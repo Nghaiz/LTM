@@ -811,6 +811,13 @@ namespace Ironfront.Net.Unity.Client
             IInputSource input = NetClientBindings.LocalPlayer.InputSource;
             if (input == null) return false;
 
+            // A trigger the weapon keeps for itself -- an unlocked Javelin marking a point -- is
+            // withheld from the SERVER's authority (ServerCombatBridge.SteerCarriedWeapon), so it
+            // must be withheld here too or every such pull predicts a round the server never
+            // spends. Read as a release, like the server does: when the lock completes under a
+            // held trigger, the next frame is the rising edge on both sides at once.
+            if (NetClientBindings.LocalPlayer.CarriedWeaponWithholdsTrigger) return false;
+
             return (input.Buttons & (ushort)InputButtons.Fire) != 0;
         }
 

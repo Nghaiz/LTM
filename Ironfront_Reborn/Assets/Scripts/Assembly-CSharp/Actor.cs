@@ -762,6 +762,58 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		}
 	}
 
+	/// <summary>
+	/// Tells the carried weapon of a networked body where its player is looking and whether they
+	/// aim. Server only; called once per accepted input frame.
+	/// </summary>
+	/// <remarks>
+	/// The server's half of the aiming lines in <see cref="UpdateWeapon"/>: a claimed body's
+	/// controller is the suspended bot brain, so nothing else ever tells its weapon either fact.
+	/// The eligibility is the same -- not stowed for a swim, not fallen over, a weapon that can
+	/// be aimed -- minus <c>aimingAction</c>'s minimum hold, which is camera feel for the local
+	/// player. A turret is skipped: it has its own aim authority.
+	/// </remarks>
+	public void SteerCarriedWeaponByNetwork(Vector3 eye, Vector3 forward, bool aimHeld)
+	{
+		if (activeWeapon == null || swimWeaponStowed)
+		{
+			return;
+		}
+		if (IsSeated() && activeWeapon == seat.weapon)
+		{
+			return;
+		}
+		activeWeapon.SteerByNetwork(eye, forward, aimHeld && !fallenOver && activeWeapon.CanBeAimed());
+	}
+
+	/// <summary>
+	/// Hands a networked body's pulled trigger to a carried weapon that takes it for itself, and
+	/// reports whether it did. Server only.
+	/// </summary>
+	/// <remarks>
+	/// Through <see cref="Weapon.Fire"/>, the entry point <see cref="UpdateWeapon"/> uses offline,
+	/// under the same eligibility: an unlocked Javelin marks the point it is looking at and
+	/// launches nothing, exactly as a local player's does. False means the trigger is an ordinary
+	/// shot and belongs to the server's combat authority.
+	/// </remarks>
+	public bool TryWithholdCarriedTriggerByNetwork(Vector3 forward)
+	{
+		if (activeWeapon == null || swimWeaponStowed || fallenOver)
+		{
+			return false;
+		}
+		if (IsSeated() && !seat.CanUseCarriedWeapon())
+		{
+			return false;
+		}
+		if (!activeWeapon.WithholdsTrigger())
+		{
+			return false;
+		}
+		activeWeapon.Fire(forward, false);
+		return true;
+	}
+
 	private void UpdateGetup()
 	{
 		float num = getupAction.Ratio();

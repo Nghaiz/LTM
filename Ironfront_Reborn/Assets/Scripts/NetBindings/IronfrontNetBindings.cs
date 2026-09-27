@@ -763,6 +763,21 @@ namespace Ironfront.Net.Unity.Bindings
             return true;
         }
 
+        public void SteerCarriedWeapon(
+            float eyeX, float eyeY, float eyeZ,
+            float forwardX, float forwardY, float forwardZ,
+            bool aimHeld)
+        {
+            if (_actor == null) return;
+
+            _actor.SteerCarriedWeaponByNetwork(
+                new Vector3(eyeX, eyeY, eyeZ), new Vector3(forwardX, forwardY, forwardZ), aimHeld);
+        }
+
+        public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
+            => _actor != null
+               && _actor.TryWithholdCarriedTriggerByNetwork(new Vector3(forwardX, forwardY, forwardZ));
+
         public bool ReleaseCarriedThrowable(
             float originX, float originY, float originZ,
             float directionX, float directionY, float directionZ)

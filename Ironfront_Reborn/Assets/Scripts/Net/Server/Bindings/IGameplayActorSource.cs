@@ -185,6 +185,32 @@
             float directionX, float directionY, float directionZ);
 
         /// <summary>
+        /// Tells the carried weapon where this body's player looks and whether they aim, from
+        /// one accepted input frame. Maps to <c>Actor.SteerCarriedWeaponByNetwork</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>What it is for: the Javelin's lock-on.</b> Offline the launcher samples a transform
+        /// on the first-person rig; a server-side body has no rig, and <c>CullFpsObjects</c>
+        /// destroys that transform on every body that is not the local player. So the lock-on
+        /// read a destroyed object and every networked Javelin pull threw (2026-09-27). The eye
+        /// is <c>ServerCombatAuthority.ShotOrigin</c>, the same point the shot would leave from.
+        /// </remarks>
+        void SteerCarriedWeapon(
+            float eyeX, float eyeY, float eyeZ,
+            float forwardX, float forwardY, float forwardZ,
+            bool aimHeld);
+
+        /// <summary>
+        /// Gives a pulled trigger to a carried weapon that keeps it for itself instead of firing,
+        /// and reports whether it did. Maps to <c>Actor.TryWithholdCarriedTriggerByNetwork</c>.
+        /// </summary>
+        /// <returns>
+        /// True when the weapon took the trigger -- an unlocked Javelin marks a point -- and the
+        /// combat authority must not spend a round on it. False for every ordinary shot.
+        /// </returns>
+        bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ);
+
+        /// <summary>
         /// Writes the authority's carried-weapon state into the engine weapon the body is holding.
         /// </summary>
         /// <remarks>

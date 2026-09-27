@@ -147,12 +147,16 @@ namespace Ironfront.Net.Unity.Server
             // loadout slot is unresolved rather than guessing slot 0 (handoff section 4.5).
             ActorAmmoSource ammo = session.AmmoSourceFrom(_loop.SpareAmmo);
 
+            // AFTER the mirror, so a weapon asked about its trigger holds the authority's clip;
+            // BEFORE the authority, because a trigger the weapon keeps must never reach it.
+            InputFrame resolved = SteerCarriedWeapon(session, actor, in frame);
+
             CombatTickResult result = _authority.Step(
                 ref session.Weapon,
                 ref session.Trigger,
                 in weapon,
                 session.ActorId,
-                in frame,
+                in resolved,
                 in session.State,
                 new ReadOnlySpan<HitscanTarget>(_targets, 0, _targetCount),
                 new ActorFireEligibility(actor.IsAlive, isDeployed: true),
@@ -195,6 +199,49 @@ namespace Ironfront.Net.Unity.Server
             EmitHitConfirms(session, in result);
 
             if (result.VictimDied) EmitDeath(session, in result);
+        }
+
+        /// <summary>
+        /// Hands the carried weapon this frame's aim, and returns the frame the combat authority
+        /// resolves -- without its trigger when the weapon kept the trigger for itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The Javelin, and why its trigger is not a shot.</b> Offline an unlocked launcher's
+        /// trigger marks the point it is looking at; the missile leaves on a later pull once the
+        /// lock has held for two seconds, or at once if the trigger is still held when it does.
+        /// The authority knows none of that -- every pull of a clip-of-one launcher is a round to
+        /// it -- so an unlocked pull reaching it spent the round and launched nothing, and the
+        /// engine threw on the way (<c>pointSampler</c> is destroyed on a server-side body).
+        /// </para>
+        /// <para>
+        /// <b>Withholding the bit reproduces the shipped timing exactly.</b> The trigger state is
+        /// edge-measured against the previous processed frame, so while the weapon keeps the
+        /// trigger the authority sees it released; the frame the lock completes with the trigger
+        /// still down is a fresh rising edge, and the launch happens there -- the offline
+        /// "hold fire and it goes when the lock does".
+        /// </para>
+        /// <para>
+        /// <b>The server decides the lock, from the server's own aim.</b> The client draws its own
+        /// lock box from the same algorithm over the same input, and never says what it locked:
+        /// a client-named target would be a target the server could not refuse.
+        /// </para>
+        /// </remarks>
+        private static InputFrame SteerCarriedWeapon(
+            ClientSession session, NetServerActor actor, in InputFrame frame)
+        {
+            Vec3 eye = ServerCombatAuthority.ShotOrigin(in session.State, in frame);
+            Vec3 aim = ServerCombatAuthority.AimDirection(frame.YawDegrees, frame.PitchDegrees);
+
+            actor.SteerCarriedWeapon(
+                eye.X, eye.Y, eye.Z, aim.X, aim.Y, aim.Z, frame.IsPressed(InputButtons.Aim));
+
+            if (!frame.IsPressed(InputButtons.Fire)) return frame;
+            if (!actor.TryWithholdCarriedTrigger(aim.X, aim.Y, aim.Z)) return frame;
+
+            return new InputFrame(
+                frame.MoveX, frame.MoveZ, frame.Yaw, frame.Pitch,
+                frame.Buttons & ~InputButtons.Fire);
         }
 
         /// <summary>

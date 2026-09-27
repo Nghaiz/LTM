@@ -71,6 +71,14 @@ namespace Ironfront.Net.Unity.Server.Tests
                 float directionX, float directionY, float directionZ)
                 => false;
 
+            public void SteerCarriedWeapon(
+                float eyeX, float eyeY, float eyeZ,
+                float forwardX, float forwardY, float forwardZ,
+                bool aimHeld) { }
+
+            public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
+                => false;
+
             public void MirrorAuthorityWeaponState(
                 int ammoInClip, bool unholstered, float elapsedSinceLastShot) { }
 

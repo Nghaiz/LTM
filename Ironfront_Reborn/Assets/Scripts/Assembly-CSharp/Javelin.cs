@@ -36,6 +36,59 @@ public class Javelin : ScopedWeapon
 
 	private Action lockOnStayAction = new Action(1f);
 
+	// Server only: where the networked body carrying this launcher looks, as its accepted input
+	// frames say. pointSampler is a child of the weapon root, so CullFpsObjects destroys it on
+	// every body that is not the local player -- and on a server that is every body. Until this
+	// existed the lock-on read a destroyed transform: every pull of a networked player's trigger
+	// threw out of ServerCombatBridge.StepCombat and no Javelin was ever launched online
+	// (2026-09-27 playtest). Offline hasNetworkAim stays false and the shipped reads are used.
+	private bool hasNetworkAim;
+
+	private Vector3 networkEye;
+
+	private Vector3 networkForward;
+
+	public override void SteerByNetwork(Vector3 eye, Vector3 forward, bool aimHeld)
+	{
+		hasNetworkAim = true;
+		networkEye = eye;
+		networkForward = forward;
+		// Through SetAiming, as Actor.UpdateWeapon does offline: starting to aim is what clears
+		// a manual target, and the lock-on in LateUpdate only runs while aiming.
+		if (aimHeld != aiming)
+		{
+			SetAiming(aimHeld);
+		}
+	}
+
+	public override bool WithholdsTrigger()
+	{
+		return !HasLock();
+	}
+
+	private Vector3 SampleOrigin()
+	{
+		return hasNetworkAim ? networkEye : pointSampler.position;
+	}
+
+	private Vector3 SampleForward()
+	{
+		return hasNetworkAim ? networkForward : pointSampler.forward;
+	}
+
+	// The shipped code measures bearings and distances from the weapon itself, which offline sits
+	// at the player's eye. A server-side weapon hangs in a bind pose nobody is standing in, so the
+	// eye the input frame stated stands in for it.
+	private Vector3 SightPosition()
+	{
+		return hasNetworkAim ? networkEye : base.transform.position;
+	}
+
+	private Vector3 LineOfSightOrigin()
+	{
+		return hasNetworkAim ? networkEye : MuzzlePosition();
+	}
+
 	public override void Unholster()
 	{
 		base.Unholster();
@@ -50,7 +103,6 @@ public class Javelin : ScopedWeapon
 	{
 		Projectile projectile = base.SpawnProjectile(direction);
 		JavelinMissile javelinMissile = (JavelinMissile)projectile;
-		Ray ray = new Ray(pointSampler.position, pointSampler.forward);
 		if (hasManualTarget)
 		{
 			javelinMissile.targetPoint = manualTargetPoint;
@@ -179,7 +231,7 @@ public class Javelin : ScopedWeapon
 		}
 		else if (!hasManualTarget)
 		{
-			Ray ray = new Ray(pointSampler.position, pointSampler.forward);
+			Ray ray = new Ray(SampleOrigin(), SampleForward());
 			RaycastHit hitInfo;
 			if (Physics.Raycast(ray, out hitInfo, 1000f, 1))
 			{
@@ -204,10 +256,10 @@ public class Javelin : ScopedWeapon
 		List<Vehicle> sortedTargets = GetSortedTargets();
 		foreach (Vehicle item in sortedTargets)
 		{
-			Vector3 direction = item.transform.position - base.transform.position;
+			Vector3 direction = item.transform.position - SightPosition();
 			if (IsInFov(item.transform.position))
 			{
-				Ray ray = new Ray(MuzzlePosition(), direction);
+				Ray ray = new Ray(LineOfSightOrigin(), direction);
 				if (!Physics.Raycast(ray, direction.magnitude, 1))
 				{
 					return item;
@@ -219,7 +271,7 @@ public class Javelin : ScopedWeapon
 
 	private bool IsInFov(Vector3 point)
 	{
-		return Vector3.Dot((point - base.transform.position).normalized, pointSampler.forward) > 0.99f;
+		return Vector3.Dot((point - SightPosition()).normalized, SampleForward()) > 0.99f;
 	}
 
 	private List<Vehicle> GetSortedTargets()
@@ -241,7 +293,8 @@ public class Javelin : ScopedWeapon
 				isEnemy.Add(item, false);
 			}
 		}
-		list.Sort((Vehicle x, Vehicle y) => (isEnemy[x] != isEnemy[y]) ? isEnemy[y].CompareTo(isEnemy[x]) : Vector3.Distance(base.transform.position, x.transform.position).CompareTo(Vector3.Distance(base.transform.position, y.transform.position)));
+		Vector3 sight = SightPosition();
+		list.Sort((Vehicle x, Vehicle y) => (isEnemy[x] != isEnemy[y]) ? isEnemy[y].CompareTo(isEnemy[x]) : Vector3.Distance(sight, x.transform.position).CompareTo(Vector3.Distance(sight, y.transform.position)));
 		return list;
 	}
 

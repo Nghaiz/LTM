@@ -82,6 +82,30 @@ namespace Ironfront.Net.Unity.Server.Tests
                 => FireCarriedWeapon(
                     originX, originY, originZ, directionX, directionY, directionZ);
 
+            /// <summary>Every aim the carried weapon was handed, in order.</summary>
+            internal readonly System.Collections.Generic.List<(Vector3 Eye, Vector3 Forward, bool Aim)> Steers =
+                new System.Collections.Generic.List<(Vector3, Vector3, bool)>();
+
+            public void SteerCarriedWeapon(
+                float eyeX, float eyeY, float eyeZ,
+                float forwardX, float forwardY, float forwardZ,
+                bool aimHeld)
+                => Steers.Add((new Vector3(eyeX, eyeY, eyeZ), new Vector3(forwardX, forwardY, forwardZ), aimHeld));
+
+            /// <summary>What the carried weapon answers when a trigger is offered: an unlocked
+            /// Javelin keeps it.</summary>
+            internal bool WithholdsTrigger;
+
+            /// <summary>Every direction a trigger was offered along.</summary>
+            internal readonly System.Collections.Generic.List<Vector3> OfferedTriggers =
+                new System.Collections.Generic.List<Vector3>();
+
+            public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
+            {
+                OfferedTriggers.Add(new Vector3(forwardX, forwardY, forwardZ));
+                return WithholdsTrigger;
+            }
+
             /// <summary>How many times the authority's weapon state was mirrored in.</summary>
             internal int Mirrors;
 
@@ -278,6 +302,47 @@ namespace Ironfront.Net.Unity.Server.Tests
             // the same point on every body prefab, so the two must not be able to swap places.
             Assert.AreEqual(1, gameplay.FiredOrigins.Count);
             Assert.AreEqual(new Vector3(1.5f, 9f, -2.5f), gameplay.FiredOrigins[0]);
+        }
+
+        // ------------------------------------------------ The Javelin: aim and a kept trigger
+
+        [Test]
+        public void SteeringTheCarriedWeaponReachesTheGameplaySeamWithEyeForwardAndAim()
+        {
+            // The Javelin's lock-on reads where its user LOOKS between shots, and on a server that
+            // is nowhere unless the netcode says so: the transform it samples is destroyed on every
+            // body that is not the local player (2026-09-27, every online Javelin pull threw). The
+            // three facts travel separately so an eye cannot pose as a direction.
+            var gameplay = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(gameplay);
+
+            actor.SteerCarriedWeapon(1f, 2f, 3f, 0f, -0.5f, 0.75f, aimHeld: true);
+
+            Assert.AreEqual(1, gameplay.Steers.Count);
+            Assert.AreEqual(new Vector3(1f, 2f, 3f), gameplay.Steers[0].Eye);
+            Assert.AreEqual(new Vector3(0f, -0.5f, 0.75f), gameplay.Steers[0].Forward);
+            Assert.IsTrue(gameplay.Steers[0].Aim);
+        }
+
+        [Test]
+        public void AWeaponThatKeepsTheTriggerIsReportedAsKeepingIt()
+        {
+            // True is the answer that keeps the round out of the combat authority. If this seam
+            // swallowed it, an unlocked Javelin pull would be spent as a shot again.
+            var gameplay = new FakeGameplayActor { WithholdsTrigger = true };
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsTrue(actor.TryWithholdCarriedTrigger(0f, 0f, 1f));
+            Assert.AreEqual(new Vector3(0f, 0f, 1f), gameplay.OfferedTriggers[0]);
+        }
+
+        [Test]
+        public void AnOrdinaryTriggerIsNotKept()
+        {
+            var gameplay = new FakeGameplayActor { WithholdsTrigger = false };
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsFalse(actor.TryWithholdCarriedTrigger(0f, 0f, 1f));
         }
 
         [Test]
