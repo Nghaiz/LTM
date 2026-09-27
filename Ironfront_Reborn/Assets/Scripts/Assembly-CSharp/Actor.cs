@@ -1467,6 +1467,19 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		return IsSeated() && (seat.type == Seat.Type.Driver || seat.type == Seat.Type.Pilot);
 	}
 
+	/// <summary>
+	/// Whether a person rather than the bot brain steers this actor: a player's own controller,
+	/// or on the server the body a connection claimed.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="aiControlled"/> alone answers wrongly on the server, where every player's body is
+	/// the AI prefab with its brain switched off (see <see cref="IsServerClaimedBody"/>).
+	/// </remarks>
+	public bool IsSteeredByAPerson()
+	{
+		return !aiControlled || IsServerClaimedBody();
+	}
+
 	public bool CanEnterSeat()
 	{
 		return !IsSeated() && cannotEnterVehicleAction.TrueDone();

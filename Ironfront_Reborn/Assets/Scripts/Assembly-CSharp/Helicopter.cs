@@ -112,6 +112,35 @@ public class Helicopter : Vehicle
 
 	private Vector3 randomBurningTorque = Vector3.zero;
 
+	private readonly HelicopterFlightAssist flightAssist = new HelicopterFlightAssist();
+
+	/// <summary>
+	/// The attitude help a person flying this helicopter gets on top of the original's flight
+	/// model: see <see cref="HelicopterFlightAssist"/> for what it does and why.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A person only.</b> <c>AiActorController.HelicopterInput</c> is a PD controller tuned on
+	/// the unassisted model, so a bot keeps it exactly. A person is the local player's own
+	/// controller and, on the server, a connection's claimed body -- both ends of a networked
+	/// flight, so the pilot's prediction and the server fly the same helicopter.
+	/// </para>
+	/// <para>
+	/// <b>Nothing while the skids rest on the ground.</b> Levelling against a slope the
+	/// helicopter stands on would push it over, the failure the grounded-weight ruling exists
+	/// for; it takes over once the helicopter lifts.
+	/// </para>
+	/// </remarks>
+	private Vector3 FlightAssist(Vector4 command)
+	{
+		Actor pilot = Driver();
+		float authority = ((pilot != null && pilot.IsSteeredByAPerson() && !restingOnGround) ? rotorSpeed : 0f);
+		Transform frame = base.transform;
+		Vector3 rate = frame.InverseTransformDirection(rigidbody.angularVelocity);
+		flightAssist.Step(command.w, command.x, command.z, rate.x, rate.y, 0f - rate.z, Mathf.Asin(Mathf.Clamp(0f - frame.forward.y, -1f, 1f)), Mathf.Asin(Mathf.Clamp(0f - frame.right.y, -1f, 1f)), frame.up.y > 0f, authority, Time.fixedDeltaTime, out var pitch, out var yaw, out var roll);
+		return new Vector3(pitch, yaw, 0f - roll);
+	}
+
 	protected override void Awake()
 	{
 		base.Awake();
@@ -153,6 +182,7 @@ public class Helicopter : Vehicle
 	protected override void DriverEntered()
 	{
 		base.DriverEntered();
+		flightAssist.Reset();
 	}
 
 	protected override void DriverExited()
@@ -209,7 +239,8 @@ public class Helicopter : Vehicle
 		rigidbody.AddForce(base.transform.up * num * 0.03f, ForceMode.Acceleration);
 		if (HasDriver())
 		{
-			Vector4 vector = Vehicle.Clamp4(Driver().controller.HelicopterInput()) * rotorSpeed;
+			Vector4 command = Vehicle.Clamp4(Driver().controller.HelicopterInput());
+			Vector4 vector = command * rotorSpeed;
 			float y = vector.y;
 			Vector3 vector2 = new Vector3(vector.w, vector.x, 0f - vector.z) * manouverability * 0.0069999998f;
 			Vector3 normalized2 = (base.transform.up + base.transform.forward * 0.05f).normalized;
@@ -225,7 +256,7 @@ public class Helicopter : Vehicle
 			else
 			{
 				rigidbody.AddForce(normalized2 * (y * rotorForce * num2 + HoverAssist(y)), ForceMode.Acceleration);
-				rigidbody.AddRelativeTorque(vector2, ForceMode.VelocityChange);
+				rigidbody.AddRelativeTorque(vector2 + FlightAssist(command), ForceMode.VelocityChange);
 			}
 		}
 	}
