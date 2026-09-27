@@ -121,10 +121,10 @@ starting point.
 
 ## 5. Play a match
 
-Once everybody has the same build, `tools/play-lan.ps1` and `tools/playtest-local.ps1` stand up
-the stack. `playtest-local.ps1 -Clients 4` runs the master, one game server for **each shipped
-map** (Dustbowl and Island), and four client windows on one machine. Both rooms must appear in the
-room browser; this is the quickest way to confirm a build works before anybody else downloads it.
+Nothing runs locally any more: the master is `kien-master-2026.fly.dev` and both game servers run
+on the Azure VM (`tools/deploy-gameservers-azure.ps1`). Once everybody has the same build,
+`tools/play-lan.ps1 -PlayerId <id>` opens one client against them. Rooms on both maps
+(Dustbowl and Island) must be creatable from the room browser.
 
 ---
 

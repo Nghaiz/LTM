@@ -28,7 +28,7 @@
 #   Unity for a silence assertion is not worth its cost. The artifact under test here is
 #   alert.sh -- given a snapshot, does it decide and deliver correctly -- and feeding it a
 #   snapshot is testing it directly. It does NOT prove a real master ever emits that shape;
-#   tools/run-e2e.ps1 is what exercises a real master with a real registered game server.
+#   Ironfront.Tools.E2E against the live master exercises a real registered game server.
 #
 # ON A DEPLOYED VM, where a real healthy master exists, run the real thing instead:
 #

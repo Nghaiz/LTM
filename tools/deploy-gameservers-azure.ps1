@@ -4,9 +4,8 @@
 #
 # THE HOST (since 2026-09-28). Azure VM "ironfront-game", Standard_B2as_v2 in Southeast Asia
 # (Singapore, the same city as the fly master: TCP connect 2-3 ms). Its network security group
-# admits UDP 27015/27016 only -- 27115/27116, the Docker Desktop defaults, are dropped at the Azure
-# edge -- so this runs the compose file with IRONFRONT_GS_*_PORT set to 27015/27016 and advertises
-# the VM's public address. Log in as irondev with the key below; irondev has passwordless sudo.
+# admits UDP 27015/27016 only (27115/27116 are dropped at the Azure edge), so this runs the compose
+# file on 27015/27016 and advertises the VM's public address. Log in as irondev with the key below; irondev has passwordless sudo.
 #
 # WHAT IT DOES, in order:
 #   1. Ships the image only if the VM lacks that exact image id. `docker save` is piped straight
@@ -19,9 +18,8 @@
 #      "[net] master link: registered as server N". A server that binds its port and never
 #      registers answers every join NoGameServerAvailable, so a port check would be a false green.
 #
-# Only one host may serve the fly master at a time: stop the Docker Desktop copies first
-# (docker compose --env-file .env -f infra/docker/gameservers.compose.yml down), or the master
-# holds two servers per map and a room can land on either.
+# Only one host may serve the fly master at a time, or the master holds two servers per map and a
+# room can land on either. Nothing else hosts them since 2026-09-28.
 #
 # Usage:
 #   pwsh tools/deploy-gameservers-azure.ps1 -Image ironfront-game-server:<rev>
