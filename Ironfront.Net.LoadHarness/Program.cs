@@ -68,7 +68,7 @@ namespace Ironfront.Net.LoadHarness
 
             SimulatorConfig simulator = options.BuildSimulatorConfig();
 
-            JoinTicketSource tickets = JoinTicketSource.Resolve(options.SharedSecret);
+            JoinTicketSource tickets = JoinTicketSource.Resolve(options.SharedSecret, options.ServerId);
 
             Console.WriteLine("Ironfront game-server harness (process B)");
             Console.WriteLine(options.Describe());
