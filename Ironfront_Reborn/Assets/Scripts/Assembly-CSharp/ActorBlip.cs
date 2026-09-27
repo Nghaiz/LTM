@@ -51,7 +51,9 @@ public class ActorBlip : MonoBehaviour
 		{
 			RectTransform rectTransform = (RectTransform)base.transform;
 			Vector3 vector = MinimapCamera.instance.camera.WorldToViewportPoint(actor.Position());
-			Vector2 anchorMax = (rectTransform.anchorMin = new Vector2(vector.x, vector.y));
+			// Pinned to the edge rather than clipped: the minimap frames the ground, and a boat or
+			// helicopter out over the sea beyond it would otherwise vanish from the map.
+			Vector2 anchorMax = (rectTransform.anchorMin = new Vector2(Mathf.Clamp01(vector.x), Mathf.Clamp01(vector.y)));
 			rectTransform.anchorMax = anchorMax;
 			if (actor.IsSeated())
 			{
