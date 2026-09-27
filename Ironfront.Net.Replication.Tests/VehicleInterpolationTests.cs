@@ -17,22 +17,20 @@ namespace Ironfront.Net.Replication.Tests
     public sealed class VehicleInterpolationTests
     {
         [Fact]
-        public void ASampleAtDelayTicksReturnsTheExactSnapshotPose()
+        public void ARenderTickAtOrBeforeTheOldestSnapshotGetsItsExactPose()
         {
             var buffer = new VehicleSnapshotInterpolator();
-
-            // Three snapshots, so the render tick (newest - DelayTicks = 100) has a snapshot
-            // sitting exactly on it and one on either side.
             buffer.Push(World(100, Entry(7, x: 10f)));
             buffer.Push(World(101, Entry(7, x: 20f)));
             buffer.Push(World(102, Entry(7, x: 30f)));
 
-            double renderTick = buffer.RenderTick(0.0);
-            Assert.Equal(100.0, renderTick);
+            // Exactly on the oldest held tick: the start of a bracket, blended by nothing.
+            Assert.Equal(VehicleSampleResult.Interpolated, buffer.TrySample(7, 100.0, out VehiclePose onIt));
+            Assert.Equal(10f, onIt.Position.X, 1);
 
-            // At tickFraction 0 the render tick equals the oldest held tick, which is TooOld by
-            // definition -- the pose is that snapshot's, exactly, with no blend applied.
-            VehicleSampleResult result = buffer.TrySample(7, renderTick, out VehiclePose pose);
+            // Before it: older than everything buffered, so the oldest pose is held rather than
+            // projected backwards.
+            VehicleSampleResult result = buffer.TrySample(7, 99.5, out VehiclePose pose);
 
             Assert.Equal(VehicleSampleResult.TooOld, result);
 
@@ -77,8 +75,8 @@ namespace Ironfront.Net.Replication.Tests
         public void ASampleNewerThanTheNewestSnapshotHoldsAndStalls()
         {
             var buffer = new VehicleSnapshotInterpolator();
-            buffer.Push(World(100, Entry(7, x: 10f)));
-            buffer.Push(World(101, Entry(7, x: 20f)));
+            buffer.Push(World(100, Moving(Entry(7, x: 10f), metresPerSecond: 30f)));
+            buffer.Push(World(101, Moving(Entry(7, x: 20f), metresPerSecond: 30f)));
 
             long before = buffer.StalledCount;
 
@@ -86,7 +84,8 @@ namespace Ironfront.Net.Replication.Tests
                 VehicleSampleResult.Stalled,
                 buffer.TrySample(7, 105.0, out VehiclePose pose));
 
-            // Held, not extrapolated. At 10 m/tick an extrapolation to 105 would read 60.
+            // Held, not extrapolated -- and the vehicle carries a velocity, so an extrapolation
+            // would show: four ticks at 30 m/s is four metres past 20.
             Assert.Equal(20f, pose.Position.X, 1);
             Assert.True(buffer.StalledCount > before, "a stall must be counted, or a bad network is invisible");
         }
@@ -169,11 +168,10 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void TheRenderDelayIsTheSameConstantTheActorPathUses()
+        public void TheBufferHoldsAsMuchAsTheActorPathDoes()
         {
-            // Two definitions of the render delay is how the vehicle and the man standing on it
-            // end up a tick and a half apart.
-            Assert.Equal(SnapshotInterpolator.DelayTicks, VehicleSnapshotInterpolator.DelayTicks);
+            // One render time serves both streams (InterpolationClock); a shorter vehicle ring
+            // would run out of history for a Far vehicle before the actor ring did for its rider.
             Assert.Equal(SnapshotInterpolator.Capacity, VehicleSnapshotInterpolator.Capacity);
         }
 
@@ -392,7 +390,7 @@ namespace Ironfront.Net.Replication.Tests
                     : World(tick, Entry(7, x: tick)));
             }
 
-            double renderTick = buffer.RenderTick(0.0);
+            double renderTick = buffer.NewestTick - InterpolationClock.DelayTicks;
 
             VehicleSampleResult near = buffer.TrySample(7, renderTick, out VehiclePose nearPose);
             VehicleSampleResult mid = buffer.TrySample(9, renderTick, out VehiclePose midPose);
@@ -406,6 +404,35 @@ namespace Ironfront.Net.Replication.Tests
                 $"the rate-limited vehicle sampled to x={midPose.Position.X}, which is the origin, "
                 + "not a held pose");
             Assert.True(nearPose.Position.X > 1f);
+
+            // And interpolated between its own two samples, not held on one of them: a held Mid
+            // vehicle steps at 10 Hz, which is the 2026-09-27 report's "teleports frame by frame".
+            Assert.Equal(VehicleSampleResult.Interpolated, mid);
+            Assert.Equal((float)(renderTick * 2.0), midPose.Position.X, 1);
+        }
+
+        /// <summary>
+        /// A Far vehicle is carried on its own velocity across the gap its band leaves, and stops
+        /// being carried after <see cref="SnapshotInterpolator.MaxExtrapolationTicks"/>.
+        /// </summary>
+        [Fact]
+        public void AFarVehicleIsCarriedOnItsOwnVelocityAcrossItsGap()
+        {
+            var buffer = new VehicleSnapshotInterpolator();
+            buffer.Push(World(100, Entry(7, x: 0f), Moving(Entry(9, x: 500f), metresPerSecond: 30f)));
+            for (uint tick = 101; tick <= 115; tick++) buffer.Push(World(tick, Entry(7, x: 0f)));
+
+            VehiclePose basePose = VehiclePose.FromEntry(Moving(Entry(9, x: 500f), metresPerSecond: 30f));
+            float speed = basePose.LinearVelocity.X;
+
+            Assert.Equal(VehicleSampleResult.Extrapolated, buffer.TrySample(9, 103.0, out VehiclePose carried));
+            Assert.Equal(basePose.Position.X + speed * 3f / ProtocolConstants.SIM_TICK_RATE, carried.Position.X, 1);
+
+            Assert.Equal(VehicleSampleResult.Held, buffer.TrySample(9, 112.0, out VehiclePose held));
+            Assert.Equal(
+                basePose.Position.X + speed * SnapshotInterpolator.MaxExtrapolationTicks / ProtocolConstants.SIM_TICK_RATE,
+                held.Position.X,
+                1);
         }
 
         /// <summary>
@@ -427,7 +454,7 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Equal(
                 VehicleSampleResult.NotPresent,
-                buffer.TrySample(99, buffer.RenderTick(0.0), out _));
+                buffer.TrySample(99, buffer.NewestTick - InterpolationClock.DelayTicks, out _));
         }
 
         // ------------------------------------------------------------------ helpers
@@ -445,6 +472,12 @@ namespace Ironfront.Net.Replication.Tests
                 Health = 255,
             };
 
+            return entry;
+        }
+
+        internal static VehicleSnapshotEntry Moving(VehicleSnapshotEntry entry, float metresPerSecond)
+        {
+            entry.VelX = Quantize.PackVel16(metresPerSecond);
             return entry;
         }
 

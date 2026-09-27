@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
-using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Replication.Movement;
@@ -141,49 +140,44 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null || _live.Count == 0) return;
 
             SnapshotInterpolator buffer = _client.Router.Interpolator;
+            if (buffer.Count < 2) return;
 
-            // Alpha comes from the prediction clock so motion is smooth above 30 fps. Without
-            // it the render tick advances in whole steps and the interpolation is quantised to
-            // the very tick rate it exists to hide.
-            double renderTick = buffer.RenderTick(NetPredictionClock.Current?.Alpha ?? 0f);
-
-            if (buffer.TrySample(renderTick, out WorldSnapshot from, out WorldSnapshot to, out double alpha)
-                == InterpolationResult.Starved)
-            {
-                return;
-            }
+            // The router's clock, not the newest tick plus the prediction clock's Alpha: Alpha
+            // wraps at 30 Hz while snapshots land at 20, and that sum threw every remote body
+            // back a tick every 100 ms. See InterpolationClock.
+            double renderTick = _client.Router.Clock.AdvanceTo(Time.unscaledTimeAsDouble);
 
             byte localTeam = ResolveLocalTeam();
 
             foreach (KeyValuePair<ushort, Transform> pair in _live)
             {
-                bool hasEntry = to.TryFind(pair.Key, out ActorSnapshotEntry entry);
+                InterpolationResult result = buffer.TrySampleActor(pair.Key, renderTick, out ActorSample sample);
+                bool hasSample = result != InterpolationResult.NotPresent
+                                 && result != InterpolationResult.Starved;
 
                 // A corpse lying as a runtime ragdoll keeps the transform it fell from: its bones
                 // are simulated in the root's space, so moving the root would drag the body along.
                 bool frozen = _views.TryGetValue(pair.Key, out RemoteActorView lying)
                               && lying != null && lying.IsRagdollPosed;
 
-                if (!frozen && SnapshotInterpolator.TryLerpPosition(from, to, alpha, pair.Key, out Vec3 p))
+                if (!frozen && hasSample)
                 {
+                    Vec3 p = sample.Position;
                     float y = p.Y;
                     if (_centrePivotActors.Contains(pair.Key))
                     {
-                        bool crouching = hasEntry
-                            && (entry.StateFlags & ActorStateFlags.IsCrouching) != 0;
+                        bool crouching = (sample.State.StateFlags & ActorStateFlags.IsCrouching) != 0;
                         y -= MovementCore.HeightFor(crouching) * 0.5f;
                     }
-                    pair.Value.position = new Vector3(p.X, y, p.Z);
+                    pair.Value.SetPositionAndRotation(
+                        new Vector3(p.X, y, p.Z), Quaternion.Euler(0f, sample.YawDegrees, 0f));
                 }
 
-                if (!frozen && SnapshotInterpolator.TryLerpYaw(from, to, alpha, pair.Key, out float yaw))
-                    pair.Value.rotation = Quaternion.Euler(0f, yaw, 0f);
-
                 // Everything past position and yaw -- pitch, stance, aim, ragdoll, weapon, team
-                // -- was decoded and discarded until phase-V10. It is read from `to` rather than
+                // -- was decoded and discarded until phase-V10. It is stepped rather than
                 // interpolated: these are discrete states, and lerping a crouch is meaningless.
                 if (!_views.TryGetValue(pair.Key, out RemoteActorView view) || view == null) continue;
-                if (hasEntry) view.Apply(in entry);
+                if (hasSample) view.Apply(in sample.State);
 
                 // P3 task 3.4. Team arrives with the snapshot, not with the spawn, so the
                 // colour is written every frame rather than once. SetMarker is idempotent by

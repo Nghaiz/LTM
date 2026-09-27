@@ -9,8 +9,9 @@ namespace Ironfront.Net.Unity.Client
     public enum VehicleClientMode
     {
         /// <summary>
-        /// Kinematic, drawn from the snapshot stream at <c>DelayTicks</c> behind newest. Every
-        /// vehicle this client is not driving, and — when the fallback is on — the one it is.
+        /// Kinematic, drawn from the snapshot stream at the router's <c>InterpolationClock</c>
+        /// render time. Every vehicle this client is not driving, and — when the fallback is on —
+        /// the one it is.
         /// </summary>
         Remote = 0,
 
@@ -145,25 +146,33 @@ namespace Ironfront.Net.Unity.Client
         /// only.
         /// </summary>
         /// <remarks>
-        /// <c>Rigidbody.position</c>/<c>.rotation</c> rather than <c>transform</c>: on a
-        /// kinematic body the two are equivalent for rendering, but writing through the body
-        /// keeps the physics transform and the render transform in step, so anything that
-        /// raycasts against this vehicle in the same frame hits it where it is drawn.
+        /// <para>
+        /// <b>The Transform is written, not only the body.</b> This used to write
+        /// <c>Rigidbody.position</c>/<c>.rotation</c> alone, on the belief that the two are
+        /// equivalent for rendering. They are not: a body write reaches the Transform — what is
+        /// drawn — only at the next physics step. Measured in the Editor on 2026-09-27: a
+        /// kinematic body written to (10, 0, 0) still read (0, 0, 0) on its Transform until one
+        /// <c>Physics.Simulate</c>. Physics steps at 60 Hz, so every remote vehicle was drawn at
+        /// the fixed rate from a pose one step old, and at any frame rate above 60 it held for a
+        /// frame or two and then jumped.
+        /// </para>
+        /// <para>
+        /// The body is still written after it, so a raycast against this vehicle in the same
+        /// frame hits it where it is now drawn whatever <c>Physics.autoSyncTransforms</c> says.
+        /// </para>
         /// </remarks>
         internal void ApplyRemote(in VehiclePose pose)
         {
             if (_vehicle == null) return;
 
+            var position = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
+            Quaternion rotation = ToQuaternion(in pose.Rotation);
+
+            _vehicle.Transform.SetPositionAndRotation(position, rotation);
             if (_rigidbody != null)
             {
-                _rigidbody.position = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
-                _rigidbody.rotation = ToQuaternion(in pose.Rotation);
-            }
-            else
-            {
-                _vehicle.Transform.SetPositionAndRotation(
-                    new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z),
-                    ToQuaternion(in pose.Rotation));
+                _rigidbody.position = position;
+                _rigidbody.rotation = rotation;
             }
 
             ApplyAuthoritativeState(in pose);
