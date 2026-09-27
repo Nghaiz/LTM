@@ -62,6 +62,40 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("Damage(Time.fixedDeltaTime * 30f)", source);
         }
 
+        /// <summary>
+        /// A piloted helicopter resting on the ground with no collective keeps its weight.
+        /// </summary>
+        /// <remarks>
+        /// The original's hover assist cancels all but 0.5 m/s^2 of gravity from the moment a
+        /// pilot sits down, so on "Low Friction" skids an idle pilot slid across the pad at up to
+        /// 5.5 m/s, tripped and rolled over, and then burned at 30 HP/s upside down (lane-B
+        /// bug7-after-01, 2026-09-27). Owner ruling the same day: planted until it lifts.
+        /// </remarks>
+        [Fact]
+        public void AHelicopterRestingOnTheGroundKeepsItsWeight()
+        {
+            string source = ReadScript("Helicopter.cs");
+
+            string fixedUpdate = MethodBody(source, "Helicopter.cs", "protected override void FixedUpdate()");
+            AssertAbsent(fixedUpdate, "Physics.gravity.y - 0.5f", "Helicopter.FixedUpdate",
+                "the hover assist goes through HoverAssist, which knows whether the skids are resting");
+            Assert.Equal(2, Regex.Matches(fixedUpdate, @"\+ HoverAssist\(y\)").Count);
+
+            int read = fixedUpdate.IndexOf("restingOnGround = groundContact;", StringComparison.Ordinal);
+            int clear = fixedUpdate.IndexOf("groundContact = false;", StringComparison.Ordinal);
+            int force = fixedUpdate.IndexOf("HoverAssist(y)", StringComparison.Ordinal);
+            Assert.True(read >= 0 && clear > read && force > clear,
+                "Helicopter.FixedUpdate must read and clear the ground contact before applying lift.");
+
+            string assist = MethodBody(source, "Helicopter.cs", "private float HoverAssist(float collective)");
+            Assert.Contains("restingOnGround && collective <= 0f", assist);
+
+            // Vehicle's private OnCollisionEnter is the ram check; a same-named message here would
+            // hide it rather than add to it.
+            Assert.Contains("private void OnCollisionStay(Collision collision)", source);
+            AssertAbsent(source, "void OnCollisionEnter(", "Helicopter", "it would hide Vehicle.OnCollisionEnter");
+        }
+
         // ------------------------------------------------------------------ Task 3: turrets
 
         [Theory]
