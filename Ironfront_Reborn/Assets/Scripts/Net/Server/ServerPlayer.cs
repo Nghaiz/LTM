@@ -250,6 +250,10 @@ namespace Ironfront.Net.Unity.Server
         private IGameplayVehicleSource _exitVehicle;
         private CharacterController _exitCapsule;
         private int _exitGraceTicks;
+
+        /// <summary>Whether this player has ticked its body at least once.</summary>
+        private bool _adoptedBody;
+
         public void Tick(float dt)
         {
             NetMovementAgent agent = Actor != null ? Actor.Movement : null;
@@ -286,6 +290,14 @@ namespace Ironfront.Net.Unity.Server
 
             _detachedTicks = 0;
 
+            if (!_adoptedBody)
+            {
+                // A pooled body outlives the connections that occupy it, so the one X-19 line a
+                // bypassed move owes is owed to each occupant, not once per server process.
+                _adoptedBody = true;
+                agent.RearmCollisionBypassWarning();
+            }
+
             // Seated: input is consumed and acknowledged, the capsule is out of the world, and
             // the session rides the seat. See InputAuthority.ConsumePendingInputSeated.
             if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(Session.ActorId, out ushort seatedIn, out _))
@@ -313,6 +325,10 @@ namespace Ironfront.Net.Unity.Server
                 Session.State = MoveState.AtRest(exit);
                 Session.PreviousPosition = exit;
                 agent.ApplyAuthoritativeState(in Session.State);
+            }
+            else if (!agent.CollisionEnabled && Actor.IsAlive)
+            {
+                RestoreLeakedCapsule(agent);
             }
 
             TickExitGrace();
@@ -478,6 +494,60 @@ namespace Ironfront.Net.Unity.Server
 
             _exitVehicle = null;
             _exitCapsule = null;
+        }
+
+        /// <summary>
+        /// Puts back a capsule that is switched off on a living body with no seat to explain it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The capsule's state is the body's, not this connection's.</b> The only undo for
+        /// <see cref="NetMovementAgent.SetSeated"/> used to be the <see cref="_seated"/> edge
+        /// above, and <see cref="_seated"/> lives on this object, which is discarded on
+        /// disconnect while the pooled body goes back to the slot pool. Measured 2026-09-27 on
+        /// Island: player 25 timed out while seated in room 22, rejoined in room 23 as a fresh
+        /// <see cref="ServerPlayer"/> on the same body (actor 2), and that body's capsule stayed
+        /// off for good. Every spawn after that sank straight down through the map at the
+        /// grounded stick speed, drowned, and came back from the wire floor to do it again.
+        /// </para>
+        /// <para>
+        /// <b>Alive only.</b> <c>NetServerActor.DisableCorpseColliders</c> switches a dead body's
+        /// colliders off on purpose, so vehicle pads do not refuse to spawn into a corpse, and it
+        /// restores them itself on the revive.
+        /// </para>
+        /// </remarks>
+        private void RestoreLeakedCapsule(NetMovementAgent agent)
+        {
+            agent.SetSeated(false);
+            Debug.LogWarning(
+                $"[net] actor {Session.ActorId}: its capsule was switched off with no seat to "
+                + "explain it -- a previous occupant of this body left it that way -- and has been "
+                + "switched back on. Without this the body moves with no collision and sinks "
+                + "through the map (X-19).");
+        }
+
+        /// <summary>
+        /// Leaves this body usable by whoever occupies it next. Called by
+        /// <see cref="ServerTickLoop"/> as the connection goes away, before its slot is released.
+        /// </summary>
+        /// <remarks>
+        /// Two things this class switches on a body are remembered only on this object: the
+        /// capsule it takes out of the world while seated, and the collision it ignores between
+        /// a climbing-out capsule and the vehicle it left. The next occupant gets a fresh
+        /// <see cref="ServerPlayer"/> that knows neither. The capsule is also repaired by
+        /// <see cref="RestoreLeakedCapsule"/>, but an ignored collision pair cannot be seen from
+        /// the body at all — it has to be ended here, by the only object that knows it exists.
+        /// A seated body keeps its capsule off: the bot brain the release resumes goes on driving.
+        /// </remarks>
+        public void ReleaseBody()
+        {
+            EndExitGrace();
+
+            NetMovementAgent agent = Actor != null ? Actor.Movement : null;
+            if (agent == null || agent.CollisionEnabled || !Actor.IsAlive) return;
+            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(Session.ActorId, out _, out _)) return;
+
+            agent.SetSeated(false);
         }
 
         /// <summary>

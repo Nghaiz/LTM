@@ -35,6 +35,49 @@ public class Helicopter : Vehicle
 
 	private float rotorSpeed;
 
+	// Set by this physics step's contacts, read and cleared by the next FixedUpdate. OnCollisionStay
+	// and not OnCollisionEnter: Vehicle declares a private OnCollisionEnter (the ram check), and a
+	// message of the same name here would hide it rather than add to it.
+	private bool groundContact;
+
+	private bool restingOnGround;
+
+	/// <summary>
+	/// Whether the skids rested on something last physics step while the pilot asked for no lift.
+	/// </summary>
+	private void OnCollisionStay(Collision collision)
+	{
+		for (int i = 0; i < collision.contactCount; i++)
+		{
+			if (collision.GetContact(i).normal.y > 0.7f)
+			{
+				groundContact = true;
+				return;
+			}
+		}
+	}
+
+	/// <summary>
+	/// The part of the lift that holds a piloted helicopter up whatever the collective says.
+	/// </summary>
+	/// <remarks>
+	/// The original applies it from the moment a pilot sits down, rotor still or not, and it
+	/// cancels all but 0.5 m/s^2 of gravity. On the ground that leaves the skids -- "Low Friction",
+	/// mu 0.1 -- with almost no weight to grip with, while the thrust, tilted 5% forward, keeps
+	/// pushing: an idle pilot slid across the pad at up to 5.5 m/s, tripped and rolled over (lane-B
+	/// bug7-after-01), and upside down a piloted helicopter burns at 30 HP/s. Owner ruling
+	/// 2026-09-27: a helicopter resting on the ground with no collective keeps its weight. Lifting
+	/// off, flying, hovering and landing are the original's.
+	/// </remarks>
+	private float HoverAssist(float collective)
+	{
+		if (restingOnGround && collective <= 0f)
+		{
+			return 0f;
+		}
+		return 0f - Physics.gravity.y - 0.5f;
+	}
+
 	/// <summary>
 	/// The helicopter's subtype tail: <c>rotorSpeed</c> as a normalized u16, low byte then high
 	/// (protocol-spec.md section 4.10).
@@ -155,6 +198,8 @@ public class Helicopter : Vehicle
 		// A physics query read by ShouldBeAvoided(), which the AI consults. It belongs at
 		// physics rate.
 		isAirborne = !Physics.Raycast(base.transform.position, Vector3.down, 3f);
+		restingOnGround = groundContact;
+		groundContact = false;
 		base.FixedUpdate();
 		Vector3 normalized = (base.transform.forward + 0.15f * base.transform.up).normalized;
 		float num = Vector3.Dot(normalized, rigidbody.linearVelocity);
@@ -174,12 +219,12 @@ public class Helicopter : Vehicle
 			float num2 = 1f + Mathf.Lerp(0f, counterForceMultiplier, t);
 			if (burning)
 			{
-				rigidbody.AddForce(0.3f * normalized2 * (y * rotorForce * num2 - Physics.gravity.y - 0.5f), ForceMode.Acceleration);
+				rigidbody.AddForce(0.3f * normalized2 * (y * rotorForce * num2 + HoverAssist(y)), ForceMode.Acceleration);
 				rigidbody.AddRelativeTorque(randomBurningTorque + 0.5f * vector2, ForceMode.VelocityChange);
 			}
 			else
 			{
-				rigidbody.AddForce(normalized2 * (y * rotorForce * num2 - Physics.gravity.y - 0.5f), ForceMode.Acceleration);
+				rigidbody.AddForce(normalized2 * (y * rotorForce * num2 + HoverAssist(y)), ForceMode.Acceleration);
 				rigidbody.AddRelativeTorque(vector2, ForceMode.VelocityChange);
 			}
 		}

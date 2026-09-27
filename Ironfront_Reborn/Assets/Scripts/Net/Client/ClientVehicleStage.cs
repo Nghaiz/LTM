@@ -195,11 +195,10 @@ namespace Ironfront.Net.Unity.Client
 
             VehicleSnapshotInterpolator buffer = _client.Router.VehicleInterpolator;
 
-            // Alpha from the prediction clock, so motion is smooth above the tick rate. Without
-            // it the render tick advances in whole steps and the interpolation is quantised to
-            // exactly the rate it exists to hide.
-            NetPredictionClock clock = NetPredictionClock.Current;
-            double renderTick = buffer.RenderTick(clock != null ? clock.Alpha : 0f);
+            // The router's clock, shared with RemoteActorRegistry so a vehicle and its riders are
+            // drawn at one time. See InterpolationClock for why it is not the newest tick plus
+            // the prediction clock's Alpha.
+            double renderTick = _client.Router.Clock.AdvanceTo(Time.unscaledTimeAsDouble);
 
             System.Collections.Generic.IReadOnlyList<ushort> ids = _registry.LiveIds;
 
@@ -210,10 +209,11 @@ namespace Ironfront.Net.Unity.Client
 
                 VehicleSampleResult result = buffer.TrySample(ids[i], renderTick, out VehiclePose pose);
 
-                // Starved and NotPresent both mean "hold what is drawn". Never extrapolate
-                // (V5-D2): a vehicle at 30 m/s projected through a 200 ms gap is 6 metres wrong
-                // and then snaps back, which is visibly worse than a 200 ms freeze -- and it is
-                // the freeze that tells you the network is bad.
+                // Starved and NotPresent both mean "hold what is drawn". A stall is never
+                // extrapolated (V5-D2): a vehicle at 30 m/s projected through a 200 ms stall is 6
+                // metres wrong and then snaps back, and it is the freeze that tells you the network
+                // is bad. Only a rate-limited gap comes back Extrapolated -- see
+                // VehicleSnapshotInterpolator.
                 if (result == VehicleSampleResult.Starved || result == VehicleSampleResult.NotPresent)
                 {
                     StarvedFrames++;

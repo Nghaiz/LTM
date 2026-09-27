@@ -1,0 +1,56 @@
+{
+  "name": "helientry-observer",
+  "note": "Idle witness for helientry-driver: stands still so its checkpoints carry the helicopter pose another client sees.",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "respawn": true
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 14.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-0",
+      "seconds": 8.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-1",
+      "seconds": 8.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-2",
+      "seconds": 8.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-3",
+      "seconds": 8.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-4",
+      "seconds": 8.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-5",
+      "seconds": 8.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-6",
+      "seconds": 8.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-7",
+      "seconds": 8.0,
+      "yawDegrees": 0
+    }
+  ]
+}

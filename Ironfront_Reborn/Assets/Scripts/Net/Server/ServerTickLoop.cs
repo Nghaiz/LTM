@@ -42,7 +42,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender
+    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender, IShotAnnouncer
     {
         /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the protocol ceiling.</summary>
         private readonly PlayerListEntry[] _playerListEntries =
@@ -568,6 +568,10 @@ namespace Ironfront.Net.Unity.Server
                 _mountedWeapons,
                 () => _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
+            // A bot's hand-held shot reaches the wire through this, from Weapon.Shoot -- which
+            // cannot name this assembly. Cleared in Unbind with the other weapon seams.
+            NetShotAnnouncements.Announcer = this;
+
             WarnAboutPlaceholderWeapons();
         }
 
@@ -646,6 +650,7 @@ namespace Ironfront.Net.Unity.Server
             // authority. NetVehicleAuthority.Uninstall exists for the same reason.
             NetTurretAim.Clear();
             NetWeaponAuthority.Clear();
+            NetShotAnnouncements.Clear();
         }
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
@@ -1513,6 +1518,63 @@ namespace Ironfront.Net.Unity.Server
                 reliable: true);
         }
 
+        /// <summary>
+        /// Puts one shot on the wire as <c>S_WEAPON_FIRE</c>, to the clients close enough to
+        /// hear it. The one emitter for every shooter: a player's shot (ServerCombatBridge) and a
+        /// bot's (Weapon.Shoot).
+        /// </summary>
+        /// <remarks>
+        /// <b>Bots had no emitter at all until 2026-09-27.</b> A client plays a remote shot's
+        /// report, muzzle flash and tracer only from this message, and the only producers took
+        /// a <c>ClientSession</c> -- which a bot does not have -- while a bot's hitscan bullet
+        /// leaves <c>ServerProjectileBridge.Launch</c> unannounced by design. So on the Island
+        /// playtest the only combat a player could hear was explosions. Cosmetic and unreliable,
+        /// like the player path: a lost shot costs one report, never state.
+        /// </remarks>
+        public void EmitWeaponFire(ushort shooterActorId, byte weaponId, in Vec3 position, in Vec3 aim)
+        {
+            var message = new WeaponFireMessage(
+                shooterActorId,
+                weaponId,
+                Quantize.PackVel16(aim.X),
+                Quantize.PackVel16(aim.Y),
+                Quantize.PackVel16(aim.Z));
+
+            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
+            if (written < 0) return;
+
+            // Only to clients close enough to hear it: a client that could hear every shot on the
+            // map would have been handed an audio wallhack.
+            SendToListenersInEarshot(
+                position,
+                ServerEventWriter.WeaponFireAudibleRadius,
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.CosmeticChannel,
+                reliable: false);
+        }
+
+        /// <summary>
+        /// A bot's hand-held shot, announced from <c>Weapon.Shoot</c> through
+        /// <see cref="NetShotAnnouncements"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>IsClaimed, not aiControlled.</b> A player's body on the server is the AI character
+        /// prefab, so it reads <c>aiControlled == true</c> for the whole match; testing that would
+        /// announce every human shot twice, because ServerCombatBridge already announces it from
+        /// the input frame that fired it.
+        /// </remarks>
+        void IShotAnnouncer.AnnounceShot(GameObject shooter, Vector3 direction)
+        {
+            NetServerActor replicated = shooter.GetComponent<NetServerActor>();
+            if (replicated == null || replicated.IsClaimed) return;
+
+            EmitWeaponFire(
+                replicated.ActorId,
+                replicated.WeaponId,
+                MovementSimulation.ToCore(shooter.transform.position),
+                MovementSimulation.ToCore(direction));
+        }
+
         /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>
         /// <remarks>
         /// <para>
@@ -2020,6 +2082,10 @@ namespace Ironfront.Net.Unity.Server
                 Debug.LogError($"[net] despawn for actor {player.Session.ActorId} did not frame");
             }
 
+            // Before the slot goes back to the pool: this ServerPlayer is the only record of what
+            // it switched on the body (a seated capsule, an exit-grace collision pair), and the
+            // next connection to claim the body gets a fresh one that knows neither.
+            player.ReleaseBody();
             ServerActorRegistry.Instance.ReleaseSlot(player.Actor);
             ForgetActor(player.Session.ActorId);
 
@@ -2046,6 +2112,20 @@ namespace Ironfront.Net.Unity.Server
                     $"[net] last player left room {RoomIdentity.RoomId}; releasing it so the next "
                     + "allocation can be adopted");
                 RoomIdentity.Release();
+
+                // ...and the round goes with the room. The next room is a new match: it must open
+                // at WaitingForPlayers, 0/0, every capture point at its opening owner and no bots,
+                // with the bot-release gate re-armed. Measured 2026-09-27 on Island: room 22's
+                // players timed out mid-round, bots played on alone for ~11 minutes, and room 23
+                // joined THAT round at 52/39 with all five points taken ("5 of 5 capture point(s)
+                // start owned" on both clients) and no Warmup, no Playing, no bot gate.
+                // ForceReset raises no MatchEnded, so the master -- which has already dropped the
+                // room -- is sent no match result for it.
+                if (_match != null && _match.Match != null)
+                {
+                    Debug.Log("[net] resetting the match for the next room");
+                    _match.Match.ForceReset();
+                }
             }
 
             // After the removal, so the table no longer names the leaver. Sending the stale one

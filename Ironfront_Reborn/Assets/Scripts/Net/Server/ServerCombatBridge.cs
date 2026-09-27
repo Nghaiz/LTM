@@ -448,22 +448,9 @@ namespace Ironfront.Net.Unity.Server
         /// heading here would draw a tracer that the shell does not follow.
         /// </remarks>
         private void EmitMountedFire(ClientSession shooter, ushort vehicleId, byte seatIndex)
-        {
-            var message = new WeaponFireMessage(
-                shooter.ActorId,
-                _mountedWeapons.WeaponIdOf(vehicleId, seatIndex),
-                0, 0, 0);
-
-            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
-            if (written < 0) return;
-
-            _loop.SendToListenersInEarshot(
-                shooter.State.Position,
-                ServerEventWriter.WeaponFireAudibleRadius,
-                new ReadOnlySpan<byte>(_eventPayload, 0, written),
-                (byte)ServerEventWriter.CosmeticChannel,
-                reliable: false);
-        }
+            => _loop.EmitWeaponFire(
+                shooter.ActorId, _mountedWeapons.WeaponIdOf(vehicleId, seatIndex),
+                shooter.State.Position, Vec3.Zero);
 
         /// <summary>
         /// Grants a respawn if the gate allows it, and silently drops it otherwise.
@@ -1388,27 +1375,7 @@ namespace Ironfront.Net.Unity.Server
 
         private void EmitWeaponFire(
             ClientSession shooter, NetServerActor actor, in Vec3 aim)
-        {
-            var message = new WeaponFireMessage(
-                shooter.ActorId,
-                actor.WeaponId,
-                Quantize.PackVel16(aim.X),
-                Quantize.PackVel16(aim.Y),
-                Quantize.PackVel16(aim.Z));
-
-            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
-            if (written < 0) return;
-
-            // Cosmetic channel, and only to clients close enough to hear it — a gunshot is a
-            // muzzle flash and a sound, so a client 300 m away gains nothing from it and a
-            // client that can hear every shot on the map has been handed an audio wallhack.
-            _loop.SendToListenersInEarshot(
-                shooter.State.Position,
-                ServerEventWriter.WeaponFireAudibleRadius,
-                new ReadOnlySpan<byte>(_eventPayload, 0, written),
-                (byte)ServerEventWriter.CosmeticChannel,
-                reliable: false);
-        }
+            => _loop.EmitWeaponFire(shooter.ActorId, actor.WeaponId, shooter.State.Position, in aim);
 
         private void EmitHitConfirms(ClientSession shooter, in CombatTickResult result)
         {

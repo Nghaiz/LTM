@@ -466,7 +466,16 @@ namespace Ironfront.Net.Unity.Client
         }
 
         // Early in the frame, before the prediction and interpolation stages read what arrived.
-        private void Update() => _transport?.Poll();
+        //
+        // The render clock is brought to this frame first so that every snapshot polled below is
+        // measured against the render time of the frame it arrived in. The readers call AdvanceTo
+        // with the same time, which does nothing twice, so their order against this does not
+        // matter.
+        private void Update()
+        {
+            Router.Clock.AdvanceTo(Time.unscaledTimeAsDouble);
+            _transport?.Poll();
+        }
 
         private void OnMessage(ReadOnlyMemory<byte> payload)
         {

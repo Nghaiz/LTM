@@ -1,0 +1,225 @@
+{
+  "name": "helientry-driver",
+  "note": "Owner report 2026-09-27, bug 7: a helicopter flips and burns as soon as a player takes the pilot seat. The seat-entry capsule kick measured on tanks, quads, jeeps and boats (lane-A bug2-before-01) fires only when the entry lands before the next owed 30 Hz ServerPlayer tick, about every other entry, so one entry proves nothing: this takes the pilot seat of helicopter 4 eight times and leaves it between. Dustbowl, -SpawnIndex 3,5, IRONFRONT_LOG_VEHICLE=1; grade the server's [veh-hit] lines between the helicopter and the seated body, and the helicopter's up vector and health per checkpoint.",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "respawn": true
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 1.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "walking-to-heli",
+      "seconds": 10.0,
+      "sprint": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "enter-0",
+      "seconds": 2.5,
+      "seatToggle": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seated-0",
+      "seconds": 2.5
+    },
+    {
+      "checkpoint": "leave-0",
+      "seconds": 1.5,
+      "seatToggle": true
+    },
+    {
+      "seconds": 1.5,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "enter-1",
+      "seconds": 2.5,
+      "seatToggle": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seated-1",
+      "seconds": 2.5
+    },
+    {
+      "checkpoint": "leave-1",
+      "seconds": 1.5,
+      "seatToggle": true
+    },
+    {
+      "seconds": 1.5,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "enter-2",
+      "seconds": 2.5,
+      "seatToggle": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seated-2",
+      "seconds": 2.5
+    },
+    {
+      "checkpoint": "leave-2",
+      "seconds": 1.5,
+      "seatToggle": true
+    },
+    {
+      "seconds": 1.5,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "enter-3",
+      "seconds": 2.5,
+      "seatToggle": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seated-3",
+      "seconds": 2.5
+    },
+    {
+      "checkpoint": "leave-3",
+      "seconds": 1.5,
+      "seatToggle": true
+    },
+    {
+      "seconds": 1.5,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "enter-4",
+      "seconds": 2.5,
+      "seatToggle": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seated-4",
+      "seconds": 2.5
+    },
+    {
+      "checkpoint": "leave-4",
+      "seconds": 1.5,
+      "seatToggle": true
+    },
+    {
+      "seconds": 1.5,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "enter-5",
+      "seconds": 2.5,
+      "seatToggle": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seated-5",
+      "seconds": 2.5
+    },
+    {
+      "checkpoint": "leave-5",
+      "seconds": 1.5,
+      "seatToggle": true
+    },
+    {
+      "seconds": 1.5,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "enter-6",
+      "seconds": 2.5,
+      "seatToggle": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seated-6",
+      "seconds": 2.5
+    },
+    {
+      "checkpoint": "leave-6",
+      "seconds": 1.5,
+      "seatToggle": true
+    },
+    {
+      "seconds": 1.5,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "enter-7",
+      "seconds": 2.5,
+      "seatToggle": true,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seated-7",
+      "seconds": 2.5
+    },
+    {
+      "checkpoint": "leave-7",
+      "seconds": 1.5,
+      "seatToggle": true
+    },
+    {
+      "seconds": 1.5,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    }
+  ]
+}

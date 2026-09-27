@@ -135,7 +135,13 @@ namespace Ironfront.Net.Diagnostics
                 Prune(dir);
 
                 string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-                CurrentFile = Path.Combine(dir, $"ironfront-{stamp}.log");
+
+                // The process id, because a second is not unique: two clients launched together
+                // open the same name, FileMode.Create lets the second truncate the first, and each
+                // then writes over the other's bytes -- losing exactly the lines, such as an
+                // exception's stack, that the file exists to keep.
+                int pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                CurrentFile = Path.Combine(dir, $"ironfront-{stamp}-{pid}.log");
 
                 // FileShare.ReadWrite so the file can be tailed while the game is running,
                 // and AutoFlush because the crash or the hang is precisely the session whose

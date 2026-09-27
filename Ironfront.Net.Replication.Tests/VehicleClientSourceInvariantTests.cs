@@ -354,6 +354,86 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains(": MonoBehaviour", relay, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// A destroyed vehicle's proxy dies from the snapshot that first flags it Dead and stays
+        /// snapshot-driven; the despawn that follows 15 s later only removes it.
+        /// </summary>
+        /// <remarks>
+        /// Before 2026-09-27 the despawn arrived at the moment of death and the proxy was handed
+        /// back to PhysX, so each client threw its own wreck with its own random impulse and
+        /// kinematic live vehicles shoved it around, while the server's real wreck stayed
+        /// invisible. Killing it a second time on the despawn is PR #325's Tank.Die throw.
+        /// </remarks>
+        [Fact]
+        public void ADeadProxyDiesFromItsSnapshotAndTheDespawnOnlyRemovesIt()
+        {
+            string apply = MethodBody(
+                ReadScript("Net", "Client", "NetClientVehicle.cs"), "NetClientVehicle.cs",
+                "private void ApplyAuthoritativeState(in VehiclePose pose)");
+            Assert.Contains("VehicleStateFlags.Dead", apply, StringComparison.Ordinal);
+            Assert.Contains("_vehicle.Die()", apply, StringComparison.Ordinal);
+
+            string despawn = MethodBody(
+                ReadScript("Net", "Client", "RemoteVehicleRegistry.cs"), "RemoteVehicleRegistry.cs",
+                "private void OnVehicleDespawn(VehicleDespawnMessage message)");
+            int diedAlready = despawn.IndexOf("DiedFromSnapshot", StringComparison.Ordinal);
+            int killAgain = despawn.IndexOf("Body.Die()", StringComparison.Ordinal);
+            Assert.True(
+                diedAlready >= 0 && killAgain > diedAlready,
+                "OnVehicleDespawn must remove a proxy that already died from its Dead snapshot "
+                + "BEFORE the legacy branch that hands the body to PhysX and kills it again.");
+        }
+
+        /// <summary>
+        /// A body entering a seat on the server leaves the physics world in the same step that
+        /// welds it into the hull.
+        /// </summary>
+        /// <remarks>
+        /// ServerPlayer.Tick also disables the capsule, but only on an owed 30 Hz tick against
+        /// 60 Hz physics, so about every other entry PhysX stepped once with a live capsule on a
+        /// kinematic Rigidbody inside the vehicle. Measured on lane-A bug2-before-01: 14,160 and
+        /// 16,905 N·s contacts between each tank and the body seated in it at 0.2 m/s, and the
+        /// same kick on quads, jeeps and boats.
+        /// </remarks>
+        /// <summary>
+        /// A minimap marker whose subject is behind the minimap camera is hidden, not drawn.
+        /// </summary>
+        /// <remarks>
+        /// A perspective projection of a point behind the camera (a helicopter above it) comes back
+        /// MIRRORED into the frame, so the RectMask2D that clips off-map icons cannot catch it: the
+        /// icon would sit inside the map at a place the vehicle is not. MinimapMarker compiles into
+        /// Assembly-CSharp (ledger E-11b), so this is pinned on its source.
+        /// </remarks>
+        [Fact]
+        public void AMinimapMarkerBehindTheMinimapCameraIsHidden()
+        {
+            string lateUpdate = MethodBody(
+                ReadScript("Assembly-CSharp", "MinimapMarker.cs"), "MinimapMarker.cs",
+                "private void LateUpdate()");
+
+            int behind = lateUpdate.IndexOf("viewport.z <= 0f", StringComparison.Ordinal);
+            int shown = lateUpdate.IndexOf("SetVisible(true)", StringComparison.Ordinal);
+            Assert.True(
+                behind >= 0 && shown > behind,
+                "MinimapMarker.LateUpdate must hide a subject behind the minimap camera before "
+                + "it ever shows the icon.");
+        }
+
+        [Fact]
+        public void SeatEntryTakesTheCapsuleOutInTheSameStep()
+        {
+            string apply = MethodBody(
+                ReadScript("Net", "Server", "ServerSeatBridge.cs"), "ServerSeatBridge.cs",
+                "private bool Apply(in SeatDecision decision)");
+
+            int enter = apply.IndexOf("TryEnterSeat", StringComparison.Ordinal);
+            int capsuleOff = apply.IndexOf("SetSeated(true)", StringComparison.Ordinal);
+            Assert.True(
+                enter >= 0 && capsuleOff > enter,
+                "ServerSeatBridge.Apply must switch the seated body's capsule off right after a "
+                + "successful TryEnterSeat, not leave it to the next owed ServerPlayer tick.");
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static string ReadScript(params string[] relativeParts)

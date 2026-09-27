@@ -61,6 +61,17 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Buffers snapshots so remote actors can be drawn between them.</summary>
         public SnapshotInterpolator Interpolator { get; } = new SnapshotInterpolator();
 
+        /// <summary>
+        /// The render time both interpolators are sampled at. Fed by the actor stream, which
+        /// every client receives on every snapshot; the vehicle stream rides the same ticks.
+        /// </summary>
+        /// <remarks>
+        /// One clock, not one per stream, for the reason <see cref="VehicleSnapshotInterpolator"/>
+        /// gives (V5-D1): two render times put a man and the vehicle he is standing on in
+        /// different places.
+        /// </remarks>
+        public InterpolationClock Clock { get; } = new InterpolationClock();
+
         /// <summary>Applies vehicle snapshot deltas. Its <c>Current</c> is the newest vehicle world.</summary>
         public VehicleDeltaDecoder VehicleDecoder { get; } = new VehicleDeltaDecoder();
 
@@ -258,6 +269,7 @@ namespace Ironfront.Net.Replication.Client
         {
             Decoder.Reset();
             Interpolator.Reset();
+            Clock.Reset();
             VehicleDecoder.Reset();
             VehicleInterpolator.Reset();
             SnapshotsApplied = 0;
@@ -562,6 +574,7 @@ namespace Ironfront.Net.Replication.Client
                     // what changed. Pushing the message would buffer a world with a handful of
                     // actors in it and nothing else.
                     Interpolator.Push(Decoder.Current);
+                    Clock.OnSnapshot(Decoder.Current.ServerTick);
                     OnSnapshotApplied?.Invoke(Decoder.Current.ServerTick, Decoder.LastProcessedInputTick);
                     return true;
 

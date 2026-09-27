@@ -1097,37 +1097,25 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	}
 
 	/// <summary>
-	/// The wreck goes off: an impulse that throws it, and a blast that hurts what is near it.
+	/// The wreck goes off: an impulse that throws it, particles and a sound. It damages nothing.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>debt-closure phase 2 task 2f closes ledger C-10.</b> V1-D5 handed "should a wreck do
-	/// blast damage" to V4 as a gameplay decision and V4 did not take it, so
-	/// <c>ExplosionKind.Vehicle</c> shipped with zero producers — declared on the wire, mapped by
-	/// the client's effect table, and emitted by nothing. The decision is taken here: <b>a wreck
-	/// damages.</b> Taking cover behind a burning vehicle is now dangerous, which is the intended
-	/// consequence and the balance note this change owes.
+	/// <b>Exactly the original's <c>Vehicle.Explode</c>, by the owner's ruling of 2026-09-27.</b>
+	/// Ledger C-10 (debt-closure phase 2, PR #145) had this also call <c>ActorManager.Explode</c>
+	/// for 300 damage over 6 m, on the reasoning that taking cover behind a burning vehicle should
+	/// be dangerous. In play it made every wreck kill its neighbours: an empty vehicle decays to
+	/// death after about 80 s (original behaviour, <see cref="AutoDamage"/>), bots leave vehicles
+	/// parked side by side on pads and roads, and each wreck set off the next 0.3 s after it — the
+	/// "smoking, burning, exploding in a chain" the 2026-09-27 Island playtest reported. The owner
+	/// chose the original over "infantry only" and "reduced damage".
 	/// </para>
 	/// <para>
-	/// <b>Unguarded, exactly like <c>ExplodingProjectile.Explode</c>.</b>
-	/// <c>ActorManager.Explode</c> owns the three-way role split at its own choke point: offline
-	/// unchanged, the server deciding and announcing <c>S_EXPLOSION</c>, and a client applying no
-	/// health damage while keeping the corpse ragdoll impulse (AD-4). A second role guard here
-	/// would be a second copy of that rule.
-	/// </para>
-	/// <para>
-	/// <b>Not a chain-detonation hazard.</b> This runs from <c>Invoke("Explode", 0.3f)</c> in
-	/// <see cref="Die"/> — a later frame on a fresh stack — so it never re-enters an
-	/// <c>ActorManager.Explode</c> that is still running. A wreck that kills a neighbour makes
-	/// that neighbour explode 0.3 s later, which is a sequence rather than a recursion.
+	/// Every client still draws and hears the blast: <see cref="Die"/> runs on each client when the
+	/// vehicle is destroyed, so this method's particles and sound play there locally, as they
+	/// always have. Do not re-add area damage here.
 	/// </para>
 	/// </remarks>
-	/// <summary>
-	/// This wreck's blast. Optional: unassigned falls back to the kind's defaults.
-	/// </summary>
-	/// <remarks>debt-closure phase 2 task 2f, ledger C-10. See <c>WreckExplosion</c>.</remarks>
-	public ExplodingProjectile.ExplosionConfiguration wreckExplosion;
-
 	protected virtual void Explode()
 	{
 		// The impulse is gameplay -- it is what throws the wreck -- so it runs unguarded. Only
@@ -1149,45 +1137,39 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		{
 			explosionSound.Play();
 		}
-		// Last, after the impulse and the cosmetics: ActorManager.Explode can kill actors and
-		// other vehicles, and running it first would mean a wreck whose own throw and particles
-		// depended on what its blast happened to reach.
-		ActorManager.Explode(
-			base.transform.position, WreckExplosion(), null,
-			Ironfront.Net.Protocol.ExplosionKind.Vehicle);
-	}
-
-	/// <summary>
-	/// The wreck's blast, from <see cref="wreckExplosion"/> or from this kind's defaults.
-	/// </summary>
-	/// <remarks>
-	/// <b>Defaults are built in code, and that is deliberate rather than lazy.</b> Every vehicle
-	/// prefab in the game predates this field, phase 2 authors no prefabs (they are Phase 1's),
-	/// and an unauthored <c>ExplosionConfiguration</c> has null <c>AnimationCurve</c>s — so
-	/// reading it straight would throw a NullReferenceException inside every wreck. The curves
-	/// run 1 at the centre to 0 at the edge, because <c>ExplosionRanges</c> hands out
-	/// <c>t = distance / range</c>. Author <see cref="wreckExplosion"/> per prefab to tune it.
-	/// </remarks>
-	private ExplodingProjectile.ExplosionConfiguration WreckExplosion()
-	{
-		if (wreckExplosion == null)
-		{
-			wreckExplosion = new ExplodingProjectile.ExplosionConfiguration();
-		}
-		if (wreckExplosion.damageFalloff == null || wreckExplosion.damageFalloff.length == 0)
-		{
-			wreckExplosion.damageFalloff = AnimationCurve.Linear(0f, 1f, 1f, 0f);
-		}
-		if (wreckExplosion.balanceFalloff == null || wreckExplosion.balanceFalloff.length == 0)
-		{
-			wreckExplosion.balanceFalloff = AnimationCurve.Linear(0f, 1f, 1f, 0f);
-		}
-		return wreckExplosion;
 	}
 
 	private void Cleanup()
 	{
+		// A replicated proxy's wreck belongs to the server: it is shown from snapshots until the
+		// server's S_VEHICLE_DESPAWN, which arrives when the server's own wreck is cleaned up.
+		// Destroying it on a local timer as well would race that despawn and could drop the
+		// minimap marker keyed by this transform before the registry got to remove it.
+		if (NetworkDriven) return;
 		UnityEngine.Object.Destroy(base.gameObject);
+	}
+
+	/// <summary>
+	/// The network id this dead vehicle still holds; despawned when the wreck object goes.
+	/// </summary>
+	private ushort wreckNetId;
+
+	/// <summary>
+	/// Keeps this dead vehicle replicated, with <c>VehicleStateFlags.Dead</c>, until the wreck is
+	/// destroyed, and announces the despawn then. Server only; called by <c>VehicleSpawner</c>.
+	/// </summary>
+	/// <remarks>
+	/// <b>The server's wreck is the one every client sees.</b> Until 2026-09-27 the despawn went
+	/// out the moment the vehicle died, while the server kept the wreck for 15 s as a solid,
+	/// unreplicated body thrown by its own random impulse — something live vehicles and bots hit
+	/// and no player could see — and every client turned ITS copy into a free physics body thrown
+	/// by a different random impulse, which kinematic live vehicles then shoved around. Holding the
+	/// id costs the pool 15 s per wreck; the replacement never waits on it, because the spawner's
+	/// scheduler is told of the death immediately.
+	/// </remarks>
+	public void DespawnWhenDestroyed(ushort netId)
+	{
+		wreckNetId = netId;
 	}
 
 	public Vector3 Velocity()
@@ -1314,6 +1296,15 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	private void OnDestroy()
 	{
 		ActorManager.DropVehicle(this);
+
+		// Here rather than in Cleanup, so every way a wreck can go -- its 15 s cleanup, a world
+		// reset, a scene unload -- takes its id off the wire exactly once.
+		if (wreckNetId != 0)
+		{
+			ushort netId = wreckNetId;
+			wreckNetId = 0;
+			NetVehicleLifecycle.ReportDespawned(netId, Ironfront.Net.Protocol.VehicleDespawnReason.Destroyed);
+		}
 	}
 
 	public bool IsStill()

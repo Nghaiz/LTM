@@ -259,6 +259,12 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 
 	protected virtual void Update()
 	{
+		if (remoteLoopHoldUntil > 0f && Time.time > remoteLoopHoldUntil)
+		{
+			// The remote shooter stopped: fade the loop out exactly as a released trigger does.
+			remoteLoopHoldUntil = 0f;
+			StopFireLoop();
+		}
 		if (!stopFireLoop.Done() && audio != null)
 		{
 			float num = 1f - stopFireLoop.Ratio();
@@ -432,6 +438,8 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		// every one of them leaves the same hand. Cleared here rather than at the top of the next
 		// shot so that a bot -- which never has one supplied -- cannot inherit the last human's.
 		networkShotOrigin = null;
+		// Also once per shot, for the same reason: one report per trigger pull, not per pellet.
+		AnnounceBotShot(direction);
 		if (ammo != -1)
 		{
 			ammo--;
@@ -491,7 +499,49 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	/// </remarks>
 	public void PlayFireCosmetics()
 	{
+		// An automatic weapon's report is a LOOP (Start sets audio.loop = configuration.auto), so a
+		// one-shot Play() per message started a loop nothing ever stopped: once a remote shooter
+		// fired a burst, its gun kept sounding for the rest of the match. Run the same loop the
+		// local trigger runs, kept alive by each message and faded out by Update once they stop.
+		if (configuration.auto && audio != null)
+		{
+			if (!audio.isPlaying || !stopFireLoop.Done())
+			{
+				StartFireLoop();
+			}
+			remoteLoopHoldUntil = Time.time + Mathf.Max(2.5f * configuration.cooldown, RemoteLoopMinHoldSeconds);
+			PlayFireCosmetics(false);
+			return;
+		}
 		PlayFireCosmetics(true);
+	}
+
+	/// <summary>
+	/// The shortest a remote automatic weapon's loop is held after its last shot. Covers the gap
+	/// between two S_WEAPON_FIRE messages at the snapshot cadence, with jitter.
+	/// </summary>
+	private const float RemoteLoopMinHoldSeconds = 0.25f;
+
+	/// <summary>When a remote automatic weapon's loop fades out, unless another shot arrives. 0 = idle.</summary>
+	private float remoteLoopHoldUntil;
+
+	/// <summary>
+	/// Announces a shot fired by a server-driven bot, once per shot, through
+	/// <see cref="NetShotAnnouncements"/>. The server's announcer skips a claimed (human) body,
+	/// whose shot is announced by ServerCombatBridge from its input frame.
+	/// </summary>
+	/// <remarks>
+	/// A mounted weapon is skipped here: the client plays the report of the gunner's CARRIED
+	/// weapon, so a bot gunner's turret would sound like a rifle. That is a fact about this type,
+	/// which is why it is tested on this side of the seam and the claimed-body test on the other.
+	/// </remarks>
+	private void AnnounceBotShot(Vector3 direction)
+	{
+		if (user == null || this is MountedWeapon)
+		{
+			return;
+		}
+		NetShotAnnouncements.Announce(user.gameObject, direction);
 	}
 
 	/// <inheritdoc cref="PlayFireCosmetics()"/>

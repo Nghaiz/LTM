@@ -348,10 +348,12 @@ namespace Ironfront.Net.Replication.Match
                     _playingElapsed += deltaSeconds;
                     UpdateCapturePoints(actors, deltaSeconds);
                     ApplyElimination(deltaSeconds);
-                    // A live round is NOT abandoned when the humans leave. The bots are still
-                    // fighting, the match still resolves, and the master still gets its
-                    // GS_MATCH_ENDED — which is what keeps the server's advertised state honest
-                    // rather than stuck mid-round.
+                    // A live round is NOT abandoned here when the humans leave: this machine has
+                    // no notion of rooms. It outlives its humans only while their ROOM lives --
+                    // ServerTickLoop calls ForceReset when the last player releases the room,
+                    // because the next room is a new match. Without that, a round left to the
+                    // bots ran 48 minutes unresolved on 2026-09-27 and the next room joined it at
+                    // 52/39 with every capture point already taken.
                     if (IsDecided()) EnterPhase(MatchPhase.Ended);
                     break;
 

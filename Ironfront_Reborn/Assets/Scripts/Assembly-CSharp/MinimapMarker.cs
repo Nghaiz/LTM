@@ -104,6 +104,16 @@ public class MinimapMarker : MonoBehaviour
 		}
 
 		Vector3 viewport = MinimapCamera.instance.camera.WorldToViewportPoint(subject.position);
+
+		// Behind the minimap camera (a helicopter above it, say), a perspective projection comes
+		// back MIRRORED into the frame, so the map's clip mask cannot catch it; and an inactive
+		// subject is not in the world at all.
+		if (viewport.z <= 0f || !subject.gameObject.activeInHierarchy)
+		{
+			SetVisible(false);
+			return;
+		}
+
 		RectTransform rect = (RectTransform)base.transform;
 		Vector2 anchor = new Vector2(viewport.x, viewport.y);
 		rect.anchorMin = anchor;

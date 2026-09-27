@@ -274,7 +274,7 @@ namespace Ironfront.Net.Replication.Tests
         public void VehicleAndEnvironmentKindsRoundTrip()
         {
             // Values pinned because they are on the wire, not because the gap is still open.
-            Assert.Equal(2, (byte)ExplosionKind.Vehicle);       // Vehicle.Explode emits it
+            Assert.Equal(2, (byte)ExplosionKind.Vehicle);       // no producer since 2026-09-27: a wreck damages nothing
             Assert.Equal(3, (byte)ExplosionKind.Environment);   // ExplosiveProp.Detonate emits it
 
             var router = new ClientMessageRouter();

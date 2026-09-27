@@ -755,19 +755,21 @@ public class VehicleSpawner : MonoBehaviour
 		// one X-70 leaked: released here, and its despawn put on the wire, so the clients that
 		// have been rendering it since stop. Checked before the lastSpawnedVehicle branch
 		// because the two sets are disjoint and this one used to fall through it entirely.
+		//
+		// The despawn itself is DEFERRED to the wreck's destruction (Vehicle.DespawnWhenDestroyed):
+		// the dead vehicle stays replicated, flagged Dead, for as long as its wreck exists, so every
+		// client draws the server's wreck instead of throwing a private copy of its own. The id
+		// stays in use until then, so the replacement the scheduler may order below can never be
+		// issued the same number while the wreck still carries it.
 		if (vehicle != null && supersededNetIds.TryGetValue(vehicle, out SupersededVehicle superseded))
 		{
 			supersededNetIds.Remove(vehicle);
-			NetVehicleLifecycle.ReportDespawned(superseded.NetId, VehicleDespawnReason.Destroyed);
+			vehicle.DespawnWhenDestroyed(superseded.NetId);
 		}
 
 		if (vehicle == lastSpawnedVehicle)
 		{
-			// Before the scheduler, because ReportVehicleDied is what may schedule the
-			// replacement -- and a replacement announced before this despawn would tell every
-			// client to remove the vehicle that had just arrived.
-			NetVehicleLifecycle.ReportDespawned(
-				lastSpawnedVehicleNetId, VehicleDespawnReason.Destroyed);
+			if (vehicle != null) vehicle.DespawnWhenDestroyed(lastSpawnedVehicleNetId);
 			lastSpawnedVehicleNetId = 0;
 		}
 

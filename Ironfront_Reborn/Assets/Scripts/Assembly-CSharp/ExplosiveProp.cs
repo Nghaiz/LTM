@@ -44,7 +44,7 @@ public class ExplosiveProp : MonoBehaviour
 	[Tooltip("Seconds between taking lethal damage and detonating. Also breaks a chain's recursion.")]
 	public float fuseSeconds = 0.3f;
 
-	[Tooltip("The blast. Unassigned falls back to code defaults; see WreckExplosion on Vehicle.")]
+	[Tooltip("The blast. Unassigned falls back to code defaults; see Blast().")]
 	public ExplodingProjectile.ExplosionConfiguration explosionConfiguration;
 
 	[Tooltip("Optional. Played on detonation; absent on a stripped headless build.")]
@@ -151,7 +151,7 @@ public class ExplosiveProp : MonoBehaviour
 	/// The blast, with code defaults when nothing was authored.
 	/// </summary>
 	/// <remarks>
-	/// Same reasoning as <c>Vehicle.WreckExplosion</c>: an unauthored
+	/// An unauthored
 	/// <c>ExplosionConfiguration</c> has null <c>AnimationCurve</c>s and reading it straight
 	/// would throw inside the detonation. The curves run 1 at the centre to 0 at the edge,
 	/// because <c>ExplosionRanges</c> hands out <c>t = distance / range</c>.

@@ -30943,24 +30943,6 @@ MonoBehaviour:
   pathingRadius: 0
   ramSize: {x: 1.5, y: 0.5, z: 2.9}
   ramOffset: {x: 0, y: 0.2, z: 0.9}
-  wreckExplosion:
-    damage: 300
-    balanceDamage: 300
-    force: 500
-    damageRange: 6
-    damageFalloff:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    balanceRange: 9
-    balanceFalloff:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
   floatAcceleration: 20
   floatDepth: 0.4
   speed: 20

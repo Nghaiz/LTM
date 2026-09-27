@@ -154,10 +154,15 @@ namespace Ironfront.Net.Unity.Server
             // vehicle nothing will ever despawn again, because the sink drops a second despawn
             // for an id it has already quarantined.
             //
-            // This is NOT on its own what keeps a dead vehicle out of the snapshot — the capture
-            // that matters is the one that already ran. ServerTickLoop resolves deaths BEFORE it
-            // captures, for exactly that reason; see BuildAndSendSnapshots.
+            // A DEAD vehicle is meant to be in the snapshot, flagged Dead, until its wreck is
+            // destroyed: VehicleSpawner defers the despawn to Vehicle.OnDestroy so that every
+            // client draws the server's wreck. What this ordering guards is the step after that.
             if (vehicleId != 0) ServerVehicleRegistry.Instance.Unregister(vehicleId);
+
+            // The interest rows go with the id, here where the id actually leaves the wire. The
+            // tick loop also forgets at death, but the wreck is captured -- and re-tracked -- for
+            // 15 s after that, and VehicleInterestTracker leaks per viewer unless told.
+            if (vehicleId != 0) ServerTickLoop.Current?.VehicleInterest.Forget(vehicleId);
 
             _sink.OnVehicleDespawned(vehicleId, reason);
         }

@@ -1,5 +1,6 @@
 ﻿using System;
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
@@ -322,7 +323,34 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	// path or belongs to the client that renders this body.
 	public void EquipLoadout()
 	{
+		DiscardCarriedWeapons();
 		SpawnLoadoutWeapons();
+	}
+
+	// Destroys every weapon this body still carries, so arming it again leaves exactly one set.
+	//
+	// The offline death runs Die, which drops all five slots, so SpawnAt always arms an empty
+	// body. A networked body on a client never runs Die -- FellBody only topples it -- so every
+	// respawn armed five new weapons on top of the last five, and SwitchToFirstAvailableWeapon
+	// unholsters without holstering: whenever the previous weapon was still shown, both stayed
+	// in the first-person view (owner report 2026-09-27, "two rifles after respawning").
+	private void DiscardCarriedWeapons()
+	{
+		for (int i = 0; i < weapons.Length; i++)
+		{
+			Weapon weapon = weapons[i];
+			weapons[i] = null;
+			// DropWeapon is the one thing that clears the parent, and Weapon.Drop has already
+			// destroyed what it let go of; the Destroy lands at the end of the frame, so a weapon
+			// dropped this frame is parentless but not yet null.
+			if (weapon == null || weapon.transform.parent == null)
+			{
+				continue;
+			}
+			weapon.gameObject.SetActive(false);
+			UnityEngine.Object.Destroy(weapon.gameObject);
+		}
+		activeWeapon = null;
 	}
 
 	/// <summary>
@@ -1763,6 +1791,18 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		// that decides whether they update at 5 Hz or every frame.
 		Camera camera = Camera.main;
 		if (camera == null)
+		{
+			return false;
+		}
+		// A server has no viewer, so no visibility or distance test on it means anything -- and
+		// the Camera.main guard above does not catch it: Island ships an enabled "Scenery Camera"
+		// tagged MainCamera, and a -nographics process never renders, so isVisible is false for
+		// every bot and EVERY bot took the 5 Hz path below. Measured on lane-A bug2-before-01
+		// (Island, headless server): a bot's replicated position held unchanged for exactly four
+		// 20 Hz snapshots -- 0.2 s -- 1,015 times, against 197 and 115 for two and three. Clients
+		// then drew each bot moving in 0.2 s jumps, which no interpolation can smooth, because the
+		// jumps are in the authoritative positions themselves.
+		if (NetContext.IsServer)
 		{
 			return false;
 		}
