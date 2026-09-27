@@ -1,5 +1,6 @@
 ﻿using System;
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
@@ -1763,6 +1764,18 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		// that decides whether they update at 5 Hz or every frame.
 		Camera camera = Camera.main;
 		if (camera == null)
+		{
+			return false;
+		}
+		// A server has no viewer, so no visibility or distance test on it means anything -- and
+		// the Camera.main guard above does not catch it: Island ships an enabled "Scenery Camera"
+		// tagged MainCamera, and a -nographics process never renders, so isVisible is false for
+		// every bot and EVERY bot took the 5 Hz path below. Measured on lane-A bug2-before-01
+		// (Island, headless server): a bot's replicated position held unchanged for exactly four
+		// 20 Hz snapshots -- 0.2 s -- 1,015 times, against 197 and 115 for two and three. Clients
+		// then drew each bot moving in 0.2 s jumps, which no interpolation can smooth, because the
+		// jumps are in the authoritative positions themselves.
+		if (NetContext.IsServer)
 		{
 			return false;
 		}
