@@ -202,6 +202,9 @@ namespace Ironfront.Net.Unity.Server
         // fresh list every round.
         private readonly List<ushort> _retainedIds = new List<ushort>(ProtocolConstants.MAX_ACTORS);
 
+        // Reused by ResetForNewMatch: the players whose body is still dead as the round resets.
+        private readonly List<ushort> _stillDeadPlayers = new List<ushort>(16);
+
         /// <summary>Layers a bullet cannot pass through. Mirrors <c>Projectile.cs</c>'s mask.</summary>
         private const int BulletBlockingLayers = -2049;
 
@@ -1884,7 +1887,19 @@ namespace Ironfront.Net.Unity.Server
             // Clears the vehicle registry, the vehicle pair table and the vehicle id pool too —
             // the audit owns the reset next to the check for it, so the two cannot drift.
             _stateAudit.ResetForNewMatch(_retainedIds);
-            _respawnGate.Reset();
+
+            // Player bodies survive the world reset, so one that was dead when the round ended
+            // is still dead now; a plain Reset() forgot the death and TryRespawn then refused
+            // that player for the whole of the next round. See ResetForNewRound.
+            _stillDeadPlayers.Clear();
+            for (int i = 0; i < _players.Count; i++)
+            {
+                NetServerActor body = _players[i].Actor;
+                if (body != null && !body.IsAlive && !_players[i].AwaitingFirstDeploy)
+                    _stillDeadPlayers.Add(_players[i].Session.ActorId);
+            }
+            _respawnGate.ResetForNewRound(
+                _stillDeadPlayers, CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
             // Beside the respawn gate, because the two are stamped from the same death edge: a
             // corpse record surviving into the next round would report a body that no longer

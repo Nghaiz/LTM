@@ -65,6 +65,28 @@ namespace Ironfront.Net.Replication.Tests
                 + "ahead of the HasState early return.");
         }
 
+        /// <summary>
+        /// A player who is dead when the round resets can deploy in the next one.
+        /// </summary>
+        /// <remarks>
+        /// Measured 2026-09-28 on the Azure Island server: the reset cleared the respawn gate
+        /// while the player's body stayed dead, <c>ServerCombatBridge.TryRespawn</c> refused a
+        /// death the gate no longer knew about, and three deploy requests from one client were
+        /// dropped silently for a whole round. The behaviour is pinned by
+        /// <c>RespawnAcrossRoundResetTests</c>; this pins that the reset uses it.
+        /// </remarks>
+        [Fact]
+        public void TheRoundResetCarriesDeadPlayersOverAsReadyToDeploy()
+        {
+            string reset = MethodBody(
+                ReadScript("Net", "Server", "ServerTickLoop.cs"), "ServerTickLoop.cs",
+                "public void ResetForNewMatch()");
+
+            Assert.Contains("_respawnGate.ResetForNewRound(", reset, StringComparison.Ordinal);
+            Assert.DoesNotContain("_respawnGate.Reset();", reset, StringComparison.Ordinal);
+            Assert.Contains("!body.IsAlive", reset, StringComparison.Ordinal);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static string ReadScript(params string[] relativeParts)
