@@ -311,10 +311,19 @@ namespace Ironfront.Net.Unity.Client
 
             // Destroyed rather than Die()'d for a WorldReset: Die plays the explosion, which is
             // right for a vehicle that was shot and wrong for one the round simply ended around.
+            // The wreck already died from a snapshot flagged Dead and has been drawn from the
+            // server's own wreck since; this despawn is that wreck being cleaned up on the server.
+            if (vehicle.DiedFromSnapshot)
+            {
+                Destroy(vehicle.Body.GameObject);
+                return;
+            }
+
             if (message.Reason == VehicleDespawnReason.Destroyed)
             {
-                // Give the body back to PhysX first, so the wreck falls apart instead of hanging
-                // in the air kinematic.
+                // A server that despawns at the moment of death (before 2026-09-27) never sends a
+                // Dead snapshot. Give the body back to PhysX first, so the wreck falls apart
+                // instead of hanging in the air kinematic.
                 vehicle.Body.SetNetworkDriven(false);
                 vehicle.Body.Die();
                 return;

@@ -134,9 +134,20 @@ namespace Ironfront.Net.Unity.Server
             if (!_vehicles.TryFind(decision.VehicleId, out IGameplayVehicleSource vehicle))
                 return false;
 
-            return decision.Result == SeatChangeResult.Entered
-                ? vehicle.TryEnterSeat(actor.gameObject, decision.SeatIndex)
-                : vehicle.TryLeaveSeat(actor.gameObject);
+            if (decision.Result != SeatChangeResult.Entered)
+                return vehicle.TryLeaveSeat(actor.gameObject);
+
+            if (!vehicle.TryEnterSeat(actor.gameObject, decision.SeatIndex)) return false;
+
+            // The capsule leaves the physics world in the SAME step that welds the body into the
+            // hull. ServerPlayer.Tick does it too, but only on an owed netcode tick (30 Hz against
+            // 60 Hz physics), so about every other entry PhysX stepped once with a live capsule on
+            // a kinematic Rigidbody inside the vehicle and threw it out: measured on lane-A
+            // bug2-before-01 as a 14,160-16,905 N·s contact between each tank and the body seated
+            // in it at 0.2 m/s relative speed, and as the same kick on quads, jeeps and boats.
+            // PR #325 fixed the exit side of this; the entry side was still open.
+            actor.Movement?.SetSeated(true);
+            return true;
         }
 
         /// <summary>

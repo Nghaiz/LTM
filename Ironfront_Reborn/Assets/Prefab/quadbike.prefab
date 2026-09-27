@@ -30611,24 +30611,6 @@ MonoBehaviour:
   pathingRadius: 0
   ramSize: {x: 0.55, y: 0.5, z: 1.2}
   ramOffset: {x: 0, y: 0.1, z: 0}
-  wreckExplosion:
-    damage: 300
-    balanceDamage: 300
-    force: 500
-    damageRange: 6
-    damageFalloff:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    balanceRange: 9
-    balanceFalloff:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
   extraStability: 0.9
   maxTorque: 90
   maxSteer: 11.5

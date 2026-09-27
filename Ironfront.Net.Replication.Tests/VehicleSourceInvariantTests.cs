@@ -498,6 +498,43 @@ namespace Ironfront.Net.Replication.Tests
             }
         }
 
+        /// <summary>
+        /// A wreck's blast damages nothing. Owner ruling 2026-09-27: the original's
+        /// <c>Vehicle.Explode</c> only throws the wreck and plays its effects.
+        /// </summary>
+        [Fact]
+        public void AWreckBlastDamagesNothing()
+        {
+            string explode = MethodBody(
+                ReadScript("Vehicle.cs"), "Vehicle.cs", "protected virtual void Explode()");
+
+            AssertAbsent(explode, "ActorManager.Explode", "Vehicle.Explode",
+                "the owner ruled on 2026-09-27 that a wreck damages nothing, exactly like the "
+                + "original; ledger C-10's 300-damage wreck blast turned every abandoned vehicle "
+                + "into a chain of explosions on the Island playtest");
+        }
+
+        /// <summary>
+        /// A dead vehicle stays on the wire, flagged Dead, until its wreck is destroyed, so every
+        /// client draws the server's wreck.
+        /// </summary>
+        [Fact]
+        public void ADeadVehicleStaysReplicatedUntilItsWreckIsDestroyed()
+        {
+            string died = MethodBody(
+                ReadScript("VehicleSpawner.cs"), "VehicleSpawner.cs",
+                "public void VehicleDied(Vehicle vehicle)");
+
+            AssertAbsent(died, "ReportDespawned", "VehicleSpawner.VehicleDied",
+                "despawning at the moment of death left the server holding an unreplicated solid "
+                + "wreck for 15 s that live vehicles and bots hit and nobody could see, while every "
+                + "client threw a private copy of its own");
+            Assert.Contains("DespawnWhenDestroyed", died, StringComparison.Ordinal);
+
+            string onDestroy = MethodBody(ReadScript("Vehicle.cs"), "Vehicle.cs", "private void OnDestroy()");
+            Assert.Contains("NetVehicleLifecycle.ReportDespawned", onDestroy, StringComparison.Ordinal);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static void AssertAbsent(string haystack, string needle, string where, string why)

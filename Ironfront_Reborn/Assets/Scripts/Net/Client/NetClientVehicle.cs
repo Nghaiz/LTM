@@ -262,6 +262,13 @@ namespace Ironfront.Net.Unity.Client
         internal VehicleStateFlags AuthoritativeFlags { get; private set; }
 
         /// <summary>
+        /// Whether this proxy already played its death from a snapshot flagged Dead, so the
+        /// despawn that follows only removes the wreck instead of killing it a second time
+        /// (Tank.Die is not idempotent -- PR #325 measured the throw).
+        /// </summary>
+        internal bool DiedFromSnapshot { get; private set; }
+
+        /// <summary>
         /// Health, burning, in-water and the subtype tail: the parts of the snapshot that are
         /// statements about the world rather than about where the vehicle is.
         /// </summary>
@@ -293,6 +300,17 @@ namespace Ironfront.Net.Unity.Client
             _vehicle.ApplyReplicatedFlags(
                 (pose.Flags & VehicleStateFlags.InWater) != 0,
                 (pose.Flags & VehicleStateFlags.Airborne) != 0);
+
+            // The server keeps a destroyed vehicle replicated, flagged Dead, for as long as its
+            // wreck exists (Vehicle.DespawnWhenDestroyed). Die here, once, and stay kinematic and
+            // snapshot-driven: the wreck this client draws is then the server's, thrown by the
+            // server's impulse and blocking what it blocks, instead of a private copy thrown a
+            // different way that live proxies then shoved around (2026-09-27 Island report).
+            if ((pose.Flags & VehicleStateFlags.Dead) != 0 && !DiedFromSnapshot)
+            {
+                DiedFromSnapshot = true;
+                _vehicle.Die();
+            }
 
             _vehicle.ApplyReplicatedSubtypeTail(pose.SubtypeA, pose.SubtypeB);
         }

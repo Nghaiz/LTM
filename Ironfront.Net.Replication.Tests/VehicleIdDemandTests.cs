@@ -262,11 +262,14 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("supersededNetIds[lastSpawnedVehicle]", spawn, StringComparison.Ordinal);
             Assert.Contains("lastSpawnedVehicleNetId", spawn, StringComparison.Ordinal);
 
-            // ...and despawned when that vehicle dies, rather than falling through the
-            // lastSpawnedVehicle guard into nothing.
+            // ...and given back when that vehicle dies, rather than falling through the
+            // lastSpawnedVehicle guard into nothing. Since 2026-09-27 the release happens when the
+            // dead vehicle's WRECK is destroyed (Vehicle.OnDestroy), so clients draw the server's
+            // wreck for its 15 s; VehicleSourceInvariantTests
+            // .ADeadVehicleStaysReplicatedUntilItsWreckIsDestroyed pins the OnDestroy half.
             string died = MethodBody(source, "public void VehicleDied(Vehicle vehicle)");
             Assert.Contains("supersededNetIds.TryGetValue", died, StringComparison.Ordinal);
-            Assert.Contains("ReportDespawned(superseded.NetId", died, StringComparison.Ordinal);
+            Assert.Contains("DespawnWhenDestroyed(superseded.NetId", died, StringComparison.Ordinal);
         }
 
         /// <summary>
