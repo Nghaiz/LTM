@@ -75,15 +75,15 @@ namespace Ironfront.Net.Unity.Diagnostics
                 var wrapped = new List<PlayerLoopSystem>(systems.Length * 3 + 1);
 
                 // The very first system of the loop closes the previous frame and opens this one.
-                if (p == 0) wrapped.Add(Marker(typeof(HitchAttribution), FrameBoundary));
+                if (p == 0) wrapped.Add(Marker(FrameBoundary));
 
                 foreach (PlayerLoopSystem system in systems)
                 {
                     int index = Names.Count;
                     Names.Add($"{phase.type?.Name}.{system.type?.Name}");
-                    wrapped.Add(Marker(typeof(HitchAttribution), () => Begin(index)));
+                    wrapped.Add(Marker(() => Begin(index)));
                     wrapped.Add(system);
-                    wrapped.Add(Marker(typeof(HitchAttribution), () => End(index)));
+                    wrapped.Add(Marker(() => End(index)));
                 }
 
                 phases[p].subSystemList = wrapped.ToArray();
@@ -104,8 +104,8 @@ namespace Ironfront.Net.Unity.Diagnostics
                       + $"{FrameTimeLog.HitchMilliseconds:F0} ms prints its {SystemsPerLine} heaviest");
         }
 
-        private static PlayerLoopSystem Marker(Type type, PlayerLoopSystem.UpdateFunction update)
-            => new PlayerLoopSystem { type = type, updateDelegate = update };
+        private static PlayerLoopSystem Marker(PlayerLoopSystem.UpdateFunction update)
+            => new PlayerLoopSystem { type = typeof(HitchAttribution), updateDelegate = update };
 
         private static void Begin(int index) => _startedAt[index] = Stopwatch.GetTimestamp();
 
