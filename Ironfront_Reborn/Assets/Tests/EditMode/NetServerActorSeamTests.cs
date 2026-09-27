@@ -26,6 +26,8 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool IsDead { get; set; }
             public bool IsSubmerged { get; set; }
 
+            public string DescribeSubmersion() => "fake";
+
             /// <summary>Stagger the seam carried since phase-V2. Recorded, not simulated.</summary>
             internal float BalanceDamageTaken;
 

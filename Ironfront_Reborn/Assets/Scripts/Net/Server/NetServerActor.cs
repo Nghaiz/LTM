@@ -624,7 +624,8 @@ namespace Ironfront.Net.Unity.Server
 
             if (!_drowning.Tick(source.IsSubmerged, elapsed)) return;
 
-            Debug.Log($"[net] actor {_actorId} drowned after {_drowning.Limit:0.#}s under water");
+            Debug.Log($"[net] actor {_actorId} ({(IsClaimed ? "player" : "bot")}) drowned after "
+                      + $"{_drowning.Limit:0.#}s under water: {source.DescribeSubmersion()}");
 
             // The body dies HERE, the way every other server kill does it (ServerActorDamageSink,
             // ServerPlayer.KillForFallingOutOfTheWorld): reporting a death is not dying. Until

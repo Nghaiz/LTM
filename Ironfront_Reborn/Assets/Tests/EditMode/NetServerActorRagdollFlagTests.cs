@@ -49,6 +49,8 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool IsDead { get; set; }
             public bool IsSubmerged { get; set; }
 
+            public string DescribeSubmersion() => "fake";
+
             public void ApplyBalanceDamage(float balanceDamage) { }
 
             public bool TryGetActiveWeaponNetworkId(out byte networkId)
