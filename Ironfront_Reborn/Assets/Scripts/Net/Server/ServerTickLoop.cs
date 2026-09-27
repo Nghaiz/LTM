@@ -1513,6 +1513,41 @@ namespace Ironfront.Net.Unity.Server
                 reliable: true);
         }
 
+        /// <summary>
+        /// Puts one shot on the wire as <c>S_WEAPON_FIRE</c>, to the clients close enough to
+        /// hear it. The one emitter for every shooter: a player's shot (ServerCombatBridge) and a
+        /// bot's (Weapon.Shoot).
+        /// </summary>
+        /// <remarks>
+        /// <b>Bots had no emitter at all until 2026-09-27.</b> A client plays a remote shot's
+        /// report, muzzle flash and tracer only from this message, and the only producers took
+        /// a <c>ClientSession</c> -- which a bot does not have -- while a bot's hitscan bullet
+        /// leaves <c>ServerProjectileBridge.Launch</c> unannounced by design. So on the Island
+        /// playtest the only combat a player could hear was explosions. Cosmetic and unreliable,
+        /// like the player path: a lost shot costs one report, never state.
+        /// </remarks>
+        public void EmitWeaponFire(ushort shooterActorId, byte weaponId, in Vec3 position, in Vec3 aim)
+        {
+            var message = new WeaponFireMessage(
+                shooterActorId,
+                weaponId,
+                Quantize.PackVel16(aim.X),
+                Quantize.PackVel16(aim.Y),
+                Quantize.PackVel16(aim.Z));
+
+            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
+            if (written < 0) return;
+
+            // Only to clients close enough to hear it: a client that could hear every shot on the
+            // map would have been handed an audio wallhack.
+            SendToListenersInEarshot(
+                position,
+                ServerEventWriter.WeaponFireAudibleRadius,
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.CosmeticChannel,
+                reliable: false);
+        }
+
         /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>
         /// <remarks>
         /// <para>
