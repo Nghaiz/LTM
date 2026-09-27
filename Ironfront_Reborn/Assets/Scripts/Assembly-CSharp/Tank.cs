@@ -40,10 +40,33 @@ public class Tank : Vehicle
 
 	private float enginePitch;
 
+	/// <summary>
+	/// Wheel damping while the driver is on the throttle. The authored value stays in force at
+	/// rest, where it is what holds a parked tank on a slope.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why the authored damping cannot also drive.</b> The prefab (identical to the recovered
+	/// original) gives every wheel <c>wheelDampingRate</c> 10000 with <c>maxTorque</c> 17000 and
+	/// radius 1. Unity 6's PhysX wheel resists at <c>damping x angular speed</c>, so full
+	/// throttle balances at about 1.7 rad/s: a tank that crawls at 1.4 m/s. Measured on lane-B
+	/// run <c>tankdrive-01</c> for a human driver (14.5 m in 10 s of full throttle) and for the
+	/// bots' own tanks in the same run (1.1-1.6 m/s), so it is the vehicle, not the netcode.
+	/// </para>
+	/// <para>
+	/// Applied in <see cref="UpdateMovement"/>, which the server and a predicting client both
+	/// run, so the two simulate the same tank.
+	/// </para>
+	/// </remarks>
+	public float driveWheelDampingRate = 1000f;
+
+	private float authoredWheelDampingRate;
+
 	protected override void Awake()
 	{
 		base.Awake();
 		rigidbody.centerOfMass += Vector3.down * extraStability;
+		authoredWheelDampingRate = wheelCollidersLeft.Length > 0 ? wheelCollidersLeft[0].wheelDampingRate : 0.25f;
 	}
 
 	private void Update()
@@ -168,12 +191,14 @@ public class Tank : Vehicle
 		}
 		enginePitch = Mathf.MoveTowards(enginePitch, target, 0.4f * Time.fixedDeltaTime);
 		audio.pitch = enginePitch;
+		float damping = flag ? authoredWheelDampingRate : driveWheelDampingRate;
 		WheelCollider[] array = wheelCollidersLeft;
 		foreach (WheelCollider wheelCollider in array)
 		{
 			wheelCollider.motorTorque = motorTorque;
 			wheelCollider.brakeTorque = brakeTorque;
 			wheelCollider.forwardFriction = forwardFriction;
+			wheelCollider.wheelDampingRate = damping;
 		}
 		WheelCollider[] array2 = wheelCollidersRight;
 		foreach (WheelCollider wheelCollider2 in array2)
@@ -181,7 +206,28 @@ public class Tank : Vehicle
 			wheelCollider2.motorTorque = motorTorque2;
 			wheelCollider2.brakeTorque = brakeTorque;
 			wheelCollider2.forwardFriction = forwardFriction;
+			wheelCollider2.wheelDampingRate = damping;
 		}
+		LogDrive(motorTorque, motorTorque2, damping);
+	}
+
+	private static bool? _driveLogging;
+	private float _nextDriveLog;
+
+	/// <summary>One line a second per driven tank when IRONFRONT_LOG_VEHICLE=1, like Car's [car-drive].</summary>
+	private void LogDrive(float torqueLeft, float torqueRight, float damping)
+	{
+		_driveLogging ??= System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_VEHICLE") == "1";
+		if (_driveLogging != true || !HasDriver() || Time.time < _nextDriveLog)
+		{
+			return;
+		}
+		_nextDriveLog = Time.time + 1f;
+		Debug.Log($"[tank-drive] t={Time.time:F2} name={base.gameObject.name} "
+			+ $"role={(Ironfront.Net.Unity.NetContext.IsServer ? "server" : Ironfront.Net.Unity.NetContext.IsClient ? "client" : "offline")} "
+			+ $"torque=({torqueLeft:F0},{torqueRight:F0}) damping={damping:F0} "
+			+ $"rpm={wheelCollidersLeft[0].rpm:F0} speed={rigidbody.linearVelocity.magnitude:F1} "
+			+ $"pos=({base.transform.position.x:F1},{base.transform.position.y:F1},{base.transform.position.z:F1})");
 	}
 
 	private void UpdateTrack(Transform track, WheelCollider[] wheels, UvOffset offset)

@@ -118,6 +118,16 @@ namespace Ironfront.Net.Unity.Client
         /// then drive.
         /// </para>
         /// </remarks>
+        /// <summary>The kind a replicated vehicle was announced as, for the same observers as <see cref="TryGetPose"/>.</summary>
+        public bool TryGetKind(ushort vehicleId, out VehicleKind kind)
+        {
+            kind = default;
+            if (!_live.TryGetValue(vehicleId, out NetClientVehicle vehicle) || vehicle == null) return false;
+
+            kind = vehicle.Kind;
+            return true;
+        }
+
         public bool TryGetPose(
             ushort vehicleId, out Vector3 position, out float yawDegrees, out string mode)
         {

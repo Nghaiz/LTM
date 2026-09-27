@@ -115,6 +115,25 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public void OpenLoadoutAfterDeath()
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null) return;
+
+            local.OpenLoadoutAfterNetworkDeath();
+        }
+
+        /// <inheritdoc/>
+        public bool TryGetChosenSpawnPoint(out Vector3 position)
+        {
+            position = default;
+            if (!MinimapUi.TryGetPickedSpawnPoint(out SpawnPoint picked)) return false;
+
+            position = picked.transform.position;
+            return true;
+        }
+
+        /// <inheritdoc/>
         public bool ConsumeDeployIntent()
         {
             FpsActorController local = FpsActorController.instance;
@@ -203,6 +222,14 @@ namespace Ironfront.Net.Unity.Bindings
             if (local == null || local.actor == null || local.actor.ragdoll == null) return;
 
             local.actor.KnockOver(force, bone);
+
+            // The drops Actor.Damage would have thrown for the killing hit, which never runs on a
+            // client: the death camera is looking straight at this body.
+            Vector3 carried = Vector3.ClampMagnitude(force * 0.1f, 5f);
+            for (int i = 0; i < 6; i++)
+            {
+                DecalManager.CreateBloodDrop(local.actor.CenterPosition(), carried, local.actor.team);
+            }
             // KnockOver is also used for recoverable balance damage in the base game and does
             // not set Actor.dead.  This seam is called only from S_DEATH, so retire the local
             // gameplay update after the ragdoll impulse has been applied.  The next authoritative

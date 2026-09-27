@@ -30,25 +30,45 @@ namespace Ironfront.Net.Unity.Client
     /// different jobs on the same object.
     /// </para>
     /// <para>
-    /// <b>The death screen was IMGUI and is now the HUD's deploy screen</b> (P17 3.2). The state
-    /// behind it never was a stopgap — the countdown, the gate and the request are the shipped
-    /// library model — so replacing the drawing touched none of it. What DID change is who
-    /// decides the screen is up: it is driven from <c>ClientCombatState.IsAlive</c> once a frame
-    /// rather than from <see cref="OnDied"/>, so a respawn this client did not request closes it
-    /// too (P17 criterion 5), and a death whose S_DEATH lands after the snapshot's IsAlive bit
-    /// still names its killer when the message arrives.
+    /// <b>A death plays out the way the original game's does</b> (owner report 2026-09-27: "I die
+    /// and I am instantly back, no death, no deploy screen"). The body falls and the camera
+    /// follows it for <see cref="DeathCameraSeconds"/>, then the stock loadout screen opens: the
+    /// player picks weapons and a flag on its minimap and presses DEPLOY, which is the only thing
+    /// that sends the respawn request. That is <c>FpsActorController.Die</c>'s own timeline
+    /// (third-person camera, <c>Invoke("OpenLoadoutWhileDead", 2f)</c>), which a networked body
+    /// never runs. It replaces two shortcuts that skipped the whole thing: Space respawned the
+    /// moment the three-second clock allowed it -- the same key as jump, so a player still
+    /// pressing it from the fight was put back without ever seeing a screen -- and the HUD's
+    /// "YOU WERE KILLED" panel covered the body the instant it fell.
     /// </para>
     /// </remarks>
     [DefaultExecutionOrder(-50)]
     [DisallowMultipleComponent]
     public sealed class NetClientLocalCombatDriver : MonoBehaviour
     {
-        /// <summary>Held to respawn once the clock allows it.</summary>
-        [Tooltip("Pressed to respawn once the death countdown has elapsed.")]
-        [SerializeField] private KeyCode _respawnKey = KeyCode.Space;
+        /// <summary>
+        /// How long the camera stays on the fallen body before the loadout screen opens. The
+        /// offline game's number: <c>FpsActorController.Die</c> invokes
+        /// <c>OpenLoadoutWhileDead</c> after 2 seconds.
+        /// </summary>
+        public const float DeathCameraSeconds = 2f;
 
-        [Tooltip("Raise the deploy screen on death. Off leaves the respawn key working.")]
-        [SerializeField] private bool _drawDeathScreen = true;
+        /// <summary>
+        /// How long a sent respawn may go unanswered before the loadout screen comes back so the
+        /// player can ask again. The request is reliable, but the server refuses one that races
+        /// its own death clock, and a refused request would otherwise leave a corpse with no
+        /// screen and no key to press.
+        /// </summary>
+        public const float RespawnAnswerSeconds = 3f;
+
+        [Tooltip("Raise the HUD's deploy panel on death. Off by default: a death opens the stock loadout screen after the death camera.")]
+        [SerializeField] private bool _drawDeathScreen = false;
+
+        /// <summary>When the loadout screen opens for the current death, or negative when none is pending.</summary>
+        private float _loadoutAfterDeathAt = -1f;
+
+        /// <summary>When the last respawn (not first deploy) request left, or negative when none is outstanding.</summary>
+        private float _respawnRequestedAt = -1f;
 
         private NetClientBootstrap _client;
         private readonly ClientCombatState _state = new ClientCombatState();
@@ -531,10 +551,14 @@ namespace Ironfront.Net.Unity.Client
             // two runs (observer-b at 968.53 in fix-verify-02, observer-a at 950.03 in
             // fix-verify-03) while the other two grounded, which is the signature of a race
             // rather than of a per-client defect. Ledger X-86.
+            //
+            // No keyboard key is read here any more. Space used to respawn the moment the clock
+            // allowed, and Space is also jump: see the class remark for what that cost. A human
+            // deploys from the loadout screen (LoadoutDeployPressed); a scripted client still
+            // has ScriptedRespawnPressed.
             if (OwesDeploy && CanDeployNow(Time.time)
                 && _client != null && _client.IsConnected
-                && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed()
-                    || DeployPressed() || LoadoutDeployPressed()))
+                && (ScriptedRespawnPressed() || DeployPressed() || LoadoutDeployPressed()))
             {
                 // The grant is NOT retired here. A sent request is not a placed body: the server
                 // drops the request outright when the connection has no ServerPlayer yet
@@ -544,11 +568,59 @@ namespace Ironfront.Net.Unity.Client
                 // prefab park across repeat runs. The grant is retired where the server ANSWERS
                 // -- OnRespawned, off the snapshot's own IsAlive bit -- and until then the block
                 // below re-sends. Ledger X-86.
-                if (RequestRespawn()) _lastDeployRequestAt = Time.time;
+                bool firstDeploy = _awaitingFirstDeploy;
+                if (RequestRespawn())
+                {
+                    _lastDeployRequestAt = Time.time;
+                    if (!firstDeploy) _respawnRequestedAt = Time.time;
+                }
             }
 
             TrackDeployFallbackGrace();
             ResendDeployUntilPlaced();
+            TickDeathLoadout();
+        }
+
+        /// <summary>
+        /// Opens the loadout screen once the death camera has run, and again if a respawn the
+        /// player asked for was never answered.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The screen is the only way back in, so it must not be lost.</b> DEPLOY closes it and
+        /// sends the request; a request the server refuses (it races the server's own
+        /// three-second clock) leaves the player dead with nothing on screen. After
+        /// <see cref="RespawnAnswerSeconds"/> without the snapshot's IsAlive bit the screen
+        /// reopens, so the player can press DEPLOY again rather than wait forever.
+        /// </para>
+        /// <para>
+        /// A first deploy is not handled here: its screen is opened by <c>OnSpawnActor</c> and its
+        /// retries by <see cref="ResendDeployUntilPlaced"/>.
+        /// </para>
+        /// </remarks>
+        private void TickDeathLoadout()
+        {
+            if (_state.IsAlive || _awaitingFirstDeploy)
+            {
+                _loadoutAfterDeathAt = -1f;
+                _respawnRequestedAt = -1f;
+                return;
+            }
+
+            if (_respawnRequestedAt >= 0f && Time.time - _respawnRequestedAt >= RespawnAnswerSeconds)
+            {
+                _respawnRequestedAt = -1f;
+                _loadoutAfterDeathAt = Time.time;
+            }
+
+            if (_loadoutAfterDeathAt < 0f || Time.time < _loadoutAfterDeathAt) return;
+            if (!NetClientPresenterGuard.IsLocalActor(_state.LocalActorId)) return;
+
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (!rig.Exists) return;
+
+            _loadoutAfterDeathAt = -1f;
+            if (!rig.IsLoadoutOpen) rig.OpenLoadoutAfterDeath();
         }
 
         /// <summary>
@@ -808,14 +880,19 @@ namespace Ironfront.Net.Unity.Client
             // V8, ledger X-11: the body used to be empty. It now carries the loadout THIS
             // client is about to render -- read from the same LoadoutUi selection GetLoadout()
             // already draws from offline -- so the server arms the identical weapons rather
-            // than its own draw. Deliberately NOT populating a spawn point choice: the
-            // minimap-driven selection is not yet wired across the network, so this sends
-            // SpawnRequestMessage.NoSpawnPointPreference (the constructor's own default) and the
-            // server keeps choosing at random among eligible points, exactly as before.
-            NetClientBindings.LocalPlayer.GetChosenLoadout(
+            // than its own draw. And the flag the player clicked on the loadout minimap, as
+            // the capture point's wire id (SpawnPointChoice); no pick sends
+            // NoSpawnPointPreference and the server chooses, as it always has.
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            rig.GetChosenLoadout(
                 out byte primary, out byte secondary, out byte gear1, out byte gear2, out byte gear3);
 
-            var spawnRequest = new SpawnRequestMessage(primary, secondary, gear1, gear2, gear3);
+            byte spawnPoint = rig.TryGetChosenSpawnPoint(out Vector3 picked)
+                ? SpawnPointChoice.ToWireIndex(NetSceneBindings.CapturePoints, picked)
+                : SpawnRequestMessage.NoSpawnPointPreference;
+
+            var spawnRequest = new SpawnRequestMessage(
+                primary, secondary, gear1, gear2, gear3, spawnPoint);
             if (spawnRequest.Write(_spawnRequestBody) < 0) return false;
 
             var writer = new PayloadFrameWriter(_payload, ChannelId.ReliableOrdered);
@@ -837,7 +914,7 @@ namespace Ironfront.Net.Unity.Client
             Debug.Log(
                 $"[net] deploy requested for actor {_state.LocalActorId} "
                 + $"(first deploy: {_awaitingFirstDeploy}, loadout {primary}/{secondary}/"
-                + $"{gear1}/{gear2}/{gear3})");
+                + $"{gear1}/{gear2}/{gear3}, flag {(spawnPoint == SpawnRequestMessage.NoSpawnPointPreference ? "any" : spawnPoint.ToString())})");
 
             return true;
         }
@@ -965,6 +1042,10 @@ namespace Ironfront.Net.Unity.Client
 
             local.DisableInput();
             _inputSuppressedByDeath = true;
+
+            // The death camera runs first; TickDeathLoadout opens the loadout screen after it.
+            _loadoutAfterDeathAt = Time.time + DeathCameraSeconds;
+            _respawnRequestedAt = -1f;
         }
 
         /// <summary>
@@ -1004,6 +1085,8 @@ namespace Ironfront.Net.Unity.Client
 
             _inputSuppressedByDeath = false;
             _hasObservedLocalDeath = false;
+            _loadoutAfterDeathAt = -1f;
+            _respawnRequestedAt = -1f;
             EnterDeployedView();
         }
 

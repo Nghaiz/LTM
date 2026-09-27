@@ -1346,16 +1346,40 @@ namespace Ironfront.Net.Unity.Server
         {
             if (request.HasValue)
             {
-                byte requested = request.Value.SpawnPointIndex;
-                if (requested != SpawnRequestMessage.NoSpawnPointPreference
-                    && requested < spawnPoints.Count
-                    && spawnPoints.IsEligible(requested, team))
+                int requested = DirectoryIndexOfFlag(
+                    spawnPoints, NetSceneBindings.CapturePoints, request.Value.SpawnPointIndex);
+                if (requested >= 0 && spawnPoints.IsEligible(requested, team))
                 {
                     return requested;
                 }
             }
 
             return ChooseSpawnIndexNearTeammates(spawnPoints, team, anchors);
+        }
+
+        /// <summary>
+        /// The spawn-directory slot standing on the capture point a client named by wire id, or
+        /// -1 when the id names nothing.
+        /// </summary>
+        /// <remarks>
+        /// The client sends the capture point's wire id rather than a directory index because
+        /// the directory is <c>FindObjectsOfType</c> order and the wire ids are authored — see
+        /// <see cref="SpawnPointChoice"/>. The two are joined here by the flag's authored
+        /// position, which both processes read from the same scene.
+        /// </remarks>
+        internal static int DirectoryIndexOfFlag(
+            ISpawnPointDirectory spawnPoints, ICapturePointDirectory capturePoints, byte wireIndex)
+        {
+            if (wireIndex == SpawnRequestMessage.NoSpawnPointPreference) return -1;
+            if (spawnPoints == null || capturePoints == null || wireIndex >= capturePoints.Count) return -1;
+
+            Vector3 flag = capturePoints.GetDefinition(wireIndex).Position;
+            for (int i = 0; i < spawnPoints.Count; i++)
+            {
+                if (SpawnPointChoice.Matches(spawnPoints.GetAnchorPosition(i), flag)) return i;
+            }
+
+            return -1;
         }
 
         private void EmitWeaponFire(

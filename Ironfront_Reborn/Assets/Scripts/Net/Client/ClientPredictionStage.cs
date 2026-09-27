@@ -74,6 +74,18 @@ namespace Ironfront.Net.Unity.Client
         private long _agreed;
         private long _stale;
         private ReconcileResult _lastResult;
+
+        /// <summary>
+        /// Snapshots after leaving a seat in which a far-off authoritative position is landed
+        /// rather than walked to. Re-armed on every seated snapshot.
+        /// </summary>
+        private int _landSnapshotsLeft;
+
+        /// <summary>How many snapshots after a seat the landing window lasts: half a second at 20 Hz.</summary>
+        private const int LandSnapshots = 10;
+
+        /// <summary>Error past which a snapshot in that window lands the body, metres.</summary>
+        private const float LandErrorMetres = 1f;
         private uint _lastServerTick;
         private uint _lastAckTick;
         private Vec3 _lastAuthoritative;
@@ -189,6 +201,26 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        /// <summary>
+        /// False while the server holds no live, placed body for this client: the corpse after a
+        /// death, or the prefab parked behind the first loadout.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="NetClientLocalCombatDriver.IsAuthoritativelyDeployed"/> is the same signal
+        /// <see cref="Update"/> already trusts with the collision capsule. With no combat driver
+        /// the answer is "live", which keeps the old behaviour for anything that runs without one.
+        /// </remarks>
+        private bool HasLiveBody
+        {
+            get
+            {
+                if (_combatDriver == null && _client != null)
+                    _combatDriver = _client.GetComponent<NetClientLocalCombatDriver>();
+
+                return _combatDriver == null || _combatDriver.IsAuthoritativelyDeployed;
+            }
+        }
+
         private void OnEnable()
         {
             // Covers the inverse startup order from NetClientBootstrap.OnConnected: if the
@@ -284,6 +316,51 @@ namespace Ironfront.Net.Unity.Client
                 Quantize.UnpackVel(entry.VelX),
                 Quantize.UnpackVel(entry.VelY),
                 Quantize.UnpackVel(entry.VelZ));
+
+            // A seated body is the vehicle's to move, so there is nothing on foot to reconcile.
+            // Reconciling anyway is what the 2026-09-27 playtest logged for a whole tank ride:
+            // "Corrected ... err=2.67m | ctrl off, seated True" every snapshot, each one pushed
+            // through NetMovementAgent.CharacterMove with the capsule switched off (X-19's error
+            // line) and shoving the rig around inside the hull, because the server's seated
+            // position (its actor root on the seat) is not this rig's. The prediction state is
+            // kept on the rig instead, so the first on-foot tick after LeaveSeat starts where the
+            // body actually is.
+            //
+            // A corpse, or the body parked behind the first loadout, is not predicted either. The
+            // clock already stops stepping it (FpsActorController's SimulationEnabled reads
+            // actor.dead), but reconciliation kept going: the corpse's capsule is off, so every
+            // correction went through CharacterMove's uncollided branch -- X-19's error line under
+            // the death camera, and the corpse dragged around (lane-B death-01: corrections 0 -> 13
+            // while dead). The landing window below then puts a respawned body on its spawn point
+            // in one move, where a correction would sweep it there through collision.
+            bool seated = IsSeated;
+            if (seated || !HasLiveBody)
+            {
+                _agent.State.Position = MovementSimulation.ToCore(transform.position);
+                _lastResult = ReconcileResult.Stale;
+                _lastAuthoritative = authoritative.Position;
+                _landSnapshotsLeft = LandSnapshots;
+                ReportPrediction(seated ? "Seated" : "NoLiveBody", hasAuthority: true);
+                return;
+            }
+
+            // Just out of a seat, or just placed by a deploy, the body is LANDED where the server
+            // put it. Both sides run Actor.LeaveSeat, but the server then moves a capsule that
+            // came out inside the hull to clear ground beside it (ServerPlayer.TryFindExitSpot),
+            // and a correction walked there through CharacterMove would be stopped by the very
+            // hull it is leaving. A window rather than one snapshot, because the move lands a
+            // tick after the leave.
+            if (_landSnapshotsLeft > 0)
+            {
+                _landSnapshotsLeft--;
+                if ((_agent.State.Position - authoritative.Position).Magnitude > LandErrorMetres)
+                {
+                    _agent.ApplyCorrectedState(in authoritative, hardSnap: true);
+                    _lastAuthoritative = authoritative.Position;
+                    ReportPrediction("Landed", hasAuthority: true);
+                    return;
+                }
+            }
 
             MoveState predicted = _agent.State;
 

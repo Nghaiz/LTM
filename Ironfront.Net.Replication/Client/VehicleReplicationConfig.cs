@@ -50,6 +50,25 @@ namespace Ironfront.Net.Replication.Client
         public const float DefaultHardSnapDegrees = 45f;
 
         /// <summary>
+        /// Position error a correction leaves alone at a standstill, metres. See
+        /// <see cref="DeadZoneMetres"/>.
+        /// </summary>
+        public const float DefaultDeadZoneMetres = 0.3f;
+
+        /// <summary>
+        /// Extra dead zone per metre-per-second of speed, seconds. See <see cref="DeadZoneMetres"/>.
+        /// </summary>
+        public const float DefaultDeadZoneSecondsOfTravel = 0.03f;
+
+        /// <summary>Angular error a correction leaves alone, degrees. See <see cref="DeadZoneMetres"/>.</summary>
+        /// <remarks>
+        /// 4 degrees, because a parked helicopter settling on its skids already disagrees by 2 to 2.6
+        /// degrees between two PhysX worlds (lane-B <c>heli-03</c>), and every rotation blend turns
+        /// the pilot's camera.
+        /// </remarks>
+        public const float DefaultDeadZoneDegrees = 4f;
+
+        /// <summary>
         /// Whether the locally-driven vehicle predicts. False routes it down the remote path.
         /// </summary>
         public readonly bool PredictLocalVehicle;
@@ -63,16 +82,42 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Angular error past which the correction teleports instead, degrees.</summary>
         public readonly float HardSnapDegrees;
 
+        /// <summary>
+        /// Position error below which the local vehicle is left exactly where its own physics put
+        /// it, metres, before <see cref="DeadZoneSecondsOfTravel"/> widens it with speed.
+        /// </summary>
+        /// <remarks>
+        /// <b>Why there is one.</b> Every snapshot used to nudge the rigidbody, 20 times a second,
+        /// however small the error: lane-B run <c>heli-01</c> recorded a correction on every
+        /// snapshot of the flight at a median of 0.17 m, and a pilot's camera rides the hull, so
+        /// each nudge is a visible twitch. Below this the two simulations agree as well as two
+        /// PhysX worlds fed the same input ever will, and leaving them alone is smoother than
+        /// correcting noise.
+        /// </remarks>
+        public readonly float DeadZoneMetres;
+
+        /// <summary>How much <see cref="DeadZoneMetres"/> grows per m/s of the server's speed, seconds.</summary>
+        public readonly float DeadZoneSecondsOfTravel;
+
+        /// <summary>Angular error below which the rotation is left alone, degrees.</summary>
+        public readonly float DeadZoneDegrees;
+
         public VehicleReplicationConfig(
             bool predictLocalVehicle,
             float correctionBlendSeconds,
             float hardSnapMetres,
-            float hardSnapDegrees)
+            float hardSnapDegrees,
+            float deadZoneMetres = DefaultDeadZoneMetres,
+            float deadZoneSecondsOfTravel = DefaultDeadZoneSecondsOfTravel,
+            float deadZoneDegrees = DefaultDeadZoneDegrees)
         {
-            PredictLocalVehicle    = predictLocalVehicle;
-            CorrectionBlendSeconds = correctionBlendSeconds;
-            HardSnapMetres         = hardSnapMetres;
-            HardSnapDegrees        = hardSnapDegrees;
+            PredictLocalVehicle     = predictLocalVehicle;
+            CorrectionBlendSeconds  = correctionBlendSeconds;
+            HardSnapMetres          = hardSnapMetres;
+            HardSnapDegrees         = hardSnapDegrees;
+            DeadZoneMetres          = deadZoneMetres;
+            DeadZoneSecondsOfTravel = deadZoneSecondsOfTravel;
+            DeadZoneDegrees         = deadZoneDegrees;
         }
 
         /// <summary>What ships: the driven vehicle predicts and is corrected by blending.</summary>

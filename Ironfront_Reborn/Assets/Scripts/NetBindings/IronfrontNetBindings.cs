@@ -505,6 +505,48 @@ namespace Ironfront.Net.Unity.Bindings
             return true;
         }
 
+        /// <summary>
+        /// The vehicle's own colliders, read fresh: occupants are parented under their seats, so
+        /// a cached read would hold whoever happened to be sitting there, and a burning tank
+        /// sheds its turret.
+        /// </summary>
+        private System.Collections.Generic.List<Collider> Colliders()
+        {
+            var own = new System.Collections.Generic.List<Collider>();
+            if (_vehicle == null) return own;
+
+            foreach (Collider collider in _vehicle.GetComponentsInChildren<Collider>(true))
+            {
+                if (collider != null && collider.GetComponentInParent<Actor>() == null) own.Add(collider);
+            }
+
+            return own;
+        }
+
+        public bool TryGetBounds(out Bounds bounds)
+        {
+            bounds = default;
+            bool any = false;
+            foreach (Collider collider in Colliders())
+            {
+                if (collider == null || !collider.enabled || collider.isTrigger) continue;
+                if (!any) bounds = collider.bounds;
+                else bounds.Encapsulate(collider.bounds);
+                any = true;
+            }
+
+            return any;
+        }
+
+        public void SetCollisionIgnored(Collider collider, bool ignored)
+        {
+            if (collider == null) return;
+            foreach (Collider own in Colliders())
+            {
+                if (own != null && own != collider) Physics.IgnoreCollision(collider, own, ignored);
+            }
+        }
+
         private Seat SeatAt(int seatIndex)
         {
             if (_vehicle == null || _vehicle.seats == null) return null;
@@ -592,8 +634,19 @@ namespace Ironfront.Net.Unity.Bindings
 
                 _actor.dead = value;
 
-                if (value) ActorManager.SetDead(_actor);
-                else ActorManager.SetAlive(_actor);
+                if (value)
+                {
+                    ActorManager.SetDead(_actor);
+                }
+                else
+                {
+                    ActorManager.SetAlive(_actor);
+
+                    // A respawn is not SpawnAt, so without this a body that died as a ragdoll
+                    // came back as one: its spine left on the corpse, drowned under a water plane
+                    // it was standing metres above (lane-B death-01/02).
+                    _actor.StandUpAfterNetworkRevival();
+                }
             }
         }
 

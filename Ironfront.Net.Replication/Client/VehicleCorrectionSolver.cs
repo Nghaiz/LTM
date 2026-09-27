@@ -11,6 +11,12 @@ namespace Ironfront.Net.Replication.Client
 
         /// <summary>The error is past a hard threshold. Teleport, and take the server's velocities.</summary>
         Snap = 1,
+
+        /// <summary>
+        /// The error is inside the dead zone. Leave the local body exactly where it is; only the
+        /// server's scalars (health, flags, turret) apply.
+        /// </summary>
+        Hold = 2,
     }
 
     /// <summary>
@@ -28,6 +34,9 @@ namespace Ironfront.Net.Replication.Client
         public long BlendCount;
         public long SnapCount;
 
+        /// <summary>Snapshots whose error was inside the dead zone and moved nothing.</summary>
+        public long HoldCount;
+
         /// <summary>Position error, metres, of the most recent correction. For the overlay.</summary>
         public float LastPositionError;
 
@@ -37,6 +46,7 @@ namespace Ironfront.Net.Replication.Client
         public void Record(CorrectionMode mode, float positionError, float angleError)
         {
             if (mode == CorrectionMode.Snap) SnapCount++;
+            else if (mode == CorrectionMode.Hold) HoldCount++;
             else BlendCount++;
 
             LastPositionError = positionError;
@@ -47,6 +57,7 @@ namespace Ironfront.Net.Replication.Client
         {
             BlendCount = 0;
             SnapCount = 0;
+            HoldCount = 0;
             LastPositionError = 0f;
             LastAngleError = 0f;
         }
@@ -67,11 +78,19 @@ namespace Ironfront.Net.Replication.Client
     /// it towards where the server says it should be by now.
     /// </para>
     /// <para>
-    /// <b>The server pose is extrapolated by half the RTT before the error is measured.</b> The
-    /// snapshot describes where the vehicle was when it left the server; the local vehicle is
-    /// where it is now. Comparing the two directly measures the latency as though it were error,
-    /// and the correction then permanently drags the vehicle backwards along its own velocity —
-    /// a car that handles as if it were being towed.
+    /// <b>The server pose is extrapolated by the whole round trip before the error is
+    /// measured.</b> The snapshot describes where the vehicle was when it left the server, and
+    /// that state already lags the local one by the trip the driver's INPUT made up: the server
+    /// applied this client's stick half a round trip after the client did. By the time the
+    /// snapshot has come back down, the local body is a full round trip ahead of it. Comparing
+    /// less than that measures the lead as error and drags the vehicle backwards along its own
+    /// velocity, a car that handles as if it were being towed. This used to extrapolate by half
+    /// the round trip, which paid only for the snapshot's own trip down: lane-B run
+    /// <c>heli-01</c> shows the rest as a helicopter corrected on every snapshot of its flight
+    /// and snapped five times in twelve seconds. Measured once the dead zone let the body run
+    /// free (<c>heli-02</c>): the local helicopter led the raw snapshot by a median 41 ms of its
+    /// own travel at a median round trip of 39 ms. Inside
+    /// <see cref="VehicleReplicationConfig.DeadZoneMetres"/> nothing moves at all.
     /// </para>
     /// <para>
     /// <b>The blend is exponential, not a fixed per-frame alpha.</b> A fixed alpha makes the
@@ -89,15 +108,23 @@ namespace Ironfront.Net.Replication.Client
     public static class VehicleCorrectionSolver
     {
         /// <summary>
+        /// The most the server pose is carried forward, seconds. A smoothed round trip still spikes
+        /// on a hitching frame (to 326 ms in lane-B <c>heli-03</c>), and extrapolating a helicopter
+        /// that far along its velocity manufactures an error the next snapshot then snaps to.
+        /// </summary>
+        public const float MaxLeadSeconds = 0.2f;
+
+        /// <summary>
         /// Measures the error between the local simulation and the server, and produces the pose
         /// to apply.
         /// </summary>
         /// <param name="local">Where the local simulation currently has the vehicle.</param>
         /// <param name="server">The newest accepted snapshot pose for it.</param>
         /// <param name="rttSeconds">
-        /// Round-trip time. Half of it is how stale <paramref name="server"/> is. Read this from
-        /// the connection's smoothed RTT — never introduce a second estimator, or the correction
-        /// and lag compensation drift apart and neither is diagnosable.
+        /// Round-trip time: how far the local body runs ahead of <paramref name="server"/> (see
+        /// the class remarks). Read this from the
+        /// connection's smoothed RTT — never introduce a second estimator, or the correction and
+        /// lag compensation drift apart and neither is diagnosable.
         /// </param>
         /// <param name="dt">Seconds since the last correction. Drives the blend rate.</param>
         /// <param name="config">Thresholds and the blend time constant.</param>
@@ -114,11 +141,11 @@ namespace Ironfront.Net.Replication.Client
             out float positionError,
             out float angleError)
         {
-            float halfRtt = Sanitize(rttSeconds) * 0.5f;
+            float lead = Math.Min(Sanitize(rttSeconds), MaxLeadSeconds);
 
-            Vec3 targetPosition = server.Position + server.LinearVelocity * halfRtt;
+            Vec3 targetPosition = server.Position + server.LinearVelocity * lead;
             Quat targetRotation = QuatMath.IntegrateAngularVelocity(
-                in server.Rotation, in server.AngularVelocity, halfRtt);
+                in server.Rotation, in server.AngularVelocity, lead);
 
             positionError = Vec3.Distance(in local.Position, in targetPosition);
             angleError = QuatMath.AngleDegrees(in local.Rotation, in targetRotation);
@@ -136,6 +163,16 @@ namespace Ironfront.Net.Replication.Client
                     .WithTransform(in targetPosition, in targetRotation)
                     .WithVelocities(in server.LinearVelocity, in server.AngularVelocity);
                 return CorrectionMode.Snap;
+            }
+
+            float deadZone = config.DeadZoneMetres
+                             + server.LinearVelocity.Magnitude * config.DeadZoneSecondsOfTravel;
+            if (positionError <= deadZone && angleError <= config.DeadZoneDegrees)
+            {
+                corrected = server
+                    .WithTransform(in local.Position, in local.Rotation)
+                    .WithVelocities(in local.LinearVelocity, in local.AngularVelocity);
+                return CorrectionMode.Hold;
             }
 
             float t = BlendFactor(dt, config.CorrectionBlendSeconds);

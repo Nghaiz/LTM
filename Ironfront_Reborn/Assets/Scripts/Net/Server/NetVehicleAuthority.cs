@@ -52,13 +52,20 @@ namespace Ironfront.Net.Unity.Server
         /// the death path.
         /// </para>
         /// <para>
-        /// A separate name from <see cref="IsInstalled"/> even though the value is the same,
-        /// because the two gameplay call sites in <c>Vehicle</c> are asking a different question
-        /// — "may I kill this?" — and a bare <c>IsInstalled</c> there would read as an
-        /// implementation detail rather than a rule.
+        /// A separate name from <see cref="IsInstalled"/>, because the two gameplay call sites in
+        /// <c>Vehicle</c> are asking a different question — "may I kill this?" — and a bare
+        /// <c>IsInstalled</c> there would read as an implementation detail rather than a rule.
+        /// </para>
+        /// <para>
+        /// <b>A client does not own the death either</b>, and asking only
+        /// <see cref="IsInstalled"/> let it act as a third authority. Its burn countdown killed
+        /// the vehicle on its own clock, then <c>S_VEHICLE_DESPAWN</c> reached
+        /// <c>RemoteVehicleRegistry.OnVehicleDespawn</c>, which called <c>Die()</c> a second time:
+        /// <c>Tank.Die</c> threw on the turret the first call had destroyed, inside the message
+        /// router (2026-09-27 playtest, client log). The despawn is the client's death.
         /// </para>
         /// </remarks>
-        public static bool ServerOwnsVehicleDeath => IsInstalled;
+        public static bool ServerOwnsVehicleDeath => IsInstalled || NetContext.IsClient;
 
         /// <summary>Installs the server's sinks. Called from <c>ServerTickLoop.Bind</c>.</summary>
         public static void Install(

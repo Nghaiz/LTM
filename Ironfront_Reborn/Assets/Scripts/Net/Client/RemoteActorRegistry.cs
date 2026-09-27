@@ -159,7 +159,12 @@ namespace Ironfront.Net.Unity.Client
             {
                 bool hasEntry = to.TryFind(pair.Key, out ActorSnapshotEntry entry);
 
-                if (SnapshotInterpolator.TryLerpPosition(from, to, alpha, pair.Key, out Vec3 p))
+                // A corpse lying as a runtime ragdoll keeps the transform it fell from: its bones
+                // are simulated in the root's space, so moving the root would drag the body along.
+                bool frozen = _views.TryGetValue(pair.Key, out RemoteActorView lying)
+                              && lying != null && lying.IsRagdollPosed;
+
+                if (!frozen && SnapshotInterpolator.TryLerpPosition(from, to, alpha, pair.Key, out Vec3 p))
                 {
                     float y = p.Y;
                     if (_centrePivotActors.Contains(pair.Key))
@@ -171,7 +176,7 @@ namespace Ironfront.Net.Unity.Client
                     pair.Value.position = new Vector3(p.X, y, p.Z);
                 }
 
-                if (SnapshotInterpolator.TryLerpYaw(from, to, alpha, pair.Key, out float yaw))
+                if (!frozen && SnapshotInterpolator.TryLerpYaw(from, to, alpha, pair.Key, out float yaw))
                     pair.Value.rotation = Quaternion.Euler(0f, yaw, 0f);
 
                 // Everything past position and yaw -- pitch, stance, aim, ragdoll, weapon, team

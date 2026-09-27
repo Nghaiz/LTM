@@ -333,7 +333,7 @@ namespace Ironfront.Net.Unity.Client.Hud
             _shownCanDeploy = canDeploy;
 
             _deployTimerText.text = canDeploy
-                ? "Ready. Deploy, or press Space."
+                ? "Ready. Deploy."
                 : "Deploying in " + seconds + "s";
         }
 

@@ -167,6 +167,35 @@ namespace Ironfront.Net.Unity
         void OpenInitialLoadout();
 
         /// <summary>
+        /// Opens the loadout screen for a player the server has killed, so the next deploy is
+        /// chosen the way the first one was. Maps to
+        /// <c>FpsActorController.OpenLoadoutAfterNetworkDeath</c>.
+        /// </summary>
+        /// <remarks>
+        /// The networked half of the offline <c>FpsActorController.Die</c> timeline, which opens
+        /// this screen two seconds after the body falls; a networked body never runs <c>Die</c>.
+        /// Default-implemented as a no-op in the shape of <see cref="GetChosenLoadout"/>, so the
+        /// null rig and the EditMode fakes keep compiling untouched.
+        /// </remarks>
+        void OpenLoadoutAfterDeath() { }
+
+        /// <summary>
+        /// Where the player picked to spawn on the loadout screen's minimap, when they picked a
+        /// flag at all. The flag's authored position, which is the same number on every process.
+        /// </summary>
+        /// <remarks>
+        /// A position rather than an index because the index the minimap holds is the client's
+        /// <c>FindObjectsOfType</c> order, which nothing guarantees matches the server's. The
+        /// sender turns it into the capture point's wire id, which is authored and shared.
+        /// Default-implemented as "nothing picked".
+        /// </remarks>
+        bool TryGetChosenSpawnPoint(out Vector3 position)
+        {
+            position = default;
+            return false;
+        }
+
+        /// <summary>
         /// Reads and clears the loadout screen's Deploy edge — the player asking to be put into
         /// the world for the first time. Maps to
         /// <c>FpsActorController.ConsumeLoadoutDeployPressed</c>.

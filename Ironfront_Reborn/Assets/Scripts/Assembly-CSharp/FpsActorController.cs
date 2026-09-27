@@ -629,6 +629,21 @@ public class FpsActorController : ActorController
 		OpenLoadout();
 	}
 
+	/// <summary>
+	/// The networked counterpart of <see cref="OpenLoadoutWhileDead"/>, for a body the server
+	/// killed. <see cref="Die"/> is what clears <see cref="deployedView"/> offline and a networked
+	/// body never runs it, so the guard in <see cref="OpenLoadoutWhileDead"/> would refuse; this
+	/// clears it first, then opens the same screen.
+	/// </summary>
+	public void OpenLoadoutAfterNetworkDeath()
+	{
+		deployedView = false;
+		if (!LoadoutUi.IsOpen())
+		{
+			OpenLoadout();
+		}
+	}
+
 	public void CloseLoadout()
 	{
 		LoadoutUi.Hide();

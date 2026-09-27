@@ -899,6 +899,10 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	public void KnockOver(Vector3 force)
 	{
+		if (IsServerClaimedBody())
+		{
+			return;
+		}
 		if (!ragdoll.IsRagdoll())
 		{
 			FallOver();
@@ -915,6 +919,10 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	/// </remarks>
 	public void KnockOver(Vector3 force, HumanBodyBones bone)
 	{
+		if (IsServerClaimedBody())
+		{
+			return;
+		}
 		if (!ragdoll.IsRagdoll())
 		{
 			FallOver();
@@ -994,6 +1002,50 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	}
 
 	/// <summary>
+	/// A player's body on the server: the AI prefab whose controller the connection switched off.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>It must never fall over.</b> <c>Update</c> parks it before the get-up logic runs, so a
+	/// ragdoll switched on here stays on for the rest of the life and past the respawn, which
+	/// <c>ServerCombatBridge.PlaceAtSpawn</c> does without <c>SpawnAt</c>. Meanwhile
+	/// <c>ServerPlayer</c> keeps moving the capsule, so the skeleton is left behind:
+	/// <c>CenterPosition</c> reads the fallen spine, <c>FallOver</c> has hidden the rifle the
+	/// server fires from, and a corpse whose colliders were switched off sinks under the terrain.
+	/// Lane-B <c>death-01</c> and <c>death-02</c> both "drowned" a respawned player standing on
+	/// dry ground eight seconds after the respawn, that spine being under the water plane.
+	/// </para>
+	/// <para>
+	/// <b>Server only.</b> Nothing on a client reaches this state, and every client draws its own
+	/// ragdoll for a death from <c>S_DEATH</c>.
+	/// </para>
+	/// </remarks>
+	private bool IsServerClaimedBody()
+	{
+		return Ironfront.Net.Unity.NetContext.IsServer
+			&& aiControlled && controller != null && !controller.enabled;
+	}
+
+	/// <summary>
+	/// Stands a revived player body back up on the server. A no-op for every other actor.
+	/// </summary>
+	/// <remarks>
+	/// A shot that kills still runs <see cref="Die(Vector3)"/>, which switches the ragdoll on
+	/// and the animator off, and the respawn that follows is not <c>SpawnAt</c> (see
+	/// <see cref="IsServerClaimedBody"/>). <see cref="EnterNetworkDeployedState"/> is exactly
+	/// <c>SpawnAt</c>'s reset without the move, and its controller call is a guarded no-op on a
+	/// switched-off controller.
+	/// </remarks>
+	public void StandUpAfterNetworkRevival()
+	{
+		if (!IsServerClaimedBody())
+		{
+			return;
+		}
+		EnterNetworkDeployedState();
+	}
+
+	/// <summary>
 	/// Puts the weapon away while swimming and takes it back out on dry land.
 	/// </summary>
 	/// <remarks>
@@ -1029,6 +1081,10 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	public void FallOver()
 	{
+		if (IsServerClaimedBody())
+		{
+			return;
+		}
 		if (IsSeated())
 		{
 			LeaveSeat();

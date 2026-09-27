@@ -1,0 +1,76 @@
+{
+  "name": "heli-observer",
+  "note": "Idle witness for heli-driver: stands still so its checkpoints carry the helicopter pose another client sees.",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "respawn": true
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 14.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-0",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-1",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-2",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-3",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-4",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-5",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-6",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-7",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-8",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-9",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-10",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-11",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    }
+  ]
+}

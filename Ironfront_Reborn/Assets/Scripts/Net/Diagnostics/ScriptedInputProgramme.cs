@@ -283,6 +283,25 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// </remarks>
         public float vehicleHoldDistanceMeters = 4f;
 
+        /// <summary>
+        /// Narrows <see cref="approachVehicle"/> to one kind: "Car", "Tank", "Helicopter" or
+        /// "Boat" (<c>VehicleKind</c>'s names). Empty takes the nearest of any kind.
+        /// </summary>
+        /// <remarks>
+        /// Island parks jeeps, a helicopter and the landing boats within a few metres of each
+        /// other, so "nearest" alone cannot choose the boat or the helicopter a check is about.
+        /// </remarks>
+        public string vehicleKind = null;
+
+        /// <summary>
+        /// A pilot's four axes, -1..1, for a step flown in a helicopter seat: the same four
+        /// <c>HelicopterControls</c> reads for a human. Zero on every other step.
+        /// </summary>
+        public float heliCollective = 0f;
+        public float heliYaw = 0f;
+        public float heliRoll = 0f;
+        public float heliPitch = 0f;
+
         public bool fire = false;
         public bool aim = false;
         public bool reload = false;

@@ -80,6 +80,17 @@ namespace Ironfront.Net.Unity.Bindings
         /// <inheritdoc/>
         public void AddScorch(Vector3 position, Vector3 normal, float size)
             => DecalManager.AddDecal(position, normal, size, DecalManager.DecalType.Scorch);
+
+        /// <inheritdoc/>
+        public void AddBlood(Vector3 point, Vector3 velocity, int team, int drops)
+        {
+            // The same call Actor.Damage makes once per drop, clamped the way it clamps the force.
+            Vector3 carried = Vector3.ClampMagnitude(velocity, 5f);
+            for (int i = 0; i < drops; i++)
+            {
+                DecalManager.CreateBloodDrop(point, carried, team);
+            }
+        }
     }
 
     /// <summary>
