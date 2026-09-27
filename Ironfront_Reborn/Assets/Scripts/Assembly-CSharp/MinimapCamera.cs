@@ -38,7 +38,9 @@ public class MinimapCamera : MonoBehaviour
 	}
 
 	/// <summary>
-	/// Centres and zooms this camera on the map's spawn points. P3 task 3.5.
+	/// Centres and zooms this camera on the map's <see cref="LevelBounds"/>, or on its spawn
+	/// points when it authors no bounds. P3 task 3.5; see <see cref="FrameTheLevelBounds"/> for
+	/// why the bounds come first.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -77,6 +79,13 @@ public class MinimapCamera : MonoBehaviour
 	private void FrameThePlayableArea()
 	{
 		// Unqualified: this file carries `using System;`, so a bare `Object` is ambiguous.
+		LevelBounds levelBounds = FindFirstObjectByType<LevelBounds>();
+		if (levelBounds != null)
+		{
+			FrameTheLevelBounds(levelBounds.WorldBox);
+			return;
+		}
+
 		SpawnPoint[] spawnPoints = FindObjectsByType<SpawnPoint>(FindObjectsSortMode.None);
 		if (spawnPoints.Length == 0)
 		{
@@ -137,6 +146,52 @@ public class MinimapCamera : MonoBehaviour
 		}
 
 		camera.fieldOfView = 2f * Mathf.Atan(halfSpan / distance) * Mathf.Rad2Deg;
+	}
+
+	/// <summary>
+	/// Room each edge keeps around <see cref="LevelBounds"/> so an icon pinned at the boundary
+	/// is still drawn whole.
+	/// </summary>
+	private const float LevelBoundsIconMargin = 0.03f;
+
+	/// <summary>Height above the top of the box the camera looks down from.</summary>
+	private const float LevelBoundsClearance = 10f;
+
+	/// <summary>
+	/// Frames the whole authored play volume, straight down and orthographic.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why the play volume and not the spawn points.</b> The spawn-point framing below was
+	/// written for Dustbowl, whose points sit in the middle of a much larger map, and on Island it
+	/// framed 326 m of a 700 m play area -- tighter than the original's own 447 m. The island's
+	/// edges and every metre of sea around it fell off the minimap, so a boat circling the island
+	/// lost its icon as soon as it left the shore. <see cref="LevelBounds"/> is the box the server
+	/// clamps every vehicle into (<c>Vehicle.KeepInsideLevelBounds</c>), so it is exactly the set
+	/// of places an icon can be; framing it means no icon can leave the map while its owner is
+	/// in play. On Dustbowl that is 1700 m, a little wider than the authored 1564 m.
+	/// </para>
+	/// <para>
+	/// <b>Why orthographic.</b> A perspective camera draws a point at altitude further from the
+	/// centre than the ground under it -- from Island's authored camera, 552 m above the water, a
+	/// helicopter 300 m up is drawn 2.2 times as far from the centre as the ground below it -- so
+	/// even a map framed wide enough would push high flyers off it. Straight down and orthographic, every icon sits over its ground position,
+	/// which is what <c>ActorBlip</c> and <c>MinimapMarker</c> assume when they rotate icons by
+	/// yaw alone.
+	/// </para>
+	/// </remarks>
+	private void FrameTheLevelBounds(Bounds box)
+	{
+		float halfSpan = Mathf.Max(box.size.x, box.size.z) * 0.5f / (1f - 2f * LevelBoundsIconMargin);
+
+		base.transform.SetPositionAndRotation(
+			new Vector3(box.center.x, box.max.y + LevelBoundsClearance, box.center.z),
+			Quaternion.Euler(90f, 0f, 0f));
+
+		camera.orthographic = true;
+		camera.orthographicSize = halfSpan;
+		camera.nearClipPlane = LevelBoundsClearance * 0.5f;
+		camera.farClipPlane = box.size.y + LevelBoundsClearance * 2f;
 	}
 
 	private void Start()
