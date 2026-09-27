@@ -306,6 +306,10 @@ public class AiActorController : ActorController
 	[NonSerialized]
 	public Squad squad;
 
+	// Set when SpawnAt asked for the AI coroutines before this bot had a squad. See
+	// StartAiCoroutines.
+	private bool aiCoroutinesAwaitSquad;
+
 	[NonSerialized]
 	public bool squadLeader;
 
@@ -451,8 +455,37 @@ public class AiActorController : ActorController
 	}
 
 
+	/// <summary>
+	/// Starts the eight AI coroutines, or defers them until <see cref="AssignedToSquad"/> when
+	/// this bot has no squad yet.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The coroutines assume a squad</b> -- <c>squad.GetTarget()</c> in AiTarget,
+	/// <c>squad.MemberNeedsResupply()</c> in AiWeapon and dozens more -- and in the original
+	/// that always held: <c>ActorManager.SpawnActorList</c> placed every body and formed every
+	/// squad in the same frame, and each coroutine yields before its first read. This project
+	/// spreads a wave's placements over frames (<c>SPAWN_WORK_BUDGET_SECONDS</c>) and still forms
+	/// the squads at the end, so a bot placed in an early frame ran with <c>squad == null</c> for
+	/// a few frames. On the server every bot release threw one NullReferenceException from
+	/// whichever coroutine got there first, and that coroutine was dead for the bot's whole
+	/// life: a bot whose AiTarget died never picked a target again until it respawned.
+	/// </para>
+	/// <para>
+	/// Deferring restores the original order -- squad first, then the coroutines -- without
+	/// touching the time slicing. The spawn wave assigns a squad to every bot it placed that is
+	/// still alive, so nothing waits indefinitely; a bot that dies while waiting is skipped by
+	/// that wave and deferred again by the next one.
+	/// </para>
+	/// </remarks>
 	private void StartAiCoroutines()
 	{
+		if (squad == null)
+		{
+			aiCoroutinesAwaitSquad = true;
+			return;
+		}
+		aiCoroutinesAwaitSquad = false;
 		StartCoroutine(AiBlocked());
 		StartCoroutine(AiVehicle());
 		StartCoroutine(AiOrders());
@@ -2231,6 +2264,7 @@ public class AiActorController : ActorController
 		}
 
 		squad = null;
+		aiCoroutinesAwaitSquad = false;
 		StopAllCoroutines();
 		CancelInvoke();
 	}
@@ -2413,6 +2447,10 @@ public class AiActorController : ActorController
 		else
 		{
 			EmoteHailLeaderSlow();
+		}
+		if (aiCoroutinesAwaitSquad)
+		{
+			StartAiCoroutines();
 		}
 	}
 
