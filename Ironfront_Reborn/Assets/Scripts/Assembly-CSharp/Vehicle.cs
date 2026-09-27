@@ -1037,8 +1037,32 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		Invoke("Explode", 0.3f);
 	}
 
+	private static bool? _hitLogging;
+
+	/// <summary>
+	/// One line per new contact on a server vehicle, when IRONFRONT_LOG_VEHICLE=1: what touched
+	/// it, how hard, and how the hull was moving afterwards. Written for the 2026-09-27 report of
+	/// a tank thrown into the air as its driver climbed out, where the question is which collider
+	/// did the throwing.
+	/// </summary>
+	private void LogContact(Collision c)
+	{
+		_hitLogging ??= System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_VEHICLE") == "1";
+		if (_hitLogging != true || !NetContext.IsServer)
+		{
+			return;
+		}
+		Vector3 v = rigidbody != null ? rigidbody.linearVelocity : Vector3.zero;
+		Vector3 w = rigidbody != null ? rigidbody.angularVelocity : Vector3.zero;
+		Debug.Log($"[veh-hit] t={Time.time:F2} name={base.gameObject.name} other={c.collider.name} "
+			+ $"layer={c.collider.gameObject.layer} root={c.collider.transform.root.name} "
+			+ $"relVel={c.relativeVelocity.magnitude:F1} impulse={c.impulse.magnitude:F0} "
+			+ $"vel={v.magnitude:F1} angVel={w.magnitude:F2} up={base.transform.up.y:F2}");
+	}
+
 	private void OnCollisionEnter(Collision c)
 	{
+		LogContact(c);
 		// Network vehicles are instantiated into a live PhysX world. Let them settle on their
 		// authored pads before collision damage is authoritative; otherwise touching the ground
 		// or a neighbouring spawn in the first frames starts the burn ladder for every client.

@@ -162,6 +162,17 @@ public class MinimapUi : MonoBehaviour
 		AddSpawnButtonHighlight(minimapSpawnPointButton[selectedSpawnPoint]);
 	}
 
+	/// <summary>
+	/// The flag the player clicked on the minimap, if any, whatever state the loadout screen is
+	/// in. A networked deploy reads it while the screen is still open, which is exactly when
+	/// <see cref="SelectedSpawnPoint"/> answers null.
+	/// </summary>
+	public static bool TryGetPickedSpawnPoint(out SpawnPoint spawnPoint)
+	{
+		spawnPoint = instance != null ? instance.selectedSpawnPoint : null;
+		return spawnPoint != null;
+	}
+
 	public static SpawnPoint SelectedSpawnPoint()
 	{
 		// Only the player picks a spawn point from a minimap. Bots use

@@ -239,7 +239,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// and a vehicle solve in the same frame return each other's answer.
         /// </para>
         /// </remarks>
-        public Solution SolveNearestVehicle(float maxSearchMetres)
+        public Solution SolveNearestVehicle(float maxSearchMetres, string kind = null)
         {
             if (_solvedFrame == Time.frameCount && _solvedIsVehicle) return Last;
 
@@ -261,7 +261,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             }
 
             Vector3 from = local.Position;
-            int count = GatherVehicles(vehicles);
+            int count = GatherVehicles(vehicles, kind);
 
             int index = ScriptedAim.NearestIndexWithin(
                 from.x, from.z, _vehicleX, _vehicleZ, count, maxSearchMetres);
@@ -294,8 +294,14 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// world origin is a real place a client could walk to, so one such entry would pull
         /// every approach toward (0, 0) and look like a solve rather than a miss.
         /// </remarks>
-        private int GatherVehicles(RemoteVehicleRegistry vehicles)
+        private int GatherVehicles(RemoteVehicleRegistry vehicles, string kind)
         {
+            // An unknown name matches nothing rather than everything, so a typo in a
+            // programme shows up as a miss in the record instead of driving the wrong vehicle.
+            bool filtered = !string.IsNullOrEmpty(kind);
+            VehicleKind wanted = default;
+            bool known = filtered && Enum.TryParse(kind, ignoreCase: true, out wanted);
+
             System.Collections.Generic.IReadOnlyList<ushort> ids = vehicles.LiveIds;
 
             if (ids.Count > _vehicleIds.Length)
@@ -310,6 +316,8 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             for (int i = 0; i < ids.Count; i++)
             {
+                if (filtered && (!known || !vehicles.TryGetKind(ids[i], out VehicleKind actual)
+                                 || actual != wanted)) continue;
                 if (!vehicles.TryGetPose(ids[i], out Vector3 position, out _, out _)) continue;
 
                 _vehicleIds[count] = ids[i];

@@ -8,6 +8,7 @@ using Ironfront.Net.Transport;
 using Ironfront.Net.Transport.Loopback;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using JobsUtility = Unity.Jobs.LowLevel.Unsafe.JobsUtility;
 
 namespace Ironfront.Net.Unity.Server
 {
@@ -192,6 +193,7 @@ namespace Ironfront.Net.Unity.Server
             {
                 QualitySettings.vSyncCount = 0;
                 Application.targetFrameRate = ProtocolConstants.SIM_TICK_RATE * 2;
+                CapJobWorkers();
             }
 
             // NOT set here, deliberately: Time.fixedDeltaTime. Decision A5 chose option B — the
@@ -248,6 +250,51 @@ namespace Ironfront.Net.Unity.Server
             if (_misconfigured || TickLoop == null || TickLoop.Transport == null) return;
 
             FillPlayerSlots();
+        }
+
+        /// <summary>
+        /// The job-system workers a headless server keeps when the command line names none.
+        /// </summary>
+        public const int HeadlessJobWorkers = 2;
+
+        /// <summary>
+        /// Shrinks Unity's job-worker pool on a headless server, unless
+        /// <c>-job-worker-count</c> was passed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Measured on the VM on 2026-09-27, during the playtest that read as "everything
+        /// stutters".</b> Unity sizes the pool to the machine, so each game server ran 11
+        /// <c>Job.Worker</c> threads on a 12-vCPU VM inside a 2-CPU pod. The workers spend
+        /// their idle time spinning: the Island server's cgroup showed more kernel time than
+        /// user time (2261 s against 1371 s), 5805 throttled periods, and tick p99 of
+        /// 44-329 ms against a 33 ms budget, 2485 ticks dropped in one match. Every symptom
+        /// downstream of a slow server follows from that: bots and vehicles in slow motion,
+        /// the local player's prediction corrected against a server that fell behind.
+        /// </para>
+        /// <para>
+        /// With <c>-job-worker-count 2</c> the same pod idles at 2.3 s of user time per second
+        /// of kernel time instead of 0.6, and its throttle count stops climbing. Set in code
+        /// as well as in the manifests so a server started any other way gets it too.
+        /// </para>
+        /// </remarks>
+        private static void CapJobWorkers()
+        {
+            int before = JobsUtility.JobWorkerCount;
+            int maximum = JobsUtility.JobWorkerMaximumCount;
+
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-job-worker-count") >= 0)
+            {
+                Debug.Log($"[net] job workers {before} of {maximum}, from -job-worker-count.");
+                return;
+            }
+
+            if (before > HeadlessJobWorkers)
+                JobsUtility.JobWorkerCount = HeadlessJobWorkers;
+
+            Debug.Log(
+                $"[net] job workers {JobsUtility.JobWorkerCount} "
+                + $"of {maximum} (was {before}); pass -job-worker-count to choose another number.");
         }
 
         private void OnDestroy() => StopServer();

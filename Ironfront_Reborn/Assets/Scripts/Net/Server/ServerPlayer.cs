@@ -232,6 +232,24 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>Whether the last tick found this player in a vehicle seat.</summary>
         private bool _seated;
+
+        /// <summary>The vehicle the last seated tick found this player in.</summary>
+        private ushort _seatVehicleId;
+
+        /// <summary>
+        /// The ticks a capsule stays out of the vehicle it just left before its first check.
+        /// </summary>
+        public const int ExitGraceMinTicks = 15;
+
+        /// <summary>The longest a capsule may stay out of that vehicle's collision.</summary>
+        public const int ExitGraceMaxTicks = 90;
+
+        /// <summary>Gap left between a climbing-out capsule and the vehicle's bounds, metres.</summary>
+        public const float ExitClearanceMetres = 0.5f;
+
+        private IGameplayVehicleSource _exitVehicle;
+        private CharacterController _exitCapsule;
+        private int _exitGraceTicks;
         public void Tick(float dt)
         {
             NetMovementAgent agent = Actor != null ? Actor.Movement : null;
@@ -270,8 +288,9 @@ namespace Ironfront.Net.Unity.Server
 
             // Seated: input is consumed and acknowledged, the capsule is out of the world, and
             // the session rides the seat. See InputAuthority.ConsumePendingInputSeated.
-            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(Session.ActorId, out _, out _))
+            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(Session.ActorId, out ushort seatedIn, out _))
             {
+                _seatVehicleId = seatedIn;
                 if (!_seated)
                 {
                     _seated = true;
@@ -288,12 +307,15 @@ namespace Ironfront.Net.Unity.Server
                 // wherever LeaveSeat put the body, so the first on-foot tick starts there rather
                 // than inside the vehicle.
                 _seated = false;
+                BeginExitGrace(agent);
                 agent.SetSeated(false);
                 Vec3 exit = MovementSimulation.ToCore(Actor.transform.position);
                 Session.State = MoveState.AtRest(exit);
                 Session.PreviousPosition = exit;
                 agent.ApplyAuthoritativeState(in Session.State);
             }
+
+            TickExitGrace();
 
             // Ground contact is Unity's answer, not the simulation's: the CharacterController
             // knows what it is standing on and MovementCore does not.
@@ -312,6 +334,150 @@ namespace Ironfront.Net.Unity.Server
             _fallDiagnostics.Sample(Session.ActorId, agent, in Session.State);
 
             EnforceWireVolume(agent);
+        }
+
+        /// <summary>
+        /// Lets the capsule of a player who has just climbed out pass through the vehicle they
+        /// left, until the two have separated.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>What it stops: a tank thrown into the air as its driver gets out</b> (owner report
+        /// 2026-09-27). The capsule is re-enabled at the seat's exit offset, and on a tank that
+        /// point is inside the hull or the turret's swing. The body carries the prefab's
+        /// kinematic Rigidbody, so PhysX resolves the overlap by pushing the 7-tonne hull out of
+        /// an immovable capsule: lane-B run <c>tankdrive-02</c> logged impulses of 375000 N s and
+        /// the hull leaving at 36.8 m/s, spinning. Bots never hit this because an AI body has no
+        /// CharacterController; a networked player's body gets one from NetMovementAgent.
+        /// </para>
+        /// <para>
+        /// <b>Scoped to the one vehicle and to the one capsule</b>, so the player still collides
+        /// with the world and with every other vehicle, and the grace ends once the capsule's
+        /// bounds no longer touch the hull's (<see cref="ExitGraceMaxTicks"/> at the latest).
+        /// </para>
+        /// </remarks>
+        private void BeginExitGrace(NetMovementAgent agent)
+        {
+            EndExitGrace();
+
+            ushort vehicleId = _seatVehicleId;
+            _seatVehicleId = 0;
+            if (vehicleId == 0) return;
+            if (!ServerVehicleRegistry.Instance.TryFind(vehicleId, out IGameplayVehicleSource vehicle)
+                || vehicle == null || !vehicle.Exists) return;
+
+            CharacterController capsule = agent.GetComponent<CharacterController>();
+            if (capsule == null) return;
+
+            vehicle.SetCollisionIgnored(capsule, true);
+
+            // Called before the session reads the body's position, so it rebases onto the spot.
+            if (vehicle.TryGetBounds(out Bounds hull)
+                && TryFindExitSpot(Actor.transform.position, hull, capsule, out Vector3 spot))
+            {
+                Actor.transform.position = spot;
+            }
+
+            _exitVehicle = vehicle;
+            _exitCapsule = capsule;
+            _exitGraceTicks = 0;
+        }
+
+        /// <summary>
+        /// Layers a climbing-out capsule may stand on: the world, not bodies, vehicles or shots.
+        /// </summary>
+        private const int ExitGroundMask = ~((1 << 2) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11)
+                                             | (1 << 12) | (1 << 13) | (1 << 14) | (1 << 16) | (1 << 17));
+
+        /// <summary>Layers that must not overlap the capsule where it lands: the ground mask plus vehicles.</summary>
+        private const int ExitBlockingMask = ExitGroundMask | (1 << 12);
+
+        /// <summary>
+        /// A spot on the ground beside <paramref name="hull"/>, clear of it and of everything else,
+        /// for a capsule leaving a seat.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The seat's own exit offset is not trusted,</b> because on the tank it is not outside
+        /// the tank: lane-B run <c>tankdrive-03</c> left the driver 3 m above the hull's origin and
+        /// 0.5 m from its centre, standing inside its bounds. The search starts on the side of the
+        /// hull that offset points to, so it lands where the vehicle's author meant, and walks
+        /// round the other seven sides when that one is blocked.
+        /// </para>
+        /// <para>
+        /// Ground comes from a ray cast down past the hull, which skips vehicles, bodies and
+        /// hitboxes; the capsule is then checked against the world and every vehicle.
+        /// </para>
+        /// </remarks>
+        internal static bool TryFindExitSpot(
+            Vector3 preferred, Bounds hull, CharacterController capsule, out Vector3 root)
+        {
+            root = preferred;
+
+            float radius = capsule.radius;
+            float half = Mathf.Max(capsule.height * 0.5f, radius);
+
+            Vector3 away = preferred - hull.center;
+            away.y = 0f;
+            if (away.sqrMagnitude < 0.01f) away = Vector3.right;
+            away.Normalize();
+
+            float reach = Mathf.Max(hull.extents.x, hull.extents.z) + radius + ExitClearanceMetres;
+            float rayTop = hull.max.y + 3f;
+            float rayLength = hull.size.y + 40f;
+
+            for (int i = 0; i < 8; i++)
+            {
+                // 0, +45, -45, +90, -90, ... so the preferred side is tried first.
+                float degrees = 45f * ((i + 1) / 2) * (i % 2 == 0 ? 1f : -1f);
+                Vector3 direction = Quaternion.Euler(0f, degrees, 0f) * away;
+                Vector3 probe = hull.center + direction * reach;
+
+                if (!Physics.Raycast(new Vector3(probe.x, rayTop, probe.z), Vector3.down, out RaycastHit ground,
+                        rayLength, ExitGroundMask, QueryTriggerInteraction.Ignore))
+                    continue;
+
+                Vector3 centre = ground.point + Vector3.up * (half + 0.05f);
+                Vector3 spine = Vector3.up * (half - radius);
+                if (Physics.CheckCapsule(centre - spine, centre + spine, radius * 0.95f,
+                        ExitBlockingMask, QueryTriggerInteraction.Ignore))
+                    continue;
+
+                root = centre - capsule.center;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void TickExitGrace()
+        {
+            if (_exitVehicle == null) return;
+
+            _exitGraceTicks++;
+            if (!_exitVehicle.Exists || _exitCapsule == null)
+            {
+                _exitVehicle = null;
+                _exitCapsule = null;
+                return;
+            }
+
+            if (_exitGraceTicks < ExitGraceMinTicks) return;
+
+            bool touching = _exitVehicle.TryGetBounds(out Bounds hull)
+                            && hull.Intersects(_exitCapsule.bounds);
+            if (touching && _exitGraceTicks < ExitGraceMaxTicks) return;
+
+            EndExitGrace();
+        }
+
+        private void EndExitGrace()
+        {
+            if (_exitVehicle != null && _exitVehicle.Exists && _exitCapsule != null)
+                _exitVehicle.SetCollisionIgnored(_exitCapsule, false);
+
+            _exitVehicle = null;
+            _exitCapsule = null;
         }
 
         /// <summary>

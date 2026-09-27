@@ -208,6 +208,15 @@ namespace Ironfront.Net.Unity.Client
             _stats.Record(mode, positionError, angleError);
             LogCorrection(in local, in server, mode, positionError, angleError, rttSeconds);
 
+            // Inside the dead zone the body is not touched at all: writing even its own pose back
+            // is a teleport that PhysX treats as one.
+            if (mode == CorrectionMode.Hold)
+            {
+                ApplyAuthoritativeState(in server);
+                _hasPose = true;
+                return;
+            }
+
             _rigidbody.position = new Vector3(
                 corrected.Position.X, corrected.Position.Y, corrected.Position.Z);
             _rigidbody.rotation = ToQuaternion(in corrected.Rotation);

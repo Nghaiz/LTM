@@ -108,7 +108,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             // programme defect and is rejected at LOAD time by
             // ScriptedInputProgramme.FindConflictingStep -- not warned about here, which is
             // read three times a frame and would say it three times a frame.
-            if (step.approachVehicle) return _solver.SolveNearestVehicle(step.vehicleSearchMetres);
+            if (step.approachVehicle)
+                return _solver.SolveNearestVehicle(step.vehicleSearchMetres, step.vehicleKind);
 
             if (string.IsNullOrEmpty(step.aimAtPlayer)) return default;
 
@@ -148,13 +149,13 @@ namespace Ironfront.Net.Unity.Diagnostics
             }
         }
 
-        public float HeliYaw => 0f;
+        public float HeliYaw => Step != null ? Step.heliYaw : 0f;
 
-        public float HeliCollective => 0f;
+        public float HeliCollective => Step != null ? Step.heliCollective : 0f;
 
-        public float HeliRoll => 0f;
+        public float HeliRoll => Step != null ? Step.heliRoll : 0f;
 
-        public float HeliPitch => 0f;
+        public float HeliPitch => Step != null ? Step.heliPitch : 0f;
 
         /// <summary>
         /// True exactly once per step that declares <c>respawn</c>.

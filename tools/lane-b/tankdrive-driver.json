@@ -1,0 +1,21 @@
+{
+  "name": "tankdrive-driver",
+  "note": "Owner report 2026-09-27: a human-driven tank crawls, and leaving it throws the hull into the air and flips it. Walk to tank 2 (Dustbowl, -SpawnIndex 3,5, 17.6 m at yaw ~315), take the driver seat before the bots are released, hold full throttle for 10 s, then leave the seat and watch the hull for 8 s. Grade from the observers' vehicles block: distance covered between drive-0 and drive-3 (the offline tank does ~6-8 m/s), and the hull's height and up-vector across left-0..left-3 (a hull that is thrown reads as a height jump and a tilted up-vector).",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 315, "respawn": true },
+    { "checkpoint": "spawned", "seconds": 1.0, "yawDegrees": 315 },
+    { "checkpoint": "walking-to-tank", "seconds": 4.0, "yawDegrees": 315, "moveZ": 1.0 },
+    { "checkpoint": "at-tank", "seconds": 1.0, "yawDegrees": 315 },
+    { "checkpoint": "seat-requested", "seconds": 3.0, "yawDegrees": 315, "seatToggle": true },
+    { "checkpoint": "seated", "seconds": 2.0, "yawDegrees": 315 },
+    { "checkpoint": "drive-0", "seconds": 3.0, "yawDegrees": 315, "moveZ": 1.0 },
+    { "checkpoint": "drive-1", "seconds": 3.0, "yawDegrees": 315, "moveZ": 1.0 },
+    { "checkpoint": "drive-2", "seconds": 4.0, "yawDegrees": 315, "moveZ": 1.0 },
+    { "checkpoint": "drive-3", "seconds": 2.0, "yawDegrees": 315 },
+    { "checkpoint": "leave-requested", "seconds": 2.0, "yawDegrees": 315, "seatToggle": true },
+    { "checkpoint": "left-0", "seconds": 2.0, "yawDegrees": 315 },
+    { "checkpoint": "left-1", "seconds": 2.0, "yawDegrees": 315 },
+    { "checkpoint": "left-2", "seconds": 2.0, "yawDegrees": 315 },
+    { "checkpoint": "left-3", "seconds": 2.0, "yawDegrees": 315 }
+  ]
+}

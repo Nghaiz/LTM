@@ -30,5 +30,23 @@ namespace Ironfront.Net.Unity
         /// orientation is a cosmetic detail, not a correctness one.
         /// </remarks>
         void AddScorch(Vector3 position, Vector3 normal, float size);
+
+        /// <summary>
+        /// Throws <paramref name="drops"/> blood drops from <paramref name="point"/>, in
+        /// <paramref name="team"/>'s colour, carried along <paramref name="velocity"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The client's only source of blood.</b> Offline, every hit runs
+        /// <c>Actor.Damage</c>, which throws <c>ceil(damage / 10)</c> drops. On a networked client
+        /// no hit ever runs there -- bullets are the server's -- so remote bodies and the local
+        /// one took every hit and died without a drop (owner report 2026-09-27). The presenters
+        /// call this from the authoritative health and death they already receive.
+        /// </para>
+        /// <para>
+        /// Default-implemented as a no-op so fakes predating it keep compiling.
+        /// </para>
+        /// </remarks>
+        void AddBlood(Vector3 point, Vector3 velocity, int team, int drops) { }
     }
 }

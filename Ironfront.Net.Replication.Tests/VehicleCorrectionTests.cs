@@ -42,8 +42,8 @@ namespace Ironfront.Net.Replication.Tests
                 out VehiclePose corrected, out float positionError, out float angleError);
 
             // Prediction is not a disguised snap: agreeing with the server must not move
-            // anything.
-            Assert.Equal(CorrectionMode.Blend, mode);
+            // anything, and inside the dead zone it is not even written back.
+            Assert.Equal(CorrectionMode.Hold, mode);
             Assert.Equal(0f, positionError, 4);
             Assert.Equal(0f, angleError, 3);
             Assert.Equal(5f, corrected.Position.X, 4);
@@ -93,22 +93,104 @@ namespace Ironfront.Net.Replication.Tests
 
         [Theory]
         [MemberData(nameof(BothPresets))]
-        public void TheServerPoseIsExtrapolatedByHalfTheRoundTrip(bool predict)
+        public void TheServerPoseIsExtrapolatedByTheWholeRoundTrip(bool predict)
         {
             VehicleReplicationConfig config = Preset(predict);
 
-            // The snapshot says where the vehicle was when it left the server; the local body is
-            // where it is now. Comparing them directly measures latency as if it were error, and
-            // the correction then permanently tows the vehicle backwards along its own velocity.
-            VehiclePose local = Pose(new Vec3(2f, 0f, 0f));
+            // The snapshot lags the local body by the input's trip up and the snapshot's trip
+            // down: the local body is a whole round trip ahead. Comparing less than that tows
+            // the vehicle backwards along its own velocity. Half the round trip was the old
+            // answer; lane-B run heli-01 is what it cost.
+            float lead = 0.2f;
+            VehiclePose local = Pose(new Vec3(20f * lead, 0f, 0f));
             VehiclePose server = Pose(Vec3.Zero, velocity: new Vec3(20f, 0f, 0f));
 
             VehicleCorrectionSolver.Solve(
                 in local, in server, rttSeconds: 0.2f, dt: 1f / 60f, in config,
                 out _, out float positionError, out _);
 
-            // 20 m/s x 0.1 s = 2 m, which is exactly where the local body already is.
             Assert.Equal(0f, positionError, 2);
+        }
+
+        [Theory]
+        [MemberData(nameof(BothPresets))]
+        public void ARoundTripSpikeCarriesTheServerNoFurtherThanTheCap(bool predict)
+        {
+            VehicleReplicationConfig config = Preset(predict);
+
+            // A hitching frame spikes the smoothed round trip; the lead stops at the cap.
+            VehiclePose local = Pose(new Vec3(20f * VehicleCorrectionSolver.MaxLeadSeconds, 0f, 0f));
+            VehiclePose server = Pose(Vec3.Zero, velocity: new Vec3(20f, 0f, 0f));
+
+            VehicleCorrectionSolver.Solve(
+                in local, in server, rttSeconds: 0.9f, dt: 1f / 60f, in config,
+                out _, out float positionError, out _);
+
+            Assert.Equal(0f, positionError, 2);
+        }
+
+        [Theory]
+        [MemberData(nameof(BothPresets))]
+        public void HalfTheRoundTripIsNoLongerEnough(bool predict)
+        {
+            VehicleReplicationConfig config = Preset(predict);
+
+            // Pins the old answer as wrong: a body exactly half a round trip ahead is now
+            // measured as the remaining half trip, not as zero.
+            VehiclePose local = Pose(new Vec3(20f * 0.1f, 0f, 0f));
+            VehiclePose server = Pose(Vec3.Zero, velocity: new Vec3(20f, 0f, 0f));
+
+            VehicleCorrectionSolver.Solve(
+                in local, in server, rttSeconds: 0.2f, dt: 1f / 60f, in config,
+                out _, out float positionError, out _);
+
+            Assert.Equal(20f * 0.1f, positionError, 2);
+        }
+
+        [Theory]
+        [MemberData(nameof(BothPresets))]
+        public void AnErrorInsideTheDeadZoneMovesNothing(bool predict)
+        {
+            VehicleReplicationConfig config = Preset(predict);
+
+            VehiclePose local = Pose(new Vec3(0.1f, 0f, 0f));
+            VehiclePose server = Pose(Vec3.Zero);
+
+            CorrectionMode mode = VehicleCorrectionSolver.Solve(
+                in local, in server, rttSeconds: 0f, dt: 1f / 20f, in config,
+                out VehiclePose corrected, out float positionError, out _);
+
+            Assert.Equal(CorrectionMode.Hold, mode);
+            Assert.Equal(0.1f, positionError, 3);
+            Assert.Equal(0.1f, corrected.Position.X, 4);
+        }
+
+        [Theory]
+        [MemberData(nameof(BothPresets))]
+        public void TheDeadZoneWidensWithSpeedAndOnlyWithSpeed(bool predict)
+        {
+            VehicleReplicationConfig config = Preset(predict);
+            const float speed = 20f;
+            float atSpeed = config.DeadZoneMetres + speed * config.DeadZoneSecondsOfTravel;
+            float error = (config.DeadZoneMetres + atSpeed) * 0.5f;
+
+            // Moving: an error between the standstill zone and the at-speed zone is held.
+            VehiclePose movingLocal = Pose(
+                new Vec3(error, 0f, 0f), velocity: new Vec3(speed, 0f, 0f));
+            VehiclePose movingServer = Pose(Vec3.Zero, velocity: new Vec3(speed, 0f, 0f));
+            CorrectionMode moving = VehicleCorrectionSolver.Solve(
+                in movingLocal, in movingServer, rttSeconds: 0f, dt: 1f / 20f, in config,
+                out _, out _, out _);
+
+            // Parked: the same error is blended.
+            VehiclePose parkedLocal = Pose(new Vec3(error, 0f, 0f));
+            VehiclePose parkedServer = Pose(Vec3.Zero);
+            CorrectionMode parked = VehicleCorrectionSolver.Solve(
+                in parkedLocal, in parkedServer, rttSeconds: 0f, dt: 1f / 20f, in config,
+                out _, out _, out _);
+
+            Assert.Equal(CorrectionMode.Hold, moving);
+            Assert.Equal(CorrectionMode.Blend, parked);
         }
 
         [Theory]
@@ -175,9 +257,13 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Equal(0, stats.SnapCount);
             Assert.True(stats.BlendCount > 0);
+
+            // Closed down to the dead zone and then left alone, rather than nudged forever.
+            float deadZone = config.DeadZoneMetres + speed * config.DeadZoneSecondsOfTravel;
+            Assert.True(stats.HoldCount > 0, "a converged stream must settle into holding");
             Assert.True(
-                stats.LastPositionError < 0.01f,
-                $"a converging stream must close the error, ended at {stats.LastPositionError} m");
+                stats.LastPositionError <= deadZone,
+                $"a converging stream must close the error to the dead zone ({deadZone} m), ended at {stats.LastPositionError} m");
         }
 
         [Theory]
@@ -263,9 +349,10 @@ namespace Ironfront.Net.Replication.Tests
         {
             VehicleReplicationConfig config = Preset(predict);
 
+            // Far enough apart to be outside the dead zone and inside the snap threshold.
             VehiclePose local = Pose(new Vec3(0.2f, 0f, 0f), velocity: new Vec3(11f, 0f, 0f));
             VehiclePose server = new VehiclePose(
-                new Vec3(0.3f, 0f, 0f),
+                new Vec3(2.0f, 0f, 0f),
                 Quat.Identity,
                 new Vec3(9f, 0f, 0f),
                 Vec3.Zero,
@@ -317,14 +404,17 @@ namespace Ironfront.Net.Replication.Tests
             var stats = new VehicleCorrectionStats();
             stats.Record(CorrectionMode.Snap, 3f, 4f);
             stats.Record(CorrectionMode.Blend, 1f, 2f);
+            stats.Record(CorrectionMode.Hold, 0.1f, 0.5f);
 
             Assert.Equal(1, stats.SnapCount);
             Assert.Equal(1, stats.BlendCount);
+            Assert.Equal(1, stats.HoldCount);
 
             stats.Reset();
 
             Assert.Equal(0, stats.SnapCount);
             Assert.Equal(0, stats.BlendCount);
+            Assert.Equal(0, stats.HoldCount);
             Assert.Equal(0f, stats.LastPositionError);
         }
 
@@ -333,6 +423,13 @@ namespace Ironfront.Net.Replication.Tests
         /// <summary>Runs a fixed one-second wall-clock convergence and returns the residual error.</summary>
         private static float Converge(VehicleReplicationConfig config, float dt, int steps)
         {
+            // The blend alone: with a dead zone the residual stops at its edge on every
+            // framerate and the comparison would be vacuous.
+            config = new VehicleReplicationConfig(
+                config.PredictLocalVehicle, config.CorrectionBlendSeconds, config.HardSnapMetres,
+                config.HardSnapDegrees, deadZoneMetres: 0f, deadZoneSecondsOfTravel: 0f,
+                deadZoneDegrees: 0f);
+
             var local = new Vec3(3f, 0f, 0f);
             VehiclePose server = Pose(Vec3.Zero);
 

@@ -174,6 +174,16 @@ namespace Ironfront.Net.Unity.Client
         private IRemoteActorPresentation _presentation;
         private bool _hiddenForDeath;
 
+        // E1: the runtime ragdoll for a proxy with no authored rig. Null when the animator is
+        // not a humanoid that names every bone RemoteRagdoll needs.
+        private RemoteRagdoll _ragdoll;
+
+        /// <summary>
+        /// Whether this body is lying as a runtime ragdoll, in which case its bones own the pose
+        /// and the registry must stop writing its transform.
+        /// </summary>
+        public bool IsRagdollPosed => _ragdoll != null && _ragdoll.IsActive;
+
         /// <summary>The network actor id this body is currently drawing.</summary>
         public ushort ActorId { get; private set; }
 
@@ -248,7 +258,11 @@ namespace Ironfront.Net.Unity.Client
             CreateFallbackMuzzleFlash();
             _presentation = NetClientBindings.ResolveRemoteActorPresentation(gameObject);
 
-            if (_actor == null) return;
+            if (_actor == null)
+            {
+                _ragdoll = RemoteRagdoll.TryCreate(_animator);
+                return;
+            }
 
             _presence = _actor as IGameplayActorPresence;
             if (_presence != null) return;
@@ -324,7 +338,14 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         public bool TryFellBody(Vector3 force, HumanBodyBones bone)
         {
-            if (!HasRagdollRig) return false;
+            if (!HasRagdollRig)
+            {
+                if (_ragdoll == null) return false;
+
+                _ragdoll.Fell(force, bone);
+                _ragdollApplied = true;
+                return true;
+            }
 
             _presence.KnockOver(force, bone);
             return true;
@@ -356,6 +377,8 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         public void Bind(ushort actorId, byte team)
         {
+            _ragdoll?.Restore();
+
             ActorId          = actorId;
             _state           = default;
             _hasState        = false;
@@ -397,8 +420,13 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         public void Apply(in ActorSnapshotEntry entry)
         {
+            RemoteActorVisualState previous = _state;
+            bool hadState = _hasState;
+
             _state    = RemoteActorVisualState.From(in entry);
             _hasState = true;
+
+            if (hadState) BleedOnHealthLoss(in previous, in _state);
 
             // A proxy without the original Actor/ragdoll rig is hidden on its death event. Spawn
             // announcements are lifetime announcements, not respawn announcements, so the same
@@ -440,6 +468,40 @@ namespace Ironfront.Net.Unity.Client
             }
 
             ApplyRagdoll(_state.IsRagdoll);
+        }
+
+        /// <summary>Extra drops thrown when a hit kills, on top of the damage's own.</summary>
+        public const int DeathBloodDrops = 4;
+
+        /// <summary>
+        /// Throws the blood the original game throws for a hit, off the one fact a client has
+        /// about hits on somebody else: their authoritative health going down.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why here.</b> Offline, <c>Actor.Damage</c> throws <c>ceil(damage / 10)</c> drops at
+        /// the hit point. A networked client never runs it for anybody -- the bullet and the
+        /// damage are the server's -- so no hit and no death on another body ever bled (owner
+        /// report 2026-09-27: "không máu me"). The health byte arrives with every snapshot that
+        /// changes it, which is exactly the moment the hit landed.
+        /// </para>
+        /// <para>
+        /// <b>Chest height, no direction.</b> The snapshot carries neither the hit point nor the
+        /// shot's direction, so the drops leave the torso with the random spread
+        /// <c>DecalManager.CreateBloodDrop</c> already adds. A heal or a respawn raises health and
+        /// throws nothing.
+        /// </para>
+        /// </remarks>
+        private void BleedOnHealthLoss(in RemoteActorVisualState before, in RemoteActorVisualState after)
+        {
+            if (!before.IsAlive || after.Health >= before.Health) return;
+
+            int drops = Mathf.CeilToInt((before.Health - after.Health) / 10f);
+            if (!after.IsAlive) drops += DeathBloodDrops;
+
+            float chest = _state.Stance == RemoteActorStance.Standing ? 1.3f : 0.8f;
+            NetClientBindings.Decals?.AddBlood(
+                transform.position + Vector3.up * chest, Vector3.zero, after.Team, drops);
         }
 
         /// <summary>
@@ -506,6 +568,13 @@ namespace Ironfront.Net.Unity.Client
 
             if (!HasRagdollRig)
             {
+                if (_ragdoll != null)
+                {
+                    if (shouldRagdoll) _ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips);
+                    else _ragdoll.Restore();
+                    return;
+                }
+
                 if (!shouldRagdoll) return;
 
                 NetClientPresenterGuard.WarnOnce(
