@@ -1,0 +1,75 @@
+# infra/docker/gameservers.compose.yml -- the two Linux game servers (Dustbowl, Island) as
+# containers on this machine's Docker Desktop, registered with the fly master.
+#
+# WHY HERE AND NOT IN THE VMWARE VM (decided 2026-09-27). The VM also runs the DevOps Learning
+# Platform, which already uses about half of its 12 vCPUs, and VMware runs in ULM mode on top of
+# Hyper-V (vmware.log: "Monitor Mode: ULM"), which makes the guest kernel's work expensive. A
+# 2-player Island match on the VM took its load to 147 and restarted DLP pods (postgres, redis,
+# traefik, prometheus) on failed probes, while each game server used only about one core. Hyper-V
+# has to stay on for Docker and WSL2, and the DLP needs its vCPUs. Docker Desktop's WSL2 backend
+# runs directly on Hyper-V, so the same image runs here at full speed and cannot touch the DLP.
+#
+# The image is the one the k8s manifests name (infra/k8s/staging-protocol10.yaml); build it with
+#   docker build -f infra/docker/gameserver.Dockerfile -t ironfront-game-server:<rev> build/server
+#
+# Usage (from the repo root; .env supplies IRONFRONT_SHARED_SECRET, the secret the fly master
+# signs tickets with):
+#   docker compose --env-file .env -f infra/docker/gameservers.compose.yml up -d
+#   docker compose --env-file .env -f infra/docker/gameservers.compose.yml logs -f
+#   docker compose --env-file .env -f infra/docker/gameservers.compose.yml down
+#
+# PORTS. 27115/27116, not 27015/27016: VMware NAT (vmnetnat.conf [incomingudp]) still holds the
+# latter on this host for the VM's copies, which must stay scaled to 0 while these run -- or the
+# master has two servers per map and a room can land on the starving one.
+
+x-gameserver: &gameserver
+  image: ${IRONFRONT_GAMESERVER_IMAGE:-ironfront-game-server:06a0a07}
+  restart: unless-stopped
+  # Unity sizes its job pool to the machine; NetServerBootstrap.CapJobWorkers caps a headless
+  # server to 2, and the flag says so for images built before that cap.
+  command: ["-job-worker-count", "2"]
+  environment: &gameserver-env
+    IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET (pass --env-file .env)}
+    IRONFRONT_MASTER_HOST: kien-master-2026.fly.dev
+    # 443 with TLS: fly's shared IPv4 routes only 80/443, selecting the app by SNI.
+    IRONFRONT_MASTER_PORT: "443"
+    IRONFRONT_GAMESERVER_MASTER_TLS: "1"
+    IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST: kien-master-2026.fly.dev
+    # What the master hands players as the address to dial: this host's Radmin VPN address.
+    IRONFRONT_GAMESERVER_PUBLIC_IP: ${IRONFRONT_GAMESERVER_PUBLIC_IP_ADVERTISED:-26.18.240.157}
+    IRONFRONT_GAMESERVER_TRANSPORT: udp
+    IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "0"
+    IRONFRONT_GAMESERVER_MAX_PLAYERS: "16"
+    IRONFRONT_GAMESERVER_MAX_CONNECTIONS: "16"
+    IRONFRONT_LOG_LEVEL: Info
+    IRONFRONT_STRUCTURED_LOG: "1"
+    # One "[frames] fps=.. ticks/s=.." line per window: the only in-process evidence that a
+    # server is keeping its 30 Hz tick, which is what starved on the VM.
+    IRONFRONT_LOG_FRAMES: "1"
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "3" }
+
+services:
+  game-server-dustbowl:
+    <<: *gameserver
+    container_name: ironfront-gs-dustbowl
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_SCENE: Dustbowl
+      IRONFRONT_GAMESERVER_UDP_PORT: "27115"
+      # Required: the master refuses a registration with no map ids. Dustbowl is 1, Island is 2.
+      IRONFRONT_GAMESERVER_MAP_IDS: "1"
+    ports:
+      - "27115:27115/udp"
+
+  game-server-island:
+    <<: *gameserver
+    container_name: ironfront-gs-island
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_SCENE: Island
+      IRONFRONT_GAMESERVER_UDP_PORT: "27116"
+      IRONFRONT_GAMESERVER_MAP_IDS: "2"
+    ports:
+      - "27116:27116/udp"

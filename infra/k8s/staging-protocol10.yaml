@@ -285,7 +285,10 @@ metadata:
     app.kubernetes.io/name: ironfront-game-server
     ironfront.dev/map: dustbowl
 spec:
-  replicas: 1
+  # 0 ON PURPOSE. The game servers run in Docker Desktop (infra/docker/gameservers.compose.yml).
+  # This VM also hosts the DevOps Learning Platform, and a 2-player match here restarted its
+  # pods on 2026-09-27. Raise this only on a VM that has CPU to spare for a 30 Hz server.
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -303,8 +306,12 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: game-server
-          image: ghcr.io/nghaiz/ironfront-game-server@sha256:d702605ee4c1bb2ac0ae95bd4a899301606c07fe8eea58e59115e580f1ccaa44
+          image: ghcr.io/nghaiz/ironfront-game-server:06a0a07
           imagePullPolicy: IfNotPresent
+          # Unity sizes its job pool to the machine: 11 spinning workers per server on this
+          # 12-vCPU VM. NetServerBootstrap.CapJobWorkers caps a headless server to 2 on its
+          # own; the flag says so here too, for images built before that cap.
+          args: ["-job-worker-count", "2"]
           envFrom:
             - configMapRef:
                 name: gameserver-env-p10
@@ -335,12 +342,18 @@ spec:
             runAsGroup: 1654
             capabilities:
               drop: ["ALL"]
+          # A 30 Hz server must get its CPU WHEN it asks, not on average. This VM also runs the
+          # DevOps Learning Platform (Prometheus, Loki, the control plane), which idles at about
+          # half its 12 vCPUs. Under contention the kernel shares CPU in proportion to REQUESTS,
+          # so 300m lost to everything else; 2 cores gives the server the larger share. The
+          # limit is 4, not 2: a 2-CPU quota throttled the Island server 5805 times in the
+          # 2026-09-27 match that ran at 3-5 fps.
           resources:
             requests:
-              cpu: "300m"
+              cpu: "2"
               memory: "384Mi"
             limits:
-              cpu: "2"
+              cpu: "4"
               memory: "1500Mi"
           # No readinessProbe on purpose. A Unity UDP listener cannot be probed honestly over
           # TCP, and a probe that always passes is worse than none: it reports healthy on
@@ -356,7 +369,10 @@ metadata:
     app.kubernetes.io/name: ironfront-game-server
     ironfront.dev/map: island
 spec:
-  replicas: 1
+  # 0 ON PURPOSE. The game servers run in Docker Desktop (infra/docker/gameservers.compose.yml).
+  # This VM also hosts the DevOps Learning Platform, and a 2-player match here restarted its
+  # pods on 2026-09-27. Raise this only on a VM that has CPU to spare for a 30 Hz server.
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -374,8 +390,12 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: game-server
-          image: ghcr.io/nghaiz/ironfront-game-server@sha256:d702605ee4c1bb2ac0ae95bd4a899301606c07fe8eea58e59115e580f1ccaa44
+          image: ghcr.io/nghaiz/ironfront-game-server:06a0a07
           imagePullPolicy: IfNotPresent
+          # Unity sizes its job pool to the machine: 11 spinning workers per server on this
+          # 12-vCPU VM. NetServerBootstrap.CapJobWorkers caps a headless server to 2 on its
+          # own; the flag says so here too, for images built before that cap.
+          args: ["-job-worker-count", "2"]
           envFrom:
             - configMapRef:
                 name: gameserver-env-p10
@@ -403,10 +423,16 @@ spec:
             runAsGroup: 1654
             capabilities:
               drop: ["ALL"]
+          # A 30 Hz server must get its CPU WHEN it asks, not on average. This VM also runs the
+          # DevOps Learning Platform (Prometheus, Loki, the control plane), which idles at about
+          # half its 12 vCPUs. Under contention the kernel shares CPU in proportion to REQUESTS,
+          # so 300m lost to everything else; 2 cores gives the server the larger share. The
+          # limit is 4, not 2: a 2-CPU quota throttled the Island server 5805 times in the
+          # 2026-09-27 match that ran at 3-5 fps.
           resources:
             requests:
-              cpu: "300m"
+              cpu: "2"
               memory: "384Mi"
             limits:
-              cpu: "2"
+              cpu: "4"
               memory: "1500Mi"
