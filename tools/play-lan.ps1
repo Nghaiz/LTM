@@ -3,9 +3,8 @@
 #
 # WHICH SCRIPT DO I WANT?
 #
-#   everything on this machine     -> tools/playtest-local.ps1   (starts the master, the game
-#                                     server AND N clients; this is the usual answer)
-#   server elsewhere, client here  -> this script
+#   a human client                 -> this script (the usual answer; the master is on fly and
+#                                     the game servers on the Azure VM -- nothing runs locally)
 #   scripted clients, no human     -> tools/run-lane-b.ps1
 #
 # WHAT CHANGED IN P15, AND WHY THIS FILE WAS WRONG UNTIL 2026-09-03. This script used to say

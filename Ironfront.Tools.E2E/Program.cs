@@ -33,7 +33,7 @@ namespace Ironfront.Tools.E2E
     /// the master's signed ticket and requires leg 4 to be REFUSED. Without that run, a game
     /// server left with <c>IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS=1</c> would admit
     /// anybody and the positive run would still print PASS — the gate would be measuring that
-    /// a UDP port is open, which it already knew. See tools/run-e2e.ps1, which runs both.
+    /// a UDP port is open, which it already knew. Run both against the live master.
     /// </para>
     /// </remarks>
     public static class Program
@@ -1125,8 +1125,9 @@ namespace Ironfront.Tools.E2E
   Exit: 0 pass · 1 master unreachable · 2 login failed · 3 join failed · 4 UDP failed
         5 never reached Starting · 6 never reached InMatch · 64 usage
 
-  Orchestrated by tools/run-e2e.ps1, which stands up the master and game server first
-  and runs the negative case as well as the positive one.");
+  Run it against the live master, e.g.:
+    --master-host kien-master-2026.fly.dev --master-port 443 --master-tls --map-id 2
+  and once more with --negative, which must be refused.");
         }
     }
 }

@@ -26,8 +26,8 @@ param(
     # Same variable tools/build-server.ps1 and run-lane-b.ps1 read.
     [string] $UnityPath = $env:UNITY_PATH,
 
-    # Where the player lands. The contract with run-lane-b.ps1, play-lan.ps1 and
-    # playtest-local.ps1 is this default; all three look here.
+    # Where the player lands. The contract with run-lane-b.ps1 and play-lan.ps1 is this
+    # default; both look here.
     [string] $OutputDirectory = "build/windows",
 
     [string] $LogFile = "",
@@ -248,4 +248,4 @@ Write-Host "[build] $exe"
 Write-Host "[build]   exe  last written $after$(if ($before -eq $after) { '  (unchanged -- expected)' })"
 Write-Host "[build]   Assembly-CSharp.dll last written $asmStamp  <- judge the build by this"
 Write-Host ""
-Write-Host "[build] next: pwsh tools/playtest-local.ps1 -Clients 4"
+Write-Host "[build] next: pwsh tools/play-lan.ps1 -PlayerId <id>   (joins the live fly master)"
