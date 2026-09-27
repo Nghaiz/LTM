@@ -307,10 +307,11 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(1f, point.Control);
             Assert.False(point.IsContested);
 
-            // LastSentQ must reset too. Leaving it at the old value means a point that ends one
-            // match where it starts the next never sends its opening state to the clients that
-            // joined in between.
+            // The send threshold measures from the reset value afterwards, and the reset itself
+            // is sent regardless: clients still connected are drawing the last match's end state
+            // (CapturePointResetResendTests).
             Assert.Equal(point.ToMessage().OwnerQ, point.LastSentQ);
+            Assert.True(point.ResendDue);
         }
 
         [Fact]

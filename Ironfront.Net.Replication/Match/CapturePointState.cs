@@ -137,6 +137,18 @@ namespace Ironfront.Net.Replication.Match
         /// <summary>The quantized value the clients were last sent.</summary>
         public sbyte LastSentQ { get; private set; }
 
+        /// <summary>
+        /// True from a <see cref="Reset"/> until that state has been handed to the transport.
+        /// </summary>
+        /// <remarks>
+        /// A reset moves the point outside the capture rule, so <see cref="Tick"/> never reports
+        /// it, and it only ticks while a round is being played. Every client that watched the
+        /// last match would keep drawing that match's flags -- and its score multiplier -- until
+        /// the point next changed hands. <c>MatchStateMachine</c> sends every point that is due,
+        /// and <see cref="MarkSent"/> is what clears it, so a failed send is retried.
+        /// </remarks>
+        public bool ResendDue { get; private set; }
+
         /// <summary>Which team holds it, or <see cref="TeamId.None"/>.</summary>
         public byte OwningTeam => _owner == 0 ? TeamId.Team0 : _owner == 1 ? TeamId.Team1 : TeamId.None;
 
@@ -250,7 +262,11 @@ namespace Ironfront.Net.Replication.Match
         /// the message has actually been handed to the transport — marking it sent first and
         /// failing to send leaves the point frozen on every client until it next moves.
         /// </summary>
-        public void MarkSent() => LastSentQ = PackForWire();
+        public void MarkSent()
+        {
+            LastSentQ = PackForWire();
+            ResendDue = false;
+        }
 
         /// <summary>
         /// Returns the point to the map's OPENING ownership for a new match.
@@ -263,9 +279,14 @@ namespace Ironfront.Net.Replication.Match
         /// </para>
         /// <para>
         /// The step clock restarts, so the first step of the next round lands one second in.
-        /// <see cref="LastSentQ"/> is deliberately reset too: leaving it at the old value would
-        /// mean a point that ended the last match where it starts the next one never sends its
-        /// opening state to the clients that joined in between.
+        /// </para>
+        /// <para>
+        /// <b>The reset state is always resent (<see cref="ResendDue"/>).</b> Clients still
+        /// connected are drawing the last match's end state, and nothing about the new value
+        /// can tell whether it differs from what each of them was told. Measured on the Azure
+        /// Island server on 2026-09-28: the server reset its flags to 1 / 1 while a client that
+        /// stayed through the reset kept showing 3 / 2 into the next round. <see cref="LastSentQ"/>
+        /// moves to the reset value so the send threshold measures from it afterwards.
         /// </para>
         /// </remarks>
         public void Reset()
@@ -275,6 +296,7 @@ namespace Ironfront.Net.Replication.Match
             _sinceStep  = 0f;
             IsContested = false;
             LastSentQ   = PackForWire();
+            ResendDue   = true;
         }
 
         /// <summary>Squared distance test, so the caller never needs a square root.</summary>
