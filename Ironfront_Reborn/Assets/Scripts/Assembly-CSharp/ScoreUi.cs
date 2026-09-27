@@ -99,6 +99,10 @@ public class ScoreUi : MonoBehaviour
 	// would leave the bar drawn to the previous round's scale.
 	private int lastVictoryPoints = -1;
 
+	// Ironfront.Net.Protocol.MatchPhase.Ended as the plain int SetAuthoritativeState carries,
+	// the same encoding PhaseLabel switches on.
+	private const int EndedPhase = (int)Ironfront.Net.Protocol.MatchPhase.Ended;
+
 	/// <summary>
 	/// Draws the victory banner. Driven by <see cref="MatchScoreboard.Ended"/>.
 	/// </summary>
@@ -216,10 +220,40 @@ public class ScoreUi : MonoBehaviour
 		{
 			return;
 		}
+		bool hadState = instance.hasAuthoritativeState;
+		int previousPhase = instance.lastPhase;
+		int previousScore0 = instance.lastTickets0;
+		int previousScore1 = instance.lastTickets1;
 		instance.hasAuthoritativeState = true;
 		instance.lastPhase = phase;
 		instance.lastTickets0 = score0;
 		instance.lastTickets1 = score1;
+		// The original pulses a team's bar on every kill it scores (ScoreUi.AddScore), and the
+		// banner below is its Win(). Offline both are driven by MatchScoreboard's events; a
+		// networked client's board is never fed, so a networked bar never flashed and a round the
+		// server had already decided simply stopped, with nothing on screen to say who won. The
+		// same two moments, read off the authoritative totals: a total that rose is a scored kill,
+		// and the first state in the Ended phase is the win.
+		if (hadState && score0 > previousScore0)
+		{
+			instance.bluePulse.Start();
+		}
+		if (hadState && score1 > previousScore1)
+		{
+			instance.redPulse.Start();
+		}
+		if (phase == EndedPhase && (!hadState || previousPhase != EndedPhase))
+		{
+			byte winner = Ironfront.Net.Protocol.ConquestScoreRule.Decide(score0, score1, victoryPoints);
+			if (winner == Ironfront.Net.Protocol.TeamId.Team0)
+			{
+				instance.OnMatchEnded(true);
+			}
+			else if (winner == Ironfront.Net.Protocol.TeamId.Team1)
+			{
+				instance.OnMatchEnded(false);
+			}
+		}
 		instance.lastSecondsRemaining = secondsRemaining;
 		instance.lastHumanPlayerCount = humanPlayerCount;
 		instance.lastVictoryPoints = victoryPoints;

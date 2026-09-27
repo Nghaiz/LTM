@@ -88,6 +88,17 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
+        /// <summary>Seconds between <c>[net] match score</c> lines while a round is Playing.</summary>
+        /// <remarks>
+        /// Nothing on the server said what the score was, so a round that stopped scoring (bot
+        /// deaths swallowed by the death gate, fixed alongside this) ran for weeks looking
+        /// healthy: every phase line printed 0 / 0 because the reset had already run. Thirty
+        /// seconds is two lines a minute per server -- enough to read a round's pace off the log.
+        /// </remarks>
+        private const float ScoreLogSeconds = 30f;
+
+        private float _sinceScoreLog;
+
         /// <summary>The authoritative match. Null until <c>Awake</c>.</summary>
         public MatchStateMachine Match => _match;
 
@@ -267,6 +278,7 @@ namespace Ironfront.Net.Unity.Server
 
             var presence = new ReadOnlySpan<ActorPresence>(_presence, 0, _presenceCount);
             _match.Tick(Time.fixedDeltaTime, _loop.PlayerCount, presence);
+            LogScoreWhilePlaying(Time.fixedDeltaTime);
 
             // AFTER the tick and BEFORE the broadcasts, so the value written onto
             // SpawnPoint.owner and the value put on the wire are the same one -- and so a
@@ -376,6 +388,34 @@ namespace Ironfront.Net.Unity.Server
             }
 
             return states;
+        }
+
+        /// <summary>
+        /// Prints the score, the flags each side holds (the kill multiplier) and how many deaths
+        /// reached the match, every <see cref="ScoreLogSeconds"/> of a Playing round.
+        /// </summary>
+        /// <remarks>
+        /// The dropped-repeat count is the death gate's own counter. It is expected to be small
+        /// -- two damage paths can report one death -- and a number that climbs with the deaths
+        /// is the signature of real deaths being thrown away, which is what it read for bots.
+        /// </remarks>
+        private void LogScoreWhilePlaying(float deltaSeconds)
+        {
+            if (_match.Phase != MatchPhase.Playing)
+            {
+                _sinceScoreLog = 0f;
+                return;
+            }
+
+            _sinceScoreLog += deltaSeconds;
+            if (_sinceScoreLog < ScoreLogSeconds) return;
+            _sinceScoreLog = 0f;
+
+            Debug.Log($"[net] match score {_match.Score0} / {_match.Score1} "
+                      + $"(win by {_match.VictoryPoints}), flags "
+                      + $"{_match.OwnedPointCount(TeamId.Team0)} / {_match.OwnedPointCount(TeamId.Team1)}, "
+                      + $"deaths {_loop.Scores.DeathsRecorded}, repeat death reports dropped "
+                      + $"{_loop.RespawnGate.DuplicateDeathsSuppressed}");
         }
 
         /// <summary>The <c>id -> name</c> order, for the D7 fallback's one log line.</summary>

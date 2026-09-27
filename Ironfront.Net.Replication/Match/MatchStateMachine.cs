@@ -471,7 +471,7 @@ namespace Ironfront.Net.Replication.Match
         /// mechanism over. Elimination remains as the second way a round ends.
         /// </para>
         /// </remarks>
-        private int OwnedPointCount(byte team)
+        public int OwnedPointCount(byte team)
         {
             int owned = 0;
             for (int i = 0; i < _points.Length; i++)
