@@ -71,8 +71,11 @@ namespace Ironfront.Net.Unity.EditorTools
         /// </remarks>
         private const int SortingOrder = 50;
 
-        /// <summary><c>--ink-950</c> under the two full-screen overlays, the world still faintly there.</summary>
+        /// <summary><c>--ink-950</c> under the scoreboard, the world still faintly there.</summary>
         private static readonly Color Dim = new Color(3f / 255f, 9f / 255f, 19f / 255f, 0.72f);
+
+        /// <summary><c>.eliminated-overlay</c>'s <c>#020A12D9</c>: the fight is not what to look at.</summary>
+        private static readonly Color Eliminated = new Color(2f / 255f, 10f / 255f, 18f / 255f, 0.85f);
 
         [MenuItem("Ironfront/Net/Build in-match readout")]
         public static void RunFromMenu() => Execute(exitOnFailure: false);
@@ -253,7 +256,16 @@ namespace Ironfront.Net.Unity.EditorTools
             return rows;
         }
 
-        /// <summary>3.2 — the deploy screen: a card on a dimmed world, and one primary action.</summary>
+        /// <summary>
+        /// 3.2 — the deploy screen: the world dimmed almost to black, a column of type, and the
+        /// orange DEPLOY.
+        /// </summary>
+        /// <remarks>
+        /// The HUD pack's <c>.eliminated-overlay</c>: no card, a red kicker, a display heading
+        /// and <c>buttons/deploy.svg</c> — the action the loadout screen deploys with, so the
+        /// button that returns a player to the fight is the same wherever it is. The killer and
+        /// the countdown sit between the heading and the action.
+        /// </remarks>
         private static GameObject BuildDeployScreen(
             GameObject root, out Text killer, out Text timer, out Button deploy, StringBuilder log)
         {
@@ -262,40 +274,48 @@ namespace Ironfront.Net.Unity.EditorTools
             Stretch(screen.GetComponent<RectTransform>());
 
             var backdrop = screen.GetComponent<Image>();
-            backdrop.color = Dim;
+            backdrop.color = Eliminated;
 
             // Raycast target ON, and that is the point: the overlay swallows clicks meant for the
             // loadout and minimap Canvases underneath it, which are still live while dead.
             backdrop.raycastTarget = true;
 
-            AngularPanel card = Angular(screen, "Card", new Vector2(0f, 20f), new Vector2(720f, 380f),
-                CutPanel, Color.clear);
-            StyleOperationsPanel(card);
-            GameObject body = card.gameObject;
+            Text kicker = Label(screen, "Kicker", "OPERATIVE DOWN", 15, TextAnchor.MiddleCenter, bold: true);
+            kicker.color = Hex("FF7769");
+            Centre(kicker.rectTransform, new Vector2(0f, 132f), new Vector2(640f, 22f));
 
-            Text kicker = Label(body, "Kicker", "STATUS // KILLED IN ACTION", 11, TextAnchor.MiddleCenter,
-                bold: true);
-            kicker.color = CyanSoft;
-            Centre(kicker.rectTransform, new Vector2(0f, 150f), new Vector2(600f, 20f));
+            Text heading = Label(screen, "Heading", "YOU WERE KILLED", 54, TextAnchor.MiddleCenter, bold: true);
+            Centre(heading.rectTransform, new Vector2(0f, 84f), new Vector2(960f, 68f));
 
-            Text heading = Label(body, "Heading", "YOU WERE KILLED", 44, TextAnchor.MiddleCenter, bold: true);
-            Centre(heading.rectTransform, new Vector2(0f, 106f), new Vector2(640f, 60f));
+            killer = Label(screen, "Killer", string.Empty, 24, TextAnchor.MiddleCenter, bold: true);
+            Centre(killer.rectTransform, new Vector2(0f, 28f), new Vector2(960f, 34f));
 
-            killer = Label(body, "Killer", string.Empty, 22, TextAnchor.MiddleCenter, bold: true);
-            Centre(killer.rectTransform, new Vector2(0f, 54f), new Vector2(640f, 34f));
-
-            Angular(body, "Rule", new Vector2(0f, 22f), new Vector2(560f, 1f), 0f,
-                WithAlpha(Line, 0.5f), AngularEdge.None, 0f, Color.clear);
-
-            timer = Label(body, "Timer", string.Empty, 17, TextAnchor.MiddleCenter, bold: false);
+            timer = Label(screen, "Timer", string.Empty, 18, TextAnchor.MiddleCenter, bold: false);
             timer.color = Muted;
-            Centre(timer.rectTransform, new Vector2(0f, -12f), new Vector2(640f, 28f));
+            Centre(timer.rectTransform, new Vector2(0f, -10f), new Vector2(960f, 28f));
 
-            deploy = MakeButton(body, "Deploy", "DEPLOY", new Vector2(0f, -100f), new Vector2(340f, 64f),
-                "primary");
+            deploy = MakeDeployButton(screen, new Vector2(0f, -88f), new Vector2(320f, 64f));
 
-            log.AppendLine("deploy screen: card with heading, killer, countdown and one primary button.");
+            log.AppendLine("deploy screen: kicker, heading, killer, countdown and the orange DEPLOY on a dark overlay.");
             return screen;
+        }
+
+        /// <summary><c>buttons/deploy.svg</c> as a button, from <see cref="IronfrontUiKit"/>.</summary>
+        private static Button MakeDeployButton(GameObject parent, Vector2 position, Vector2 size)
+        {
+            AngularPanel face = Angular(parent, "Deploy", position, size, 15f, Color.clear);
+            StyleDeployFace(face);
+
+            Button button = face.gameObject.AddComponent<Button>();
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = ButtonColours(button.colors, "primary");
+
+            Text text = Label(face.gameObject, "Text", DeployCaption, 26, TextAnchor.MiddleCenter, bold: true);
+            text.color = DeployInk;
+            Stretch(text.rectTransform);
+
+            return button;
         }
 
         /// <summary>The three labels one side's column is made of.</summary>
@@ -462,26 +482,6 @@ namespace Ironfront.Net.Unity.EditorTools
             text.raycastTarget = false;
 
             return text;
-        }
-
-        /// <summary>A button in the menu's own face and caption, from <see cref="IronfrontUiKit"/>.</summary>
-        private static Button MakeButton(GameObject parent, string name, string caption,
-            Vector2 position, Vector2 size, string kind)
-        {
-            AngularPanel face = Angular(parent, name, position, size, CutAction, Color.clear);
-            StyleButtonFace(face, kind, size.y);
-
-            Button button = face.gameObject.AddComponent<Button>();
-            button.targetGraphic = face;
-            button.transition = Selectable.Transition.ColorTint;
-            button.colors = ButtonColours(button.colors, kind);
-
-            Text text = Label(face.gameObject, "Text", caption, CaptionSize(size.y), TextAnchor.MiddleCenter,
-                bold: true);
-            text.color = CaptionInk(kind);
-            Stretch(text.rectTransform);
-
-            return button;
         }
 
         private static void Stretch(RectTransform rect)

@@ -28,6 +28,12 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>No stroke.</summary>
         None,
+
+        /// <summary>
+        /// A bar down the right edge, inset above the bottom-right cut: <c>border-right: 3px</c>
+        /// on the in-match weapon readout. Last, because the members are serialized by value.
+        /// </summary>
+        Right,
     }
 
     /// <summary>
@@ -204,6 +210,12 @@ namespace Ironfront.Net.Unity.Client.Menu
             {
                 AddQuad(vh,
                     new Rect(rect.xMin, rect.yMin, rect.width - cut, _edgeWidth),
+                    _edgeColour);
+            }
+            else if (_edge == AngularEdge.Right)
+            {
+                AddQuad(vh,
+                    new Rect(rect.xMax - _edgeWidth, rect.yMin + cut, _edgeWidth, rect.height - cut),
                     _edgeColour);
             }
         }

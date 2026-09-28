@@ -302,7 +302,7 @@ GameObject:
   m_Component:
   - component: {fileID: 224199326981891754}
   - component: {fileID: 222972256141108433}
-  - component: {fileID: 114772028047624154}
+  - component: {fileID: 3661537626806607242}
   m_Layer: 5
   m_Name: Background
   m_TagString: Untagged
@@ -337,7 +337,7 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1554996061871773}
   m_CullTransparentMesh: 1
---- !u!114 &114772028047624154
+--- !u!114 &3661537626806607242
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -346,24 +346,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 1554996061871773}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Script: {fileID: 11500000, guid: 3b7e36e296ee40341a8bd5131d64edee, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Ironfront.Net.Unity.Client::Ironfront.Net.Unity.Client.Menu.AngularPanel
   m_Material: {fileID: 0}
-  m_Color: {r: 0.039215688, g: 0.09803922, b: 0.15294118, a: 1}
+  m_Color: {r: 0.02745098, g: 0.08627451, b: 0.13725491, a: 0.9}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 1
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
+  _cut: 14
+  _edge: 0
+  _edgeWidth: 1
+  _edgeColour: {r: 0.4, g: 0.5254902, b: 0.63529414, a: 0.6}
+  _gradient: 0
+  _gradientTo: {r: 1, g: 1, b: 1, a: 1}
+  _gradientAngle: 135

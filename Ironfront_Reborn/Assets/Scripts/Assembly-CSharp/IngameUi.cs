@@ -14,6 +14,15 @@ public class IngameUi : MonoBehaviour
 
 	public Text health;
 
+	/// <summary>
+	/// The health meter's fill, sized by its right anchor as <see cref="vehicleHealth"/> is.
+	/// Optional: a HUD without a meter shows the figure alone.
+	/// </summary>
+	public RectTransform healthBar;
+
+	/// <summary>What <c>Actor</c> restores on every spawn, so a full meter.</summary>
+	private const float FullHealth = 100f;
+
 	public Image weapon;
 
 	public RawImage hitmarker;
@@ -182,6 +191,10 @@ public class IngameUi : MonoBehaviour
 	public void SetHealth(float health)
 	{
 		this.health.text = Mathf.CeilToInt(health).ToString();
+		if (healthBar != null)
+		{
+			healthBar.anchorMax = new Vector2(Mathf.Clamp01(health / FullHealth), 1f);
+		}
 	}
 
 	public void Hide()

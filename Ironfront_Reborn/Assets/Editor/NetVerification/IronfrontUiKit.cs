@@ -161,6 +161,39 @@ namespace Ironfront.Net.Unity.EditorTools
             face.raycastTarget = true;
         }
 
+        /// <summary>The caption of the action that puts a player into the world.</summary>
+        internal const string DeployCaption = "DEPLOY  ➜";
+
+        /// <summary><c>.deploy-action</c>'s ink: darker than any text on the menu's orange.</summary>
+        internal static readonly Color DeployInk = Hex("1A2020");
+
+        /// <summary>
+        /// <c>buttons/deploy.svg</c>, from the HUD pack: the one orange action that puts a player
+        /// into the world, on the loadout screen and on the death screen alike.
+        /// </summary>
+        /// <remarks>
+        /// The master is a vertical gradient from <c>#FFAE48</c> to <c>#E66A16</c> under a 2px
+        /// <c>#FFC172</c> stroke, cut at the top-left and the bottom-right — the two corners
+        /// <see cref="AngularPanel"/> cuts. Its tint states are the primary button's.
+        /// </remarks>
+        internal static void StyleDeployFace(AngularPanel face)
+        {
+            face.color = Hex("FFAE48");
+            face.SetGradient(Hex("E66A16"), 180f);
+            face.Configure(15f, AngularEdge.All, 2f, Hex("FFC172"));
+            face.raycastTarget = true;
+        }
+
+        /// <summary>
+        /// <c>panels/loadout-card.svg</c>: an equipment card's glass, stroke and cut.
+        /// </summary>
+        internal static void StyleCard(AngularPanel face)
+        {
+            face.color = new Color(7f / 255f, 22f / 255f, 35f / 255f, 0.9f);
+            face.Configure(14f, AngularEdge.All, 1f, new Color(102f / 255f, 134f / 255f, 162f / 255f, 0.6f));
+            face.raycastTarget = true;
+        }
+
         /// <summary>The tint states every button of a variant shares.</summary>
         internal static ColorBlock ButtonColours(ColorBlock colours, string kind)
         {
