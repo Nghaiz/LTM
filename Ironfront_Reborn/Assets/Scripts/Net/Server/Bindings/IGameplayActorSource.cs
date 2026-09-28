@@ -59,6 +59,13 @@
         bool IsSubmerged { get; }
 
         /// <summary>
+        /// Whether this actor sits in an enclosed seat -- a tank's or a helicopter's crew --
+        /// where only a piercing round reaches it. <c>Actor.IsSeated() &amp;&amp; seat.enclosed</c>,
+        /// the rule <c>Actor.DamageAttributed</c> applies offline.
+        /// </summary>
+        bool IsInEnclosedSeat => false;
+
+        /// <summary>
         /// One line of what the body's water state is made of: where its feet are, how deep the
         /// crown <see cref="IsSubmerged"/> reads and the shipped swim sample sit, whether it has
         /// fallen over into a ragdoll, and which seat it is in. For the drowning log.

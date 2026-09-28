@@ -260,13 +260,15 @@ namespace Ironfront.Net.Replication.Combat
                 dropoffStartMetres: 0f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.1f,
                 automatic: false);
 
-            // sniper.prefab (ScopedWeapon). The placeholder had this as an automatic.
+            // sniper.prefab (ScopedWeapon). The placeholder had this as an automatic. Piercing: it
+            // fires Sniper Rifle Tracer.prefab, the one projectile authored `piercing: 1`, so it
+            // alone reaches a tank's or a helicopter's crew.
             configs[WeaponIds.SL_DEFENDER] = new WeaponConfig(
                 cooldown: 1.5f, spread: 0f, projectilesPerShot: 1, range: 1000f,
                 damage: 80f, force: 130f, clipSize: 8, spareAmmo: 40,
                 balanceDamage: 130f,
                 dropoffStartMetres: 248.3f, dropoffEndMetres: 500f, dropoffMinMultiplier: 0.9f,
-                automatic: false);
+                automatic: false, piercing: true);
 
             // dmr.prefab. Semi-auto, 20-round magazine.
             configs[WeaponIds.SIGNAL_DMR] = new WeaponConfig(

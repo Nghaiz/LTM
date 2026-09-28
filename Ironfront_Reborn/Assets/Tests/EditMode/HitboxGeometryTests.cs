@@ -98,7 +98,163 @@ namespace Ironfront.Net.Unity.Server.Tests
             }
         }
 
+        // ------------------------------------------------------------------ every drawn pose
+
+        /// <summary>
+        /// The head box of each pose holds the drawn head's centre through the stride.
+        /// </summary>
+        /// <remarks>
+        /// Bug 5 audit, same playtest: a client animates a remote body from its snapshot bits --
+        /// moving, sprinting, crouched, seated -- and each moves the head. The server does not
+        /// know which frame of the stride a client draws, only which stride, so the box must hold
+        /// the head through all of it, not through one frame.
+        /// </remarks>
+        [TestCase("run forward",   false, false, true,  0f,    3.5f,  false, HumanoidPose.Moving)]
+        [TestCase("run back",      false, false, true,  0f,   -2.87f, false, HumanoidPose.Moving)]
+        [TestCase("run right",     false, false, true,  3.3f,  0f,    false, HumanoidPose.Moving)]
+        [TestCase("run left",      false, false, true, -3.3f,  0f,    false, HumanoidPose.Moving)]
+        [TestCase("sprint",        false, false, true,  0f,    6.5f,  true,  HumanoidPose.Sprinting)]
+        [TestCase("crouched",      false, true,  false, 0f,    0f,    false, HumanoidPose.Crouched)]
+        [TestCase("crouch walk",   false, true,  true,  0f,    1.8f,  false, HumanoidPose.CrouchMoving)]
+        [TestCase("crouch strafe", false, true,  true,  1.8f,  0f,    false, HumanoidPose.CrouchMoving)]
+        [TestCase("seated",        true,  false, false, 0f,    0f,    false, HumanoidPose.Seated)]
+        public void TheHeadBoxHoldsTheDrawnHeadThroughTheStride(
+            string pose, bool seated, bool crouched, bool moving,
+            float movementX, float movementY, bool sprinting, HumanoidPose serverPose)
+        {
+            // Facing +Z, so the animator's local velocity is the world one.
+            Aabb server = HitboxSet.Humanoid(Vec3.Zero, 0f, serverPose, movementX, movementY).Head;
+
+            GameObject character = Instantiate(CharacterPath);
+            try
+            {
+                Animator animator = Pose(character, seated, crouched, moving, movementX, movementY, sprinting);
+                Collider head = HitboxCollider(character, "Bone_004");
+
+                const int frames = 60;
+                int inside = 0;
+                string worst = "";
+                for (int i = 0; i < frames; i++)
+                {
+                    animator.Update(1f / 30f);
+                    Physics.SyncTransforms();
+                    Vector3 c = head.bounds.center;
+                    var centre = new Vec3(c.x, c.y, c.z);
+                    if (Contains(in server, in centre)) inside++;
+                    else worst = c.ToString("F2");
+                }
+
+                Assert.GreaterOrEqual(inside, frames * 95 / 100,
+                    $"{pose}: the drawn head's centre left the server's {serverPose} head box in "
+                    + $"{frames - inside} of {frames} frames (e.g. at {worst}; box {Describe(in server)}). "
+                    + "A headshot there scores as a body hit or a miss.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(character);
+            }
+        }
+
+        // ------------------------------------------------------------------ a player's own body
+
+        /// <summary>
+        /// The server's own body for a player -- the engine colliders a projectile, a blast or a
+        /// bot's aim meets -- stands where the player stands, in the player's pose.
+        /// </summary>
+        /// <remarks>
+        /// Bug 5 audit: measured before this, the head collider of a standing player's body stood
+        /// at 2.21..2.63 m, because the AI prefab's feet are its root and a player's root is its
+        /// capsule's centre, 0.9 m up. <see cref="NetServerActor.PresentAsPlayer"/> lowers the drawn
+        /// body onto the ground and poses it.
+        /// </remarks>
+        [TestCase(false, false, 1.52f)]
+        [TestCase(false, true, 1.11f)]
+        [TestCase(true, false, 0.95f)]
+        public void APlayersBodyStandsWhereThePlayerStands(bool seated, bool crouching, float headCentre)
+        {
+            GameObject body = Instantiate(CharacterPath);
+            try
+            {
+                var replicated = body.GetComponent<NetServerActor>();
+                Assert.IsNotNull(replicated, "the AI prefab no longer carries NetServerActor");
+                replicated.AttachMovementAgent();
+
+                // A seated body's root is the seat; on foot it is the capsule centre above the ground.
+                float root = seated ? 0f : MovementCore.HeightFor(crouching) * 0.5f;
+                body.transform.position = new Vector3(0f, root, 0f);
+
+                replicated.PresentAsPlayer(seated, crouching, Vec3.Zero);
+
+                Animator animator = body.GetComponentInChildren<Animator>();
+                for (int i = 0; i < 40; i++) animator.Update(0.05f);
+                Physics.SyncTransforms();
+
+                Bounds head = HitboxCollider(body, "Bone_004").bounds;
+                Assert.AreEqual(headCentre, head.center.y, Tolerance,
+                    $"a player's own body (seated {seated}, crouched {crouching}) holds its head at "
+                    + $"{head.center.y:F2} m over the ground it stands on; every client draws it at "
+                    + $"{headCentre:F2} m.");
+
+                // Handed back to the bot brain as the prefab authored it.
+                Transform model = animator.transform;
+                replicated.Release();
+                Assert.AreEqual(0f, model.localPosition.y, 1e-4f,
+                    "a released body kept the player's lowered model under the bot brain");
+            }
+            finally
+            {
+                Object.DestroyImmediate(body);
+            }
+        }
+
         // ------------------------------------------------------------------ helpers
+
+        private static GameObject Instantiate(string path)
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            Assert.IsNotNull(prefab, path + " is missing");
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            instance.transform.position = Vector3.zero;
+            instance.transform.rotation = Quaternion.identity;
+            return instance;
+        }
+
+        /// <summary>Drives the animator the way <c>RemoteActorView.Apply</c> does, and settles it.</summary>
+        private static Animator Pose(
+            GameObject character, bool seated, bool crouched, bool moving,
+            float movementX, float movementY, bool sprinting)
+        {
+            Animator animator = character.GetComponentInChildren<Animator>();
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            animator.Rebind();
+            animator.SetBool("seated", seated);
+            animator.SetBool("crouched", crouched);
+            animator.SetBool("moving", moving);
+            animator.SetBool("sprinting", sprinting);
+            animator.SetFloat("movement x", movementX);
+            animator.SetFloat("movement y", movementY);
+            for (int i = 0; i < 40; i++) animator.Update(0.05f);
+            return animator;
+        }
+
+        private static Collider HitboxCollider(GameObject character, string name)
+        {
+            foreach (Collider collider in character.GetComponentsInChildren<Collider>(true))
+            {
+                if (collider.gameObject.layer == HitboxLayer && collider.name == name) return collider;
+            }
+
+            Assert.Fail($"no {name} on the Hitbox layer");
+            return null;
+        }
+
+        private static bool Contains(in Aabb box, in Vec3 point)
+            => point.X >= box.Min.X && point.X <= box.Max.X
+               && point.Y >= box.Min.Y && point.Y <= box.Max.Y
+               && point.Z >= box.Min.Z && point.Z <= box.Max.Z;
+
+        private static string Describe(in Aabb box)
+            => $"({box.Min.X:F2}, {box.Min.Y:F2}, {box.Min.Z:F2})..({box.Max.X:F2}, {box.Max.Y:F2}, {box.Max.Z:F2})";
 
         /// <summary>The head and body hitboxes of the drawn character, feet at the origin.</summary>
         private static (Bounds Head, Bounds Body) Measure(bool crouched)

@@ -227,10 +227,12 @@ namespace Ironfront.Net.Unity.Server
         /// a client-named target would be a target the server could not refuse.
         /// </para>
         /// </remarks>
-        private static InputFrame SteerCarriedWeapon(
+        private InputFrame SteerCarriedWeapon(
             ClientSession session, NetServerActor actor, in InputFrame frame)
         {
-            Vec3 eye = ServerCombatAuthority.ShotOrigin(in session.State, in frame);
+            // The authority's one origin rule, seat and lean included: a launcher aimed from a
+            // passenger seat locks from the seat's eye, not from a standing one below it.
+            Vec3 eye = _authority.ShotOriginFor(session.ActorId, in session.State, in frame);
             Vec3 aim = ServerCombatAuthority.AimDirection(frame.YawDegrees, frame.PitchDegrees);
 
             actor.SteerCarriedWeapon(
@@ -267,7 +269,7 @@ namespace Ironfront.Net.Unity.Server
                 // has no frame of its own. A default frame would drop a held Prone button and
                 // release a prone player's throw from standing eye height.
                 InputFrame posture = player.LastAcceptedFrame;
-                Vec3 origin = ServerCombatAuthority.ShotOrigin(in session.State, in posture);
+                Vec3 origin = _authority.ShotOriginFor(session.ActorId, in session.State, in posture);
                 Vec3 aim = transition.Aim;
                 bool launched = false;
                 try
@@ -975,7 +977,8 @@ namespace Ironfront.Net.Unity.Server
                 if (_targetCount >= _targets.Length) break;
 
                 _targets[_targetCount++] = new HitscanTarget(
-                    candidate.ActorId, candidate.IsAlive, candidate.CaptureHitboxes());
+                    candidate.ActorId, candidate.IsAlive, candidate.CaptureHitboxes(),
+                    candidate.IsInEnclosedSeat);
             }
 
             _targetsBuiltForTick = tick;

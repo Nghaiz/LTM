@@ -326,9 +326,11 @@ namespace Ironfront.Net.Replication.Tests
             // eye height; the posture is now the latest frame the server accepted.
             Assert.Contains("InputFrame posture = player.LastAcceptedFrame;", bridge,
                 StringComparison.Ordinal);
-            Assert.Contains("ShotOrigin(in session.State, in posture)", bridge,
+            // Through the authority's one origin rule (ShotOriginFor), which adds the seat's eye
+            // for a seated thrower -- still from the posture frame, never from a default one.
+            Assert.Contains("ShotOriginFor(session.ActorId, in session.State, in posture)", bridge,
                 StringComparison.Ordinal);
-            Assert.DoesNotContain("ShotOrigin(in session.State, default)", bridge,
+            Assert.DoesNotContain("in session.State, default)", bridge,
                 StringComparison.Ordinal);
 
             // Recorded before combat steps, so the frame that pressed Prone is already the

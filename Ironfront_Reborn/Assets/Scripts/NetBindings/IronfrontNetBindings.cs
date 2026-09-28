@@ -598,6 +598,9 @@ namespace Ironfront.Net.Unity.Bindings
         /// </remarks>
         public bool IsSubmerged => WaterLevel.InWater(CrownPosition());
 
+        /// <inheritdoc/>
+        public bool IsInEnclosedSeat => _actor != null && _actor.IsSeated() && _actor.seat.enclosed;
+
         private Vector3 CrownPosition()
         {
             Transform head = _actor.ragdoll.IsRagdoll()

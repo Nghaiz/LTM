@@ -158,6 +158,96 @@ namespace Ironfront.Net.Replication.Tests
                         $"aim point {aim} is only {body.Torso.Max.Y - aim:F3} m below the torso ceiling");
         }
 
+        // ------------------------------------------------------------------ poses
+        //
+        // Bug 5 audit, the same playtest. The client draws a remote body in the pose its snapshot
+        // bits give it -- moving, sprinting, crouched, crouch-walking, seated -- and each moves the
+        // head a measured distance. Boxes shaped as a standing idle scored a headshot on anyone
+        // running as a body hit, and missed the top half of a crouch-walker outright.
+
+        [Theory]
+        [InlineData(HumanoidPose.Standing, 1.75f)]
+        [InlineData(HumanoidPose.Moving, 1.65f)]
+        [InlineData(HumanoidPose.Sprinting, 1.55f)]
+        [InlineData(HumanoidPose.Crouched, 1.35f)]
+        [InlineData(HumanoidPose.CrouchMoving, 1.55f)]
+        [InlineData(HumanoidPose.Seated, 1.70f)]
+        public void EveryPoseCoversTheBodyWithoutASeam(HumanoidPose pose, float minimumHeight)
+        {
+            AssertContiguous(HitboxSet.Humanoid(Vec3.Zero, 0f, pose, 0f, 0f), 1f, minimumHeight);
+            AssertContiguous(HitboxSet.Humanoid(new Vec3(4f, 2f, -3f), 137f, pose, 2f, -3f), 1f, minimumHeight);
+        }
+
+        [Theory]
+        [InlineData(HumanoidPose.Standing, 0f, 1.52f, 0f)]
+        [InlineData(HumanoidPose.Moving, 0f, 1.40f, 0f)]
+        [InlineData(HumanoidPose.Sprinting, 0.10f, 1.32f, 0.21f)]
+        [InlineData(HumanoidPose.Crouched, 0.13f, 1.11f, 0.13f)]
+        [InlineData(HumanoidPose.CrouchMoving, 0.07f, 1.28f, 0.13f)]
+        [InlineData(HumanoidPose.Seated, 0.01f, 0.95f, 0.155f)]
+        public void AShotAtWhereTheHeadIsDrawnIsAHeadshotInEveryPose(
+            HumanoidPose pose, float right, float height, float forward)
+        {
+            // The measured mean of the drawn head, in the actor's frame; the target faces the
+            // shooter's -Z so its forward is toward the shooter.
+            HitResult hit = PoseShot(pose, targetYaw: 180f, right: right, height: height, forward: forward);
+
+            Assert.True(hit.Hit, $"a shot at the drawn head of a {pose} target missed");
+            Assert.Equal(HitboxType.Head, hit.HitboxType);
+        }
+
+        [Fact]
+        public void ACrouchWalkersHeadIsWhereItIsDrawnNotWhereTheCrouchWas()
+        {
+            // The crouch-walk is upright: its head is drawn at 1.28 m, 0.17 m above the still
+            // crouch's. At 1.45 m -- the top of that head -- the still crouch's boxes hold nothing.
+            Assert.False(PoseShot(HumanoidPose.Crouched, 180f, 0.07f, 1.45f, 0.13f).Hit,
+                "precondition: the still crouch ends below 1.45 m");
+            Assert.Equal(HitboxType.Head,
+                PoseShot(HumanoidPose.CrouchMoving, 180f, 0.07f, 1.45f, 0.13f).HitboxType);
+        }
+
+        [Fact]
+        public void AMovingHeadLeadsTheTravel()
+        {
+            HitboxSet forward = HitboxSet.Humanoid(Vec3.Zero, 0f, HumanoidPose.Moving, 0f, 3.5f);
+            HitboxSet backward = HitboxSet.Humanoid(Vec3.Zero, 0f, HumanoidPose.Moving, 0f, -3.5f);
+            HitboxSet strafing = HitboxSet.Humanoid(Vec3.Zero, 0f, HumanoidPose.Moving, 3.5f, 0f);
+
+            Assert.Equal(HitboxSet.HumanoidMovingHeadLead, forward.Head.Center.Z, 3);
+            Assert.Equal(-HitboxSet.HumanoidMovingHeadLead, backward.Head.Center.Z, 3);
+            Assert.Equal(HitboxSet.HumanoidMovingHeadLead, strafing.Head.Center.X, 3);
+
+            // In the actor's frame: facing east, running east leads east.
+            HitboxSet east = HitboxSet.Humanoid(Vec3.Zero, 90f, HumanoidPose.Moving, 3.5f, 0f);
+            Assert.Equal(HitboxSet.HumanoidMovingHeadLead, east.Head.Center.X, 3);
+        }
+
+        [Theory]
+        [InlineData(true, false, 0f, false, HumanoidPose.Seated)]
+        [InlineData(true, true, 5f, true, HumanoidPose.Seated)]
+        [InlineData(false, true, 0f, false, HumanoidPose.Crouched)]
+        [InlineData(false, true, 1.5f, false, HumanoidPose.CrouchMoving)]
+        [InlineData(false, false, 6.5f, true, HumanoidPose.Sprinting)]
+        [InlineData(false, false, 3.5f, false, HumanoidPose.Moving)]
+        [InlineData(false, false, 0.05f, false, HumanoidPose.Standing)]
+        public void ThePoseIsTheOneTheClientsAnimatorResolves(
+            bool seated, bool crouching, float speed, bool sprinting, HumanoidPose expected)
+        {
+            Assert.Equal(expected, HitboxSet.PoseFor(seated, crouching, speed, sprinting));
+        }
+
+        [Fact]
+        public void TheOldOverloadsAreTheStandingAndCrouchedPoses()
+        {
+            Assert.Equal(
+                HitboxSet.Humanoid(Vec3.Zero, 30f, HumanoidPose.Crouched, 0f, 0f).Head.Center,
+                HitboxSet.Humanoid(Vec3.Zero, 30f, crouching: true).Head.Center);
+            Assert.Equal(
+                HitboxSet.Humanoid(Vec3.Zero, 30f, HumanoidPose.Standing, 0f, 0f).Torso.Center,
+                HitboxSet.Humanoid(Vec3.Zero, 30f, crouching: false).Torso.Center);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static HitResult LevelShot(float height, float targetYaw = 0f)
@@ -168,6 +258,29 @@ namespace Ironfront.Net.Replication.Tests
             return compensator.ResolveHitscan(
                 new[] { new HitscanTarget(Target, true, target) },
                 Shooter, new Vec3(0f, height, 0f), new Vec3(0f, 0f, 1f),
+                maxDistance: 100f, smoothedRttMs: 0f, currentTick: 10);
+        }
+
+        /// <summary>
+        /// A level shot along +Z at a still target 10 m away in <paramref name="pose"/>, aimed at
+        /// the point <paramref name="right"/>, <paramref name="height"/>, <paramref name="forward"/>
+        /// of the target's own frame.
+        /// </summary>
+        private static HitResult PoseShot(
+            HumanoidPose pose, float targetYaw, float right, float height, float forward)
+        {
+            var feet = new Vec3(0f, 0f, 10f);
+            HitboxSet target = HitboxSet.Humanoid(feet, targetYaw, pose, 0f, 0f);
+
+            float radians = targetYaw * (float)(Math.PI / 180.0);
+            float cos = MathF.Cos(radians);
+            float sin = MathF.Sin(radians);
+            float x = right * cos + forward * sin;
+
+            var compensator = new LagCompensator(new HitboxHistory());
+            return compensator.ResolveHitscan(
+                new[] { new HitscanTarget(Target, true, target) },
+                Shooter, new Vec3(x, height, 0f), new Vec3(0f, 0f, 1f),
                 maxDistance: 100f, smoothedRttMs: 0f, currentTick: 10);
         }
 

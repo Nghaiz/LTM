@@ -184,6 +184,16 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public readonly float DropoffMinMultiplier;
 
+        /// <summary>
+        /// Whether the round reaches a crew in an enclosed seat. <c>Projectile.Configuration.piercing</c>.
+        /// </summary>
+        /// <remarks>
+        /// One weapon in the game: <c>sniper.prefab</c> fires <c>Sniper Rifle Tracer.prefab</c>, the
+        /// only projectile of sixteen authored <c>piercing: 1</c>. Defaults to false, which is every
+        /// other gun, and the rule it gates is the original's own (<c>Actor.DamageAttributed</c>).
+        /// </remarks>
+        public readonly bool Piercing;
+
         /// <param name="balanceDamage">
         /// Defaults to zero so every call site written before phase-V2 keeps its old behaviour
         /// rather than acquiring a stagger nobody asked for.
@@ -206,8 +216,10 @@ namespace Ironfront.Net.Replication.Combat
             bool spendsAmmo = true,
             WeaponDelivery delivery = WeaponDelivery.Hitscan,
             bool automatic = true,
-            ushort releaseDelayTicks = 0)
+            ushort releaseDelayTicks = 0,
+            bool piercing = false)
         {
+            Piercing = piercing;
             SpareAmmo = spareAmmo;
             SpendsAmmo = spendsAmmo;
             Delivery = delivery;

@@ -202,6 +202,116 @@ namespace Ironfront.Net.Unity.Server
 
             return Movement;
         }
+
+        // ------------------------------------------------------------ a player's own body
+
+        // The drawn body under a player's capsule-centred root, found on first use.
+        private Transform _model;
+        private Animator _modelAnimator;
+        private Vector3 _modelRest;
+        private AnimatorCullingMode _modelCulling;
+        private bool _presentingPlayer;
+
+        private static readonly int SeatedParameter     = Animator.StringToHash("seated");
+        private static readonly int SeatedTypeParameter = Animator.StringToHash("seated type");
+        private static readonly int CrouchedParameter   = Animator.StringToHash("crouched");
+        private static readonly int SprintingParameter  = Animator.StringToHash("sprinting");
+        private static readonly int MovingParameter     = Animator.StringToHash("moving");
+        private static readonly int MovementXParameter  = Animator.StringToHash("movement x");
+        private static readonly int MovementYParameter  = Animator.StringToHash("movement y");
+
+        /// <summary>
+        /// Poses this player's body the way every client draws it, so what the engine's own
+        /// colliders meet -- a projectile, a blast, a bot taking aim -- is the body players see.
+        /// Once per server tick, for a claimed body.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Playtest 2026-09-28, bug 5 audit. Measured: a player's hitbox colliders stood 0.9 m
+        /// above the player.</b> A claimed body is the AI prefab, authored with its feet at the
+        /// root, and <see cref="AttachMovementAgent"/> gives it a CharacterController whose centre
+        /// is zero -- so the ROOT is the capsule's centre, placed 0.9 m above the ground
+        /// (<c>ServerCombatBridge.StandingBodyPosition</c>), and the drawn body with it: head
+        /// collider at 2.21..2.63 m over a head every client draws at 1.31..1.72 m. The hitscan
+        /// path never noticed, because <see cref="CaptureHitboxes"/> converts to feet; everything
+        /// that meets the engine's colliders did. A mounted gun's rounds passed under the chest, a
+        /// rocket at the feet was measured from a spine 0.9 m too high, and bots aimed over heads.
+        /// </para>
+        /// <para>
+        /// <b>And the pose.</b> <c>Actor.Update</c> is parked for a claimed body, so nothing set
+        /// its animator: it stood in its idle while its player crouched or sat, and a headless
+        /// server culled the animation anyway. The parameters here are the ones
+        /// <c>RemoteActorView.Apply</c> drives the proxy with, from the same facts, and the seat
+        /// type is the chair every client draws.
+        /// </para>
+        /// </remarks>
+        public void PresentAsPlayer(bool seated, bool crouching, in Vec3 velocity)
+        {
+            if (!FindModel()) return;
+
+            if (!_presentingPlayer)
+            {
+                _presentingPlayer = true;
+                _modelAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            }
+
+            // On foot the root is the capsule's centre; in a seat it is the seat itself, the
+            // feet pivot the prefab was authored around.
+            float drop = seated ? 0f : MovementCore.HeightFor(crouching) * 0.5f;
+            _model.localPosition = _modelRest + Vector3.down * drop;
+
+            // A headless server never turned this transform, so the body faced its spawn heading
+            // whichever way its player looked. A seat owns the rotation of a seated body.
+            if (!seated && !float.IsNaN(YawDegrees))
+                transform.rotation = Quaternion.Euler(0f, YawDegrees, 0f);
+
+            float horizontal = MathF.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
+            HumanoidPose pose = HitboxSet.PoseFor(
+                seated, crouching, horizontal, IsSprintingVelocity(in velocity));
+            bool moving = pose == HumanoidPose.Moving || pose == HumanoidPose.Sprinting
+                || pose == HumanoidPose.CrouchMoving;
+
+            // The locomotion blend is in the body's own frame, m/s, as RemoteLocomotion feeds it.
+            float radians = transform.eulerAngles.y * Mathf.Deg2Rad;
+            float cos = Mathf.Cos(radians);
+            float sin = Mathf.Sin(radians);
+            float localX = velocity.X * cos - velocity.Z * sin;
+            float localZ = velocity.X * sin + velocity.Z * cos;
+
+            _modelAnimator.SetBool(SeatedParameter, seated);
+            _modelAnimator.SetInteger(SeatedTypeParameter, 0);
+            _modelAnimator.SetBool(CrouchedParameter, pose == HumanoidPose.Crouched || pose == HumanoidPose.CrouchMoving);
+            _modelAnimator.SetBool(SprintingParameter, pose == HumanoidPose.Sprinting);
+            _modelAnimator.SetBool(MovingParameter, moving);
+            _modelAnimator.SetFloat(MovementXParameter, moving ? localX : 0f);
+            _modelAnimator.SetFloat(MovementYParameter, moving ? localZ : 0f);
+        }
+
+        /// <summary>
+        /// Hands the body back as the prefab authored it -- model on the root, animation culled
+        /// as authored -- for the bot brain <see cref="Release"/> resumes.
+        /// </summary>
+        private void EndPlayerPresentation()
+        {
+            if (!_presentingPlayer) return;
+            _presentingPlayer = false;
+
+            if (_model != null) _model.localPosition = _modelRest;
+            if (_modelAnimator != null) _modelAnimator.cullingMode = _modelCulling;
+        }
+
+        private bool FindModel()
+        {
+            if (_model != null) return true;
+
+            _modelAnimator = GetComponentInChildren<Animator>(true);
+            if (_modelAnimator == null || _modelAnimator.transform == transform) return false;
+
+            _model = _modelAnimator.transform;
+            _modelRest = _model.localPosition;
+            _modelCulling = _modelAnimator.cullingMode;
+            return true;
+        }
         public bool EquipLoadout()
         {
             IGameplayActorSource source = Source;
@@ -723,20 +833,7 @@ namespace Ironfront.Net.Unity.Server
                 ? Movement.State.Position
                 : MovementSimulation.ToCore(transform.position);
 
-            Vec3 velocity;
-            if (Movement != null)
-            {
-                velocity = Movement.State.Velocity;
-            }
-            else if (Source != null)
-            {
-                Source.GetVelocity(out float vx, out float vy, out float vz);
-                velocity = new Vec3(vx, vy, vz);
-            }
-            else
-            {
-                velocity = Vec3.Zero;
-            }
+            Vec3 velocity = ReplicatedVelocity();
 
             // Through the properties, not the backing fields: both are pass-throughs to the
             // gameplay actor now, and reading _weaponId here is how the weapon id stayed 0 in
@@ -802,33 +899,17 @@ namespace Ironfront.Net.Unity.Server
 
             if (IsAiming) flags |= ActorStateFlags.IsAiming;
 
-            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
-                    _actorId, out _, out _))
-                flags |= ActorStateFlags.IsSeated;
-
-            Vec3 velocity = Vec3.Zero;
-            if (Movement != null)
-            {
-                velocity = Movement.State.Velocity;
-            }
-            else if (Source != null)
-            {
-                Source.GetVelocity(out float vx, out float vy, out float vz);
-                velocity = new Vec3(vx, vy, vz);
-            }
+            if (IsSeatedOnServer) flags |= ActorStateFlags.IsSeated;
 
             if (Movement != null || Source != null)
             {
                 if (Movement != null && Movement.State.IsCrouching)
                     flags |= ActorStateFlags.IsCrouching;
 
-                // Sprinting is derived rather than stored: the simulation has no sprint flag on
-                // its state, only a speed, and reporting "moving faster than a walk" is what the
-                // client actually animates from.
-                float horizontal = velocity.X * velocity.X + velocity.Z * velocity.Z;
-
-                float walk = MovementSimulation.WalkSpeed;
-                if (horizontal > walk * walk * 1.05f) flags |= ActorStateFlags.IsSprinting;
+                // Sprinting is derived rather than stored. One rule for this bit and for the
+                // pose CaptureHitboxes shapes the boxes in, so the two cannot disagree.
+                Vec3 velocity = ReplicatedVelocity();
+                if (IsSprintingVelocity(in velocity)) flags |= ActorStateFlags.IsSprinting;
             }
 
             return flags;
@@ -852,9 +933,22 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public HitboxSet CaptureHitboxes()
         {
-            Vec3 feet;
+            // Shaped from the same facts every client draws this body from: the seat, the
+            // crouch and sprint bits and the velocity the snapshot carries, and the heading
+            // Capture sends. Boxes in a pose the drawn body is not in are as wrong as boxes in
+            // the wrong place (playtest 2026-09-28, bug 5).
+            bool seated = IsSeatedOnServer;
             bool crouching = false;
-            if (Movement != null)
+            Vec3 feet;
+
+            if (seated)
+            {
+                // A seated body sits on the seat's own transform (Actor.EnterSeat parents it at
+                // local zero), the pivot the seated pose was measured from. NOT the movement
+                // agent's state, which is not the seat -- see ServerPlayer's seated branch.
+                feet = MovementSimulation.ToCore(transform.position);
+            }
+            else if (Movement != null)
             {
                 MoveState state = Movement.State;
                 crouching = state.IsCrouching;
@@ -871,14 +965,52 @@ namespace Ironfront.Net.Unity.Server
                 feet = MovementSimulation.ToCore(transform.position);
             }
 
-            // Turned the way every client draws this body, and crouched exactly when the
-            // snapshot says so -- the heading Capture sends, and the IsCrouching flag it sets
-            // only for a body with a Movement agent. Boxes that turned or crouched when the
-            // drawn body did not would be as wrong as ones that never did (playtest 2026-09-28,
-            // bug 5).
             float yaw = float.IsNaN(YawDegrees) ? transform.eulerAngles.y : YawDegrees;
 
-            return HitboxSet.Humanoid(in feet, yaw, crouching);
+            Vec3 velocity = ReplicatedVelocity();
+            float horizontal = MathF.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
+            HumanoidPose pose = HitboxSet.PoseFor(
+                seated, crouching, horizontal, IsSprintingVelocity(in velocity));
+
+            return HitboxSet.Humanoid(in feet, yaw, pose, velocity.X, velocity.Z);
+        }
+
+        /// <summary>Whether the server's own occupancy record has this actor in a seat.</summary>
+        /// <remarks>The same question <see cref="BuildStateFlags"/> answers for the IsSeated bit.</remarks>
+        private bool IsSeatedOnServer
+            => ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(_actorId, out _, out _);
+
+        /// <summary>
+        /// Sitting in an enclosed seat, where only a piercing round reaches this actor. See
+        /// <see cref="HitscanTarget.InEnclosedSeat"/>.
+        /// </summary>
+        public bool IsInEnclosedSeat => Source != null && Source.IsInEnclosedSeat;
+
+        /// <summary>
+        /// The velocity every client animates this body from: the one the snapshot carries.
+        /// </summary>
+        private Vec3 ReplicatedVelocity()
+        {
+            if (Movement != null) return Movement.State.Velocity;
+
+            if (Source != null)
+            {
+                Source.GetVelocity(out float vx, out float vy, out float vz);
+                return new Vec3(vx, vy, vz);
+            }
+
+            return Vec3.Zero;
+        }
+
+        /// <summary>
+        /// The IsSprinting bit's rule: moving faster than a walk. The simulation has no sprint flag
+        /// on its state, only a speed, and "faster than a walk" is what the client animates from.
+        /// </summary>
+        private static bool IsSprintingVelocity(in Vec3 velocity)
+        {
+            float horizontal = velocity.X * velocity.X + velocity.Z * velocity.Z;
+            float walk = MovementSimulation.WalkSpeed;
+            return horizontal > walk * walk * 1.05f;
         }
 
         /// <summary>
@@ -983,6 +1115,7 @@ namespace Ironfront.Net.Unity.Server
         {
             IsClaimed = false;
 
+            EndPlayerPresentation();
             SetAiDriverSuspended(false);
         }
     }

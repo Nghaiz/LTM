@@ -204,5 +204,22 @@ namespace Ironfront.Net.Protocol
         /// every shot taken while leaning left from 40 cm to the side of the crosshair.
         /// </remarks>
         public const float  LEAN_EYE_OFFSET = 0.4f;
+
+        /// <summary>
+        /// A seated player's eye above the seat, in metres, along the seat's own up.
+        /// </summary>
+        /// <remarks>
+        /// <c>FpsActorController.StartSeated</c> parents the FP camera to the seat at
+        /// <c>Vector3.up * 0.85f + Vector3.forward * 0.2f</c>, and a seated body sits on the seat's
+        /// own transform (<c>Actor.EnterSeat</c>, local zero). The server fires a seated player's
+        /// carried weapon from there; <c>SeatedEyeTests</c> pins these to that line.
+        /// </remarks>
+        public const float  SEATED_EYE_HEIGHT = 0.85f;
+
+        /// <summary>
+        /// A seated player's eye ahead of the seat, in metres, along the seat's own forward. See
+        /// <see cref="SEATED_EYE_HEIGHT"/>.
+        /// </summary>
+        public const float  SEATED_EYE_FORWARD = 0.2f;
     }
 }
