@@ -119,7 +119,7 @@ public class ThrowableWeapon : Weapon
 	{
 		// In a network match this callback is presentation only. Snapshot reconciliation is
 		// the sole writer of loaded and reserve counts, and the server's explicit release is
-		// the sole projectile creator. Offline keeps Ravenfield's original animation event.
+		// the sole projectile creator. Offline keeps the original game's animation event.
 		if (!NetContext.IsOffline) return;
 
 		ReleaseThrowable();

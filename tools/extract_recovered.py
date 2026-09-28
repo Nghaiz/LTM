@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Lift the durable ground truth out of the recovered Ravenfield build into versioned JSON.
+"""Lift the durable ground truth out of the recovered original build into versioned JSON.
 
 WHY THIS EXISTS
-    The owner reverse-engineered the shipped Ravenfield Beta 5 build back into a near-intact
+    The owner reverse-engineered the shipped original build back into a near-intact
     Unity 5.4.0f3 project. It lives in `tmp/recovered/` -- 191 MB, and `tmp` is gitignored.
     That makes the only reference the port-back has UNVERSIONED: one `git clean` and it is
     gone, and re-deriving it is not cheap.

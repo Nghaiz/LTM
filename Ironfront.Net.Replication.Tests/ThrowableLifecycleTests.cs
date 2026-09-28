@@ -15,7 +15,7 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData(WeaponIds.SPEARHEAD, 1, 2, 3, 29)]
         [InlineData(WeaponIds.AMMO_BAG, 1, WeaponConfig.NoResupplySpareAmmo, 1, 10)]
         [InlineData(WeaponIds.MEDIPACK, 1, WeaponConfig.NoResupplySpareAmmo, 1, 10)]
-        public void CataloguePinsRavenfieldThrowableInventoryAndReleaseTiming(
+        public void CataloguePinsOriginalThrowableInventoryAndReleaseTiming(
             byte weaponId, byte clip, short reserve, int totalUses, ushort releaseTicks)
         {
             WeaponConfig config = WeaponCatalog.For(weaponId);

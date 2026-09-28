@@ -1,4 +1,4 @@
-// RECOVERED SHADER - Ravenfield Beta 5
+// RECOVERED SHADER - original game
 // Properties, tags, pass list and render state below are EXACT (read back from the shipped
 // ShaderLab block in resources.assets). The shipped shader has 5 generated passes -
 // ForwardBase / ForwardAdd / PrePassBase / PrePassFinal / Deferred - which is exactly the set a

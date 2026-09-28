@@ -1,5 +1,5 @@
 <!--
-  Ironfront Reborn — pull request checklist.
+  Ironfront: Reborn — pull request checklist.
 
   Single-owner project. This template is not a gate someone else enforces; it is the record you
   will read in six weeks when you cannot remember whether a thing was verified or assumed.

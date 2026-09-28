@@ -1,0 +1,70 @@
+IRONFRONT: REBORN  (LTM10)
+Bản build {{VERSION}} ({{COMMIT}})
+
+==============================================================
+TIẾNG VIỆT
+==============================================================
+
+CÀI ĐẶT
+  1. Giải nén file zip ra một thư mục MỚI, ví dụ D:\Games\IronfrontReborn.
+     Đừng giải nén đè lên bản cũ: file cũ còn sót lại sẽ làm game lỗi.
+  2. Mở Ironfront.exe.
+     - Nếu Windows hiện "Windows protected your PC": bấm "More info" rồi
+       "Run anyway". Game chưa được ký số nên Windows cảnh báo vậy.
+     - Nếu Windows Firewall hỏi quyền mạng: bấm "Allow".
+
+VÀO TRẬN
+  1. Ở màn hình đầu, bấm MULTIPLAYER.
+  2. Lần đầu chơi: bấm "Create an account" để tạo tên đăng nhập và mật khẩu.
+     Tài khoản lưu trên server nên máy nào cũng dùng được.
+     Những lần sau: nhập tên, mật khẩu rồi bấm LOG IN.
+  3. Bấm BROWSE ROOMS để xem danh sách phòng.
+  4. Bấm JOIN để vào phòng có sẵn, hoặc CREATE ROOM để tạo phòng mới
+     (chọn bản đồ DUSTBOWL hoặc ISLAND).
+  5. Trong phòng, bấm READY UP. Trận tự bắt đầu khi có ít nhất 2 người
+     READY trong cùng một phòng. Một mình thì phòng sẽ đứng chờ.
+  6. Chọn điểm xuất phát trên bản đồ nhỏ rồi bấm DEPLOY.
+
+Không cần cấu hình gì thêm. Địa chỉ server đã có sẵn trong game.
+
+YÊU CẦU
+  - Windows 10 hoặc 11, bản 64-bit.
+  - Card đồ họa hỗ trợ DirectX 11 trở lên.
+  - Có Internet, và mạng cho phép gửi UDP ra ngoài qua cổng 27015 và 27016.
+    Một số mạng công ty hoặc trường học chặn UDP. Khi đó bạn vẫn đăng nhập
+    được nhưng không vào được trận.
+
+GẶP LỖI
+  Gửi file log này cho người phát hành game, kèm số bản build ở đầu file:
+    %USERPROFILE%\AppData\LocalLow\LTM10\IronfrontReborn\Player.log
+  Cách mở: dán dòng trên vào thanh địa chỉ của File Explorer rồi nhấn Enter.
+
+==============================================================
+ENGLISH
+==============================================================
+
+INSTALL
+  1. Extract the zip into a NEW folder. Do not extract over an older build.
+  2. Run Ironfront.exe.
+     - SmartScreen "Windows protected your PC": click "More info", then
+       "Run anyway". The game is not code-signed yet.
+     - Windows Firewall asks for network access: click "Allow".
+
+PLAY
+  1. Main menu: MULTIPLAYER.
+  2. First time: "Create an account". Accounts live on the server.
+     Later: enter your name and password, then LOG IN.
+  3. BROWSE ROOMS, then JOIN a room or CREATE ROOM (DUSTBOWL or ISLAND).
+  4. Press READY UP. The match starts by itself once at least 2 players
+     in the room are ready; a room with one player just waits.
+  5. Pick a spawn point on the minimap and press DEPLOY.
+
+Nothing to configure: the server address is built into the game.
+
+REQUIREMENTS
+  Windows 10/11 64-bit, a DirectX 11 capable GPU, and an internet
+  connection that allows outgoing UDP on ports 27015 and 27016.
+
+PROBLEMS
+  Send this log file together with the build number above:
+    %USERPROFILE%\AppData\LocalLow\LTM10\IronfrontReborn\Player.log

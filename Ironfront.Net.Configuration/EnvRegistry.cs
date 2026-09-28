@@ -625,7 +625,7 @@ namespace Ironfront.Net.Configuration
             var text = new StringBuilder();
 
             AppendComment(text,
-                "Ironfront Reborn — environment template.\n" +
+                "Ironfront: Reborn — environment template.\n" +
                 "COMMIT this file. NEVER commit a real .env (see conventions.md section 1.4).\n" +
                 "\n" +
                 "GENERATED from Ironfront.Net.Configuration/EnvRegistry.cs — do not hand-edit.\n" +

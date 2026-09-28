@@ -12,7 +12,7 @@ namespace Ironfront.Net.Replication.Tests
     /// <remarks>
     /// <para>
     /// Until v10 the reserve and the reload state were authoritative on the server and simply
-    /// never crossed the wire, so the client held Ravenfield's own pool beside the clip it was
+    /// never crossed the wire, so the client held the original game's own pool beside the clip it was
     /// told about: two sources of one number, free to drift, and most visibly wrong on the
     /// clip-of-one weapons where a single round is the whole magazine. The wire was widened
     /// first; <see cref="ClientCombatState"/> reading it is the other half, and these are the
@@ -247,7 +247,7 @@ namespace Ironfront.Net.Replication.Tests
         /// (a) a flagged, still-reloading snapshot must not be taken verbatim just because it
         /// is within <see cref="ClientCombatState.AmmoResyncThreshold"/> of the prediction;
         /// (b) the same holds for a flagless snapshot the server produced before it saw the
-        /// reload input; (c) <see cref="ClientCombatState.Tick"/> must not let Ravenfield's own
+        /// reload input; (c) <see cref="ClientCombatState.Tick"/> must not let the original game's own
         /// (1.8 s) reload clock finish the clip ahead of the server's (2.0 s + RTT).
         /// </summary>
         [Fact]
@@ -272,7 +272,7 @@ namespace Ironfront.Net.Replication.Tests
                 WeaponEntry(ammo: 1, spareEncoded: 90, flags: WeaponStateFlags.Reloading), Now);
             Assert.Equal(0, state.AmmoInClip);
 
-            // Ravenfield's own reload clock (1.8 s, ak.prefab) elapses before the server's
+            // The original game's own reload clock (1.8 s, ak.prefab) elapses before the server's
             // (2.0 s + RTT, ProtocolConstants.RELOAD_SECONDS). CompleteReloadIfElapsed must not
             // fill the clip while the server still says Reloading, or the HUD shows a full
             // magazine the server has not actually granted yet.

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give frag, spearhead, ammo box, and medipack one Ravenfield-faithful, server-authoritative inventory and release lifecycle with deterministic client reconciliation and correct projectile visuals.
+**Goal:** Give frag, spearhead, ammo box, and medipack one original-faithful, server-authoritative inventory and release lifecycle with deterministic client reconciliation and correct projectile visuals.
 
 **Architecture:** An engine-free `ThrowableLifecycle` owns accept, delayed release, refill, cancel, and rollback transitions inside `Ironfront.Net.Replication`. The server advances pending releases on simulation ticks and converts transition results into Unity launch requests; the client installs snapshot truth and replays unacknowledged throwable commands. Unity weapon fields are mirrors at network roles and retain their original mutation only offline.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Preserve Ravenfield Beta 5 quantities and authored release delays exactly.
+- Preserve the original game's quantities and authored release delays exactly.
 - Preserve ordinary-gun cooldown, clip, reserve, recoil, reload, and trigger behavior.
 - The server is the only gameplay writer in a network match; Unity counters are mirrors there.
 - Keep offline single-player behavior on the original `Weapon`/`ThrowableWeapon` path.
@@ -119,7 +119,7 @@ git commit -m "feat(protocol): describe pending throwable release"
 [InlineData(WeaponIds.SPEARHEAD, 1, 2, 3, 29)]
 [InlineData(WeaponIds.AMMO_BAG, 1, -1, 1, 10)]
 [InlineData(WeaponIds.MEDIPACK, 1, -1, 1, 10)]
-public void CataloguePinsRavenfieldThrowableFacts(
+public void CataloguePinsOriginalThrowableFacts(
     byte id, byte clip, short reserve, int total, ushort releaseTicks)
 {
     WeaponConfig config = WeaponCatalog.For(id);
@@ -135,7 +135,7 @@ Use `ceil(seconds * SIM_TICK_RATE)`: `ceil(0.952444 * 30) = 29` and
 
 - [ ] **Step 2: Run the catalogue test and verify RED**
 
-Run: `dotnet test Ironfront.Net.Replication.Tests/Ironfront.Net.Replication.Tests.csproj --filter CataloguePinsRavenfieldThrowableFacts --no-restore`
+Run: `dotnet test Ironfront.Net.Replication.Tests/Ironfront.Net.Replication.Tests.csproj --filter CataloguePinsOriginalThrowableFacts --no-restore`
 
 Expected: compile failure because `ReleaseDelayTicks` is absent.
 

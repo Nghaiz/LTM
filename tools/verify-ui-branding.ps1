@@ -15,11 +15,11 @@ $menu = Read-ProjectFile 'Assets/Scenes/Menu.unity'
 $legacyMenuCode = Read-ProjectFile 'Assets/Scripts/Assembly-CSharp/MainMenu.cs'
 
 $required = @(
-    @{ Name = 'company'; Text = $settings; Pattern = 'companyName: Team 10 LTM' },
-    @{ Name = 'product'; Text = $settings; Pattern = 'productName: Ironfront Reborn' },
-    @{ Name = 'identifier'; Text = $settings; Pattern = 'Standalone: com.team10ltm.ironfrontreborn' },
-    @{ Name = 'splash title'; Text = $splash; Pattern = 'm_Text: IRONFRONT REBORN' },
-    @{ Name = 'splash team'; Text = $splash; Pattern = 'm_Text: TEAM 10 LTM PRESENTS' }
+    @{ Name = 'company'; Text = $settings; Pattern = 'companyName: LTM10' },
+    @{ Name = 'product'; Text = $settings; Pattern = 'productName: IronfrontReborn' },
+    @{ Name = 'identifier'; Text = $settings; Pattern = 'Standalone: com.ltm10.ironfrontreborn' },
+    @{ Name = 'splash title'; Text = $splash; Pattern = 'IRONFRONT: REBORN' },
+    @{ Name = 'splash team'; Text = $splash; Pattern = 'm_Text: LTM10 PRESENTS' }
 )
 
 $errors = [System.Collections.Generic.List[string]]::new()
@@ -34,7 +34,9 @@ foreach ($check in @(
     @{ Name = 'menu'; Text = $menu },
     @{ Name = 'legacy menu code'; Text = $legacyMenuCode }
 )) {
-    foreach ($oldBrand in @('Ravenfield', 'SteelRaven7', 'Johan Hassel')) {
+    # The inherited menu also shipped the original's news feed, Steam Greenlight vote panel,
+    # Twitter button and version label. They are removed, not rebranded.
+    foreach ($oldBrand in @('Ravenfield', 'SteelRaven7', 'Johan Hassel', 'Greenlight', 'twitter', 'docs.google.com', 'Beta 5')) {
         if ($check.Text.IndexOf($oldBrand, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
             $errors.Add("$($check.Name) still contains inherited brand '$oldBrand'")
         }
@@ -46,4 +48,4 @@ if ($errors.Count -gt 0) {
     exit 1
 }
 
-Write-Host '[ui-branding] PASS - Ironfront Reborn / Team 10 LTM identity is clean.'
+Write-Host '[ui-branding] PASS - Ironfront: Reborn / LTM10 identity is clean.'

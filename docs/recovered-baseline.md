@@ -1,9 +1,9 @@
-# The recovered Ravenfield build — baseline, and what was actually measured
+# The recovered original build — baseline, and what was actually measured
 
 **Audience:** whoever runs the port-back phases (P23 static flags, P26 shaders and geometry), and
 anyone who later wonders where these numbers came from.
 
-The owner reverse-engineered the shipped Ravenfield Beta 5 Windows build back into a Unity
+The owner reverse-engineered the shipped original Windows build back into a Unity
 **5.4.0f3** project. It is the only reference we have for what `Ironfront_Reborn` is supposed to
 look like. It lives at `tmp/recovered/` — 191 MB, and **`tmp/` is gitignored**, so a single
 `git clean` destroys it.
@@ -206,7 +206,7 @@ never assigned — `Desert Bridge Roof` and `Material_002_0` hold `_AlphaTex` / 
 
 The build ships only compiled bytecode, so no tool returns the original CG. What *was* recovered
 exactly is each shader's properties, tags, passes, blend mode and render state. Three custom
-Ravenfield shaders were re-authored by hand from that render state and now live in the repo,
+The original's shaders were re-authored by hand from that render state and now live in the repo,
 replacing AssetRipper's `//DummyShaderTextExporter` placeholders:
 
 | File | Declares | Used by |
@@ -246,7 +246,7 @@ lines with no semantic change. Physics layers, the collision matrix, `TimeManage
 
 What differs is the engine. The public repo was genuinely upgraded to **2017.3.0f3** (it carries a
 `Library/`, `RenderSettings: serializedVersion: 8` against 5.4's `7`, and 2017-style long
-fileIDs). Ravenfield is a ragdoll game: every character is a `ConfigurableJoint` chain driven
+fileIDs). The original is a ragdoll game: every character is a `ConfigurableJoint` chain driven
 through `slerpDrive`, and `ActiveRaggy.cs:104` sets `jointDrive.mode = JointDriveMode.Position`
 — identical in both copies. Unity 5.5 moved PhysX 3.3 → 3.4 and **dropped `JointDriveMode`**
 (3.4 always applies position and velocity drive together). The line still compiles on 2017.3 and

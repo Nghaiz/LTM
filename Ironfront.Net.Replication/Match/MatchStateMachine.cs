@@ -235,7 +235,7 @@ namespace Ironfront.Net.Replication.Match
         /// <remarks>
         /// <para>
         /// <b>The direction reversed in P11 and that is the whole defect.</b> This used to
-        /// subtract a ticket from the victim's own side — the Ravenfield rule, which nothing
+        /// subtract a ticket from the victim's own side — the original rule, which nothing
         /// else in this project implements. The game's own rule, the one
         /// <c>MatchScoreboard.AddScore</c> implements and <c>Actor.Die</c> feeds, awards the
         /// team OPPOSITE the victim's. The three invariants, each cheap to state and expensive

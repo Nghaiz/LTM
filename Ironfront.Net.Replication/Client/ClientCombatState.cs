@@ -514,7 +514,7 @@ namespace Ironfront.Net.Replication.Client
             if (!_runtime.Reloading) return;
 
             // The server's own reload is the one that actually fills the clip -- see
-            // ApplySnapshot's reload-delivered branch. Ravenfield's local timer
+            // ApplySnapshot's reload-delivered branch. The original game's local timer
             // (DefaultReloadSeconds, 1.8 s on ak.prefab) finishes before the server's
             // (ProtocolConstants.RELOAD_SECONDS, 2.0 s) plus RTT, so completing here while the
             // server still says Reloading would render a full magazine the server has not

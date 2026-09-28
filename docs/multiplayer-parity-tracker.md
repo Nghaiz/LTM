@@ -1,6 +1,6 @@
 # Bảng theo dõi tương đương cơ chế — Ironfront multiplayer
 
-**Mục tiêu:** mọi cơ chế của bản gốc Ravenfield chạy đúng trong chế độ hai đội.
+**Mục tiêu:** mọi cơ chế của bản gốc chạy đúng trong chế độ hai đội.
 **Ngoài phạm vi:** khôi phục chế độ chơi đơn (đã quyết định, xem § Phụ lục A).
 
 - Cây mã lập bảng: `758d328` (`develop`), dirty: 6 DLL trong `Assets/Plugins/`
@@ -128,7 +128,7 @@ Chi tiết deploy và sự cố NAT: [`multiplayer-server-rebuild-handoff-2026-0
 
 ## W1 — Xe cộ
 
-Lái xe, ngồi xe và bắn từ xe là cơ chế đặc trưng của Ravenfield. Hiện tại **không dùng
+Lái xe, ngồi xe và bắn từ xe là cơ chế đặc trưng của bản gốc. Hiện tại **không dùng
 được**: người chơi mạng không bao giờ thật sự vào ghế, nên toàn bộ tầng trình bày của ghế
 ngồi không tồn tại. Mười tám lỗi dưới đây, bảy trong số đó từ **một** nguyên nhân gốc (R1).
 
@@ -226,7 +226,7 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 | **HUD-04** | ☐ | **Vết cháy của lựu đạn được vẽ thành vết đạn.** `DecalType.Scorch` không có drawer — 3 entry cho 4 member enum; `DecalManager` tự sửa type thành `Impact` | `DecalManager.cs:13-24,129-162`; `_Managers.prefab` | 1 | |
 | **HUD-05** | ☐ | **Ống nhòm ra lệnh squad không có tác dụng.** Vẫn đọc được cự ly, vẫn có hiệu ứng, không squad nào di chuyển — lệnh không có thông điệp nào để đi qua dây | `Binoculars.cs:56-86` | 1 | |
 | **HUD-06** | ☑ | **Hiệu ứng nổ là một chùm quad trắng không texture — do cấu trúc, không phải do lỗi thời.** `_effectsByKind` trỏ vào **container placeholder** trong scene: cả bốn emitter (2 mỗi map) có `m_Materials: {fileID: 0}` (**không material**) và `EmissionModule.enabled: 0`, `m_Bursts: []`, `looping: 1`. Hiệu ứng thật nằm ở các **object con** (`Explosion Fire`/`Sparks`/`Debris`…), có material đàng hoàng. Rồi `ExplosionEffectPlayback.TryPlay` **chế ra** 24 hạt vào emitter trơ ấy, và `TryAssignFallbackMaterial` gán `Shader.Find("Particles/Standard Unlit")` **không texture** → `_BaseMap` trắng → quad trắng đục | `Dustbowl.unity:399864,434002`; `Island.unity:315520,309892`; `ExplosionEffectPlayback.cs:25,38-46`; `NetClientExplosionPresenter.cs:307-326` | 1 | |
-| | | **Bản sửa code là bù cho một asset thiếu, và comment ở `NetClientExplosionPresenter.cs:239-243` nói rõ ý định đó.** Sửa đúng là **asset**: trỏ `_effectsByKind` vào hiệu ứng thật thay vì placeholder (sửa YAML của scene — cần chủ dự án xác nhận). Bàn giao 2026-09-13 đã ghi sẵn việc này: *"dùng prefab/material Ravenfield gốc… loại bỏ material fallback gây ô vuông trắng"* | | | |
+| | | **Bản sửa code là bù cho một asset thiếu, và comment ở `NetClientExplosionPresenter.cs:239-243` nói rõ ý định đó.** Sửa đúng là **asset**: trỏ `_effectsByKind` vào hiệu ứng thật thay vì placeholder (sửa YAML của scene — cần chủ dự án xác nhận). Bàn giao 2026-09-13 đã ghi sẵn việc này: *"dùng prefab/material bản gốc… loại bỏ material fallback gây ô vuông trắng"* | | | |
 
 ## W6 — Bot & quyền thế giới
 

@@ -134,7 +134,7 @@ if ($editors.Count -gt 0 -and -not $Force) {
     throw ("a Unity Editor is running (pid $($editors.Id -join ', ')). Close it first -- " +
            "BuildPlayer cannot start while the project is locked, and this build strips " +
            "UNITY_MCP_READY, which queues a recompile the build would then wait on forever.`n" +
-           "  pwsh .claude/scripts/unity-editor.ps1 -Stop`n" +
+           "  pwsh .claude/scripts/unity-editor.ps1 close`n" +
            "Pass -Force if that Editor is on a different project.")
 }
 

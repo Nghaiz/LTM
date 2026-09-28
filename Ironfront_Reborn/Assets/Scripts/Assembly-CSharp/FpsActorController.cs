@@ -242,7 +242,7 @@ public class FpsActorController : ActorController
 		{
 			buttons |= Ironfront.Net.Protocol.InputButtons.Fire;
 		}
-		// Ravenfield starts auto-reload inside Weapon.AmmoChanged(), not from an input button.
+		// The original game starts auto-reload inside Weapon.AmmoChanged(), not from an input button.
 		// Mirror that already-started reload onto C_INPUT so the server fills the authoritative
 		// clip too; otherwise the local animation spends reserve ammo and the next snapshot puts
 		// the clip straight back to zero. This also covers grenades and launchers.
@@ -1021,7 +1021,7 @@ public class FpsActorController : ActorController
 	}
 
 	// Everything below is edge-triggered -- GetKeyDown, GetButtonDown, mouseScrollDelta.
-	// Weapon selection is predicted here for Ravenfield responsiveness and independently sampled
+	// Weapon selection is predicted here for the original game's responsiveness and independently sampled
 	// as an absolute slot by SampleWeaponSlotIntent for the authoritative C_INPUT stream. Seat
 	// selection remains on its dedicated network seam.
 	private void UpdateInput()

@@ -4,7 +4,7 @@ Investigation report, 2026-09-20. Phase: [`phases/phase-p24-astar-hitch.md`](../
 
 **Negative result, and the phase closes on it.** A* Pathfinding costs the main thread
 **0.17 % of wall clock on Dustbowl and 0.16 % on Island** in a 32-bot match. The six files that
-look like 395 lines of divergence from the recovered Ravenfield build contain **zero** unexplained
+look like 395 lines of divergence from the recovered original build contain **zero** unexplained
 changes: 10 lines are a required Unity API migration and the other 357 are two decompilers
 printing the same IL differently.
 

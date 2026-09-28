@@ -92,7 +92,7 @@ namespace Ironfront.Net.Unity.Bindings
 
         /// <summary>
         /// Gives the lightweight network skeleton the same team materials and authored
-        /// third-person weapon models used by Ravenfield's AI actors.
+        /// third-person weapon models used by the original game's AI actors.
         /// </summary>
         private sealed class RemoteActorPresentationBinding : IRemoteActorPresentation
         {

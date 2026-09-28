@@ -130,7 +130,7 @@ namespace Ironfront.Net.Protocol
         /// It was 2 bytes through v9, and the two it lacked are why a bazooka could read
         /// <c>0/N</c> on the server and <c>1/N</c> on the client. The reserve and the reload
         /// state were authoritative on the server and simply never crossed the wire, so the
-        /// client kept its own Ravenfield-side pool beside the clip it was told about: two
+        /// client kept its own original-side pool beside the clip it was told about: two
         /// sources of one number, free to disagree, and most visibly wrong on the clip-of-one
         /// weapons where a single round is the whole magazine. The fields widened this field
         /// rather than claiming a ninth mask bit because <see cref="SnapshotField"/> has none

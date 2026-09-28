@@ -1,4 +1,4 @@
-# Ironfront Reborn
+# Ironfront: Reborn
 
 [![CI](https://github.com/Nghaiz/LTM/actions/workflows/ci.yml/badge.svg)](https://github.com/Nghaiz/LTM/actions/workflows/ci.yml)
 
@@ -16,6 +16,17 @@ using a framework would remove the thing being built.
 
 One Unity 6 client, four .NET libraries, one wire protocol frozen in week 1 and enforced by a
 build gate ever since.
+
+## Chơi game / Play
+
+Tải file `IronfrontReborn-<version>-windows-x64.zip` ở trang
+[**Releases**](https://github.com/Nghaiz/LTM/releases/latest), giải nén ra một thư mục mới rồi
+mở `Ironfront.exe`. Không cần Unity, không cần cấu hình: server đã chạy sẵn trên Internet và địa
+chỉ của nó nằm trong game. Hướng dẫn chi tiết có trong `README.txt` bên trong file zip.
+
+Download the zip from [Releases](https://github.com/Nghaiz/LTM/releases/latest), extract it
+into a new folder and run `Ironfront.exe` (Windows 10/11, 64-bit). Cutting a release:
+[docs/releasing.md](docs/releasing.md).
 
 ---
 
@@ -212,6 +223,7 @@ written down in [`docs/branch-protection.md`](docs/branch-protection.md).
 | [`docs/architecture.md`](docs/architecture.md) | How the projects fit together, and why the shared library must not touch `UnityEngine` |
 | [`docs/codebase-map.md`](docs/codebase-map.md) | What is where in the Unity project |
 | [`docs/operations.md`](docs/operations.md) | How to run and deploy the system |
+| [`docs/releasing.md`](docs/releasing.md) | How to cut the player zip and publish it as a GitHub release |
 
 **The nine per-track plan directories were deleted on 2026-08-29** — 228 files down to 12. They
 were executed; git keeps them (`git show 68acdd9:plans/…`), and a directory of finished

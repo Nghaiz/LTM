@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Find what our tree LOST relative to the recovered Ravenfield build (P27 section 5.1).
+"""Find what our tree LOST relative to the recovered original build (P27 section 5.1).
 
 WHY THIS EXISTS
     322 .cs files exist in both our tree and the recovered original, and ~8.5k lines differ.

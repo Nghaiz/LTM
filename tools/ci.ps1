@@ -123,7 +123,7 @@ try {
         & "$PSScriptRoot/check-diagnostics-exclusion.ps1"
     }
 
-    # P27. Guards the port-back track's one-way risk: a line the ORIGINAL Ravenfield build has,
+    # P27. Guards the port-back track's one-way risk: a line the ORIGINAL build has,
     # that we still had yesterday, and that an edit has just dropped. `dotnet build` cannot see
     # it -- deleting a statement leaves valid code -- and no test covers most of Assembly-CSharp.
     #
