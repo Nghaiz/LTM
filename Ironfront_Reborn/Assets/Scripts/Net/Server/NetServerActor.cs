@@ -239,10 +239,17 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// <para>
         /// <b>And the pose.</b> <c>Actor.Update</c> is parked for a claimed body, so nothing set
-        /// its animator: it stood in its idle while its player crouched or sat, and a headless
-        /// server culled the animation anyway. The parameters here are the ones
-        /// <c>RemoteActorView.Apply</c> drives the proxy with, from the same facts, and the seat
-        /// type is the chair every client draws.
+        /// its animator: it stood in its idle while its player crouched or sat. The parameters
+        /// here are the ones <c>RemoteActorView.Apply</c> drives the proxy with, from the same
+        /// facts, and the seat type is the chair every client draws.
+        /// </para>
+        /// <para>
+        /// <b>Culling was never what froze it.</b> The prefab authors CullUpdateTransforms, but
+        /// <c>ActiveRaggy.Awake</c> sets AlwaysAnimate on this same Animator for every body the
+        /// game instantiates, so a headless server poses bots and claimed bodies alike. Setting
+        /// it again below is harmless and keeps this method honest on its own.
+        /// <c>HeadlessBotAnimationTests</c> pins it; an EditMode fixture never runs Awake, which
+        /// is how the opposite came to be written down here once.
         /// </para>
         /// </remarks>
         public void PresentAsPlayer(bool seated, bool crouching, in Vec3 velocity)
