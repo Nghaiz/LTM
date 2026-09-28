@@ -280,6 +280,13 @@ namespace Ironfront.Net.Unity.Bindings
 
             ShowIncomingHit(local, before, health);
 
+            // A rise in a LIVING body is a medipack's heal: a respawn rises from zero. Offline
+            // Actor.ResupplyHealth plays this itself; at client role the server heals and only the
+            // number arrives, so a networked player heard and saw nothing and could not tell
+            // whether a pack worked at all (playtest 2026-09-28, bug 4).
+            bool healed = before > 0f && health > before;
+            bool resupplied = false;
+
             Weapon weapon = actor.activeWeapon;
             if (weapon != null && weapon.NetworkId == weaponId)
             {
@@ -301,16 +308,33 @@ namespace Ironfront.Net.Unity.Bindings
                 for (int slot = 0; slot < actor.weapons.Length; slot++)
                 {
                     if (actor.weapons[slot] != weapon) continue;
+
+                    int spareBefore = actor.spareAmmo[slot];
                     actor.spareAmmo[slot] = LocalSpareEncoding(spare);
+
+                    // An ammo bag's delivery, heard the way ResupplyAmmo plays it offline. Only a
+                    // rise on the weapon last applied, in a living body, outside a reload: a switch
+                    // lands on a slot whose local count may be old, a respawn refills, and a
+                    // reload's own correction can raise the count it just spent.
+                    resupplied = before > 0f && clipSettled && weaponId == _lastAppliedWeaponId
+                                 && actor.spareAmmo[slot] > spareBefore;
                     break;
                 }
             }
+
+            _lastAppliedWeaponId = weaponId;
 
             // These singleton calls are presentation only and are absent during scene teardown.
             if (IngameUi.instance == null) return;
             actor.UpdateHealthUi();
             if (weapon != null) actor.UpdateAmmoUi();
+
+            if (healed) IngameUi.instance.Heal();
+            if (resupplied) IngameUi.instance.Resupply();
         }
+
+        /// <summary>The weapon the last authoritative apply was about. See the resupply test.</summary>
+        private byte _lastAppliedWeaponId;
 
         /// <summary>
         /// The feedback the game gives a player who has just been shot, minus the parts the wire
