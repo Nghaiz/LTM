@@ -157,7 +157,7 @@ namespace Ironfront.Net.Replication.Combat
 
                 HitResult hit = _lagCompensator.ResolveHitscan(
                     targets, shooterActorId, in origin, in direction,
-                    config.Range, smoothedRttMs, currentTick);
+                    config.Range, smoothedRttMs, currentTick, config.Piercing);
 
                 if (!hit.Hit) continue;
                 if (hitCount >= hits.Length) continue;

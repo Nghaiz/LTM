@@ -174,6 +174,10 @@ namespace Ironfront.Net.Replication.Combat
         /// <param name="maxDistance">Weapon range in metres.</param>
         /// <param name="smoothedRttMs">The shooter's smoothed RTT. 0 for a bot.</param>
         /// <param name="currentTick">The server tick the shot is being processed on.</param>
+        /// <param name="piercing">
+        /// The round reaches crews in enclosed seats. Only the sniper's does, as in the original;
+        /// see <see cref="HitscanTarget.InEnclosedSeat"/>.
+        /// </param>
         public HitResult ResolveHitscan(
             ReadOnlySpan<HitscanTarget> targets,
             ushort shooterActorId,
@@ -181,7 +185,8 @@ namespace Ironfront.Net.Replication.Combat
             in Vec3 direction,
             float maxDistance,
             float smoothedRttMs,
-            uint currentTick)
+            uint currentTick,
+            bool piercing = false)
         {
             ShotsResolved++;
 
@@ -208,6 +213,10 @@ namespace Ironfront.Net.Replication.Combat
 
                 if (!target.IsAlive) continue;
                 if (target.ActorId == shooterActorId) continue;   // trap 5
+
+                // Not a target at all, rather than a hit for nothing: the hull around the seat is
+                // what the round meets, and the occlusion test below is what stops it there.
+                if (target.InEnclosedSeat && !piercing) continue;
 
                 HitboxSet boxes;
                 bool usedFallback;
@@ -247,7 +256,7 @@ namespace Ironfront.Net.Replication.Combat
 
             if (!found)
             {
-                MeasureNearestMiss(targets, shooterActorId, in origin, in ray, maxDistance, targetTick);
+                MeasureNearestMiss(targets, shooterActorId, in origin, in ray, maxDistance, targetTick, piercing);
                 return HitResult.Miss(targetTick);
             }
 
@@ -292,7 +301,7 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         private void MeasureNearestMiss(
             ReadOnlySpan<HitscanTarget> targets, ushort shooterActorId,
-            in Vec3 origin, in Vec3 ray, float maxDistance, uint targetTick)
+            in Vec3 origin, in Vec3 ray, float maxDistance, uint targetTick, bool piercing)
         {
             float bestGap = float.PositiveInfinity;
             HitboxMiss best = HitboxMiss.None;
@@ -303,6 +312,7 @@ namespace Ironfront.Net.Replication.Combat
 
                 if (!target.IsAlive) continue;
                 if (target.ActorId == shooterActorId) continue;
+                if (target.InEnclosedSeat && !piercing) continue;   // the resolver's own rule
 
                 HitboxSet boxes = _history.TryGetFrame(target.ActorId, targetTick, out HitboxHistory.Frame frame)
                     ? frame.Boxes

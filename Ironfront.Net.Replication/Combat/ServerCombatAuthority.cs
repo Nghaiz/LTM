@@ -373,7 +373,7 @@ namespace Ironfront.Net.Replication.Combat
                     ReloadsRefusedForUnknownSlot++;
             }
 
-            Vec3 origin = ResolveShotOrigin(in state, in frame);
+            Vec3 origin = ResolveShotOrigin(in state, in frame, shooterActorId);
 
             // 3. The gate. A semi-automatic reaches the resolver only on the rising edge, so
             //    the several input frames inside one mouse press spend one round rather than one
@@ -564,12 +564,40 @@ namespace Ironfront.Net.Replication.Combat
         public Func<Vec3, Vec3, float, float>? LeanClearance { get; set; }
 
         /// <summary>
-        /// <see cref="ShotOrigin"/>, with the lean cut short where <see cref="LeanClearance"/>
-        /// says a wall is in the way.
+        /// Where the eye of the shooter with this actor id is while it sits in a seat, or null
+        /// when it is on foot.
         /// </summary>
-        private Vec3 ResolveShotOrigin(in MoveState state, in InputFrame frame)
+        /// <remarks>
+        /// <para>
+        /// <b>Playtest 2026-09-28, bug 5 audit.</b> A seated player's camera is the seat's, not
+        /// the body's: <c>FpsActorController.StartSeated</c> parents it to the seat at
+        /// <see cref="ProtocolConstants.SEATED_EYE_HEIGHT"/> up and
+        /// <see cref="ProtocolConstants.SEATED_EYE_FORWARD"/> forward. <see cref="EyePosition"/>
+        /// read the session's seat-root position as a standing capsule and fired from 0.22 m
+        /// below and 0.2 m behind that camera, so a passenger aiming at a head hit the chest.
+        /// </para>
+        /// <para>
+        /// The engine's half, because only the engine knows which way the seat faces: a vehicle
+        /// turns, rolls and pitches under its crew.
+        /// </para>
+        /// </remarks>
+        public Func<ushort, Vec3?>? SeatedEye { get; set; }
+
+        /// <summary>
+        /// Where a shot by <paramref name="shooterActorId"/> leaves: the seat's eye or the
+        /// standing or crouched one, moved by the lean and stopped by walls. The one rule every
+        /// origin uses -- a carried shot, a launcher's aim and a throw's release.
+        /// </summary>
+        public Vec3 ShotOriginFor(ushort shooterActorId, in MoveState state, in InputFrame frame)
+            => ResolveShotOrigin(in state, in frame, shooterActorId);
+
+        /// <summary>
+        /// <see cref="ShotOrigin"/>, from the seat's eye when <see cref="SeatedEye"/> has one, with
+        /// the lean cut short where <see cref="LeanClearance"/> says a wall is in the way.
+        /// </summary>
+        private Vec3 ResolveShotOrigin(in MoveState state, in InputFrame frame, ushort shooterActorId)
         {
-            Vec3 eye = EyePosition(in state, in frame);
+            Vec3 eye = SeatedEye?.Invoke(shooterActorId) ?? EyePosition(in state, in frame);
             Vec3 lean = LeanOffset(in frame);
 
             float reach = lean.Magnitude;

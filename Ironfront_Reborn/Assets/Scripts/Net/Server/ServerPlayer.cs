@@ -308,8 +308,21 @@ namespace Ironfront.Net.Unity.Server
                     _seated = true;
                     agent.SetSeated(true);
                 }
-                InputAuthority.ConsumePendingInputSeated(
-                    Session, MovementSimulation.ToCore(Actor.transform.position), this);
+                Vec3 seat = MovementSimulation.ToCore(Actor.transform.position);
+                InputAuthority.ConsumePendingInputSeated(Session, seat, this);
+
+                // The agent rides the seat as well, as the capsule centre a standing body on the
+                // seat would have -- the convention every player position is sent in, so a client
+                // that lowers it by half a capsule draws the body on the seat. Playtest
+                // 2026-09-28, bug 5 audit: nothing wrote the agent while seated, so the snapshot
+                // and the hitbox history kept the spot the player BOARDED from -- measured 141 m
+                // from the body in a carried vehicle -- and a player in a moving jeep was drawn
+                // and hit back where they climbed in.
+                agent.State = MoveState.AtRest(
+                    new Vec3(seat.X, seat.Y + MovementCore.HeightFor(crouching: false) * 0.5f, seat.Z),
+                    grounded: true);
+
+                Actor.PresentAsPlayer(seated: true, crouching: false, Vec3.Zero);
                 return;
             }
 
@@ -350,6 +363,10 @@ namespace Ironfront.Net.Unity.Server
             _fallDiagnostics.Sample(Session.ActorId, agent, in Session.State);
 
             EnforceWireVolume(agent);
+
+            // After the move and the containment: the body is posed where it ended the tick.
+            Actor.PresentAsPlayer(
+                seated: false, crouching: Session.State.IsCrouching, Session.State.Velocity);
         }
 
         /// <summary>

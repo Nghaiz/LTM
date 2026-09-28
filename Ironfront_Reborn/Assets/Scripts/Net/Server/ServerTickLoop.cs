@@ -243,6 +243,8 @@ namespace Ironfront.Net.Unity.Server
                 // The engine half of a leaning shot's origin: stop where the client's camera
                 // stops. See LeanClearance below.
                 LeanClearance = LeanClearance,
+                // A seated shooter fires from the seat's camera, which only the engine can place.
+                SeatedEye = SeatedEye,
             };
             // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
             // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
@@ -846,8 +848,8 @@ namespace Ironfront.Net.Unity.Server
                 NetServerActor actor = actors[i];
                 if (actor == null || !actor.isActiveAndEnabled || !actor.IsAlive) continue;
 
-                _projectileTargets[_projectileTargetCount++] =
-                    new HitscanTarget(actor.ActorId, isAlive: true, actor.CaptureHitboxes());
+                _projectileTargets[_projectileTargetCount++] = new HitscanTarget(
+                    actor.ActorId, isAlive: true, actor.CaptureHitboxes(), actor.IsInEnclosedSeat);
             }
         }
 
@@ -2487,6 +2489,24 @@ namespace Ironfront.Net.Unity.Server
                     out RaycastHit hit, reach, LeanSweepLayers, QueryTriggerInteraction.Ignore)
                 ? hit.distance
                 : reach;
+        }
+
+        /// <summary>
+        /// A seated player's eye: the seat's own point <see cref="ProtocolConstants.SEATED_EYE_HEIGHT"/>
+        /// up and <see cref="ProtocolConstants.SEATED_EYE_FORWARD"/> forward, where
+        /// <c>FpsActorController.StartSeated</c> puts that player's camera. Null on foot.
+        /// </summary>
+        /// <remarks>
+        /// Through the body's transform, which a seat holds at local zero (<c>Actor.EnterSeat</c>),
+        /// so the eye turns, rolls and scales with the vehicle exactly as the client's camera does.
+        /// </remarks>
+        private static Vec3? SeatedEye(ushort actorId)
+        {
+            if (!ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(actorId, out _, out _)) return null;
+            if (!ServerActorRegistry.Instance.TryFind(actorId, out NetServerActor actor) || actor == null) return null;
+
+            return MovementSimulation.ToCore(actor.transform.TransformPoint(
+                0f, ProtocolConstants.SEATED_EYE_HEIGHT, ProtocolConstants.SEATED_EYE_FORWARD));
         }
 
         /// <summary><c>PlayerFpParent.LateUpdate</c>'s sphere radius.</summary>
