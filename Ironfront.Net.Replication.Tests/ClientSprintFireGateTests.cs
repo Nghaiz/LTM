@@ -216,6 +216,7 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(FireRejection.Holstered, client.PredictFire(Now));
 
             client.ApplySnapshot(Entry(alive: false), Now);
+            client.NoteDeployRequested();
             client.ApplySnapshot(Entry(alive: true), Now + 0.01f);
 
             Assert.Equal(FireRejection.None, client.PredictFire(Now + 0.01f));

@@ -127,6 +127,44 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Whether <see cref="_diedAtSeconds"/> holds a real clock reading this life.</summary>
         private bool _deathStamped;
 
+        /// <summary>
+        /// Whether this client has asked to be deployed since the local body last died. Set by
+        /// <see cref="NoteDeployRequested"/>, cleared on every alive-to-dead edge.
+        /// </summary>
+        private bool _deployRequestedSinceDeath;
+
+        /// <summary>
+        /// When a snapshot first claimed the dead local body was alive again without a deploy
+        /// having been asked for, or NaN when no such claim is pending.
+        /// </summary>
+        private float _unrequestedRevivalSince = float.NaN;
+
+        /// <summary>
+        /// How long the snapshots must keep saying "alive" about a body nobody asked to deploy
+        /// before it is believed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Playtest 2026-09-28, bug 1: a pilot killed with his helicopter was put back on his
+        /// feet, drew his rifle in mid-air (the respawn animation), and only then got the deploy
+        /// screen.</b> Measured on the live server with a scripted client flying a helicopter into
+        /// the ground: S_DEATH, then a snapshot reporting the body alive, then one reporting it
+        /// dead, all inside one frame. The alive one was captured before the crew died but sent
+        /// after S_DEATH, and <see cref="SetAlive"/> read it as a respawn — <c>OnRespawned</c>
+        /// runs the whole deploy (first-person camera, loadout, input) on a corpse.
+        /// </para>
+        /// <para>
+        /// The server fixes its half (the capture now follows the vehicle deaths), but the two
+        /// travel on different channels with no ordering between them, so an alive bit can still
+        /// overtake a death on a real network. What makes it detectable is that no respawn
+        /// happens by itself: the server places a dead body only in answer to this client's
+        /// C_SPAWN_REQUEST. So an alive bit that arrives while no request is outstanding is a
+        /// stale one, and it is held back for this long in case it is the rare real one — a
+        /// stale bit is contradicted by the very next snapshot, a real revival keeps saying so.
+        /// </para>
+        /// </remarks>
+        public const float UnrequestedRevivalSeconds = 1f;
+
         /// <summary>When the predicted reload started, or NaN when none is running.</summary>
         private float _reloadStartedAt = float.NaN;
 
@@ -549,7 +587,18 @@ namespace Ironfront.Net.Replication.Client
             if (entry.Has(SnapshotField.Health)) SetHealth(entry.Health);
 
             if (entry.Has(SnapshotField.StateFlags))
-                SetAlive((entry.StateFlags & ActorStateFlags.IsAlive) != 0, nowSeconds);
+                ApplySnapshotAlive((entry.StateFlags & ActorStateFlags.IsAlive) != 0, nowSeconds);
+
+            // A revival nobody asked for is believed once it has held for long enough. Checked on
+            // every snapshot, not only on one that carries the flags: the encoder sends StateFlags
+            // only when they change against the acked baseline, so a real one would otherwise
+            // never be looked at again.
+            if (!float.IsNaN(_unrequestedRevivalSince)
+                && nowSeconds - _unrequestedRevivalSince >= UnrequestedRevivalSeconds)
+            {
+                _unrequestedRevivalSince = float.NaN;
+                SetAlive(true, nowSeconds);
+            }
 
             _weaponCommands.RemoveAcknowledged(lastProcessedInputTick);
 
@@ -687,6 +736,44 @@ namespace Ironfront.Net.Replication.Client
             return true;
         }
 
+        /// <summary>
+        /// Records that this client has just asked to be deployed (a C_SPAWN_REQUEST went out).
+        /// </summary>
+        /// <remarks>
+        /// The only thing that turns a dead local body alive again is the server answering that
+        /// request, so from here on a snapshot saying "alive" is the answer and is believed at
+        /// once. See <see cref="UnrequestedRevivalSeconds"/>.
+        /// </remarks>
+        public void NoteDeployRequested() => _deployRequestedSinceDeath = true;
+
+        /// <summary>
+        /// The snapshot's alive bit, with a revival nobody asked for held back. See
+        /// <see cref="UnrequestedRevivalSeconds"/>.
+        /// </summary>
+        private void ApplySnapshotAlive(bool alive, float nowSeconds)
+        {
+            bool unrequestedRevival = alive && !IsAlive && _deathStamped && !_deployRequestedSinceDeath;
+            if (!unrequestedRevival)
+            {
+                _unrequestedRevivalSince = float.NaN;
+                SetAlive(alive, nowSeconds);
+                return;
+            }
+
+            if (float.IsNaN(_unrequestedRevivalSince)) _unrequestedRevivalSince = nowSeconds;
+            UnrequestedRevivalsHeld++;
+        }
+
+        /// <summary>
+        /// Snapshots that reported the dead local body alive while no deploy was outstanding.
+        /// </summary>
+        /// <remarks>
+        /// Each one is a respawn animation, a first-person camera and a re-armed loadout that did
+        /// not play on a corpse. Non-zero is normal after a vehicle death on a server that predates
+        /// the capture-order fix; climbing on every death means a server regression.
+        /// </remarks>
+        public long UnrequestedRevivalsHeld { get; private set; }
+
         /// <summary>Whether the respawn delay has elapsed. False while alive.</summary>
         public bool CanRequestRespawn(float nowSeconds)
             => !IsAlive && _deathStamped && nowSeconds - _diedAtSeconds >= RespawnDelaySeconds;
@@ -713,6 +800,8 @@ namespace Ironfront.Net.Replication.Client
             _reloadStartedAt = float.NaN;
             _diedAtSeconds = float.NegativeInfinity;
             _deathStamped = false;
+            _deployRequestedSinceDeath = false;
+            _unrequestedRevivalSince = float.NaN;
             Health = 100;
             IsAlive = true;
             WeaponId = 0;
@@ -835,6 +924,8 @@ namespace Ironfront.Net.Replication.Client
             {
                 _diedAtSeconds = float.NegativeInfinity;
                 _deathStamped = false;
+                _deployRequestedSinceDeath = false;
+                _unrequestedRevivalSince = float.NaN;
                 _runtime = WeaponRuntimeState.Loaded(_weapon);
 
                 // A new life starts under no sprint block, exactly as ClientSession.ResetWeapon
@@ -853,6 +944,10 @@ namespace Ironfront.Net.Replication.Client
                 OnRespawned?.Invoke();
                 return;
             }
+
+            // A new death: whatever deploy was asked for belonged to the life that just ended.
+            _deployRequestedSinceDeath = false;
+            _unrequestedRevivalSince = float.NaN;
 
             // Death is an authoritative cancellation boundary. Do not keep an unacknowledged
             // local trigger around to replay over a later delta: the server drops the matching
