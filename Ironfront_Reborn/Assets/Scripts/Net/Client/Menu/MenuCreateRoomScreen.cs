@@ -18,8 +18,8 @@ namespace Ironfront.Net.Unity.Client.Menu
     /// unsendable.
     /// </para>
     /// <para>
-    /// <b>The map list is <c>MapCatalog</c>, not a typed id.</b> Two maps ship — Dustbowl and
-    /// Island — and a free-text id would let a player advertise a map no game server declares,
+    /// <b>The map list is <c>MapCatalog</c>, not a typed id.</b> The maps that ship are its rows,
+    /// and a free-text id would let a player advertise a map no game server declares,
     /// which surfaces much later as <c>NoGameServerAvailable</c> and reads as the master being
     /// down.
     /// </para>
