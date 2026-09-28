@@ -130,9 +130,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// How many chat lines the log keeps.
         /// </summary>
         /// <remarks>
-        /// Bounded because the room screen has a fixed-height label and an unbounded list would
-        /// grow a string every push for as long as a room stays open -- the log would push its
-        /// own newest line out of view, which is the opposite of what it is for.
+        /// Bounded because an unbounded list would grow a string every push for as long as a
+        /// room stays open. This is the backlog, not what is on screen: the room screen shows
+        /// the newest of these lines that fit its label, which is usually fewer.
         /// </remarks>
         public const int ChatLines = 8;
 

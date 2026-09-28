@@ -1,6 +1,7 @@
 #nullable enable
 
 using System.Collections.Generic;
+using System.Linq;
 using Ironfront.Net.Unity.Client.Menu;
 using NUnit.Framework;
 using UnityEngine;
@@ -90,6 +91,43 @@ namespace Ironfront.Net.Unity.Client.Tests
             CollectionAssert.AreEqual(new[] { "hold the line" }, submitted);
             Assert.AreEqual(string.Empty, field.text);
             Assert.AreSame(field.gameObject, eventSystem.currentSelectedGameObject);
+        }
+
+        /// <summary>
+        /// A log longer than its label shows its newest lines, not its oldest.
+        /// </summary>
+        /// <remarks>
+        /// The label's own overflow handling (Truncate) keeps the TOP lines, so an eight-line
+        /// backlog in a label three or four lines tall showed the oldest messages and hid every
+        /// new one.
+        /// </remarks>
+        [Test]
+        public void ChatLogShowsTheNewestLinesThatFit()
+        {
+            Text log = Make("ChatLog").AddComponent<Text>();
+            log.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            log.fontSize = 22;
+            log.rectTransform.sizeDelta = new Vector2(1400f, 100f);
+            string[] lines = new string[MenuScreenController.ChatLines];
+            for (int i = 0; i < lines.Length; i++) lines[i] = $"Player{i + 1}: line {i + 1}";
+
+            string[] shown = MenuRoomLobbyScreen.NewestThatFit(log, string.Join("\n", lines)).Split('\n');
+
+            Assert.Less(shown.Length, lines.Length, "The label holds the whole backlog; the test proves nothing.");
+            Assert.Greater(shown.Length, 1);
+            CollectionAssert.AreEqual(lines.Skip(lines.Length - shown.Length), shown);
+
+            // A single line taller than the label is the newest thing said: kept, not emptied.
+            string wall = "Player9: " + new string('x', 2000);
+            Assert.AreEqual(wall, MenuRoomLobbyScreen.NewestThatFit(log, wall));
+        }
+
+        [Test]
+        public void FieldCaretIsAtLeastItsScreenWidthAtEveryCanvasScale()
+        {
+            foreach (float scale in new[] { 0.25f, 0.49f, 0.5f, 0.75f, 1f, 1.5f, 2f, 3f })
+                Assert.GreaterOrEqual(MenuFieldCaret.WidthFor(scale) * scale, MenuFieldCaret.ScreenPixels,
+                    $"canvas scale {scale}");
         }
 
         [Test]

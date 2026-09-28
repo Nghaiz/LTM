@@ -1226,6 +1226,10 @@ namespace Ironfront.Net.Unity.EditorTools
             chatLog.alignment = TextAnchor.LowerLeft;
             chatLog.resizeTextForBestFit = false;
 
+            // Other players' text, shown as typed: with rich text on, a message carrying a size
+            // or colour tag restyles the whole log for everyone in the room.
+            chatLog.supportRichText = false;
+
             InputField chatField = PackField(panel, "ChatInput", "Say something",
                 new Vector2(-180f, -330f), new Vector2(560f, 52f), password: false,
                 iconAsset: "icons/chevron.png");
@@ -1867,6 +1871,12 @@ namespace Ironfront.Net.Unity.EditorTools
             colours.highlightedColor = Hex("7ACFFF");
             colours.selectedColor = Cyan;
             field.colors = colours;
+
+            // A caret that can be seen: the accent colour rather than the text's white, and a
+            // width held in screen pixels (MenuFieldCaret's remark says why it vanished).
+            field.customCaretColor = true;
+            field.caretColor = CyanSoft;
+            go.AddComponent<MenuFieldCaret>();
             return field;
         }
 
