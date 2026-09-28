@@ -27,6 +27,19 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool IsSubmerged { get; set; }
             public bool IsCrouching { get; set; }
             public int SeatAnimation { get; set; }
+            public bool IsRagdolledAlive { get; set; }
+            public bool IsInWater { get; set; }
+            internal Vector3 RagdollPelvis;
+            internal Bounds RagdollHead;
+            internal Bounds RagdollBody;
+
+            public bool TryGetRagdollPose(out Vector3 pelvis, out Bounds head, out Bounds body)
+            {
+                pelvis = RagdollPelvis;
+                head = RagdollHead;
+                body = RagdollBody;
+                return IsRagdolledAlive;
+            }
 
             public string DescribeSubmersion() => "fake";
 
@@ -462,6 +475,68 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             Assert.AreEqual(headHeight, head.bounds.center.y, 0.05f, "head height over the seat");
             Assert.AreEqual(headForward, head.bounds.center.z, 0.05f, "head forward of the seat");
+        }
+
+        /// <summary>
+        /// A bot knocked over or swimming is sent alive AND ragdolled, at its ragdoll's pelvis, and
+        /// boxed where the ragdoll lies.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 audit: only death set IsRagdoll, and the snapshot and the
+        /// hitboxes used the actor's transform, which stays where the bot fell while the ragdoll is
+        /// thrown or floats away. Every client drew it standing there, and shots hit that drawing.
+        /// </remarks>
+        [Test]
+        public void ALiveRagdollIsSentAliveLyingAtItsPelvisAndBoxedWhereItLies()
+        {
+            var gameplay = new FakeGameplayActor
+            {
+                IsRagdolledAlive = true,
+                RagdollPelvis = new Vector3(5f, 0.3f, -2f),
+                RagdollHead = new Bounds(new Vector3(5.8f, 0.2f, -2f), new Vector3(0.3f, 0.3f, 0.3f)),
+                RagdollBody = new Bounds(new Vector3(5f, 0.2f, -2f), new Vector3(1.4f, 0.4f, 0.6f)),
+            };
+            NetServerActor actor = CreateActor(gameplay);
+            _gameObject.transform.position = new Vector3(1f, 0f, 1f); // where it fell
+
+            var flags = actor.BuildStateFlags();
+            Assert.IsTrue((flags & Ironfront.Net.Protocol.ActorStateFlags.IsAlive) != 0, "a knocked-over bot is not dead");
+            Assert.IsTrue((flags & Ironfront.Net.Protocol.ActorStateFlags.IsRagdoll) != 0,
+                "a knocked-over bot is not sent lying down, so every client draws it standing");
+
+            var entry = actor.Capture();
+            var position = Ironfront.Net.Replication.SnapshotBuilder.UnpackPosition(in entry);
+            Assert.AreEqual(5f, position.X, 0.07f, "the snapshot sends where the bot fell, not where its body is");
+            Assert.AreEqual(0.3f, position.Y, 0.07f);
+            Assert.AreEqual(-2f, position.Z, 0.07f);
+
+            var boxes = actor.CaptureHitboxes();
+            Assert.AreEqual(5.8f, boxes.Head.Center.X, 1e-3f, "the head box is not the ragdoll's head");
+            Assert.AreEqual(0.15f, boxes.Head.Extents.X, 1e-3f);
+            Assert.AreEqual(5f, boxes.Torso.Center.X, 1e-3f, "the body box is not the ragdoll's body");
+            Assert.AreEqual(0.7f, boxes.Torso.Extents.X, 1e-3f);
+        }
+
+        [Test]
+        public void AStandingBotIsNeitherLyingNorMoved()
+        {
+            var gameplay = new FakeGameplayActor { RagdollPelvis = new Vector3(5f, 0.3f, -2f) };
+            NetServerActor actor = CreateActor(gameplay);
+            _gameObject.transform.position = new Vector3(1f, 0f, 1f);
+
+            Assert.IsTrue((actor.BuildStateFlags() & Ironfront.Net.Protocol.ActorStateFlags.IsRagdoll) == 0);
+            var entry = actor.Capture();
+            Assert.AreEqual(1f, Ironfront.Net.Replication.SnapshotBuilder.UnpackPosition(in entry).X, 0.07f);
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void TheWaterBitIsTheGamesOwn(bool inWater)
+        {
+            NetServerActor actor = CreateActor(new FakeGameplayActor { IsInWater = inWater });
+
+            bool sent = (actor.BuildStateFlags() & Ironfront.Net.Protocol.ActorStateFlags.IsInWater) != 0;
+            Assert.AreEqual(inWater, sent, "IsInWater does not follow Actor.inWater");
         }
 
         /// <summary>

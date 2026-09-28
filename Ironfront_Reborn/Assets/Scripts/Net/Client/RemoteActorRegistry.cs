@@ -201,6 +201,14 @@ namespace Ironfront.Net.Unity.Client
                 {
                     view.SetSeatAnimation(SeatAnimationOf(in sample.State));
                     view.Apply(in sample.State);
+
+                    // A body lying as a ragdoll keeps its root where it fell (see `frozen`); the
+                    // server's pelvis is steered toward instead, and water floats it.
+                    if (view.IsRagdollPosed)
+                    {
+                        Vec3 pelvis = sample.Position;
+                        view.SteerRagdoll(new Vector3(pelvis.X, pelvis.Y, pelvis.Z));
+                    }
                 }
 
                 // P3 task 3.4. Team arrives with the snapshot, not with the spawn, so the

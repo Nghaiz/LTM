@@ -59,8 +59,14 @@ namespace Ironfront.Net.Protocol
         IsProne     = 1 << 2,
         IsSprinting = 1 << 3,
         IsAiming    = 1 << 4,
+        /// <summary>The game counts the body as swimming (<c>Actor.inWater</c>).</summary>
         IsInWater   = 1 << 5,
-        /// <summary>Dead; the client enables its own ragdoll. Corpses are never synced (AD-4).</summary>
+        /// <summary>
+        /// The body lies as a ragdoll. Without <see cref="IsAlive"/>: dead, and the client enables
+        /// its own corpse, which is never synced (AD-4). WITH <see cref="IsAlive"/>: knocked over or
+        /// swimming, and the entry's position is the server ragdoll's pelvis, which the client's
+        /// ragdoll follows (protocol-spec.md section 4.3, 11.0.3).
+        /// </summary>
         IsRagdoll   = 1 << 6,
         IsSeated    = 1 << 7,
     }

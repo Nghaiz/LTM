@@ -79,6 +79,37 @@
         int SeatAnimation => 0;
 
         /// <summary>
+        /// Whether this actor lies as a LIVE ragdoll: knocked over, or swimming -- the original
+        /// game swims a body as a buoyant active ragdoll. Never a dead actor, and never a claimed
+        /// body, which <c>Actor.FallOver</c> refuses to ragdoll.
+        /// </summary>
+        bool IsRagdolledAlive => false;
+
+        /// <summary>
+        /// Whether the game counts this actor as in water deep enough to swim (<c>Actor.inWater</c>,
+        /// the spine plus half a metre under the surface). Not the drowning sensor -- that is
+        /// <see cref="IsSubmerged"/>, the crown of the head.
+        /// </summary>
+        bool IsInWater => false;
+
+        /// <summary>
+        /// A live ragdoll's pelvis, and the world bounds of its head and of the rest of its body,
+        /// read off the physical ragdoll. False when <see cref="IsRagdolledAlive"/> is false.
+        /// </summary>
+        /// <remarks>
+        /// The snapshot sends the pelvis while the body lies, because the actor's transform stays
+        /// where it fell while the ragdoll is flung or floats away; the bounds are the hitboxes,
+        /// because a standing box at the fall spot is a target nothing is standing in.
+        /// </remarks>
+        bool TryGetRagdollPose(out UnityEngine.Vector3 pelvis, out UnityEngine.Bounds head, out UnityEngine.Bounds body)
+        {
+            pelvis = default;
+            head = default;
+            body = default;
+            return false;
+        }
+
+        /// <summary>
         /// One line of what the body's water state is made of: where its feet are, how deep the
         /// crown <see cref="IsSubmerged"/> reads and the shipped swim sample sit, whether it has
         /// fallen over into a ragdoll, and which seat it is in. For the drowning log.

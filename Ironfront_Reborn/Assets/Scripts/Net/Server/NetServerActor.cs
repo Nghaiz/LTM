@@ -840,7 +840,7 @@ namespace Ironfront.Net.Unity.Server
 
             Vec3 position = Movement != null
                 ? Movement.State.Position
-                : MovementSimulation.ToCore(transform.position);
+                : MovementSimulation.ToCore(BotPosition());
 
             Vec3 velocity = ReplicatedVelocity();
 
@@ -906,6 +906,16 @@ namespace Ironfront.Net.Unity.Server
             // does not make them both pass, it flips which one fails.
             else flags |= ActorStateFlags.IsRagdoll;
 
+            // And a LIVE ragdoll: a bot knocked over, or swimming, which the original game does as
+            // a buoyant active ragdoll. Until 2026-09-28 only death set the bit, so every client
+            // drew such a bot standing where it fell -- while its real body lay elsewhere or
+            // floated off, and its hitboxes stood with the drawing. IsAlive stays set, which is how
+            // a client tells this from a corpse.
+            if (IsAlive && Source != null && Source.IsRagdolledAlive) flags |= ActorStateFlags.IsRagdoll;
+
+            // The bit has been decoded, and drawn, since the flags byte was defined; nothing set it.
+            if (Source != null && Source.IsInWater) flags |= ActorStateFlags.IsInWater;
+
             if (IsAiming) flags |= ActorStateFlags.IsAiming;
 
             if (IsSeatedOnServer) flags |= ActorStateFlags.IsSeated;
@@ -943,6 +953,17 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public HitboxSet CaptureHitboxes()
         {
+            // A bot lying as a live ragdoll is boxed where its physical ragdoll lies: the head's
+            // own bounds, and the rest of the body. Arms and legs take the body's box, so the body
+            // wins every tie (the lower index) -- a lying body is a head or a body.
+            if (Movement == null && Source != null && Source.IsRagdolledAlive
+                && Source.TryGetRagdollPose(out _, out Bounds headBounds, out Bounds bodyBounds))
+            {
+                Aabb head = ToAabb(in headBounds);
+                Aabb body = ToAabb(in bodyBounds);
+                return new HitboxSet(in head, in body, in body, in body);
+            }
+
             // Shaped from the same facts every client draws this body from: the seat, the
             // crouch and sprint bits and the velocity the snapshot carries, and the heading
             // Capture sends. Boxes in a pose the drawn body is not in are as wrong as boxes in
@@ -1008,6 +1029,27 @@ namespace Ironfront.Net.Unity.Server
         /// arbiter's record.
         /// </summary>
         private int SeatAnimationOnServer => Source != null ? Source.SeatAnimation : 0;
+
+        /// <summary>
+        /// Where every client should draw this bot: its feet -- or, while it lies as a live
+        /// ragdoll, the ragdoll's pelvis. The actor's transform stays where it fell while the body
+        /// is flung or floats away, so the transform is not where the bot is.
+        /// </summary>
+        private Vector3 BotPosition()
+        {
+            if (Source != null && Source.IsRagdolledAlive)
+            {
+                // The pelvis is set whenever the actor is a live ragdoll; the return value speaks
+                // only for the bounds.
+                Source.TryGetRagdollPose(out Vector3 pelvis, out _, out _);
+                return pelvis;
+            }
+
+            return transform.position;
+        }
+
+        private static Aabb ToAabb(in Bounds bounds)
+            => new Aabb(MovementSimulation.ToCore(bounds.center), MovementSimulation.ToCore(bounds.extents));
 
         /// <summary>Whether the server's own occupancy record has this actor in a seat.</summary>
         /// <remarks>The same question <see cref="BuildStateFlags"/> answers for the IsSeated bit.</remarks>
