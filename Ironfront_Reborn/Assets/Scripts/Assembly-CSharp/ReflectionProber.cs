@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class ReflectionProber : MonoBehaviour
 {
@@ -23,13 +24,39 @@ public class ReflectionProber : MonoBehaviour
 		StartCoroutine(SetupProbesCoroutine());
 	}
 
+	/// <summary>
+	/// Renders each probe under its own atmosphere: the day's for the normal probe, the green
+	/// night vision tint for the other.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Waits for each render to finish, not for the end of a frame.</b> RenderProbe only
+	/// schedules the render, and the probe is drawn during a later frame. Waiting one frame was
+	/// not enough: night vision was applied before the normal probe was drawn, so the day's
+	/// probe held the green tint, and every surface that reflects it -- metal, foliage, rock,
+	/// the player's own weapon -- was drawn green for the whole match.
+	/// </para>
+	/// <para>
+	/// A process with no graphics device renders no probes, and nobody would see them.
+	/// </para>
+	/// </remarks>
 	private IEnumerator SetupProbesCoroutine()
 	{
-		normalProbe.RenderProbe();
-		yield return new WaitForEndOfFrame();
+		if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+		{
+			yield break;
+		}
+		int normal = normalProbe.RenderProbe();
+		while (!normalProbe.IsFinishedRendering(normal))
+		{
+			yield return null;
+		}
 		TimeOfDay.instance.ApplyNightvision();
-		nightVisionProbe.RenderProbe();
-		yield return new WaitForEndOfFrame();
+		int nightVision = nightVisionProbe.RenderProbe();
+		while (!nightVisionProbe.IsFinishedRendering(nightVision))
+		{
+			yield return null;
+		}
 		TimeOfDay.instance.ResetAtmosphere();
 	}
 
