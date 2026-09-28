@@ -124,6 +124,26 @@ namespace Ironfront.Net.Unity
         public static IMenuPlatformActions MenuPlatformActions { get; set; }
 
         /// <summary>
+        /// Leaves the matchmade match this client is in and returns to the lobby, still signed
+        /// in. Registered by the client assembly's <c>ClientFlowBootstrap</c>; called from
+        /// <c>IngameMenuUi.Menu</c>, which may not name it. Null when no matchmade flow runs.
+        /// </summary>
+        /// <remarks>
+        /// Answers false when there was no match to leave -- the offline game, or a map scene
+        /// entered directly -- and the caller then loads the menu itself, as it always did.
+        /// Playtest 2026-09-29: QUIT TO MENU loaded the Menu scene underneath the flow, which
+        /// stayed InMatch with the game-server link up, and the MULTIPLAYER button on the menu it
+        /// landed on did nothing until the game was restarted.
+        /// </remarks>
+        public static Func<bool> LeaveMatch { get; set; }
+
+        /// <summary>
+        /// True when a matchmade match was left through <see cref="LeaveMatch"/>, false when
+        /// there was none to leave.
+        /// </summary>
+        public static bool TryLeaveMatch() => LeaveMatch != null && LeaveMatch();
+
+        /// <summary>
         /// The colour for <paramref name="team"/> as <c>0xRRGGBB</c>, or a neutral grey when no
         /// palette is registered.
         /// </summary>
@@ -253,6 +273,7 @@ namespace Ironfront.Net.Unity
             TeamPalette = null;
             Practice = null;
             MenuPlatformActions = null;
+            LeaveMatch = null;
             ProjectileCatalogReader = null;
             LocalTeam = null;
             ExplosionPredictor = null;

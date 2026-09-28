@@ -139,6 +139,9 @@ namespace Ironfront.Net.Unity.Client
             _session.OnGameServerFailed += OnGameServerFailed;
             _flow.OnStateChanged += OnFlowStateChanged;
 
+            // The pause menu's way out of a match; see LeaveMatchFromMenu.
+            NetClientBindings.LeaveMatch = LeaveMatchFromMenu;
+
             // Held while the map loads, and only then. Before the map is up there is no
             // NetClientBootstrap to route into, so this subscription is the only thing standing
             // between the server's first snapshots and the floor.
@@ -183,7 +186,7 @@ namespace Ironfront.Net.Unity.Client
         /// so it must be reachable before anything has activated it.
         /// </para>
         /// </remarks>
-        private void BindMenuCanvas()
+        private void BindMenuCanvas(bool announceEndpoint = true)
         {
             _menu = FindAnyObjectByType<Menu.MenuScreenController>(FindObjectsInactive.Include);
 
@@ -200,7 +203,7 @@ namespace Ironfront.Net.Unity.Client
             _menu.MasterPort = config.MasterPort;
             _menu.MasterTls  = BuildMasterTls(config);
 
-            LogMasterEndpoint(config);
+            if (announceEndpoint) LogMasterEndpoint(config);
 
             _menu.Bind(_session, _flow);
         }
@@ -304,6 +307,8 @@ namespace Ironfront.Net.Unity.Client
             if (!ReferenceEquals(Current, this)) return;
 
             if (_menu != null) _menu.Unbind();
+
+            if (NetClientBindings.LeaveMatch == LeaveMatchFromMenu) NetClientBindings.LeaveMatch = null;
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
 
@@ -520,6 +525,13 @@ namespace Ironfront.Net.Unity.Client
             if (string.Equals(scene.name, MenuScene, StringComparison.Ordinal))
             {
                 ResumeHolding();
+
+                // The Menu scene brings a NEW menu with it, and only Awake ever bound one: every
+                // return from a match -- its end, a kick, the pause menu's QUIT TO MENU -- landed
+                // on a menu with no flow behind it, whose MULTIPLAYER button did nothing until the
+                // game was restarted (playtest 2026-09-29). Bind is idempotent, so the first load,
+                // which Awake already bound, only binds the same menu again.
+                BindMenuCanvas(announceEndpoint: false);
                 return;
             }
 
@@ -618,6 +630,25 @@ namespace Ironfront.Net.Unity.Client
 
             if (_verbose) Debug.Log($"[flow] leaving the match; returning to '{MenuScene}'.");
             SceneManager.LoadScene(MenuScene);
+        }
+
+        /// <summary>
+        /// The pause menu's QUIT TO MENU inside a matchmade match: drops the game-server link and
+        /// lets <see cref="OnFlowStateChanged"/> take the player back to the lobby, signed in.
+        /// </summary>
+        /// <remarks>
+        /// False outside a match, so the menu loads the scene itself as it did before. The menu
+        /// used to do that in a match too, underneath the flow, which stayed InMatch with the link
+        /// up -- and MULTIPLAYER on the menu it landed on did nothing until a restart.
+        /// </remarks>
+        private bool LeaveMatchFromMenu()
+        {
+            if (_session == null || _flow == null) return false;
+            if (_flow.State != GameFlowState.InMatch && _flow.State != GameFlowState.MatchEnd) return false;
+
+            if (_verbose) Debug.Log("[flow] the player left the match from the pause menu.");
+            _session.LeaveMatch();
+            return true;
         }
 
         /// <summary>
