@@ -234,6 +234,13 @@ $ClientBaseline = @(
                 'MenuNavigationButton.cs itself -- the same shape as the VehicleKind.Helicopter ' +
                 'row above. The legacy MonoBehaviour of that name is never referenced: the case ' +
                 'body calls _controller.ReturnToMainMenu(), a method on a Net/Client type' }
+    # Found by the in-match chat box (2026-09-28). It reads Enter and Esc from IMGUI's own events,
+    # because Input.GetKeyDown stops reporting them once a text field holds the keyboard.
+    @{ Type = 'EventType'               ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'UnityEngine.EventType.KeyDown, the IMGUI event enum, in ' +
+                'ClientChatSender.HandleBoxKeys. It collides with an enum NESTED inside ' +
+                'Pathfinding.GraphModifier in Assembly-CSharp, which this assembly cannot ' +
+                'reference -- the green compile is the proof' }
     @{ Type = 'Resolution'              ; Kind = 'not-a-reference'; Retires = 'never'
        Reason = 'UnityEngine.Resolution, the engine struct, in `foreach (Resolution resolution ' +
                 'in Screen.resolutions)` at MenuSettingsScreen.cs. It collides with a public ' +

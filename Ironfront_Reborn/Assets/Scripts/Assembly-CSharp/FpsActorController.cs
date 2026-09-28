@@ -946,11 +946,14 @@ public class FpsActorController : ActorController
 				fpCameraParent.transform.localRotation = Quaternion.RotateTowards(fpCameraParent.transform.localRotation, Quaternion.identity, Time.deltaTime * 400f);
 			}
 		}
-		// Not while a text field owns the keyboard. The "Loadout" axis is bound to return with
-		// enter as its alternate (ProjectSettings/InputManager.asset), and the chat line sends
-		// on Return -- so without this guard one press both sent the message and toggled the
-		// deploy screen, which is the shape the defect took when chat first shipped.
-		if (Input.GetButtonDown("Loadout") && !LocalTextEntry.Composing)
+		// Offline only. The "Loadout" axis is bound to return with enter as its alternate
+		// (ProjectSettings/InputManager.asset), and in a networked match Enter is the chat box's
+		// key: it opens the box and sends the line. Reading it here as well opened the deploy
+		// screen on the same press (playtest 2026-09-28) -- and a composing guard alone could not
+		// stop it, because the chat box runs first and clears that flag before this
+		// runs, on the very frame the send happens. A networked deploy screen opens on death
+		// (OpenLoadoutAfterNetworkDeath) and on the first deploy, never from a key.
+		if (!NetContext.IsClient && Input.GetButtonDown("Loadout") && !LocalTextEntry.OwnsKeyboard)
 		{
 			if (LoadoutUi.IsOpen())
 			{
@@ -961,15 +964,15 @@ public class FpsActorController : ActorController
 				OpenLoadout();
 			}
 		}
-		if (Input.GetKeyDown(KeyCode.K))
+		if (Input.GetKeyDown(KeyCode.K) && !LocalTextEntry.OwnsKeyboard)
 		{
 			actor.Damage(200f, 200f, true, actor.CenterPosition(), Vector3.forward, Vector3.zero);
 		}
-		if (Input.GetKeyDown(KeyCode.O))
+		if (Input.GetKeyDown(KeyCode.O) && !LocalTextEntry.OwnsKeyboard)
 		{
 			ActorManager.instance.debug = !ActorManager.instance.debug;
 		}
-		if (Input.GetButtonDown("Slowmotion") && !IngameMenuUi.IsOpen())
+		if (Input.GetButtonDown("Slowmotion") && !IngameMenuUi.IsOpen() && !LocalTextEntry.OwnsKeyboard)
 		{
 			// PhysicsRate, not a second Time.fixedDeltaTime = Time.timeScale / 60f here. That
 			// literal made this component an unwitting authority on the project's physics rate:
@@ -1028,8 +1031,9 @@ public class FpsActorController : ActorController
 	{
 		// One guard for the whole method rather than eleven. Every read below is a bare key --
 		// the digits especially -- so typing "1st squad" into the chat line would otherwise
-		// switch weapon three times on the way through the sentence.
-		if (LocalTextEntry.Composing)
+		// switch weapon three times on the way through the sentence. OwnsKeyboard rather than
+		// Composing, so the frame the line closes on is covered too.
+		if (LocalTextEntry.OwnsKeyboard)
 		{
 			return;
 		}

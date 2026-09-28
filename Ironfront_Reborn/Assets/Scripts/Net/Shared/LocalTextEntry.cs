@@ -33,11 +33,43 @@ namespace Ironfront.Net.Unity
     /// </remarks>
     public static class LocalTextEntry
     {
+        private static bool _composing;
+
+        /// <summary>The frame on which a text field last gave the keyboard back.</summary>
+        private static int _releasedOnFrame = -1;
+
         /// <summary>
         /// True while a text field owns the keyboard. Gameplay input is suppressed for as long
         /// as it is set.
         /// </summary>
-        public static bool Composing { get; set; }
+        public static bool Composing
+        {
+            get => _composing;
+            set
+            {
+                if (_composing && !value) _releasedOnFrame = Time.frameCount;
+                _composing = value;
+            }
+        }
+
+        /// <summary>
+        /// True while a text field owns the keyboard, AND for the rest of the frame in which it
+        /// gave it back.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The key that closes a text field is still "down" for everyone who runs after it.</b>
+        /// <c>ClientChatSender</c> reads Enter and Esc before any gameplay script and clears
+        /// <see cref="Composing"/> there, so a reader of <see cref="Composing"/> alone sees the
+        /// very press that sent a line as a fresh one: Enter opened the deploy screen, Esc opened
+        /// the pause menu. Every reader of a key the chat box also uses asks this instead.
+        /// </para>
+        /// <para>
+        /// The frame the box OPENS needs no extra term: <see cref="Composing"/> is already true
+        /// for every reader that runs after the chat box.
+        /// </para>
+        /// </remarks>
+        public static bool OwnsKeyboard => _composing || _releasedOnFrame == Time.frameCount;
 
         /// <summary>
         /// Clears the flag at subsystem registration, for <see cref="NetContext.ResetOnLoad"/>'s
@@ -48,7 +80,8 @@ namespace Ironfront.Net.Unity
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetOnLoad()
         {
-            Composing = false;
+            _composing = false;
+            _releasedOnFrame = -1;
         }
     }
 }

@@ -1,120 +1,78 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Ironfront.Net.Protocol;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace Ironfront.Net.Unity.Client
 {
     /// <summary>
-    /// The one production sender of <c>C_CHAT</c>, and the thing that draws what comes back.
-    /// Phase P6 task 3.3, ledger X-8.
+    /// The one production sender of <c>C_CHAT</c>, and the in-match chat box that draws what
+    /// comes back. Phase P6 task 3.3, ledger X-8; reworked after the 2026-09-28 playtest.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Nothing sent this opcode and nothing routed it.</b> <c>ClientWiringGate</c>'s G10 held
-    /// a named gap for it whose retire condition was explicit: "when Chat gets a handler AND a
-    /// sender, not before", because a sender alone would have shipped a write-only path the
-    /// server counted in <c>UnknownMessages</c> — its corruption counter. The route landed
-    /// first (<c>ServerMessageRouter</c> → <see cref="Ironfront.Net.Replication.Server.IChatHandler"/>
-    /// → <c>ServerTickLoop</c>), then this.
+    /// <b>Enter opens, Enter sends, Esc closes</b> — the rules live in <see cref="ChatPanelModel"/>.
+    /// Enter used to be the deploy screen's key as well (the <c>Loadout</c> axis in
+    /// <c>ProjectSettings/InputManager.asset</c> is bound to return/enter), so the press that sent
+    /// a line also opened the deploy screen in the same frame: the send ran here first, cleared
+    /// the typing flag, and <c>FpsActorController</c> read the same press a few
+    /// microseconds later with nothing left to stop it. A networked match no longer reads that
+    /// axis at all, and <see cref="LocalTextEntry.OwnsKeyboard"/> covers the frame the box closes
+    /// on, so the key that closed it cannot also be read by whatever runs after.
     /// </para>
     /// <para>
     /// <b>Sender and presenter in one component, deliberately.</b> They are two halves of one
-    /// conversation and they share the buffer of recent lines: a player needs to see their own
-    /// message land to know it was sent at all. Splitting them would also mean two components to
-    /// author or to add, and the second one missing is a chat box that swallows everything.
+    /// conversation and share the history: a player needs to see their own line land to know it
+    /// was sent at all.
     /// </para>
     /// <para>
-    /// <b>Lobby chat as M3 names it, and nothing more.</b> No history beyond what is on screen,
-    /// no channels, no moderation beyond the sanitizing every ingress already does. Each of
-    /// those is a feature with its own decisions; none of them is needed for two players to talk
-    /// to each other.
-    /// </para>
-    /// <para>
-    /// <b>Drawn from <c>OnGUI</c>, like <c>LobbyShellOverlay</c>.</b> This phase owns no scenes
-    /// or prefabs, so a canvas-based box would have to be authored somewhere to exist — and a
-    /// chat box present in one scene and missing from the next reads as the server dropping
-    /// messages. An immediate-mode overlay has no scene to be missing from. It is the plainest
-    /// possible surface and is meant to be replaced by a real one.
-    /// </para>
-    /// <para>
-    /// At execution order -40, alongside <see cref="ClientSeatRequester"/>: it needs the router
-    /// and nothing else, so it only has to be later than the bootstrap that owns it.
+    /// <b>Drawn from <c>OnGUI</c>.</b> This component is added at runtime by
+    /// <c>NetClientBootstrap</c>, so an immediate-mode box has no scene or prefab to be missing
+    /// from — a chat box present in one map and absent from the next would read as the server
+    /// dropping messages.
     /// </para>
     /// </remarks>
-    [DefaultExecutionOrder(-40)]
+    // Before the EventSystem (-1000). The Enter that opens or sends a line must clear the uGUI
+    // selection BEFORE the input module reads the same press as Submit and clicks whatever the
+    // deploy screen last had selected -- DEPLOY included. Running after it, the clear lands one
+    // frame late.
+    [DefaultExecutionOrder(-1010)]
     [DisallowMultipleComponent]
     public sealed class ClientChatSender : MonoBehaviour
     {
-        /// <summary>The key that opens the chat line.</summary>
-        /// <remarks>
-        /// <para>
-        /// <b>Not Return, and the reason is a shipped defect.</b> This was <c>KeyCode.Return</c>,
-        /// and the remark here used to claim it was "not a gameplay control competing with
-        /// anything a player has already bound". That was wrong: <c>ProjectSettings/InputManager.asset</c>
-        /// binds the <c>Loadout</c> axis to <c>return</c> with <c>enter</c> as its alternate, and
-        /// has since the original import. One press therefore opened the chat line AND toggled
-        /// the deploy screen in the same frame, every time.
-        /// </para>
-        /// <para>
-        /// T for open and <see cref="_sendKey"/> for send is the convention every shooter with a
-        /// chat box uses, so it costs a player nothing to learn. Enter keeps its original meaning
-        /// — deploy — whenever the chat line is closed, which is the state it is in almost always.
-        /// </para>
-        /// </remarks>
-        [Tooltip("Opens the chat line. Not Return: that is the deploy screen's key.")]
-        [SerializeField] private KeyCode _openKey = KeyCode.T;
+        /// <summary>History lines shown while the box is open.</summary>
+        [Tooltip("History lines shown while the chat box is open.")]
+        [SerializeField] private int _openLines = 8;
 
-        /// <summary>The key that sends the line, read only while the line is already open.</summary>
-        /// <remarks>
-        /// Return, because that is what a text field means by Return — and it is safe here in a
-        /// way it is not on <see cref="_openKey"/>: while composing, the deploy toggle in
-        /// <c>FpsActorController</c> is suppressed by <see cref="LocalTextEntry.Composing"/>, so
-        /// the key has exactly one meaning at a time rather than two at once.
-        /// </remarks>
-        [Tooltip("Sends the line. Only read while the chat line is open.")]
-        [SerializeField] private KeyCode _sendKey = KeyCode.Return;
+        /// <summary>History lines shown while the box lingers after a line is sent or received.</summary>
+        [Tooltip("History lines shown after a line is sent or received, before the box fades.")]
+        [SerializeField] private int _lingerLines = 6;
 
-        /// <summary>Abandons the line without sending it.</summary>
-        /// <remarks>
-        /// A chat box with no way out is the failure being fixed here — a player who opens one
-        /// by accident must be able to get their movement keys back without sending a message
-        /// or restarting.
-        /// </remarks>
-        [Tooltip("Closes the chat line and discards the draft.")]
-        [SerializeField] private KeyCode _cancelKey = KeyCode.Escape;
-
-        /// <summary>How many recent lines stay on screen.</summary>
-        [Tooltip("Lines kept on screen. Older ones fall off the top.")]
-        [SerializeField] private int _visibleLines = 6;
-
-        /// <summary>Seconds a line stays up after it arrives.</summary>
-        /// <remarks>
-        /// Chat that never fades covers the game; chat that fades too fast is missed by anyone
-        /// who was aiming at the time. Ten seconds is long enough to read a line you were not
-        /// looking for.
-        /// </remarks>
-        [Tooltip("Seconds a line stays on screen after it arrives.")]
-        [SerializeField] private float _lineLifetimeSeconds = 10f;
+        /// <summary>Seconds the history stays up after a line is sent or received.</summary>
+        [Tooltip("Seconds the history stays on screen after a line is sent or received.")]
+        [SerializeField] private float _lingerSeconds = ChatPanelModel.DefaultLingerSeconds;
 
         private NetClientBootstrap _client;
         private NetClientCombatPresenter _names;
+        private ChatPanelModel _model;
 
-        private readonly List<ChatLine> _lines = new List<ChatLine>(16);
         private readonly byte[] _body = new byte[ChatTextMessage.MaxClientBodySize];
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
-        private string _draft = string.Empty;
-        private bool _composing;
-
-        /// <summary>Set on the frame the line opens, consumed by the first <c>OnGUI</c> after it.</summary>
+        /// <summary>Set when the box opens, consumed by the first <c>OnGUI</c> after it.</summary>
         /// <remarks>
-        /// The focus grab has to happen once, not every frame. <c>GUI.FocusControl</c> was being
-        /// called unconditionally on every repaint, which re-seats IMGUI's text-editing state
-        /// continuously and takes the caret with it — so a player could open the box and then
-        /// find their typing landing unpredictably.
+        /// The focus grab happens once, not every frame: calling <c>GUI.FocusControl</c> on every
+        /// repaint re-seats IMGUI's editing state and takes the caret with it.
         /// </remarks>
         private bool _focusPending;
+
+        /// <summary>Set when the box closes, so the next <c>OnGUI</c> hands IMGUI's focus back.</summary>
+        private bool _releaseFocusPending;
+
+        /// <summary>The frame the box last opened on. See <see cref="HandleBoxKeys"/>.</summary>
+        private int _openedOnFrame = -1;
 
         /// <summary><c>C_CHAT</c> messages sent. Zero after typing is the tell.</summary>
         public long MessagesSent { get; private set; }
@@ -124,44 +82,18 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>
         /// Drafts refused because nothing survived sanitizing, or because the encoded line did
-        /// not fit the wire bound.
+        /// not fit the wire bound. Surfaced so "I pressed Enter and nothing happened" has an
+        /// answer somewhere.
         /// </summary>
-        /// <remarks>
-        /// Surfaced rather than logged so "I pressed Return and nothing happened" has an answer
-        /// somewhere. It rises on a line of pure markup or whitespace, which is a player typing
-        /// something the wire will not carry rather than a fault.
-        /// </remarks>
         public long DraftsRefused { get; private set; }
 
-        /// <summary>True while the chat line has focus and gameplay keys should be ignored.</summary>
-        /// <remarks>
-        /// <b>This used to have no consumer, and could not have had one.</b> The remark here
-        /// said so outright — "nothing consumes it yet" — and the reason it stayed that way is
-        /// structural: this type lives in <c>Ironfront.Net.Unity.Client</c>, whose asmdef sets
-        /// <c>autoReferenced: false</c>, so neither <c>Assembly-CSharp</c> nor the input
-        /// assemblies can name it. The flag that the input path actually reads is
-        /// <see cref="LocalTextEntry.Composing"/>, in the one assembly all of them can see;
-        /// this property is now just the local half of the same state, kept for callers that
-        /// already hold the component.
-        /// </remarks>
-        public bool IsComposing => _composing;
-
-        /// <summary>
-        /// Moves the composing state, and publishes it where the input path can read it.
-        /// </summary>
-        /// <remarks>
-        /// Every write to <see cref="_composing"/> goes through here. That is the point: the
-        /// two flags drifting apart would leave the player's movement keys suppressed with no
-        /// chat box on screen, which is worse than the defect this replaces.
-        /// </remarks>
-        private void SetComposing(bool composing)
-        {
-            _composing = composing;
-            LocalTextEntry.Composing = composing;
-        }
+        /// <summary>True while the chat line has focus and gameplay keys are ignored.</summary>
+        public bool IsComposing => _model != null && _model.IsComposing;
 
         private void Awake()
         {
+            _model = new ChatPanelModel(lingerSeconds: _lingerSeconds);
+
             if (!NetClientPresenterGuard.IsPresentable)
             {
                 enabled = false;
@@ -174,9 +106,9 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            // Optional. It owns the actor-id-to-name table built from S_PLAYER_LIST; without it
-            // a line is attributed by actor id, which is worse than a name and better than
-            // nothing. Chat must not depend on the combat presenter existing.
+            // Optional. It owns the actor-id-to-name table built from S_PLAYER_LIST and the team
+            // of each row; without it a line is attributed by actor id, which is worse than a
+            // name and better than nothing. Chat must not depend on the combat presenter existing.
             _names = GetComponent<NetClientCombatPresenter>();
         }
 
@@ -188,61 +120,121 @@ namespace Ironfront.Net.Unity.Client
 
         private void OnDisable()
         {
-            if (_client == null) return;
-            _client.Router.OnChat -= OnChat;
+            if (_client != null) _client.Router.OnChat -= OnChat;
 
             // A disconnect mid-compose would otherwise leave the line open across a reconnect,
-            // eating the player's movement keys with no server to send to. Through SetComposing
-            // so the published flag is cleared too -- this component going away with
-            // LocalTextEntry.Composing left true is a player who can never move again.
-            SetComposing(false);
-            _draft        = string.Empty;
+            // eating the player's movement keys with no server to send to.
+            if (_model != null) _model.Abandon();
+            Publish();
             _focusPending = false;
         }
 
-        /// <summary>
-        /// Opens on <see cref="_openKey"/>, sends on <see cref="_sendKey"/>, abandons on
-        /// <see cref="_cancelKey"/>.
-        /// </summary>
-        /// <remarks>
-        /// <b>The open key is read only while closed, and the send key only while open.</b> One
-        /// key doing both is what the previous shape did, and it is why moving the open key to a
-        /// letter would not have been enough on its own: with a single key, every character of
-        /// the draft that happened to be that letter would have sent the line mid-word.
-        /// </remarks>
+        private void OnDestroy() => DestroyTextures();
+
         private void Update()
         {
             if (_client == null || !_client.IsConnected)
             {
-                // Not SetComposing-guarded on a state check: this runs every frame while
-                // disconnected, and publishing false repeatedly is free and idempotent.
-                if (_composing) SetComposing(false);
+                if (_model.IsComposing)
+                {
+                    _model.Abandon();
+                    _releaseFocusPending = true;
+                    Publish();
+                }
+
                 return;
             }
 
-            ExpireLines();
+            bool enter = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
 
-            if (!_composing)
+            if (!_model.IsComposing)
             {
-                if (!Input.GetKeyDown(_openKey)) return;
-                _draft = string.Empty;
+                if (!enter) return;
+
+                _model.PressEnter(Time.unscaledTime, out _);
+                _openedOnFrame = Time.frameCount;
                 _focusPending = true;
-                SetComposing(true);
+                ReleaseUiSelection();
+                Publish();
                 return;
             }
 
-            if (Input.GetKeyDown(_cancelKey))
-            {
-                _draft = string.Empty;
-                SetComposing(false);
-                return;
-            }
+            // Usually NOT reached while the box is open, and that is the shipped defect this
+            // replaces: once the text field holds the keyboard, Input.GetKeyDown stops reporting
+            // Enter and Esc on Windows (the IME takes them), so a line could be typed and never
+            // sent. OnGUI reads the same two keys from IMGUI's own events -- see HandleBoxKeys.
+            // This path stays for the machines where the legacy read does see them; whichever
+            // runs first closes the box and the other finds it closed.
+            if (Input.GetKeyDown(KeyCode.Escape)) Cancel();
+            else if (enter) Submit();
+        }
 
-            if (!Input.GetKeyDown(_sendKey)) return;
+        /// <summary>Enter on an open box: send what was typed, close the input line.</summary>
+        private void Submit()
+        {
+            if (_model.PressEnter(Time.unscaledTime, out string submitted) == ChatKeyOutcome.Submitted)
+                Send(submitted);
 
-            Send(_draft);
-            _draft = string.Empty;
-            SetComposing(false);
+            _releaseFocusPending = true;
+            ReleaseUiSelection();
+            Publish();
+        }
+
+        /// <summary>Esc on an open box: close it and throw the draft away.</summary>
+        private void Cancel()
+        {
+            _model.PressEscape();
+            _releaseFocusPending = true;
+            Publish();
+        }
+
+        /// <summary>
+        /// Enter and Esc as IMGUI sees them, while the text field holds the keyboard.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is what makes a line sendable at all.</b> Measured 2026-09-28 against the live
+        /// servers: with the draft field focused, neither Enter nor Esc ever reached
+        /// <c>Input.GetKeyDown</c> -- the typed characters did, through IMGUI -- so the box
+        /// opened, took the text, and then could be neither sent nor closed. That is the
+        /// owner's "the chat opens and nothing can be sent".
+        /// </para>
+        /// <para>
+        /// <b>The Enter that opened the box is ignored here.</b> It reaches IMGUI in the frame it
+        /// was pressed, after <c>Update</c> has already opened the box, and would otherwise send
+        /// an empty line and close it again in the same frame. A human cannot open, type and
+        /// send inside two frames, so the window costs nothing.
+        /// </para>
+        /// </remarks>
+        private void HandleBoxKeys(Event current)
+        {
+            if (current == null || current.type != EventType.KeyDown) return;
+
+            bool enter = current.keyCode == KeyCode.Return || current.keyCode == KeyCode.KeypadEnter
+                         || current.character == '\n' || current.character == '\r';
+            bool escape = current.keyCode == KeyCode.Escape || current.character == '\u001b';
+            if (!enter && !escape) return;
+
+            current.Use();
+
+            if (Time.frameCount - _openedOnFrame <= 1) return;
+
+            if (escape) Cancel();
+            else Submit();
+        }
+
+        /// <summary>Hands the composing state to the input path, which suppresses gameplay keys.</summary>
+        private void Publish() => LocalTextEntry.Composing = _model != null && _model.IsComposing;
+
+        /// <summary>
+        /// Clears the uGUI selection, so the Enter that opens or sends a line is not also the
+        /// <c>Submit</c> that clicks whichever button the deploy screen last had selected.
+        /// </summary>
+        private static void ReleaseUiSelection()
+        {
+            EventSystem events = EventSystem.current;
+            if (events != null && events.currentSelectedGameObject != null)
+                events.SetSelectedGameObject(null);
         }
 
         /// <summary>
@@ -250,23 +242,18 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Reliable, on channel 2</b>, for <c>C_SEAT_REQUEST</c>'s reason: a dropped line is
-        /// a player who said something nobody heard, with nothing to re-send it and no next
-        /// frame carrying the same intent.
+        /// <b>Reliable, on channel 2</b>: a dropped line is a player who said something nobody
+        /// heard, with nothing to re-send it.
         /// </para>
         /// <para>
-        /// <b>Sanitized and clipped before encoding.</b> The clip is in CHARACTERS
-        /// (<see cref="ChatTextMessage.MaxTextCharacters"/>) because that is where a boundary can be
-        /// found without splitting a multi-byte code point; the wire bound is in bytes and
-        /// <see cref="ChatTextMessage.Encode"/> refuses rather than truncating when the two
-        /// disagree, which is a line of Vietnamese long enough to exceed 120 bytes inside 60
-        /// characters. That refusal is counted, not silent.
+        /// <b>Sanitized and clipped before encoding.</b> The clip is in CHARACTERS because that is
+        /// where a boundary can be found without splitting a code point; the wire bound is in
+        /// bytes and <see cref="ChatTextMessage.Encode"/> refuses rather than truncating when a
+        /// line of Vietnamese outgrows it. That refusal is counted, not silent.
         /// </para>
         /// <para>
-        /// <b>Nothing is echoed locally.</b> The line appears when — and only when — the server
-        /// broadcasts it back, which is what makes what a player sees the same thing everybody
-        /// else sees. A local echo would show a message that was refused or dropped as though it
-        /// had been delivered.
+        /// <b>Nothing is echoed locally.</b> The line appears when the server broadcasts it back,
+        /// which is what makes what a player sees the same thing everybody else sees.
         /// </para>
         /// </remarks>
         private void Send(string draft)
@@ -309,108 +296,454 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>
-        /// A line arrived. Already sanitized by the router at this client's own ingress.
+        /// A line arrived, already sanitized by the router at this client's own ingress.
         /// </summary>
         /// <remarks>
-        /// <b>No <c>IsLocalActor</c> guard, and that is not an omission.</b> Every other
-        /// per-actor handler in this folder guards, because it writes the local player's camera,
-        /// health or rig from an event that may name a remote actor. This one writes a shared
-        /// message list: a line from a remote player is exactly what chat is for, and guarding
-        /// here would show a player only their own messages.
+        /// No <c>IsLocalActor</c> guard: a line from a remote player is exactly what chat is for.
         /// </remarks>
         private void OnChat(byte actorId, string text)
         {
             MessagesReceived++;
-
-            _lines.Add(new ChatLine(NameOf(actorId), text, Time.time + _lineLifetimeSeconds));
-
-            // Bounded from the front, so a busy match cannot grow this list for the length of
-            // the round. The lifetime usually gets there first; this is what covers the case
-            // where it does not.
-            while (_lines.Count > _visibleLines) _lines.RemoveAt(0);
+            _model.Add(actorId, text, Time.unscaledTime);
         }
 
-        /// <summary>The speaker's name, or their actor id when no name has arrived.</summary>
-        /// <remarks>
-        /// The fallback is here rather than in <c>PlayerNameTable</c>, which returns null, for
-        /// the reason <c>NetClientCombatPresenter</c> gives: only the consumer knows what a
-        /// missing name should read as, and here it is an id rather than a blank.
-        /// </remarks>
-        private string NameOf(byte actorId)
-            => _names != null ? _names.Names.NameOr(actorId, "#" + actorId) : "#" + actorId;
+        // ------------------------------------------------------------------------------ drawing
 
-        private void ExpireLines()
-        {
-            // From the front only: the list is append-ordered by arrival, so every expired line
-            // is a prefix of it and a full scan would cost the same answer.
-            while (_lines.Count > 0 && Time.time >= _lines[0].ExpiresAt) _lines.RemoveAt(0);
-        }
+        private const string DraftControlName = "ironfront.chat.draft";
+
+        /// <summary>Screen pixels kept clear under the box for the health and ammo readout.</summary>
+        private const float BottomClearance = 118f;
+
+        private const float ReferenceHeight = 1080f;
+
+        private GUIStyle _titleStyle;
+        private GUIStyle _metaStyle;
+        private GUIStyle _rosterStyle;
+        private GUIStyle _lineStyle;
+        private GUIStyle _shadowStyle;
+        private GUIStyle _inputStyle;
+        private GUIStyle _hintStyle;
+        private GUIStyle _panelStyle;
+        private Texture2D _panelTexture;
+        private Texture2D _inputTexture;
+        private Texture2D _dividerTexture;
+        private float _stylesScale = -1f;
+
+        private readonly StringBuilder _text = new StringBuilder(160);
+        private readonly List<string> _lineRich = new List<string>(8);
+        private readonly List<string> _linePlain = new List<string>(8);
+        private string _rosterRich = string.Empty;
+        private int _rosterCount;
+        private int _rosterNamesRevision = -1;
+        private int _rosterScoresRevision = -1;
+        private ushort _rosterLocalActor = ushort.MaxValue;
 
         /// <summary>
-        /// The plainest possible chat surface. Meant to be replaced by a real HUD.
+        /// The box: a header naming who is in the match, the history, and the input line.
         /// </summary>
         /// <remarks>
-        /// <b>Rich text is off on the label.</b> The text has been sanitized of angle brackets
-        /// at two ingresses already, and turning it off here as well costs one line and means a
-        /// third way in would still render as characters rather than as markup.
+        /// <para>
+        /// <b>Anchored to the bottom-left and grown upwards</b>, so the input line sits where the
+        /// eye already is and a longer history pushes the top up instead of covering the HUD.
+        /// </para>
+        /// <para>
+        /// <b>Rich text is safe here only because '&lt;' cannot reach it.</b> Names and lines are
+        /// sanitized of angle brackets at two ingresses; <see cref="AppendEscaped"/> swaps any that
+        /// ever got past both for a look-alike, so the only markup drawn is the colour this method
+        /// writes itself.
+        /// </para>
         /// </remarks>
         private void OnGUI()
         {
-            if (_lines.Count == 0 && !_composing) return;
+            if (_model == null) return;
 
-            var style = new GUIStyle(GUI.skin.label) { richText = false };
+            if (_model.IsComposing) HandleBoxKeys(Event.current);
 
-            GUILayout.BeginArea(new Rect(12f, Screen.height - 190f, 520f, 178f));
-
-            for (int i = 0; i < _lines.Count; i++)
-                GUILayout.Label($"{_lines[i].Speaker}: {_lines[i].Text}", style);
-
-            if (_composing)
+            if (_releaseFocusPending && !_model.IsComposing)
             {
-                GUI.SetNextControlName(DraftControlName);
-                _draft = GUILayout.TextField(_draft, ChatTextMessage.MaxTextCharacters);
+                GUIUtility.keyboardControl = 0;
+                _releaseFocusPending = false;
+            }
 
-                // Once, on the first OnGUI pass after the line opened. See _focusPending.
-                //
-                // Deliberately NOT gated on the repaint event: naming EventType here trips
-                // tools/check-net-layering.ps1 rule 6b, which matches predefined-assembly type
-                // names by NAME and cannot tell UnityEngine.EventType from the EventType
-                // Assembly-CSharp declares. GUI.FocusControl takes on any event, so the gate
-                // costs nothing here -- and a "not-a-reference" baseline row would be a second
-                // thing to re-check forever in exchange for a line that was never needed.
+            float opacity = _model.Opacity(Time.unscaledTime);
+            if (opacity <= 0f) return;
+
+            float scale = Mathf.Clamp(Screen.height / ReferenceHeight, 0.85f, 2.5f);
+            EnsureStyles(scale);
+
+            bool open = _model.IsComposing;
+            float margin = 18f * scale;
+            float pad = 12f * scale;
+            float width = Mathf.Min(620f * scale, Screen.width - 2f * margin);
+            float inner = width - 2f * pad;
+            float gap = 6f * scale;
+
+            CollectLines(open ? _openLines : _lingerLines, open);
+
+            // Measure first, so the box can be anchored by its bottom edge.
+            float titleHeight = 0f, rosterHeight = 0f;
+            if (open)
+            {
+                RefreshRoster();
+                titleHeight = _titleStyle.CalcHeight(new GUIContent("CHAT"), inner);
+                rosterHeight = _rosterStyle.CalcHeight(new GUIContent(_rosterRich), inner);
+            }
+
+            float linesHeight = 0f;
+            for (int i = 0; i < _lineRich.Count; i++)
+                linesHeight += _lineStyle.CalcHeight(new GUIContent(_lineRich[i]), inner);
+
+            float inputHeight = open ? _inputStyle.fixedHeight : 0f;
+            float hintHeight = open ? _hintStyle.CalcHeight(new GUIContent("ENTER"), inner) : 0f;
+
+            float height = pad;
+            if (open) height += titleHeight + rosterHeight + gap * 2f + 1f;
+            height += linesHeight;
+            if (open) height += gap * 1.5f + inputHeight + gap * 0.5f + hintHeight;
+            height += pad;
+
+            float x = margin;
+            float y = Screen.height - BottomClearance * scale - height;
+
+            Color previous = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, opacity * (open ? 1f : 0.75f));
+            GUI.Box(new Rect(x, y, width, height), GUIContent.none, _panelStyle);
+            GUI.color = new Color(1f, 1f, 1f, opacity);
+
+            float cx = x + pad;
+            float cy = y + pad;
+
+            if (open)
+            {
+                GUI.Label(new Rect(cx, cy, inner, titleHeight), "CHAT", _titleStyle);
+                GUI.Label(new Rect(cx, cy, inner, titleHeight),
+                    _rosterCount == 1 ? "1 PLAYER" : _rosterCount + " PLAYERS", _metaStyle);
+                cy += titleHeight;
+
+                GUI.Label(new Rect(cx, cy, inner, rosterHeight), _rosterRich, _rosterStyle);
+                cy += rosterHeight + gap;
+
+                GUI.DrawTexture(new Rect(cx, cy, inner, 1f), _dividerTexture);
+                cy += 1f + gap;
+            }
+
+            for (int i = 0; i < _lineRich.Count; i++)
+            {
+                float h = _lineStyle.CalcHeight(new GUIContent(_lineRich[i]), inner);
+                float shadow = Mathf.Max(1f, 1.5f * scale);
+
+                GUI.Label(new Rect(cx + shadow, cy + shadow, inner, h), _linePlain[i], _shadowStyle);
+                GUI.Label(new Rect(cx, cy, inner, h), _lineRich[i], _lineStyle);
+                cy += h;
+            }
+
+            if (open)
+            {
+                cy += gap * 1.5f;
+
+                GUI.SetNextControlName(DraftControlName);
+                _model.Draft = GUI.TextField(
+                    new Rect(cx, cy, inner, inputHeight), _model.Draft ?? string.Empty,
+                    ChatTextMessage.MaxTextCharacters, _inputStyle);
+
+                // Once, on the first pass after the box opened. See _focusPending.
                 if (_focusPending)
                 {
                     GUI.FocusControl(DraftControlName);
                     _focusPending = false;
                 }
+
+                cy += inputHeight + gap * 0.5f;
+                GUI.Label(new Rect(cx, cy, inner, hintHeight),
+                    "ENTER  send     ESC  close", _hintStyle);
             }
 
-            GUILayout.EndArea();
+            GUI.color = previous;
         }
 
-        private const string DraftControlName = "ironfront.chat.draft";
-
-        /// <summary>One line on screen, with the moment it stops being shown.</summary>
-        /// <remarks>
-        /// <b>Not <c>Line</c>.</b> Assembly-CSharp declares <c>Pathfinding.RVO.Line</c>, and the
-        /// layering gate matches predefined-assembly type names by name — it cannot see that a
-        /// private nested struct in this file is not a reference to that one, and
-        /// <c>Ironfront.Net.Unity.Client</c> could not reference Assembly-CSharp even if it
-        /// wanted to. Renaming removes the ambiguity outright, which is better than adding a
-        /// "not-a-reference" baseline row that a future reader would have to re-check.
-        /// </remarks>
-        private readonly struct ChatLine
+        /// <summary>The newest <paramref name="count"/> lines, as drawn text and as its shadow.</summary>
+        private void CollectLines(int count, bool open)
         {
-            public readonly string Speaker;
-            public readonly string Text;
-            public readonly float ExpiresAt;
+            _lineRich.Clear();
+            _linePlain.Clear();
 
-            public ChatLine(string speaker, string text, float expiresAt)
+            IReadOnlyList<ChatEntry> entries = _model.History;
+            int first = Mathf.Max(0, entries.Count - Mathf.Max(1, count));
+
+            if (open && entries.Count == 0)
             {
-                Speaker   = speaker;
-                Text      = text;
-                ExpiresAt = expiresAt;
+                _lineRich.Add("<i><color=#9AA3AD>No messages yet. Say hello to your squad.</color></i>");
+                _linePlain.Add("<i>No messages yet. Say hello to your squad.</i>");
+                return;
             }
+
+            for (int i = first; i < entries.Count; i++)
+            {
+                ChatEntry entry = entries[i];
+                string speaker = NameOf(entry.Speaker);
+
+                _text.Length = 0;
+                _text.Append("<b><color=#").Append(ColourHex(TeamOf(entry.Speaker), 0.28f)).Append('>');
+                AppendEscaped(_text, speaker);
+                _text.Append("</color></b>  ");
+                AppendEscaped(_text, entry.Text);
+                _lineRich.Add(_text.ToString());
+
+                _text.Length = 0;
+                _text.Append("<b>");
+                AppendEscaped(_text, speaker);
+                _text.Append("</b>  ");
+                AppendEscaped(_text, entry.Text);
+                _linePlain.Add(_text.ToString());
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds the "who is here" line when the name or score table has moved.
+        /// </summary>
+        /// <remarks>
+        /// Cached on the two tables' revisions: the roster is drawn every frame the box is open,
+        /// and a string per frame for a line that changes a few times a match is waste.
+        /// </remarks>
+        private void RefreshRoster()
+        {
+            if (_names == null)
+            {
+                _rosterRich = "<color=#9AA3AD>Player list unavailable</color>";
+                _rosterCount = 0;
+                return;
+            }
+
+            ushort local = _client != null ? _client.LocalActorId : ushort.MaxValue;
+            if (_names.Names.Revision == _rosterNamesRevision
+                && _names.Scores.Revision == _rosterScoresRevision
+                && local == _rosterLocalActor)
+                return;
+
+            _rosterNamesRevision = _names.Names.Revision;
+            _rosterScoresRevision = _names.Scores.Revision;
+            _rosterLocalActor = local;
+
+            _text.Length = 0;
+            _rosterCount = 0;
+
+            for (int id = 0; id < ProtocolConstants.MAX_ACTORS; id++)
+            {
+                string name = _names.Names.NameOf((ushort)id);
+                if (string.IsNullOrEmpty(name)) continue;
+
+                if (_rosterCount > 0) _text.Append("     ");
+                _text.Append("<color=#").Append(ColourHex(TeamOf((byte)id), 0.28f)).Append(">● ");
+                AppendEscaped(_text, name);
+                if (id == local) _text.Append(" <i>(you)</i>");
+                _text.Append("</color>");
+                _rosterCount++;
+            }
+
+            _rosterRich = _rosterCount == 0
+                ? "<color=#9AA3AD>Waiting for the player list...</color>"
+                : _text.ToString();
+        }
+
+        /// <summary>The speaker's name, or their actor id when no name has arrived.</summary>
+        private string NameOf(byte actorId)
+            => _names != null ? _names.Names.NameOr(actorId, "#" + actorId) : "#" + actorId;
+
+        private byte TeamOf(byte actorId) => _names != null ? _names.Scores.TeamOf(actorId) : TeamId.None;
+
+        /// <summary>
+        /// A team's colour as hex, pulled towards white by <paramref name="lift"/> so a dark team
+        /// colour stays readable on the dark box.
+        /// </summary>
+        private static string ColourHex(byte team, float lift)
+        {
+            if (team == TeamId.None) return "D7DDE3";
+
+            int rgb = NetClientBindings.TeamColourRgb(team);
+            int r = Lift((rgb >> 16) & 0xFF, lift);
+            int g = Lift((rgb >> 8) & 0xFF, lift);
+            int b = Lift(rgb & 0xFF, lift);
+
+            return ((r << 16) | (g << 8) | b).ToString("X6");
+        }
+
+        private static int Lift(int channel, float lift)
+            => Mathf.Clamp(Mathf.RoundToInt(channel + (255 - channel) * lift), 0, 255);
+
+        /// <summary>
+        /// Appends <paramref name="value"/> with every angle bracket swapped for a look-alike, so a
+        /// line can never close or open a rich-text tag of its own.
+        /// </summary>
+        private static void AppendEscaped(StringBuilder into, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c == '<') into.Append('‹');
+                else if (c == '>') into.Append('›');
+                else into.Append(c);
+            }
+        }
+
+        private void EnsureStyles(float scale)
+        {
+            if (_panelStyle != null && Mathf.Approximately(scale, _stylesScale)) return;
+            _stylesScale = scale;
+
+            if (_panelTexture == null)
+            {
+                _panelTexture = RoundedTexture(new Color(0.06f, 0.07f, 0.09f, 0.78f), 10);
+                _inputTexture = RoundedTexture(new Color(1f, 1f, 1f, 0.12f), 6);
+                _dividerTexture = SolidTexture(new Color(1f, 1f, 1f, 0.16f));
+            }
+
+            Font regular = FindFont("Roboto-Medium");
+            Font bold = FindFont("Roboto-Bold") ?? regular;
+
+            _panelStyle = new GUIStyle
+            {
+                normal = { background = _panelTexture },
+                border = new RectOffset(10, 10, 10, 10),
+            };
+
+            _titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                font = bold,
+                fontSize = Mathf.RoundToInt(18f * scale),
+                fontStyle = bold != null ? FontStyle.Normal : FontStyle.Bold,
+                normal = { textColor = new Color(1f, 1f, 1f, 0.95f) },
+                padding = new RectOffset(0, 0, 0, Mathf.RoundToInt(2f * scale)),
+                margin = new RectOffset(0, 0, 0, 0),
+                richText = false,
+            };
+
+            _metaStyle = new GUIStyle(_titleStyle)
+            {
+                font = regular,
+                fontSize = Mathf.RoundToInt(13f * scale),
+                fontStyle = FontStyle.Normal,
+                alignment = TextAnchor.UpperRight,
+                normal = { textColor = new Color(0.72f, 0.76f, 0.81f, 1f) },
+            };
+
+            _rosterStyle = new GUIStyle(GUI.skin.label)
+            {
+                font = regular,
+                fontSize = Mathf.RoundToInt(16f * scale),
+                wordWrap = true,
+                richText = true,
+                padding = new RectOffset(0, 0, Mathf.RoundToInt(2f * scale), 0),
+                margin = new RectOffset(0, 0, 0, 0),
+                normal = { textColor = Color.white },
+            };
+
+            _lineStyle = new GUIStyle(GUI.skin.label)
+            {
+                font = regular,
+                fontSize = Mathf.RoundToInt(20f * scale),
+                wordWrap = true,
+                richText = true,
+                padding = new RectOffset(0, 0, Mathf.RoundToInt(2f * scale), Mathf.RoundToInt(2f * scale)),
+                margin = new RectOffset(0, 0, 0, 0),
+                normal = { textColor = new Color(0.94f, 0.95f, 0.96f, 1f) },
+            };
+
+            _shadowStyle = new GUIStyle(_lineStyle)
+            {
+                normal = { textColor = new Color(0f, 0f, 0f, 0.7f) },
+            };
+
+            _inputStyle = new GUIStyle(GUI.skin.textField)
+            {
+                font = regular,
+                fontSize = Mathf.RoundToInt(20f * scale),
+                fixedHeight = Mathf.Round(40f * scale),
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(
+                    Mathf.RoundToInt(10f * scale), Mathf.RoundToInt(10f * scale), 0, 0),
+                border = new RectOffset(6, 6, 6, 6),
+                richText = false,
+                wordWrap = false,
+                clipping = TextClipping.Clip,
+            };
+            _inputStyle.normal.background = _inputTexture;
+            _inputStyle.focused.background = _inputTexture;
+            _inputStyle.hover.background = _inputTexture;
+            _inputStyle.active.background = _inputTexture;
+            _inputStyle.normal.textColor = Color.white;
+            _inputStyle.focused.textColor = Color.white;
+            _inputStyle.hover.textColor = Color.white;
+            _inputStyle.active.textColor = Color.white;
+
+            _hintStyle = new GUIStyle(_metaStyle)
+            {
+                fontSize = Mathf.RoundToInt(13f * scale),
+                alignment = TextAnchor.UpperRight,
+                normal = { textColor = new Color(0.62f, 0.67f, 0.73f, 1f) },
+            };
+        }
+
+        /// <summary>
+        /// One of the project's Roboto faces when the scene has already loaded it, else null and
+        /// IMGUI's default. Looked up rather than referenced: this component has no scene to hold
+        /// a reference in.
+        /// </summary>
+        private static Font FindFont(string name)
+        {
+            Font[] loaded = Resources.FindObjectsOfTypeAll<Font>();
+            for (int i = 0; i < loaded.Length; i++)
+                if (loaded[i] != null && loaded[i].name == name) return loaded[i];
+
+            return null;
+        }
+
+        private static Texture2D SolidTexture(Color colour)
+        {
+            var texture = new Texture2D(1, 1, TextureFormat.RGBA32, false)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            texture.SetPixel(0, 0, colour);
+            texture.Apply();
+            return texture;
+        }
+
+        /// <summary>
+        /// A small rounded rectangle for nine-slicing: corners of <paramref name="radius"/> pixels,
+        /// anti-aliased by coverage, flat fill in between.
+        /// </summary>
+        private static Texture2D RoundedTexture(Color colour, int radius)
+        {
+            int size = radius * 2 + 2;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+
+            for (int py = 0; py < size; py++)
+            for (int px = 0; px < size; px++)
+            {
+                float dx = Mathf.Max(0f, Mathf.Max(radius - (px + 0.5f), px + 0.5f - (size - radius)));
+                float dy = Mathf.Max(0f, Mathf.Max(radius - (py + 0.5f), py + 0.5f - (size - radius)));
+                float coverage = Mathf.Clamp01(radius + 0.5f - Mathf.Sqrt(dx * dx + dy * dy));
+
+                texture.SetPixel(px, py, new Color(colour.r, colour.g, colour.b, colour.a * coverage));
+            }
+
+            texture.Apply();
+            return texture;
+        }
+
+        private void DestroyTextures()
+        {
+            if (_panelTexture != null) Destroy(_panelTexture);
+            if (_inputTexture != null) Destroy(_inputTexture);
+            if (_dividerTexture != null) Destroy(_dividerTexture);
         }
     }
 }

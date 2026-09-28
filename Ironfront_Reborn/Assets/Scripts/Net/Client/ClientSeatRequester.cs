@@ -165,7 +165,9 @@ namespace Ironfront.Net.Unity.Client
             ExpirePending();
             SendDueRetry();
 
-            if (!TryReadLocalSeatIntent(Input.GetButtonDown(_seatButton), out Vector3 standingAt))
+            // Not while the chat box owns the keyboard: F is a letter people type.
+            bool pressed = Input.GetButtonDown(_seatButton) && !LocalTextEntry.OwnsKeyboard;
+            if (!TryReadLocalSeatIntent(pressed, out Vector3 standingAt))
                 return;
 
             if (_pendingVehicleId != 0)

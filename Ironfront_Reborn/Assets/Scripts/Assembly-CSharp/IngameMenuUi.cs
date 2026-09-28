@@ -85,7 +85,9 @@ public class IngameMenuUi : MonoBehaviour
 
 	private void Update()
 	{
-		if (!Input.GetKeyDown(KeyCode.Escape))
+		// Not the Esc that closes the chat box. The chat box reads it first, before any gameplay script,
+		// and OwnsKeyboard still answers true for the rest of that frame.
+		if (!Input.GetKeyDown(KeyCode.Escape) || Ironfront.Net.Unity.LocalTextEntry.OwnsKeyboard)
 		{
 			return;
 		}
