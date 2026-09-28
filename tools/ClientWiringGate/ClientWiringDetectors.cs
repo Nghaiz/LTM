@@ -1776,7 +1776,7 @@ namespace Ironfront.Tools.ClientWiringGate
         /// owner that was never handed the call.
         /// </para>
         /// <para>
-        /// <b>Ravenfield got this for free and we gave it away.</b> The original zeroed all four
+        /// <b>The original got this for free and we gave it away.</b> The original zeroed all four
         /// counters in <c>ScoreUi.Awake</c>, and the HUD prefab is re-instantiated per match, so
         /// every match opened at 0-0. Ours moved that state to a plain static that outlives a
         /// scene load. Untied, the second offline match in a process opens holding the first

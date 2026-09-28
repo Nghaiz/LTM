@@ -373,7 +373,7 @@ namespace Ironfront.Net.Unity.Client
             // GameManager also schedules this one second after the scene starts, but a network
             // actor can be announced before or after that timer and scene transitions can cancel
             // the Invoke.  The spawn message is the reliable point at which this client owns a
-            // local slot, so make the normal Ravenfield loadout screen explicit and idempotent.
+            // local slot, so make the normal loadout screen explicit and idempotent.
             ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
             if (_awaitingFirstDeploy && rig.Exists) rig.OpenInitialLoadout();
 
@@ -446,7 +446,7 @@ namespace Ironfront.Net.Unity.Client
             //
             // There are two clip counters on a client and each is decremented in exactly one
             // place. ClientCombatState's is moved only by PredictFire, here -- the whole file
-            // contains no other call. Ravenfield's Weapon.ammo is moved only by `ammo--` in
+            // contains no other call. The original game's Weapon.ammo is moved only by `ammo--` in
             // Weapon.Shoot. They do not compound, because OnSnapshotApplied ASSIGNS the
             // reconciled count into Weapon.ammo (ILocalPlayerRig.ApplyAuthoritativeCombat) --
             // an assignment, not a subtraction, so a divergence is erased every snapshot rather

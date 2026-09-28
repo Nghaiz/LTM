@@ -12,8 +12,8 @@ PlayerSettings:
   targetDevice: 2
   useOnDemandResources: 0
   accelerometerFrequency: 60
-  companyName: Team 10 LTM
-  productName: Ironfront Reborn
+  companyName: LTM10
+  productName: IronfrontReborn
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -170,10 +170,10 @@ PlayerSettings:
   androidMaxAspectRatio: 2.1
   androidMinAspectRatio: 1
   applicationIdentifier:
-    Android: com.Company.ProductName
-    Standalone: com.team10ltm.ironfrontreborn
-    Tizen: com.Company.ProductName
-    iPhone: com.Company.ProductName
+    Android: com.ltm10.ironfrontreborn
+    Standalone: com.ltm10.ironfrontreborn
+    Tizen: com.ltm10.ironfrontreborn
+    iPhone: com.ltm10.ironfrontreborn
     tvOS: com.Company.ProductName
   buildNumber:
     Standalone: 0

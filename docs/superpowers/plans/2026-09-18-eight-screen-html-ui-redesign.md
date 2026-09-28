@@ -1,4 +1,4 @@
-# Ironfront Reborn Eight-Screen HTML UI Redesign Implementation Plan
+# Ironfront: Reborn Eight-Screen HTML UI Redesign Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -16,7 +16,7 @@
 - Do not copy mock room, map, team, player, ping, or invite-code values.
 - Do not implement Forgot Password.
 - Unsupported controls must display `Tính năng đang được phát triển`.
-- Branding is `Ironfront Reborn` / `Team 10 LTM`.
+- Branding is `Ironfront: Reborn` / `LTM10`.
 - Do not modify or stage the six user-owned plugin DLL changes.
 - Do not create a player build.
 - Do not merge `feature/ironfront-reborn-ui-refresh` wholesale; reuse only focused UI logic.
@@ -145,9 +145,9 @@
 - Create: `tools/verify-ui-branding.ps1`
 
 **Interfaces:**
-- Produces: project identity `Ironfront Reborn` / `Team 10 LTM` and a repeatable user-facing branding check.
+- Produces: project identity `Ironfront: Reborn` / `LTM10` and a repeatable user-facing branding check.
 
-- [ ] Write a failing test/script that checks product/company fields and scans owned user-facing menu/project content for Ravenfield/SteelRaven identity.
+- [ ] Write a failing test/script that checks product/company fields and scans owned user-facing menu/project content for inherited base-game identity.
 - [ ] Run it and record the remaining owned references.
 - [ ] Replace owned product/developer labels and obsolete external developer links while leaving third-party licenses and historical technical context intact.
 - [ ] Run branding tests and scan again.

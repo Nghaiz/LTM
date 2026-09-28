@@ -24,7 +24,7 @@ Bằng chứng: GUID script `f46858369396476faab0f70ce9590e12`
 scene, không asset.
 
 Một điểm cần nói rõ vì nó ngược với giả định ban đầu: **`ExplosiveProp.cs`
-không phải code của Ravenfield gốc.** Nó do dự án này viết, đặt trong thư mục
+không phải code của bản gốc.** Nó do dự án này viết, đặt trong thư mục
 `Assembly-CSharp` nhưng được thêm bởi commit `c2e5fcc` ("V0 debt closure phase
 2"). Nó tham chiếu type chỉ dự án có —
 `Ironfront.Net.Protocol.ExplosionKind.Environment` (`ExplosiveProp.cs:124`) —
@@ -97,7 +97,7 @@ Liệt kê toàn bộ GameObject particle trong ba prefab xe nhẹ cho thấy ch
 
 Đây không phải lỗi do dự án gây ra: ở commit import gốc `4ad689e`,
 `jeep.prefab` đã là `burnParticles: {fileID: 0}` / `burnTime: 0`, còn
-`tank.prefab` đã gán đủ. Khoảng trống nằm trong nội dung Ravenfield Beta 5
+`tank.prefab` đã gán đủ. Khoảng trống nằm trong nội dung gốc
 được import.
 
 Code xử lý null một cách im lặng: `Vehicle.cs:887-890` là

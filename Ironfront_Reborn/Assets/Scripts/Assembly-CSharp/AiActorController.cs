@@ -1350,7 +1350,7 @@ public class AiActorController : ActorController
 			// Headless multiplayer cannot use an animation/physics timeout as a damage source.
 			// It used to kill otherwise healthy bots with a null attacker after 60 seconds,
 			// producing the repeated "The world -> actor" feed and continuously recycling bots.
-			// Recover the stuck rig in-place; retain Ravenfield's original offline behaviour.
+			// Recover the stuck rig in-place; retain the original game's offline behaviour.
 			if (Ironfront.Net.Unity.NetContext.IsServer)
 			{
 				actor.RecoverFromStuckRagdoll();

@@ -2,7 +2,7 @@
 
 - **Created:** 2026-09-20. Sau [P26](phase-p26-visual-fidelity.md). Phase cuối của track port-back.
 - **Base:** `develop`. **Track:** [`../plan.md`](../plan.md) §4.2.
-- **Nguồn:** [`../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md)
+- **Nguồn:** [`../reports/2026-09-20-recovered-original-port-back-brainstorm.md`](../reports/2026-09-20-recovered-original-port-back-brainstorm.md)
 - **Kind:** điều tra + sửa. **Phase mở** — chưa biết trước có bao nhiêu lỗi.
 
 ---
@@ -18,7 +18,7 @@ là xoá tính năng.
 ## 2. Bối cảnh — phase này đứng một mình
 
 Dự án phát triển từ `JonJon565/Ravenfield_Beta_5_Decomp` (đã bị nâng lên Unity 2017.3), nay chạy
-Unity 6 với netcode multiplayer tự viết. Chủ dự án reverse-engineer bản build Ravenfield Beta 5
+Unity 6 với netcode multiplayer tự viết. Chủ dự án reverse-engineer bản build gốc
 gốc thành project Unity 5.4.0f3 gần như nguyên vẹn — 408 file `Assembly-CSharp`, **5 631/5 631
 method khớp ở mức IL metadata**. Dữ liệu đã trích vào `tools/recovered/` ở
 [P22](phase-p22-recovered-ground-truth.md); project khôi phục ở `tmp/recovered/` (gitignore, có

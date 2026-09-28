@@ -1,4 +1,4 @@
-# Ironfront Reborn
+# Ironfront: Reborn
 
 [![CI](https://github.com/Nghaiz/LTM/actions/workflows/ci.yml/badge.svg)](https://github.com/Nghaiz/LTM/actions/workflows/ci.yml)
 

@@ -127,7 +127,7 @@ drawing an ordinary per-object mesh            0
 Both counts land exactly on the `staticBatchedRenderers` the probe reported, from the other side:
 1 092 and 343.
 
-**The original Ravenfield build's static batching survived the rip.** AssetRipper preserved the
+**The original build's static batching survived the rip.** AssetRipper preserved the
 combined meshes and each renderer's `firstSubMesh`/`subMeshCount` index into them. Those objects
 have been batched at runtime the entire time, flags or no flags, and Editor Play Mode reuses the
 baked data rather than re-deriving it.

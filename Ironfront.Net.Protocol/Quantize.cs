@@ -41,7 +41,7 @@ namespace Ironfront.Net.Protocol
         //
         // The split is a rule rather than a fit to one map: 1024 m of negative headroom for a map
         // built around the origin, 3072 m of positive for a map built in positive space (which is
-        // how Ravenfield's are authored). Dustbowl's far corner sits 722 m inside the ceiling.
+        // how the original game's are authored). Dustbowl's far corner sits 722 m inside the ceiling.
         // A map that needs more negative space than this wants a per-map origin in the protocol,
         // not a wider window -- and it will say so out loud rather than silently, because
         // LevelBounds.SetupBounds checks the authored volume against these constants on load.

@@ -362,7 +362,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	/// method because it also writes the transform owned by the server.  Leaving the flag set
 	/// makes <see cref="Update"/> return before weapon fire, aiming, reload, animation and weapon
 	/// switching; it is the single reason a deployed network player can see a rifle but cannot
-	/// use any Ravenfield gameplay attached to it.
+	/// use any original gameplay attached to it.
 	/// </remarks>
 	public void EnterNetworkDeployedState()
 	{

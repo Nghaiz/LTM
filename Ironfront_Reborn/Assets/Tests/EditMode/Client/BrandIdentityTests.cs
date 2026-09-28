@@ -12,11 +12,11 @@ namespace Ironfront.Net.Unity.Client.Tests
     public sealed class BrandIdentityTests
     {
         [Test]
-        public void PlayerSettingsUseIronfrontRebornAndTeam10Ltm()
+        public void PlayerSettingsUseIronfrontRebornAndLtm10()
         {
-            Assert.AreEqual("Team 10 LTM", PlayerSettings.companyName);
-            Assert.AreEqual("Ironfront Reborn", PlayerSettings.productName);
-            Assert.AreEqual("com.team10ltm.ironfrontreborn",
+            Assert.AreEqual("LTM10", PlayerSettings.companyName);
+            Assert.AreEqual("IronfrontReborn", PlayerSettings.productName);
+            Assert.AreEqual("com.ltm10.ironfrontreborn",
                 PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Standalone));
         }
 
@@ -30,15 +30,17 @@ namespace Ironfront.Net.Unity.Client.Tests
             StringAssert.DoesNotContain("Ravenfield", copy);
             StringAssert.DoesNotContain("SteelRaven7", copy);
             StringAssert.DoesNotContain("Johan Hassel", copy);
+            StringAssert.DoesNotContain("GREENLIGHT", copy.ToUpperInvariant());
+            StringAssert.DoesNotContain("BETA 5", copy.ToUpperInvariant());
         }
 
         [Test]
-        public void SplashPresentsIronfrontRebornByTeam10Ltm()
+        public void SplashPresentsIronfrontRebornByLtm10()
         {
             Scene scene = EditorSceneManager.OpenScene("Assets/Scenes/Splash.unity", OpenSceneMode.Single);
             string copy = ReadPlayerFacingText(scene);
-            StringAssert.Contains("IRONFRONT REBORN", copy);
-            StringAssert.Contains("TEAM 10 LTM PRESENTS", copy);
+            StringAssert.Contains("IRONFRONT: REBORN", copy);
+            StringAssert.Contains("LTM10 PRESENTS", copy);
         }
 
         private static string ReadPlayerFacingText(Scene scene)

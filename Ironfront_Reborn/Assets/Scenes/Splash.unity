@@ -891,7 +891,7 @@ GameObject:
   - component: {fileID: 143}
   - component: {fileID: 159}
   m_Layer: 0
-  m_Name: IRONFRONT REBORN
+  m_Name: 'IRONFRONT: REBORN'
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2714,7 +2714,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 56}
-  m_Text: IRONFRONT REBORN
+  m_Text: 'IRONFRONT: REBORN'
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1
@@ -2736,7 +2736,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 61}
-  m_Text: TEAM 10 LTM PRESENTS
+  m_Text: LTM10 PRESENTS
   m_OffsetZ: 0
   m_CharacterSize: 1
   m_LineSpacing: 1

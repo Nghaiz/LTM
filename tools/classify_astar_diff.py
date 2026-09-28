@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Classify the A* divergence between our tree and the recovered Ravenfield build (P24 section 3.2).
+"""Classify the A* divergence between our tree and the recovered original build (P24 section 3.2).
 
 WHY THIS EXISTS
     Six A* Pathfinding Project files differ from the recovered original, and the phase plan reads

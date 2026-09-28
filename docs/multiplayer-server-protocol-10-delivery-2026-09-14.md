@@ -231,7 +231,7 @@ thể tự đóng:
 
 Phần client vẫn theo mục 3.2 của bàn giao gốc: đọc `SpareAmmoEncoded` và `WeaponStateFlags`,
 reconcile cả clip lẫn reserve, không tự trừ đạn lần thứ hai trong `Weapon.Shoot`/`ReloadDone` ở
-network role, và dùng prefab/material Ravenfield gốc cho grenade/rocket/explosion.
+network role, và dùng prefab/material bản gốc cho grenade/rocket/explosion.
 
 Checklist nghiệm thu hai người chơi ở mục 14 của bàn giao gốc vẫn là cách duy nhất để đóng phần
 còn lại. Không có test tự động nào ở đây thay được nó.

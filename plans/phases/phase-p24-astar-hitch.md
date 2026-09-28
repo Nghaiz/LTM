@@ -3,7 +3,7 @@
 - **Created:** 2026-09-20. Sau [P23](phase-p23-static-batching.md), vì chỉ khi static batching đã
   trả lại xong mới biết còn bao nhiêu giật lag là của A*.
 - **Base:** `develop`. **Track:** [`../plan.md`](../plan.md) §4.2.
-- **Nguồn:** [`../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md)
+- **Nguồn:** [`../reports/2026-09-20-recovered-original-port-back-brainstorm.md`](../reports/2026-09-20-recovered-original-port-back-brainstorm.md)
 - **Kind:** điều tra mở. **Có thể kết thúc bằng "không cần sửa gì"** — đó là kết quả hợp lệ.
 
 ---
@@ -18,7 +18,7 @@ không hỏng.
 
 ## 2. Vì sao nghi A*
 
-Dự án phát triển từ bản decompiled Ravenfield Beta 5 (Unity 2017.3), nay chạy Unity 6. Chủ dự án
+Dự án phát triển từ bản decompiled của bản gốc (Unity 2017.3), nay chạy Unity 6. Chủ dự án
 reverse-engineer bản build gốc thành project Unity 5.4.0f3 gần như nguyên vẹn, đặt ở
 `tmp/recovered/` (xem [P22](phase-p22-recovered-ground-truth.md) — dữ liệu đã trích vào
 `tools/recovered/`).
@@ -40,7 +40,7 @@ Nhưng sáu file trong danh sách lệch **không phải netcode**, và không t
 | `PathUtilities.cs` | 28 |
 
 Đây là A* Pathfinding Project — thư viện bên thứ ba. Một thư viện bên thứ ba lệch 395 dòng so với
-bản gốc là điều cần giải thích, và pathfinding là nguồn frame-hitch kinh điển của Ravenfield: bot
+bản gốc là điều cần giải thích, và pathfinding là nguồn frame-hitch kinh điển của bản gốc: bot
 tính lại đường theo đợt, trên main thread, khi trận đánh đông người.
 
 **Chưa ai soi.** Đây là phát hiện mới của khảo sát 2026-09-20, không nằm trong tài liệu nguồn.

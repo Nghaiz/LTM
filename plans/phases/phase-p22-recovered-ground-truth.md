@@ -2,14 +2,14 @@
 
 - **Created:** 2026-09-20. Đứng trước mọi phase khác của track port-back vì lý do dưới đây.
 - **Base:** `develop`. **Track:** [`../plan.md`](../plan.md) §4.2.
-- **Nguồn:** [`../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md)
+- **Nguồn:** [`../reports/2026-09-20-recovered-original-port-back-brainstorm.md`](../reports/2026-09-20-recovered-original-port-back-brainstorm.md)
 - **Kind:** tooling + data. Không đổi scope game, không đụng `Assets/Scripts`.
 
 ---
 
 ## 1. Vì sao phase này chạy trước
 
-Chủ dự án tự reverse-engineer bản build Ravenfield Beta 5 gốc thành một project Unity 5.4.0f3 gần
+Chủ dự án tự reverse-engineer bản build gốc thành một project Unity 5.4.0f3 gần
 như nguyên vẹn (408 file `Assembly-CSharp`, 5 631/5 631 method khớp IL, 0 asset reference gãy). Nó
 nằm ở `tmp/recovered/` — **191 MB, và `tmp` có trong `.gitignore` (dòng 268)**.
 

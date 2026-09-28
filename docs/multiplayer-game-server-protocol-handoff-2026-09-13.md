@@ -24,7 +24,7 @@ Quyết định đã chốt:
    giữa protocol 9 và 10.
 4. Chỉ deploy protocol 10 lên **staging** khi chưa có client 10. Cutover production của master, game
    server và client phải được phối hợp cùng một đợt.
-5. Ravenfield B5 là chuẩn hành vi gameplay. Server giữ authority đối với đạn, hit, damage, death,
+5. Bản gốc là chuẩn hành vi gameplay. Server giữ authority đối với đạn, hit, damage, death,
    projectile và vehicle; client chỉ dự đoán/hiển thị rồi reconcile theo server.
 
 Không được deploy riêng game server protocol 10 vào pool production đang phục vụ client protocol 9.
@@ -41,7 +41,7 @@ Log dùng để điều tra nằm tại:
 - `tmp/playtest/game-server-Island.log`
 
 Các kết luận dưới đây đã được đối chiếu với mã gameplay trong
-`Ironfront_Reborn/Assets/Scripts/Assembly-CSharp` và bộ Ravenfield B5 tại
+`Ironfront_Reborn/Assets/Scripts/Assembly-CSharp` và bộ cài bản gốc tại
 `E:\Ravenfield_B5_1_Windows\Ravenfield`.
 
 ### 2.1. Fire khi sprint và súng lục mất hai viên
@@ -65,7 +65,7 @@ Server đã có `ActorSpareAmmoPool` và reload server-authoritative. Tuy nhiên
 weapon = u8 weaponId + u8 ammoInClip
 ```
 
-Đạn dự trữ và trạng thái reload không đi qua wire. Client vì thế vừa có pool đạn cục bộ của Ravenfield,
+Đạn dự trữ và trạng thái reload không đi qua wire. Client vì thế vừa có pool đạn cục bộ của bản gốc,
 vừa có clip authoritative từ snapshot nhưng không có authoritative reserve. Đây là hai nguồn dữ liệu có
 thể lệch nhau, đặc biệt với vũ khí clip 1 như bazooka và throwable.
 
@@ -120,7 +120,7 @@ damage/burning thì server phải sửa nguồn damage/lifecycle trước khi b�
 - Đọc `SpareAmmoEncoded` và `WeaponStateFlags` từ snapshot protocol 10.
 - Reconcile cả clip/reserve, HUD và reload animation.
 - Không tự trừ đạn lần thứ hai trong `Weapon.Shoot`, `ReloadDone` hoặc animation event ở network role.
-- Dùng prefab/material Ravenfield gốc cho grenade, rocket và explosion; loại bỏ material fallback gây ô
+- Dùng prefab/material bản gốc cho grenade, rocket và explosion; loại bỏ material fallback gây ô
   vuông trắng.
 - Hiển thị grenade body/trail theo authoritative spawn parameters.
 - Dọn remote model khi chết và reset presentation khi snapshot respawn đến.
@@ -278,7 +278,7 @@ Khoảng 0,2 giây phải là shared gameplay constant có tên; không lặp li
 - Automatic: thử bắn mỗi tick effectiveFire=true; `ServerFireResolver` tiếp tục quyết định cooldown.
 - Release Fire hoặc vào sprint làm effectiveFire=false và re-arm semi-auto.
 - Giữ Fire trong lúc sprint rồi thả Sprint: sau cửa sổ 0,2 giây, transition sang effectiveFire=true được
-  coi là một trigger edge, giống controller Ravenfield gốc.
+  coi là một trigger edge, giống controller bản gốc.
 - Aim/RMB không phải điều kiện bắt buộc để bắn; hip-fire vẫn hợp lệ khi không sprint.
 
 Chỉ khi `CombatTickResult.Fired=true` mới được:

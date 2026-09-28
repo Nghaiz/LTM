@@ -244,7 +244,7 @@ Nói thẳng để không ai đọc bản này thành một tuyên bố "đã s�
 | Release | `gs-20260917-veh01` | `gs-20260917-s7` |
 | Image | `sha256:739ae93ab70fcc7635974db61d8147fdfbdb3662afe4b91fde8e18a38a0b74b4` | `sha256:1210e6cb81a5f76099cac184315f689edc3521abaaeb43590e7ad1ecd1467e77` |
 
-- Cả hai stamp đều sạch, không `-dirty`. Tarball bỏ `Ravenfield_BurstDebugInformation_DoNotShip`.
+- Cả hai stamp đều sạch, không `-dirty`. Tarball bỏ `*_BurstDebugInformation_DoNotShip`.
 - Image được side-load vào VM rồi `set image` cho `game-server-dustbowl` và `game-server-island`. Image trước ngày này là tag `relink-fe52ffa`. Rollback: đặt lại một trong hai digest trên.
 - ConfigMap `gameserver-env-p10` đã bật `IRONFRONT_LOG_LOADOUT=1` và `IRONFRONT_LOG_SHOTS=1`.
 - Master không redeploy. Cả hai pod đăng ký với `kien-master-2026.fly.dev:443`.

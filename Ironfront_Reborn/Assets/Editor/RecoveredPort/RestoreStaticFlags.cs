@@ -1,6 +1,6 @@
 // Put back the static flags the 2017 engine upgrade dropped.
 //
-// The recovered Ravenfield build (Unity 5.4.0f3) carries 1,096 static-flagged objects on
+// The recovered original build (Unity 5.4.0f3) carries 1,096 static-flagged objects on
 // Dustbowl and 345 on Island. Ironfront_Reborn carries 0 and 1. Every one of those meshes is
 // therefore its own draw call. tools/extract_recovered.py lifted the originals into
 // tools/recovered/static-flags.<scene>.json; this script matches them onto our scene and sets
