@@ -37,9 +37,15 @@ namespace Ironfront.Net.Replication.Tests
 
         /// <summary>
         /// V7-D8. A thrown bag settles in about two seconds, so the whole cost of a deployment
-        /// is roughly twenty messages and then <b>nothing</b> — a bag on the ground is free. If
-        /// this fails, every deployable in the match is paying 10 Hz forever.
+        /// is roughly twenty messages, then <b>one</b> -- the pose it came to rest in -- and then
+        /// nothing: a bag on the ground is free. If this fails, every deployable in the match is
+        /// paying 10 Hz forever, or no client ever learns where it stopped.
         /// </summary>
+        /// <remarks>
+        /// The one was added for playtest bug 4 (2026-09-28): the last moving announcement is
+        /// mid-bounce, and a client left to guess where the pack stopped drew it a floor below
+        /// the one that heals.
+        /// </remarks>
         [Fact]
         public void ADeployableStopsReAnnouncingOnceAtRest()
         {
@@ -64,9 +70,18 @@ namespace Ironfront.Net.Replication.Tests
             // Two seconds of movement at 10 Hz is about twenty messages.
             Assert.InRange(whileMoving, 15, 25);
 
-            // Now it settles. Velocity below the rest threshold, and the traffic must stop dead.
+            // Now it settles. Velocity below the rest threshold: the resting pose goes out once,
+            // on the first tick at rest, and then the traffic stops dead.
+            authority.UpdatePose(id, new Vec3(0f, 1f, 12f), Vec3.Zero);
+            DeployableStepResult settled = authority.Step(
+                61, ReadOnlySpan<HitscanTarget>.Empty, reAnnounce, expired);
+
+            Assert.Equal(1, settled.ReAnnounceCount);
+            Assert.Equal(id, reAnnounce[0]);
+            Assert.Equal(12f, authority.PositionOf(id).Z, 3);
+
             int afterRest = 0;
-            for (uint t = 61; t <= 200; t++)
+            for (uint t = 62; t <= 200; t++)
             {
                 authority.UpdatePose(id, new Vec3(0f, 1f, 12f), Vec3.Zero);
                 afterRest += authority

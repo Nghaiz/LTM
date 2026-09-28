@@ -121,6 +121,12 @@ namespace Ironfront.Net.Replication.Projectiles
         private readonly uint[] _lastAnnounceTick;
         private readonly byte[] _lastAnnouncedLifetimeDs;
 
+        /// <summary>
+        /// The pose this deployable came to rest in has been announced. Cleared whenever it moves,
+        /// so a pack an explosion knocks along is announced again where it stops.
+        /// </summary>
+        private readonly bool[] _restAnnounced;
+
         private readonly int[] _slotOfId;
         private int _liveCount;
 
@@ -151,6 +157,7 @@ namespace Ironfront.Net.Replication.Projectiles
             _nextResupplyTick        = new uint[_capacity];
             _lastAnnounceTick        = new uint[_capacity];
             _lastAnnouncedLifetimeDs = new byte[_capacity];
+            _restAnnounced           = new bool[_capacity];
 
             _slotOfId = new int[ProjectileIdPool.FirstId + _capacity];
             for (int i = 0; i < _slotOfId.Length; i++) _slotOfId[i] = -1;
@@ -236,6 +243,8 @@ namespace Ironfront.Net.Replication.Projectiles
             _lastAnnounceTick[slot]        = currentTick;
             _lastAnnouncedLifetimeDs[slot] =
                 ProjectileSpawnMessage.PackRemainingLifetime(lifetimeSeconds);
+            // A pack that spawns motionless was announced at rest by its own spawn message.
+            _restAnnounced[slot]           = velocity.SqrMagnitude < RestSpeedSquared;
 
             _slotOfId[id] = slot;
             _liveCount++;
@@ -333,11 +342,15 @@ namespace Ironfront.Net.Replication.Projectiles
                     }
                 }
 
-                if (ShouldReAnnounce(slot, currentTick) && announced < reAnnounce.Length)
+                bool moving = _velocity[slot].SqrMagnitude >= RestSpeedSquared;
+                if (moving) _restAnnounced[slot] = false;
+
+                if (ShouldReAnnounce(slot, currentTick, moving) && announced < reAnnounce.Length)
                 {
                     _lastAnnounceTick[slot] = currentTick;
                     _lastAnnouncedLifetimeDs[slot] = ProjectileSpawnMessage.PackRemainingLifetime(
                         (_expiryTick[slot] - currentTick) * _tickDurationSeconds);
+                    if (!moving) _restAnnounced[slot] = true;
                     reAnnounce[announced++] = id;
                 }
             }
@@ -359,18 +372,22 @@ namespace Ironfront.Net.Replication.Projectiles
         /// Whether this deployable owes the wire an update.
         /// </summary>
         /// <remarks>
-        /// Two independent triggers, because they answer different questions. <b>Moving</b> is
-        /// about the pose: the Rigidbody path cannot be predicted, so it is re-sent at 10 Hz
-        /// until it settles. <b>A lifetime that has moved by more than one quantization step</b>
-        /// is about the medipack: it can shorten its own life while sitting perfectly still, and
-        /// a rest-only policy would never tell anyone.
+        /// <para>
+        /// Three triggers, because they answer different questions. <b>Moving</b> is about the
+        /// pose: the Rigidbody path cannot be predicted, so it is re-sent at 10 Hz until it
+        /// settles. <b>Coming to rest</b> is the pose that matters most and the one that was never
+        /// sent: the last moving announcement is mid-bounce, so a client was left to guess where
+        /// the pack stopped, and its guess could be a floor lower than the pack that heals
+        /// (playtest 2026-09-28, bug 4). <b>A lifetime that has moved by more than one
+        /// quantization step</b> is about the medipack: it can shorten its own life while sitting
+        /// perfectly still, and a rest-only policy would never tell anyone.
+        /// </para>
         /// </remarks>
-        private bool ShouldReAnnounce(int slot, uint currentTick)
+        private bool ShouldReAnnounce(int slot, uint currentTick, bool moving)
         {
             if (LifetimeSurprisedTheClient(slot, currentTick)) return true;
 
-            bool moving = _velocity[slot].SqrMagnitude >= RestSpeedSquared;
-            if (!moving) return false;
+            if (!moving) return !_restAnnounced[slot];
 
             return currentTick - _lastAnnounceTick[slot] >= MovingReAnnounceTicks;
         }
