@@ -25,6 +25,13 @@ namespace Ironfront.Net.Replication.Combat
         Crouched = 3,
         CrouchMoving = 4,
         Seated = 5,
+
+        /// <summary>
+        /// Astride a seat whose <c>Seat.animation</c> is <c>Quad</c> -- the quad bike's driver.
+        /// The animator's "Seated Quad" state, selected by <c>seated type</c> 1: the head sits
+        /// 0.28 m further forward than in the chair, over the handlebars.
+        /// </summary>
+        SeatedQuad = 6,
     }
 
     /// <summary>
@@ -180,6 +187,12 @@ namespace Ironfront.Net.Replication.Combat
         public const float HumanoidSeatedHeadCenterHeight = 0.95f;
 
         /// <summary>
+        /// The animator's <c>seated type</c> for a seat authored <c>Seat.SitAnimation.Quad</c>:
+        /// astride, as the quad bike's driver sits. 0 is the chair.
+        /// </summary>
+        public const int QuadSeatAnimation = 1;
+
+        /// <summary>
         /// Moving: how far the head leads the direction of travel. Measured 0.10 m at a run
         /// forward or back, 0.06 m strafing.
         /// </summary>
@@ -242,6 +255,13 @@ namespace Ironfront.Net.Replication.Combat
             // chin down past the seat to -0.62, where the dangling legs end.
             new Shape(0.01f, HumanoidSeatedHeadCenterHeight, 0.155f, 0.17f, 0.21f, 0.165f,
                 0f, -0.62f, 0.135f, 0.44f, 0.415f),
+
+            // Astride the quad bike: head 0.68..1.15 above the seat and 0.43 m forward of it, over
+            // the handlebars; the body box runs from the chin down past the seat to -0.69 and leans
+            // with it, -0.38..0.77 along the bike. Measured 2026-09-28 the same way as the chair
+            // (which the same probe reproduced to the millimetre): seated type 1, 60 frames.
+            new Shape(0.014f, 0.914f, 0.434f, 0.17f, 0.24f, 0.215f,
+                0f, -0.69f, 0.195f, 0.44f, 0.575f),
         };
 
         /// <summary>
@@ -256,8 +276,17 @@ namespace Ironfront.Net.Replication.Combat
         /// server cannot call a body still that every client draws walking.
         /// </remarks>
         public static HumanoidPose PoseFor(bool seated, bool crouching, float horizontalSpeed, bool sprinting)
+            => PoseFor(seated, astride: false, crouching, horizontalSpeed, sprinting);
+
+        /// <summary>
+        /// As <see cref="PoseFor(bool, bool, float, bool)"/>, for a seat that may be the quad
+        /// bike's: <paramref name="astride"/> is its <c>seated type</c> being
+        /// <see cref="QuadSeatAnimation"/>, which the animator draws before anything else.
+        /// </summary>
+        public static HumanoidPose PoseFor(
+            bool seated, bool astride, bool crouching, float horizontalSpeed, bool sprinting)
         {
-            if (seated) return HumanoidPose.Seated;
+            if (seated) return astride ? HumanoidPose.SeatedQuad : HumanoidPose.Seated;
 
             bool moving = horizontalSpeed > RemoteLocomotionSolver.MovingSpeed;
             if (crouching) return moving ? HumanoidPose.CrouchMoving : HumanoidPose.Crouched;

@@ -166,6 +166,61 @@ namespace Ironfront.Net.Unity.Server.Tests
             }
         }
 
+        /// <summary>
+        /// Astride the quad bike -- <c>seated type</c> 1 -- the head box holds the drawn head.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 audit, which drew and boxed the quad's driver in the chair
+        /// pose. Astride, the head is 0.28 m further forward, over the handlebars.
+        /// </remarks>
+        [Test]
+        public void TheQuadRidersHeadBoxHoldsTheDrawnHead()
+        {
+            Aabb server = HitboxSet.Humanoid(Vec3.Zero, 0f, HumanoidPose.SeatedQuad, 0f, 0f).Head;
+            Aabb chair = HitboxSet.Humanoid(Vec3.Zero, 0f, HumanoidPose.Seated, 0f, 0f).Head;
+
+            GameObject character = Instantiate(CharacterPath);
+            try
+            {
+                // Set before the first step, as Actor.EnterSeat sets it before the seat: the
+                // state machine picks the seated pose on the way in.
+                Animator animator = character.GetComponentInChildren<Animator>();
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Rebind();
+                animator.SetBool("seated", true);
+                animator.SetInteger("seated type", HitboxSet.QuadSeatAnimation);
+                for (int i = 0; i < 40; i++) animator.Update(0.05f);
+                Collider head = HitboxCollider(character, "Bone_004");
+
+                const int frames = 60;
+                const float allowance = 0.04f;
+                int inside = 0, insideChair = 0;
+                for (int i = 0; i < frames; i++)
+                {
+                    animator.Update(1f / 30f);
+                    Physics.SyncTransforms();
+                    Bounds drawn = head.bounds;
+                    var centre = new Vec3(drawn.center.x, drawn.center.y, drawn.center.z);
+                    if (Contains(in server, in centre)
+                        && drawn.min.y + allowance >= server.Min.Y
+                        && drawn.max.y - allowance <= server.Max.Y) inside++;
+                    if (Contains(in chair, in centre)) insideChair++;
+                }
+
+                Assert.GreaterOrEqual(inside, frames * 95 / 100,
+                    $"the quad rider's drawn head left the SeatedQuad head box in {frames - inside} "
+                    + $"of {frames} frames (box {Describe(in server)})");
+
+                // And the pose matters: the chair's box does not hold it.
+                Assert.Less(insideChair, frames / 2,
+                    "precondition: the chair's head box already holds the quad rider's head");
+            }
+            finally
+            {
+                Object.DestroyImmediate(character);
+            }
+        }
+
         // ------------------------------------------------------------------ a player's own body
 
         /// <summary>

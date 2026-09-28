@@ -70,6 +70,17 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         Vector3 GetSeatPosition(int seatIndex);
 
+        /// <summary>
+        /// The pose an occupant of seat <paramref name="seatIndex"/> is drawn in, as the actor
+        /// animator's <c>seated type</c>: 0 the chair, 1 astride (<c>Seat.SitAnimation.Quad</c>,
+        /// the quad bike's driver). 0 for a seat this vehicle does not have.
+        /// </summary>
+        /// <remarks>
+        /// <c>Actor.EnterSeat</c> sets this parameter from the seat offline, and nothing did for a
+        /// remote body, so the quad bike's driver was drawn sitting on a chair.
+        /// </remarks>
+        int GetSeatAnimation(int seatIndex) => 0;
+
         /// <summary>The body the interpolator and the corrector write, or null without one.</summary>
         Rigidbody Rigidbody { get; }
 

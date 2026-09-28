@@ -26,6 +26,7 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool IsDead { get; set; }
             public bool IsSubmerged { get; set; }
             public bool IsCrouching { get; set; }
+            public int SeatAnimation { get; set; }
 
             public string DescribeSubmersion() => "fake";
 
@@ -421,6 +422,46 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             Assert.AreEqual(expected.Min.Y, head.Min.Y, 1e-4f, $"the head box is not the {pose} one");
             Assert.AreEqual(expected.Max.Y, head.Max.Y, 1e-4f, $"the head box is not the {pose} one");
+        }
+
+        /// <summary>
+        /// A player astride the quad bike has a body posed astride, with its head where every
+        /// client draws the rider's.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 audit: <c>PresentAsPlayer</c> wrote <c>seated type</c> 0
+        /// for every seat, so the engine colliders a projectile meets sat in the chair pose on a
+        /// bike whose rider leans 0.28 m further forward.
+        /// </remarks>
+        [TestCase(0, 0.95f, 0.155f)]
+        [TestCase(1, 0.914f, 0.434f)]
+        public void ASeatedPlayersBodyTakesItsSeatsPose(int seatAnimation, float headHeight, float headForward)
+        {
+            GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Prefab/Ai Character Optimizations.prefab");
+            _gameObject = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(prefab);
+            _gameObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+            var actor = _gameObject.GetComponent<NetServerActor>();
+            actor.BindGameplaySource(new FakeGameplayActor { SeatAnimation = seatAnimation });
+            actor.AttachMovementAgent();
+
+            actor.PresentAsPlayer(seated: true, crouching: false, Ironfront.Net.Replication.Movement.Vec3.Zero);
+
+            Animator animator = _gameObject.GetComponentInChildren<Animator>();
+            Assert.AreEqual(seatAnimation, animator.GetInteger("seated type"),
+                "the body is not posed in its seat's own seated type");
+
+            for (int i = 0; i < 40; i++) animator.Update(0.05f);
+            Physics.SyncTransforms();
+
+            Collider head = null;
+            foreach (Collider collider in _gameObject.GetComponentsInChildren<Collider>(true))
+                if (collider.gameObject.layer == 8 && collider.name == "Bone_004") head = collider;
+            Assert.IsNotNull(head, "no Bone_004 on the Hitbox layer");
+
+            Assert.AreEqual(headHeight, head.bounds.center.y, 0.05f, "head height over the seat");
+            Assert.AreEqual(headForward, head.bounds.center.z, 0.05f, "head forward of the seat");
         }
 
         /// <summary>

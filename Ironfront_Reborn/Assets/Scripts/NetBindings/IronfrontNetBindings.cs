@@ -604,6 +604,10 @@ namespace Ironfront.Net.Unity.Bindings
         /// <inheritdoc/>
         public bool IsCrouching => _actor != null && _actor.IsCrouchedStance;
 
+        /// <inheritdoc/>
+        public int SeatAnimation
+            => _actor != null && _actor.IsSeated() && _actor.seat != null ? (int)_actor.seat.animation : 0;
+
         private Vector3 CrownPosition()
         {
             Transform head = _actor.ragdoll.IsRagdoll()

@@ -241,7 +241,7 @@ namespace Ironfront.Net.Unity.Server
         /// <b>And the pose.</b> <c>Actor.Update</c> is parked for a claimed body, so nothing set
         /// its animator: it stood in its idle while its player crouched or sat. The parameters
         /// here are the ones <c>RemoteActorView.Apply</c> drives the proxy with, from the same
-        /// facts, and the seat type is the chair every client draws.
+        /// facts, and the seat type is the seat's own, as every client draws it.
         /// </para>
         /// <para>
         /// <b>Culling was never what froze it.</b> The prefab authors CullUpdateTransforms, but
@@ -273,8 +273,10 @@ namespace Ironfront.Net.Unity.Server
                 transform.rotation = Quaternion.Euler(0f, YawDegrees, 0f);
 
             float horizontal = MathF.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
+            int seatAnimation = seated ? SeatAnimationOnServer : 0;
             HumanoidPose pose = HitboxSet.PoseFor(
-                seated, crouching, horizontal, IsSprintingVelocity(in velocity));
+                seated, seatAnimation == HitboxSet.QuadSeatAnimation, crouching, horizontal,
+                IsSprintingVelocity(in velocity));
             bool moving = pose == HumanoidPose.Moving || pose == HumanoidPose.Sprinting
                 || pose == HumanoidPose.CrouchMoving;
 
@@ -286,7 +288,7 @@ namespace Ironfront.Net.Unity.Server
             float localZ = velocity.X * sin + velocity.Z * cos;
 
             _modelAnimator.SetBool(SeatedParameter, seated);
-            _modelAnimator.SetInteger(SeatedTypeParameter, 0);
+            _modelAnimator.SetInteger(SeatedTypeParameter, seatAnimation);
             _modelAnimator.SetBool(CrouchedParameter, pose == HumanoidPose.Crouched || pose == HumanoidPose.CrouchMoving);
             _modelAnimator.SetBool(SprintingParameter, pose == HumanoidPose.Sprinting);
             _modelAnimator.SetBool(MovingParameter, moving);
@@ -981,8 +983,12 @@ namespace Ironfront.Net.Unity.Server
 
             Vec3 velocity = ReplicatedVelocity();
             float horizontal = MathF.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
+
+            // Astride the quad bike the head is 0.28 m further forward than in the chair; every
+            // client draws the seat's own pose (RemoteActorView's seated type), so the boxes do.
+            bool astride = seated && SeatAnimationOnServer == HitboxSet.QuadSeatAnimation;
             HumanoidPose pose = HitboxSet.PoseFor(
-                seated, crouching, horizontal, IsSprintingVelocity(in velocity));
+                seated, astride, crouching, horizontal, IsSprintingVelocity(in velocity));
 
             return HitboxSet.Humanoid(in feet, yaw, pose, velocity.X, velocity.Z);
         }
@@ -995,6 +1001,13 @@ namespace Ironfront.Net.Unity.Server
             => Movement != null
                 ? Movement.State.IsCrouching
                 : Source != null && Source.IsCrouching;
+
+        /// <summary>
+        /// The <c>seated type</c> of the seat the gameplay actor sits in, 0 without one. From the
+        /// actor's own seat (<c>Actor.seat.animation</c>), which the seat bridge keeps equal to the
+        /// arbiter's record.
+        /// </summary>
+        private int SeatAnimationOnServer => Source != null ? Source.SeatAnimation : 0;
 
         /// <summary>Whether the server's own occupancy record has this actor in a seat.</summary>
         /// <remarks>The same question <see cref="BuildStateFlags"/> answers for the IsSeated bit.</remarks>
