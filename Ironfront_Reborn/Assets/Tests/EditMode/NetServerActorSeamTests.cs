@@ -25,6 +25,21 @@ namespace Ironfront.Net.Unity.Server.Tests
             public float Health { get; set; } = 100f;
             public bool IsDead { get; set; }
             public bool IsSubmerged { get; set; }
+            public bool IsCrouching { get; set; }
+            public int SeatAnimation { get; set; }
+            public bool IsRagdolledAlive { get; set; }
+            public bool IsInWater { get; set; }
+            internal Vector3 RagdollPelvis;
+            internal Bounds RagdollHead;
+            internal Bounds RagdollBody;
+
+            public bool TryGetRagdollPose(out Vector3 pelvis, out Bounds head, out Bounds body)
+            {
+                pelvis = RagdollPelvis;
+                head = RagdollHead;
+                body = RagdollBody;
+                return IsRagdolledAlive;
+            }
 
             public string DescribeSubmersion() => "fake";
 
@@ -390,6 +405,138 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(expectedZ, velocity.Z, 0.001f);
             Assert.IsTrue((entry.StateFlags & Ironfront.Net.Protocol.ActorStateFlags.IsSprinting) != 0,
                 "a moving AI actor must not arrive as an idle default-pose proxy");
+        }
+
+        /// <summary>
+        /// A crouched bot is sent crouched, and its hitboxes are the crouched ones every client
+        /// now draws it in.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 hit-registration audit: the IsCrouching bit came only from
+        /// a player's movement agent, so a bot crouching behind cover was drawn standing and boxed
+        /// standing -- consistent with each other, and with neither matching the bot.
+        /// </remarks>
+        [TestCase(true)]
+        [TestCase(false)]
+        public void ABotsCrouchReachesTheSnapshotAndItsHitboxes(bool crouching)
+        {
+            var gameplay = new FakeGameplayActor { IsCrouching = crouching };
+            NetServerActor actor = CreateActor(gameplay);
+
+            bool sent = (actor.BuildStateFlags() & Ironfront.Net.Protocol.ActorStateFlags.IsCrouching) != 0;
+            Assert.AreEqual(crouching, sent, "the IsCrouching bit does not follow the bot's own stance");
+
+            var pose = crouching
+                ? Ironfront.Net.Replication.Combat.HumanoidPose.Crouched
+                : Ironfront.Net.Replication.Combat.HumanoidPose.Standing;
+            var expected = Ironfront.Net.Replication.Combat.HitboxSet.Humanoid(
+                Ironfront.Net.Replication.Movement.Vec3.Zero, 0f, pose, 0f, 0f).Head;
+            var head = actor.CaptureHitboxes().Head;
+
+            Assert.AreEqual(expected.Min.Y, head.Min.Y, 1e-4f, $"the head box is not the {pose} one");
+            Assert.AreEqual(expected.Max.Y, head.Max.Y, 1e-4f, $"the head box is not the {pose} one");
+        }
+
+        /// <summary>
+        /// A player astride the quad bike has a body posed astride, with its head where every
+        /// client draws the rider's.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 audit: <c>PresentAsPlayer</c> wrote <c>seated type</c> 0
+        /// for every seat, so the engine colliders a projectile meets sat in the chair pose on a
+        /// bike whose rider leans 0.28 m further forward.
+        /// </remarks>
+        [TestCase(0, 0.95f, 0.155f)]
+        [TestCase(1, 0.914f, 0.434f)]
+        public void ASeatedPlayersBodyTakesItsSeatsPose(int seatAnimation, float headHeight, float headForward)
+        {
+            GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Prefab/Ai Character Optimizations.prefab");
+            _gameObject = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(prefab);
+            _gameObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+            var actor = _gameObject.GetComponent<NetServerActor>();
+            actor.BindGameplaySource(new FakeGameplayActor { SeatAnimation = seatAnimation });
+            actor.AttachMovementAgent();
+
+            actor.PresentAsPlayer(seated: true, crouching: false, Ironfront.Net.Replication.Movement.Vec3.Zero);
+
+            Animator animator = _gameObject.GetComponentInChildren<Animator>();
+            Assert.AreEqual(seatAnimation, animator.GetInteger("seated type"),
+                "the body is not posed in its seat's own seated type");
+
+            for (int i = 0; i < 40; i++) animator.Update(0.05f);
+            Physics.SyncTransforms();
+
+            Collider head = null;
+            foreach (Collider collider in _gameObject.GetComponentsInChildren<Collider>(true))
+                if (collider.gameObject.layer == 8 && collider.name == "Bone_004") head = collider;
+            Assert.IsNotNull(head, "no Bone_004 on the Hitbox layer");
+
+            Assert.AreEqual(headHeight, head.bounds.center.y, 0.05f, "head height over the seat");
+            Assert.AreEqual(headForward, head.bounds.center.z, 0.05f, "head forward of the seat");
+        }
+
+        /// <summary>
+        /// A bot knocked over or swimming is sent alive AND ragdolled, at its ragdoll's pelvis, and
+        /// boxed where the ragdoll lies.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 audit: only death set IsRagdoll, and the snapshot and the
+        /// hitboxes used the actor's transform, which stays where the bot fell while the ragdoll is
+        /// thrown or floats away. Every client drew it standing there, and shots hit that drawing.
+        /// </remarks>
+        [Test]
+        public void ALiveRagdollIsSentAliveLyingAtItsPelvisAndBoxedWhereItLies()
+        {
+            var gameplay = new FakeGameplayActor
+            {
+                IsRagdolledAlive = true,
+                RagdollPelvis = new Vector3(5f, 0.3f, -2f),
+                RagdollHead = new Bounds(new Vector3(5.8f, 0.2f, -2f), new Vector3(0.3f, 0.3f, 0.3f)),
+                RagdollBody = new Bounds(new Vector3(5f, 0.2f, -2f), new Vector3(1.4f, 0.4f, 0.6f)),
+            };
+            NetServerActor actor = CreateActor(gameplay);
+            _gameObject.transform.position = new Vector3(1f, 0f, 1f); // where it fell
+
+            var flags = actor.BuildStateFlags();
+            Assert.IsTrue((flags & Ironfront.Net.Protocol.ActorStateFlags.IsAlive) != 0, "a knocked-over bot is not dead");
+            Assert.IsTrue((flags & Ironfront.Net.Protocol.ActorStateFlags.IsRagdoll) != 0,
+                "a knocked-over bot is not sent lying down, so every client draws it standing");
+
+            var entry = actor.Capture();
+            var position = Ironfront.Net.Replication.SnapshotBuilder.UnpackPosition(in entry);
+            Assert.AreEqual(5f, position.X, 0.07f, "the snapshot sends where the bot fell, not where its body is");
+            Assert.AreEqual(0.3f, position.Y, 0.07f);
+            Assert.AreEqual(-2f, position.Z, 0.07f);
+
+            var boxes = actor.CaptureHitboxes();
+            Assert.AreEqual(5.8f, boxes.Head.Center.X, 1e-3f, "the head box is not the ragdoll's head");
+            Assert.AreEqual(0.15f, boxes.Head.Extents.X, 1e-3f);
+            Assert.AreEqual(5f, boxes.Torso.Center.X, 1e-3f, "the body box is not the ragdoll's body");
+            Assert.AreEqual(0.7f, boxes.Torso.Extents.X, 1e-3f);
+        }
+
+        [Test]
+        public void AStandingBotIsNeitherLyingNorMoved()
+        {
+            var gameplay = new FakeGameplayActor { RagdollPelvis = new Vector3(5f, 0.3f, -2f) };
+            NetServerActor actor = CreateActor(gameplay);
+            _gameObject.transform.position = new Vector3(1f, 0f, 1f);
+
+            Assert.IsTrue((actor.BuildStateFlags() & Ironfront.Net.Protocol.ActorStateFlags.IsRagdoll) == 0);
+            var entry = actor.Capture();
+            Assert.AreEqual(1f, Ironfront.Net.Replication.SnapshotBuilder.UnpackPosition(in entry).X, 0.07f);
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void TheWaterBitIsTheGamesOwn(bool inWater)
+        {
+            NetServerActor actor = CreateActor(new FakeGameplayActor { IsInWater = inWater });
+
+            bool sent = (actor.BuildStateFlags() & Ironfront.Net.Protocol.ActorStateFlags.IsInWater) != 0;
+            Assert.AreEqual(inWater, sent, "IsInWater does not follow Actor.inWater");
         }
 
         /// <summary>

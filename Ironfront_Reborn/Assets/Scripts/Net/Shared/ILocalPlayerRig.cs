@@ -452,5 +452,18 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// </remarks>
         void LeaveSeat() { }
+
+        /// <summary>
+        /// Takes this rig's body out of its seat because it died there: the same exit as
+        /// <see cref="LeaveSeat"/>, without drawing a weapon for a corpse.
+        /// </summary>
+        /// <remarks>
+        /// Playtest 2026-09-28, bug 1: <c>Actor.LeaveSeat</c> draws the first weapon for a body
+        /// that comes out empty-handed, which is right for a pilot climbing out and was the whole
+        /// visible death of a pilot killed with his helicopter -- the respawn draw animation,
+        /// played on a corpse. Defaults to <see cref="LeaveSeat"/> so a rig with nothing to draw
+        /// needs nothing new.
+        /// </remarks>
+        void LeaveSeatAsCorpse() => LeaveSeat();
     }
 }

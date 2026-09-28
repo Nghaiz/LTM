@@ -454,6 +454,52 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(0, points.PositionsRequested);
         }
 
+        // ---- ChooseRequestedOrRandomSpawnIndex - a deploy with no flag chosen ----------------
+
+        /// <summary>
+        /// Playtest 2026-09-28, bug 2: a deploy with no flag chosen must land on ANY point the
+        /// team owns, not on the one nearest a living teammate.
+        /// </summary>
+        /// <remarks>
+        /// The near-teammate rule named one point every time anybody on the team was alive, and
+        /// teammates crowd the front where the player has just died, so the deploy kept landing
+        /// beside the body. Before the fix this draw ignored three of the four owned points
+        /// whenever a teammate stood near the fourth; there is no anchor parameter any more, so
+        /// the only way to reintroduce that bias is to break reach, which this counts.
+        /// </remarks>
+        [Test]
+        public void WithNoFlagChosenEveryPointTheTeamOwnsCanBeTheSpawn()
+        {
+            // Team 0 owns 0, 2, 3 and 5; team 1 owns 1; 4 is neutral.
+            var points = new CapturePointOwners(0, 1, 0, 0, -1, 0);
+            var seen = new int[6];
+
+            for (int attempt = 0; attempt < 800; attempt++)
+            {
+                int chosen = ServerCombatBridge.ChooseRequestedOrRandomSpawnIndex(points, 0, null);
+                Assert.GreaterOrEqual(chosen, 0, "a team that owns points must always get one");
+                seen[chosen]++;
+            }
+
+            Assert.AreEqual(0, seen[1], "never the other team's flag");
+            Assert.AreEqual(0, seen[4], "never neutral ground while the team owns a flag");
+
+            // Uniform over four points is 200 each; 100 is a loose floor that still fails any
+            // draw that settles on one favourite.
+            foreach (int owned in new[] { 0, 2, 3, 5 })
+                Assert.Greater(seen[owned], 100, $"owned point {owned} was reached only {seen[owned]} of 800 times");
+        }
+
+        [Test]
+        public void WithNoFlagChosenATeamThatOwnsNothingGetsNothingFromThisDraw()
+        {
+            // MoveToSpawnPoint then falls back onto neutral ground near a teammate -- that
+            // fallback is ChooseSpawnIndexNearTeammates' job, pinned by its own tests below.
+            var points = new CapturePointOwners(1, 1, -1);
+
+            Assert.AreEqual(-1, ServerCombatBridge.ChooseRequestedOrRandomSpawnIndex(points, 0, null));
+        }
+
         // ---- ChooseSpawnIndexNearTeammates - the BOT-05 fix -------------------------------
 
         [Test]

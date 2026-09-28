@@ -234,10 +234,12 @@ namespace Ironfront.Net.Unity.Bindings
 
             // Out of the seat first, as Actor.Die does before it ragdolls. The server never
             // sends a Left for a death in a seat, so without this the corpse stayed welded to the
-            // vehicle and the respawned player came back still sitting in it.
+            // vehicle and the respawned player came back still sitting in it. Drawing nothing:
+            // Actor.Die drops the weapons before it leaves, and a corpse drawing its rifle was
+            // bug 1 of the 2026-09-28 playtest.
             if (local.actor.IsSeated())
             {
-                local.actor.LeaveSeat();
+                local.actor.LeaveSeat(drawWeapon: false);
             }
 
             local.actor.KnockOver(force, bone);
@@ -254,6 +256,11 @@ namespace Ironfront.Net.Unity.Bindings
             // gameplay update after the ragdoll impulse has been applied.  The next authoritative
             // deploy reverses it in EnterNetworkDeployedState.
             local.actor.MarkNetworkDead();
+
+            // The death camera Actor.Die would have started, kept on the body. A pilot is set
+            // down at the seat's exit, often in the air, and without this the corpse fell out of
+            // a camera left hanging there.
+            local.FollowCorpse();
         }
 
         /// <inheritdoc/>
@@ -442,6 +449,16 @@ namespace Ironfront.Net.Unity.Bindings
             if (!local.actor.IsSeated()) return;
 
             local.actor.LeaveSeat();
+        }
+
+        /// <inheritdoc/>
+        public void LeaveSeatAsCorpse()
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null || local.actor == null) return;
+            if (!local.actor.IsSeated()) return;
+
+            local.actor.LeaveSeat(drawWeapon: false);
         }
     }
 }

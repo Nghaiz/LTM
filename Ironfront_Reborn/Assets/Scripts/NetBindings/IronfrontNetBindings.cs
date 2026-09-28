@@ -598,6 +598,68 @@ namespace Ironfront.Net.Unity.Bindings
         /// </remarks>
         public bool IsSubmerged => WaterLevel.InWater(CrownPosition());
 
+        /// <inheritdoc/>
+        public bool IsInEnclosedSeat => _actor != null && _actor.IsSeated() && _actor.seat.enclosed;
+
+        /// <inheritdoc/>
+        public bool IsCrouching => _actor != null && _actor.IsCrouchedStance;
+
+        /// <inheritdoc/>
+        public int SeatAnimation
+            => _actor != null && _actor.IsSeated() && _actor.seat != null ? (int)_actor.seat.animation : 0;
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <c>ragdoll.IsRagdoll()</c> rather than <c>fallenOver</c>: the latter stays true through
+        /// the get-up, while the body is already animating back onto its feet.
+        /// </remarks>
+        public bool IsRagdolledAlive => _actor != null && !_actor.dead && _actor.ragdoll.IsRagdoll();
+
+        /// <inheritdoc/>
+        public bool IsInWater => _actor != null && _actor.inWater;
+
+        // Reused: CaptureHitboxes asks every tick for every body that is lying down.
+        private static readonly System.Collections.Generic.List<Collider> RagdollColliders =
+            new System.Collections.Generic.List<Collider>();
+
+        /// <inheritdoc/>
+        public bool TryGetRagdollPose(out Vector3 pelvis, out Bounds head, out Bounds body)
+        {
+            pelvis = default;
+            head = default;
+            body = default;
+            if (!IsRagdolledAlive) return false;
+
+            ActiveRaggy ragdoll = _actor.ragdoll;
+            pelvis = ragdoll.Position();
+            Transform headBone = ragdoll.HumanBoneTransform(HumanBodyBones.Head);
+
+            bool haveHead = false;
+            bool haveBody = false;
+            ragdoll.ragdollObject.GetComponentsInChildren(false, RagdollColliders);
+            for (int i = 0; i < RagdollColliders.Count; i++)
+            {
+                Collider collider = RagdollColliders[i];
+                if (collider == null || !collider.enabled || collider.isTrigger) continue;
+
+                if (headBone != null && collider.transform == headBone)
+                {
+                    if (haveHead) head.Encapsulate(collider.bounds);
+                    else head = collider.bounds;
+                    haveHead = true;
+                }
+                else
+                {
+                    if (haveBody) body.Encapsulate(collider.bounds);
+                    else body = collider.bounds;
+                    haveBody = true;
+                }
+            }
+
+            RagdollColliders.Clear();
+            return haveHead && haveBody;
+        }
+
         private Vector3 CrownPosition()
         {
             Transform head = _actor.ragdoll.IsRagdoll()

@@ -575,6 +575,32 @@ public class FpsActorController : ActorController
 		FirstPersonCamera();
 	}
 
+	/// <summary>
+	/// The death camera for a body the server killed: third person, kept on the corpse until the
+	/// next return to first person.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Playtest 2026-09-28, bug 1. <see cref="Die"/> places the third-person camera behind the body
+	/// once, with the sweep that keeps it out of terrain and vehicle hulls; a networked death never
+	/// ran it, and marks the actor dead in the same call, so <see cref="UpdateThirdPersonCamera"/>
+	/// never moved the camera either. On foot that went unnoticed -- the camera's rest pose is
+	/// already behind the body. A pilot killed with his helicopter is set down at the seat's exit,
+	/// often in the air, and the corpse fell out of a camera left hanging there.
+	/// </para>
+	/// <para>
+	/// Following rather than placing once is what <c>NetClientLocalCombatDriver</c> documents for
+	/// the death camera ("the body falls and the camera follows it"), and it keeps a corpse that
+	/// falls fifty metres in frame.
+	/// </para>
+	/// </remarks>
+	public void FollowCorpse()
+	{
+		followingCorpse = true;
+		ThirdPersonCamera();
+		UpdateThirdPersonCamera(true);
+	}
+
 	public override void Die()
 	{
 		// Cleared here so the deploy screen can come back for the next life. This is the one
@@ -720,6 +746,9 @@ public class FpsActorController : ActorController
 	/// </summary>
 	private bool deployedView;
 
+	// Set by FollowCorpse, cleared by every return to first person. See FollowCorpse.
+	private bool followingCorpse;
+
 	/// <summary>
 	/// The presentation half of <see cref="SpawnAt"/>, with no write to the body's transform.
 	/// Ledger <b>X-48</b>.
@@ -859,6 +888,7 @@ public class FpsActorController : ActorController
 
 	private void FirstPersonCamera()
 	{
+		followingCorpse = false;
 		fpCamera.enabled = true;
 		tpCamera.enabled = false;
 		Renderer[] array = thirdpersonRenderers;
@@ -946,11 +976,14 @@ public class FpsActorController : ActorController
 				fpCameraParent.transform.localRotation = Quaternion.RotateTowards(fpCameraParent.transform.localRotation, Quaternion.identity, Time.deltaTime * 400f);
 			}
 		}
-		// Not while a text field owns the keyboard. The "Loadout" axis is bound to return with
-		// enter as its alternate (ProjectSettings/InputManager.asset), and the chat line sends
-		// on Return -- so without this guard one press both sent the message and toggled the
-		// deploy screen, which is the shape the defect took when chat first shipped.
-		if (Input.GetButtonDown("Loadout") && !LocalTextEntry.Composing)
+		// Offline only. The "Loadout" axis is bound to return with enter as its alternate
+		// (ProjectSettings/InputManager.asset), and in a networked match Enter is the chat box's
+		// key: it opens the box and sends the line. Reading it here as well opened the deploy
+		// screen on the same press (playtest 2026-09-28) -- and a composing guard alone could not
+		// stop it, because the chat box runs first and clears that flag before this
+		// runs, on the very frame the send happens. A networked deploy screen opens on death
+		// (OpenLoadoutAfterNetworkDeath) and on the first deploy, never from a key.
+		if (!NetContext.IsClient && Input.GetButtonDown("Loadout") && !LocalTextEntry.OwnsKeyboard)
 		{
 			if (LoadoutUi.IsOpen())
 			{
@@ -961,15 +994,23 @@ public class FpsActorController : ActorController
 				OpenLoadout();
 			}
 		}
-		if (Input.GetKeyDown(KeyCode.K))
+		// The original game's developer keys -- K kills you, O draws the AI debug labels, Caps Lock
+		// or B toggles slow motion -- are offline only. In a networked match none of them can do
+		// what it says, and each one breaks the player instead (playtest 2026-09-28): the server
+		// owns health, so K only ragdolled the local body while the server kept it standing, and
+		// the prediction then fought the ragdoll -- the body thrown into the air, the camera
+		// shaking, input gone, "blood and a fall but no death". Slow motion slowed this client's
+		// clock alone against a server that does not slow down.
+		bool developerKeys = NetContext.IsOffline && !LocalTextEntry.OwnsKeyboard;
+		if (developerKeys && Input.GetKeyDown(KeyCode.K))
 		{
 			actor.Damage(200f, 200f, true, actor.CenterPosition(), Vector3.forward, Vector3.zero);
 		}
-		if (Input.GetKeyDown(KeyCode.O))
+		if (developerKeys && Input.GetKeyDown(KeyCode.O))
 		{
 			ActorManager.instance.debug = !ActorManager.instance.debug;
 		}
-		if (Input.GetButtonDown("Slowmotion") && !IngameMenuUi.IsOpen())
+		if (developerKeys && Input.GetButtonDown("Slowmotion") && !IngameMenuUi.IsOpen())
 		{
 			// PhysicsRate, not a second Time.fixedDeltaTime = Time.timeScale / 60f here. That
 			// literal made this component an unwitting authority on the project's physics rate:
@@ -1028,8 +1069,9 @@ public class FpsActorController : ActorController
 	{
 		// One guard for the whole method rather than eleven. Every read below is a bare key --
 		// the digits especially -- so typing "1st squad" into the chat line would otherwise
-		// switch weapon three times on the way through the sentence.
-		if (LocalTextEntry.Composing)
+		// switch weapon three times on the way through the sentence. OwnsKeyboard rather than
+		// Composing, so the frame the line closes on is covered too.
+		if (LocalTextEntry.OwnsKeyboard)
 		{
 			return;
 		}
@@ -1053,35 +1095,42 @@ public class FpsActorController : ActorController
 		{
 			QueueWeaponSwitch(4);
 		}
-		if (Input.GetKeyDown(KeyCode.F1))
+		// F1-F8 move the body between the seats of its vehicle -- LeaveSeat and EnterSeat, both
+		// local. Seat authority is the server's at client role (design D2, ledger X-30, and the
+		// Use key's own guard below): a networked client switching here moved its camera to
+		// another seat while the server kept it driving, and the protocol has no switch to ask
+		// for. Offline they are the original game's keys, unchanged. Found auditing bug 4 of the
+		// 2026-09-28 playtest, the keys nobody knew were live.
+		bool offlineSeatKeys = !NetContext.IsClient;
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F1))
 		{
 			actor.SwitchSeat(0);
 		}
-		if (Input.GetKeyDown(KeyCode.F2))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F2))
 		{
 			actor.SwitchSeat(1);
 		}
-		if (Input.GetKeyDown(KeyCode.F3))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F3))
 		{
 			actor.SwitchSeat(2);
 		}
-		if (Input.GetKeyDown(KeyCode.F4))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F4))
 		{
 			actor.SwitchSeat(3);
 		}
-		if (Input.GetKeyDown(KeyCode.F5))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F5))
 		{
 			actor.SwitchSeat(4);
 		}
-		if (Input.GetKeyDown(KeyCode.F6))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F6))
 		{
 			actor.SwitchSeat(5);
 		}
-		if (Input.GetKeyDown(KeyCode.F7))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F7))
 		{
 			actor.SwitchSeat(6);
 		}
-		if (Input.GetKeyDown(KeyCode.F8))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F8))
 		{
 			actor.SwitchSeat(7);
 		}
@@ -1135,7 +1184,7 @@ public class FpsActorController : ActorController
 	{
 		if (tpCamera.enabled)
 		{
-			UpdateThirdPersonCamera();
+			UpdateThirdPersonCamera(followingCorpse);
 		}
 	}
 

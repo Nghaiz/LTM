@@ -247,6 +247,10 @@ namespace Ironfront.Net.Unity.Server
 
             var reporter = new GameServerMatchReporter(new GameServerLink(), ownsLink: true);
 
+            // GS_ROOM_ASSIGNED: the room's own bot count, which nothing carried to a game server
+            // before 2026-09-28. Raised from Poll() below, so on the main thread.
+            reporter.RoomAssigned += NetBotRelease.AssignRoom;
+
             // ASSIGNED BEFORE THE AWAIT, AND THAT ORDER IS THE WHOLE FIX (P14).
             //
             // GameServerLink follows the Poll() contract: ReceiveLoopAsync only ENQUEUES each

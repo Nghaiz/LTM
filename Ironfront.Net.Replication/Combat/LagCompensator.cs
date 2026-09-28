@@ -66,12 +66,19 @@ namespace Ironfront.Net.Replication.Combat
         /// closer the pair got.
         /// </para>
         /// <para>
+        /// <b>The shooter's actor id is the fifth, for the same reason at the other end</b>
+        /// (playtest 2026-09-28, bug 5). The origin sits inside the shooter's own rig, and a
+        /// shot fired down a slope passes out through that body's own box on its way — so the
+        /// shooter's body was cover for their own shots, exactly as the victim's was for the
+        /// shot that hit it before X-26.
+        /// </para>
+        /// <para>
         /// Whose colliders those are is a question only the engine can answer, so this seam
-        /// carries the id and the Unity implementation decides. Nothing engine-free needs to
+        /// carries the ids and the Unity implementation decides. Nothing engine-free needs to
         /// know what a collider is, which is the whole point of the seam.
         /// </para>
         /// </remarks>
-        public Func<Vec3, Vec3, float, ushort, bool>? Occlusion { get; set; }
+        public Func<Vec3, Vec3, float, ushort, ushort, bool>? Occlusion { get; set; }
 
         /// <summary>Shots resolved. Denominator for the hit-rate experiment.</summary>
         public long ShotsResolved { get; private set; }
@@ -167,6 +174,10 @@ namespace Ironfront.Net.Replication.Combat
         /// <param name="maxDistance">Weapon range in metres.</param>
         /// <param name="smoothedRttMs">The shooter's smoothed RTT. 0 for a bot.</param>
         /// <param name="currentTick">The server tick the shot is being processed on.</param>
+        /// <param name="piercing">
+        /// The round reaches crews in enclosed seats. Only the sniper's does, as in the original;
+        /// see <see cref="HitscanTarget.InEnclosedSeat"/>.
+        /// </param>
         public HitResult ResolveHitscan(
             ReadOnlySpan<HitscanTarget> targets,
             ushort shooterActorId,
@@ -174,7 +185,8 @@ namespace Ironfront.Net.Replication.Combat
             in Vec3 direction,
             float maxDistance,
             float smoothedRttMs,
-            uint currentTick)
+            uint currentTick,
+            bool piercing = false)
         {
             ShotsResolved++;
 
@@ -201,6 +213,10 @@ namespace Ironfront.Net.Replication.Combat
 
                 if (!target.IsAlive) continue;
                 if (target.ActorId == shooterActorId) continue;   // trap 5
+
+                // Not a target at all, rather than a hit for nothing: the hull around the seat is
+                // what the round meets, and the occlusion test below is what stops it there.
+                if (target.InEnclosedSeat && !piercing) continue;
 
                 HitboxSet boxes;
                 bool usedFallback;
@@ -240,7 +256,7 @@ namespace Ironfront.Net.Replication.Combat
 
             if (!found)
             {
-                MeasureNearestMiss(targets, shooterActorId, in origin, in ray, maxDistance, targetTick);
+                MeasureNearestMiss(targets, shooterActorId, in origin, in ray, maxDistance, targetTick, piercing);
                 return HitResult.Miss(targetTick);
             }
 
@@ -249,7 +265,7 @@ namespace Ironfront.Net.Replication.Combat
             // Walls last: an occluded shot is a miss, and asking the engine about geometry is
             // the most expensive thing here, so it runs once for the winner rather than once
             // per candidate box.
-            if (Occlusion != null && Occlusion(origin, point, bestDistance, bestActor))
+            if (Occlusion != null && Occlusion(origin, point, bestDistance, bestActor, shooterActorId))
             {
                 ShotsOccluded++;
                 return HitResult.Miss(targetTick);
@@ -285,7 +301,7 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         private void MeasureNearestMiss(
             ReadOnlySpan<HitscanTarget> targets, ushort shooterActorId,
-            in Vec3 origin, in Vec3 ray, float maxDistance, uint targetTick)
+            in Vec3 origin, in Vec3 ray, float maxDistance, uint targetTick, bool piercing)
         {
             float bestGap = float.PositiveInfinity;
             HitboxMiss best = HitboxMiss.None;
@@ -296,6 +312,7 @@ namespace Ironfront.Net.Replication.Combat
 
                 if (!target.IsAlive) continue;
                 if (target.ActorId == shooterActorId) continue;
+                if (target.InEnclosedSeat && !piercing) continue;   // the resolver's own rule
 
                 HitboxSet boxes = _history.TryGetFrame(target.ActorId, targetTick, out HitboxHistory.Frame frame)
                     ? frame.Boxes

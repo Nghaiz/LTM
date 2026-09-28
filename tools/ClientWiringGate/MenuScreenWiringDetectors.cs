@@ -324,7 +324,7 @@ namespace Ironfront.Tools.ClientWiringGate
                  "the seat count reads as empty, so criterion 8's even-number check has no "
                  + "input to refuse and no screenshot to be graded on"),
                 ("_botCountField",
-                 "the bot count is always zero, so the field silently is not one"),
+                 "the bot count is always the default, so the field silently is not one"),
                 ("_privateToggle",
                  "no room can be made private, so criterion 7 has no private room to join"),
                 ("_passwordField",

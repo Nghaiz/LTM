@@ -990,7 +990,8 @@ namespace Ironfront.Net.Unity.EditorTools
                 password: false);
             maxPlayers.contentType = InputField.ContentType.IntegerNumber;
 
-            InputField bots = PackField(panel, "BotCount", "Bots",
+            InputField bots = PackField(panel, "BotCount",
+                "Bots per team (0-" + ProtocolConstants.MAX_BOTS_PER_TEAM + ")",
                 new Vector2(thirdThird, 130f), new Vector2(third, 56f),
                 password: false);
             bots.contentType = InputField.ContentType.IntegerNumber;

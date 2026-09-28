@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
+using Ironfront.Net.Protocol;
 using Xunit;
 
 namespace Ironfront.Net.Replication.Tests
@@ -31,8 +32,13 @@ namespace Ironfront.Net.Replication.Tests
     /// </remarks>
     public sealed class MatchPopulationTests
     {
-        /// <summary>The V9 load criteria's bot count, split evenly across the two teams.</summary>
-        private const int DesignBotsPerTeam = 16;
+        /// <summary>
+        /// The V9 load criteria's bot count, split evenly across the two teams -- and, since
+        /// 2026-09-28, the roster of a room nobody asked a number for: the create-room form's empty
+        /// field and every matchmade room read the same constant, and a server the master told
+        /// nothing falls back to this prefab. One number, pinned in one place.
+        /// </summary>
+        private const int DesignBotsPerTeam = ProtocolConstants.DEFAULT_BOTS_PER_TEAM;
 
         [Theory]
         [InlineData("team0Bots")]

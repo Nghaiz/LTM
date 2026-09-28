@@ -373,7 +373,7 @@ namespace Ironfront.Net.Replication.Combat
                     ReloadsRefusedForUnknownSlot++;
             }
 
-            Vec3 origin = ShotOrigin(in state, in frame);
+            Vec3 origin = ResolveShotOrigin(in state, in frame, shooterActorId);
 
             // 3. The gate. A semi-automatic reaches the resolver only on the rising edge, so
             //    the several input frames inside one mouse press spend one round rather than one
@@ -549,6 +549,105 @@ namespace Ironfront.Net.Replication.Combat
         /// </para>
         /// </remarks>
         public static Vec3 ShotOrigin(in MoveState state, in InputFrame frame)
+            => EyePosition(in state, in frame) + LeanOffset(in frame);
+
+        /// <summary>
+        /// How far a lean may carry the eye from <c>eye</c> along the unit <c>direction</c> before
+        /// geometry stops it, in metres; null means the full <see cref="ProtocolConstants.LEAN_EYE_OFFSET"/>.
+        /// </summary>
+        /// <remarks>
+        /// The engine's half of the lean: <c>PlayerFpParent</c> stops the FP camera short of any
+        /// wall a 0.3 m sphere would touch on the way out, and only the engine can ask where the
+        /// walls are. Without the stop a player leaning into a wall would fire from inside it,
+        /// and a ray that starts inside a collider does not see that collider.
+        /// </remarks>
+        public Func<Vec3, Vec3, float, float>? LeanClearance { get; set; }
+
+        /// <summary>
+        /// Where the eye of the shooter with this actor id is while it sits in a seat, or null
+        /// when it is on foot.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Playtest 2026-09-28, bug 5 audit.</b> A seated player's camera is the seat's, not
+        /// the body's: <c>FpsActorController.StartSeated</c> parents it to the seat at
+        /// <see cref="ProtocolConstants.SEATED_EYE_HEIGHT"/> up and
+        /// <see cref="ProtocolConstants.SEATED_EYE_FORWARD"/> forward. <see cref="EyePosition"/>
+        /// read the session's seat-root position as a standing capsule and fired from 0.22 m
+        /// below and 0.2 m behind that camera, so a passenger aiming at a head hit the chest.
+        /// </para>
+        /// <para>
+        /// The engine's half, because only the engine knows which way the seat faces: a vehicle
+        /// turns, rolls and pitches under its crew.
+        /// </para>
+        /// </remarks>
+        public Func<ushort, Vec3?>? SeatedEye { get; set; }
+
+        /// <summary>
+        /// Where a shot by <paramref name="shooterActorId"/> leaves: the seat's eye or the
+        /// standing or crouched one, moved by the lean and stopped by walls. The one rule every
+        /// origin uses -- a carried shot, a launcher's aim and a throw's release.
+        /// </summary>
+        public Vec3 ShotOriginFor(ushort shooterActorId, in MoveState state, in InputFrame frame)
+            => ResolveShotOrigin(in state, in frame, shooterActorId);
+
+        /// <summary>
+        /// <see cref="ShotOrigin"/>, from the seat's eye when <see cref="SeatedEye"/> has one, with
+        /// the lean cut short where <see cref="LeanClearance"/> says a wall is in the way.
+        /// </summary>
+        private Vec3 ResolveShotOrigin(in MoveState state, in InputFrame frame, ushort shooterActorId)
+        {
+            Vec3 eye = SeatedEye?.Invoke(shooterActorId) ?? EyePosition(in state, in frame);
+            Vec3 lean = LeanOffset(in frame);
+
+            float reach = lean.Magnitude;
+            if (reach <= 0f || LeanClearance == null) return eye + lean;
+
+            Vec3 direction = lean * (1f / reach);
+            float allowed = LeanClearance(eye, direction, reach);
+            if (allowed < 0f) allowed = 0f;
+            if (allowed > reach) allowed = reach;
+
+            return eye + direction * allowed;
+        }
+
+        /// <summary>
+        /// Where a lean moves the eye: <see cref="ProtocolConstants.LEAN_EYE_OFFSET"/> along the
+        /// shooter's right, towards the lean. Zero when neither or both lean bits are set.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Playtest 2026-09-28, bug 5.</b> The client moves its FP camera 0.4 m to the side
+        /// when the player leans (<c>PlayerFpParent.LateUpdate</c>), and until this change it
+        /// never told the server: the packer left both lean bits clear, so every shot taken
+        /// while leaning around cover left from 40 cm to the side of the crosshair. At that
+        /// offset a shot aimed at the middle of a 0.70 m body misses it outright, which is the
+        /// "sometimes the enemy just cannot be hurt" report.
+        /// </para>
+        /// <para>
+        /// The client's own camera leans gradually, the bits say "fully or not at all"; the
+        /// difference lasts the fraction of a second the lean takes to settle.
+        /// </para>
+        /// </remarks>
+        public static Vec3 LeanOffset(in InputFrame frame)
+        {
+            bool left = frame.IsPressed(InputButtons.LeanLeft);
+            bool right = frame.IsPressed(InputButtons.LeanRight);
+            if (left == right) return Vec3.Zero;
+
+            const float toRadians = (float)(Math.PI / 180.0);
+            float yaw = frame.YawDegrees * toRadians;
+            float side = right ? ProtocolConstants.LEAN_EYE_OFFSET : -ProtocolConstants.LEAN_EYE_OFFSET;
+
+            // The heading's right vector in Unity's frame: (cos yaw, 0, -sin yaw).
+            return new Vec3(MathF.Cos(yaw) * side, 0f, -MathF.Sin(yaw) * side);
+        }
+
+        /// <summary>
+        /// The eye, before any lean: the capsule centre converted to feet, then raised to eye
+        /// height.
+        /// </summary>
+        public static Vec3 EyePosition(in MoveState state, in InputFrame frame)
         {
             bool lowered = state.IsCrouching || frame.IsPressed(InputButtons.Prone);
 

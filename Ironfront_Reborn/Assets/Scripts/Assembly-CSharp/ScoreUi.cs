@@ -532,6 +532,10 @@ public class ScoreUi : MonoBehaviour
 		// ProjectSettings/InputManager.asset -- checked, not assumed, because the last key chosen
 		// without checking that file was Return, which the Loadout axis already owned and which
 		// therefore opened chat and toggled the deploy screen in one press (see ClientChatSender).
+		if (Ironfront.Net.Unity.LocalTextEntry.OwnsKeyboard)
+		{
+			return;
+		}
 		if (Input.GetKeyDown(KeyCode.V))
 		{
 			HideVictoryScreen();

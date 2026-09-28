@@ -53,6 +53,22 @@ namespace Ironfront.MasterClient
         public byte State { get; set; }
     }
 
+    /// <summary>
+    /// What the master tells a game server about the room it now hosts. GS_ROOM_ASSIGNED
+    /// (0x0107), protocol-spec.md section 11.
+    /// </summary>
+    public sealed class GameServerRoomAssignment
+    {
+        public ushort ServerId { get; set; }
+        public int RoomId { get; set; }
+        public ushort MapId { get; set; }
+
+        /// <summary>
+        /// Bots per team the room asked for, 0 to <c>ProtocolConstants.MAX_BOTS_PER_TEAM</c>.
+        /// </summary>
+        public int BotsPerTeam { get; set; }
+    }
+
     /// <summary>One player's line on the end-of-match report.</summary>
     public sealed class MatchPlayerResult
     {
@@ -119,5 +135,11 @@ namespace Ironfront.MasterClient
 
         event Action OnDisconnected;
         event Action<int, string> OnError;
+
+        /// <summary>
+        /// The master assigned this server a room (GS_ROOM_ASSIGNED). Raised from
+        /// <see cref="Poll"/>, once per ticket the master issues for that room.
+        /// </summary>
+        event Action<GameServerRoomAssignment> OnRoomAssigned;
     }
 }

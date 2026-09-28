@@ -126,6 +126,18 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	private bool wasCrouching;
 
+	/// <summary>
+	/// Whether this actor is in its crouched stance: what UpdateMovement last wrote to the
+	/// animator's "crouched". False while seated, fallen over or dead, which own the pose instead.
+	/// </summary>
+	/// <remarks>
+	/// Read by the network to send a bot's crouch (IGameplayActorSource.IsCrouching). A bot
+	/// crouches behind low cover while it reloads or cools down (AiActorController.Crouch), and
+	/// until 2026-09-28 no client drew it: the snapshot's IsCrouching bit came only from a
+	/// player's movement agent.
+	/// </remarks>
+	public bool IsCrouchedStance => wasCrouching && !dead && !fallenOver && !IsSeated();
+
 	[NonSerialized]
 	public bool inWater;
 
@@ -1563,6 +1575,22 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	public void LeaveSeat()
 	{
+		LeaveSeat(drawWeapon: true);
+	}
+
+	/// <summary>
+	/// Takes the body out of its seat; <paramref name="drawWeapon"/> false for a body leaving it
+	/// dead.
+	/// </summary>
+	/// <remarks>
+	/// Playtest 2026-09-28, bug 1: a pilot killed with his helicopter was put back on his feet
+	/// drawing his rifle -- the respawn animation -- instead of dying. The offline
+	/// <see cref="Die(Vector3)"/> never reaches the draw below because it drops every weapon
+	/// first; a networked client does not own the inventory and cannot drop it, so its death
+	/// paths say so here instead.
+	/// </remarks>
+	public void LeaveSeat(bool drawWeapon)
+	{
 		Vector3 vector = seat.transform.position + seat.transform.localToWorldMatrix.MultiplyVector(seat.exitOffset);
 		Vector3 forward = seat.transform.forward;
 		Vehicle vehicle = seat.vehicle;
@@ -1588,7 +1616,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		rigidbody.rotation = quaternion;
 		animator.SetLayerWeight(1, 1f);
 		ik.turnBody = true;
-		if (activeWeapon == null)
+		if (drawWeapon && activeWeapon == null)
 		{
 			SwitchToFirstAvailableWeapon();
 		}

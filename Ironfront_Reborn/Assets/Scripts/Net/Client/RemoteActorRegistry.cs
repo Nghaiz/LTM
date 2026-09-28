@@ -107,6 +107,26 @@ namespace Ironfront.Net.Unity.Client
             return false;
         }
 
+        /// <summary>
+        /// The seated pose of the seat <paramref name="state"/> names: 0 the chair, 1 astride the
+        /// quad bike. The chair when the body is not seated, or the vehicle is not (yet) drawn
+        /// here -- the pose every seated body had before, so an unknown seat degrades to it.
+        /// </summary>
+        private int SeatAnimationOf(in ActorSnapshotEntry state)
+        {
+            if ((state.StateFlags & ActorStateFlags.IsSeated) == 0) return 0;
+
+            // Added to this GameObject by NetClientBootstrap.EnsureVehicleStage, which may run
+            // after this component's Awake, so it is looked up on first need.
+            if (_vehicles == null) _vehicles = GetComponent<RemoteVehicleRegistry>();
+            if (_vehicles == null || !_vehicles.TryFind(state.VehicleId, out NetClientVehicle vehicle)) return 0;
+            if (!vehicle.Exists || vehicle.Body == null) return 0;
+
+            return vehicle.Body.GetSeatAnimation(state.SeatIndex);
+        }
+
+        private RemoteVehicleRegistry _vehicles;
+
         private void Awake()
         {
             _client = NetClientBootstrap.Current;
@@ -177,7 +197,19 @@ namespace Ironfront.Net.Unity.Client
                 // -- was decoded and discarded until phase-V10. It is stepped rather than
                 // interpolated: these are discrete states, and lerping a crouch is meaningless.
                 if (!_views.TryGetValue(pair.Key, out RemoteActorView view) || view == null) continue;
-                if (hasSample) view.Apply(in sample.State);
+                if (hasSample)
+                {
+                    view.SetSeatAnimation(SeatAnimationOf(in sample.State));
+                    view.Apply(in sample.State);
+
+                    // A body lying as a ragdoll keeps its root where it fell (see `frozen`); the
+                    // server's pelvis is steered toward instead, and water floats it.
+                    if (view.IsRagdollPosed)
+                    {
+                        Vec3 pelvis = sample.Position;
+                        view.SteerRagdoll(new Vector3(pelvis.X, pelvis.Y, pelvis.Z));
+                    }
+                }
 
                 // P3 task 3.4. Team arrives with the snapshot, not with the spawn, so the
                 // colour is written every frame rather than once. SetMarker is idempotent by

@@ -112,7 +112,8 @@ public class MinimapUi : MonoBehaviour
 
 	private void Update()
 	{
-		bool held = Input.GetKey(KeyCode.M) || (HoldSource != null && HoldSource());
+		bool held = (Input.GetKey(KeyCode.M) && !LocalTextEntry.OwnsKeyboard)
+			|| (HoldSource != null && HoldSource());
 		float target = (!held) ? 0f : 1f;
 		minimapOpenness = Mathf.MoveTowards(minimapOpenness, target, Time.deltaTime * 20f);
 		ingameParent.anchorMin = new Vector2(0f, Mathf.Lerp(-1f, 0f, minimapOpenness));

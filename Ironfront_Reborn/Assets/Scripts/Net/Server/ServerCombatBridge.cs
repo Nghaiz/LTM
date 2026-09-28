@@ -227,10 +227,12 @@ namespace Ironfront.Net.Unity.Server
         /// a client-named target would be a target the server could not refuse.
         /// </para>
         /// </remarks>
-        private static InputFrame SteerCarriedWeapon(
+        private InputFrame SteerCarriedWeapon(
             ClientSession session, NetServerActor actor, in InputFrame frame)
         {
-            Vec3 eye = ServerCombatAuthority.ShotOrigin(in session.State, in frame);
+            // The authority's one origin rule, seat and lean included: a launcher aimed from a
+            // passenger seat locks from the seat's eye, not from a standing one below it.
+            Vec3 eye = _authority.ShotOriginFor(session.ActorId, in session.State, in frame);
             Vec3 aim = ServerCombatAuthority.AimDirection(frame.YawDegrees, frame.PitchDegrees);
 
             actor.SteerCarriedWeapon(
@@ -267,7 +269,7 @@ namespace Ironfront.Net.Unity.Server
                 // has no frame of its own. A default frame would drop a held Prone button and
                 // release a prone player's throw from standing eye height.
                 InputFrame posture = player.LastAcceptedFrame;
-                Vec3 origin = ServerCombatAuthority.ShotOrigin(in session.State, in posture);
+                Vec3 origin = _authority.ShotOriginFor(session.ActorId, in session.State, in posture);
                 Vec3 aim = transition.Aim;
                 bool launched = false;
                 try
@@ -975,7 +977,8 @@ namespace Ironfront.Net.Unity.Server
                 if (_targetCount >= _targets.Length) break;
 
                 _targets[_targetCount++] = new HitscanTarget(
-                    candidate.ActorId, candidate.IsAlive, candidate.CaptureHitboxes());
+                    candidate.ActorId, candidate.IsAlive, candidate.CaptureHitboxes(),
+                    candidate.IsInEnclosedSeat);
             }
 
             _targetsBuiltForTick = tick;
@@ -1152,13 +1155,11 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
-            // BOT-05: gathered once, ahead of both draws below, so the team draw AND the neutral
-            // fallback both favour landing near whoever on this team is still alive rather than
-            // a uniform point anywhere on the whole base.
+            // BOT-05's anchors: only the neutral fallback below still favours landing near a
+            // living teammate, and the placement log names the nearest one.
             CollectLivingTeammateAnchors(actor);
 
-            int chosen = ChooseRequestedOrRandomSpawnIndex(
-                spawnPoints, actor.Team, request, _teammateAnchors);
+            int chosen = ChooseRequestedOrRandomSpawnIndex(spawnPoints, actor.Team, request);
             if (chosen < 0)
             {
                 // Every point this team held has been captured. A neutral point is a worse spawn
@@ -1373,20 +1374,28 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>
         /// Honours the deploying client's requested spawn point when it names one this actor's
-        /// team may actually use; falls back to <see cref="ChooseSpawnIndexNearTeammates"/>
-        /// otherwise.
+        /// team may actually use; otherwise any point the team owns, uniformly at random.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <b>Never trusted outright.</b> <see cref="SpawnRequestMessage.SpawnPointIndex"/> is
         /// validated against the SAME <see cref="ISpawnPointDirectory"/> the random draw reads —
         /// out of range or ineligible for this team is treated exactly like
-        /// <see cref="SpawnRequestMessage.NoSpawnPointPreference"/>, which is what every sender
-        /// writes today (see that field's own remark). No client input reaches
+        /// <see cref="SpawnRequestMessage.NoSpawnPointPreference"/>. No client input reaches
         /// <see cref="ISpawnPointDirectory.GetSpawnPosition"/> unchecked.
+        /// </para>
+        /// <para>
+        /// <b>Uniform, not "near a living teammate" (owner, playtest 2026-09-28).</b> This used to
+        /// fall back to <see cref="ChooseSpawnIndexNearTeammates"/>, which is not a draw at all
+        /// once anyone on the team is alive: it names the one owned point closest to a teammate,
+        /// every time. Teammates crowd the front, and so does the player who just died there, so
+        /// a deploy with no flag chosen kept landing at the flag beside the body — "it respawns
+        /// me where I died instead of at a random point my team owns". A player who wants a
+        /// particular flag picks it on the deploy map, which the branch above honours.
+        /// </para>
         /// </remarks>
         internal static int ChooseRequestedOrRandomSpawnIndex(
-            ISpawnPointDirectory spawnPoints, int team, SpawnRequestMessage? request,
-            IReadOnlyList<Vector3> anchors)
+            ISpawnPointDirectory spawnPoints, int team, SpawnRequestMessage? request)
         {
             if (request.HasValue)
             {
@@ -1398,7 +1407,7 @@ namespace Ironfront.Net.Unity.Server
                 }
             }
 
-            return ChooseSpawnIndexNearTeammates(spawnPoints, team, anchors);
+            return ChooseSpawnIndex(spawnPoints, team);
         }
 
         /// <summary>

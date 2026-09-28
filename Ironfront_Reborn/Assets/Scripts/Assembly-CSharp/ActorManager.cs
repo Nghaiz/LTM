@@ -325,11 +325,11 @@ public class ActorManager : MonoBehaviour
 	/// roster enters the world over the half second the fill takes rather than in one frame.
 	/// A round reset mid-fill stops it: the next round fills its own roster once released.
 	/// </remarks>
-	private IEnumerator FillEmptySlotsWithAI()
+	private IEnumerator FillEmptySlotsWithAI(int team0Count, int team1Count)
 	{
 		int generation = rosterGeneration;
 		float sliceStartedAt = Time.realtimeSinceStartup;
-		int rows = Mathf.Max(team0Bots, team1Bots);
+		int rows = Mathf.Max(team0Count, team1Count);
 		for (int i = 0; i < rows; i++)
 		{
 			if (Time.realtimeSinceStartup - sliceStartedAt > SPAWN_WORK_BUDGET_SECONDS)
@@ -341,13 +341,13 @@ public class ActorManager : MonoBehaviour
 				}
 				sliceStartedAt = Time.realtimeSinceStartup;
 			}
-			if (i < team0Bots)
+			if (i < team0Count)
 			{
-				CreateAIActor(0, (float)i / (float)team0Bots);
+				CreateAIActor(0, (float)i / (float)team0Count);
 			}
-			if (i < team1Bots)
+			if (i < team1Count)
 			{
-				CreateAIActor(1, (float)i / (float)team1Bots);
+				CreateAIActor(1, (float)i / (float)team1Count);
 			}
 		}
 	}
@@ -393,11 +393,18 @@ public class ActorManager : MonoBehaviour
 		if (botsReleased && !aiRosterFilled)
 		{
 			aiRosterFilled = true;
-			StartCoroutine(FillEmptySlotsWithAI());
+			// The ROOM's count when the master sent one for the room this server hosts, the
+			// authored team0Bots/team1Bots otherwise. Until 2026-09-28 it was always the authored
+			// pair, so the create-room form's Bots field never reached a match: a room made with
+			// 0 bots released 32. The authored fields are left untouched, so a later room the
+			// master says nothing about falls back to them rather than to this room's number.
+			Ironfront.Net.Replication.Match.BotRosterSize roster =
+				Ironfront.Net.Unity.NetBotRelease.RosterFor(team0Bots, team1Bots);
+			StartCoroutine(FillEmptySlotsWithAI(roster.Team0, roster.Team1));
 			Debug.Log(
-				$"[net] bots released: {team0Bots} for team 0, {team1Bots} for team 1, "
+				$"[net] bots released: {roster.Team0} for team 0, {roster.Team1} for team 1, "
 				+ $"{Ironfront.Net.Unity.NetBotRelease.DelaySeconds:F0}s after the first player "
-				+ "body entered the world.");
+				+ $"body entered the world ({roster.Reason}).");
 		}
 
 		// ONE BATCH AT A TIME. A batch places its bodies over several frames now (see

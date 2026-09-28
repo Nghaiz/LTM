@@ -238,7 +238,14 @@ namespace Ironfront.Net.Unity.Server
             _lagCompensator.Occlusion = IsOccluded;
             _fireResolver = new ServerFireResolver(_lagCompensator);
             _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
-            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink);
+            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink)
+            {
+                // The engine half of a leaning shot's origin: stop where the client's camera
+                // stops. See LeanClearance below.
+                LeanClearance = LeanClearance,
+                // A seated shooter fires from the seat's camera, which only the engine can place.
+                SeatedEye = SeatedEye,
+            };
             // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
             // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
             // pool would drain the gunner's rifle magazines to refill a coaxial.
@@ -591,6 +598,11 @@ namespace Ironfront.Net.Unity.Server
             // cannot name this assembly. Cleared in Unbind with the other weapon seams.
             NetShotAnnouncements.Announcer = this;
 
+            // The room the tickets name, for ActorManager's bot release: the master's
+            // GS_ROOM_ASSIGNED is applied only to this room. Cleared in Unbind.
+            _hostedRoom ??= () => RoomIdentity.RoomId;
+            NetBotRelease.HostedRoom = _hostedRoom;
+
             WarnAboutPlaceholderWeapons();
         }
 
@@ -670,7 +682,11 @@ namespace Ironfront.Net.Unity.Server
             NetTurretAim.Clear();
             NetWeaponAuthority.Clear();
             NetShotAnnouncements.Clear();
+            if (NetBotRelease.HostedRoom == _hostedRoom) NetBotRelease.HostedRoom = null;
         }
+
+        /// <summary>This loop's <see cref="NetBotRelease.HostedRoom"/>, kept so Unbind clears only its own.</summary>
+        private Func<ushort> _hostedRoom;
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
         public void RunInputStage()
@@ -841,8 +857,8 @@ namespace Ironfront.Net.Unity.Server
                 NetServerActor actor = actors[i];
                 if (actor == null || !actor.isActiveAndEnabled || !actor.IsAlive) continue;
 
-                _projectileTargets[_projectileTargetCount++] =
-                    new HitscanTarget(actor.ActorId, isAlive: true, actor.CaptureHitboxes());
+                _projectileTargets[_projectileTargetCount++] = new HitscanTarget(
+                    actor.ActorId, isAlive: true, actor.CaptureHitboxes(), actor.IsInEnclosedSeat);
             }
         }
 
@@ -2389,7 +2405,8 @@ namespace Ironfront.Net.Unity.Server
         /// Triggers are ignored: a capture-point volume or a water trigger is not cover.
         /// </para>
         /// </remarks>
-        private static bool IsOccluded(Vec3 origin, Vec3 point, float distance, ushort victimActorId)
+        private static bool IsOccluded(
+            Vec3 origin, Vec3 point, float distance, ushort victimActorId, ushort shooterActorId)
         {
             Vector3 from = MovementSimulation.ToUnity(origin);
             Vector3 to = MovementSimulation.ToUnity(point);
@@ -2399,6 +2416,11 @@ namespace Ironfront.Net.Unity.Server
             if (length <= 0.0001f) return false;   // muzzle inside the box: nothing to occlude
 
             Transform victim = VictimRoot(victimActorId);
+
+            // The other end of X-26 (playtest 2026-09-28, bug 5): the origin sits inside the
+            // shooter's own rig, and a shot fired down a slope leaves through that body's own
+            // box. A body is not cover for the shots it fires.
+            Transform shooter = VictimRoot(shooterActorId);
 
             // RaycastNonAlloc, not Linecast: the nearest hit may be the victim's own rig bone,
             // and a query that returns only the nearest cannot look past it. The buffer is a
@@ -2422,6 +2444,7 @@ namespace Ironfront.Net.Unity.Server
                 // point-blank shot is rejected by its own target -- 34 of 34 occlusions across
                 // x27-pinned-01..03 were `Bone_002 layer=8` at frac 0.94.
                 if (IsPartOf(candidate.collider, victim)) continue;
+                if (IsPartOf(candidate.collider, shooter)) continue;
 
                 if (found && candidate.distance >= nearest.distance) continue;
 
@@ -2457,6 +2480,49 @@ namespace Ironfront.Net.Unity.Server
         /// rather than leaving a reader to assume it never happens.
         /// </remarks>
         private static readonly RaycastHit[] _occlusionHits = new RaycastHit[32];
+
+        /// <summary>
+        /// How far a lean may carry a shooter's eye before a wall stops it: the server's copy of
+        /// the stop in <c>PlayerFpParent.LateUpdate</c>.
+        /// </summary>
+        /// <remarks>
+        /// The client sweeps a 0.3 m sphere along the lean against the Default layer and stops
+        /// its camera at the first hit. The same sweep with the same mask puts a leaning shot
+        /// where that player's camera actually stopped, rather than inside the wall they leaned
+        /// into -- where a ray would start inside the wall's collider and never see it.
+        /// </remarks>
+        private static float LeanClearance(Vec3 eye, Vec3 direction, float reach)
+        {
+            return Physics.SphereCast(
+                    MovementSimulation.ToUnity(eye), LeanSweepRadius, MovementSimulation.ToUnity(direction),
+                    out RaycastHit hit, reach, LeanSweepLayers, QueryTriggerInteraction.Ignore)
+                ? hit.distance
+                : reach;
+        }
+
+        /// <summary>
+        /// A seated player's eye: the seat's own point <see cref="ProtocolConstants.SEATED_EYE_HEIGHT"/>
+        /// up and <see cref="ProtocolConstants.SEATED_EYE_FORWARD"/> forward, where
+        /// <c>FpsActorController.StartSeated</c> puts that player's camera. Null on foot.
+        /// </summary>
+        /// <remarks>
+        /// Through the body's transform, which a seat holds at local zero (<c>Actor.EnterSeat</c>),
+        /// so the eye turns, rolls and scales with the vehicle exactly as the client's camera does.
+        /// </remarks>
+        private static Vec3? SeatedEye(ushort actorId)
+        {
+            if (!ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(actorId, out _, out _)) return null;
+            if (!ServerActorRegistry.Instance.TryFind(actorId, out NetServerActor actor) || actor == null) return null;
+
+            return MovementSimulation.ToCore(actor.transform.TransformPoint(
+                0f, ProtocolConstants.SEATED_EYE_HEIGHT, ProtocolConstants.SEATED_EYE_FORWARD));
+        }
+
+        /// <summary><c>PlayerFpParent.LateUpdate</c>'s sphere radius.</summary>
+        private const float LeanSweepRadius = 0.3f;
+
+        /// <summary><c>PlayerFpParent.LateUpdate</c>'s layer mask: Default only.</summary>
+        private const int LeanSweepLayers = 1;
 
         /// <summary>
         /// Shots where every collider on the segment belonged to the victim, so nothing blocked.

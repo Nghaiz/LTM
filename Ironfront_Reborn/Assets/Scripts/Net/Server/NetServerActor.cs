@@ -202,6 +202,125 @@ namespace Ironfront.Net.Unity.Server
 
             return Movement;
         }
+
+        // ------------------------------------------------------------ a player's own body
+
+        // The drawn body under a player's capsule-centred root, found on first use.
+        private Transform _model;
+        private Animator _modelAnimator;
+        private Vector3 _modelRest;
+        private AnimatorCullingMode _modelCulling;
+        private bool _presentingPlayer;
+
+        private static readonly int SeatedParameter     = Animator.StringToHash("seated");
+        private static readonly int SeatedTypeParameter = Animator.StringToHash("seated type");
+        private static readonly int CrouchedParameter   = Animator.StringToHash("crouched");
+        private static readonly int SprintingParameter  = Animator.StringToHash("sprinting");
+        private static readonly int MovingParameter     = Animator.StringToHash("moving");
+        private static readonly int MovementXParameter  = Animator.StringToHash("movement x");
+        private static readonly int MovementYParameter  = Animator.StringToHash("movement y");
+
+        /// <summary>
+        /// Poses this player's body the way every client draws it, so what the engine's own
+        /// colliders meet -- a projectile, a blast, a bot taking aim -- is the body players see.
+        /// Once per server tick, for a claimed body.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Playtest 2026-09-28, bug 5 audit. Measured: a player's hitbox colliders stood 0.9 m
+        /// above the player.</b> A claimed body is the AI prefab, authored with its feet at the
+        /// root, and <see cref="AttachMovementAgent"/> gives it a CharacterController whose centre
+        /// is zero -- so the ROOT is the capsule's centre, placed 0.9 m above the ground
+        /// (<c>ServerCombatBridge.StandingBodyPosition</c>), and the drawn body with it: head
+        /// collider at 2.21..2.63 m over a head every client draws at 1.31..1.72 m. The hitscan
+        /// path never noticed, because <see cref="CaptureHitboxes"/> converts to feet; everything
+        /// that meets the engine's colliders did. A mounted gun's rounds passed under the chest, a
+        /// rocket at the feet was measured from a spine 0.9 m too high, and bots aimed over heads.
+        /// </para>
+        /// <para>
+        /// <b>And the pose.</b> <c>Actor.Update</c> is parked for a claimed body, so nothing set
+        /// its animator: it stood in its idle while its player crouched or sat. The parameters
+        /// here are the ones <c>RemoteActorView.Apply</c> drives the proxy with, from the same
+        /// facts, and the seat type is the seat's own, as every client draws it.
+        /// </para>
+        /// <para>
+        /// <b>Culling was never what froze it.</b> The prefab authors CullUpdateTransforms, but
+        /// <c>ActiveRaggy.Awake</c> sets AlwaysAnimate on this same Animator for every body the
+        /// game instantiates, so a headless server poses bots and claimed bodies alike. Setting
+        /// it again below is harmless and keeps this method honest on its own.
+        /// <c>HeadlessBotAnimationTests</c> pins it; an EditMode fixture never runs Awake, which
+        /// is how the opposite came to be written down here once.
+        /// </para>
+        /// </remarks>
+        public void PresentAsPlayer(bool seated, bool crouching, in Vec3 velocity)
+        {
+            if (!FindModel()) return;
+
+            if (!_presentingPlayer)
+            {
+                _presentingPlayer = true;
+                _modelAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            }
+
+            // On foot the root is the capsule's centre; in a seat it is the seat itself, the
+            // feet pivot the prefab was authored around.
+            float drop = seated ? 0f : MovementCore.HeightFor(crouching) * 0.5f;
+            _model.localPosition = _modelRest + Vector3.down * drop;
+
+            // A headless server never turned this transform, so the body faced its spawn heading
+            // whichever way its player looked. A seat owns the rotation of a seated body.
+            if (!seated && !float.IsNaN(YawDegrees))
+                transform.rotation = Quaternion.Euler(0f, YawDegrees, 0f);
+
+            float horizontal = MathF.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
+            int seatAnimation = seated ? SeatAnimationOnServer : 0;
+            HumanoidPose pose = HitboxSet.PoseFor(
+                seated, seatAnimation == HitboxSet.QuadSeatAnimation, crouching, horizontal,
+                IsSprintingVelocity(in velocity));
+            bool moving = pose == HumanoidPose.Moving || pose == HumanoidPose.Sprinting
+                || pose == HumanoidPose.CrouchMoving;
+
+            // The locomotion blend is in the body's own frame, m/s, as RemoteLocomotion feeds it.
+            float radians = transform.eulerAngles.y * Mathf.Deg2Rad;
+            float cos = Mathf.Cos(radians);
+            float sin = Mathf.Sin(radians);
+            float localX = velocity.X * cos - velocity.Z * sin;
+            float localZ = velocity.X * sin + velocity.Z * cos;
+
+            _modelAnimator.SetBool(SeatedParameter, seated);
+            _modelAnimator.SetInteger(SeatedTypeParameter, seatAnimation);
+            _modelAnimator.SetBool(CrouchedParameter, pose == HumanoidPose.Crouched || pose == HumanoidPose.CrouchMoving);
+            _modelAnimator.SetBool(SprintingParameter, pose == HumanoidPose.Sprinting);
+            _modelAnimator.SetBool(MovingParameter, moving);
+            _modelAnimator.SetFloat(MovementXParameter, moving ? localX : 0f);
+            _modelAnimator.SetFloat(MovementYParameter, moving ? localZ : 0f);
+        }
+
+        /// <summary>
+        /// Hands the body back as the prefab authored it -- model on the root, animation culled
+        /// as authored -- for the bot brain <see cref="Release"/> resumes.
+        /// </summary>
+        private void EndPlayerPresentation()
+        {
+            if (!_presentingPlayer) return;
+            _presentingPlayer = false;
+
+            if (_model != null) _model.localPosition = _modelRest;
+            if (_modelAnimator != null) _modelAnimator.cullingMode = _modelCulling;
+        }
+
+        private bool FindModel()
+        {
+            if (_model != null) return true;
+
+            _modelAnimator = GetComponentInChildren<Animator>(true);
+            if (_modelAnimator == null || _modelAnimator.transform == transform) return false;
+
+            _model = _modelAnimator.transform;
+            _modelRest = _model.localPosition;
+            _modelCulling = _modelAnimator.cullingMode;
+            return true;
+        }
         public bool EquipLoadout()
         {
             IGameplayActorSource source = Source;
@@ -721,22 +840,9 @@ namespace Ironfront.Net.Unity.Server
 
             Vec3 position = Movement != null
                 ? Movement.State.Position
-                : MovementSimulation.ToCore(transform.position);
+                : MovementSimulation.ToCore(BotPosition());
 
-            Vec3 velocity;
-            if (Movement != null)
-            {
-                velocity = Movement.State.Velocity;
-            }
-            else if (Source != null)
-            {
-                Source.GetVelocity(out float vx, out float vy, out float vz);
-                velocity = new Vec3(vx, vy, vz);
-            }
-            else
-            {
-                velocity = Vec3.Zero;
-            }
+            Vec3 velocity = ReplicatedVelocity();
 
             // Through the properties, not the backing fields: both are pass-throughs to the
             // gameplay actor now, and reading _weaponId here is how the weapon id stayed 0 in
@@ -800,35 +906,30 @@ namespace Ironfront.Net.Unity.Server
             // does not make them both pass, it flips which one fails.
             else flags |= ActorStateFlags.IsRagdoll;
 
+            // And a LIVE ragdoll: a bot knocked over, or swimming, which the original game does as
+            // a buoyant active ragdoll. Until 2026-09-28 only death set the bit, so every client
+            // drew such a bot standing where it fell -- while its real body lay elsewhere or
+            // floated off, and its hitboxes stood with the drawing. IsAlive stays set, which is how
+            // a client tells this from a corpse.
+            if (IsAlive && Source != null && Source.IsRagdolledAlive) flags |= ActorStateFlags.IsRagdoll;
+
+            // The bit has been decoded, and drawn, since the flags byte was defined; nothing set it.
+            if (Source != null && Source.IsInWater) flags |= ActorStateFlags.IsInWater;
+
             if (IsAiming) flags |= ActorStateFlags.IsAiming;
 
-            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
-                    _actorId, out _, out _))
-                flags |= ActorStateFlags.IsSeated;
-
-            Vec3 velocity = Vec3.Zero;
-            if (Movement != null)
-            {
-                velocity = Movement.State.Velocity;
-            }
-            else if (Source != null)
-            {
-                Source.GetVelocity(out float vx, out float vy, out float vz);
-                velocity = new Vec3(vx, vy, vz);
-            }
+            if (IsSeatedOnServer) flags |= ActorStateFlags.IsSeated;
 
             if (Movement != null || Source != null)
             {
-                if (Movement != null && Movement.State.IsCrouching)
-                    flags |= ActorStateFlags.IsCrouching;
+                // A claimed body's crouch is its movement agent's; a bot's is its own animator's
+                // stance. The second half was missing, so no client ever drew a bot crouched.
+                if (IsCrouchingForReplication()) flags |= ActorStateFlags.IsCrouching;
 
-                // Sprinting is derived rather than stored: the simulation has no sprint flag on
-                // its state, only a speed, and reporting "moving faster than a walk" is what the
-                // client actually animates from.
-                float horizontal = velocity.X * velocity.X + velocity.Z * velocity.Z;
-
-                float walk = MovementSimulation.WalkSpeed;
-                if (horizontal > walk * walk * 1.05f) flags |= ActorStateFlags.IsSprinting;
+                // Sprinting is derived rather than stored. One rule for this bit and for the
+                // pose CaptureHitboxes shapes the boxes in, so the two cannot disagree.
+                Vec3 velocity = ReplicatedVelocity();
+                if (IsSprintingVelocity(in velocity)) flags |= ActorStateFlags.IsSprinting;
             }
 
             return flags;
@@ -852,11 +953,37 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public HitboxSet CaptureHitboxes()
         {
+            // A bot lying as a live ragdoll is boxed where its physical ragdoll lies: the head's
+            // own bounds, and the rest of the body. Arms and legs take the body's box, so the body
+            // wins every tie (the lower index) -- a lying body is a head or a body.
+            if (Movement == null && Source != null && Source.IsRagdolledAlive
+                && Source.TryGetRagdollPose(out _, out Bounds headBounds, out Bounds bodyBounds))
+            {
+                Aabb head = ToAabb(in headBounds);
+                Aabb body = ToAabb(in bodyBounds);
+                return new HitboxSet(in head, in body, in body, in body);
+            }
+
+            // Shaped from the same facts every client draws this body from: the seat, the
+            // crouch and sprint bits and the velocity the snapshot carries, and the heading
+            // Capture sends. Boxes in a pose the drawn body is not in are as wrong as boxes in
+            // the wrong place (playtest 2026-09-28, bug 5).
+            bool seated = IsSeatedOnServer;
+            bool crouching = false;
             Vec3 feet;
-            if (Movement != null)
+
+            if (seated)
+            {
+                // A seated body sits on the seat's own transform (Actor.EnterSeat parents it at
+                // local zero), the pivot the seated pose was measured from. NOT the movement
+                // agent's state, which is not the seat -- see ServerPlayer's seated branch.
+                feet = MovementSimulation.ToCore(transform.position);
+            }
+            else if (Movement != null)
             {
                 MoveState state = Movement.State;
-                float halfCapsule = MovementCore.HeightFor(state.IsCrouching) * 0.5f;
+                crouching = state.IsCrouching;
+                float halfCapsule = MovementCore.HeightFor(crouching) * 0.5f;
                 feet = new Vec3(
                     state.Position.X,
                     state.Position.Y - halfCapsule,
@@ -867,9 +994,99 @@ namespace Ironfront.Net.Unity.Server
                 // The original AI actor uses a feet/root pivot (Actor.SpawnAt writes the ground
                 // position directly), unlike the network player CharacterController above.
                 feet = MovementSimulation.ToCore(transform.position);
+
+                // The same answer the IsCrouching bit gives, so the boxes are in the pose every
+                // client now draws the bot in.
+                crouching = IsCrouchingForReplication();
             }
 
-            return HitboxSet.Humanoid(in feet);
+            float yaw = float.IsNaN(YawDegrees) ? transform.eulerAngles.y : YawDegrees;
+
+            Vec3 velocity = ReplicatedVelocity();
+            float horizontal = MathF.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
+
+            // Astride the quad bike the head is 0.28 m further forward than in the chair; every
+            // client draws the seat's own pose (RemoteActorView's seated type), so the boxes do.
+            bool astride = seated && SeatAnimationOnServer == HitboxSet.QuadSeatAnimation;
+            HumanoidPose pose = HitboxSet.PoseFor(
+                seated, astride, crouching, horizontal, IsSprintingVelocity(in velocity));
+
+            return HitboxSet.Humanoid(in feet, yaw, pose, velocity.X, velocity.Z);
+        }
+
+        /// <summary>
+        /// The crouch every client draws this body in: the movement agent's for a claimed body,
+        /// the game's own stance for a bot. One rule for the IsCrouching bit and the hitboxes.
+        /// </summary>
+        private bool IsCrouchingForReplication()
+            => Movement != null
+                ? Movement.State.IsCrouching
+                : Source != null && Source.IsCrouching;
+
+        /// <summary>
+        /// The <c>seated type</c> of the seat the gameplay actor sits in, 0 without one. From the
+        /// actor's own seat (<c>Actor.seat.animation</c>), which the seat bridge keeps equal to the
+        /// arbiter's record.
+        /// </summary>
+        private int SeatAnimationOnServer => Source != null ? Source.SeatAnimation : 0;
+
+        /// <summary>
+        /// Where every client should draw this bot: its feet -- or, while it lies as a live
+        /// ragdoll, the ragdoll's pelvis. The actor's transform stays where it fell while the body
+        /// is flung or floats away, so the transform is not where the bot is.
+        /// </summary>
+        private Vector3 BotPosition()
+        {
+            if (Source != null && Source.IsRagdolledAlive)
+            {
+                // The pelvis is set whenever the actor is a live ragdoll; the return value speaks
+                // only for the bounds.
+                Source.TryGetRagdollPose(out Vector3 pelvis, out _, out _);
+                return pelvis;
+            }
+
+            return transform.position;
+        }
+
+        private static Aabb ToAabb(in Bounds bounds)
+            => new Aabb(MovementSimulation.ToCore(bounds.center), MovementSimulation.ToCore(bounds.extents));
+
+        /// <summary>Whether the server's own occupancy record has this actor in a seat.</summary>
+        /// <remarks>The same question <see cref="BuildStateFlags"/> answers for the IsSeated bit.</remarks>
+        private bool IsSeatedOnServer
+            => ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(_actorId, out _, out _);
+
+        /// <summary>
+        /// Sitting in an enclosed seat, where only a piercing round reaches this actor. See
+        /// <see cref="HitscanTarget.InEnclosedSeat"/>.
+        /// </summary>
+        public bool IsInEnclosedSeat => Source != null && Source.IsInEnclosedSeat;
+
+        /// <summary>
+        /// The velocity every client animates this body from: the one the snapshot carries.
+        /// </summary>
+        private Vec3 ReplicatedVelocity()
+        {
+            if (Movement != null) return Movement.State.Velocity;
+
+            if (Source != null)
+            {
+                Source.GetVelocity(out float vx, out float vy, out float vz);
+                return new Vec3(vx, vy, vz);
+            }
+
+            return Vec3.Zero;
+        }
+
+        /// <summary>
+        /// The IsSprinting bit's rule: moving faster than a walk. The simulation has no sprint flag
+        /// on its state, only a speed, and "faster than a walk" is what the client animates from.
+        /// </summary>
+        private static bool IsSprintingVelocity(in Vec3 velocity)
+        {
+            float horizontal = velocity.X * velocity.X + velocity.Z * velocity.Z;
+            float walk = MovementSimulation.WalkSpeed;
+            return horizontal > walk * walk * 1.05f;
         }
 
         /// <summary>
@@ -974,6 +1191,7 @@ namespace Ironfront.Net.Unity.Server
         {
             IsClaimed = false;
 
+            EndPlayerPresentation();
             SetAiDriverSuspended(false);
         }
     }

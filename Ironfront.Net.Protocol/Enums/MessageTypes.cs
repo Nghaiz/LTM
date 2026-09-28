@@ -146,5 +146,34 @@ namespace Ironfront.Net.Protocol
         GsMatchEnded      = 0x0104,
         GsPlayerJoined    = 0x0105,
         GsPlayerLeft      = 0x0106,
+
+        /// <summary>
+        /// The master tells a game server the room it now hosts and what that room asked for.
+        /// M→G, body <c>{ "serverId", "roomId", "mapId", "botsPerTeam" }</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The first master → game-server push.</b> Every other opcode in this range runs
+        /// the other way, and P14 learned the ROOM without one: it arrives signed inside every
+        /// join ticket. The room's bot count had no such carrier -- the ticket's 32 signed bytes
+        /// are full -- so the create-room form's Bots field reached the master and stopped
+        /// there, and every match got the prefab's 16 per team whatever the room asked for
+        /// (owner report 2026-09-28: a room set to 0 bots released 32).
+        /// </para>
+        /// <para>
+        /// <b>Sent with every ticket the master issues</b>, not once at allocation: a game server
+        /// that re-registered in between would otherwise never hear it, and the frame is a few
+        /// dozen bytes per join. The game server keeps the latest one and applies it only to the
+        /// room its tickets name.
+        /// </para>
+        /// <para>
+        /// <b>Not a <c>PROTOCOL_VERSION</c> bump</b>, for the reason
+        /// <see cref="RoomTeamRequest"/> gives: that constant governs the binary UDP protocol,
+        /// and MSP bodies are JSON. A game server built before this opcode hands the frame to
+        /// a registration that is no longer pending and nothing reads it, so it keeps its
+        /// prefab's roster rather than failing.
+        /// </para>
+        /// </remarks>
+        GsRoomAssigned    = 0x0107,
     }
 }

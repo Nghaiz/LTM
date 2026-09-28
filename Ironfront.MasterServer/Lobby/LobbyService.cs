@@ -54,6 +54,10 @@ namespace Ironfront.MasterServer.Lobby
         /// </remarks>
         public required byte MaxPlayers { get; set; }
 
+        /// <summary>
+        /// Bots PER TEAM this room asked for, 0 to <see cref="ProtocolConstants.MAX_BOTS_PER_TEAM"/>.
+        /// Sent to the allocated game server with every ticket (<c>GS_ROOM_ASSIGNED</c>).
+        /// </summary>
         public required byte BotCount { get; init; }
         public required bool IsPrivate { get; init; }
         public string? PasswordHash { get; init; }
@@ -142,6 +146,10 @@ namespace Ironfront.MasterServer.Lobby
             if (_playerToRoom.ContainsKey(session.PlayerId)) return Fail(ErrorCode.AlreadyInAnotherRoom);
             if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 48 || request.MaxPlayers < 2 || request.MaxPlayers > ProtocolConstants.MAX_PLAYERS)
                 return Fail(ErrorCode.InternalServerError);
+
+            // Per team, and no game server can field more than half of MAX_BOTS on a side. The
+            // form refuses it first; this is for a client that skipped the form.
+            if (request.BotCount > ProtocolConstants.MAX_BOTS_PER_TEAM) return Fail(ErrorCode.InternalServerError);
             if (request.IsPrivate && !AuthService.IsValidSha256(request.PasswordHash)) return Fail(ErrorCode.WrongRoomPassword);
 
             var room = new Room

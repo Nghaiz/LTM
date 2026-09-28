@@ -16,11 +16,29 @@ namespace Ironfront.Net.Replication.Combat
         public readonly bool IsAlive;
         public readonly HitboxSet Present;
 
+        /// <summary>
+        /// Sitting in an enclosed seat -- a tank's or a helicopter's crew -- which only a piercing
+        /// round reaches.
+        /// </summary>
+        /// <remarks>
+        /// The original's rule, <c>Actor.DamageAttributed</c>: <c>IsSeated() &amp;&amp;
+        /// seat.enclosed</c> refuses every non-piercing hit. The server's hitscan path owns
+        /// health itself and never runs that method, so a rifle round that found a gap in a hull
+        /// killed the pilot behind it (playtest 2026-09-28, bug 5 audit).
+        /// </remarks>
+        public readonly bool InEnclosedSeat;
+
         public HitscanTarget(ushort actorId, bool isAlive, in HitboxSet present)
+            : this(actorId, isAlive, in present, inEnclosedSeat: false)
+        {
+        }
+
+        public HitscanTarget(ushort actorId, bool isAlive, in HitboxSet present, bool inEnclosedSeat)
         {
             ActorId = actorId;
             IsAlive = isAlive;
             Present = present;
+            InEnclosedSeat = inEnclosedSeat;
         }
     }
 

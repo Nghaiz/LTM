@@ -96,6 +96,22 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		return seat != null ? seat.transform.position : Vector3.positiveInfinity;
 	}
 
+	/// <summary>
+	/// The animator's "seated type" for an occupant of <paramref name="seatIndex"/>: the seat's
+	/// SitAnimation (0 chair, 1 quad), or 0 for a seat this vehicle does not have.
+	/// </summary>
+	/// <remarks>
+	/// EnterSeat sets this parameter offline; a remote body is drawn from the snapshot's seat
+	/// instead, and nothing read it for one, so the quad bike's driver sat on a chair.
+	/// </remarks>
+	public int GetSeatAnimation(int seatIndex)
+	{
+		if (seats == null || seatIndex < 0 || seatIndex >= seats.Length) return 0;
+
+		Seat seat = seats[seatIndex];
+		return seat != null ? (int)seat.animation : 0;
+	}
+
 	public float maxHealth = 1000f;
 
 	public float crashDamageSpeedThrehshold = 2f;
@@ -1019,14 +1035,27 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 			if (seat.IsOccupied())
 			{
 				Actor occupant = seat.occupant;
-				occupant.LeaveSeat();
-				if (seat.enclosed)
+				// Bug 1 of the 2026-09-28 playtest. A networked client runs this from the snapshot
+				// that flags the wreck Dead, and on a client Damage never kills: the pilot was set
+				// down beside the wreck drawing his rifle, knocked over only by the local balance
+				// hit. The server kills an enclosed occupant with its vehicle and says so in
+				// S_DEATH, which fells this body (LocalPlayerRigBinding.FellBody); here it only
+				// leaves the seat, so the wreck does not take it along, and draws nothing.
+				if (seat.enclosed && Ironfront.Net.Unity.NetContext.IsClient)
 				{
-					occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+					occupant.LeaveSeat(drawWeapon: false);
 				}
 				else
 				{
-					occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+					occupant.LeaveSeat();
+					if (seat.enclosed)
+					{
+						occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+					}
+					else
+					{
+						occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+					}
 				}
 			}
 			seat.gameObject.SetActive(false);

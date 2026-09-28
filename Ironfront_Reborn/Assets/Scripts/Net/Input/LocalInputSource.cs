@@ -169,6 +169,7 @@ namespace Ironfront.Net.Unity
                 bool aimKey = Input.GetButton("Fire2") || Input.GetMouseButton(1);
                 bool crouchKey = Input.GetButton("Crouch");
                 bool sprintKey = Input.GetButton("Sprint");
+                bool sprinting = _sprinting != null ? _sprinting(crouchKey, aimKey, sprintKey) : sprintKey;
 
                 return InputButtonPacker.Pack(
                     fire:   (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen,
@@ -176,9 +177,13 @@ namespace Ironfront.Net.Unity
                     reload: Input.GetButton("Reload") && !loadoutOpen,
                     jump:   Input.GetButton("Jump"),
                     crouch: crouchKey,
-                    sprint: _sprinting != null ? _sprinting(crouchKey, aimKey, sprintKey) : sprintKey,
+                    sprint: sprinting,
                     use:    Input.GetButton("Use"),
-                    weaponSlot: _weaponSlotIntent != null ? _weaponSlotIntent() : -1);
+                    weaponSlot: _weaponSlotIntent != null ? _weaponSlotIntent() : -1,
+                    // The server fires a leaning shot from where the leaning camera is; without
+                    // the bits it fired from 0.4 m beside it (playtest 2026-09-28, bug 5). Zero
+                    // while sprinting, as FpsActorController.Lean() zeroes the camera's lean.
+                    lean: sprinting ? 0f : Lean);
             }
         }
 

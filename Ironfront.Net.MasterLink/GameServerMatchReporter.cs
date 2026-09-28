@@ -35,7 +35,19 @@ namespace Ironfront.Net.MasterLink
         {
             _link     = link ?? throw new ArgumentNullException(nameof(link));
             _ownsLink = ownsLink;
+            _link.OnRoomAssigned += ForwardRoomAssignment;
         }
+
+        /// <summary>
+        /// The master assigned this server a room: its id as the join tickets carry it, and the
+        /// bots per team it asked for. Raised from <see cref="Poll"/>, so on the polling thread.
+        /// </summary>
+        public event Action<ushort, int>? RoomAssigned;
+
+        // The ticket carries the room as a u16 (JoinTicket.Issue casts the master's int), so the
+        // assignment is narrowed the same way or the two would never compare equal.
+        private void ForwardRoomAssignment(GameServerRoomAssignment assignment)
+            => RoomAssigned?.Invoke((ushort)assignment.RoomId, assignment.BotsPerTeam);
 
         public ushort ServerId => _link.ServerId;
 
@@ -140,6 +152,7 @@ namespace Ironfront.Net.MasterLink
 
         public void Dispose()
         {
+            _link.OnRoomAssigned -= ForwardRoomAssignment;
             if (_ownsLink) _link.Dispose();
         }
     }
