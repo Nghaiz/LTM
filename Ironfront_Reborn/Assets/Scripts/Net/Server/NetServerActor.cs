@@ -910,8 +910,9 @@ namespace Ironfront.Net.Unity.Server
 
             if (Movement != null || Source != null)
             {
-                if (Movement != null && Movement.State.IsCrouching)
-                    flags |= ActorStateFlags.IsCrouching;
+                // A claimed body's crouch is its movement agent's; a bot's is its own animator's
+                // stance. The second half was missing, so no client ever drew a bot crouched.
+                if (IsCrouchingForReplication()) flags |= ActorStateFlags.IsCrouching;
 
                 // Sprinting is derived rather than stored. One rule for this bit and for the
                 // pose CaptureHitboxes shapes the boxes in, so the two cannot disagree.
@@ -970,6 +971,10 @@ namespace Ironfront.Net.Unity.Server
                 // The original AI actor uses a feet/root pivot (Actor.SpawnAt writes the ground
                 // position directly), unlike the network player CharacterController above.
                 feet = MovementSimulation.ToCore(transform.position);
+
+                // The same answer the IsCrouching bit gives, so the boxes are in the pose every
+                // client now draws the bot in.
+                crouching = IsCrouchingForReplication();
             }
 
             float yaw = float.IsNaN(YawDegrees) ? transform.eulerAngles.y : YawDegrees;
@@ -981,6 +986,15 @@ namespace Ironfront.Net.Unity.Server
 
             return HitboxSet.Humanoid(in feet, yaw, pose, velocity.X, velocity.Z);
         }
+
+        /// <summary>
+        /// The crouch every client draws this body in: the movement agent's for a claimed body,
+        /// the game's own stance for a bot. One rule for the IsCrouching bit and the hitboxes.
+        /// </summary>
+        private bool IsCrouchingForReplication()
+            => Movement != null
+                ? Movement.State.IsCrouching
+                : Source != null && Source.IsCrouching;
 
         /// <summary>Whether the server's own occupancy record has this actor in a seat.</summary>
         /// <remarks>The same question <see cref="BuildStateFlags"/> answers for the IsSeated bit.</remarks>

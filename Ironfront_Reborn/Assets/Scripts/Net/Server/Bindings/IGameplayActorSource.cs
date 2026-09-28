@@ -66,6 +66,13 @@
         bool IsInEnclosedSeat => false;
 
         /// <summary>
+        /// Whether this actor is crouched, in the stance the game's own animator shows. Read for
+        /// bots only: a claimed body's crouch is its movement agent's, which is what its player
+        /// predicts against.
+        /// </summary>
+        bool IsCrouching => false;
+
+        /// <summary>
         /// One line of what the body's water state is made of: where its feet are, how deep the
         /// crown <see cref="IsSubmerged"/> reads and the shipped swim sample sit, whether it has
         /// fallen over into a ragdoll, and which seat it is in. For the drowning log.
