@@ -864,9 +864,6 @@ namespace Ironfront.Net.Unity.Server
 
         private void BuildAndSendSnapshots()
         {
-            _world.ServerTick = _scheduler.CurrentTick;
-            ServerActorRegistry.Instance.CaptureInto(_world);
-
             // V4. Deaths are resolved BEFORE the capture, and that ordering is the whole of
             // acceptance criterion 9.
             //
@@ -882,7 +879,22 @@ namespace Ironfront.Net.Unity.Server
             //
             // Killing first means the despawn unregisters the vehicle, so the capture below
             // simply does not see it. No filter, no dead-entry special case.
+            //
+            // THE ACTOR CAPTURE TOO, and that half was missed. It sat above this call, so a
+            // vehicle that burned out killed its crew (Vehicle.Die -> Actor.Die ->
+            // ServerCombatEvents.ReportDeath) AFTER the actors had been captured: S_DEATH went out
+            // on the reliable channel at once, and this tick's snapshot followed it carrying the
+            // crew as they were a moment earlier -- alive, and already out of the seat, because
+            // the seat table had let go of them. The client read that as a respawn and played
+            // the whole deploy on the corpse: a pilot shot down or crashed jumped out of the
+            // cockpit drawing his rifle in mid-air, then got the deploy screen (playtest
+            // 2026-09-28, bug 1; reproduced live 2026-09-29 by flying a helicopter into the
+            // ground). Capturing after the burn puts every death in the same snapshot as its
+            // S_DEATH.
             AdvanceVehicleBurn();
+
+            _world.ServerTick = _scheduler.CurrentTick;
+            ServerActorRegistry.Instance.CaptureInto(_world);
 
             // Reads each vehicle's Rigidbody once per snapshot, not once per viewer — quantizing
             // here is what makes change detection mean anything, because a vehicle idling on a

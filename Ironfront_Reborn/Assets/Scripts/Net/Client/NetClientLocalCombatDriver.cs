@@ -913,6 +913,11 @@ namespace Ironfront.Net.Unity.Client
                 ChannelId.ReliableOrdered, new System.ReadOnlySpan<byte>(_payload, 0, total),
                 reliable: true);
 
+            // From here a snapshot saying the body is alive is the server's answer. Before it,
+            // one is a stale capture racing S_DEATH (bug 1 of the 2026-09-28 playtest) and
+            // ClientCombatState holds it back rather than respawning a corpse.
+            _state.NoteDeployRequested();
+
             // The client logged NOTHING about deploy, and that is why the 2026-09-04 playtest had
             // to be solved by reading source instead of logs: three log files, 18,929 lines, and
             // no way to tell a request that was never sent from one the server never answered.

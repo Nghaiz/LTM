@@ -107,6 +107,87 @@ namespace Ironfront.Net.Replication.Tests
                 a => Normalized(a) == "followingCorpse=false");
         }
 
+        [Fact]
+        public void TheServerCapturesTheActorsAfterTheVehicleDeaths()
+        {
+            // Bug 1 again, reproduced live on 2026-09-29: the actors were captured BEFORE
+            // AdvanceVehicleBurn, so a burn that killed a crew broadcast S_DEATH and then sent a
+            // snapshot still carrying that crew alive (and out of the seat: MarkDead had already
+            // cleared the seat table). The client respawned the corpse on it.
+            MethodDeclarationSyntax build = Methods(Parse("Net/Server/ServerTickLoop.cs"), "BuildAndSendSnapshots").Single();
+
+            InvocationExpressionSyntax burn = Invocations(build, "AdvanceVehicleBurn").Single();
+            InvocationExpressionSyntax actors = Invocations(build, "CaptureInto")
+                .Single(i => Normalized(i) == "ServerActorRegistry.Instance.CaptureInto(_world)");
+
+            Assert.True(burn.SpanStart < actors.SpanStart,
+                "BuildAndSendSnapshots captures the actors before AdvanceVehicleBurn, so a vehicle "
+                + "that burns out kills its crew after the capture: S_DEATH goes out, then a snapshot "
+                + "that still has them alive, and the client respawns the corpse (bug 1, 2026-09-28).");
+        }
+
+        [Fact]
+        public void TheClientNotesEveryDeployRequestItSends()
+        {
+            MethodDeclarationSyntax request = Methods(
+                Parse("Net/Client/NetClientLocalCombatDriver.cs"), "RequestRespawn").Single();
+
+            InvocationExpressionSyntax send = Invocations(request, "Send").Single();
+            InvocationExpressionSyntax noted = Invocations(request, "NoteDeployRequested").Single();
+
+            Assert.Equal("_state.NoteDeployRequested()", Normalized(noted));
+            Assert.True(send.SpanStart < noted.SpanStart,
+                "The deploy request must be noted only once it has been sent: ClientCombatState "
+                + "believes an alive snapshot after a death only as the answer to one.");
+        }
+
+        [Fact]
+        public void ACorpseAsksForNoSeat()
+        {
+            MethodDeclarationSyntax update = Methods(Parse("Net/Client/ClientSeatRequester.cs"), "Update").Single();
+
+            IfStatementSyntax gate = update.DescendantNodes().OfType<IfStatementSyntax>()
+                .Single(s => Normalized(s.Condition) == "!LocalBodyIsDeployed()");
+            Assert.NotEmpty(gate.Statement.DescendantNodesAndSelf().OfType<ReturnStatementSyntax>());
+
+            // Before the retry and before the key is read, so neither a fresh press nor a walk to
+            // the next seat that a death interrupted can reach the wire.
+            Assert.True(gate.SpanStart < Invocations(update, "SendDueRetry").Single().SpanStart);
+            Assert.True(gate.SpanStart < Invocations(update, "GetButtonDown").Single().SpanStart);
+        }
+
+        [Fact]
+        public void TheServerGivesNoSeatToACorpse()
+        {
+            MethodDeclarationSyntax measure = Methods(
+                Parse("Net/Server/ServerSeatBridge.cs"), "TryMeasureSeatReach").Single();
+
+            Assert.Contains(measure.DescendantNodes().OfType<IfStatementSyntax>(),
+                s => Normalized(s.Condition) == "!actor.IsAlive"
+                     && s.Statement.DescendantNodesAndSelf().OfType<ReturnStatementSyntax>().Any());
+        }
+
+        [Fact]
+        public void ACorpseNeverDrawsAWeaponOrTakesASeat()
+        {
+            SyntaxNode actor = Parse("Assembly-CSharp/Actor.cs");
+
+            MethodDeclarationSyntax leave = Methods(actor, "LeaveSeat")
+                .Single(m => m.ParameterList.Parameters.Count == 1);
+            foreach (InvocationExpressionSyntax draw in Invocations(leave, "SwitchToFirstAvailableWeapon"))
+            {
+                Assert.True(IsInsideIfMentioning(draw, "dead"),
+                    "Actor.LeaveSeat can draw for a dead body: a seat Left that lands after the "
+                    + "death plays the respawn animation on the corpse.");
+            }
+
+            // The refusal comes FIRST: InstantGetUp stands a fallen body up and hands it the
+            // first-person camera, which is exactly what must not happen to a corpse.
+            MethodDeclarationSyntax enter = Methods(actor, "EnterSeat").Single();
+            StatementSyntax first = enter.Body!.Statements.First();
+            Assert.Equal("if(dead){returnfalse;}", Normalized(first));
+        }
+
         // ------------------------------------------------------------------------ helpers
 
         private static void AssertEveryLeaveIsACorpse(MethodDeclarationSyntax method, string where)
