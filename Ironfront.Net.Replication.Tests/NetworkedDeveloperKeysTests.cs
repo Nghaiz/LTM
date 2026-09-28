@@ -64,6 +64,25 @@ namespace Ironfront.Net.Replication.Tests
                 "!NetContext.IsClient");
         }
 
+        /// <summary>
+        /// F1-F8 switch seats locally; a networked client must leave seats to the server (X-30).
+        /// </summary>
+        [Theory]
+        [InlineData("F1")]
+        [InlineData("F2")]
+        [InlineData("F3")]
+        [InlineData("F4")]
+        [InlineData("F5")]
+        [InlineData("F6")]
+        [InlineData("F7")]
+        [InlineData("F8")]
+        public void TheSeatSwitchKeysAreNotReadByANetworkedClient(string key)
+        {
+            AssertEveryReadIsGuardedBy(
+                "Assembly-CSharp/FpsActorController.cs", $"Input.GetKeyDown(KeyCode.{key})",
+                "!NetContext.IsClient");
+        }
+
         /// <summary>The pause menu freezes time offline only.</summary>
         [Fact]
         public void ThePauseMenuStopsTimeOfflineOnly()

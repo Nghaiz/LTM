@@ -1095,35 +1095,42 @@ public class FpsActorController : ActorController
 		{
 			QueueWeaponSwitch(4);
 		}
-		if (Input.GetKeyDown(KeyCode.F1))
+		// F1-F8 move the body between the seats of its vehicle -- LeaveSeat and EnterSeat, both
+		// local. Seat authority is the server's at client role (design D2, ledger X-30, and the
+		// Use key's own guard below): a networked client switching here moved its camera to
+		// another seat while the server kept it driving, and the protocol has no switch to ask
+		// for. Offline they are the original game's keys, unchanged. Found auditing bug 4 of the
+		// 2026-09-28 playtest, the keys nobody knew were live.
+		bool offlineSeatKeys = !NetContext.IsClient;
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F1))
 		{
 			actor.SwitchSeat(0);
 		}
-		if (Input.GetKeyDown(KeyCode.F2))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F2))
 		{
 			actor.SwitchSeat(1);
 		}
-		if (Input.GetKeyDown(KeyCode.F3))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F3))
 		{
 			actor.SwitchSeat(2);
 		}
-		if (Input.GetKeyDown(KeyCode.F4))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F4))
 		{
 			actor.SwitchSeat(3);
 		}
-		if (Input.GetKeyDown(KeyCode.F5))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F5))
 		{
 			actor.SwitchSeat(4);
 		}
-		if (Input.GetKeyDown(KeyCode.F6))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F6))
 		{
 			actor.SwitchSeat(5);
 		}
-		if (Input.GetKeyDown(KeyCode.F7))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F7))
 		{
 			actor.SwitchSeat(6);
 		}
-		if (Input.GetKeyDown(KeyCode.F8))
+		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F8))
 		{
 			actor.SwitchSeat(7);
 		}
