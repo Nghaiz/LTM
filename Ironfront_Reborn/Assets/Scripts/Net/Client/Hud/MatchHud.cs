@@ -73,6 +73,9 @@ namespace Ironfront.Net.Unity.Client.Hud
         [Tooltip("Names the local team, blank until the first snapshot answers.")]
         [SerializeField] private Text _teamReadoutText;
 
+        [Tooltip("Optional. The chip the readout sits on, shown only while there is a team to name.")]
+        [SerializeField] private GameObject _teamReadoutRoot;
+
         [Header("Killfeed (3.3)")]
         [Tooltip("Newest first. One Text per line; the builder authors KillfeedRows of them.")]
         [SerializeField] private Text[] _killfeedRows = new Text[KillfeedRows];
@@ -181,7 +184,7 @@ namespace Ironfront.Net.Unity.Client.Hud
                 // over the bot match is the X-48 failure one screen over.
                 if (_deployRoot != null) _deployRoot.SetActive(false);
                 if (_scoreboardRoot != null) _scoreboardRoot.SetActive(false);
-                if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
+                ClearTeamReadout();
                 ClearKillfeed();
                 ClearScoreboard();
 
@@ -191,7 +194,7 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             if (_deployRoot != null) _deployRoot.SetActive(false);
             if (_scoreboardRoot != null) _scoreboardRoot.SetActive(false);
-            if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
+            ClearTeamReadout();
             ClearKillfeed();
             ClearScoreboard();
         }
@@ -261,12 +264,23 @@ namespace Ironfront.Net.Unity.Client.Hud
                 // one would be a fabricated zero -- ScoreUi's own rule for a human count that
                 // has not arrived. This element exists to make a wrong team visible; it cannot,
                 // if the unknown state is drawn as a side.
-                _teamReadoutText.text = string.Empty;
+                ClearTeamReadout();
                 return;
             }
 
             _teamReadoutText.text = TeamLabel(team);
             _teamReadoutText.color = TeamColour(team);
+            if (_teamReadoutRoot != null) _teamReadoutRoot.SetActive(true);
+        }
+
+        /// <summary>
+        /// Blanks the readout, and puts its chip away with it: an empty chip would be a second
+        /// way of drawing the unknown state as something.
+        /// </summary>
+        private void ClearTeamReadout()
+        {
+            if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
+            if (_teamReadoutRoot != null) _teamReadoutRoot.SetActive(false);
         }
 
         /// <inheritdoc/>
@@ -503,27 +517,19 @@ namespace Ironfront.Net.Unity.Client.Hud
         private static string Coloured(string text, int team)
             => "<color=#" + ColourHex(team) + ">" + text + "</color>";
 
-        private static string ColourHex(int team)
-            => (NetClientBindings.TeamColourRgb(team) & 0xFFFFFF).ToString("X6");
+        private static string ColourHex(int team) => ColorUtility.ToHtmlStringRGB(TeamColour(team));
 
         /// <summary>
-        /// The palette's answer for <paramref name="team"/>, as an engine colour.
+        /// The palette's answer for <paramref name="team"/>, as the colour of type.
         /// </summary>
         /// <remarks>
-        /// The unpack is <c>MenuRoomLobbyScreen.TeamColour</c>'s, and it is repeated rather than
-        /// shared because sharing it means a helper in <c>Net/Shared</c> that returns a
-        /// <c>UnityEngine.Color</c> -- which is exactly the widening <see cref="ITeamPalette"/>
-        /// refuses, for the alpha and colour-space reasons its own remark gives. Four lines of
-        /// shifting is the cheaper of the two.
+        /// <see cref="TeamInk"/> does the unpack and lifts the answer toward white — the room
+        /// lobby's rule too, so a side is drawn in one ink on both screens. It lives in this
+        /// assembly rather than <c>Net/Shared</c>, where a helper returning a
+        /// <c>UnityEngine.Color</c> would be exactly the widening <see cref="ITeamPalette"/>
+        /// refuses, for the alpha and colour-space reasons its own remark gives.
         /// </remarks>
         private static Color TeamColour(int team)
-        {
-            int rgb = NetClientBindings.TeamColourRgb(team);
-
-            return new Color(
-                ((rgb >> 16) & 0xFF) / 255f,
-                ((rgb >> 8) & 0xFF) / 255f,
-                (rgb & 0xFF) / 255f);
-        }
+            => TeamInk.FromRgb(NetClientBindings.TeamColourRgb(team));
     }
 }

@@ -350,7 +350,11 @@ public class LoadoutUi : MonoBehaviour
 	private void ActivateContainer(RectTransform container)
 	{
 		container.gameObject.SetActive(true);
-		if (container.sizeDelta.y > (float)Screen.height)
+		// The list against the view it scrolls in, both in canvas units. Screen.height is pixels,
+		// which only agreed with them while this canvas was Constant Pixel Size; it now scales
+		// with the screen, so on any display but 1080p the hint came up when the list fitted, or
+		// stayed down when it did not.
+		if (container.sizeDelta.y > ((RectTransform)container.parent).rect.height)
 		{
 			scrollIndicator.gameObject.SetActive(true);
 		}

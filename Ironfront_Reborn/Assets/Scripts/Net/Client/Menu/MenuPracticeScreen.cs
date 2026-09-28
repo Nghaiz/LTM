@@ -13,6 +13,11 @@ namespace Ironfront.Net.Unity.Client.Menu
     {
         [SerializeField] private MenuScreenController? _controller;
         [SerializeField] private Dropdown? _mapDropdown;
+
+        /// <summary>
+        /// The map card's title, which follows the map dropdown as Create Room's does. Optional.
+        /// </summary>
+        [SerializeField] private Text? _mapPreviewTitle;
         [SerializeField] private Button? _startButton;
         [SerializeField] private Button[] _unsupportedControls = System.Array.Empty<Button>();
         [SerializeField] private MenuToast? _toast;
@@ -24,14 +29,25 @@ namespace Ironfront.Net.Unity.Client.Menu
             {
                 _mapDropdown.ClearOptions();
                 _mapDropdown.AddOptions(CurrentMapLabels().ToList());
+                _mapDropdown.onValueChanged.AddListener(_ => RefreshMapPreview());
             }
             _sceneNames.Clear();
             _sceneNames.AddRange(CurrentMapScenes());
+            RefreshMapPreview();
 
             if (_startButton != null)
                 _startButton.onClick.AddListener(StartPracticeConfiguration);
             foreach (Button control in _unsupportedControls)
                 if (control != null) control.onClick.AddListener(ShowDevelopment);
+        }
+
+        private void RefreshMapPreview()
+        {
+            if (_mapPreviewTitle == null || _mapDropdown == null) return;
+            int count = _mapDropdown.options.Count;
+            _mapPreviewTitle.text = count == 0
+                ? string.Empty
+                : _mapDropdown.options[Mathf.Clamp(_mapDropdown.value, 0, count - 1)].text;
         }
 
         internal static string[] CurrentMapLabels()

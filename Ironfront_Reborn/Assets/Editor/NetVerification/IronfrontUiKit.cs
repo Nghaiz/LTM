@@ -1,0 +1,237 @@
+using Ironfront.Net.Unity.Client.Menu;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Ironfront.Net.Unity.EditorTools
+{
+    /// <summary>
+    /// The UI pack's design tokens and surfaces, for every tool that authors UI.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>One definition, because two drifted.</b> The menu was rebuilt on the pack's palette,
+    /// Roboto and angular geometry while the in-match readout kept the built-in Arial on flat
+    /// grey and the legacy HUD its own greys, so the game changed design language at the moment a
+    /// match loaded. <c>BuildMenuCanvas</c>, <c>BuildMatchHud</c> and <c>RestyleIngameUi</c> now take
+    /// their colours, type and surfaces from here, and a button is the same button on every screen.
+    /// </para>
+    /// <para>
+    /// Colours are named for their token in <c>ui-pack/css/tokens.css</c>, not for the surface
+    /// that happens to use them.
+    /// </para>
+    /// </remarks>
+    internal static class IronfrontUiKit
+    {
+        /// <summary><c>--steel-100</c>: body text.</summary>
+        internal static readonly Color Ink = Hex("E7F2FB");
+
+        /// <summary><c>--ink-900</c>: text on the orange primary face.</summary>
+        internal static readonly Color Ink900 = Hex("07111D");
+
+        /// <summary><c>.section-heading p</c>: secondary text.</summary>
+        internal static readonly Color Muted = Hex("8DA8BA");
+
+        internal static readonly Color Cyan = Hex("35B6FF");
+        internal static readonly Color CyanSoft = Hex("7ACFFF");
+        internal static readonly Color Orange = Hex("FF7417");
+        internal static readonly Color Green = Hex("3BDB83");
+        internal static readonly Color Red = Hex("FF5265");
+
+        /// <summary><c>--line</c>: the default stroke.</summary>
+        internal static readonly Color Line = new Color(113f / 255f, 179f / 255f, 226f / 255f, 0.42f);
+
+        /// <summary><c>--panel</c>: glass cards.</summary>
+        internal static readonly Color Surface = new Color(5f / 255f, 18f / 255f, 31f / 255f, 0.93f);
+
+        // The corners, in reference pixels, exactly as the stylesheet cuts them.
+        internal const float CutPanel = 20f;
+        internal const float CutCard = 18f;
+        internal const float CutMenuButton = 13f;
+        internal const float CutAction = 10f;
+
+        /// <summary>Buttons at least this tall are <c>.menu-button</c> rows rather than actions.</summary>
+        internal const float MenuButtonHeight = 62f;
+
+        /// <summary>
+        /// The bundled UI font used by the HTML prototype's fallback stack.
+        /// </summary>
+        /// <remarks>
+        /// The explicit project path keeps glyph metrics stable between Editor and player builds.
+        /// A built-in fallback remains so a missing asset produces readable diagnostics instead
+        /// of an entirely blank screen.
+        /// </remarks>
+        internal static Font RegularFont()
+        {
+            Font font = AssetDatabase.LoadAssetAtPath<Font>("Assets/Font/Roboto-Regular.ttf");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            return font;
+        }
+
+        internal static Font BoldFont()
+        {
+            Font font = AssetDatabase.LoadAssetAtPath<Font>("Assets/Font/Roboto-Bold.ttf");
+            return font != null ? font : RegularFont();
+        }
+
+        /// <summary>
+        /// A cut-cornered surface, for CSS-only shapes: cards, rules, tracks, bars.
+        /// </summary>
+        internal static AngularPanel Angular(GameObject parent, string name, Vector2 position,
+            Vector2 size, float cut, Color fill, AngularEdge edge = AngularEdge.All,
+            float edgeWidth = 1f, Color? edgeColour = null)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(AngularPanel));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            RectTransform rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+
+            AngularPanel panel = go.GetComponent<AngularPanel>();
+            panel.color = fill;
+            panel.Configure(cut, edge, edgeWidth, edgeColour ?? Line);
+            panel.raycastTarget = false;
+            return panel;
+        }
+
+        /// <summary>
+        /// <c>panels/operations-panel.svg</c> on an existing surface: the glass, its stroke, and
+        /// the orange bracket on the cut corner at its designed size whatever the panel's.
+        /// </summary>
+        internal static void StyleOperationsPanel(AngularPanel panel)
+        {
+            panel.color = new Color(6f / 255f, 20f / 255f, 33f / 255f, 0.9f);
+            panel.Configure(CutPanel, AngularEdge.All, 1f,
+                new Color(107f / 255f, 164f / 255f, 206f / 255f, 0.65f));
+
+            Transform existing = panel.transform.Find("Accent");
+            GameObject accentObject = existing != null
+                ? existing.gameObject
+                : new GameObject("Accent", typeof(RectTransform), typeof(AngularAccent));
+            accentObject.transform.SetParent(panel.transform, worldPositionStays: false);
+
+            RectTransform rect = accentObject.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = AngularAccent.DesignSize;
+
+            AngularAccent accent = accentObject.GetComponent<AngularAccent>();
+            accent.color = Orange;
+            accent.raycastTarget = false;
+        }
+
+        /// <summary>
+        /// The button face for an action variant: <c>primary.svg</c>, <c>secondary.svg</c>, and
+        /// the two semantic states the pack has no master for.
+        /// </summary>
+        /// <remarks>
+        /// Command and danger used to multiply a colour into the secondary PNG, which darkened its
+        /// stroke into the fill. Here each has its own fill and stroke, in the palette's blue and
+        /// red, so the state reads from the edge the way the other two variants do.
+        /// </remarks>
+        internal static void StyleButtonFace(AngularPanel face, string kind, float height)
+        {
+            float cut = height >= MenuButtonHeight ? CutMenuButton : CutAction;
+            switch (kind)
+            {
+                case "primary":
+                    face.color = Hex("FF9D27");
+                    face.SetGradient(Hex("F15A0A"), 90f);
+                    face.Configure(cut, AngularEdge.All, 1f, Hex("FFC066"));
+                    break;
+                case "command":
+                    face.color = WithAlpha(Hex("04172B"), 0.92f);
+                    face.Configure(cut, AngularEdge.All, 1f, Hex("2E8FD6"));
+                    break;
+                case "danger":
+                    face.color = WithAlpha(Hex("170A10"), 0.92f);
+                    face.Configure(cut, AngularEdge.All, 1f, Hex("B8475A"));
+                    break;
+                default:
+                    face.color = WithAlpha(Hex("0A1927"), 0.92f);
+                    face.Configure(cut, AngularEdge.All, 1f, Hex("7FB5DB"));
+                    break;
+            }
+            face.raycastTarget = true;
+        }
+
+        /// <summary>The tint states every button of a variant shares.</summary>
+        internal static ColorBlock ButtonColours(ColorBlock colours, string kind)
+        {
+            colours.normalColor = Color.white;
+            colours.highlightedColor = kind == "primary" ? Hex("FFD9AE") : CyanSoft;
+            colours.pressedColor = kind == "primary" ? Hex("E95D0D") : Hex("176F9F");
+            colours.disabledColor = new Color(0.35f, 0.4f, 0.45f, 0.45f);
+            colours.colorMultiplier = 1f;
+            return colours;
+        }
+
+        /// <summary>
+        /// The caption size, by the button's class rather than its exact height: the tall menu
+        /// rows, the ordinary actions, and the compact table/prompt buttons.
+        /// </summary>
+        /// <remarks>
+        /// Scaling with the height gave a screen's side-by-side controls three different type
+        /// sizes when their heights differed by a few pixels.
+        /// </remarks>
+        internal static int CaptionSize(float height)
+            => height >= MenuButtonHeight ? Mathf.Clamp(Mathf.RoundToInt(height * 0.32f), 20, 25)
+                : height >= 46f ? 16 : 14;
+
+        /// <summary>The caption colour on a variant's face.</summary>
+        internal static Color CaptionInk(string kind) => kind == "primary" ? Ink900 : Ink;
+
+        /// <summary>
+        /// Imports a UI texture so it stays sharp where a canvas draws it smaller than its pixels.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Trilinear, over a Kaiser-filtered mip chain biased half a level sharp. Bilinear snaps to
+        /// one mip: art drawn between two levels' sizes comes from the coarser one and is magnified
+        /// back up, which is the smear the menu's wordmark and the HUD's icons showed. Kaiser keeps
+        /// edges in the downsampled levels that a box filter averages away, and the bias leans
+        /// every lookup toward the finer of the two levels it blends.
+        /// </para>
+        /// <para>
+        /// Line art wants <see cref="TextureImporterCompression.Uncompressed"/>: block compression
+        /// rings and smears its hard edges. Smooth art — paintings, gradients, soft masks — keeps
+        /// whatever compression suits its size.
+        /// </para>
+        /// </remarks>
+        /// <returns>Whether a setting changed, so the caller reimports only what it touched.</returns>
+        internal static bool SharpenUiTexture(TextureImporter importer, TextureImporterCompression compression)
+        {
+            bool changed = !importer.mipmapEnabled
+                || importer.filterMode != FilterMode.Trilinear
+                || importer.mipmapFilter != TextureImporterMipFilter.KaiserFilter
+                || !Mathf.Approximately(importer.mipMapBias, -0.5f)
+                || importer.textureCompression != compression;
+
+            importer.mipmapEnabled = true;
+            importer.filterMode = FilterMode.Trilinear;
+            importer.mipmapFilter = TextureImporterMipFilter.KaiserFilter;
+            importer.mipMapBias = -0.5f;
+            importer.textureCompression = compression;
+            return changed;
+        }
+
+        internal static Color Hex(string rgb)
+        {
+            if (!ColorUtility.TryParseHtmlString("#" + rgb, out Color colour))
+                return Color.white;
+            return colour;
+        }
+
+        internal static Color WithAlpha(Color colour, float alpha)
+        {
+            colour.a = alpha;
+            return colour;
+        }
+    }
+}

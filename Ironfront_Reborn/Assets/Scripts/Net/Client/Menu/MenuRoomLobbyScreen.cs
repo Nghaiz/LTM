@@ -247,23 +247,17 @@ namespace Ironfront.Net.Unity.Client.Menu
         }
 
         /// <summary>
-        /// The team's colour, through the registry seam. Criterion 10.
+        /// The team's colour, through the registry seam, as type. Criterion 10.
         /// </summary>
         /// <remarks>
         /// <c>NetClientBindings.TeamColourRgb</c> falls back to a neutral grey when no palette is
         /// installed, which is the documented degraded case rather than a silent black — and a
         /// grey roster in a screenshot is a visible, diagnosable "the binding did not install"
-        /// rather than text that has disappeared into the backdrop.
+        /// rather than text that has disappeared into the backdrop. <see cref="TeamInk"/> lifts
+        /// the answer so the palette's pure blue can be read on the team card's navy.
         /// </remarks>
         private static Color TeamColour(byte team)
-        {
-            int rgb = NetClientBindings.TeamColourRgb(team);
-
-            return new Color(
-                ((rgb >> 16) & 0xFF) / 255f,
-                ((rgb >> 8) & 0xFF) / 255f,
-                (rgb & 0xFF) / 255f);
-        }
+            => TeamInk.FromRgb(NetClientBindings.TeamColourRgb(team));
 
         /// <summary>
         /// This client's own row in the roster, or false when the push has not named it yet.

@@ -1,8 +1,10 @@
 using System.Text;
 using Ironfront.Net.Unity.Client.Hud;
+using Ironfront.Net.Unity.Client.Menu;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using static Ironfront.Net.Unity.EditorTools.IronfrontUiKit;
 
 namespace Ironfront.Net.Unity.EditorTools
 {
@@ -40,6 +42,11 @@ namespace Ironfront.Net.Unity.EditorTools
     /// two.
     /// </para>
     /// <para>
+    /// <b>It is drawn in the menu's design language</b> — <see cref="IronfrontUiKit"/>'s palette,
+    /// Roboto and angular surfaces — so the match does not change look at the moment it loads.
+    /// It used to be the built-in Arial on flat grey rectangles.
+    /// </para>
+    /// <para>
     /// <b>Run headlessly:</b>
     /// <c>Unity -batchmode -nographics -quit -projectPath Ironfront_Reborn
     /// -executeMethod Ironfront.Net.Unity.EditorTools.BuildMatchHud.Run</c>.
@@ -64,8 +71,8 @@ namespace Ironfront.Net.Unity.EditorTools
         /// </remarks>
         private const int SortingOrder = 50;
 
-        private static readonly Color Ink = new Color(0.93f, 0.94f, 0.96f);
-        private static readonly Color Backdrop = new Color(0.04f, 0.05f, 0.07f, 0.82f);
+        /// <summary><c>--ink-950</c> under the two full-screen overlays, the world still faintly there.</summary>
+        private static readonly Color Dim = new Color(3f / 255f, 9f / 255f, 19f / 255f, 0.72f);
 
         [MenuItem("Ironfront/Net/Build in-match readout")]
         public static void RunFromMenu() => Execute(exitOnFailure: false);
@@ -118,6 +125,9 @@ namespace Ironfront.Net.Unity.EditorTools
                 var canvas = root.GetComponent<Canvas>();
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 canvas.sortingOrder = SortingOrder;
+                // As the menu's: strokes and type on whole pixels, which is what keeps a 1px
+                // frame a crisp line rather than a soft two-pixel band.
+                canvas.pixelPerfect = true;
 
                 var scaler = root.GetComponent<CanvasScaler>();
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -126,7 +136,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
                 MatchHud hud = root.AddComponent<MatchHud>();
 
-                Text team = BuildTeamReadout(root, log);
+                Text team = BuildTeamReadout(root, out GameObject teamChip, log);
                 Text[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
                     root, out Text killer, out Text timer, out Button deployButton, log);
@@ -135,6 +145,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
                 var so = new SerializedObject(hud);
                 Assign(so, "_teamReadoutText", team);
+                Assign(so, "_teamReadoutRoot", teamChip);
                 AssignArray(so, "_killfeedRows", killfeed);
                 Assign(so, "_deployRoot", deploy);
                 Assign(so, "_deployKillerText", killer);
@@ -154,6 +165,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 // authored visible is ledger X-48's failure, one screen over.
                 deploy.SetActive(false);
                 scoreboard.SetActive(false);
+                teamChip.SetActive(false);
 
                 PrefabUtility.SaveAsPrefabAsset(contents, PrefabPath);
                 log.AppendLine("saved: " + PrefabPath);
@@ -184,52 +196,53 @@ namespace Ironfront.Net.Unity.EditorTools
 
         // ------------------------------------------------------------------ the elements
 
-        /// <summary>3.1 — which side you are on, top-left, above the ammo readout.</summary>
-        private static Text BuildTeamReadout(GameObject root, StringBuilder log)
+        /// <summary>3.1 — which side you are on: a chip in the top-left corner.</summary>
+        /// <remarks>
+        /// The chip is the root <c>MatchHud</c> shows and hides with the readout, so there is never
+        /// an empty frame on screen before the first snapshot has named a side.
+        /// </remarks>
+        private static Text BuildTeamReadout(GameObject root, out GameObject chip, StringBuilder log)
         {
-            // Backdrop, the same way BuildDeployScreen and BuildScoreboard back their own text —
-            // a bare Text over the killfeed and minimap underneath it was unreadable at a glance.
-            var panel = new GameObject("Team Readout", typeof(RectTransform), typeof(Image));
-            panel.transform.SetParent(root.transform, worldPositionStays: false);
+            AngularPanel panel = Angular(root, "Team Readout", Vector2.zero, Vector2.zero, CutAction,
+                WithAlpha(Surface, 0.86f));
+            Pin(panel.rectTransform, new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(220f, 62f));
+            chip = panel.gameObject;
 
-            RectTransform panelRect = panel.GetComponent<RectTransform>();
-            panelRect.anchorMin = new Vector2(0f, 1f);
-            panelRect.anchorMax = new Vector2(0f, 1f);
-            panelRect.pivot = new Vector2(0f, 1f);
-            panelRect.anchoredPosition = new Vector2(36f, -36f);
-            panelRect.sizeDelta = new Vector2(320f, 44f);
+            Text kicker = Label(chip, "Kicker", "YOUR SIDE", 11, TextAnchor.MiddleLeft, bold: true);
+            kicker.color = CyanSoft;
+            Place(kicker.rectTransform, new Vector2(0f, 1f), new Vector2(16f, -9f), new Vector2(190f, 16f));
 
-            var backdrop = panel.GetComponent<Image>();
-            backdrop.color = Backdrop;
-            backdrop.raycastTarget = false;
-
-            Text label = Label(panel, "Text", string.Empty, 26, TextAnchor.UpperLeft);
-            Stretch(label.GetComponent<RectTransform>());
+            Text label = Label(chip, "Text", string.Empty, 24, TextAnchor.MiddleLeft, bold: true);
+            Place(label.rectTransform, new Vector2(0f, 1f), new Vector2(16f, -25f), new Vector2(190f, 30f));
 
             // Authored EMPTY, deliberately. Criterion 2 is graded on a screenshot at join, and a
             // placeholder string would render as an answer for however long the first snapshot
             // takes -- the fabricated zero ScoreUi refuses, wearing a different label.
-            log.AppendLine("team readout: authored blank; MatchHud.SetLocalTeam writes it.");
+            log.AppendLine("team readout: authored blank and put away; MatchHud.SetLocalTeam writes and shows it.");
             return label;
         }
 
         /// <summary>3.3 — the killfeed, top-right, newest first.</summary>
+        /// <remarks>
+        /// Bare type over the world, so each row carries a drop shadow: bold white on a pale sky
+        /// was the one place the old feed could not be read at a glance.
+        /// </remarks>
         private static Text[] BuildKillfeed(GameObject root, StringBuilder log)
         {
             var rows = new Text[MatchHud.KillfeedRows];
 
             for (int i = 0; i < rows.Length; i++)
             {
-                Text row = Label(root, "Killfeed Row " + i, string.Empty, 26, TextAnchor.UpperRight);
-                RectTransform rect = row.GetComponent<RectTransform>();
-
-                rect.anchorMin = new Vector2(1f, 1f);
-                rect.anchorMax = new Vector2(1f, 1f);
-                rect.pivot = new Vector2(1f, 1f);
-                rect.anchoredPosition = new Vector2(-28f, -24f - i * 30f);
-                rect.sizeDelta = new Vector2(680f, 30f);
-
+                Text row = Label(root, "Killfeed Row " + i, string.Empty, 18, TextAnchor.MiddleRight,
+                    bold: true);
+                Pin(row.rectTransform, new Vector2(1f, 1f), new Vector2(-24f, -24f - i * 30f),
+                    new Vector2(520f, 28f));
                 row.supportRichText = true;
+
+                Shadow shadow = row.gameObject.AddComponent<Shadow>();
+                shadow.effectColor = new Color(0f, 0f, 0f, 0.8f);
+                shadow.effectDistance = new Vector2(1.5f, -1.5f);
+
                 rows[i] = row;
             }
 
@@ -240,34 +253,49 @@ namespace Ironfront.Net.Unity.EditorTools
             return rows;
         }
 
-        /// <summary>3.2 — the deploy screen.</summary>
+        /// <summary>3.2 — the deploy screen: a card on a dimmed world, and one primary action.</summary>
         private static GameObject BuildDeployScreen(
             GameObject root, out Text killer, out Text timer, out Button deploy, StringBuilder log)
         {
-            var panel = new GameObject("Deploy Screen", typeof(RectTransform), typeof(Image));
-            panel.transform.SetParent(root.transform, worldPositionStays: false);
-            Stretch(panel.GetComponent<RectTransform>());
+            var screen = new GameObject("Deploy Screen", typeof(RectTransform), typeof(Image));
+            screen.transform.SetParent(root.transform, worldPositionStays: false);
+            Stretch(screen.GetComponent<RectTransform>());
 
-            var backdrop = panel.GetComponent<Image>();
-            backdrop.color = Backdrop;
+            var backdrop = screen.GetComponent<Image>();
+            backdrop.color = Dim;
 
             // Raycast target ON, and that is the point: the overlay swallows clicks meant for the
             // loadout and minimap Canvases underneath it, which are still live while dead.
             backdrop.raycastTarget = true;
 
-            Text heading = Label(panel, "Heading", "YOU WERE KILLED", 56, TextAnchor.MiddleCenter);
-            Centre(heading.GetComponent<RectTransform>(), new Vector2(0f, 160f), new Vector2(900f, 80f));
+            AngularPanel card = Angular(screen, "Card", new Vector2(0f, 20f), new Vector2(720f, 380f),
+                CutPanel, Color.clear);
+            StyleOperationsPanel(card);
+            GameObject body = card.gameObject;
 
-            killer = Label(panel, "Killer", string.Empty, 36, TextAnchor.MiddleCenter);
-            Centre(killer.GetComponent<RectTransform>(), new Vector2(0f, 80f), new Vector2(900f, 56f));
+            Text kicker = Label(body, "Kicker", "STATUS // KILLED IN ACTION", 11, TextAnchor.MiddleCenter,
+                bold: true);
+            kicker.color = CyanSoft;
+            Centre(kicker.rectTransform, new Vector2(0f, 150f), new Vector2(600f, 20f));
 
-            timer = Label(panel, "Timer", string.Empty, 34, TextAnchor.MiddleCenter);
-            Centre(timer.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(900f, 52f));
+            Text heading = Label(body, "Heading", "YOU WERE KILLED", 44, TextAnchor.MiddleCenter, bold: true);
+            Centre(heading.rectTransform, new Vector2(0f, 106f), new Vector2(640f, 60f));
 
-            deploy = MakeButton(panel, "Deploy", "DEPLOY", new Vector2(0f, -100f), new Vector2(400f, 84f));
+            killer = Label(body, "Killer", string.Empty, 22, TextAnchor.MiddleCenter, bold: true);
+            Centre(killer.rectTransform, new Vector2(0f, 54f), new Vector2(640f, 34f));
 
-            log.AppendLine("deploy screen: heading, killer, countdown and one button.");
-            return panel;
+            Angular(body, "Rule", new Vector2(0f, 22f), new Vector2(560f, 1f), 0f,
+                WithAlpha(Line, 0.5f), AngularEdge.None, 0f, Color.clear);
+
+            timer = Label(body, "Timer", string.Empty, 17, TextAnchor.MiddleCenter, bold: false);
+            timer.color = Muted;
+            Centre(timer.rectTransform, new Vector2(0f, -12f), new Vector2(640f, 28f));
+
+            deploy = MakeButton(body, "Deploy", "DEPLOY", new Vector2(0f, -100f), new Vector2(340f, 64f),
+                "primary");
+
+            log.AppendLine("deploy screen: card with heading, killer, countdown and one primary button.");
+            return screen;
         }
 
         /// <summary>The three labels one side's column is made of.</summary>
@@ -285,7 +313,7 @@ namespace Ironfront.Net.Unity.EditorTools
             public Text Scores { get; }
         }
 
-        /// <summary>P18 3.3 — the Tab scoreboard: two columns over a backdrop.</summary>
+        /// <summary>P18 3.3 — the Tab scoreboard: two columns on an operations panel.</summary>
         /// <remarks>
         /// <para>
         /// <b>Two multi-line labels per side, not a label per row.</b> <c>MatchHud</c>'s own
@@ -303,72 +331,94 @@ namespace Ironfront.Net.Unity.EditorTools
             GameObject root, out ScoreboardColumn left, out ScoreboardColumn right,
             StringBuilder log)
         {
-            var panel = new GameObject("Scoreboard", typeof(RectTransform), typeof(Image));
-            panel.transform.SetParent(root.transform, worldPositionStays: false);
-            Stretch(panel.GetComponent<RectTransform>());
+            var screen = new GameObject("Scoreboard", typeof(RectTransform), typeof(Image));
+            screen.transform.SetParent(root.transform, worldPositionStays: false);
+            Stretch(screen.GetComponent<RectTransform>());
 
-            var backdrop = panel.GetComponent<Image>();
-            backdrop.color = Backdrop;
+            var backdrop = screen.GetComponent<Image>();
+            backdrop.color = WithAlpha(Dim, 0.6f);
 
             // Raycast target OFF, unlike the deploy screen's. This board comes up while the
             // player is alive and still shooting; swallowing their clicks would be a scoreboard
             // that disarms them.
             backdrop.raycastTarget = false;
 
-            Text heading = Label(panel, "Heading", "SCOREBOARD", 40, TextAnchor.UpperCenter);
-            Centre(heading.GetComponent<RectTransform>(), new Vector2(0f, 460f), new Vector2(900f, 48f));
+            AngularPanel panel = Angular(screen, "Panel", new Vector2(0f, -10f), new Vector2(1600f, 960f),
+                CutPanel, Color.clear);
+            StyleOperationsPanel(panel);
+            GameObject body = panel.gameObject;
 
-            left = BuildScoreboardColumn(panel, "Team 0", -440f);
-            right = BuildScoreboardColumn(panel, "Team 1", 440f);
+            Text kicker = Label(body, "Kicker", "MATCH // SQUAD STANDINGS", 11, TextAnchor.MiddleLeft,
+                bold: true);
+            kicker.color = CyanSoft;
+            Centre(kicker.rectTransform, new Vector2(-420f, 438f), new Vector2(640f, 20f));
+
+            Text heading = Label(body, "Heading", "SCOREBOARD", 34, TextAnchor.MiddleLeft, bold: true);
+            Centre(heading.rectTransform, new Vector2(-420f, 400f), new Vector2(640f, 48f));
+
+            left = BuildScoreboardColumn(body, "Team 0", -380f);
+            right = BuildScoreboardColumn(body, "Team 1", 380f);
 
             log.AppendLine(
                 "scoreboard: two columns of " + MatchHud.ScoreboardRowsPerTeam
                 + " rows each, from ProtocolConstants.MAX_ACTORS.");
 
-            return panel;
+            return screen;
         }
 
-        /// <summary>One side's heading, name column and score column.</summary>
+        /// <summary>One side's heading bar, column captions, name column and score column.</summary>
         private static ScoreboardColumn BuildScoreboardColumn(
             GameObject panel, string name, float centreX)
         {
             const float ColumnWidth = 720f;
             const float ScoresWidth = 150f;
-            const float HeaderTop = 400f;
-            const float BodyTop = 356f;
+            const float HeaderY = 340f;
+            const float CaptionY = 304f;
+            const float BodyTop = 288f;
 
-            // Sized so the FULL column fits the 1080-tall reference frame, rather than picked to
-            // look right at three rows. A 21-a-side map fills 21 of these and a full one fills
-            // ScoreboardRowsPerTeam; at 22 px the body ends at y = -348, comfortably above the
-            // bottom edge. The first authoring of this used 26 px from y = 280 and ran 32 rows
-            // straight off the screen — caught on the captured artifact, which is the only place
-            // a layout fault of this kind is visible at all.
+            // Sized so the FULL column fits the panel, rather than picked to look right at three
+            // rows. A full side is ScoreboardRowsPerTeam lines; at 22 px the body ends 704 px
+            // below BodyTop, inside the panel's bottom edge. The first authoring of this used
+            // 26 px and ran 32 rows straight off the screen -- caught on the captured artifact,
+            // which is the only place a layout fault of this kind is visible at all.
             const float RowHeight = 22f;
-            const int RowFontSize = 19;
+            const int RowFontSize = 18;
 
             float bodyHeight = MatchHud.ScoreboardRowsPerTeam * RowHeight;
+            float left = centreX - ColumnWidth * 0.5f;
 
-            Text header = Label(panel, name + " Header", string.Empty, 26, TextAnchor.UpperLeft);
-            TopLeftBlock(
-                header.GetComponent<RectTransform>(),
-                centreX - ColumnWidth * 0.5f, HeaderTop, ColumnWidth, 34f);
+            // `.team header`: a bar with a 2px rule under it. The side's colour is the heading's,
+            // written at runtime.
+            Angular(panel, name + " Header Bar", new Vector2(centreX, HeaderY), new Vector2(ColumnWidth, 44f),
+                0f, Hex("0A2032"), AngularEdge.Bottom, 2f, WithAlpha(CyanSoft, 0.55f));
+
+            Text header = Label(panel, name + " Header", string.Empty, 20, TextAnchor.MiddleLeft, bold: true);
+            TopLeftBlock(header.rectTransform, left + 16f, HeaderY + 16f, ColumnWidth - 32f, 32f);
+
+            Text player = Label(panel, name + " Player Caption", "PLAYER", 11, TextAnchor.MiddleLeft, bold: true);
+            player.color = Muted;
+            TopLeftBlock(player.rectTransform, left + 16f, CaptionY + 8f, 200f, 16f);
+
+            Text kd = Label(panel, name + " Score Caption", "K / D", 11, TextAnchor.MiddleRight, bold: true);
+            kd.color = Muted;
+            TopLeftBlock(kd.rectTransform, left + ColumnWidth - 16f - ScoresWidth, CaptionY + 8f,
+                ScoresWidth, 16f);
 
             // The names take the left of the column and the scores the right of the SAME column,
             // rather than each getting half the screen: a name and its score belong to one row,
-            // and 400 px of empty desert between them is a row the eye cannot follow.
-            Text names = Label(panel, name + " Names", string.Empty, RowFontSize, TextAnchor.UpperLeft);
+            // and 400 px of empty desert between them is a row the eye cannot follow. Both are the
+            // same face at the same size, so line N of one sits beside line N of the other.
+            Text names = Label(panel, name + " Names", string.Empty, RowFontSize, TextAnchor.UpperLeft,
+                bold: false);
             names.supportRichText = true;
             names.verticalOverflow = VerticalWrapMode.Truncate;
-            TopLeftBlock(
-                names.GetComponent<RectTransform>(),
-                centreX - ColumnWidth * 0.5f, BodyTop,
-                ColumnWidth - ScoresWidth - 20f, bodyHeight);
+            TopLeftBlock(names.rectTransform, left + 16f, BodyTop,
+                ColumnWidth - 32f - ScoresWidth - 20f, bodyHeight);
 
-            Text scores = Label(panel, name + " Scores", string.Empty, RowFontSize, TextAnchor.UpperRight);
+            Text scores = Label(panel, name + " Scores", string.Empty, RowFontSize, TextAnchor.UpperRight,
+                bold: false);
             scores.verticalOverflow = VerticalWrapMode.Truncate;
-            TopLeftBlock(
-                scores.GetComponent<RectTransform>(),
-                centreX + ColumnWidth * 0.5f - ScoresWidth, BodyTop,
+            TopLeftBlock(scores.rectTransform, left + ColumnWidth - 16f - ScoresWidth, BodyTop,
                 ScoresWidth, bodyHeight);
 
             return new ScoreboardColumn(header, names, scores);
@@ -396,13 +446,13 @@ namespace Ironfront.Net.Unity.EditorTools
         // ------------------------------------------------------------------ helpers
 
         private static Text Label(
-            GameObject parent, string name, string content, int size, TextAnchor anchor)
+            GameObject parent, string name, string content, int size, TextAnchor anchor, bool bold)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent.transform, worldPositionStays: false);
 
             Text text = go.AddComponent<Text>();
-            text.font = DefaultFont();
+            text.font = bold ? BoldFont() : RegularFont();
             text.fontSize = size;
             text.text = content;
             text.color = Ink;
@@ -414,21 +464,22 @@ namespace Ironfront.Net.Unity.EditorTools
             return text;
         }
 
-        private static Button MakeButton(
-            GameObject parent, string name, string caption, Vector2 position, Vector2 size)
+        /// <summary>A button in the menu's own face and caption, from <see cref="IronfrontUiKit"/>.</summary>
+        private static Button MakeButton(GameObject parent, string name, string caption,
+            Vector2 position, Vector2 size, string kind)
         {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent.transform, worldPositionStays: false);
-            Centre(go.GetComponent<RectTransform>(), position, size);
+            AngularPanel face = Angular(parent, name, position, size, CutAction, Color.clear);
+            StyleButtonFace(face, kind, size.y);
 
-            var background = go.GetComponent<Image>();
-            background.color = new Color(0.16f, 0.19f, 0.24f, 1f);
+            Button button = face.gameObject.AddComponent<Button>();
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = ButtonColours(button.colors, kind);
 
-            Button button = go.AddComponent<Button>();
-            button.targetGraphic = background;
-
-            Text text = Label(go, "Text", caption, 34, TextAnchor.MiddleCenter);
-            Stretch(text.GetComponent<RectTransform>());
+            Text text = Label(face.gameObject, "Text", caption, CaptionSize(size.y), TextAnchor.MiddleCenter,
+                bold: true);
+            text.color = CaptionInk(kind);
+            Stretch(text.rectTransform);
 
             return button;
         }
@@ -450,19 +501,24 @@ namespace Ironfront.Net.Unity.EditorTools
             rect.sizeDelta = size;
         }
 
-        /// <summary>
-        /// The built-in font every legacy <c>Text</c> in this project already uses.
-        /// </summary>
-        /// <remarks>
-        /// <c>LegacyRuntime.ttf</c> is where Unity moved Arial. A null font renders nothing at all
-        /// — no error, no warning, an empty rect — which on a screenshot-graded phase reads as an
-        /// unassigned label and sends the reader after the wrong fault.
-        /// </remarks>
-        private static Font DefaultFont()
+        /// <summary>Pins a rect to a corner of its parent by the same corner of its own.</summary>
+        private static void Pin(RectTransform rect, Vector2 corner, Vector2 position, Vector2 size)
         {
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            return font;
+            rect.anchorMin = corner;
+            rect.anchorMax = corner;
+            rect.pivot = corner;
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+        }
+
+        /// <summary>Places a rect by its top-left corner, relative to its parent's <paramref name="anchor"/>.</summary>
+        private static void Place(RectTransform rect, Vector2 anchor, Vector2 position, Vector2 size)
+        {
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
         }
 
         private static void Assign(SerializedObject so, string field, Object value)
