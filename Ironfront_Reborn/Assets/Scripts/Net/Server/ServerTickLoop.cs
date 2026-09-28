@@ -238,7 +238,12 @@ namespace Ironfront.Net.Unity.Server
             _lagCompensator.Occlusion = IsOccluded;
             _fireResolver = new ServerFireResolver(_lagCompensator);
             _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
-            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink);
+            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink)
+            {
+                // The engine half of a leaning shot's origin: stop where the client's camera
+                // stops. See LeanClearance below.
+                LeanClearance = LeanClearance,
+            };
             // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
             // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
             // pool would drain the gunner's rifle magazines to refill a coaxial.
@@ -2389,7 +2394,8 @@ namespace Ironfront.Net.Unity.Server
         /// Triggers are ignored: a capture-point volume or a water trigger is not cover.
         /// </para>
         /// </remarks>
-        private static bool IsOccluded(Vec3 origin, Vec3 point, float distance, ushort victimActorId)
+        private static bool IsOccluded(
+            Vec3 origin, Vec3 point, float distance, ushort victimActorId, ushort shooterActorId)
         {
             Vector3 from = MovementSimulation.ToUnity(origin);
             Vector3 to = MovementSimulation.ToUnity(point);
@@ -2399,6 +2405,11 @@ namespace Ironfront.Net.Unity.Server
             if (length <= 0.0001f) return false;   // muzzle inside the box: nothing to occlude
 
             Transform victim = VictimRoot(victimActorId);
+
+            // The other end of X-26 (playtest 2026-09-28, bug 5): the origin sits inside the
+            // shooter's own rig, and a shot fired down a slope leaves through that body's own
+            // box. A body is not cover for the shots it fires.
+            Transform shooter = VictimRoot(shooterActorId);
 
             // RaycastNonAlloc, not Linecast: the nearest hit may be the victim's own rig bone,
             // and a query that returns only the nearest cannot look past it. The buffer is a
@@ -2422,6 +2433,7 @@ namespace Ironfront.Net.Unity.Server
                 // point-blank shot is rejected by its own target -- 34 of 34 occlusions across
                 // x27-pinned-01..03 were `Bone_002 layer=8` at frac 0.94.
                 if (IsPartOf(candidate.collider, victim)) continue;
+                if (IsPartOf(candidate.collider, shooter)) continue;
 
                 if (found && candidate.distance >= nearest.distance) continue;
 
@@ -2457,6 +2469,31 @@ namespace Ironfront.Net.Unity.Server
         /// rather than leaving a reader to assume it never happens.
         /// </remarks>
         private static readonly RaycastHit[] _occlusionHits = new RaycastHit[32];
+
+        /// <summary>
+        /// How far a lean may carry a shooter's eye before a wall stops it: the server's copy of
+        /// the stop in <c>PlayerFpParent.LateUpdate</c>.
+        /// </summary>
+        /// <remarks>
+        /// The client sweeps a 0.3 m sphere along the lean against the Default layer and stops
+        /// its camera at the first hit. The same sweep with the same mask puts a leaning shot
+        /// where that player's camera actually stopped, rather than inside the wall they leaned
+        /// into -- where a ray would start inside the wall's collider and never see it.
+        /// </remarks>
+        private static float LeanClearance(Vec3 eye, Vec3 direction, float reach)
+        {
+            return Physics.SphereCast(
+                    MovementSimulation.ToUnity(eye), LeanSweepRadius, MovementSimulation.ToUnity(direction),
+                    out RaycastHit hit, reach, LeanSweepLayers, QueryTriggerInteraction.Ignore)
+                ? hit.distance
+                : reach;
+        }
+
+        /// <summary><c>PlayerFpParent.LateUpdate</c>'s sphere radius.</summary>
+        private const float LeanSweepRadius = 0.3f;
+
+        /// <summary><c>PlayerFpParent.LateUpdate</c>'s layer mask: Default only.</summary>
+        private const int LeanSweepLayers = 1;
 
         /// <summary>
         /// Shots where every collider on the segment belonged to the victim, so nothing blocked.

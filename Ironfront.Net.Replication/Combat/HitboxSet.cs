@@ -1,3 +1,4 @@
+using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
@@ -62,105 +63,190 @@ namespace Ironfront.Net.Replication.Combat
             _ => HitboxType.Limb,
         };
 
-        /// <summary>
-        /// A plausible humanoid hitbox set standing at <paramref name="feetPosition"/>.
-        /// </summary>
+        // ------------------------------------------------------------------ geometry
+        //
+        // MEASURED, NOT AUTHORED (playtest 2026-09-28, bug 5). The numbers below are read off the
+        // character every client draws -- Ai Character Optimizations.prefab, the rig Remote Actor
+        // Proxy.prefab renders -- by running its Animator in the standing and crouched idles and
+        // reading the world bounds of its two "Hitbox"-layer colliders: Bone_004, the head (the
+        // original game's x4 box), and Bone_002, the body (x1). Those two boxes are what the
+        // original game's own bullets hit while a soldier is alive.
+        //
+        // The set they replace was written down rather than measured. It put the head box at
+        // 1.58..1.82 m with a 0.24 m footprint over a head the player sees at 1.31..1.72 m and
+        // 0.34 m wide, so a shot through the face landed in the torso box for 35 instead of 140;
+        // and a torso 0.50 x 0.32 m across, fixed to the world axes, let the shots at a soldier's
+        // flank miss the 0.70 x 0.55 m body the original counts. HitboxGeometryTests (EditMode)
+        // re-measures the prefab and fails when these drift from it.
+
+        /// <summary>Height above the feet of the head box's centre, standing, in metres.</summary>
+        public const float HumanoidHeadCenterHeight = 1.52f;
+
+        /// <summary>Full height of the head box, standing.</summary>
         /// <remarks>
-        /// Exists so tests and the bootstrap have one definition of "roughly a person" instead
-        /// of each inventing their own. Real actors override it with boxes read from the client track's
-        /// rig; nothing in the resolution path depends on these numbers being the real ones.
+        /// The head is the one box with a damage multiplier, so its size and its position are a
+        /// balance decision: they are the original character's, measured, and nothing else may
+        /// move them as a side effect.
         /// </remarks>
+        public const float HumanoidHeadHeight = 0.42f;
+
+        /// <summary>Width and depth of the head box. Square, so turning the body cannot resize it.</summary>
+        public const float HumanoidHeadWidth = 0.34f;
+
+        /// <summary>Height above the feet where the head box begins: 1.31 m.</summary>
+        public const float HumanoidHeadBottomHeight =
+            HumanoidHeadCenterHeight - HumanoidHeadHeight * 0.5f;
+
+        /// <summary>Height above the feet where the body box begins, just below them.</summary>
+        /// <remarks>The original body box starts at -0.04 m, so a shot at a boot still lands.</remarks>
+        public const float HumanoidTorsoBottomHeight = -0.05f;
+
         /// <summary>
-        /// Height above the feet of <see cref="Humanoid"/>'s torso box centre, in metres, and the
-        /// point a scripted shooter aims at.
+        /// Height above the feet where the body box ends — <b>defined as the head's lower
+        /// edge</b>, not as a number of its own, so no band of a standing body between the two is
+        /// covered by nothing (ledger X-24).
+        /// </summary>
+        public const float HumanoidTorsoTopHeight = HumanoidHeadBottomHeight;
+
+        /// <summary>
+        /// Height above the feet of the body box's centre, and the point a scripted shooter aims
+        /// at.
         /// </summary>
         /// <remarks>
-        /// Named because a second party needs it: a scripted shooter has to pick a point ON a
-        /// body to aim at, and the only aim point with margin on every side is this one — the
-        /// torso is 0.73 m tall, so its nearest edge is 0.365 m away. Ledger X-25 is what
-        /// happens without it: the harness aimed at feet + <c>EYE_HEIGHT</c> (1.6 m), which is
-        /// 0.02 m inside the head box's lower edge, and every lane-B combat shot was a coin
-        /// toss against the 1.550..1.580 gap X-24 names.
-        ///
-        /// It is a constant here rather than a literal at the aim site so the two cannot drift:
-        /// move the torso box and the shooter follows it.
-        ///
-        /// <b>Derived from the box's own edges since X-24</b>, where it read <c>1.20f</c> and the
-        /// box's centre read 1.20 m by coincidence of two independently-authored numbers. Raising
-        /// the torso's top edge to close the seam moved the centre to 1.215 m, and a literal here
-        /// would have left the shooter aiming 1.5 cm off the centre it claims to name — a drift
-        /// of exactly the kind this constant exists to prevent. <c>ScriptedAimTests</c> pins the
-        /// two as equal.
+        /// Named because a second party needs it: a scripted shooter has to pick a point ON a body
+        /// to aim at, and the centre is the one with margin on every side (ledger X-25). Derived
+        /// from the box's own edges so the two cannot drift; <c>ScriptedAimTests</c> pins them
+        /// equal.
         /// </remarks>
         public const float HumanoidTorsoCenterHeight =
             (HumanoidTorsoTopHeight + HumanoidTorsoBottomHeight) * 0.5f;
 
-        /// <summary>Height above the feet of the head box's centre, in metres.</summary>
-        public const float HumanoidHeadCenterHeight = 1.70f;
+        /// <summary>The body box across the shoulders, in the actor's own frame.</summary>
+        public const float HumanoidBodyWidth = 0.70f;
 
-        /// <summary>Full height of the head box, in metres.</summary>
-        /// <remarks>
-        /// The head is the one box with a damage multiplier, so its size and its position are a
-        /// balance decision and nothing else may move them as a side effect. X-24's fix raised
-        /// the torso to meet this box; it did not touch this box. See
-        /// <see cref="HumanoidTorsoTopHeight"/>.
-        /// </remarks>
-        public const float HumanoidHeadHeight = 0.24f;
+        /// <summary>The body box front to back, in the actor's own frame.</summary>
+        public const float HumanoidBodyDepth = 0.55f;
 
-        /// <summary>Height above the feet where the head box begins: 1.58 m.</summary>
-        public const float HumanoidHeadBottomHeight =
-            HumanoidHeadCenterHeight - HumanoidHeadHeight * 0.5f;
+        /// <summary>Crouched: the head box's centre above the feet, from the crouch idle.</summary>
+        public const float HumanoidCrouchedHeadCenterHeight = 1.11f;
 
-        /// <summary>Height above the feet where the torso box begins, in metres.</summary>
-        public const float HumanoidTorsoBottomHeight = 0.85f;
+        /// <summary>Crouched: the head box's full height.</summary>
+        public const float HumanoidCrouchedHeadHeight = 0.44f;
+
+        /// <summary>Crouched: the head box's width and depth.</summary>
+        public const float HumanoidCrouchedHeadWidth = 0.40f;
+
+        /// <summary>Crouched: how far forward of the feet the head sits.</summary>
+        /// <remarks>The crouch pose leans over the rifle; the head is not above the feet.</remarks>
+        public const float HumanoidCrouchedHeadForward = 0.12f;
+
+        /// <summary>Crouched: the head's offset to the body's right, from the same pose.</summary>
+        public const float HumanoidCrouchedHeadRight = 0.05f;
+
+        /// <summary>Crouched: the body box's width and depth, knees and shoulders included.</summary>
+        public const float HumanoidCrouchedBodyWidth = 0.80f;
+
+        /// <summary>Crouched: where the head box begins, and so where the body box ends.</summary>
+        public const float HumanoidCrouchedHeadBottomHeight =
+            HumanoidCrouchedHeadCenterHeight - HumanoidCrouchedHeadHeight * 0.5f;
 
         /// <summary>
-        /// Height above the feet where the torso box ends — <b>defined as the head's lower
-        /// edge</b>, not as a number of its own.
+        /// A standing humanoid at <paramref name="feetPosition"/>, facing +Z.
+        /// </summary>
+        /// <remarks>
+        /// For the callers that only need "a person" -- tests and diagnostic probes. The server's
+        /// own capture goes through the overload that takes the heading and the stance, because
+        /// the boxes are measured from a body that has both.
+        /// </remarks>
+        public static HitboxSet Humanoid(in Vec3 feetPosition, float scale = 1f)
+            => Humanoid(in feetPosition, 0f, crouching: false, scale);
+
+        /// <summary>
+        /// The character's hitbox set at <paramref name="feetPosition"/>, facing
+        /// <paramref name="yawDegrees"/> (Unity's convention: 0 faces +Z, 90 faces +X), standing
+        /// or crouched.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Ledger row X-24.</b> The torso used to be authored as (centre 1.20, height 0.70)
-        /// and the head as (centre 1.70, height 0.24), which put the torso's top at 1.550 m and
-        /// the head's bottom at 1.580 m — <b>3 cm of a standing body, at chest-to-chin height,
-        /// covered by nothing.</b> A ray through it struck no box, so
-        /// <see cref="LagCompensator.ResolveHitscan"/> returned a miss BEFORE the occlusion test
-        /// ever ran, and a human aiming at the same band got the same nothing.
+        /// <b>Turned with the body.</b> Each box is authored in the actor's own frame and stored as
+        /// the axis-aligned box around the turned one — what <c>Collider.bounds</c> reports for
+        /// the same box in the scene. A body is 0.70 m across the shoulders and 0.55 m front to
+        /// back, and a footprint fixed to the world axes was wrong for one of those two views
+        /// whatever it was set to.
         /// </para>
         /// <para>
-        /// <b>Why the torso moved and not the head.</b> Lowering the head's lower edge by 3 cm
-        /// would have made the multiplier box 12.5% taller and moved where a headshot begins —
-        /// a balance change to the most sensitive box in the set. Raising the torso puts the
-        /// neck into <see cref="HitboxType.Body"/>, which is where a player aiming at a neck
-        /// expects a body hit, and leaves headshot geometry exactly where it was. A fifth neck
-        /// box was the third option and is worse than both: the wire enum has three values
-        /// (protocol-spec.md section 4.5), so a neck would have to be reported as one of these
-        /// anyway.
-        /// </para>
-        /// <para>
-        /// <b>Derived rather than written down</b>, so the seam cannot reopen: move the head and
-        /// the torso follows it. A future set that re-authors the head from a real rig gets the
-        /// coverage for free.
+        /// <b>Four boxes, one damage class for the body.</b> The original's body box runs from
+        /// the boots to the chin at x1, so the legs box sits inside it and never wins a ray: a ray
+        /// reaches the enclosing box first, and a tie goes to the earlier index. The arms box is
+        /// wider than the body and no deeper, so only the few centimetres beyond the shoulders
+        /// resolve as a limb; a shot at the chest from in front is a body hit.
         /// </para>
         /// </remarks>
-        public const float HumanoidTorsoTopHeight = HumanoidHeadBottomHeight;
-
-        public static HitboxSet Humanoid(in Vec3 feetPosition, float scale = 1f)
+        public static HitboxSet Humanoid(
+            in Vec3 feetPosition, float yawDegrees, bool crouching, float scale = 1f)
         {
-            // Copied out of the `in` parameter: a local function cannot capture one.
-            float x = feetPosition.X, baseY = feetPosition.Y, z = feetPosition.Z;
+            float radians = yawDegrees * (float)(Math.PI / 180.0);
+            float cos = MathF.Cos(radians);
+            float sin = MathF.Sin(radians);
 
-            Vec3 At(float y) => new Vec3(x, baseY + y * scale, z);
-
-            const float torsoHeight = HumanoidTorsoTopHeight - HumanoidTorsoBottomHeight;
+            if (!crouching)
+            {
+                return new HitboxSet(
+                    head: Box(in feetPosition, cos, sin, scale,
+                        0f, HumanoidHeadCenterHeight, 0f,
+                        HumanoidHeadWidth, HumanoidHeadHeight, HumanoidHeadWidth),
+                    torso: Box(in feetPosition, cos, sin, scale,
+                        0f, HumanoidTorsoCenterHeight, -0.03f,
+                        HumanoidBodyWidth, HumanoidTorsoTopHeight - HumanoidTorsoBottomHeight,
+                        HumanoidBodyDepth),
+                    arms: Box(in feetPosition, cos, sin, scale,
+                        0f, 1.15f, -0.03f,
+                        0.84f, 0.36f, 0.50f),
+                    legs: Box(in feetPosition, cos, sin, scale,
+                        0f, 0.42f, -0.03f,
+                        0.44f, 0.94f, 0.36f));
+            }
 
             return new HitboxSet(
-                head: Aabb.FromSize(
-                    At(HumanoidHeadCenterHeight),
-                    new Vec3(0.24f, HumanoidHeadHeight, 0.24f) * scale),
-                torso: Aabb.FromSize(At(HumanoidTorsoCenterHeight), new Vec3(0.50f, torsoHeight, 0.32f) * scale),
-                arms: Aabb.FromSize(At(1.25f), new Vec3(0.80f, 0.60f, 0.26f) * scale),
-                legs: Aabb.FromSize(At(0.45f), new Vec3(0.40f, 0.90f, 0.30f) * scale));
+                head: Box(in feetPosition, cos, sin, scale,
+                    HumanoidCrouchedHeadRight, HumanoidCrouchedHeadCenterHeight,
+                    HumanoidCrouchedHeadForward,
+                    HumanoidCrouchedHeadWidth, HumanoidCrouchedHeadHeight, HumanoidCrouchedHeadWidth),
+                torso: Box(in feetPosition, cos, sin, scale,
+                    0f, (HumanoidCrouchedHeadBottomHeight + HumanoidTorsoBottomHeight) * 0.5f, 0f,
+                    HumanoidCrouchedBodyWidth,
+                    HumanoidCrouchedHeadBottomHeight - HumanoidTorsoBottomHeight,
+                    HumanoidCrouchedBodyWidth),
+                arms: Box(in feetPosition, cos, sin, scale,
+                    0f, 0.75f, 0f,
+                    0.90f, 0.36f, 0.60f),
+                legs: Box(in feetPosition, cos, sin, scale,
+                    0f, 0.25f, 0f,
+                    0.50f, 0.60f, 0.60f));
+        }
+
+        /// <summary>
+        /// One box authored in the actor's frame (<paramref name="x"/> to the right,
+        /// <paramref name="z"/> forward, <paramref name="y"/> up from the feet), turned by the
+        /// heading and returned as the world-space axis-aligned box around it.
+        /// </summary>
+        private static Aabb Box(
+            in Vec3 feet, float cos, float sin, float scale,
+            float x, float y, float z, float width, float height, float depth)
+        {
+            float halfWidth = width * 0.5f * scale;
+            float halfDepth = depth * 0.5f * scale;
+
+            // Unity's heading: a local (x, z) turns to (x cos + z sin, -x sin + z cos).
+            float worldX = (x * cos + z * sin) * scale;
+            float worldZ = (-x * sin + z * cos) * scale;
+
+            float extentX = MathF.Abs(cos) * halfWidth + MathF.Abs(sin) * halfDepth;
+            float extentZ = MathF.Abs(sin) * halfWidth + MathF.Abs(cos) * halfDepth;
+
+            return new Aabb(
+                new Vec3(feet.X + worldX, feet.Y + y * scale, feet.Z + worldZ),
+                new Vec3(extentX, height * 0.5f * scale, extentZ));
         }
 
         /// <summary>Moves every box by <paramref name="offset"/>. Used to place a rewound pose.</summary>

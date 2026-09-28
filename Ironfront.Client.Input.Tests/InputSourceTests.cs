@@ -121,6 +121,31 @@ namespace Ironfront.Client.Input.Tests
 
             Assert.Equal(0, packed & (ushort)unused);
         }
+
+        /// <summary>
+        /// The lean overload sets the side the camera is leaning to once the axis is past half,
+        /// and nothing else. Its reader is <c>ServerCombatAuthority.LeanOffset</c> (playtest
+        /// 2026-09-28, bug 5): without the bits every leaning shot left from beside the
+        /// crosshair.
+        /// </summary>
+        [Theory]
+        [InlineData(-1f, InputButtons.LeanLeft)]
+        [InlineData(-0.5f, InputButtons.LeanLeft)]
+        [InlineData(-0.49f, InputButtons.None)]
+        [InlineData(0f, InputButtons.None)]
+        [InlineData(0.49f, InputButtons.None)]
+        [InlineData(0.5f, InputButtons.LeanRight)]
+        [InlineData(1f, InputButtons.LeanRight)]
+        public void A_lean_past_half_packs_the_side_it_leans_to(float lean, InputButtons expected)
+        {
+            const InputButtons leanBits = InputButtons.LeanLeft | InputButtons.LeanRight;
+
+            ushort packed = InputButtonPacker.Pack(
+                false, false, false, false, false, false, false, weaponSlot: -1, lean: lean);
+
+            Assert.Equal((ushort)expected, (ushort)(packed & (ushort)leanBits));
+            Assert.Equal(0, packed & ~(ushort)leanBits);
+        }
     }
 
     /// <summary>

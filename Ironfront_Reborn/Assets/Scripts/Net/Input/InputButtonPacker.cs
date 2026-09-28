@@ -28,11 +28,11 @@ namespace Ironfront.Net.Unity
         /// Packs the gameplay buttons a controller can observe.
         /// </summary>
         /// <remarks>
-        /// Grenade, prone and lean bits are deliberately absent: nothing in
-        /// <c>FpsActorController</c> produces them today. Prone does not exist in the game at
-        /// all (docs/codebase-map.md § 2), and lean travels as the continuous
-        /// <see cref="IInputSource.Lean"/> axis locally. Packing a bit that no reader sets is
-        /// how a protocol field quietly becomes permanently zero.
+        /// Grenade and prone bits are deliberately absent: nothing in <c>FpsActorController</c>
+        /// produces them. Prone does not exist in the game at all (docs/codebase-map.md § 2).
+        /// Packing a bit that no reader sets is how a protocol field quietly becomes permanently
+        /// zero. The lean bits have a producer and a reader since 2026-09-28 -- see the overload
+        /// that takes <c>lean</c>.
         /// <para>
         /// <b>Weapon switch moved out of that list on 2026-08-21</b>, and only because both
         /// halves landed together: the overload below produces the slot bits and
@@ -57,8 +57,34 @@ namespace Ironfront.Net.Unity
         public static ushort Pack(
             bool fire, bool aim, bool reload, bool jump, bool crouch, bool sprint, bool use,
             int weaponSlot)
+            => Pack(fire, aim, reload, jump, crouch, sprint, use, weaponSlot, lean: 0f);
+
+        /// <summary>
+        /// As above, plus the lean: <see cref="InputButtons.LeanLeft"/> at <paramref name="lean"/>
+        /// ≤ -0.5, <see cref="InputButtons.LeanRight"/> at ≥ 0.5, neither in between.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Both halves landed together (playtest 2026-09-28, bug 5).</b> The reader is
+        /// <c>ServerCombatAuthority.LeanOffset</c>, which moves a leaning shot's origin the
+        /// 0.4 m to the side that <c>PlayerFpParent</c> moves the player's camera. Before this
+        /// the bits were never set, so every shot fired while leaning left from beside the
+        /// crosshair and missed what it was aimed at.
+        /// </para>
+        /// <para>
+        /// Half a lean is the threshold because the camera's lean is an axis that eases in, and
+        /// the wire has room for "leaning" and "not"; the half-way mark is where the camera is
+        /// nearer to the one than the other.
+        /// </para>
+        /// </remarks>
+        public static ushort Pack(
+            bool fire, bool aim, bool reload, bool jump, bool crouch, bool sprint, bool use,
+            int weaponSlot, float lean)
         {
             InputButtons b = InputButtons.None;
+
+            if (lean <= -0.5f) b |= InputButtons.LeanLeft;
+            else if (lean >= 0.5f) b |= InputButtons.LeanRight;
 
             if (fire)   b |= InputButtons.Fire;
             if (aim)    b |= InputButtons.Aim;

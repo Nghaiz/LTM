@@ -386,10 +386,83 @@ namespace Ironfront.Net.Replication.Tests
                 0f, MovementCore.CrouchHeight * 0.5f, 0f);
             CombatTickResult low = crouching.Step(now: 10f, InputButtons.Fire);
 
+            // Level from 1.53 m is the head (1.31..1.73); level from the crouched 0.88 m is the
+            // body box, which runs from the boots to the chin as the original's does. It was a
+            // Limb before 2026-09-28, when the eye sat at 0.45 m and the legs had a box of their
+            // own outside the body.
             Assert.Equal(HitboxType.Head, standing.Hits[0].HitboxType);
-            Assert.Equal(HitboxType.Limb, crouching.Hits[0].HitboxType);
+            Assert.Equal(HitboxType.Body, crouching.Hits[0].HitboxType);
             Assert.Equal(1, high.HitCount);
             Assert.Equal(1, low.HitCount);
+        }
+
+        // ------------------------------------------------------------------ lean (playtest bug 5)
+
+        [Fact]
+        public void ALeanMovesTheShotOriginToTheLeaningSide()
+        {
+            var standing = MoveState.AtRest(new Vec3(0f, MovementCore.StandHeight * 0.5f, 0f));
+            Vec3 eye = ServerCombatAuthority.ShotOrigin(in standing, Frame(InputButtons.None));
+
+            // Facing +Z, the right is +X.
+            Vec3 right = ServerCombatAuthority.ShotOrigin(in standing, Frame(InputButtons.LeanRight));
+            Vec3 left = ServerCombatAuthority.ShotOrigin(in standing, Frame(InputButtons.LeanLeft));
+            Assert.Equal(eye.X + ProtocolConstants.LEAN_EYE_OFFSET, right.X, 4);
+            Assert.Equal(eye.X - ProtocolConstants.LEAN_EYE_OFFSET, left.X, 4);
+            Assert.Equal(eye.Y, right.Y, 4);
+
+            // Facing +X, the right is -Z: the lean turns with the heading.
+            Vec3 rightFacingEast = ServerCombatAuthority.ShotOrigin(
+                in standing, Frame(InputButtons.LeanRight, yaw: 90f));
+            Assert.Equal(-ProtocolConstants.LEAN_EYE_OFFSET, rightFacingEast.Z, 3);
+            Assert.Equal(0f, rightFacingEast.X, 3);
+
+            // Both bits at once cancel, as the axis they came from would.
+            Vec3 both = ServerCombatAuthority.ShotOrigin(
+                in standing, Frame(InputButtons.LeanLeft | InputButtons.LeanRight));
+            Assert.Equal(eye.X, both.X, 4);
+        }
+
+        [Fact]
+        public void ALeaningShooterHitsWhatTheLeaningCrosshairIsOn()
+        {
+            // The victim stands 0.4 m to the shooter's right, 10 m ahead: exactly where a full
+            // right lean puts the camera. From there a level shot lands on the head; from the
+            // unleaned eye -- the only origin the server had before the lean bits were sent --
+            // the same shot passes the body by and hits nothing.
+            var victimFeet = new Vec3(ProtocolConstants.LEAN_EYE_OFFSET, 0f, 10f);
+
+            var leaning = new CombatFixture(victimFeet: victimFeet);
+            CombatTickResult hit = leaning.Step(now: 10f, InputButtons.Fire | InputButtons.LeanRight);
+
+            var upright = new CombatFixture(victimFeet: victimFeet);
+            CombatTickResult miss = upright.Step(now: 10f, InputButtons.Fire);
+
+            Assert.Equal(1, hit.HitCount);
+            Assert.Equal(HitboxType.Head, leaning.Hits[0].HitboxType);
+            Assert.Equal(0, miss.HitCount);
+        }
+
+        [Fact]
+        public void AWallCutsTheLeanShortWhereItStopsTheCamera()
+        {
+            var fixture = new CombatFixture();
+            float askedReach = -1f;
+            fixture.Authority.LeanClearance = (eye, direction, reach) =>
+            {
+                askedReach = reach;
+                return 0.1f;
+            };
+
+            CombatTickResult result = fixture.Step(now: 10f, InputButtons.LeanRight);
+
+            Assert.Equal(ProtocolConstants.LEAN_EYE_OFFSET, askedReach, 4);
+            Assert.Equal(0.1f, result.Origin.X, 4);
+
+            // Not asked at all without a lean: no wall can shorten a lean that is not happening.
+            askedReach = -1f;
+            fixture.Step(now: 11f, InputButtons.None);
+            Assert.Equal(-1f, askedReach);
         }
 
         [Fact]
