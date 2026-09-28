@@ -3,7 +3,7 @@
 Investigation report, 2026-09-21. Phase: [`phases/phase-p25-ragdoll-drive.md`](../phases/phase-p25-ragdoll-drive.md).
 
 **The premise does not survive.** P25 opens by saying the ragdoll diverged from the original
-Ravenfield because `ActiveRaggy.cs` lost one line — `jointDrive.mode = JointDriveMode.Position;` —
+because `ActiveRaggy.cs` lost one line — `jointDrive.mode = JointDriveMode.Position;` —
 and that PhysX 4 therefore reads `positionSpring` / `positionDamper` differently, so the drive
 needs recalibrating against a measured baseline.
 
@@ -46,7 +46,7 @@ That green is worth something specific: menu, map select, weapon loadout, deploy
 all `Assembly-CSharp` code, so they exercise the recompiled assembly rather than just proving it
 loads. Deaths ran `ActiveRaggy.Ragdoll()` repeatedly — the player's own, plus bot deaths visible as
 bodies and blood decals throughout — and a serialization mismatch there would have thrown on the
-first one and filled the log. (How many bot deaths is not claimed: Ravenfield's score counts
+first one and filled the log. (How many bot deaths is not claimed: the original game's score counts
 capture ticks as well as kills, so the 462 points scored do not convert to a death count.)
 
 **So the measurement rig the plan wanted is buildable.** That conclusion stands whatever happens to

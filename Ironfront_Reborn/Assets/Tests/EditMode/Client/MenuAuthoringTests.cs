@@ -38,7 +38,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.That(allText, Does.Not.Contain("VANGUARD_07"));
             Assert.That(allText, Does.Not.Contain("ARCHIPELAGO"));
             Assert.That(allText, Does.Not.Contain("EU-01"));
-            Assert.That(allText, Does.Contain("TEAM 10 LTM"));
+            Assert.That(allText, Does.Contain("LTM10"));
 
             Image[] backgrounds = root.GetComponentsInChildren<Image>(true)
                 .Where(image => image.name == "Background").ToArray();

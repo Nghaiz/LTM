@@ -5,7 +5,7 @@
 .DESCRIPTION
     WHY THIS EXISTS
 
-    The P25 phase plan opens by saying the ragdoll diverged from the original Ravenfield because
+    The P25 phase plan opens by saying the ragdoll diverged from the original because
     ActiveRaggy.cs lost exactly one line:
 
         jointDrive.mode = JointDriveMode.Position;   // "API Unity 5.5 da xoa"
@@ -31,13 +31,13 @@
     This is a fact collector, not a judge. It emits what it read; the report reasons over it.
 
 .NOTES
-    Needs the recovered Ravenfield build under tmp/ for the 5.4 assembly. It refuses to run
+    Needs the recovered original build under tmp/ for the 5.4 assembly. It refuses to run
     without it rather than emitting a file with holes in it -- the committed JSON is the durable
     artifact, tmp/ is disposable.
 #>
 [CmdletBinding()]
 param(
-    # Managed/ of the shipped Ravenfield build. Supplies the Unity 5.4.0f3 UnityEngine.dll, which
+    # Managed/ of the shipped original build. Supplies the Unity 5.4.0f3 UnityEngine.dll, which
     # is the only authority on what the original engine's JointDrive actually did.
     [string] $ShipManaged = "tmp/Ravenfield/Ravenfield_Data/Managed",
 

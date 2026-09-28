@@ -1,4 +1,4 @@
-# Ironfront Reborn eight-screen HTML UI redesign
+# Ironfront: Reborn eight-screen HTML UI redesign
 
 ## Goal
 
@@ -19,7 +19,7 @@ The Unity menu scene will provide eight screens matching the prototype:
 
 Splash and all in-game HUD/gameplay scenes are explicitly out of scope for this pass.
 
-Branding is **Ironfront Reborn**, developed by **Team 10 LTM**. Forgot Password remains visible for HTML parity and reports the shared development notice.
+Branding is **Ironfront: Reborn**, developed by **LTM10**. Forgot Password remains visible for HTML parity and reports the shared development notice.
 
 ## Source-of-truth rules
 
@@ -113,5 +113,5 @@ The three supplied backgrounds and rasterized branding/icons are used without ge
 - Keep verification focused on asset references, the generated scene hierarchy, real-data bindings, and unsupported-action routing.
 - Regenerate the menu scene and check that all serialized references resolve.
 - Do not run the full Unity or .NET suites for this visual pass. The user will build and runtime-test locally.
-- Scan user-facing project/menu text for obsolete Ravenfield/SteelRaven branding while preserving third-party/legal attribution where appropriate.
+- Scan user-facing project/menu text for obsolete inherited base-game branding while preserving third-party/legal attribution where appropriate.
 - Do not create a player build; the user will build and perform final visual/runtime validation.

@@ -347,7 +347,7 @@ namespace Ironfront.Net.Unity.EditorTools
             // required this string since before the screen existed. Pinned to the corner rather
             // than placed at a coordinate, for the reason Anchor gives.
             Text build = Label(panel, "BuildLabel",
-                "TEAM 10 LTM  •  CLASSROOM MULTIPLAYER PROJECT", 12, Vector2.zero,
+                "LTM10  •  CLASSROOM MULTIPLAYER PROJECT", 12, Vector2.zero,
                 new Vector2(420f, 22f));
             build.alignment = TextAnchor.MiddleRight;
             build.resizeTextForBestFit = false;
@@ -827,7 +827,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 ("SETTINGS", MenuNavigationAction.Settings));
             PackPanel(panel, "OperationsPanel", new Vector2(0f, -25f), new Vector2(1540f, 850f));
 
-            Label(panel, "Kicker", "TEAM 10 LTD // MULTIPLAYER OPERATIONS", 11,
+            Label(panel, "Kicker", "LTM10 // MULTIPLAYER OPERATIONS", 11,
                 new Vector2(-405f, 265f), new Vector2(520f, 20f)).alignment = TextAnchor.MiddleLeft;
             Label(panel, "Heading", "ROOMS", 42,
                 new Vector2(-405f, 230f), new Vector2(320f, 48f)).alignment = TextAnchor.MiddleLeft;

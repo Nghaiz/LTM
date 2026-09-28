@@ -27,7 +27,7 @@ No new visual asset will be generated. Selected PNG and JPG files will be copied
 - Use the pack's base, hover, pressed, and disabled states through Unity `Selectable` sprite-state transitions.
 - Use the pack's 1280x720 composition as the Canvas reference resolution.
 - Use the supplied logo, icons, backgrounds, panels, rows, tabs, toggles, and button/field sprites only.
-- Display `IRONFRONT REBORN` and `Team 10 LTM`; remove old product/publisher attribution from these screens.
+- Display `IRONFRONT: REBORN` and `LTM10`; remove old product/publisher attribution from these screens.
 
 ## Main Menu
 
@@ -38,7 +38,7 @@ The main background fills the screen. The supplied logo and tagline sit in the u
 3. Settings — secondary action; opens the existing `OptionsUi` through a shared binding seam.
 4. Exit — danger action; quits in a player build and remains harmless in Edit Mode tests.
 
-The supplied icons accompany each action. Footer copy identifies Team 10 LTM without legacy publisher information.
+The supplied icons accompany each action. Footer copy identifies LTM10 without legacy publisher information.
 
 ## Sign In
 

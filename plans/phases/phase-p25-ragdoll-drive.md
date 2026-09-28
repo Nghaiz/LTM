@@ -3,7 +3,7 @@
 - **Created:** 2026-09-20. Sau [P24](phase-p24-astar-hitch.md).
 - **Rewritten:** 2026-09-21, sau khi cổng §4.3 và kiểm tra §5.4 (bản cũ) trả lời xong.
 - **Base:** `develop`. **Track:** [`../plan.md`](../plan.md) §4.2.
-- **Nguồn:** [`../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md)
+- **Nguồn:** [`../reports/2026-09-20-recovered-original-port-back-brainstorm.md`](../reports/2026-09-20-recovered-original-port-back-brainstorm.md)
 - **Báo cáo:** [`../reports/2026-09-21-p25-ragdoll-drive.md`](../reports/2026-09-21-p25-ragdoll-drive.md)
 - **Kind:** gameplay feel. Sửa tham số, **không** sửa kiến trúc.
 
@@ -11,7 +11,7 @@
 
 ## 1. Goal
 
-Đưa cảm giác điều khiển và cảm giác ngã của nhân vật về gần bản Ravenfield gốc — **đo được**,
+Đưa cảm giác điều khiển và cảm giác ngã của nhân vật về gần bản gốc — **đo được**,
 không chỉnh theo cảm tính.
 
 Mục tiêu này không đổi. Cái đã đổi là **chẩn đoán**.

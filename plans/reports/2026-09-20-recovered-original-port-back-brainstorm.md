@@ -1,10 +1,10 @@
-# Port-back từ bản Ravenfield khôi phục — báo cáo brainstorm
+# Port-back từ bản gốc khôi phục — báo cáo brainstorm
 
 **Ngày:** 2026-09-20 · **Nguồn:** `tmp/recovered/` (191 MB, **đang gitignore**) · **Trạng thái:** thiết kế đã được chủ dự án duyệt
 
 ## 1. Bối cảnh
 
-Chủ dự án tự reverse-engineer bản build Ravenfield Beta 5 gốc, thu được project Unity 5.4.0f3
+Chủ dự án tự reverse-engineer bản build gốc, thu được project Unity 5.4.0f3
 gần như nguyên vẹn (408 file `Assembly-CSharp`, 5 631/5 631 method khớp IL). Ironfront_Reborn được
 phát triển từ một bản decompiled khác (`JonJon565/Ravenfield_Beta_5_Decomp`, đã bị nâng lên Unity
 2017.3) và hiện chạy Unity 6000.3.21f1. Câu hỏi: bản khôi phục giải thích được tình trạng giật lag
@@ -57,7 +57,7 @@ chỉnh cho PhysX 3.3 @ 50 Hz nay chạy PhysX 4 @ 60 Hz.
 
 `AstarPath.cs` (113 dòng), `ProceduralGridMover.cs` (94), `EuclideanEmbedding.cs` (70),
 `RecastGraph.cs` (46), `Voxelize.cs` (44), `PathUtilities.cs` (28). Pathfinding là nguồn
-frame-hitch kinh điển của Ravenfield. Chưa ai soi.
+frame-hitch kinh điển của bản gốc. Chưa ai soi.
 
 ### 3.3 Render pipeline = Built-in
 

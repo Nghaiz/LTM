@@ -153,7 +153,7 @@ namespace Ironfront.Tools.RecoveredPort
                 //
                 // Worth knowing while reading these rows: every angular limit on all 12 joints of
                 // this ragdoll is zero with motion = Limited, in BOTH trees -- it is how
-                // Ravenfield's ragdoll has always been built, not a divergence. Those zero limits
+                // The original game's ragdoll has always been built, not a divergence. Those zero limits
                 // do not stop the drive: commanded 30 degrees, the chain lands within 0.84 deg at
                 // maximumForce 1e13 and within 0.85 deg at maximumForce 100, so the shipped 1e13
                 // is not what is overcoming them. Why gravity alone does not move the chain while

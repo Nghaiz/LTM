@@ -147,7 +147,7 @@ namespace Ironfront.Net.Protocol
         /// on both the client's prediction and the server's authority.
         /// </summary>
         /// <remarks>
-        /// Ravenfield's own <c>FpsActorController</c> refuses to fire while sprinting and for a
+        /// The original game's own <c>FpsActorController</c> refuses to fire while sprinting and for a
         /// short window after, because the weapon is lowered and has to come back up. Before
         /// v10 only the client knew that: the client's controller declined the shot while the
         /// server, reading the raw Fire bit out of <c>C_INPUT</c>, accepted it and took the

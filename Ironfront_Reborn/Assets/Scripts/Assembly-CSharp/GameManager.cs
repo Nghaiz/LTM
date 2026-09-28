@@ -84,7 +84,7 @@ public class GameManager : MonoBehaviour
 		// it named was never given the call. `MatchScoreboard.Reset` shipped with zero callers,
 		// its own summary reading "Called when a match starts".
 		//
-		// The original got this free. Ravenfield's ScoreUi zeroed all four counters in Awake and
+		// The original got this free. Its ScoreUi zeroed all four counters in Awake and
 		// the HUD prefab is re-instantiated per match, so every match began at 0-0. Ours moved
 		// the state onto a plain static that survives scene loads, so the second offline match in
 		// a process opened holding the first one's score AND its latched `GameEnded` -- which

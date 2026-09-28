@@ -3,7 +3,7 @@
 - **Created:** 2026-09-20. Sau [P22](phase-p22-recovered-ground-truth.md), vì phase này đọc JSON
   mà P22 sinh ra.
 - **Base:** `develop`. **Track:** [`../plan.md`](../plan.md) §4.2.
-- **Nguồn:** [`../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md)
+- **Nguồn:** [`../reports/2026-09-20-recovered-original-port-back-brainstorm.md`](../reports/2026-09-20-recovered-original-port-back-brainstorm.md)
 - **Kind:** asset + tooling. Không đụng `Assets/Scripts`.
 
 ---
@@ -18,7 +18,7 @@ tra: cờ đã mất, biết chính xác mất cái nào, và biết cách đặ
 
 ## 2. Bối cảnh — phase này đứng một mình
 
-Dự án được phát triển từ một bản decompiled Ravenfield Beta 5 đã bị nâng lên Unity 2017.3, rồi
+Dự án được phát triển từ một bản decompiled của bản gốc đã bị nâng lên Unity 2017.3, rồi
 nâng tiếp lên Unity 6. Chủ dự án sau đó reverse-engineer bản build gốc thành project Unity 5.4.0f3
 nguyên vẹn. Đối chiếu hai bên cho thấy bước nâng engine đã **xoá sạch cờ static**.
 

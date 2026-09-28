@@ -9,13 +9,13 @@ namespace Ironfront.Net.Unity.EditorTools
     /// <summary>Applies the classroom project's owned product identity through Unity APIs.</summary>
     public static class RebrandProjectIdentity
     {
-        [MenuItem("Ironfront/Brand/Apply Ironfront Reborn identity")]
+        [MenuItem("Ironfront/Brand/Apply Ironfront: Reborn identity")]
         public static void Run()
         {
-            PlayerSettings.companyName = "Team 10 LTM";
-            PlayerSettings.productName = "Ironfront Reborn";
+            PlayerSettings.companyName = "LTM10";
+            PlayerSettings.productName = "IronfrontReborn";
             PlayerSettings.SetApplicationIdentifier(
-                BuildTargetGroup.Standalone, "com.team10ltm.ironfrontreborn");
+                BuildTargetGroup.Standalone, "com.ltm10.ironfrontreborn");
 
             RebrandScene("Assets/Scenes/Splash.unity", splash: true);
             RebrandScene("Assets/Scenes/Menu.unity", splash: false);
@@ -44,18 +44,18 @@ namespace Ironfront.Net.Unity.EditorTools
             if (splash)
             {
                 if (value.IndexOf("STEELRAVEN7 PRESENTS", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                    return "TEAM 10 LTM PRESENTS";
+                    return "LTM10 PRESENTS";
                 if (value.IndexOf("RAVENFIELD", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                    return "IRONFRONT REBORN";
+                    return "IRONFRONT: REBORN";
             }
 
             if (value.IndexOf("Johan Hassel", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                return "Ironfront Reborn • Team 10 LTM";
+                return "Ironfront: Reborn • LTM10";
             if (value.IndexOf("SteelRaven7", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                return "TEAM 10 LTM";
+                return "LTM10";
             if (value.IndexOf("Ravenfield", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                return value.Replace("RAVENFIELD", "IRONFRONT REBORN")
-                    .Replace("Ravenfield", "Ironfront Reborn");
+                return value.Replace("RAVENFIELD", "IRONFRONT: REBORN")
+                    .Replace("Ravenfield", "Ironfront: Reborn");
             return value;
         }
     }

@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Make every carried throwable behave like Ravenfield Beta 5 while remaining deterministic in a
+Make every carried throwable behave like the original game while remaining deterministic in a
 client/server match. Frag grenades, spearhead grenades, ammo boxes, and medipacks must share one
 inventory and release lifecycle. The server owns gameplay truth; the local client predicts only
 presentation and replays unacknowledged input over snapshots.
@@ -17,7 +17,7 @@ uncommitted work already present in the affected files.
 
 ## Ground Truth
 
-The checked-in Ravenfield assets and the original installation at
+The checked-in original assets and the original installation at
 `E:/Ravenfield_B5_1_Windows/Ravenfield` establish these rules:
 
 | Weapon | Loaded/carrying | Reserve | Total uses | Reload after release | Release delay |
@@ -40,8 +40,8 @@ for frag and `1/2 -> 1/1 -> 1/0 -> 0/0` for spearhead. Ammo box and medipack go 
 The current client can hold the same inventory in three places:
 
 1. `ClientCombatState` predicts `WeaponRuntimeState.AmmoInClip` at input time.
-2. Ravenfield's `Weapon.ammo` is decremented later by the throw animation event.
-3. Ravenfield's `Actor.spareAmmo[slot]` is spent by `Weapon.ReloadDone`.
+2. The original game's `Weapon.ammo` is decremented later by the throw animation event.
+3. The original game's `Actor.spareAmmo[slot]` is spent by `Weapon.ReloadDone`.
 
 The server separately owns `ClientSession.Weapon` and `ActorSpareAmmoPool`. Snapshots copy only some
 of those values back into the Unity objects, and the generic anti-flicker rule intentionally tolerates
@@ -85,7 +85,7 @@ A delayed throwable uses a two-phase transaction:
    another pending release. Reserve exactly one loaded use, capture aim, and schedule the authoritative
    release tick. The reserved use cannot be fired again.
 2. **Release:** at the scheduled server tick, atomically commit the use, emit exactly one projectile
-   spawn of the correct kind, and apply the Ravenfield refill rule. A finite reserve loses only the
+   spawn of the correct kind, and apply the original refill rule. A finite reserve loses only the
    number actually transferred into the hand.
 
 Death, round reset, disconnect, or a weapon switch before release aborts the transaction and restores
@@ -119,7 +119,7 @@ so the game protocol version advances from 10 to 11 even though the snapshot byt
 ### Unity boundary
 
 `Weapon.ammo` and `Actor.spareAmmo` become mirrors at network client and server roles. Their legacy
-mutation remains active only offline, where Ravenfield's original single-player behavior stays intact.
+mutation remains active only offline, where the original game's single-player behavior stays intact.
 
 For network roles:
 
@@ -217,7 +217,7 @@ overlapping changes are incorporated deliberately and reviewed by diff.
 
 ### Runtime acceptance
 
-- Offline Ravenfield behavior remains unchanged.
+- Offline behavior of the original remains unchanged.
 - Local multiplayer player sees the object leave the hand at the authored delay.
 - Two observers see the same type, trajectory, bounce, detonation/deployment, and disappearance.
 - HUD and server checkpoints agree after every release and refill.

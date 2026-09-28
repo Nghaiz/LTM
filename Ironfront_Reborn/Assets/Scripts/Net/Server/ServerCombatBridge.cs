@@ -173,7 +173,7 @@ namespace Ironfront.Net.Unity.Server
             //
             // Protocol 10 adds the other two thirds of that field. The reserve and the reload
             // flag were authoritative on the server the whole time and had no way onto the wire,
-            // so the client ran its own Ravenfield pool beside the authoritative clip -- two
+            // so the client ran its own legacy pool beside the authoritative clip -- two
             // sources for one number, and the clip-of-one weapons are where they visibly
             // disagreed.
             PublishWeaponState(session, actor, in weapon, in ammo);

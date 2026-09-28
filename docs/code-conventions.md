@@ -1,4 +1,4 @@
-# Code conventions — Ironfront Reborn
+# Code conventions — Ironfront: Reborn
 
 Moved out of `plans/00-shared/conventions.md` on 2026-08-29, when the four-developer coordination
 material was deleted. Sections 1.1–1.3 (branch-per-developer, role hand-offs, and *"only A opens

@@ -1,4 +1,4 @@
-// RECOVERED SHADER - Ravenfield Beta 5
+// RECOVERED SHADER - original game
 // Properties, tags, the single FORWARDBASE pass, the Dependency line and Fallback below are EXACT
 // (read back from the shipped ShaderLab block in sharedassets2.assets).
 // That signature - RenderType=TreeLeaf, SHADOWSUPPORT, one forward pass only, and

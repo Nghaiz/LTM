@@ -49,7 +49,7 @@ namespace Ironfront.Net.Replication.Vehicles
         /// </summary>
         /// <param name="isServer">
         /// False offline and on a client, where this whole guard is absent by design: offline
-        /// Ravenfield's crash damage is unchanged, and a client never decides damage at all.
+        /// The original game's crash damage is unchanged, and a client never decides damage at all.
         /// </param>
         /// <param name="now">The engine clock.</param>
         /// <param name="notBefore">

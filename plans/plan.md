@@ -1,4 +1,4 @@
-# Ironfront Reborn — the one plan
+# Ironfront: Reborn — the one plan
 
 - **Created:** 2026-08-29, replacing eight track plans and nine phase directories.
 - **Owner:** one person. Every role split, hand-off, sync point and "who is blocked by whom"
@@ -213,9 +213,9 @@ not a UI task. P18 *(file deleted -- `git show 509c70d:plans/phases/phase-p18-sc
 
 ---
 
-## 4.2 Track port-back: bản Ravenfield khôi phục
+## 4.2 Track port-back: bản gốc khôi phục
 
-Chủ dự án tự reverse-engineer bản build Ravenfield Beta 5 gốc thành một project Unity 5.4.0f3 gần
+Chủ dự án tự reverse-engineer bản build gốc thành một project Unity 5.4.0f3 gần
 như nguyên vẹn — 408 file `Assembly-CSharp`, **5 631/5 631 method khớp ở mức IL metadata**, 0 asset
 reference gãy. Dự án này vốn phát triển từ một bản decompiled khác đã bị nâng lên Unity 2017.3, và
 đối chiếu hai bên ngày 2026-09-20 giải thích được cả giật lag lẫn một phần lỗi logic.
@@ -250,7 +250,7 @@ Bốn dữ kiện kỹ thuật mà mọi phase trong track phải biết, đầy
    tác, nhưng nó là biến thứ hai khi hiệu chỉnh ragdoll.
 4. **`tmp/` nằm trong `.gitignore`**, nên P22 chạy trước mọi phase khác.
 
-Brainstorm đầy đủ: [`reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md).
+Brainstorm đầy đủ: [`reports/2026-09-20-recovered-original-port-back-brainstorm.md`](reports/2026-09-20-recovered-original-port-back-brainstorm.md).
 
 **Bốn quyết định của chủ dự án, 2026-09-20 — đã chốt, không hỏi lại:**
 

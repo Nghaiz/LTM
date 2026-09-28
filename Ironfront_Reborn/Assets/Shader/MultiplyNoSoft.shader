@@ -1,6 +1,6 @@
 // Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
 
-// RECOVERED SHADER - Ravenfield Beta 5
+// RECOVERED SHADER - original game
 // Properties, tags, render state and blend mode below are EXACT: they were read back from the
 // shipped ShaderLab block (Shader.m_Script) inside resources.assets.
 // The CG body is RE-AUTHORED: the game ships only compiled d3d9/d3d11 bytecode for it.

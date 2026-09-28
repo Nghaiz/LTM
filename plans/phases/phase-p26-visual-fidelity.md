@@ -2,7 +2,7 @@
 
 - **Created:** 2026-09-20. Sau [P25](phase-p25-ragdoll-drive.md).
 - **Base:** `develop`. **Track:** [`../plan.md`](../plan.md) §4.2.
-- **Nguồn:** [`../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md)
+- **Nguồn:** [`../reports/2026-09-20-recovered-original-port-back-brainstorm.md`](../reports/2026-09-20-recovered-original-port-back-brainstorm.md)
 - **Kind:** asset. **Rủi ro cao nhất cả track** — xem §5 trước khi cam kết bất cứ điều gì.
 
 ---
@@ -22,7 +22,7 @@ Nếu mục 3 không khả thi, mục 1 và 2 vẫn giao được — **đừng 
 
 ## 2. Bối cảnh — phase này đứng một mình
 
-Dự án phát triển từ bản decompiled Ravenfield Beta 5 đã bị nâng lên Unity 2017.3, nay chạy Unity 6.
+Dự án phát triển từ bản decompiled của bản gốc đã bị nâng lên Unity 2017.3, nay chạy Unity 6.
 Chủ dự án reverse-engineer bản build gốc thành project Unity 5.4.0f3 nguyên vẹn; dữ liệu đã trích
 vào `tools/recovered/` ở [P22](phase-p22-recovered-ground-truth.md).
 
@@ -54,7 +54,7 @@ EasyRoads3D sinh ra.
 | Loại | Số | Cách xử lý |
 |---|---|---|
 | Built-in của Unity | 22 | Chọn lại từ dropdown Shader của material. Không viết code. |
-| Custom Ravenfield | 3 | Đã viết lại tay, đưa vào repo ở P22 → chỉ cần gán |
+| Custom của bản gốc | 3 | Đã viết lại tay, đưa vào repo ở P22 → chỉ cần gán |
 
 Ba shader custom: `Custom/Flag` (material `Flag`), `Custom/Multiply No Soft` (`DamageVignette`,
 `Dark Scope`), `Custom/StandardDoubleSide` (`Dollar`).

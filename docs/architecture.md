@@ -1,4 +1,4 @@
-# System architecture — Ironfront Reborn
+# System architecture — Ironfront: Reborn
 
 This document describes the target architecture. Byte-level details live in
 [protocol-spec.md](../plans/00-shared/protocol-spec.md).

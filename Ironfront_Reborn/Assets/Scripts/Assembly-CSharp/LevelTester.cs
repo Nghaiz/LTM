@@ -19,7 +19,7 @@ using UnityEngine;
 /// authored <c>m_IsOn: 0</c> (<c>Menu.unity:138865</c>), so every recorded server run opened with
 /// each neutral point handed to team 1 — <c>6 of 6</c> on Dustbowl and <c>5 of 5</c> on Island,
 /// across 33 runs — against two maps that author exactly one base per side and leave the rest
-/// neutral. Assault mode is an optional Ravenfield match modifier the player ticks, not the
+/// neutral. Assault mode is an optional original match modifier the player ticks, not the
 /// default opening; the prefab now reads <c>assaultMode: 0</c> and the server opens
 /// <c>2 of 6</c> / <c>2 of 5</c>, which is what the map authors wrote.
 /// </para>

@@ -173,7 +173,7 @@ namespace Ironfront.Net.Unity
         void EnterDeployedView();
 
         /// <summary>
-        /// Opens the normal Ravenfield loadout screen while the first network deploy is pending.
+        /// Opens the normal loadout screen while the first network deploy is pending.
         /// This is presentation only; the Deploy button still produces the intent consumed by
         /// <see cref="ConsumeDeployIntent"/> and the server remains the spawn authority.
         /// </summary>
@@ -342,7 +342,7 @@ namespace Ironfront.Net.Unity
 
         /// <summary>
         /// Applies the server's authoritative health, active-weapon clip and spare reserve to the
-        /// local Ravenfield body and HUD. Implementations without a gameplay body may keep the
+        /// local gameplay body and HUD. Implementations without a gameplay body may keep the
         /// default no-op.
         /// </summary>
         /// <remarks>
