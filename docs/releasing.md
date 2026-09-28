@@ -42,7 +42,7 @@ git switch develop; git pull --ff-only
 git status --short                               # must be empty
 pwsh .claude/scripts/unity-editor.ps1 close       # the build needs the Editor closed
 pwsh tools/build-player.ps1                      # ~10 min; prints "[build] stamp : <sha> ..."
-pwsh tools/package-release.ps1 -Version v0.1.0   # zip into artifacts/release/
+pwsh tools/package-release.ps1 -Version v1.1.0   # zip into artifacts/release/
 ```
 
 `build-player.ps1` rebuilds the tracked plugin DLLs, which leaves them modified in the working
@@ -82,15 +82,21 @@ parent directory of `build/windows` is picked up by `DotEnv.LoadFromAncestors`, 
 ## 4. Publish
 
 ```powershell
-pwsh tools/package-release.ps1 -Version v0.1.0 -Publish           # tag on main
-pwsh tools/package-release.ps1 -Version v0.1.0 -Publish -NotesFile notes.md
+pwsh tools/package-release.ps1 -Version v1.1.0 -Publish           # tag on main
+pwsh tools/package-release.ps1 -Version v1.1.0 -Publish -NotesFile notes.md
 ```
 
 `-Publish` runs `gh release create <version> --target main` with the zip attached and prints
 the release URL. GitHub caps a release asset at 2 GiB; a build is a few hundred MB.
 
-Tags follow `vMAJOR.MINOR.PATCH`. Bump MINOR when the wire protocol changes: a client from an
-older release can no longer talk to the servers, and its players have to download again.
+Tags follow semantic versioning, `vMAJOR.MINOR.PATCH`. **v1.0.0 (2026-09-28, built from
+`9836e90`) is the first stable release.** From there:
+
+| Bump | When | Players |
+|---|---|---|
+| MAJOR | the wire protocol version changes | old clients are refused by the servers and must download again |
+| MINOR | new features, still protocol-compatible | old clients keep working |
+| PATCH | fixes, still protocol-compatible | old clients keep working |
 
 ---
 
@@ -101,7 +107,7 @@ older release can no longer talk to the servers, and its players have to downloa
 | Game servers moved, resized, redeployed | No. The master hands out their address |
 | Master redeployed at the same address | No |
 | Master moved to a new host name or port | **Yes.** Change `PublicMasterHost` / `PublicMasterPort`, update `Menu.unity` and `play-lan.ps1` (the test names all three), release again |
-| Wire protocol version bumped | **Yes.** Old clients are refused |
+| Wire protocol version bumped | **Yes, as a new MAJOR.** Old clients are refused |
 
 ---
 

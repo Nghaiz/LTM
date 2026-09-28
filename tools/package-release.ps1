@@ -18,14 +18,14 @@
 #
 # Usage:
 #   pwsh tools/build-player.ps1                                   # first, from a clean checkout
-#   pwsh tools/package-release.ps1 -Version v0.1.0                # zip into artifacts/release/
-#   pwsh tools/package-release.ps1 -Version v0.1.0 -Publish       # ...and create the GitHub release
+#   pwsh tools/package-release.ps1 -Version v1.1.0                # zip into artifacts/release/
+#   pwsh tools/package-release.ps1 -Version v1.1.0 -Publish       # ...and create the GitHub release
 #
 # Full procedure: docs/releasing.md.
 
 [CmdletBinding()]
 param(
-    # The release tag, e.g. v0.1.0. Also names the zip and the folder inside it.
+    # The release tag, e.g. v1.1.0. Also names the zip and the folder inside it.
     [Parameter(Mandatory)]
     [ValidatePattern('^v\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$')]
     [string] $Version,
