@@ -126,6 +126,18 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	private bool wasCrouching;
 
+	/// <summary>
+	/// Whether this actor is in its crouched stance: what UpdateMovement last wrote to the
+	/// animator's "crouched". False while seated, fallen over or dead, which own the pose instead.
+	/// </summary>
+	/// <remarks>
+	/// Read by the network to send a bot's crouch (IGameplayActorSource.IsCrouching). A bot
+	/// crouches behind low cover while it reloads or cools down (AiActorController.Crouch), and
+	/// until 2026-09-28 no client drew it: the snapshot's IsCrouching bit came only from a
+	/// player's movement agent.
+	/// </remarks>
+	public bool IsCrouchedStance => wasCrouching && !dead && !fallenOver && !IsSeated();
+
 	[NonSerialized]
 	public bool inWater;
 

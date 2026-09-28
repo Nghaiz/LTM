@@ -25,6 +25,7 @@ namespace Ironfront.Net.Unity.Server.Tests
             public float Health { get; set; } = 100f;
             public bool IsDead { get; set; }
             public bool IsSubmerged { get; set; }
+            public bool IsCrouching { get; set; }
 
             public string DescribeSubmersion() => "fake";
 
@@ -390,6 +391,36 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(expectedZ, velocity.Z, 0.001f);
             Assert.IsTrue((entry.StateFlags & Ironfront.Net.Protocol.ActorStateFlags.IsSprinting) != 0,
                 "a moving AI actor must not arrive as an idle default-pose proxy");
+        }
+
+        /// <summary>
+        /// A crouched bot is sent crouched, and its hitboxes are the crouched ones every client
+        /// now draws it in.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 hit-registration audit: the IsCrouching bit came only from
+        /// a player's movement agent, so a bot crouching behind cover was drawn standing and boxed
+        /// standing -- consistent with each other, and with neither matching the bot.
+        /// </remarks>
+        [TestCase(true)]
+        [TestCase(false)]
+        public void ABotsCrouchReachesTheSnapshotAndItsHitboxes(bool crouching)
+        {
+            var gameplay = new FakeGameplayActor { IsCrouching = crouching };
+            NetServerActor actor = CreateActor(gameplay);
+
+            bool sent = (actor.BuildStateFlags() & Ironfront.Net.Protocol.ActorStateFlags.IsCrouching) != 0;
+            Assert.AreEqual(crouching, sent, "the IsCrouching bit does not follow the bot's own stance");
+
+            var pose = crouching
+                ? Ironfront.Net.Replication.Combat.HumanoidPose.Crouched
+                : Ironfront.Net.Replication.Combat.HumanoidPose.Standing;
+            var expected = Ironfront.Net.Replication.Combat.HitboxSet.Humanoid(
+                Ironfront.Net.Replication.Movement.Vec3.Zero, 0f, pose, 0f, 0f).Head;
+            var head = actor.CaptureHitboxes().Head;
+
+            Assert.AreEqual(expected.Min.Y, head.Min.Y, 1e-4f, $"the head box is not the {pose} one");
+            Assert.AreEqual(expected.Max.Y, head.Max.Y, 1e-4f, $"the head box is not the {pose} one");
         }
 
         /// <summary>
