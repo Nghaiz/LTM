@@ -130,7 +130,11 @@ public class GameManager : MonoBehaviour
 		{
 			return;
 		}
-		if (Input.GetKey(KeyCode.S))
+		// Holding S as the map finishes loading is the original game's way into spectator mode,
+		// and offline only. Networked, it was a trap: S is also "walk back", a player holding it
+		// through the load got a free camera with no loadout and no way to deploy, and nothing on
+		// screen said why.
+		if (Ironfront.Net.Unity.NetContext.IsOffline && Input.GetKey(KeyCode.S))
 		{
 			UnityEngine.Object.Instantiate(spectatorCameraPrefab, SceneryCamera.instance.transform.position, SceneryCamera.instance.transform.rotation);
 			FpsActorController.instance.DisableCameras();

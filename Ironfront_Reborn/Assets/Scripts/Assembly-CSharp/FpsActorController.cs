@@ -964,15 +964,23 @@ public class FpsActorController : ActorController
 				OpenLoadout();
 			}
 		}
-		if (Input.GetKeyDown(KeyCode.K) && !LocalTextEntry.OwnsKeyboard)
+		// The original game's developer keys -- K kills you, O draws the AI debug labels, Caps Lock
+		// or B toggles slow motion -- are offline only. In a networked match none of them can do
+		// what it says, and each one breaks the player instead (playtest 2026-09-28): the server
+		// owns health, so K only ragdolled the local body while the server kept it standing, and
+		// the prediction then fought the ragdoll -- the body thrown into the air, the camera
+		// shaking, input gone, "blood and a fall but no death". Slow motion slowed this client's
+		// clock alone against a server that does not slow down.
+		bool developerKeys = NetContext.IsOffline && !LocalTextEntry.OwnsKeyboard;
+		if (developerKeys && Input.GetKeyDown(KeyCode.K))
 		{
 			actor.Damage(200f, 200f, true, actor.CenterPosition(), Vector3.forward, Vector3.zero);
 		}
-		if (Input.GetKeyDown(KeyCode.O) && !LocalTextEntry.OwnsKeyboard)
+		if (developerKeys && Input.GetKeyDown(KeyCode.O))
 		{
 			ActorManager.instance.debug = !ActorManager.instance.debug;
 		}
-		if (Input.GetButtonDown("Slowmotion") && !IngameMenuUi.IsOpen() && !LocalTextEntry.OwnsKeyboard)
+		if (developerKeys && Input.GetButtonDown("Slowmotion") && !IngameMenuUi.IsOpen())
 		{
 			// PhysicsRate, not a second Time.fixedDeltaTime = Time.timeScale / 60f here. That
 			// literal made this component an unwitting authority on the project's physics rate:
