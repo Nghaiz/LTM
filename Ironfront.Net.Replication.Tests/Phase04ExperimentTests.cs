@@ -242,13 +242,15 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void PastTheClampAFastTargetIsMissedWhichIsWhatTheClampCosts()
         {
-            // The 300 ms row of the table above still reads 100% at 5 m/s, because the 50 ms
-            // the clamp gives up is 0.25 m of strafe — inside a torso. Wind the target up and
-            // the limit becomes visible, which is the point of measuring past the clamp at all.
-            int slow = Phase02MeasurementTests.StrafeVolleyFor(300f, compensated: true);
-            int fast = Phase02MeasurementTests.StrafeVolleyFor(300f, compensated: true, strafeSpeed: 20f);
+            // At 330 ms the view is ~447 ms old by the tick that applies the shot and the clamp
+            // rewinds 400: the ~47 ms it gives up is 0.23 m of strafe at 5 m/s, inside a torso.
+            // Wind the target up and the limit becomes visible, which is the point of measuring
+            // past the clamp at all. (300 ms was this row while the clamp was 200 ms and the
+            // formula half a round trip; the whole-trip formula stays inside 400 ms there.)
+            int slow = Phase02MeasurementTests.StrafeVolleyFor(330f, compensated: true);
+            int fast = Phase02MeasurementTests.StrafeVolleyFor(330f, compensated: true, strafeSpeed: 20f);
 
-            _output.WriteLine($"At 300 ms: 5 m/s target {slow * 5}%, 20 m/s target {fast * 5}%");
+            _output.WriteLine($"At 330 ms: 5 m/s target {slow * 5}%, 20 m/s target {fast * 5}%");
             Assert.True(fast < slow, "the clamp should cost something at 20 m/s");
         }
 

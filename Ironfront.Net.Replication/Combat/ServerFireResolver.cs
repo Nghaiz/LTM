@@ -120,6 +120,11 @@ namespace Ironfront.Net.Replication.Combat
         /// resolved and discarded rather than overrunning.
         /// </param>
         /// <param name="hitCount">Entries written into <paramref name="hits"/>.</param>
+        /// <param name="shooterSeatIsInterpolated">
+        /// The shooter rides a vehicle they do not drive, so their client drew their own seat at
+        /// the rewind tick like everything else: the sweep starts from where that seat was. See
+        /// <see cref="LagCompensator.TryMeasureOwnTravel"/>.
+        /// </param>
         /// <returns><see cref="FireRejection.None"/> when the shot was taken.</returns>
         public FireRejection Resolve(
             ref WeaponRuntimeState state,
@@ -133,7 +138,8 @@ namespace Ironfront.Net.Replication.Combat
             float smoothedRttMs,
             uint currentTick,
             Span<HitResult> hits,
-            out int hitCount)
+            out int hitCount,
+            bool shooterSeatIsInterpolated = false)
         {
             hitCount = 0;
 
@@ -151,13 +157,23 @@ namespace Ironfront.Net.Replication.Combat
             Vec3 aim = aimDirection.Normalized;
             if (aim.SqrMagnitude < 0.5f) return FireRejection.None;   // fired, but at nothing
 
+            Vec3 muzzle = origin;
+            Vec3 travelled = default;
+
+            if (shooterSeatIsInterpolated
+                && _lagCompensator.TryMeasureOwnTravel(
+                    targets, shooterActorId, smoothedRttMs, currentTick, out travelled))
+            {
+                muzzle = origin - travelled;
+            }
+
             for (int projectile = 0; projectile < config.ProjectilesPerShot; projectile++)
             {
                 Vec3 direction = ApplySpread(in aim, config.Spread * DiagnosticSpreadScale);
 
                 HitResult hit = _lagCompensator.ResolveHitscan(
-                    targets, shooterActorId, in origin, in direction,
-                    config.Range, smoothedRttMs, currentTick, config.Piercing);
+                    targets, shooterActorId, in muzzle, in direction,
+                    config.Range, smoothedRttMs, currentTick, config.Piercing, in travelled);
 
                 if (!hit.Hit) continue;
                 if (hitCount >= hits.Length) continue;

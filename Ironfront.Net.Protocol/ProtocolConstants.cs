@@ -47,7 +47,7 @@ namespace Ironfront.Net.Protocol
         public const int    FRAGMENT_TIMEOUT_MS = 2000;
 
         public const int    INTERP_BUFFER_MS  = 100;
-        public const int    MAX_REWIND_MS     = 200;
+        public const int    MAX_REWIND_MS     = 400;
         public const int    HITBOX_HISTORY_MS = 1000;
 
         public const int    MAX_PLAYERS       = 16;
@@ -109,8 +109,9 @@ namespace Ironfront.Net.Protocol
 
         /// <summary>
         /// Maximum ticks the server may rewind hitboxes for lag compensation.
-        /// = MAX_REWIND_MS * SIM_TICK_RATE / 1000 = 6 ticks. Anti-abuse clamp
-        /// (protocol-spec.md section 7.2).
+        /// = MAX_REWIND_MS * SIM_TICK_RATE / 1000 = 12 ticks. Anti-abuse clamp
+        /// (protocol-spec.md section 7.2), sized for a whole round trip plus the interpolation
+        /// buffer: compensation stops growing at about 300 ms of ping.
         /// </summary>
         public const int    MAX_REWIND_TICKS = MAX_REWIND_MS * SIM_TICK_RATE / 1000;
 

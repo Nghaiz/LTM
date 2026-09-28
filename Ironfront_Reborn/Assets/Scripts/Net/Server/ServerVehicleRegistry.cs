@@ -158,6 +158,27 @@ namespace Ironfront.Net.Unity.Server
         public ushort NetworkIdOf(GameObject vehicle)
             => vehicle != null && _byGameObject.TryGetValue(vehicle, out ushort id) ? id : (ushort)0;
 
+        /// <summary>
+        /// The GameObject registered under <paramref name="vehicleId"/>, or null. May be a
+        /// destroyed object, which compares equal to null.
+        /// </summary>
+        /// <remarks>
+        /// Scanned, for the reason <see cref="Unregister"/> gives: a second index could hold a
+        /// dead key. <see cref="ProtocolConstants.MAX_VEHICLES"/> entries at most, and only a shot
+        /// that hit something asks.
+        /// </remarks>
+        public GameObject GameObjectOf(ushort vehicleId)
+        {
+            if (vehicleId == 0) return null;
+
+            foreach (KeyValuePair<GameObject, ushort> pair in _byGameObject)
+            {
+                if (pair.Value == vehicleId) return pair.Key;
+            }
+
+            return null;
+        }
+
         /// <summary>Finds the game-side vehicle behind an id.</summary>
         public bool TryFind(ushort vehicleId, out IGameplayVehicleSource source)
         {
