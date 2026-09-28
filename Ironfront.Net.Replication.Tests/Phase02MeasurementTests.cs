@@ -400,7 +400,8 @@ namespace Ironfront.Net.Replication.Tests
                 // Derived from protocol-spec section 7.1 in milliseconds, NOT by calling
                 // RewindTicks — using the function under test to build the aim point makes the
                 // experiment self-fulfilling.
-                float clientViewLagMs = rttMs * 0.5f + ProtocolConstants.INTERP_BUFFER_MS;
+                float clientViewLagMs = rttMs + ProtocolConstants.INTERP_BUFFER_MS
+                                        + ProtocolConstants.MS_PER_TICK * 0.5f;
                 float seenTimeMs = currentTick * ProtocolConstants.MS_PER_TICK - clientViewLagMs;
                 Vec3 aimPoint = HitboxSet.Humanoid(PositionAtTime(seenTimeMs)).Torso.Center;
                 var present = new[]

@@ -138,7 +138,158 @@ namespace Ironfront.Net.Replication.Tests
                 + "player's rounds from those two constants; move them together.");
         }
 
+        // ------------------------------------------------------------------ a passenger's origin
+
+        [Fact]
+        public void APassengerHitsTheDriverTheyRideBehind()
+        {
+            // Playtest 2026-09-28, bug 2: riding in a car a bot was driving, a magazine emptied
+            // into the driver did no damage. A client interpolates every vehicle it does not
+            // drive, so the passenger aimed from where the car WAS; fired from where it is, the
+            // round left from metres ahead of the driver it was aimed at.
+            Assert.Equal(1, PassengerShotAtDriver(ridesAsPassenger: true, out _));
+        }
+
+        [Fact]
+        public void FromThePresentSeatThePassengersRoundMissesTheDriver()
+        {
+            // The bug as it shipped, and the control for the test above: only the flag differs.
+            Assert.Equal(0, PassengerShotAtDriver(ridesAsPassenger: false, out _));
+        }
+
+        [Fact]
+        public void APassengersOriginMovesBackByTheirOwnTravel()
+        {
+            PassengerShotAtDriver(ridesAsPassenger: true, out LagCompensator compensator);
+
+            // Once per trigger pull, and measured -- not the present-origin fallback.
+            Assert.Equal(1, compensator.OwnTravelMeasured);
+            Assert.Equal(0, compensator.OwnTravelUnmeasured);
+        }
+
+        [Fact]
+        public void AShooterWithNoHistoryKeepsThePresentOrigin()
+        {
+            var compensator = new LagCompensator(new HitboxHistory());
+            HitscanTarget[] targets =
+            {
+                new HitscanTarget(Shooter, true, HitboxSet.Humanoid(new Vec3(0f, 0f, 0f))),
+            };
+
+            Assert.False(compensator.TryMeasureOwnTravel(targets, Shooter, 100f, 300, out Vec3 travelled));
+            Assert.Equal(Vec3.Zero, travelled);
+            Assert.Equal(1, compensator.OwnTravelUnmeasured);
+        }
+
+        [Fact]
+        public void TheOcclusionQueryCarriesBothTravels()
+        {
+            // The engine judges a hull where the shooter saw it by moving the segment by its
+            // crew's travel; the resolver is the only side that knows either number.
+            PassengerShotAtDriver(ridesAsPassenger: true, out _, out OcclusionQuery asked);
+
+            float carTravel = CarSpeed * LagCompensator.RewindTicks(PassengerRttMs)
+                              * ProtocolConstants.MS_PER_TICK / 1000f;
+
+            Assert.Equal(Crew, asked.VictimActorId);
+            Assert.Equal(Shooter, asked.ShooterActorId);
+            Assert.InRange(asked.VictimTravel.Z, carTravel - 0.001f, carTravel + 0.001f);
+            Assert.InRange(asked.ShooterTravel.Z, carTravel - 0.001f, carTravel + 0.001f);
+        }
+
+        [Fact]
+        public void AFallbackPoseReportsNoVictimTravel()
+        {
+            var compensator = new LagCompensator(new HitboxHistory());
+            OcclusionQuery asked = default;
+            compensator.Occlusion = q => { asked = q; return false; };
+
+            HitResult hit = compensator.ResolveHitscan(
+                new[] { new HitscanTarget(Crew, true, HitboxSet.Humanoid(new Vec3(0f, 0f, 10f))) },
+                Shooter, new Vec3(0f, 1.5f, 0f), new Vec3(0f, 0f, 1f), 100f, 150f, 300);
+
+            Assert.True(hit.UsedPresentFallback);
+            Assert.Equal(Vec3.Zero, asked.VictimTravel);
+            Assert.Equal(Vec3.Zero, asked.ShooterTravel);
+        }
+
         // ------------------------------------------------------------------ helpers
+
+        private const float CarSpeed = 15f;
+        private const float PassengerRttMs = 100f;
+
+        private static int PassengerShotAtDriver(bool ridesAsPassenger, out LagCompensator compensator)
+            => PassengerShotAtDriver(ridesAsPassenger, out compensator, out _);
+
+        /// <summary>
+        /// A car doing <see cref="CarSpeed"/> along +Z with the shooter in the back seat and the
+        /// driver 1.2 m ahead, both with the history the server captured. One round straight
+        /// ahead at <see cref="PassengerRttMs"/>; returns how many connected.
+        /// </summary>
+        /// <remarks>
+        /// Straight ahead at the height of the middle of the driver's torso, so the round hits
+        /// from anywhere behind the driver and misses from anywhere in front: the test measures
+        /// where the origin was put, and nothing about aim.
+        /// </remarks>
+        private static int PassengerShotAtDriver(
+            bool ridesAsPassenger, out LagCompensator compensator, out OcclusionQuery asked)
+        {
+            const uint now = 300;
+            var driverOffset = new Vec3(0f, 0f, 1.2f);
+
+            var history = new HitboxHistory();
+            for (uint tick = now - 20; tick <= now; tick++)
+            {
+                Vec3 car = CarAt(tick);
+                history.Capture(tick, Shooter, SeatedAt(car));
+                history.Capture(tick, Crew, SeatedAt(car + driverOffset));
+            }
+
+            HitscanTarget[] targets =
+            {
+                new HitscanTarget(Shooter, true, SeatedAt(CarAt(now))),
+                new HitscanTarget(Crew, true, SeatedAt(CarAt(now) + driverOffset)),
+            };
+
+            Vec3 presentEye = CarAt(now) + new Vec3(0f, SeatedAt(Vec3.Zero).Torso.Center.Y, 0f);
+
+            OcclusionQuery seen = default;
+            compensator = new LagCompensator(history)
+            {
+                Occlusion = q => { seen = q; return false; },
+            };
+
+            var authority = new ServerCombatAuthority(
+                new ServerFireResolver(compensator, seed: 7), new NullDamageSink())
+            {
+                SeatedEye = actorId => actorId == Shooter ? presentEye : (Vec3?)null,
+                RidesAsPassenger = actorId => ridesAsPassenger && actorId == Shooter,
+            };
+
+            WeaponConfig config = WeaponConfig.Rifle;
+            WeaponRuntimeState weapon = WeaponRuntimeState.Loaded(in config);
+            EffectiveTrigger trigger = EffectiveTrigger.Idle;
+            ActorAmmoSource ammo = ActorAmmoSource.Unlimited(Shooter);
+            ActorFireEligibility actor = ActorFireEligibility.OnFoot(isAlive: true);
+            MoveState state = MoveState.AtRest(CarAt(now));
+            InputFrame fire = InputFrame.FromFloats(0f, 0f, 0f, 0f, InputButtons.Fire);
+            var hits = new HitResult[1];
+
+            CombatTickResult result = authority.Step(
+                ref weapon, ref trigger, in config, Shooter, in fire, in state, targets,
+                in actor, in ammo, 10f, PassengerRttMs, now, hits);
+
+            Assert.True(result.Fired, $"the round was refused: {result.Rejection}");
+
+            asked = seen;
+            return result.HitCount;
+        }
+
+        private static Vec3 CarAt(uint tick)
+            => new Vec3(0f, 0f, CarSpeed * tick * ProtocolConstants.MS_PER_TICK / 1000f);
+
+        private static HitboxSet SeatedAt(Vec3 seat)
+            => HitboxSet.Humanoid(in seat, 0f, HumanoidPose.Seated, 0f, 0f);
 
         private static HitResult ShotAtCrew(bool piercing, bool enclosed)
         {

@@ -245,6 +245,8 @@ namespace Ironfront.Net.Unity.Server
                 LeanClearance = LeanClearance,
                 // A seated shooter fires from the seat's camera, which only the engine can place.
                 SeatedEye = SeatedEye,
+                // ... and a passenger's camera is an interpolated one; see RidesAsPassenger.
+                RidesAsPassenger = RidesAsPassenger,
             };
             // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
             // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
@@ -2416,30 +2418,43 @@ namespace Ironfront.Net.Unity.Server
         /// <para>
         /// Triggers are ignored: a capture-point volume or a water trigger is not cover.
         /// </para>
+        /// <para>
+        /// <b>A vehicle is judged where the shooter saw it</b> (playtest 2026-09-28, bug 2). The
+        /// segment lies in the rewound world and a hull stands where it is now, metres further
+        /// along at speed. So the hull the victim sits in, and the one the shooter sits in, are
+        /// left out of the first query and asked again with the segment moved by that crew's
+        /// travel; <see cref="OcclusionQuery"/> says why that is the same question. Against the
+        /// present hull alone, a car driving at the shooter put its bonnet across a shot at its
+        /// own driver, and a car driving away left its driver uncovered.
+        /// </para>
         /// </remarks>
-        private static bool IsOccluded(
-            Vec3 origin, Vec3 point, float distance, ushort victimActorId, ushort shooterActorId)
+        private static bool IsOccluded(OcclusionQuery query)
         {
-            Vector3 from = MovementSimulation.ToUnity(origin);
-            Vector3 to = MovementSimulation.ToUnity(point);
+            Vector3 from = MovementSimulation.ToUnity(query.Origin);
+            Vector3 to = MovementSimulation.ToUnity(query.Point);
 
             Vector3 segment = to - from;
             float length = segment.magnitude;
             if (length <= 0.0001f) return false;   // muzzle inside the box: nothing to occlude
 
-            Transform victim = VictimRoot(victimActorId);
+            Vector3 direction = segment / length;
+
+            Transform victim = VictimRoot(query.VictimActorId);
 
             // The other end of X-26 (playtest 2026-09-28, bug 5): the origin sits inside the
             // shooter's own rig, and a shot fired down a slope leaves through that body's own
             // box. A body is not cover for the shots it fires.
-            Transform shooter = VictimRoot(shooterActorId);
+            Transform shooter = VictimRoot(query.ShooterActorId);
+
+            Transform victimVehicle = SeatedVehicleRoot(query.VictimActorId);
+            Transform shooterVehicle = SeatedVehicleRoot(query.ShooterActorId);
 
             // RaycastNonAlloc, not Linecast: the nearest hit may be the victim's own rig bone,
             // and a query that returns only the nearest cannot look past it. The buffer is a
             // reused static -- this runs on the tick loop, and the one loop that must not
             // allocate is this one (M1 criterion 9).
             int count = Physics.RaycastNonAlloc(
-                from, segment / length, _occlusionHits, length, BulletBlockingLayers,
+                from, direction, _occlusionHits, length, BulletBlockingLayers,
                 QueryTriggerInteraction.Ignore);
 
             if (count >= _occlusionHits.Length) OcclusionBufferSaturations++;
@@ -2458,10 +2473,30 @@ namespace Ironfront.Net.Unity.Server
                 if (IsPartOf(candidate.collider, victim)) continue;
                 if (IsPartOf(candidate.collider, shooter)) continue;
 
+                // Asked again below, where the shooter saw them. A seated body hangs off its
+                // seat, so this also skips the crews: a body is judged by its hitboxes.
+                if (IsPartOf(candidate.collider, victimVehicle)) continue;
+                if (IsPartOf(candidate.collider, shooterVehicle)) continue;
+
                 if (found && candidate.distance >= nearest.distance) continue;
 
                 nearest = candidate;
                 found = true;
+            }
+
+            if (!found && victimVehicle != null)
+            {
+                found = TryHitHull(
+                    from + MovementSimulation.ToUnity(query.VictimTravel), direction, length,
+                    victimVehicle, out nearest);
+            }
+
+            // Sharing a vehicle, the two crews travelled together and the pass above was this one.
+            if (!found && shooterVehicle != null && shooterVehicle != victimVehicle)
+            {
+                found = TryHitHull(
+                    from + MovementSimulation.ToUnity(query.ShooterTravel), direction, length,
+                    shooterVehicle, out nearest);
             }
 
             if (!found)
@@ -2479,6 +2514,49 @@ namespace Ironfront.Net.Unity.Server
                 length);
 
             return true;
+        }
+
+        /// <summary>
+        /// The nearest collider of <paramref name="hull"/> on a segment, skipping the bodies
+        /// seated in it -- a body is judged by its hitboxes, never as cover.
+        /// </summary>
+        private static bool TryHitHull(
+            Vector3 from, Vector3 direction, float length, Transform hull, out RaycastHit nearest)
+        {
+            nearest = default;
+            bool found = false;
+
+            int count = Physics.RaycastNonAlloc(
+                from, direction, _occlusionHits, length, BulletBlockingLayers,
+                QueryTriggerInteraction.Ignore);
+
+            if (count >= _occlusionHits.Length) OcclusionBufferSaturations++;
+
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit candidate = _occlusionHits[i];
+
+                if (!IsPartOf(candidate.collider, hull)) continue;
+                if (candidate.collider.GetComponentInParent<NetServerActor>() != null) continue;
+                if (found && candidate.distance >= nearest.distance) continue;
+
+                nearest = candidate;
+                found = true;
+            }
+
+            return found;
+        }
+
+        /// <summary>The vehicle <paramref name="actorId"/> sits in, or null on foot.</summary>
+        private static Transform SeatedVehicleRoot(ushort actorId)
+        {
+            if (actorId == 0) return null;
+
+            ServerVehicleRegistry vehicles = ServerVehicleRegistry.Instance;
+            if (!vehicles.Registry.TryFindSeatOf(actorId, out ushort vehicleId, out _)) return null;
+
+            GameObject vehicle = vehicles.GameObjectOf(vehicleId);
+            return vehicle != null ? vehicle.transform : null;
         }
 
         /// <summary>
@@ -2530,6 +2608,14 @@ namespace Ironfront.Net.Unity.Server
                 0f, ProtocolConstants.SEATED_EYE_HEIGHT, ProtocolConstants.SEATED_EYE_FORWARD));
         }
 
+        /// <summary>
+        /// True when <paramref name="actorId"/> sits in a seat other than the driver's: the
+        /// seats whose vehicle their client interpolates rather than predicts.
+        /// </summary>
+        private static bool RidesAsPassenger(ushort actorId)
+            => ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(actorId, out _, out byte seat)
+               && seat != VehicleInputAuthority.DriverSeatIndex;
+
         /// <summary><c>PlayerFpParent.LateUpdate</c>'s sphere radius.</summary>
         private const float LeanSweepRadius = 0.3f;
 
@@ -2537,7 +2623,8 @@ namespace Ironfront.Net.Unity.Server
         private const int LeanSweepLayers = 1;
 
         /// <summary>
-        /// Shots where every collider on the segment belonged to the victim, so nothing blocked.
+        /// Shots where every collider on the segment belonged to the victim or the shooter, or
+        /// to a hull that was not in the way where the shooter saw it, so nothing blocked.
         /// X-26's counter: it rises exactly where the pre-fix build reported an occlusion.
         /// </summary>
         internal static long SelfOcclusionsIgnored { get; private set; }

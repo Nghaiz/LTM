@@ -8,7 +8,7 @@ namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
     /// Phase-02 tasks 2 and 3, criteria 3 (hit rate at 150 ms), 4 (hitboxes never stuck in the
-    /// past) and 5 (rewind clamped at 200 ms).
+    /// past) and 5 (rewind clamped; 200 ms then, 400 ms since the whole-trip formula).
     /// </summary>
     public sealed class LagCompensationTests
     {
@@ -21,45 +21,65 @@ namespace Ironfront.Net.Replication.Tests
         // ------------------------------------------------------------------ criterion 5
 
         [Fact]
-        public void RewindIsClampedAtTwoHundredMilliseconds()
+        public void RewindIsClampedAtFourHundredMilliseconds()
         {
             // Criterion 5. The clamp is the anti-abuse limit from protocol-spec.md section 7.2:
             // without it, a cheater inflating their reported ping shoots arbitrarily far into
-            // the past.
+            // the past. 400 ms since 2026-09-29: the whole-trip formula needs it to cover pings
+            // up to ~300 ms, where the half-trip one reached 200 ms at the same ping.
             Assert.Equal(ProtocolConstants.MAX_REWIND_TICKS, LagCompensator.RewindTicks(1000f));
-            Assert.Equal(6, ProtocolConstants.MAX_REWIND_TICKS);
-            Assert.True(LagCompensator.RewindTicks(99999f) <= 6);
+            Assert.Equal(12, ProtocolConstants.MAX_REWIND_TICKS);
+            Assert.True(LagCompensator.RewindTicks(99999f) <= 12);
         }
 
         [Fact]
         public void RewindMatchesTheSpecFormula()
         {
-            // rewindMs = rtt/2 + INTERP_BUFFER_MS, divided by 33.33 ms per tick.
-            // 100 ms rtt: (50 + 100) / 33.33 = 4.5 -> 4 (banker's rounding on the .5).
-            Assert.Equal(4, LagCompensator.RewindTicks(100f));
+            // rewindMs = rtt + INTERP_BUFFER_MS + half a tick, divided by 33.33 ms per tick.
+            // The inputs sit away from the .5 boundaries, where float rounding decides.
+            // 110 ms rtt: (110 + 100 + 16.7) / 33.33 = 6.8 -> 7.
+            Assert.Equal(7, LagCompensator.RewindTicks(110f));
 
-            // 150 ms rtt: (75 + 100) / 33.33 = 5.25 -> 5.
-            Assert.Equal(5, LagCompensator.RewindTicks(150f));
+            // 150 ms rtt: (150 + 100 + 16.7) / 33.33 = 8.0 -> 8.
+            Assert.Equal(8, LagCompensator.RewindTicks(150f));
 
-            // 0 ms rtt still rewinds by the interpolation buffer alone: 100 / 33.33 = 3.
-            Assert.Equal(3, LagCompensator.RewindTicks(0f));
+            // 60 ms rtt: (60 + 100 + 16.7) / 33.33 = 5.3 -> 5.
+            Assert.Equal(5, LagCompensator.RewindTicks(60f));
+        }
+
+        [Fact]
+        public void RewindCoversTheWholeRoundTripNotHalfOfIt()
+        {
+            // Playtest 2026-09-28, bug 2. The half-trip formula rewound 5 ticks at 150 ms, three
+            // short of the age of what that client was looking at; shots at the drawn body
+            // missed and shots ahead of it landed. Doubling the ping must add a full RTT's worth
+            // of ticks, not half of it.
+            int at60 = LagCompensator.RewindTicks(60f);
+            int at160 = LagCompensator.RewindTicks(160f);
+
+            Assert.Equal(3, at160 - at60);   // 100 ms more ping is three ticks, not one or two
         }
 
         [Fact]
         public void RewindNeverGoesNegativeOnGarbageInput()
         {
-            Assert.Equal(3, LagCompensator.RewindTicks(-500f));
-            Assert.Equal(3, LagCompensator.RewindTicks(float.NaN));
+            // Garbage reads as no ping at all, which still rewinds by the buffer and the tick
+            // wait: never less than three ticks, never negative.
+            int none = LagCompensator.RewindTicks(0f);
+
+            Assert.InRange(none, 3, 4);
+            Assert.Equal(none, LagCompensator.RewindTicks(-500f));
+            Assert.Equal(none, LagCompensator.RewindTicks(float.NaN));
         }
 
         [Fact]
         public void TheTargetTickSaturatesAtZeroRatherThanWrapping()
         {
-            // In the first 200 ms of a match currentTick is smaller than the rewind. An
+            // In the opening ticks of a match currentTick is smaller than the rewind. An
             // unsigned subtraction there lands near four billion, which no history frame
             // matches, so every opening shot would silently fall back to the present.
             Assert.Equal(0u, LagCompensator.ResolveTargetTick(2, 150f));
-            Assert.Equal(95u, LagCompensator.ResolveTargetTick(100, 150f));
+            Assert.Equal(92u, LagCompensator.ResolveTargetTick(100, 150f));
         }
 
         // ------------------------------------------------------------------ criterion 3
@@ -67,8 +87,9 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void AtOneHundredFiftyMillisecondsAStrafingTargetIsHitAtLeastSeventyFivePercent()
         {
-            // Criterion 3. The shooter aims at where their client RENDERED the target, which is
-            // rtt/2 + interp behind the server. Lag compensation rewinds to that moment.
+            // Criterion 3. The shooter aims at where their client RENDERED the target, which the
+            // tick applying the shot sees rtt + interp + half a tick ago. Lag compensation
+            // rewinds to that moment.
             var scenario = new StrafingScenario(strafeSpeed: 5f, rangeMetres: 20f);
             int hits = scenario.FireVolley(shots: 20, rttMs: 150f, compensated: true);
 
@@ -111,23 +132,23 @@ namespace Ironfront.Net.Replication.Tests
         {
             // Proof that the corrected fixture is actually sensitive, and the clamp is real.
             //
-            // At 300 ms the client saw the world 250 ms ago, but MAX_REWIND_MS caps the server
-            // at 200 — a deliberate 50 ms disagreement, because the alternative is letting a
-            // cheater inflate their ping and shoot arbitrarily far into the past. At 5 m/s that
-            // is 0.25 m of strafe, which is still inside the hitbox, so the volley at that speed
-            // reports 100% and the clamp is invisible. Wind the target up to 20 m/s and the same
-            // 50 ms is a full metre, which is not.
+            // At 400 ms the tick applying the shot sees the client's view ~517 ms ago, but
+            // MAX_REWIND_MS caps the server at 400 — a deliberate disagreement, because the
+            // alternative is letting a cheater inflate their ping and shoot arbitrarily far into
+            // the past. At 20 m/s the ~117 ms is more than two metres of strafe. 190 ms stays
+            // inside the clamp, away from the half-tick boundary where rounding alone costs a
+            // fast target a third of a metre.
             //
             // This is also the test that would have caught the self-fulfilling fixture: when the
             // aim point was derived by calling RewindTicks, the clamp applied to BOTH sides and
             // this stayed at 100% no matter how fast the target moved.
             var fast = new StrafingScenario(strafeSpeed: 20f, rangeMetres: 20f);
 
-            int insideTheClamp = fast.FireVolley(shots: 20, rttMs: 200f, compensated: true);
+            int insideTheClamp = fast.FireVolley(shots: 20, rttMs: 190f, compensated: true);
             int pastTheClamp = fast.FireVolley(shots: 20, rttMs: 400f, compensated: true);
 
             Assert.True(insideTheClamp >= 15,
-                $"compensation should still work at 200 ms; landed {insideTheClamp}/20");
+                $"compensation should still work at 190 ms; landed {insideTheClamp}/20");
             Assert.True(pastTheClamp < insideTheClamp,
                 $"the rewind clamp had no effect on a 20 m/s target: {pastTheClamp}/20 past the "
                 + $"clamp against {insideTheClamp}/20 inside it — the aim point is probably still "
@@ -161,7 +182,7 @@ namespace Ironfront.Net.Replication.Tests
             HitResult before = world.Fire(rttMs: 150f, currentTick: 100);
             Assert.True(before.Hit);
 
-            world.Compensator.Occlusion = (_, _, _, _, _) => throw new InvalidOperationException("boom");
+            world.Compensator.Occlusion = _ => throw new InvalidOperationException("boom");
             Assert.Throws<InvalidOperationException>(() => world.Fire(rttMs: 150f, currentTick: 100));
 
             world.Compensator.Occlusion = null;
@@ -286,7 +307,7 @@ namespace Ironfront.Net.Replication.Tests
             // with a line-of-sight check". This is that check's seam.
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _, _, _) => true,
+                Occlusion = _ => true,
             };
 
             HitResult hit = compensator.ResolveHitscan(
@@ -304,7 +325,7 @@ namespace Ironfront.Net.Replication.Tests
             int calls = 0;
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _, _, _) => { calls++; return false; },
+                Occlusion = _ => { calls++; return false; },
             };
 
             var targets = new[]
@@ -338,7 +359,7 @@ namespace Ironfront.Net.Replication.Tests
 
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _, victim, _) => { seen = victim; calls++; return false; },
+                Occlusion = q => { seen = q.VictimActorId; calls++; return false; },
             };
 
             HitResult hit = compensator.ResolveHitscan(
@@ -362,12 +383,12 @@ namespace Ironfront.Net.Replication.Tests
             var victimIsNotCover = new LagCompensator(new HitboxHistory())
             {
                 // The endpoint is inside the victim, so the first collider met belongs to them.
-                Occlusion = (_, _, _, victim, _) => victim != Target,
+                Occlusion = q => q.VictimActorId != Target,
             };
 
             var blocksEverything = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _, _, _) => true,
+                Occlusion = _ => true,
             };
 
             var targets = new[]
@@ -424,7 +445,7 @@ namespace Ironfront.Net.Replication.Tests
             var world = new RewindWorld();
             HitResult hit = world.Fire(rttMs: 150f, currentTick: 100);
 
-            Assert.Equal(95u, hit.ResolvedAtTick);
+            Assert.Equal(92u, hit.ResolvedAtTick);
             Assert.False(hit.UsedPresentFallback);
         }
 
@@ -477,7 +498,8 @@ namespace Ironfront.Net.Replication.Tests
         /// </summary>
         /// <remarks>
         /// The shooter aims at the pose their client RENDERED, which is
-        /// <c>rtt/2 + INTERP_BUFFER_MS</c> behind the server — the whole premise of section 7.
+        /// <c>rtt + INTERP_BUFFER_MS + half a tick</c> behind the tick that applies its shot —
+        /// the whole premise of section 7.
         /// Passing <c>compensated: false</c> resolves against an empty history so every target
         /// falls back to its present pose, which is exactly what "lag compensation off" means.
         /// </remarks>
@@ -498,16 +520,16 @@ namespace Ironfront.Net.Replication.Tests
         /// </para>
         /// <para>
         /// Instead the client's view time is computed here in MILLISECONDS from
-        /// protocol-spec.md section 7.1's own definition — the client renders
-        /// <c>rtt/2 + INTERP_BUFFER_MS</c> behind the server — and the target's position at that
-        /// continuous instant is what the crosshair sits on. The server then rewinds by whatever
+        /// protocol-spec.md section 7.1's own definition — what the client renders is
+        /// <c>rtt + INTERP_BUFFER_MS + half a tick</c> old by the tick that applies the shot — and
+        /// the target's position at that continuous instant is what the crosshair sits on. The server then rewinds by whatever
         /// its own tick arithmetic decides. If the two disagree, the shot misses, which is the
         /// whole property being measured.
         /// </para>
         /// <para>
         /// One consequence worth stating: past the <see cref="ProtocolConstants.MAX_REWIND_MS"/>
-        /// clamp the two are SUPPOSED to disagree. A 300 ms client is compensated as though it
-        /// were at 200 ms, so its hit rate degrades — and the fixture now shows that instead of
+        /// clamp the two are SUPPOSED to disagree. A 400 ms client is compensated as though it
+        /// were at ~280 ms, so its hit rate degrades — and the fixture now shows that instead of
         /// hiding it behind a shared constant.
         /// </para>
         /// </remarks>
@@ -547,8 +569,10 @@ namespace Ironfront.Net.Replication.Tests
                     capturedThrough = currentTick + 1;
 
                     // protocol-spec.md section 7.1, in milliseconds and independent of the
-                    // implementation: half the trip plus the interpolation buffer.
-                    float clientViewLagMs = rttMs * 0.5f + ProtocolConstants.INTERP_BUFFER_MS;
+                    // implementation: the whole trip, the interpolation buffer, and the average
+                    // wait for the tick that applies the shot.
+                    float clientViewLagMs = rttMs + ProtocolConstants.INTERP_BUFFER_MS
+                                            + ProtocolConstants.MS_PER_TICK * 0.5f;
                     float seenTimeMs = currentTick * ProtocolConstants.MS_PER_TICK - clientViewLagMs;
 
                     Vec3 aimPoint = HitboxSet.Humanoid(PositionAtTime(seenTimeMs)).Torso.Center;

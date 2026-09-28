@@ -449,10 +449,13 @@ namespace Ironfront.Net.Replication.Combat
                     blockedBySprint: blockedBySprint);
             }
 
+            // Only the sweep starts from the rewound seat. A launch or a throw is simulated from
+            // the present by the engine, so its origin is the present one above.
             FireRejection rejection = _fireResolver.Resolve(
                 ref weapon, in config, targets, shooterActorId, shooterIsAlive,
                 in origin, in aim, nowSeconds, smoothedRttMs, currentTick,
-                hits, out int hitCount);
+                hits, out int hitCount,
+                shooterSeatIsInterpolated: RidesAsPassenger?.Invoke(shooterActorId) == true);
 
             bool fired = rejection == FireRejection.None;
             bool victimDied = false;
@@ -582,6 +585,18 @@ namespace Ironfront.Net.Replication.Combat
         /// </para>
         /// </remarks>
         public Func<ushort, Vec3?>? SeatedEye { get; set; }
+
+        /// <summary>
+        /// True when the actor with this id sits in a vehicle seat other than the driver's.
+        /// </summary>
+        /// <remarks>
+        /// <b>Playtest 2026-09-28, bug 2.</b> A client predicts the vehicle it drives and
+        /// interpolates every other one, so a passenger's camera rides their seat as it was a
+        /// rewind ago while <see cref="SeatedEye"/> reads it now. Fired from the present seat,
+        /// a passenger's shot at the bot driving them left from metres ahead of where it was
+        /// aimed and never touched the driver. True makes the sweep leave from the seat they saw.
+        /// </remarks>
+        public Func<ushort, bool>? RidesAsPassenger { get; set; }
 
         /// <summary>
         /// Where a shot by <paramref name="shooterActorId"/> leaves: the seat's eye or the

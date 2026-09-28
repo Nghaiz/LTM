@@ -68,7 +68,7 @@ public static class ProtocolConstants
     public const int    FRAGMENT_TIMEOUT_MS = 2000;
 
     public const int    INTERP_BUFFER_MS  = 100;
-    public const int    MAX_REWIND_MS     = 200;
+    public const int    MAX_REWIND_MS     = 400;
     public const int    HITBOX_HISTORY_MS = 1000;
 
     public const int    MAX_PLAYERS       = 16;
@@ -1247,9 +1247,10 @@ Rules:
 ### 7.1. The principle
 
 A client with 100 ms ping sees the world as it was **150 ms ago** (50 ms of transit + 100 ms of
-interpolation buffer). When they shoot someone in the head, by the time the server receives the
-packet that person has already moved. If the server raycast at the current position, a high-ping
-client would almost never land a shot.
+interpolation buffer). When they shoot someone in the head, the shot then takes the other 50 ms
+to reach the server, which applies it on its next tick: by then the world the client aimed at is
+**~215 ms** old, and that person has moved. If the server raycast at the current position, a
+high-ping client would almost never land a shot.
 
 **The fix:** the server rewinds hitboxes to the exact moment the client was seeing.
 
@@ -1262,25 +1263,39 @@ sequenceDiagram
     Note over C: arrives at t+50ms<br/>rendered 100ms behind → sees B at ~tick 297
     Note over C: The player shoots B
     C->>S: C_INPUT {tick 303, FIRE, yaw, pitch}
-    Note over S: t+100ms, now at tick 306, B is at x=54<br/>rewindTime = 306 - (RTT/2 + interp)/tickMs<br/>= 306 - (50+100)/33.3 ≈ tick 301<br/>Restore B's hitboxes to their tick-301 position<br/>Raycast → HIT
+    Note over S: t+100ms, now at tick 303, B is at x=52<br/>rewindTime = 303 - (RTT + interp + tickMs/2)/tickMs<br/>= 303 - (100+100+16.7)/33.3 ≈ tick 297<br/>Resolve against B's tick-297 hitboxes<br/>Raycast → HIT
     S-->>C: S_HIT_CONFIRM
 ```
 
 ### 7.2. The formula
 
 ```csharp
-// Ironfront_Reborn/Assets/Scripts/Net/Server/HitboxHistory.cs
-int rewindTicks = Mathf.Clamp(
-    Mathf.RoundToInt((conn.SmoothedRttMs * 0.5f + ProtocolConstants.INTERP_BUFFER_MS)
-                     / (1000f / ProtocolConstants.SIM_TICK_RATE)),
+// Ironfront.Net.Replication/Combat/LagCompensator.cs, RewindTicks
+int rewindTicks = Clamp(
+    Round((conn.SmoothedRttMs + ProtocolConstants.INTERP_BUFFER_MS
+           + ProtocolConstants.MS_PER_TICK * 0.5f) / ProtocolConstants.MS_PER_TICK),
     0,
-    ProtocolConstants.MAX_REWIND_MS * ProtocolConstants.SIM_TICK_RATE / 1000);   // = 6 ticks
+    ProtocolConstants.MAX_REWIND_TICKS);   // = 12 ticks
 
 int targetTick = currentServerTick - rewindTicks;
 ```
 
-`MAX_REWIND_MS = 200` is the **anti-abuse limit**: a cheater could deliberately inflate their ping
-to "shoot further into the past". 200 ms is the figure every commercial FPS uses.
+**The whole round trip, not half.** The snapshot the client renders from left the server half a
+round trip before it arrived, and the shot takes the other half back; the half tick is the wait
+for the tick that applies it. Until 2026-09-29 this used `RTT/2 + interp`, which stops half a
+round trip short of the tick the client was seeing. Measured on the live server at ~100 ms, the inputs landed a
+mean 7.1 ticks after the tick being rendered (an upper bound by ~0.75 tick) against 5 rewound;
+shots at a drawn body missed and shots ahead of it landed.
+
+**A passenger's origin is rewound too.** A client predicts only the vehicle it drives, so a
+passenger's own seat is drawn a rewind ago like everything else. The server moves that shot's
+origin back by the passenger's own travel over the same window, measured from the passenger's
+hitbox history, and asks the occlusion test about a hull where the shooter saw it: the segment
+moved by that crew's travel against the present hull.
+
+`MAX_REWIND_MS = 400` is the **anti-abuse limit**: a cheater could deliberately inflate their ping
+to "shoot further into the past". It was 200, sized for the half-trip formula; the whole trip plus
+the 100 ms buffer needs 400 to cover pings up to ~300 ms.
 
 ### 7.3. The hitbox history ring buffer
 
