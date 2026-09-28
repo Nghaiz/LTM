@@ -52,6 +52,7 @@ namespace Ironfront.MasterClient
 
         public event Action? OnDisconnected;
         public event Action<int, string>? OnError;
+        public event Action<GameServerRoomAssignment>? OnRoomAssigned;
 
         public Task ConnectAsync(string host, int port, CancellationToken ct = default)
             => ConnectAsync(host, port, null, ct);
@@ -321,6 +322,19 @@ namespace Ironfront.MasterClient
                 return;
             }
 
+            if (type == MspMessageType.GsRoomAssigned)
+            {
+                // A push, not an answer: it must never complete whatever request is pending.
+                OnRoomAssigned?.Invoke(new GameServerRoomAssignment
+                {
+                    ServerId    = (ushort)response.ServerId,
+                    RoomId      = response.RoomId,
+                    MapId       = (ushort)response.MapId,
+                    BotsPerTeam = response.BotsPerTeam,
+                });
+                return;
+            }
+
             _pending?.TrySetResult(response);
         }
 
@@ -343,6 +357,11 @@ namespace Ironfront.MasterClient
             public int ServerId { get; set; }
             public int Code { get; set; }
             public string? Message { get; set; }
+
+            // GS_ROOM_ASSIGNED.
+            public int RoomId { get; set; }
+            public int MapId { get; set; }
+            public int BotsPerTeam { get; set; }
         }
     }
 }

@@ -74,6 +74,8 @@ public static class ProtocolConstants
     public const int    MAX_PLAYERS       = 16;
     public const int    MAX_BOTS          = 32;
     public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
+    public const int    MAX_BOTS_PER_TEAM = MAX_BOTS / 2;      // a room's botCount is PER TEAM, § 11
+    public const int    DEFAULT_BOTS_PER_TEAM = MAX_BOTS_PER_TEAM;  // empty Bots field, matchmaking
 
     public const int    MAX_VEHICLES      = 24;     // separate u16 id space, see § 4.10
     public const int    VEHICLE_ID_QUARANTINE_TICKS = 150;   // 5 s, same rule as actorId
@@ -1399,7 +1401,7 @@ compatibility.
 | `0x0004` | `REGISTER_RES` | M→C | `{ok, errorCode}` |
 | `0x0010` | `ROOM_LIST_REQ` | C→M | `{}` |
 | `0x0011` | `ROOM_LIST_RES` | M→C | `{rooms:[{roomId, name, mapId, players, maxPlayers, state}]}` |
-| `0x0012` | `ROOM_CREATE_REQ` | C→M | `{name, mapId, maxPlayers, botCount, isPrivate, password}` |
+| `0x0012` | `ROOM_CREATE_REQ` | C→M | `{name, mapId, maxPlayers, botCount, isPrivate, password}` — `botCount` is bots **per team**, 0…`MAX_BOTS_PER_TEAM` |
 | `0x0013` | `ROOM_CREATE_RES` | M→C | `{ok, roomId, errorCode}` |
 | `0x0014` | `ROOM_JOIN_REQ` | C→M | `{roomId, password}` |
 | `0x0015` | `ROOM_JOIN_RES` | M→C | `{ok, gameServerIp, gameServerPort, joinTicket, errorCode}` |
@@ -1463,6 +1465,17 @@ than to "retry now".
 | `0x0104` | `GS_MATCH_ENDED` | G→M | `{serverId, roomId, results:[{playerId, kills, deaths, score}]}` |
 | `0x0105` | `GS_PLAYER_JOINED` | G→M | `{serverId, playerId}` |
 | `0x0106` | `GS_PLAYER_LEFT` | G→M | `{serverId, playerId}` |
+| `0x0107` | `GS_ROOM_ASSIGNED` | M→G | `{serverId, roomId, mapId, botsPerTeam}` — sent with every ticket the master issues for the room |
+
+`GS_ROOM_ASSIGNED` is the only master → game-server push. Every other opcode in this table runs the
+other way, and the ROOM already reaches the game server signed inside each join ticket (§ 12). What
+had no carrier was the room's bot count — the ticket's 32 signed bytes are full — so a room created
+with 0 bots still released the prefab's 16 per team (owner report, 2026-09-28). The game server keeps
+the latest push and applies `botsPerTeam` only when its `roomId` is the room its tickets name; with
+no push, or one naming another room, it falls back to `_Managers.prefab`'s roster
+(`DEFAULT_BOTS_PER_TEAM`) and says so in its `bots released` line. Resent with every ticket because a
+game server that re-registered in between would otherwise never hear it. A game server that predates
+the opcode ignores the frame, so this is not a `PROTOCOL_VERSION` change (§ 15).
 
 ## 12. joinTicket — the bridge between TCP and UDP
 
@@ -1634,6 +1647,7 @@ Added at v3.0.0:
 | **10.0.0** | 2026-09-14 | the server track | **The reserve, the reload state and eight more vehicle ids.** `S_SNAPSHOT`'s `weapon` field (bit 5) goes 2 → 5 bytes, adding `u16 spareAmmoEncoded` and `u8 weaponStateFlags` (§ 4.3); `MAX_VEHICLES` 16 → 24 (§ 4.10). Also pins the sprint-fire window as a shared constant so both sides refuse the same shots — no byte carries it, but the behaviour on an unchanged `C_INPUT` byte layout changes, which is the other half of what a version means. | **Yes** — every field after bit 5 in an actor entry shifts by three bytes. A v9 client parsing a v10 entry reads the reserve's low byte as `team` and then walks off the end of the entry; the peers must refuse the mismatch rather than try. `MAX_VEHICLES` alone would also do it: a v9 client sizes its vehicle array to 16 and a 24-vehicle snapshot overruns it | (this change) |
 | **11.0.1** | 2026-09-26 | the client track | **The two grenades stop sharing a `ProjectileKind`.** `Spearhead` = 7 appended to `ProjectileKind` (§ 4.10). `frag.prefab` and `spearhead.prefab` point at different projectile prefabs with different meshes, but both carry the `GrenadeProjectile` script, and the kind is the only projectile identity `S_PROJECTILE_SPAWN` carries — so both were announced as `Grenade` = 3 and every client drew the frag prefab for a spearhead throw. The prefab cannot separate them, so the *weapon* does, at the announce site; nothing is authored for it to work. Both scenes' `_prefabsByKind` arrays gained the eighth entry, which the asset gate demands off the enum itself. Reported by playing: *"there are two types of grenades, and the object that appears is the same for both"* | **No** — the same argument the `7.0.1` row makes for `ErrorCode.InvalidDisplayName`, and the one the enum's own doc makes for `Medipack` and `Bullet`: `Kind` is already a `u8`, nothing behind it misaligns, and a value added to its space is invisible to a decoder that never receives it. A client older than the value sees `PrefabFor` return null and counts the throw in `UnrenderableKinds` rather than drawing the wrong grenade, and both sides ship together. **Filed under v11 without causing it**: the bump in the row above is the `PendingRelease` bit's, and this append rides along with it rather than opening a version of its own | (this change) |
 | **11.0.0** | 2026-09-25 | the replication track | **A reserved weapon-state bit gains delayed-release semantics.** `weaponStateFlags` bit 1 is now `PendingRelease`: one throwable use has been accepted and reserved but has not reached its authored release tick. The five-byte weapon field is unchanged in width, but snapshots now distinguish a genuinely ready `1/N` state from a `1/N` object already committed to an in-progress throw. | **Yes** — the byte width is unchanged, but an unchanged bit pattern gains mandatory gameplay meaning. A v10 client ignores bit 1 and can predict a second use from the same held object while a v11 server is awaiting release; peers must refuse the mismatch. | (this change) |
+| **11.0.2** | 2026-09-28 | the master-server track | **A room's bot count reaches its game server.** New MSP opcode `GS_ROOM_ASSIGNED` (0x0107, M→G, § 11) carrying `{serverId, roomId, mapId, botsPerTeam}`, sent with every ticket the master issues; `ROOM_CREATE_REQ.botCount` is now defined as bots **per team** (owner ruling 2026-09-28) and bounded by the new `MAX_BOTS_PER_TEAM` = 16, with `DEFAULT_BOTS_PER_TEAM` = 16 for an empty field and for matchmaking (§ 1). Until now the field was validated, sent and stored, and read by no game server: every match released the prefab's 16 per team, so a room created with 0 bots got 32 | **No** — nothing on the UDP wire moved. MSP bodies are JSON and this is a new frame on the master ↔ game-server link, which a game server that predates it ignores (it keeps its prefab roster); the precedent is `RoomTeamRequest` (0x0019), which § 11 records the same way | (this change) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

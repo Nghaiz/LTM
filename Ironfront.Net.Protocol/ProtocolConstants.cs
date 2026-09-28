@@ -55,6 +55,20 @@ namespace Ironfront.Net.Protocol
         public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
 
         /// <summary>
+        /// The most bots one side of a room may ask for. The create-room form's Bots field,
+        /// <c>ROOM_CREATE_REQ.botCount</c> and <c>GS_ROOM_ASSIGNED.botsPerTeam</c> all count
+        /// bots PER TEAM (owner ruling, 2026-09-28), so a match holds at most twice this.
+        /// </summary>
+        public const int    MAX_BOTS_PER_TEAM = MAX_BOTS / 2;
+
+        /// <summary>
+        /// Bots per team for a room nobody asked a number of: an empty Bots field, or a room
+        /// matchmaking made. The design roster, both sides full, which is also what
+        /// <c>_Managers.prefab</c> authors for a server the master never told anything.
+        /// </summary>
+        public const int    DEFAULT_BOTS_PER_TEAM = MAX_BOTS_PER_TEAM;
+
+        /// <summary>
         /// Concurrent vehicles the world may hold. A SEPARATE u16 id space from
         /// <see cref="MAX_ACTORS"/> — a vehicle is not an actor and never occupies an actorId.
         /// </summary>

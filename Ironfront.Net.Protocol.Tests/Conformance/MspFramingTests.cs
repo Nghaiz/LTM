@@ -248,6 +248,35 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(0x00F1, (ushort)MspMessageType.ErrorPush);
             Assert.Equal(0x0100, (ushort)MspMessageType.GsRegister);
             Assert.Equal(0x0106, (ushort)MspMessageType.GsPlayerLeft);
+            Assert.Equal(0x0107, (ushort)MspMessageType.GsRoomAssigned);
+        }
+
+        // msgType 0x0107, body {"serverId":37,"roomId":12,"mapId":1,"botsPerTeam":0} -- 53 bytes,
+        // so the length prefix counts 2 + 53 = 55 (0x37).
+        private const string RoomAssignedFrameHex =
+            "00 00 00 37 07 01 7B 22 73 65 72 76 65 72 49 64 22 3A 33 37 2C 22 72 6F 6F 6D 49 64 "
+            + "22 3A 31 32 2C 22 6D 61 70 49 64 22 3A 31 2C 22 62 6F 74 73 50 65 72 54 65 61 6D 22 "
+            + "3A 30 7D";
+
+        /// <summary>
+        /// <c>GS_ROOM_ASSIGNED</c> (0x0107), byte for byte -- § 15's wire gate for a new opcode.
+        /// </summary>
+        /// <remarks>
+        /// The body is the one <c>MspMessageDispatcher.TellGameServerItsRoom</c> writes, camelCase
+        /// and in that field order; <c>RoomBotCountTests</c> drives the master and a real
+        /// <c>GameServerLink</c> against each other over a socket, so the two cannot drift apart
+        /// without one of the two going red. The first master to game-server push, and the carrier
+        /// of a room's bot count, which reached no game server before it (2026-09-28).
+        /// </remarks>
+        [Fact]
+        public void ARoomAssignedFrameSerializesToTheExpectedBytes()
+        {
+            byte[] frame = Frame(
+                MspMessageType.GsRoomAssigned,
+                "{\"serverId\":37,\"roomId\":12,\"mapId\":1,\"botsPerTeam\":0}");
+
+            Assert.Equal(RoomAssignedFrameHex, Hex.ToHex(frame));
+            Assert.Equal(59, frame.Length);
         }
 
         /// <summary>Splits a length into <paramref name="parts"/> uneven, non-zero chunks.</summary>

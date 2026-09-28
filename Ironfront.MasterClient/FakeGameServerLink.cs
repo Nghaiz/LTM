@@ -57,6 +57,7 @@ namespace Ironfront.MasterClient
 
         public event Action? OnDisconnected;
         public event Action<int, string>? OnError;
+        public event Action<GameServerRoomAssignment>? OnRoomAssigned;
 
         public Task ConnectAsync(string host, int port, CancellationToken ct = default)
         {
@@ -105,6 +106,10 @@ namespace Ironfront.MasterClient
 
         /// <summary>Simulates an ERROR_PUSH.</summary>
         public void SimulateError(int code, string message) => OnError?.Invoke(code, message);
+
+        /// <summary>Simulates a GS_ROOM_ASSIGNED push from the master.</summary>
+        public void SimulateRoomAssigned(GameServerRoomAssignment assignment)
+            => OnRoomAssigned?.Invoke(assignment ?? throw new ArgumentNullException(nameof(assignment)));
 
         public void Dispose() => State = MasterConnectionState.Disconnected;
 

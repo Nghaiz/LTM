@@ -1,3 +1,4 @@
+using System;
 using Ironfront.Net.Replication.Match;
 using UnityEngine;
 
@@ -33,6 +34,45 @@ namespace Ironfront.Net.Unity
     public static class NetBotRelease
     {
         private static readonly BotReleaseGate Gate = new BotReleaseGate();
+
+        // The room's own bot count, pushed by the master (GS_ROOM_ASSIGNED). Engine-free like
+        // the gate, and covered by `dotnet test` the same way: RoomBotPlanTests.
+        private static readonly RoomBotPlan RoomPlan = new RoomBotPlan();
+
+        /// <summary>
+        /// The room this process hosts, as its verified join tickets name it, or 0 for none.
+        /// Registered by <c>ServerTickLoop</c>, which owns the tickets; null offline and on a
+        /// client, where no room is hosted.
+        /// </summary>
+        public static Func<ushort> HostedRoom { get; set; }
+
+        /// <summary>
+        /// Records the room the master allocated this server to and the bots per team it asked
+        /// for. Called for every ticket the master issues, so it logs only a change.
+        /// </summary>
+        public static void AssignRoom(ushort roomId, int botsPerTeam)
+        {
+            bool changed = RoomPlan.AssignedRoomId != roomId
+                           || RoomPlan.AssignedBotsPerTeam != botsPerTeam;
+            RoomPlan.Assign(roomId, botsPerTeam);
+            if (!changed) return;
+
+            Debug.Log($"[net] master assigned room {roomId}: {botsPerTeam} bot(s) per team.");
+        }
+
+        /// <summary>
+        /// The roster the next release fields: the hosted room's own count when the master sent
+        /// one for it, the authored roster otherwise, with the reason for the log line.
+        /// </summary>
+        /// <remarks>
+        /// Read once per release by <c>ActorManager.SpawnWave</c>, not per spawn wave, so a
+        /// count that arrives mid-round takes effect from the next round's release.
+        /// </remarks>
+        public static BotRosterSize RosterFor(int authoredTeam0, int authoredTeam1)
+        {
+            Func<ushort> hosted = HostedRoom;
+            return RoomPlan.Resolve(hosted != null ? hosted() : (ushort)0, authoredTeam0, authoredTeam1);
+        }
 
         /// <summary>Seconds after the first player spawn before bots may exist.</summary>
         public static float DelaySeconds => Gate.DelaySeconds;

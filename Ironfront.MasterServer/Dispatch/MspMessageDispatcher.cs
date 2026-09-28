@@ -22,6 +22,12 @@ namespace Ironfront.MasterServer.Dispatch
         private readonly MatchmakingService _matchmaking;
         private readonly byte[] _sharedSecret;
         private readonly Dictionary<int, ClientConnection> _connectionsByPlayer = new Dictionary<int, ClientConnection>();
+
+        /// <summary>
+        /// Registered game servers' links, by connection id: the one place a master → game-server
+        /// push can be written to. <see cref="GameServerRecord.OwnerConnectionId"/> names the key.
+        /// </summary>
+        private readonly Dictionary<int, ClientConnection> _gameServerLinks = new Dictionary<int, ClientConnection>();
         private readonly JsonSerializerOptions _json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
 
         public MspMessageDispatcher(AuthService auth, LobbyService lobby, GameServerRegistry gameServers, SqliteDatabase database, string sharedSecret)
@@ -120,6 +126,7 @@ namespace Ironfront.MasterServer.Dispatch
 
         public void OnDisconnected(ClientConnection connection)
         {
+            _gameServerLinks.Remove(connection.Id);
             foreach (int roomId in _gameServers.RemoveConnection(connection.Id))
                 ResetRoomAfterServerLoss(roomId);
 
@@ -398,7 +405,48 @@ namespace Ironfront.MasterServer.Dispatch
                 team = member.Team,
             });
 
+            // BEFORE the ticket leaves, so the game server holds the room's settings by the time
+            // the player this ticket admits can reach it.
+            TellGameServerItsRoom(server, room);
+
             Send(connection, MspMessageType.RoomJoinResponse, new { ok = true, gameServerIp = server.PublicIp, gameServerPort = server.UdpPort, joinTicket = Convert.ToBase64String(ticket), errorCode = (ushort)ErrorCode.Ok });
+        }
+
+        /// <summary>
+        /// Pushes <c>GS_ROOM_ASSIGNED</c>: the room <paramref name="server"/> now hosts and the
+        /// bots per team it asked for. See <see cref="MspMessageType.GsRoomAssigned"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Once per ticket, not once per allocation.</b> Every opcode before this one ran game
+        /// server → master, so nothing carried the room's bot count to the server that has to
+        /// release the bots, and every match fielded the prefab's 16 per team whatever the room
+        /// was created with. Repeating it with each ticket costs a few dozen bytes a join and
+        /// covers a server that re-registered after the allocation.
+        /// </para>
+        /// <para>
+        /// <b>A missing link is logged, not fatal.</b> The ticket is still good: the server falls
+        /// back to its prefab roster and says so in its own log, which is a worse match rather
+        /// than no match.
+        /// </para>
+        /// </remarks>
+        private void TellGameServerItsRoom(GameServerRecord server, Room room)
+        {
+            if (!_gameServerLinks.TryGetValue(server.OwnerConnectionId, out ClientConnection? link))
+            {
+                MasterLog.Warn(
+                    $"room {room.RoomId}: no link to game server {server.ServerId} to send its "
+                    + $"{room.BotCount} bots per team; it will release its prefab roster instead");
+                return;
+            }
+
+            Send(link, MspMessageType.GsRoomAssigned, new
+            {
+                serverId = server.ServerId,
+                roomId = room.RoomId,
+                mapId = room.MapId,
+                botsPerTeam = room.BotCount,
+            });
         }
 
         private void RegisterGameServer(ClientConnection connection, GameServerRegistration request)
@@ -441,7 +489,11 @@ namespace Ironfront.MasterServer.Dispatch
             // sending one bogus GS_REGISTER, which is precisely the Slowloris case that
             // deadline exists to stop. From here the connection is judged by the heartbeat
             // timeout instead, which is the right clock: game servers heartbeat every ~5s.
-            if (ok) connection.MarkAuthenticated();
+            if (ok)
+            {
+                connection.MarkAuthenticated();
+                _gameServerLinks[connection.Id] = connection;
+            }
 
             // A refused registration was previously silent on this side: the operator saw only
             // "closed: not authenticated within 30s" thirty seconds later, which names the
