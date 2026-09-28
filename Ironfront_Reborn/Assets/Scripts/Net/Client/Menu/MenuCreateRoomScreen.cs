@@ -142,12 +142,15 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_mapPreviewCapacity != null)
                 _mapPreviewCapacity.text = PreviewValue(_maxPlayersField, DefaultMaxPlayers.ToString());
             if (_mapPreviewBots != null)
-                _mapPreviewBots.text = PreviewValue(_botCountField, "0");
+                _mapPreviewBots.text = RoomBotsField.Preview(BotFieldText());
             if (_mapPreviewSecurity != null)
                 _mapPreviewSecurity.text = _privateToggle != null && _privateToggle.isOn
                     ? "PRIVATE"
                     : "PUBLIC";
         }
+
+        // Not `?.`: an InputField is a UnityEngine.Object, whose null test is the overloaded one.
+        private string? BotFieldText() => _botCountField != null ? _botCountField.text : null;
 
         private static string PreviewValue(InputField? field, string fallback)
         {
@@ -212,9 +215,11 @@ namespace Ironfront.Net.Unity.Client.Menu
                 return;
             }
 
-            if (!TryReadCount(_botCountField, out int botCount) || botCount < 0 || botCount > maxPlayers)
+            // Bots PER TEAM, not capped by the seat count; empty means the design roster. See
+            // RoomBotsField for why.
+            if (!RoomBotsField.TryRead(BotFieldText(), out int botCount))
             {
-                SetError($"Bots must be a number between 0 and {maxPlayers}.");
+                SetError(RoomBotsField.RangeError);
                 return;
             }
 

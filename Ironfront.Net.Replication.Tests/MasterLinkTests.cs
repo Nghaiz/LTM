@@ -39,6 +39,41 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal("203.0.113.10", link.Registration!.PublicIp);
         }
 
+        // ------------------------------------------------------------------ room assignment
+
+        [Fact]
+        public async Task ARoomAssignmentReachesTheServerAsTheTicketsRoomAndItsBotsPerTeam()
+        {
+            var link = new FakeGameServerLink(assignedServerId: 12);
+            using var reporter = new GameServerMatchReporter(link);
+            await reporter.ConnectAndRegisterAsync("master", 7777, Registration());
+
+            var heard = new List<(ushort Room, int Bots)>();
+            reporter.RoomAssigned += (room, bots) => heard.Add((room, bots));
+
+            link.SimulateRoomAssigned(new GameServerRoomAssignment
+            {
+                ServerId = 12, RoomId = 41, MapId = 1, BotsPerTeam = 0,
+            });
+
+            // 0 is a real request -- the one that used to release 32 -- not "unset".
+            Assert.Equal(new[] { ((ushort)41, 0) }, heard);
+        }
+
+        [Fact]
+        public void ADisposedReporterStopsListeningToItsLink()
+        {
+            var link = new FakeGameServerLink();
+            var reporter = new GameServerMatchReporter(link);
+            int heard = 0;
+            reporter.RoomAssigned += (_, _) => heard++;
+
+            reporter.Dispose();
+            link.SimulateRoomAssigned(new GameServerRoomAssignment { RoomId = 1, BotsPerTeam = 4 });
+
+            Assert.Equal(0, heard);
+        }
+
         [Fact]
         public async Task ARefusedRegistrationYieldsIdZeroRatherThanThrowing()
         {

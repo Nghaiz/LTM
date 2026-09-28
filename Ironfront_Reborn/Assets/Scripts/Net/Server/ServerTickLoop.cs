@@ -598,6 +598,11 @@ namespace Ironfront.Net.Unity.Server
             // cannot name this assembly. Cleared in Unbind with the other weapon seams.
             NetShotAnnouncements.Announcer = this;
 
+            // The room the tickets name, for ActorManager's bot release: the master's
+            // GS_ROOM_ASSIGNED is applied only to this room. Cleared in Unbind.
+            _hostedRoom ??= () => RoomIdentity.RoomId;
+            NetBotRelease.HostedRoom = _hostedRoom;
+
             WarnAboutPlaceholderWeapons();
         }
 
@@ -677,7 +682,11 @@ namespace Ironfront.Net.Unity.Server
             NetTurretAim.Clear();
             NetWeaponAuthority.Clear();
             NetShotAnnouncements.Clear();
+            if (NetBotRelease.HostedRoom == _hostedRoom) NetBotRelease.HostedRoom = null;
         }
+
+        /// <summary>This loop's <see cref="NetBotRelease.HostedRoom"/>, kept so Unbind clears only its own.</summary>
+        private Func<ushort> _hostedRoom;
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
         public void RunInputStage()
