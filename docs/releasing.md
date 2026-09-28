@@ -40,7 +40,7 @@ From a clean checkout of the commit you mean to ship (normally `develop` after m
 ```powershell
 git switch develop; git pull --ff-only
 git status --short                               # must be empty
-pwsh .claude/scripts/unity-editor.ps1 -Stop      # the build needs the Editor closed
+pwsh .claude/scripts/unity-editor.ps1 close       # the build needs the Editor closed
 pwsh tools/build-player.ps1                      # ~10 min; prints "[build] stamp : <sha> ..."
 pwsh tools/package-release.ps1 -Version v0.1.0   # zip into artifacts/release/
 ```
