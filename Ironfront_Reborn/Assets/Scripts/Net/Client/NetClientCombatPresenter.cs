@@ -304,7 +304,7 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            bool held = Input.GetKey(_scoreboardKey)
+            bool held = (Input.GetKey(_scoreboardKey) && !LocalTextEntry.OwnsKeyboard)
                         || (ScoreboardHoldSource != null && ScoreboardHoldSource());
 
             if (held == _pushedScoreboardVisible
