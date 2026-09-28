@@ -100,11 +100,13 @@ namespace Ironfront.Net.Replication.Match
         private float _phaseTimer;
 
         // ASCENDING score accumulators, starting at 0 -- not tickets. Integers, not floats:
-        // nothing subtracts from them and nothing accrues continuously any more (P11 deleted
-        // the bleed), so the float accumulator that existed to carry sub-ticket bleed would now
-        // be a fraction that can never be non-zero.
+        // nothing subtracts from them, and the territory award (bug 3, 2026-09-29) lands in whole
+        // points once per interval rather than accruing continuously.
         private int _score0;
         private int _score1;
+
+        /// <summary>Seconds since the last territory award. See <see cref="ApplyTerritoryAward"/>.</summary>
+        private float _territoryClock;
 
         /// <summary>Both teams eliminated at once: the round is over and nobody won.</summary>
         private bool _drawn;
@@ -221,6 +223,12 @@ namespace Ironfront.Net.Replication.Match
 
         /// <summary>Rounds completed since construction. The load scenario asserts on this.</summary>
         public int CompletedMatches { get; private set; }
+
+        /// <summary>Points the territory award has handed out, both teams, since construction.</summary>
+        public long TerritoryPointsAwarded { get; private set; }
+
+        /// <summary>Rounds the time limit ended rather than the margin or elimination.</summary>
+        public int RoundsEndedByTimeLimit { get; private set; }
 
         /// <summary>Seconds left in the current phase, or 0 for a phase with no timer.</summary>
         public float PhaseSecondsRemaining => _phaseTimer > 0f ? _phaseTimer : 0f;
@@ -347,7 +355,9 @@ namespace Ironfront.Net.Replication.Match
                 case MatchPhase.Playing:
                     _playingElapsed += deltaSeconds;
                     UpdateCapturePoints(actors, deltaSeconds);
+                    ApplyTerritoryAward(deltaSeconds);
                     ApplyElimination(deltaSeconds);
+                    ApplyTimeLimit(deltaSeconds);
                     // A live round is NOT abandoned here when the humans leave: this machine has
                     // no notion of rooms. It outlives its humans only while their ROOM lives --
                     // ServerTickLoop calls ForceReset when the last player releases the room,
@@ -491,13 +501,16 @@ namespace Ironfront.Net.Replication.Match
         /// bleed had nothing left to do.
         /// </para>
         /// <para>
-        /// <b>The bleed was DELETED rather than kept as an ascending trickle, and that is a
+        /// <b>The bleed was DELETED rather than kept as an ascending trickle, and that was a
         /// decision with a cost.</b> It was the only pressure that made a stalemate resolve on
-        /// its own, so two evenly-matched sides that stop killing each other now play until
-        /// somebody scores. That is exactly what the offline match does — it has no bleed
-        /// either — and matching the offline rule is the whole purpose of this phase; a second
-        /// pressure the offline game does not have would have re-opened the divergence one
-        /// mechanism over. Elimination remains as the second way a round ends.
+        /// its own, so two evenly-matched sides that stop killing each other played until
+        /// somebody scored -- the offline rule, which P11 matched. The cost arrived as playtest
+        /// bug 3 (2026-09-28): rounds past thirty minutes, and captures that seemed to do
+        /// nothing. The answer is an ascending award, not the old drain, and it is added to BOTH
+        /// runtimes so they still play one game: <see cref="ApplyTerritoryAward"/> here,
+        /// <c>MatchScoreboard.Tick</c> offline, one rule in
+        /// <see cref="ConquestScoreRule.TerritoryAward"/>. Elimination and the time limit are the
+        /// other ways a round ends.
         /// </para>
         /// </remarks>
         public int OwnedPointCount(byte team)
@@ -614,15 +627,93 @@ namespace Ironfront.Net.Replication.Match
             MatchStateIsDirty = true;
         }
 
+        /// <summary>
+        /// Once per <see cref="MatchRules.TerritoryAwardSeconds"/>, the team holding more capture
+        /// points earns the difference. Playtest 2026-09-28, bug 3; the rule and its reasons are
+        /// <c>ConquestScoreRule.TerritoryAward</c>'s.
+        /// </summary>
+        /// <remarks>
+        /// Counted from the round's opening, so the first award lands one full interval in rather
+        /// than on the tick the round opens -- when both sides still hold only their bases.
+        /// </remarks>
+        private void ApplyTerritoryAward(float deltaSeconds)
+        {
+            float interval = _rules.TerritoryAwardSeconds;
+            if (interval <= 0f) return;
+
+            _territoryClock += deltaSeconds;
+
+            while (_territoryClock >= interval)
+            {
+                _territoryClock -= interval;
+
+                int held0 = OwnedPointCount(TeamId.Team0);
+                int held1 = OwnedPointCount(TeamId.Team1);
+                int award0 = ConquestScoreRule.TerritoryAward(held0, held1);
+                int award1 = ConquestScoreRule.TerritoryAward(held1, held0);
+                if (award0 == 0 && award1 == 0) continue;
+
+                _score0 += award0;
+                _score1 += award1;
+                TerritoryPointsAwarded += award0 + award1;
+                MatchStateIsDirty = true;
+            }
+        }
+
+        /// <summary>
+        /// Ends the round when <see cref="MatchRules.TimeLimitSeconds"/> runs out: the team ahead
+        /// wins, and a level score plays on until the next point decides it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Expressed as moving the score, like <see cref="ApplyElimination"/>, and for its
+        /// reason:</b> every client derives the winner from the two scores against the victory
+        /// margin, a released 1.0 client included. Ending on the clock with a lead short of the
+        /// margin would broadcast an undecided round; raising the leader to exactly the margin is
+        /// what makes every client, old or new, name the team that was ahead.
+        /// </para>
+        /// <para>
+        /// The countdown is <see cref="PhaseSecondsRemaining"/>, so it reaches the clients through
+        /// the <c>S_MATCH_STATE</c> field that already carries the warmup's: no new message, and a
+        /// client that predates the limit simply shows no clock.
+        /// </para>
+        /// <para>
+        /// <b>No draw.</b> The offline scoreboard has no drawn-round screen, and a level score in
+        /// the hundreds rarely lasts past the next kill or territory award, so both runtimes play
+        /// on instead (<c>MatchScoreboard.Tick</c> does the same).
+        /// </para>
+        /// </remarks>
+        private void ApplyTimeLimit(float deltaSeconds)
+        {
+            if (_rules.TimeLimitSeconds <= 0f) return;
+
+            _phaseTimer -= deltaSeconds;
+            if (_phaseTimer > 0f || IsDecided()) return;
+
+            _phaseTimer = 0f;
+
+            byte leader = ConquestScoreRule.Leader(_score0, _score1);
+            if (leader == TeamId.None) return;   // level: play on
+
+            if (leader == TeamId.Team0)
+                _score0 = Math.Max(_score0, _score1 + _rules.VictoryPoints);
+            else
+                _score1 = Math.Max(_score1, _score0 + _rules.VictoryPoints);
+
+            RoundsEndedByTimeLimit++;
+            MatchStateIsDirty = true;
+        }
+
         private void EnterPhase(MatchPhase phase)
         {
             Phase = phase;
 
             _phaseTimer = phase switch
             {
-                MatchPhase.Warmup => _rules.WarmupSeconds,
-                MatchPhase.Ended  => _rules.PostMatchSeconds,
-                _                 => 0f,
+                MatchPhase.Warmup  => _rules.WarmupSeconds,
+                MatchPhase.Playing => _rules.TimeLimitSeconds > 0f ? _rules.TimeLimitSeconds : 0f,
+                MatchPhase.Ended   => _rules.PostMatchSeconds,
+                _                  => 0f,
             };
 
             // Reset on ENTRY to Playing, not in PerformReset: ForceReset can drop a live round
@@ -639,6 +730,7 @@ namespace Ironfront.Net.Replication.Match
                 _eliminationDwell1   = 0f;
                 _spawnPointDanger0   = false;
                 _spawnPointDanger1   = false;
+                _territoryClock      = 0f;
             }
 
             MatchStateIsDirty = true;

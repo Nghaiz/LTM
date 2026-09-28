@@ -25,10 +25,12 @@ namespace Ironfront.Net.Unity.Client
     /// </para>
     /// <para>
     /// <b>The <see cref="MatchPhase.Playing"/> timer rule.</b>
-    /// <c>MatchStateMessage.PhaseSecondsRemaining</c> is 0 during <c>Playing</c> by design --
-    /// that phase ends on tickets, not a clock. <see cref="MatchStateModel.HasTimer"/> is false
-    /// there, and this presenter passes <c>-1</c> to <see cref="IObjectiveHud.SetAuthoritativeState"/>
-    /// in that case, which is documented there as "hide the timer", never "render 0:00".
+    /// <c>MatchStateMessage.PhaseSecondsRemaining</c> is 0 during <c>Playing</c> unless the host
+    /// set a time limit -- the round otherwise ends on the score margin, not a clock.
+    /// <see cref="MatchStateModel.HasTimer"/> is false for such a round, and this presenter passes
+    /// <c>-1</c> to <see cref="IObjectiveHud.SetAuthoritativeState"/> in that case, which is
+    /// documented there as "hide the timer", never "render 0:00". A limited round shows its
+    /// clock like any other phase.
     /// </para>
     /// <para>
     /// <b>Staleness dims rather than freezes-and-lies.</b>
