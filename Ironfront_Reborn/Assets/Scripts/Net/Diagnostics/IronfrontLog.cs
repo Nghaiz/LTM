@@ -1,3 +1,16 @@
+// Diagnostics are compiled OUT of a shipping client build.
+//
+// The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
+// ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
+// ProjectSettings and switched on for every build that needs it -- which is the Editor, the
+// EditMode tests and the lane-B harness, i.e. everything except the one build that does not
+// exist yet. Defaulting ON and letting a shipping build ADD IRONFRONT_NO_DIAGNOSTICS is the
+// only arrangement the mechanism actually supports.
+//
+// Nothing outside Assets/Scripts/Net/Diagnostics/ names a type from this folder: the ten
+// mentions elsewhere are doc-comments, checked 2026-08-21. So this guard needs no companion
+// guard at any call site, and a strip cannot leave a dangling reference behind it.
+#if !IRONFRONT_NO_DIAGNOSTICS
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -75,11 +88,42 @@ namespace Ironfront.Net.Diagnostics
             Application.logMessageReceivedThreaded += OnLog;
             Application.quitting += Shutdown;
 
+            AttachTransportLog();
+
             WriteLine("INFO", $"session started {DateTime.Now:yyyy-MM-dd HH:mm:ss} · Unity {Application.unityVersion} · {Application.platform}");
             WriteLine("INFO", $"timeScale={Time.timeScale} fixedDeltaTime={Time.fixedDeltaTime:F5} (project setting; see NetPredictionClock for why the netcode does not use it)");
             ReportAssemblies();
 
             Debug.Log($"[IronfrontLog] this session is being written to {CurrentFile}");
+        }
+
+        /// <summary>
+        /// Gives <see cref="Ironfront.Net.Transport.NetLog"/> somewhere to write, for every
+        /// build — client, dedicated server and Editor alike.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>These sinks were null in every shipped build.</b> The transport formats its
+        /// warnings and hands them to an <c>Action&lt;string&gt;</c> that nothing ever
+        /// assigned, so the two lines that name a reliable-channel death — <c>reliable
+        /// sequence N abandoned after M resends</c> and <c>reliable sequence slot collision at
+        /// N</c> — were composed and discarded on every run since the transport was written.
+        /// <c>Connection.Update</c>'s own remark says it ends the connection <i>"loudly instead
+        /// of continuing quietly"</i>; the loud half reached nobody, and a dropped client
+        /// presented to everyone as a bare <c>TransportError</c> with no cause attached.
+        /// </para>
+        /// <para>
+        /// The lane-B harness attached its own sink and that is how the cause was finally
+        /// read — but a diagnostic only the test harness can see is not a diagnostic for the
+        /// dedicated server, which is the process that will be running when it matters. It
+        /// belongs here, beside the census, for the reason this whole file gives: anything
+        /// that must be wired up by hand is missing exactly when someone needs it.
+        /// </para>
+        /// </remarks>
+        private static void AttachTransportLog()
+        {
+            Ironfront.Net.Transport.NetLog.Warning ??= message => Debug.LogWarning($"[transport] {message}");
+            Ironfront.Net.Transport.NetLog.Error ??= message => Debug.LogError($"[transport:error] {message}");
         }
 
         private static bool TryOpen()
@@ -91,7 +135,13 @@ namespace Ironfront.Net.Diagnostics
                 Prune(dir);
 
                 string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-                CurrentFile = Path.Combine(dir, $"ironfront-{stamp}.log");
+
+                // The process id, because a second is not unique: two clients launched together
+                // open the same name, FileMode.Create lets the second truncate the first, and each
+                // then writes over the other's bytes -- losing exactly the lines, such as an
+                // exception's stack, that the file exists to keep.
+                int pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                CurrentFile = Path.Combine(dir, $"ironfront-{stamp}-{pid}.log");
 
                 // FileShare.ReadWrite so the file can be tailed while the game is running,
                 // and AutoFlush because the crash or the hang is precisely the session whose
@@ -265,3 +315,4 @@ namespace Ironfront.Net.Diagnostics
         }
     }
 }
+#endif

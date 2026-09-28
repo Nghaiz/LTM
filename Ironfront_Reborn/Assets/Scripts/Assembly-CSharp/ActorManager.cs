@@ -13,6 +13,16 @@ public class ActorManager : MonoBehaviour
 
 	private const float AI_MAX_FIRST_SPAWN_TIME = 10f;
 
+	/// <summary>
+	/// Seconds a body stays down before <see cref="SpawnWave"/> will respawn it.
+	/// </summary>
+	/// <remarks>
+	/// Named because <see cref="CreateAIActor"/> now has to subtract it to make a newly created
+	/// bot eligible on the next wave; two copies of the same literal in one file, one of them
+	/// load-bearing for a deploy time, is how the two silently drift apart.
+	/// </remarks>
+	private const float AI_SPAWN_WAVE_DEATH_GRACE = 6f;
+
 	public static ActorManager instance;
 
 	public float spawnTime = 10f;
@@ -22,6 +32,56 @@ public class ActorManager : MonoBehaviour
 	public int team1Bots = 16;
 
 	public GameObject actorPrefab;
+
+	/// <summary>
+	/// Whether this round's AI roster has been created yet.
+	/// </summary>
+	/// <remarks>
+	/// The roster is filled ONCE per round, on the first <see cref="SpawnWave"/> tick after
+	/// <c>NetBotRelease</c> opens. Not serialized and not public: it is round state, and a
+	/// designer setting it in the inspector would mean "this map starts with no bots, ever".
+	/// </remarks>
+	[NonSerialized]
+	private bool aiRosterFilled;
+
+	/// <summary>
+	/// Real-time seconds one frame may spend creating or placing bodies before the rest waits
+	/// for the next frame. At least one body is handled per frame, so the work always finishes.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Both used to happen all at once. Measured 2026-09-27 on a lane-B Island server: the
+	/// release tick created all 32 bots in one 104 ms frame, and the wave after it placed all 32
+	/// in one 187 ms frame -- about 3 ms to create a bot and 6 ms to place one. No snapshot
+	/// leaves a server frame that has not ended, so every client froze with it, at the start of
+	/// every round; a wave of bots that died together did the same on a smaller scale.
+	/// </para>
+	/// <para>
+	/// Four milliseconds leaves a 60 Hz server frame most of its budget for the tick, and still
+	/// puts a full 32-bot roster into the world in about half a second.
+	/// </para>
+	/// </remarks>
+	private const float SPAWN_WORK_BUDGET_SECONDS = 0.004f;
+
+	/// <summary>
+	/// The frame the spawn batch in flight last did work on, or -1 when none is running.
+	/// </summary>
+	/// <remarks>
+	/// A heartbeat rather than a flag. <see cref="SpawnWave"/> runs ten times a second on the
+	/// shipped <c>spawnTime</c>, so it must not start a second batch over bodies the first is
+	/// still placing -- but a coroutine stopped from outside never reaches the line that would
+	/// clear a flag, and a flag stuck on would hold every later wave forever. A batch that has
+	/// not beaten for a frame is gone, and the next wave goes ahead.
+	/// </remarks>
+	[NonSerialized]
+	private int spawnBatchHeartbeat = -1;
+
+	/// <summary>
+	/// Bumped whenever the roster is torn down, so a fill still creating bots for a round that has
+	/// just been reset stops rather than adding them to the next one.
+	/// </summary>
+	[NonSerialized]
+	private int rosterGeneration;
 
 	[NonSerialized]
 	public SpawnPoint[] spawnPoints;
@@ -62,14 +122,49 @@ public class ActorManager : MonoBehaviour
 		}
 	}
 
+	// Ledger X-49. Every one of these three removals is now reached from an OnDestroy, so each
+	// has to survive being called while the scene is being torn down: Unity destroys children in
+	// no guaranteed order, so ActorManager may already be gone, and StartGame may never have run
+	// at all (a headless server that loads the map and quits). A null-ref thrown out of OnDestroy
+	// during quit is the kind of error that reads as a crash and is only ever noise.
 	public static void Drop(Actor actor)
 	{
+		if (instance == null || instance.actors == null) return;
+
 		instance.actors.Remove(actor);
 	}
 
 	private void Awake()
 	{
 		instance = this;
+
+		// ALLOCATED HERE, not in StartGame(). `instance` was assigned in Awake while the three
+		// registries below were built in StartGame(), which GameManager calls from its
+		// sceneLoaded handler -- so between the map's Awakes and that handler there is a window
+		// in which `instance` is non-null and `instance.vehicles` is null. The client's held
+		// snapshot queue releases inside exactly that window
+		// (ClientFlowBootstrap.OnSceneLoaded -> MasterSession.OnSceneReady ->
+		// SnapshotHoldingQueue.Release -> RemoteVehicleRegistry.OnVehicleSpawn -> Instantiate ->
+		// Vehicle.Awake -> RegisterVehicle), and every vehicle in the first batch threw out of
+		// RegisterVehicle: 14 of them in tmp/playtest/client-2.log.
+		//
+		// The tell that this was patched once on the wrong side: DropVehicle and DropActor carry
+		// null guards and RegisterVehicle and RegisterActor do not. Guarding the register half to
+		// match would stop the exception and lose the vehicle -- it would exist as a GameObject
+		// that nothing can damage, enter or clean up, which is worse than the throw because
+		// nothing says so. DecalManager.AddDecal already warns about the same window; this is the
+		// third instance of the shape, so it is fixed at the lifetime rather than at the call.
+		//
+		// `vehicles` and `aliveActors` are the two this actually fixes, because they are the two
+		// OnLevelLoaded does not touch. `actors` is allocated here as well, but it does NOT stay
+		// allocated and StartGame has to build it again -- see the remark on OnLevelLoaded, which
+		// nulls it moments after this line runs, on this very same scene load.
+		actors = new List<Actor>();
+		vehicles = new List<Vehicle>();
+		aliveActors = new Dictionary<int, List<Actor>>();
+		aliveActors.Add(0, new List<Actor>());
+		aliveActors.Add(1, new List<Actor>());
+
 		AiActorController.SetupParameters();
 		SceneManager.sceneLoaded += OnLevelLoaded;
 		spawnTime = Mathf.Max(0.1f, spawnTime);
@@ -78,29 +173,182 @@ public class ActorManager : MonoBehaviour
 	private void OnDestroy()
 	{
 		SceneManager.sceneLoaded -= OnLevelLoaded;
+
+		// NetWorldLifecycle is static and outlives the scene, so an un-removed handler would
+		// keep a destroyed ActorManager alive and fire DespawnBots against a dead `actors` list
+		// on the NEXT map's first round reset. Unconditional: -= on a handler that was never
+		// added is a no-op, and StartGame's subscription is skipped on a client.
+		Ironfront.Net.Unity.Server.NetWorldLifecycle.ResetRequested -= OnWorldResetRequested;
 	}
 
 	public void StartGame()
 	{
+		// `actors` MUST be rebuilt here, and this line is not the leftover it looks like. Awake
+		// allocates it and then OnLevelLoaded, which Awake itself subscribes to, sets it back to
+		// null on the same scene load -- so between those two callbacks the field is null and the
+		// ONLY thing that has ever restored it is this line. Deleting it as redundant cost 14400
+		// NullReferenceExceptions per client and 8136 on the server, out of SpawnWave and
+		// Register, in a single four-client playtest. It is safe to build a fresh list because
+		// Unity runs every Start after every sceneLoaded callback, so Actor.Start -> Register has
+		// not run yet and nothing is discarded.
+		//
+		// `vehicles` and `aliveActors` are deliberately NOT rebuilt here. OnLevelLoaded leaves
+		// them alone, so Awake's copies are still live -- and the client's held snapshot releases
+		// BEFORE this runs, so a `new` or a `Clear()` would drop exactly the vehicles the Awake
+		// allocation exists to keep.
+		//
+		// spawnPoints stays: it is a scan of the loaded scene and has nothing to find from Awake.
 		actors = new List<Actor>();
 		spawnPoints = UnityEngine.Object.FindObjectsOfType<SpawnPoint>();
-		vehicles = new List<Vehicle>();
-		aliveActors = new Dictionary<int, List<Actor>>();
-		aliveActors.Add(0, new List<Actor>());
-		aliveActors.Add(1, new List<Actor>());
-		FillEmptySlotsWithAI();
+
+		// A CLIENT DOES NOT POPULATE THE MATCH. Ledger X-82's other half.
+		//
+		// Both lines below are the offline game's roster: FillEmptySlotsWithAI Instantiates
+		// team0Bots + team1Bots actorPrefabs, and the repeating SpawnWave places every dead one at
+		// a spawn point of its own choosing, forever. On a networked client the roster belongs to
+		// the server -- bots included -- and arrives as S_SPAWN_ACTOR plus snapshots, rendered by
+		// RemoteActorRegistry onto bodies this side never spawns.
+		//
+		// Running them anyway is what the 2026-09-04 playtest recorded: 2 [spawn] ground-snap
+		// warnings on client-1 and 10 on client-2, every one with ActorManager.SpawnWave ->
+		// SpawnActorList -> CapturePoint.GetSpawnPosition in its stack -- i.e. each client was
+		// simulating a private war of ~40 AI actors, scoring its own tickets and moving its own
+		// capture points, while snapshots overwrote the same capture points from the server. That
+		// disagreement is the "map does not load right" report: not a broken scene, two
+		// simulations of it in one process.
+		//
+		// Offline is untouched, and so is the server: NetContext.IsClient is false in both.
+		if (Ironfront.Net.Unity.NetContext.IsClient)
+		{
+			return;
+		}
+
+		// THE ROSTER IS NO LONGER FILLED HERE, and that is the whole fix for "every capture
+		// point is already owned seconds into the match".
+		//
+		// FillEmptySlotsWithAI used to run on this line, at SCENE LOAD, while the capture
+		// arithmetic waits for MatchPhase.Playing. So 32 bots had the whole of
+		// WaitingForPlayers plus the 20s warmup to spread across the map, and the round opened
+		// onto terrain they were already standing on. Measured on Dustbowl 2026-09-20: the map
+		// opened correctly at one point per team, then the four neutral points fell to bots at
+		// ~34s, ~65s, ~92s and ~115s while the three human clients captured nothing, and by
+		// 118s nothing on the map was neutral. The objective game was played, and decided, by
+		// bots before a player had finished choosing a loadout.
+		//
+		// The wave below now fills the roster on its first tick after NetBotRelease opens --
+		// 30s after the first player body enters the world, and never before one does. Doing it
+		// there rather than here also means the round-reset path gets the re-fill for free.
+		Ironfront.Net.Unity.Server.NetWorldLifecycle.ResetRequested += OnWorldResetRequested;
 		InvokeRepeating("SpawnWave", 1f, spawnTime);
 	}
 
-	private void FillEmptySlotsWithAI()
+	/// <summary>
+	/// Clears the round's bots and re-arms the release gate, so the next round opens as empty
+	/// as the first one did.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <c>MatchStateMachine.PerformReset</c> restores every capture point's opening owner and
+	/// does nothing to the bodies. Without this the delay would protect the FIRST round only:
+	/// round two reopens with the previous round's 32 bots standing exactly where they finished,
+	/// and a gate anchored on "the first player spawn" has nothing left to delay.
+	/// </para>
+	/// <para>
+	/// <b>Destroyed, not parked.</b> <c>NetServerActor.OnDisable</c> unregisters through
+	/// <c>ServerActorRegistry</c>, which hands the actor id back to the quarantining pool — so
+	/// destruction is also what keeps the id space honest. It runs on
+	/// <c>NetWorldLifecycle.ResetRequested</c>, which fires BEFORE
+	/// <c>ServerTickLoop.ResetForNewMatch</c> snapshots the still-live actors into its retained
+	/// set, so these ids leave the retained count rather than being re-offered while still held
+	/// (X-73, X-74).
+	/// </para>
+	/// </remarks>
+	private void OnWorldResetRequested()
 	{
-		for (int i = 0; i < team0Bots; i++)
+		DespawnBots();
+		Ironfront.Net.Unity.NetBotRelease.ResetForNewRound();
+	}
+
+	/// <summary>Destroys every AI body and empties the roster.</summary>
+	/// <remarks>
+	/// Iterated over a COPY: <c>Actor.OnDestroy</c> unregisters from <see cref="actors"/>, so
+	/// walking the live list while destroying from it skips every second entry.
+	/// </remarks>
+	private void DespawnBots()
+	{
+		if (actors == null)
 		{
-			CreateAIActor(0, (float)i / (float)team0Bots);
+			return;
 		}
-		for (int j = 0; j < team1Bots; j++)
+		List<Actor> snapshot = new List<Actor>(actors);
+		int destroyed = 0;
+		foreach (Actor actor in snapshot)
 		{
-			CreateAIActor(1, (float)j / (float)team1Bots);
+			// A body a connection holds is not ours to destroy even when it is AI-controlled:
+			// aiControlled is frozen in Awake from the controller's type and a player slot is
+			// built from the same AI character prefab, so it stays true for a claimed slot for
+			// the whole match. The same IsClaimed / AvailableForPlayers test SpawnWave uses.
+			if (actor == null || !actor.aiControlled)
+			{
+				continue;
+			}
+			var replicated = actor.GetComponent<Ironfront.Net.Unity.Server.NetServerActor>();
+			if (replicated != null && (replicated.AvailableForPlayers || replicated.IsClaimed))
+			{
+				continue;
+			}
+			// DEACTIVATE FIRST, and the ordering is the whole point.
+			//
+			// Object.Destroy is deferred to the end of the frame, so NetServerActor.OnDisable --
+			// which is what unregisters and hands the actor id back to the pool -- would not run
+			// until after MatchController.OnResetRequested had already called
+			// ResetForNewMatch, whose FIRST act is to snapshot every still-live actor into its
+			// retained-id set. The ids would be retained for a round they no longer belong to.
+			// SetActive(false) fires OnDisable synchronously, so the registry is correct by the
+			// time that snapshot is taken -- which is exactly what OnResetRequested's own
+			// "the world is torn down first" comment promises.
+			actor.gameObject.SetActive(false);
+			UnityEngine.Object.Destroy(actor.gameObject);
+			destroyed++;
+		}
+		aiRosterFilled = false;
+		rosterGeneration++;
+		Debug.Log($"[net] round reset: {destroyed} bot(s) despawned, roster re-armed.");
+	}
+
+	/// <summary>
+	/// Creates the round's bots, <see cref="SPAWN_WORK_BUDGET_SECONDS"/> of them a frame, the
+	/// two teams interleaved so neither reaches the map first.
+	/// </summary>
+	/// <remarks>
+	/// Each bot is due on the wave after it is created (<see cref="CreateAIActor"/>), so the
+	/// roster enters the world over the half second the fill takes rather than in one frame.
+	/// A round reset mid-fill stops it: the next round fills its own roster once released.
+	/// </remarks>
+	private IEnumerator FillEmptySlotsWithAI()
+	{
+		int generation = rosterGeneration;
+		float sliceStartedAt = Time.realtimeSinceStartup;
+		int rows = Mathf.Max(team0Bots, team1Bots);
+		for (int i = 0; i < rows; i++)
+		{
+			if (Time.realtimeSinceStartup - sliceStartedAt > SPAWN_WORK_BUDGET_SECONDS)
+			{
+				yield return null;
+				if (generation != rosterGeneration)
+				{
+					yield break;
+				}
+				sliceStartedAt = Time.realtimeSinceStartup;
+			}
+			if (i < team0Bots)
+			{
+				CreateAIActor(0, (float)i / (float)team0Bots);
+			}
+			if (i < team1Bots)
+			{
+				CreateAIActor(1, (float)i / (float)team1Bots);
+			}
 		}
 	}
 
@@ -108,25 +356,146 @@ public class ActorManager : MonoBehaviour
 	{
 		Actor component = UnityEngine.Object.Instantiate(actorPrefab).GetComponent<Actor>();
 		component.SetTeam(team);
-		component.deathTimestamp = Time.time + Mathf.Max(spawnTime, 10f);
+
+		// DEPLOY ON THE NEXT WAVE, not sixteen seconds from now.
+		//
+		// A fresh Actor is dead, and SpawnWave's own test is `deathTimestamp + 6f < Time.time`,
+		// so the old `Time.time + max(spawnTime, 10f)` held every bot out of the world for ~16s
+		// after creation. That stagger existed because the roster was built at scene load and
+		// wanted the map quiet for a moment. The release gate now owns that wait, and owns it
+		// properly -- so stacking the old one on top would put bots in the world 46s after the
+		// first player spawned when the rule says 30.
+		//
+		// The subtraction is what makes the strict `<` above true on the very next tick.
+		component.deathTimestamp = Time.time - (AI_SPAWN_WAVE_DEATH_GRACE + 1f);
 		component.lqUpdatePhase = fillRatio * 0.2f;
 	}
 
 	private void SpawnWave()
 	{
+		// NO BOT EXISTS BEFORE A HUMAN IS IN THE WORLD, AND NONE FOR 30s AFTER THE FIRST ONE.
+		//
+		// GATED PER ACTOR, NOT BY RETURNING EARLY, and that distinction is the whole reason
+		// single-player still works. Offline the PLAYER's own body is spawned by this wave --
+		// GameManager.StartGame instantiates the prefab at (0, 1000, 0) and it sits dead in
+		// `actors` until a wave picks it up -- so a blanket early-out here would hold the player
+		// out of the world, which would mean the anchor never fires, which would mean the wave
+		// never opens: a deadlock that ends single-player at the loadout screen. Networked
+		// players never come through here at all (ServerCombatBridge.PlaceAtSpawn places them,
+		// and the claimed/available test below skips their slots), so the ONLY thing this gate
+		// may hold back is an AI body.
+		bool botsReleased = Ironfront.Net.Unity.NetBotRelease.IsReleased;
+
+		// First tick past the gate: build the roster the old StartGame call used to build at
+		// scene load. Doing it here rather than at the release edge means the round-reset path
+		// re-fills for free -- DespawnBots clears the flag and this rebuilds on the next tick
+		// after the new round's first player spawns.
+		if (botsReleased && !aiRosterFilled)
+		{
+			aiRosterFilled = true;
+			StartCoroutine(FillEmptySlotsWithAI());
+			Debug.Log(
+				$"[net] bots released: {team0Bots} for team 0, {team1Bots} for team 1, "
+				+ $"{Ironfront.Net.Unity.NetBotRelease.DelaySeconds:F0}s after the first player "
+				+ "body entered the world.");
+		}
+
+		// ONE BATCH AT A TIME. A batch places its bodies over several frames now (see
+		// SPAWN_WORK_BUDGET_SECONDS), and this runs ten times a second: a second batch started
+		// meanwhile would hold the same waiting bodies and spend its own budget on them in the
+		// same frames. Returning holds nobody back for long -- whoever the batch in flight does
+		// not hold is picked up by the first tick after it ends, a fraction of a second later --
+		// and it is not the blanket early-out the remark above forbids, because a batch always
+		// ends: a stopped one stops beating and stops counting as in flight.
+		if (SpawnBatchInFlight)
+		{
+			return;
+		}
+
 		List<Actor> list = new List<Actor>();
 		foreach (Actor actor in actors)
 		{
-			if (actor.dead && actor.deathTimestamp + 6f < Time.time)
+			if (actor.dead && actor.deathTimestamp + AI_SPAWN_WAVE_DEATH_GRACE < Time.time)
 			{
+				// The gate, applied to AI bodies only. See the remark at the top of this method
+				// for why a human body must never be held here.
+				if (actor.aiControlled && !botsReleased)
+				{
+					continue;
+				}
+
+				// A BODY A CONNECTION HOLDS IS NOT THE BOT WAVE'S TO SPAWN.
+				//
+				// ServerTickLoop.OnClientConnected parks a claimed slot at Health 0 / IsAlive
+				// false on purpose -- "a join is no longer a spawn" -- so the body is placed and
+				// armed for the FIRST time when that connection's own C_SPAWN_REQUEST arrives,
+				// carrying the loadout the player chose. Actor.dead is exactly what this wave
+				// looks for, and deathTimestamp is whatever the slot's previous occupant left
+				// behind, so on a server that has been up for more than six seconds the wave
+				// respawned the player's body itself, within one spawnTime of the join.
+				//
+				// That is a spawn the deploy path never authorised, and it took the client with
+				// it. Actor.SpawnAt sets dead = false, so the next snapshot reported IsAlive to
+				// a client still waiting to deploy; ClientCombatState.SetAlive raised Respawned,
+				// NetClientLocalCombatDriver.OnRespawned read it as "the server placed this
+				// body" and called EnterDeployedView, and deployedView makes
+				// OpenLoadoutWhileDead return early -- so the loadout screen GameManager opens
+				// one second into the map never appeared, no Deploy was ever pressed, and no
+				// C_SPAWN_REQUEST was ever sent. MoveToSpawnPoint therefore never ran and the
+				// only body the player could see was the Player Fps Actor prefab
+				// GameManager.StartGame instantiates at (0, 1000, 0), falling onto the edge of
+				// the heightmap. Measured on 2026-09-04: client-1.log has "deploy granted for
+				// actor 33" raised from OnSnapshotApplied -> ApplySnapshot -> SetAlive, no
+				// "deploy requested" anywhere, and game-server.log has no "placed at spawn
+				// point" and neither MoveToSpawnPoint warning.
+				//
+				// IsClaimed, not aiControlled: Actor.aiControlled is decided once in Awake from
+				// the controller's type, and a player slot is built from the same AI character
+				// prefab a bot is, so it stays true for the whole match. Release() clears
+				// IsClaimed when the connection goes, which is what hands the slot back to the
+				// bot brain rather than leaving one more inert mannequin standing in the map.
+				//
+				// AvailableForPlayers covers the OTHER half, and the server's own boot line says
+				// what it is for: "player slot pool filled: 16 claimable bodies, all parked (bot
+				// brain suspended until claimed). Map bots are unaffected." A pool body starts
+				// dead with deathTimestamp at its default 0, so six seconds into the match this
+				// wave spawned all sixteen of them -- bodies with a suspended brain, standing
+				// still at a spawn point, invisible to every client because IsAnnounceable
+				// excludes an unclaimed slot, and simulated by the server for the whole round.
+				// The three "server over budget" windows in the same run are that, in part.
+				// Bots leave the flag off, so a map bot still spawns and re-spawns as before.
+				//
+				// Offline is untouched: the local Player Fps Actor carries no NetServerActor, so
+				// GetComponent answers null and the single-player wave behaves as it always has.
+				var replicated = actor.GetComponent<Ironfront.Net.Unity.Server.NetServerActor>();
+				if (replicated != null && (replicated.AvailableForPlayers || replicated.IsClaimed))
+				{
+					continue;
+				}
+
 				list.Add(actor);
 			}
+		}
+		// Ten ticks a second almost always find nobody waiting; a batch with nothing to place
+		// would still allocate a coroutine and a list per spawn point.
+		if (list.Count == 0)
+		{
+			return;
 		}
 		StartCoroutine(SpawnActorList(list));
 	}
 
+	/// <summary>Whether a spawn batch is still placing bodies. See <see cref="spawnBatchHeartbeat"/>.</summary>
+	private bool SpawnBatchInFlight => spawnBatchHeartbeat >= 0 && Time.frameCount - spawnBatchHeartbeat <= 1;
+
+	/// <summary>
+	/// Places a wave's bodies, <see cref="SPAWN_WORK_BUDGET_SECONDS"/> of them a frame, then forms
+	/// the squads from whoever was placed.
+	/// </summary>
 	private IEnumerator SpawnActorList(List<Actor> actorsToSpawn)
 	{
+		float sliceStartedAt = Time.realtimeSinceStartup;
+		spawnBatchHeartbeat = Time.frameCount;
 		Dictionary<SpawnPoint, List<Actor>> spawnedActors = new Dictionary<SpawnPoint, List<Actor>>();
 		SpawnPoint[] array = spawnPoints;
 		foreach (SpawnPoint spawnPoint in array)
@@ -135,11 +504,40 @@ public class ActorManager : MonoBehaviour
 		}
 		foreach (Actor actor in actorsToSpawn)
 		{
+			if (Time.realtimeSinceStartup - sliceStartedAt > SPAWN_WORK_BUDGET_SECONDS)
+			{
+				yield return null;
+				sliceStartedAt = Time.realtimeSinceStartup;
+				spawnBatchHeartbeat = Time.frameCount;
+			}
+
+			// Asked again, because the wave spans frames now. A round reset in between destroys
+			// the bots this batch holds -- deactivating them first, so they are not null until the
+			// frame ends -- and a body is only this batch's to place while it is still down.
+			if (actor == null || !actor.gameObject.activeInHierarchy || !actor.dead)
+			{
+				continue;
+			}
+
 			SpawnPoint spawnPoint3 = actor.controller.SelectedSpawnPoint();
 			if (spawnPoint3 != null)
 			{
 				actor.SpawnAt(spawnPoint3.GetSpawnPosition());
 				spawnedActors[spawnPoint3].Add(actor);
+
+				// THE OFFLINE BOT-RELEASE ANCHOR, and the counterpart to the one in
+				// ServerCombatBridge.PlaceAtSpawn. Single-player has no deploy handshake: the
+				// player's body enters the world right here, on the wave, so this is the only
+				// moment that answers "a human is now in the map".
+				//
+				// Guarded on aiControlled rather than on NetContext.IsOffline: a bot must never
+				// anchor its own release, and on the networked server no human body reaches
+				// this loop anyway, so the test states the real condition instead of the
+				// circumstance that usually implies it.
+				if (!actor.aiControlled)
+				{
+					Ironfront.Net.Unity.NetBotRelease.NotifyPlayerSpawned();
+				}
 			}
 		}
 		SpawnPoint[] array2 = spawnPoints;
@@ -151,6 +549,12 @@ public class ActorManager : MonoBehaviour
 			float squadReadyTime = 0f;
 			foreach (Actor spawnedActor in spawnedActors[spawnPoint2])
 			{
+				// Placed in an earlier frame of this batch, so it may since have died, or been
+				// torn down by a round reset. Neither belongs in a squad that is forming now.
+				if (spawnedActor == null || !spawnedActor.gameObject.activeInHierarchy || spawnedActor.dead)
+				{
+					continue;
+				}
 				if (spawnedActor.aiControlled)
 				{
 					aiSquad.Add((AiActorController)spawnedActor.controller);
@@ -170,17 +574,51 @@ public class ActorManager : MonoBehaviour
 				new Squad(aiSquad, squadReadyTime);
 			}
 		}
+		spawnBatchHeartbeat = -1;
 		yield break;
 	}
 
+	/// <summary>
+	/// Adds an actor to its team's alive register. Ledger <b>X-59</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The guard REPORTS a second producer; it is not the fix for the one that was found.</b>
+	/// X-59 was a body killed through <c>ActorGameplaySource.IsDead</c>, which wrote the flag and
+	/// left the register, so the next spawn wave registered the body a second time; that window
+	/// is closed at the seam, where the reason lives. What this refuses is the NEXT double-add,
+	/// from a path nobody has enumerated yet.
+	/// </para>
+	/// <para>
+	/// <b>Refused loudly rather than silently deduplicated.</b> A quiet membership test would
+	/// make the storm unproducible and the cause unfindable, which is how X-59 survived a gate
+	/// that read "zero throws at any site". One <c>LogError</c> naming the body is a defect
+	/// report; sixty <c>ArgumentException</c>s out of a coroutine are not.
+	/// </para>
+	/// </remarks>
 	public static void SetAlive(Actor actor)
 	{
-		instance.aliveActors[actor.team].Add(actor);
+		List<Actor> onTeam = instance.aliveActors[actor.team];
+
+		if (onTeam.Contains(actor))
+		{
+			Debug.LogError(
+				$"[actors] '{actor.name}' is already in team {actor.team}'s alive register, so "
+				+ "something registered it twice without a death in between (X-59's family). "
+				+ "Refusing the second entry: it would throw out of every "
+				+ "FindPotentialTargets on the opposing team for the rest of the match.");
+			return;
+		}
+
+		onTeam.Add(actor);
 	}
 
 	public static void SetDead(Actor actor)
 	{
-		instance.aliveActors[actor.team].Remove(actor);
+		if (instance == null || instance.aliveActors == null) return;
+		if (!instance.aliveActors.TryGetValue(actor.team, out List<Actor> onTeam)) return;
+
+		onTeam.Remove(actor);
 	}
 
 	public static List<Actor> AliveActorsOnTeam(int team)
@@ -323,6 +761,32 @@ public class ActorManager : MonoBehaviour
 
 	public static void RegisterProjectile(Projectile p)
 	{
+		// This method exists to warn the ENEMY team's AI that something is incoming, and "the
+		// enemy team" is read off the shooter. A projectile with no shooter names no team, so
+		// there is nothing here to warn and no fallback that would be honest -- guessing a team
+		// would make bots duck away from a tracer nobody fired at them.
+		//
+		// It is not a rare case. Every projectile NetClientProjectilePresenter spawns carries
+		// `source == null` on purpose (V7-D3: damage, and therefore attribution, is the
+		// server's), and Projectile.Start calls this for all of them because `warnsEnemyAi`
+		// defaults true. That is 64 of the 95 NullReferenceExceptions three clients threw in
+		// artifacts/lane-b/p4-combat-01, and the reason a player's Development Console filled up
+		// within seconds of the first rocket.
+		//
+		// Returning early rather than warning on a client is also correct on its own terms: the
+		// AI runs on the server, so a client-side cosmetic tracer has no business steering it.
+		if (p.source == null)
+		{
+			return;
+		}
+		// A network body exists before its first authoritative snapshot can assign team 0/1.
+		// A locally predicted projectile may therefore start during that short UNKNOWN_TEAM
+		// window.  `1 - (-1)` is team 2, which is not a key in aliveActors and used to throw once
+		// per bullet. There is no honest enemy AI to warn until the shooter's team is known.
+		if (p.source.team != 0 && p.source.team != 1)
+		{
+			return;
+		}
 		Ray ray = new Ray(p.transform.position, p.transform.forward);
 		float num = 9999f;
 		RaycastHit hitInfo;
@@ -370,19 +834,39 @@ public class ActorManager : MonoBehaviour
 
 	public static void DropVehicle(Vehicle vehicle)
 	{
+		if (instance == null || instance.vehicles == null) return;
+
 		instance.vehicles.Remove(vehicle);
 	}
 
 	// V1 task 3. Reused across blasts so ActorsInRange stops allocating a List per explosion.
 	// Static because Explode is; single-threaded, like everything else on the Unity main loop.
 	//
-	// Load-bearing precondition: Explode is NOT re-entrant. Nothing it calls explodes again
-	// synchronously -- Actor.Damage ends in Die() and a ragdoll, and Vehicle.Damage ends in
-	// Vehicle.Explode(), which is an impulse plus particles and does not route back here (D5).
-	// If a future chain-detonation does call Explode from inside Explode, this buffer is the
+	// Load-bearing precondition: Explode is NOT re-entrant, and it is still not after
+	// debt-closure phase 2 gave Vehicle.Explode a blast of its own (ledger C-10). Vehicle.Damage
+	// ends in Die(), which reaches Explode through Invoke("Explode", 0.3f) -- a later frame and a
+	// fresh stack -- so the chain detonation this comment warned about is sequential rather than
+	// nested and this buffer is never re-entered. Actor.Damage still ends in a ragdoll.
+	// If a future caller DOES call Explode from inside Explode synchronously, this buffer is the
 	// thing that breaks, silently, by having its contents replaced mid-loop -- give that caller
 	// its own list rather than making this one deeper.
 	private static readonly List<Actor> _explosionVictims = new List<Actor>();
+
+	// debt-closure phase 2 task 2f (ledger C-10). A SNAPSHOT of instance.vehicles, because the
+	// loop below now damages vehicles that can die inside it: Vehicle.Damage -> Die() ->
+	// ActorManager.DropVehicle removes the entry mid-iteration, and an index-walked List that
+	// shrinks under you skips the next element. Before a wreck could blast, one vehicle dying to
+	// a blast was already enough to trigger this -- the claim in the comment above the loop that
+	// nothing removes from the list during it was already false -- but a wreck detonating inside
+	// a cluster of vehicles is what makes it routine.
+	//
+	// Vehicle.Explode itself is NOT re-entrant into this method: Die() reaches it through
+	// Invoke("Explode", 0.3f), so the wreck's own blast is a fresh top-level call on a later
+	// frame and _explosionVictims above is never nested.
+	private static readonly List<Vehicle> _explosionVehicles = new List<Vehicle>();
+
+	// Same snapshot discipline, for ExplosiveProp.Live (ledger C-11).
+	private static readonly List<ExplosiveProp> _explosionProps = new List<ExplosiveProp>();
 
 	// V1 task 3. The three-way role split, on the ONE choke point rather than on each of the
 	// callers that funnel into it -- the identical argument that put phase-05's guard on
@@ -446,7 +930,7 @@ public class ActorManager : MonoBehaviour
 				// actor's reaction is the snapshot's to describe.
 				if (!isClient)
 				{
-					item.Damage(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2);
+					item.DamageAttributed(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2, source);
 					result = true;
 				}
 			}
@@ -457,12 +941,20 @@ public class ActorManager : MonoBehaviour
 				item.ApplyRigidbodyForce(vector.normalized * configuration.force * num2);
 			}
 		}
-		// Indexed rather than instance.vehicles.ToArray(), which allocated a second array per
-		// blast. Safe because neither branch below adds to or removes from the list -- only
-		// Vehicle.Explode does that, and it does not call this method (D5).
-		for (int i = 0; i < instance.vehicles.Count; i++)
+		// Copied into a reused buffer rather than instance.vehicles.ToArray(), which allocated a
+		// second array per blast -- and rather than indexing the live list, which this loop can
+		// now shorten under itself (see _explosionVehicles).
+		_explosionVehicles.Clear();
+		_explosionVehicles.AddRange(instance.vehicles);
+		for (int i = 0; i < _explosionVehicles.Count; i++)
 		{
-			Vehicle vehicle = instance.vehicles[i];
+			Vehicle vehicle = _explosionVehicles[i];
+			// A vehicle killed earlier in this same blast is already gone. Destroyed Unity
+			// objects compare equal to null, which is exactly what the snapshot cannot know.
+			if (vehicle == null)
+			{
+				continue;
+			}
 			float num3 = Vector3.Distance(vehicle.transform.position, point);
 			float vehicleDamageT;
 			if (ranges.TryGetDamageT(num3, out vehicleDamageT))
@@ -478,6 +970,32 @@ public class ActorManager : MonoBehaviour
 				}
 			}
 		}
+		// debt-closure phase 2 task 2f (ledger C-11): props in range take the blast too, which is
+		// what makes a row of fuel drums chain. Snapshotted for the vehicle loop's reason --
+		// ExplosiveProp.Damage lights a fuse and a detonation deregisters -- and skipped on a
+		// client, where a prop's destruction is the server's to decide and arrives as
+		// S_EXPLOSION. The detonation itself is deferred by the prop's fuse, so this never
+		// re-enters Explode.
+		if (!isClient)
+		{
+			_explosionProps.Clear();
+			_explosionProps.AddRange(ExplosiveProp.Live);
+			for (int i = 0; i < _explosionProps.Count; i++)
+			{
+				ExplosiveProp prop = _explosionProps[i];
+				if (prop == null)
+				{
+					continue;
+				}
+				float propDamageT;
+				if (ranges.TryGetDamageT(
+						Vector3.Distance(prop.transform.position, point), out propDamageT))
+				{
+					prop.Damage(configuration.damage * configuration.damageFalloff.Evaluate(propDamageT));
+				}
+			}
+		}
+
 		// Once per blast, after both loops -- never once per victim. One grenade among four
 		// people is one explosion and four deaths, and the deaths travel separately through
 		// Actor.Damage and phase-05's existing path.
@@ -487,7 +1005,7 @@ public class ActorManager : MonoBehaviour
 		// Client only, and only for this client's own blast: draw it now rather than a
 		// round-trip late, and suppress the confirming S_EXPLOSION when it lands (V10 D13,
 		// taking V1 D6's own recorded fallback clause).
-		Ironfront.Net.Unity.Client.ClientCombatEvents.PredictExplosion(
+		Ironfront.Net.Unity.NetClientBindings.PredictExplosion(
 			source, point, configuration.damageRange, kind);
 
 		return result;
@@ -504,6 +1022,25 @@ public class ActorManager : MonoBehaviour
 		return replicated != null ? replicated.ActorId : Vehicle.NoAttacker;
 	}
 
+	/// <summary>Drops the previous level's actors and stops the spawn timer.</summary>
+	/// <remarks>
+	/// <para>
+	/// <b>This runs on the scene load that CREATED this instance, and nulls a field Awake had
+	/// just allocated.</b> Awake subscribes to sceneLoaded, and Unity then raises it for that
+	/// same load, so a fresh per-scene ActorManager nulls its own list within one frame of
+	/// building it. Nothing here is aware of that; it reads as "clean up the last level".
+	/// </para>
+	/// <para>
+	/// StartGame is what puts `actors` back, which is why that allocation cannot be removed no
+	/// matter how redundant it looks beside Awake's. Removing it was measured at 14400
+	/// NullReferenceExceptions per client out of SpawnWave and Register.
+	/// </para>
+	/// <para>
+	/// Left as a null rather than an empty list on purpose: changing it would be a behaviour
+	/// change to the legacy single-player lifecycle with no test covering it, and the repair
+	/// belongs in StartGame where it has always been.
+	/// </para>
+	/// </remarks>
 	private void OnLevelLoaded(Scene arg0, LoadSceneMode arg1)
 	{
 		actors = null;

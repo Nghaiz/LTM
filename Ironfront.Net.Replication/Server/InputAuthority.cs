@@ -255,6 +255,69 @@ namespace Ironfront.Net.Replication.Server
             return 1;
         }
 
+        /// <summary>
+        /// Consumes this tick's input for a player sitting in a vehicle: frames are accepted,
+        /// acknowledged and handed to <paramref name="observer"/> exactly as on foot, but no
+        /// on-foot step runs and the session is pinned to <paramref name="seatPosition"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why seated input must not move the body.</b> The shipped game disables the
+        /// CharacterController when an actor sits down (<c>FpsActorController.StartSeated</c>)
+        /// and parents the body to the seat. The server used to run
+        /// <see cref="ApplyPendingInput"/> for a seated player anyway, pushing the on-foot capsule
+        /// through collision every tick from inside the vehicle's own hull. Measured 2026-09-23
+        /// (lane-B <c>steer-05</c>, <c>[car-drive]</c>): the driver's jeep read full throttle and
+        /// 40 degrees of steer, its wheels spun up to 883 rpm, and it did not move one centimetre
+        /// for eight seconds before PhysX flung it 20 m into the air. The driver's client, which
+        /// does not step a seated body, predicted normal driving and was dragged back to the
+        /// stalled server pose every snapshot: "only drives straight, jitters when steering".
+        /// </para>
+        /// <para>
+        /// <b>Pinned rather than stepped, and never clamped.</b> The seat carries the body at the
+        /// vehicle's speed, which is far past <see cref="MaxMovePerTick"/>; routing it through
+        /// <see cref="ClampMovement"/> would record a speed violation every tick a player drove
+        /// and hold the reported position behind the vehicle. Writing both the position and
+        /// <see cref="ClientSession.PreviousPosition"/> keeps the clamp's baseline honest for the
+        /// first on-foot tick after the player gets out. Velocity is zeroed, so a long drive does
+        /// not bank airborne gravity into the first step after exit.
+        /// </para>
+        /// <para>
+        /// The input budget and ordering rules are <see cref="ApplyPendingInput"/>'s; there is no
+        /// coast, because nothing moves.
+        /// </para>
+        /// </remarks>
+        /// <returns>Frames accepted this tick.</returns>
+        public static int ConsumePendingInputSeated(
+            ClientSession session, in Vec3 seatPosition, IAcceptedFrameObserver? observer = null)
+        {
+            if (session == null) throw new ArgumentNullException(nameof(session));
+
+            int accepted = 0;
+            session.InputBudget = Math.Min(session.InputBudget + 1, MaxInputBurst);
+
+            while (session.InputBudget > 0
+                && session.TryDequeueInput(out uint tick, out InputFrame frame))
+            {
+                if (!TryAccept(session, tick, in frame, out MoveInput input)) continue;
+
+                session.InputBudget--;
+                session.LastProcessedInputTick = tick;
+                session.LastInput = input;
+                session.HasInput  = true;
+                session.MissedInputTicks = 0;
+                accepted++;
+
+                observer?.OnAcceptedFrame(session, tick, in frame, in input);
+            }
+
+            if (session.InputBudget == 0 && session.PendingInputCount > 0) session.InputThrottleEvents++;
+
+            session.State = MoveState.AtRest(seatPosition, grounded: true);
+            session.PreviousPosition = seatPosition;
+            return accepted;
+        }
+
         private static void StepOnce(
             ClientSession session, in MoveInput input, float dt, Func<Vec3, Vec3> applyMove)
         {

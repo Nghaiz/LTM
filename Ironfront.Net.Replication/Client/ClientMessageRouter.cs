@@ -40,11 +40,37 @@ namespace Ironfront.Net.Replication.Client
         // rare, but a router that allocates per message is one that allocates per packet as
         // soon as somebody sends it per tick.
         private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
+
+        /// <summary>Chat lines refused because nothing survived sanitizing. Phase P6.</summary>
+        private long _chatLinesDropped;
         private readonly PlayerListEntry[] _playerListEntries =
             new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
 
+        /// <summary>
+        /// Reusable rows for S_PLAYER_SCORES. No body buffer beside it, unlike the name list.
+        /// </summary>
+        /// <remarks>
+        /// <c>PlayerScoresMessage</c> parses into values rather than into slices of the source,
+        /// so nothing it produces outlives the frame it was read from — which is the entire
+        /// reason <see cref="_playerListBody"/> exists. Copying the body here would buy a second
+        /// 321-byte buffer and no safety.
+        /// </remarks>
+        private readonly PlayerScoreEntry[] _playerScoreEntries =
+            new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
         /// <summary>Buffers snapshots so remote actors can be drawn between them.</summary>
         public SnapshotInterpolator Interpolator { get; } = new SnapshotInterpolator();
+
+        /// <summary>
+        /// The render time both interpolators are sampled at. Fed by the actor stream, which
+        /// every client receives on every snapshot; the vehicle stream rides the same ticks.
+        /// </summary>
+        /// <remarks>
+        /// One clock, not one per stream, for the reason <see cref="VehicleSnapshotInterpolator"/>
+        /// gives (V5-D1): two render times put a man and the vehicle he is standing on in
+        /// different places.
+        /// </remarks>
+        public InterpolationClock Clock { get; } = new InterpolationClock();
 
         /// <summary>Applies vehicle snapshot deltas. Its <c>Current</c> is the newest vehicle world.</summary>
         public VehicleDeltaDecoder VehicleDecoder { get; } = new VehicleDeltaDecoder();
@@ -183,6 +209,43 @@ namespace Ironfront.Net.Replication.Client
         public event Action<PlayerListEntry[], int>? OnPlayerList;
 
         /// <summary>
+        /// The per-player kill and death table changed. Raised with the parsed rows and their
+        /// count. P18 task 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <b>The rows are values and safe to keep</b>, unlike <see cref="OnPlayerList"/>'s,
+        /// which point into the receive buffer. The array itself is still the router's and is
+        /// overwritten by the next broadcast, so a handler copies out of it rather than storing
+        /// the reference — <c>PlayerScoreTable.Apply</c> is that copy.
+        /// </remarks>
+        public event Action<PlayerScoreEntry[], int>? OnPlayerScores;
+
+        /// <summary>
+        /// Somebody said something. Carries the speaker's actor id and the decoded line.
+        /// Phase P6 task 3.3, ledger X-8.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A string, unlike <see cref="OnPlayerList"/>, and the asymmetry is deliberate.</b>
+        /// A player list is up to 64 names on every join and hands out slices so that a broadcast
+        /// does not allocate 64 strings; a chat line is one short line a few times a minute whose
+        /// only possible consumer is a label. Handing out a slice there would buy nothing and
+        /// would hand every subscriber a buffer that is about to become somebody else's packet.
+        /// </para>
+        /// <para>
+        /// <b>Already sanitized</b> — <c>PlayerNameSanitizer</c> ran on it before this was
+        /// raised. The client sanitizes what it receives even though the server sanitized what
+        /// it forwarded, for the reason that class's own remark gives: the client cannot verify
+        /// the game server, so each end cleans at its own ingress.
+        /// </para>
+        /// <para>
+        /// <b>Empty is never raised.</b> A line that sanitizes to nothing is dropped rather than
+        /// delivered as a blank row, which would read as a rendering fault.
+        /// </para>
+        /// </remarks>
+        public event Action<byte, string>? OnChat;
+
+        /// <summary>
         /// A snapshot was applied. Carries the server tick and the newest input tick the server
         /// had processed, which is exactly what <see cref="PredictionReconciler.Reconcile"/>
         /// needs.
@@ -206,6 +269,7 @@ namespace Ironfront.Net.Replication.Client
         {
             Decoder.Reset();
             Interpolator.Reset();
+            Clock.Reset();
             VehicleDecoder.Reset();
             VehicleInterpolator.Reset();
             SnapshotsApplied = 0;
@@ -354,6 +418,14 @@ namespace Ironfront.Net.Replication.Client
                         if (RoutePlayerList(body)) handled++;
                         break;
 
+                    case ServerMessageType.PlayerScores:
+                        if (RoutePlayerScores(body)) handled++;
+                        break;
+
+                    case ServerMessageType.Chat:
+                        if (RouteChat(body)) handled++;
+                        break;
+
                     default:
                         UnknownMessages++;
                         break;
@@ -361,6 +433,47 @@ namespace Ironfront.Net.Replication.Client
             }
 
             return handled;
+        }
+
+        /// <summary>Chat lines that parsed but had nothing left after sanitizing.</summary>
+        /// <remarks>
+        /// Counted rather than logged, because the cause is a hostile or broken sender and a log
+        /// line per message is what turns that into a way to fill somebody's console.
+        /// </remarks>
+        public long ChatLinesDropped => _chatLinesDropped;
+
+        /// <summary>
+        /// Parses an <c>S_CHAT</c> body and raises <see cref="OnChat"/> with a decoded line.
+        /// </summary>
+        /// <remarks>
+        /// The decode allocates and that is the right trade here — see <see cref="OnChat"/>. The
+        /// sanitize runs at this ingress, on the client's own side of a game server it cannot
+        /// verify, and a line with nothing left is dropped rather than raised blank.
+        /// </remarks>
+        private bool RouteChat(ReadOnlySpan<byte> body)
+        {
+            if (!ChatTextMessage.TryParseServer(
+                    body, out byte actorId, out ReadOnlySpan<byte> textUtf8))
+            {
+                MalformedMessages++;
+                return false;
+            }
+
+            string text = PlayerNameSanitizer.Sanitize(
+                ChatTextMessage.TextOf(textUtf8), ChatTextMessage.MaxTextCharacters);
+
+            if (text.Length == 0)
+            {
+                _chatLinesDropped++;
+
+                // Parsed, understood and deliberately not delivered -- so it is handled, not
+                // malformed. Counting it as malformed would put a hostile name-shaped line in
+                // the same counter as a truncated packet.
+                return true;
+            }
+
+            OnChat?.Invoke(actorId, text);
+            return true;
         }
 
         /// <summary>
@@ -392,6 +505,27 @@ namespace Ironfront.Net.Replication.Client
             }
 
             OnPlayerList?.Invoke(_playerListEntries, count);
+            return true;
+        }
+
+        /// <summary>
+        /// Parses a score table into the reusable row buffer and raises
+        /// <see cref="OnPlayerScores"/>.
+        /// </summary>
+        /// <remarks>
+        /// No copy of the body first, unlike <see cref="RoutePlayerList"/>. Every field of a
+        /// <c>PlayerScoreEntry</c> is a number read out of the frame rather than a slice of it,
+        /// so nothing handed to a subscriber points at a buffer that is about to be recycled.
+        /// </remarks>
+        private bool RoutePlayerScores(ReadOnlySpan<byte> body)
+        {
+            if (!PlayerScoresMessage.TryParse(body, _playerScoreEntries, out int count))
+            {
+                MalformedMessages++;
+                return false;
+            }
+
+            OnPlayerScores?.Invoke(_playerScoreEntries, count);
             return true;
         }
 
@@ -440,6 +574,7 @@ namespace Ironfront.Net.Replication.Client
                     // what changed. Pushing the message would buffer a world with a handful of
                     // actors in it and nothing else.
                     Interpolator.Push(Decoder.Current);
+                    Clock.OnSnapshot(Decoder.Current.ServerTick);
                     OnSnapshotApplied?.Invoke(Decoder.Current.ServerTick, Decoder.LastProcessedInputTick);
                     return true;
 

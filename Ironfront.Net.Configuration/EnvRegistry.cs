@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -120,6 +120,31 @@ namespace Ironfront.Net.Configuration
             "second scene.",
             "27015");
 
+        /// <summary>Which half of the netcode this process is. Ledger X-10.</summary>
+        public static readonly EnvVar NetRole = new EnvVar(
+            "IRONFRONT_ROLE", "Game server", "game server, client",
+            "server | client. Declared BEFORE any scene loads, which is the whole point.\n" +
+            "\n" +
+            "Dustbowl carries an active NetServer AND an active NetClient, so every process that\n" +
+            "loads it runs both bootstraps, and each claims the role only if the other has not.\n" +
+            "Both sit at execution order -1000, so with nothing declared which one wins is\n" +
+            "Unity's tie to break. That is not cosmetic: every client presenter latches\n" +
+            "enabled = false during the same Awake pass and never re-checks, so a process that\n" +
+            "loses the flip has a dead killfeed, name table and local combat driver for the rest\n" +
+            "of its life.\n" +
+            "\n" +
+            "SHIPPED BLANK, and the blank behaviour is unchanged: the bootstraps decide exactly\n" +
+            "as they always have, which is what keeps offline single-player and the Editor\n" +
+            "sandbox working. A headless process needs nothing here either -- it is inferred to\n" +
+            "be a server. What this exists for is a RENDERED process that is a client, which had\n" +
+            "no way to say so at all.\n" +
+            "\n" +
+            "NOT IRONFRONT_LANEB_ROLE. That one also installs the lane-B harness, strips a\n" +
+            "bootstrap and writes checkpoint artifacts; this one only names a role, so setting it\n" +
+            "on a player build cannot drag verification scaffolding in. The command line\n" +
+            "-ironfront-role=client is the same declaration for a launcher that cannot set an\n" +
+            "environment.");
+
         /// <summary>Transport selection: the real socket, or the in-process wire.</summary>
         public static readonly EnvVar GameServerTransport = new EnvVar(
             "IRONFRONT_GAMESERVER_TRANSPORT", "Game server", "game server",
@@ -162,7 +187,23 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar GameServerMapIds = new EnvVar(
             "IRONFRONT_GAMESERVER_MAP_IDS", "Game server", "game server",
             "Comma-separated map ids this server can host, driving the matchmaker's\n" +
-            "preferred-map filter. Empty means no preference.");
+            "preferred-map filter. REQUIRED, and at least one id: GameServerRegistry.TryRegister\n" +
+            "refuses a registration whose map list is empty, so a server started without this\n" +
+            "is turned away and then closed 30 s later as an unauthenticated connection. This\n" +
+            "line used to read 'Empty means no preference', which is the opposite of what the\n" +
+            "code does; infra/compose/.env.example shipped it empty, so a by-the-book compose\n" +
+            "deployment could never register a game server at all. Dustbowl is 1.",
+            "1");
+
+        /// <summary>The map scene a dedicated server hosts.</summary>
+        public static readonly EnvVar GameServerScene = new EnvVar(
+            "IRONFRONT_GAMESERVER_SCENE", "Game server", "game server",
+            "The map scene a headless dedicated server loads at startup. Without it the build\n" +
+            "boots Splash then Menu and stops there: NetServerBootstrap is a component that\n" +
+            "lives in a map scene, so nothing binds the UDP port and the process sits healthy\n" +
+            "and unreachable. Distinct from IRONFRONT_GAMESERVER_MAP_IDS, which only tells the\n" +
+            "matchmaker what this server is willing to host and loads nothing.",
+            "Dustbowl");
 
         /// <summary>Development shortcut: admit tickets nobody signed.</summary>
         public static readonly EnvVar GameServerAcceptUnsignedTickets = new EnvVar(
@@ -194,6 +235,100 @@ namespace Ironfront.Net.Configuration
             "IRONFRONT_CLIENT_VERBOSE", "Game client", "game client",
             "Log the first snapshot and every connection state change.",
             "1");
+
+        /// <summary>The player id this client's self-minted join ticket claims.</summary>
+        public static readonly EnvVar ClientPlayerId = new EnvVar(
+            "IRONFRONT_CLIENT_PLAYER_ID", "Game client", "game client",
+            "The playerId written into the join ticket a client mints for itself, on the runs\n" +
+            "with no master server in them. It must be DISTINCT PER CLIENT and never 0: the\n" +
+            "game server enforces one session per player once a shared secret is configured,\n" +
+            "so two clients sharing an id have the second join rejected -- and the rejection\n" +
+            "is reported as a bare InvalidTicket, which reads as a full server and is not one.\n" +
+            "UNSET derives one from the process id, above the range the load harness numbers\n" +
+            "its synthetic clients from, so several clients on one machine do not collide.\n" +
+            "Set it explicitly when a run has to be replayed against the same identities.",
+            "");
+
+        /// <summary>The name that self-minted ticket carries into the killfeed.</summary>
+        public static readonly EnvVar ClientDisplayName = new EnvVar(
+            "IRONFRONT_CLIENT_DISPLAY_NAME", "Game client", "game client",
+            "The displayName written into that ticket, truncated to 15 UTF-8 bytes (16 until\n" +
+            "PROTOCOL_VERSION 6 took a byte for the team). BYTES, not characters: a\n" +
+            "Vietnamese name costs two or three per accented vowel. This is\n" +
+            "where a killfeed line gets its name, so a scripted two-client run that leaves\n" +
+            "both instances on the default produces a killfeed nobody can read.",
+            "player");
+
+        /// <summary>The side that self-minted ticket claims.</summary>
+        public static readonly EnvVar ClientTeam = new EnvVar(
+            "IRONFRONT_CLIENT_TEAM", "Game client", "game client",
+            "The team written into the join ticket a client mints for itself, on the runs with\n" +
+            "no master server in them. 0 or 1; anything else is refused rather than clamped,\n" +
+            "because a clamp would put the client on a side nobody chose and look like a\n" +
+            "server-side balancing decision. In a real join the MASTER supplies this and the\n" +
+            "value here is never consulted -- the lobby balances teams and signs the answer\n" +
+            "into the ticket. It exists so a scripted run can put two clients on opposite\n" +
+            "sides without a master server standing behind them; leaving both on the default\n" +
+            "produces a run in which nobody has an opponent.",
+            "0");
+
+        /// <summary>Master server a client build dials before it can see a room list.</summary>
+        public static readonly EnvVar ClientMasterHost = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_HOST", "Game client", "game client",
+            "The master server a client logs in against. Distinct from IRONFRONT_MASTER_HOST,\n" +
+            "which is what a GAME SERVER dials to register itself -- the two are the same box\n" +
+            "in most deployments and different ones whenever a client reaches the master\n" +
+            "through a public name while the game servers reach it over a private network.\n" +
+            "UNSET keeps the scene's field, so nothing changes in the Editor.",
+            "127.0.0.1");
+
+        /// <summary>Master server port the client dials.</summary>
+        public static readonly EnvVar ClientMasterPort = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_PORT", "Game client", "game client",
+            "Matches the master's IRONFRONT_MASTER_PORT, and takes its default FROM it\n" +
+            "rather than restating the number. The two had drifted -- this said 27020\n" +
+            "while the master bound 27000 -- so a client build with no override dialled\n" +
+            "a port nothing listened on, and the attempt surfaced nothing a player could\n" +
+            "act on. The line above claimed the match the whole time; only data disagreed.",
+            MasterPort.DefaultValue);
+
+        /// <summary>Whether a client build uses TLS when dialling the master.</summary>
+        public static readonly EnvVar ClientMasterTls = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_TLS", "Game client", "game client",
+            "Set to 1 when the master listener presents TLS. The mirror of\n" +
+            "IRONFRONT_GAMESERVER_MASTER_TLS, and a SEPARATE variable because the two are not\n" +
+            "the same link: a game server can reach the master over a private network in\n" +
+            "plaintext while every client reaches that same master through a public name which\n" +
+            "terminates TLS. fly.io is exactly that shape -- its app config carries a tls\n" +
+            "handler on the MSP port, so a plaintext client fails the handshake before it can\n" +
+            "even show a login screen.\n" +
+            "\n" +
+            "The plumbing this drives was already complete and merely unreachable:\n" +
+            "MasterSession.ConnectAsync has taken a MasterClientTlsOptions since the\n" +
+            "master-client library was written, and MenuScreenController.MasterTls is a\n" +
+            "settable property that nothing ever set. The client could not speak TLS for want\n" +
+            "of one variable and one assignment, and the symptom -- a client unable to reach a\n" +
+            "perfectly healthy public master -- reads as a deployment fault rather than as a\n" +
+            "missing feature, which is why it outlived a deployment that was working.",
+            "0",
+            summary: "1 to use TLS for client-to-master login");
+
+        /// <summary>Server name used by a client's TLS connection to the master.</summary>
+        public static readonly EnvVar ClientMasterTlsTargetHost = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_TLS_TARGET_HOST", "Game client", "game client",
+            "Certificate name for the client's master TLS connection. Empty uses\n" +
+            "IRONFRONT_CLIENT_MASTER_HOST, which is right whenever the client dials the\n" +
+            "certificate's own name. Set it when a client reaches the master through an\n" +
+            "address the certificate does not name.",
+            summary: "TLS certificate name; empty uses the client's master host");
+
+        /// <summary>Optional self-signed certificate pin for the client-to-master link.</summary>
+        public static readonly EnvVar ClientMasterTlsPinnedFingerprint = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_TLS_PINNED_FINGERPRINT_SHA256", "Game client", "game client",
+            "SHA-256 certificate fingerprint for a self-signed master certificate. Leave empty\n" +
+            "for a publicly trusted certificate -- fly.io's edge certificate is one, so the fly\n" +
+            "deployment wants this empty. Never use an accept-any-certificate switch.",
+            summary: "optional SHA-256 pin for a self-signed master certificate");
 
         /// <summary>The V5-D6 driver-prediction fallback, as one flag.</summary>
         public static readonly EnvVar ClientPredictLocalVehicle = new EnvVar(
@@ -397,9 +532,13 @@ namespace Ironfront.Net.Configuration
             SharedSecret,
             MasterPort, MasterHost, GameServerMasterTls, GameServerMasterTlsTargetHost,
             GameServerMasterTlsPinnedFingerprint, DatabasePath,
+            NetRole,
             GameServerUdpPort, GameServerTransport, GameServerMaxConnections, GameServerMaxPlayers,
-            GameServerPublicIp, GameServerMapIds, GameServerAcceptUnsignedTickets,
+            GameServerPublicIp, GameServerMapIds, GameServerScene, GameServerAcceptUnsignedTickets,
             ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
+            ClientMasterHost, ClientMasterPort,
+            ClientMasterTls, ClientMasterTlsTargetHost, ClientMasterTlsPinnedFingerprint,
+            ClientPlayerId, ClientDisplayName, ClientTeam,
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,

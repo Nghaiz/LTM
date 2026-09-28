@@ -1,0 +1,21 @@
+{
+    "name": "Ironfront.Net.Unity.EditorHarness",
+    "rootNamespace": "Ironfront.Net.Unity.EditorTools",
+    "references": [
+        "Ironfront.Net.Unity.Shared",
+        "Ironfront.Net.Unity.Client",
+        "Ironfront.Net.Unity.Server",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

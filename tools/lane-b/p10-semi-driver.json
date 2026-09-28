@@ -1,0 +1,17 @@
+{
+  "name": "p10-semi-driver",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0, "pitchDegrees": -25, "respawn": true },
+    { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 0, "pitchDegrees": -25 },
+    { "checkpoint": "armed", "seconds": 3.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "switchWeaponSlot": 0 },
+    { "checkpoint": "press-1", "seconds": 5.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "switchWeaponSlot": 0, "fire": true },
+    { "checkpoint": "released", "seconds": 2.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "switchWeaponSlot": 0 },
+    { "checkpoint": "press-2", "seconds": 5.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "switchWeaponSlot": 0, "fire": true },
+    { "checkpoint": "settled", "seconds": 4.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "switchWeaponSlot": 0 }
+  ]
+}

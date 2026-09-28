@@ -54,6 +54,36 @@ namespace Ironfront.MasterServer.Net
         public TimeSpan UnauthenticatedTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
         /// <summary>
+        /// The hard cap on an unauthenticated connection, however well-behaved it is.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="UnauthenticatedTimeout"/> is measured from the last COMPLETE frame
+        /// (<c>ClientConnection.LastFrameAtMs</c>), which is what lets a player fill in the
+        /// create-account form without being reaped mid-form — the client heartbeats every 15 s
+        /// from the moment the socket opens, and <c>REGISTER</c> never authenticates the
+        /// connection, so before this there was no way for a player to survive past accept plus
+        /// thirty seconds.
+        /// </para>
+        /// <para>
+        /// <b>That alone would let a peer hold a slot forever by heartbeating</b>, which is the
+        /// property the absolute deadline existed to prevent. So the deadline is not removed,
+        /// it is raised to something a login screen fits inside and a squatter does not: five
+        /// minutes. Nobody spends five minutes on a username and a password, and an attacker
+        /// who does spend them is holding one slot out of
+        /// <see cref="MaxTotalConnections"/> against a <see cref="MaxConnectionsPerIp"/> of five
+        /// — the per-IP cap, not this, is what bounds a single source.
+        /// </para>
+        /// <para>
+        /// <b>The cost is stated rather than hidden:</b> a heartbeating squatter now costs ten
+        /// times what it did to evict. A silent one, or one dribbling bytes that never complete
+        /// a frame, still dies in thirty seconds exactly as before — and that is the shape a
+        /// Slowloris actually takes.
+        /// </para>
+        /// </remarks>
+        public TimeSpan UnauthenticatedCeiling { get; set; } = TimeSpan.FromMinutes(5);
+
+        /// <summary>
         /// The half-open detector (D7). A client whose network is unplugged sends no FIN and
         /// no RST, and the OS keepalive default is two hours — so liveness has to be measured
         /// at the application level: <c>0x00F0 HEARTBEAT</c> every 15 s, three missed in a row

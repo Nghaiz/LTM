@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 3.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 3`
+**Version: 11.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 11`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -10,7 +10,7 @@
 > `tools/SpecChecker` parses the fenced constants block in § 1 and never reads this line. That is
 > why § 15's wire gate calls out condition 4 separately — the header is prose, and prose is the
 > half no machine checks.
-> See [conventions.md](conventions.md) for the protocol change process.
+> See [`docs/code-conventions.md`](../../docs/code-conventions.md) for the protocol change process.
 >
 > **The single source of these constants in code:** `Ironfront.Net.Protocol/ProtocolConstants.cs`.
 > Re-hardcoding any number from this document anywhere else is forbidden.
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 3;
+    public const byte   PROTOCOL_VERSION  = 11;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -75,7 +75,7 @@ public static class ProtocolConstants
     public const int    MAX_BOTS          = 32;
     public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
 
-    public const int    MAX_VEHICLES      = 16;     // separate u16 id space, see § 4.10
+    public const int    MAX_VEHICLES      = 24;     // separate u16 id space, see § 4.10
     public const int    VEHICLE_ID_QUARANTINE_TICKS = 150;   // 5 s, same rule as actorId
 }
 ```
@@ -127,6 +127,20 @@ ackBitfield = bit0 → seq 102 = 0 (lost)
 B receives it and immediately knows 100 and 102 never arrived. Because every packet carries 33
 pieces of ack information (1 + 32), an ack is only lost if 33 consecutive packets are lost — in
 practice, never. **This is why no separate ACK packet is needed.**
+
+> **The argument above holds only for packets carrying a FRESH sequence, and that is a
+> requirement on the sender, not an observation.** The bitfield is addressed by *distance behind
+> `ack`* and can express exactly 32 of them, so a sequence further back than that is not
+> "unlikely to be acked" — it is **inexpressible**, however many copies arrive and however many
+> acks come back. A retransmission that reused its original sequence therefore fell out of the
+> addressable window after about 0.64 s at the ~50 packets/s a loaded client sends, and could
+> never be acknowledged again; the sender spent its whole reliable budget on a packet the peer
+> already held and then dropped the connection. **Every retransmission MUST be re-stamped with a
+> new `sequence` (and a current `ack`/`ackBitfield`) before it goes out.** The wire format is
+> unchanged by this — a receiver sees an ordinary new packet whose duplicate payload the channel
+> layer already discards on `channelSequence` (§ 5.1) — so it is not a version event. It is
+> defect **X-32**, and it is the reason 4 of 8 clients (later 8 of 8) died inside 120 s at 5 %
+> loss while 8 of 8 held on a clean wire, where nothing is ever retransmitted.
 
 ### 2.3. Sequence comparison with wrap-around
 
@@ -218,6 +232,21 @@ Retry: CONNECT_REQUEST is resent every 250 ms, up to 20 times (5 seconds), then 
 | 4 | Banned |
 | 5 | Server shutting down |
 | 6 | Already connected (duplicate playerId) |
+| 7 | Your team is full (the other side may not be) — see below |
+
+**Code 7 is not code 1.** "The server is full" has no remedy; "your side is full" has one the
+player can act on, so rendering them as the same sentence throws away the only actionable half.
+Adding the value **moves no byte** — the reason field was already a `u8` — so it is not a wire
+change on its own, the same call § 4.9 makes for weapon ids.
+
+**A client that predates code 7 must degrade to a GENERIC refusal**, not to silence and not to a
+wrong reason. `Connection.MapDeniedReason` maps any unrecognised code to `DisconnectReason.Refused`
+rather than to `InvalidTicket`: a player told their ticket is invalid re-logs in, and the real
+answer was that their side was full.
+
+> **The slot claim happens after the handshake**, so this refusal reaches the client as a
+> `DisconnectReason`, not as `CONNECT_DENIED`. `DisconnectReason.TeamFull` = 9 is the counterpart,
+> and without it code 7 would be a value nothing on the failing path could ever send.
 
 ---
 
@@ -248,7 +277,7 @@ repeat messageCount times:
 | `0x20` | `C_INPUT` | 3 (unreliable-seq) | Input frames, see § 4.2 |
 | `0x21` | `C_VEHICLE_INPUT` | 3 (unreliable-seq) | Vehicle axes + turret aim while seated, see § 4.10 |
 | `0x22` | `C_LOADOUT_SELECT` | 2 (reliable-ord) | Weapon selection before spawning |
-| `0x23` | `C_SPAWN_REQUEST` | 2 | Requests a respawn at a spawn point |
+| `0x23` | `C_SPAWN_REQUEST` | 2 | Deploys or respawns, carrying the chosen loadout and spawn point, see § 4.14 |
 | `0x24` | `C_CHAT` | 2 | In-match chat |
 | `0x25` | `C_PING` | 0 (unreliable) | RTT measurement, carries a client timestamp |
 | `0x26` | `C_SEAT_REQUEST` | 2 | Enter/exit a vehicle seat, see § 4.10 |
@@ -263,7 +292,7 @@ repeat messageCount times:
 | `0x42` | `S_DESPAWN_ACTOR` | 2 | An actor disappeared |
 | `0x43` | `S_HIT_CONFIRM` | 2 | Hit confirmation (for the hitmarker) |
 | `0x44` | `S_DEATH` | 2 | Someone died, with a force vector for the local ragdoll |
-| `0x45` | `S_MATCH_STATE` | 2 | Score, time, match state |
+| `0x45` | `S_MATCH_STATE` | 2 | Score, victory margin, time, match state |
 | `0x46` | `S_CAPTURE_POINT` | 2 | A capture point changed state |
 | `0x47` | `S_CHAT` | 2 | Chat broadcast |
 | `0x48` | `S_PONG` | 0 | Ping reply, echoes the client timestamp |
@@ -275,6 +304,7 @@ repeat messageCount times:
 | `0x4E` | `S_VEHICLE_DESPAWN` | 2 | A vehicle left the world |
 | `0x4F` | `S_PROJECTILE_SPAWN` | 2 | A projectile was launched, with its flight parameters |
 | `0x50` | `S_SEAT_CHANGE` | 2 | Authoritative seat enter/leave, including a rejection |
+| `0x51` | `S_PLAYER_SCORES` | 2 | Per-player kills, deaths and side, see § 4.13 |
 
 ### 4.2. `C_INPUT` (0x20) — byte layout
 
@@ -303,7 +333,7 @@ At 30 Hz: `29 × 30 = 870 B/s` upstream. Negligible.
 | 4 | Crouch | 12 | SwitchWeapon1 |
 | 5 | Sprint | 13 | SwitchWeapon2 |
 | 6 | Prone | 14 | SwitchWeapon3 |
-| 7 | Reserved7 | 15 | reserved |
+| 7 | Reserved7 | 15 | SwitchWeapon4 |
 
 **Bit 7 was `ThrowGrenade`, and V7-D10 retired it rather than implementing it.** It was declared
 at the freeze and never gained a producer or a gameplay consumer. The game has no dedicated
@@ -337,13 +367,64 @@ repeat actorCount times:
     [bit2] velocity    i8 × 3    Quantized -64..64 m/s
     [bit3] stateFlags  u8        See below
     [bit4] health      u8        0..100
-    [bit5] weapon      u8 weaponId + u8 ammoInClip
+    [bit5] weapon      u8 weaponId + u8 ammoInClip + u16 spareAmmoEncoded + u8 weaponStateFlags
     [bit6] team        u8        Only sent on change (rare)
     [bit7] seatInfo    u16 vehicleId + u8 seatIndex   (vehicleId 0 = not seated)
 ```
 
 **`changeMask`**: bit i = 1 ⇔ field i is present in this packet. In a full snapshot, every needed
 bit is 1. In a delta snapshot, only the bits for fields that actually changed since `baselineTick`.
+
+An actor on foot with every field present (`FullNoSeat`) is **23 bytes**; seated, **26**. A full
+64-actor snapshot is 1485 bytes unseated and 1677 fully seated — both past `MAX_PAYLOAD`, so both
+fragment, which is the ordinary join case rather than an error (§ 6).
+
+**`weapon` (bit 5) — the four parts, and why they travel together.** Through v9 this field was two
+bytes, `weaponId` and `ammoInClip`, and the reserve was not on the wire at all. The server held the
+authoritative reserve in its spare-ammo pool while the client held Ravenfield's own pool, so the two
+numbers were free to drift, and on a clip-of-one weapon — bazooka, grenade — a single round is the
+whole magazine, which is where the drift became a bazooka that read `0/N` on one side and `1/N` on
+the other. v10 widens the field rather than claiming a ninth `changeMask` bit, because there is no
+ninth bit (below).
+
+```
+u8   weaponId
+u8   ammoInClip
+u16  spareAmmoEncoded     little-endian, like every u16 in this protocol
+u8   weaponStateFlags
+```
+
+`spareAmmoEncoded`:
+
+| Wire value | Meaning |
+|---:|---|
+| `0 .. 65533` | A countable reserve |
+| `65534` (`0xFFFE`) | **No resupply** — no reserve, and no ammo bag will give it one. Distinct from a countable `0`, which is empty but refillable |
+| `65535` (`0xFFFF`) | **Infinite** — reloading does not decrement it |
+
+The sentinels sit at the top of the range because the field is unsigned and there is no below-zero
+to put them in. `Ironfront.Net.Protocol/SpareAmmoWire.cs` is the only place that converts: the
+weapon model spells no-resupply `-1` and infinite `-2`, while a pool's `Remaining` spells infinite
+`-1`, and an inline `(ushort)` cast at each call site turns one of those meanings into the other
+without saying so.
+
+`weaponStateFlags`:
+
+| Bit | Name | Meaning |
+|---:|---|---|
+| 0 | `Reloading` | The server accepted a reload and it has neither completed nor been cancelled |
+| 1 | `PendingRelease` | The server accepted one delayed throwable use and has neither released nor cancelled it; another trigger cannot reserve the same held object |
+| 2–7 | Reserved | Server writes 0; client ignores |
+
+There is deliberately no trigger bit. `S_WEAPON_FIRE` already names every round the server
+accepted, and a trigger sampled at the 20 Hz snapshot rate would miss taps between snapshots while
+implying it had seen them.
+
+**Delta rule for this field: all four parts or none.** A delta that carries bit 5 replaces all four;
+one that does not carries all four forward from the baseline. Assigning the reserve outside that
+branch writes a sparse delta's default `0` over a live baseline, and the client watches its reserve
+fall to zero between reloads for no reason. `DeltaEncoder.ComputeChangeMask` sets bit 5 when **any**
+of the four differs, which includes a reload that spends the reserve without changing the clip.
 
 ### 4.3.1. `actorId` — allocation and lifetime
 
@@ -405,13 +486,24 @@ After interest management (only ~20 actors actually sent): **~5–7 KB/s**. Targ
 > `POS_RANGE = 2048` while the server uses `4096`, characters end up at double the wrong position.
 > The bug is very hard to spot because there's no runtime error.
 
+> **4.0.0 moved the window, and did not widen it (X-53).** It was `±2048` beside a comment claiming
+> the map fit inside it; Dustbowl's authored play volume is `(650, −50, 620) .. (2350, 650, 2220)`,
+> so 302 m of x and 172 m of z were unrepresentable — including the Oasis capture point at
+> `x = 2085.6`, team 0's opening base. Everything out there encoded to exactly `2048.00` on every
+> client. Widening to `±4096` would have halved the resolution to 12.5 cm for every actor on every
+> map to buy negative space no map uses; shifting to `−1024 .. 3072` keeps the width, the 6.25 cm
+> and the 6 bytes. A map needing more negative space than this wants a per-map origin, not a wider
+> window.
+
 ```csharp
 public static class Quantize
 {
     // ===== POSITION =====
-    // The current map fits inside a ±2048 m box. An i16 has 65536 levels.
-    public const float POS_MIN  = -2048f;
-    public const float POS_MAX  =  2048f;
+    // A 4096 m window placed where playable content lives. An i16 has 65536 levels, so the
+    // WIDTH buys resolution and the PLACEMENT is free. 1024 m of negative headroom for a map
+    // built around the origin, 3072 m of positive for one built in positive space.
+    public const float POS_MIN  = -1024f;
+    public const float POS_MAX  =  3072f;
     public const float POS_RANGE = POS_MAX - POS_MIN;        // 4096
     // Resolution = 4096 / 65536 = 0.0625 m = 6.25 cm. Good enough for an FPS.
 
@@ -786,7 +878,7 @@ property that makes `changeMask` safe.
 | **Does it share the `actorId` space?** | **No.** A separate `u16` space, allocated **from 1** | A vehicle is not an actor and never occupies an actorId. `MAX_ACTORS` and `SnapshotHeader.actorCount` are untouched by this section |
 | **What does 0 mean?** | **"No vehicle."** Never assigned | `seatInfo` (§ 4.3.1) must be able to say *left the vehicle*, and it is sent only on change. A sentinel is the only way to express that in a `u16` field |
 | **Is an id reused as soon as a vehicle dies?** | **No — quarantine for 5 seconds** (`VEHICLE_ID_QUARANTINE_TICKS` = 150) | The same reason as § 4.3.1: snapshots and events naming a destroyed vehicle are in flight for up to one interpolation buffer plus retransmits, so reissuing immediately applies a wreck's tail packets to its replacement |
-| **Is `MAX_VEHICLES = 16` enough?** | **Yes**, and the cap is load-bearing | It bounds the vehicle body at `16 × 30 + 9 = 489 B`, which is what lets the elastic actor body be sized against what the bounded one consumed. It also leaves the quarantine window room while a spawner replaces a wreck |
+| **Is `MAX_VEHICLES = 24` enough?** | **Yes at 24**, and the cap is load-bearing | It bounds the vehicle body at `24 × 30 + 9 = 729 B`, which is what lets the elastic actor body be sized against what the bounded one consumed. It also leaves the quarantine window room while a spawner replaces a wreck. **Raised from 16 at v10**: Island exhausted the space in a real match (15/16, then 16/16), after which spawners either lost their vehicle or created one with id 0 that no client can address. Dustbowl peaks above its spawner count because `AfterMoved` keeps a superseded wreck mapped while its replacement is live, so both hold an id. 24 covers the observed peak with six ids of headroom |
 
 #### Co-residency with `S_SNAPSHOT`
 
@@ -826,9 +918,10 @@ second 16-byte GSP header at 20 Hz (~320 B/s) to solve a problem neither stream 
 **Enums.** `SeatAction`: `Enter` = 0, `Leave` = 1. `SeatChangeResult`: `Entered` = 0, `Left` = 1,
 `RejectedOccupied` = 2, `RejectedVehicleDead` = 3, `RejectedAlreadySeated` = 4, `RejectedTooFar` = 5,
 `RejectedNoSuchSeat` = 6, `RejectedLockedOut` = 7. `VehicleDespawnReason`: `Destroyed` = 0,
-`WorldReset` = 1.
+`WorldReset` = 1, `Reclaimed` = 2. A receiver must treat every reason other than `Destroyed` as
+a quiet removal, which is what makes `Reclaimed` safe to send to a client that predates it.
 `ProjectileKind`: `Shell` = 0, `Rocket` = 1, `GuidedMissile` = 2, `Grenade` = 3,
-`AmmoBag` = 4, `Medipack` = 5, `Bullet` = 6.
+`AmmoBag` = 4, `Medipack` = 5, `Bullet` = 6, `Spearhead` = 7.
 
 The load-bearing notes, none of them colour:
 
@@ -914,14 +1007,147 @@ repeat playerCount times:
 by this sentence, because raising `MAX_ACTORS` past 256 would truncate ids silently and the symptom
 would be a scoreboard naming the wrong player.
 
-**Names only, no scores**, despite what the § 4.1 row used to promise. Score and match time already
-travel in `S_MATCH_STATE` (0x45); a second copy here would be a second source of truth for the
-number that changes most often. Worst case is `1 + 64 × 18 = 1153 B`, inside one un-fragmented
-channel-2 payload.
+**Names only, and the scoreboard's numbers are in § 4.13 rather than here.** Two reasons, and
+either alone would settle it.
+
+*The arithmetic.* Worst case is `1 + 64 × 18 = 1153 B` against a `MAX_CHANNEL_PAYLOAD` of 1181 — so
+this message has **28 bytes of headroom in total**. One extra `u8` per row costs 64 and already
+overflows; the `u16` kills-and-deaths pair costs 128. Widening a row here would have traded the
+un-fragmented guarantee for a scoreboard, on the map with the most players, which is exactly when it
+matters.
+
+*The cadence.* Names are sent on join and on change because names do not move; kills and deaths move
+on every death. Two messages let each keep its own send rule.
+
+**The team score still does not go here, and that reasoning is untouched.** Score and match time
+travel in `S_MATCH_STATE` (0x45); a second copy of them would be a second source of truth for the
+number that changes most often. § 4.13 does not carry it — per-player kills and deaths travelled
+nowhere at all before that section existed, so it adds a number with no second source.
 
 An over-long name is **refused, not truncated**: cutting UTF-8 at a fixed byte count splits
 multi-byte code points and renders as replacement characters. The caller clips at a character
 boundary, where it still knows what the characters are.
+
+### 4.12. `C_CHAT` (0x24) and `S_CHAT` (0x47) — byte layout
+
+Both declared at the freeze with no body layout, no codec and no route, which is why the opcode sat
+in `ClientWiringGate`'s named-gap list for four phases: a client sender would have shipped a
+write-only path the server counted in `UnknownMessages`, its corruption counter. Phase P6 landed the
+route first and the sender second, in that order.
+
+```
+C_CHAT (client → server), channel 2
+u8   textLength           1..120 bytes
+utf8 text                 textLength bytes, not NUL-terminated
+
+S_CHAT (server → client), channel 2
+u8   actorId              who said it
+u8   textLength           1..120 bytes
+utf8 text                 textLength bytes, not NUL-terminated
+```
+
+**The client never states who it is.** `C_CHAT` carries no `actorId` and must not: the server
+already knows which session the datagram arrived on, and a self-declared id is a client asserting it
+is somebody else. Same reasoning as `C_SEAT_REQUEST`.
+
+**`actorId` is a `u8` here**, as in § 4.11 and for the same reason — ids are allocated from
+`0 … MAX_ACTORS − 1` and `MAX_ACTORS` is 64.
+
+**An empty line is refused at the parser, not broadcast.** Zero bytes of text is a request to put a
+blank row on every player's screen; it costs a reliable send and renders as a rendering fault. The
+router counts it as malformed rather than as unknown — the sender either clipped wrong or is probing.
+
+**Both ends sanitize, at their own ingress**, with `PlayerNameSanitizer` — the same rule a display
+name gets, at a longer bound (60 characters). The hazards are identical: rich-text markup that hides
+or enlarges a line, control characters that split it, bidi overrides that re-order the text around
+it. The server cleans what it receives before re-broadcasting; the client cleans again on arrival,
+because a client cannot verify the game server.
+
+**120 bytes, refused rather than truncated.** Worst case `2 + 120 = 122 B`, so a chat line can never
+be the message that fragments. A sender clips at 60 *characters*, where a boundary can be found
+without splitting a multi-byte code point; a line that still exceeds 120 bytes after that — 60
+characters of Vietnamese will — is dropped and counted, not cut.
+
+### 4.13. `S_PLAYER_SCORES` (0x51) — byte layout
+
+The per-player half of the scoreboard. The server has counted kills and deaths since phase P6
+(`MatchScoreTally`, fed from the single point a death is resolved), and until P18 those numbers had
+no way off the server: the only reader was the end-of-match report to the master. This is the
+message that carries them to a client. Sent **on change, coalesced to at most one per tick** — a
+death is the only thing that moves them, and a grenade in a crowd resolves several inside one tick.
+
+```
+u8   playerCount
+repeat playerCount times:
+    u8   actorId
+    u16  kills
+    u16  deaths
+    u8   team                 0, 1, or 255 for none
+```
+
+Worst case `1 + 64 × 6 = 385 B`, comfortably inside one un-fragmented channel-2 payload (1181).
+
+**A new opcode rather than a wider § 4.11**, for the two reasons that section now states: 0x4B has
+28 bytes of headroom and a different send cadence.
+
+**`u16` counters, not `u8`.** A bot on a 40-bot map over a long session passes 255 deaths, and a
+wrapped counter renders as a plausible small number rather than as an error — the failure mode that
+reads as working. Two bytes per row buys a counter that cannot lie, at 128 B of a 385 B worst case.
+The server saturates rather than wraps if a match ever reaches 65535.
+
+**`actorId` is a `u8` here**, as in § 4.11 and for the same reason — ids are allocated from
+`0 … MAX_ACTORS − 1` and `MAX_ACTORS` is 64. Both are pinned by the same conformance test rather
+than by two, because it is one bound.
+
+**`team` is here although § 4.3's actor entry already carries one**, and that is deliberate rather
+than an oversight. `InterestManager` emits actors in relevance buckets under a per-snapshot ceiling
+with a shed cursor (§ 7.3), so a client holds a team only for the actors it currently sees — on a
+41-bot map, a small minority. A scoreboard columned from the snapshot would put most of the roster
+on no side at all. This is the same authoritative assignment, for the actors a board has to place,
+which is all of them. It is **not** the second source of truth § 4.11 refuses: that objection is
+about the team score, a single number that changes many times a match; this is a per-actor value
+that changes at most once a life and is written from one answer in one tick loop.
+
+**Bots get rows.** The tally counts them — they kill and die like anybody else — and the team score
+moves on every death regardless of who died. A scoreboard omitting them could not be reconciled with
+the number above it, which is the arithmetic P18 criterion 7 grades.
+
+**A row for an actor no `S_PLAYER_LIST` has named is normal, not an error.** The two messages arrive
+independently and scores routinely land first. A client keys its rows on `actorId` and falls back to
+rendering the id; a client keying on the name table would make a player appear and disappear.
+
+---
+
+### 4.14. `C_SPAWN_REQUEST` (0x23) — byte layout
+
+Empty from the freeze until V8: the router counted the opcode and discarded whatever the body held,
+because deploying and respawning carried no information the server did not already decide for
+itself. Ledger **X-11**. Given a shape now that it carries one:
+
+```
+u8   primary            weapon network id, 0 = slot left empty
+u8   secondary
+u8   gear1
+u8   gear2
+u8   gear3
+u8   spawnPointIndex    index into the server's spawn-point list, 0xFF = no preference
+```
+
+6 bytes. **Drives both a first deploy and every later respawn** — a join no longer places the body
+(§ 3, `ServerTickLoop.OnClientConnected`), so the same message the client already sent on death now
+also arms the very first life, gated server-side by whether this connection has deployed before
+rather than by anything in the message's own shape.
+
+**Weapon slots are network ids, never `WeaponEntry` references or names.** The same boundary
+`ILoadoutDirectory` is built around (§ 4.8's own value space): the game's loadout types compile into
+`Assembly-CSharp`, unreachable from the wire. 0 in a slot is "left empty," matching `WeaponManager`'s
+own reservation of 0 for "no/unknown weapon" — never "arm slot 0 with whatever id 0 resolves to."
+
+**`spawnPointIndex` is validated against the server's own directory, not trusted.** A client naming
+an index outside `0 .. Count-1`, or one `IsEligible` refuses for that actor's team, is treated
+exactly like `0xFF` — the server falls back to its own random-among-eligible draw. `0xFF` is what
+every sender writes today; the field is real and load-bearing the moment a sender starts writing
+something else, and no further wire change is needed when one does.
 
 ---
 
@@ -1168,7 +1394,7 @@ compatibility.
 | Value | Name | Direction | Body |
 |---|---|---|---|
 | `0x0001` | `LOGIN_REQ` | C→M | `{username, passwordHash, clientVersion}` |
-| `0x0002` | `LOGIN_RES` | M→C | `{ok, errorCode, sessionToken, playerId, displayName}` |
+| `0x0002` | `LOGIN_RES` | M→C | `{ok, errorCode, sessionToken, playerId, displayName, retryAfterSec}` |
 | `0x0003` | `REGISTER_REQ` | C→M | `{username, passwordHash, displayName}` |
 | `0x0004` | `REGISTER_RES` | M→C | `{ok, errorCode}` |
 | `0x0010` | `ROOM_LIST_REQ` | C→M | `{}` |
@@ -1180,13 +1406,51 @@ compatibility.
 | `0x0016` | `ROOM_LEAVE_REQ` | C→M | `{}` |
 | `0x0017` | `ROOM_STATE_PUSH` | M→C | `{roomId, members:[{playerId, name, team, ready}], state}` |
 | `0x0018` | `ROOM_READY_REQ` | C→M | `{ready}` |
-| `0x0020` | `CHAT_SEND` | C→M | `{channel, text}` |
+| `0x0020` | `CHAT_SEND` | C→M | `{channel, text}` — see § 11.1 |
 | `0x0021` | `CHAT_PUSH` | M→C | `{channel, fromPlayerId, fromName, text, timestamp}` |
 | `0x0030` | `MATCHMAKE_REQ` | C→M | `{preferredMapId}` |
 | `0x0031` | `MATCHMAKE_RES` | M→C | `{ok, roomId, estimatedWaitSec}` |
 | `0x0032` | `MATCHMAKE_CANCEL` | C→M | `{}` |
 | `0x00F0` | `HEARTBEAT` | C→M | `{}` — every 15s |
 | `0x00F1` | `ERROR_PUSH` | M→C | `{code, message}` |
+
+### 11.1 Chat channels
+
+The `channel` byte decides **who receives the line**. This table did not exist until 2026-09-03,
+and its absence was not a documentation gap — it was the defect. The master routed `0` to every
+connection it held and everything else to the sender's room; the Unity lobby sent `0` with a
+comment reading *"zero, which is what the master echoes back untouched"*. Both halves were
+internally consistent, neither was reading the spec wrong, and every line typed into a room-lobby
+chat box went to every player on the server.
+
+| Value | Name | Audience |
+|---|---|---|
+| `0` | Global | Every player logged into the master, whatever room they are in |
+| `1` | Room | The members of the sender's room, and nobody else |
+
+Any other value is refused with `4002`. A `1` from a sender who is in no room is refused with
+`4003` — the master used to drop it in silence, which the sender could not tell from a message
+nobody answered.
+
+`CHAT_PUSH` echoes the channel it was sent on. A push carrying `fromPlayerId = 0` and
+`fromName = "SERVER"` is a line the master authored itself (for example, a room whose seat count
+was lowered to the assigned game server's capacity); player ids start at 1, so this cannot collide
+with a real sender.
+
+**Length.** A line is at most **200 characters**, measured before control-character stripping.
+Longer is refused with `4000`, which is deliberately not the rate-limit code: the fix for a long
+line is to shorten it, and "wait and try again" is the one instruction that cannot work.
+
+`Ironfront.Net.Protocol.MspChatChannel` and `MspChatLimits` are the shared definitions of both;
+the client and the master compile against them rather than each holding their own copy.
+
+## 11.2 Retry-after
+
+`LOGIN_RES.retryAfterSec` is the **whole seconds until the refusal lifts**, or `0` when waiting
+does not help. It is populated for `9001` (the per-address login budget's window, 60 s) and `1006`
+(an account lockout, 15 min), and is `0` for every other code. A master that predates the field
+sends nothing and the client reads `0`, so an old master degrades to the wordless message rather
+than to "retry now".
 
 **Game Server ↔ Master**
 
@@ -1215,9 +1479,29 @@ joinTicket (64 bytes):
   u16  serverId
   u16  roomId
   u64  expiresAtUnixMs        (valid for 60 seconds from issue)
-  u8[16] displayNameUtf8      (truncated/padded to 16 bytes)
+  u8   team                   0 or 1. TeamId.None is NOT a legal value here
+  u8[15] displayNameUtf8      (truncated/padded to 15 bytes)
   u8[32] hmac                 = HMAC-SHA256(the first 32 payload bytes, SHARED_SECRET)[0..32]
 ```
+
+**The team byte came out of the name, not out of spare room** — there was none: the signed payload
+was exactly 32 bytes and the ticket exactly 64. So `displayName` went 16 → 15 and `team` took the
+byte. `Size` is still 64, the signed span is still the first 32 bytes, and the HMAC still covers
+exactly those. This is what makes it a wire change and why v6 exists.
+
+**Why `team` sits before the name.** The name stays the trailing run, so a truncation bug loses a
+name character rather than the team byte — a wrong character in a killfeed is cosmetic, a wrong
+side is the match. Being inside the signed 32 bytes is the other half: a team byte outside the
+HMAC would let a player choose their side by editing one byte of their own ticket.
+
+**15 bytes is not 15 characters.** A Vietnamese name costs two or three bytes per accented vowel.
+A multi-byte character straddling the 15th byte must be dropped **whole**; a cut through the middle
+of a UTF-8 sequence decodes to U+FFFD and the player carries a replacement glyph all match.
+
+**Where the byte comes from.** The master server's lobby balances teams on join
+(`LobbyService.NewMember`) and writes the answer into the ticket. The game server claims a body on
+that side (`ServerActorRegistry.TryClaimPlayerSlot(team, …)`) rather than re-deriving a side from
+slot parity — which is what it did until v6, so a player's team was an accident of join order.
 
 - The master server issues the ticket when it replies with `ROOM_JOIN_RES`.
 - The client passes the ticket through verbatim in `CONNECT_REQUEST`.
@@ -1244,15 +1528,32 @@ expires after 60 seconds and only works for one specific server.
 | 1002 | Invalid username (length 3–16, only a-z0-9_) |
 | 1003 | Session expired, log in again |
 | 1004 | Wrong client version |
+| 1005 | Invalid display name (supplied and over 32 characters). **Blank is not this** — a blank display name is accepted and the master stores the username |
+| 1006 | Account locked after too many failed attempts. **Only ever returned when the supplied password was CORRECT** — see below |
+| 1007 | Account banned. Same rule: only returned on a correct password |
 | 2000 | Room doesn't exist |
 | 2001 | Room is full |
 | 2002 | Wrong room password |
 | 2003 | Match already started |
 | 2004 | Already in another room |
+| 2005 | The side change would leave the two sides differing by more than one |
 | 3000 | No game server available |
 | 3001 | Game server not responding |
+| 4000 | Chat message longer than 200 characters (§ 11.1) |
+| 4001 | Chat message empty after trimming and control-character stripping |
+| 4002 | Chat channel is not one this master defines (§ 11.1) |
+| 4003 | A room-channel chat line from a sender who is in no room |
 | 9000 | Internal server error |
-| 9001 | Rate limited, try again later |
+| 9001 | Rate limited. Carries `retryAfterSec` on `LOGIN_RES`; the login budget is **per source address** over 60 s |
+
+**Why 1006 and 1007 are withheld from a wrong password.** Naming either state admits the account
+exists, so both are returned only to a request whose password VERIFIED. Along the guessing path —
+the only path an enumerator has — every answer is still `1000`, identical to a username nobody has
+registered, so nothing leaks that was not already leakable. The player typing their own password
+learns why the door is shut. Before this, all four of *wrong password*, *no such account*, *banned*
+and *locked* left the master as `1000`: ten fat-fingered attempts bought fifteen minutes during
+which the correct password was answered "Wrong username or password", advice that sends the player
+to reset a password that was never wrong and does not clear the lock either.
 
 ---
 
@@ -1305,7 +1606,7 @@ Added at v3.0.0:
 >
 > **Owner:** written by the replication track (the verifier), against a serializer implemented by the transport track. Keep that
 > split whatever happens to the file locations — see
-> [conventions.md § 7](conventions.md#7-file-ownership-boundaries).
+> [`docs/code-conventions.md` § 7](../../docs/code-conventions.md#7-scope-discipline).
 
 ---
 
@@ -1321,6 +1622,18 @@ Added at v3.0.0:
 
 | **3.0.0** | Week 3 | the replication track | **The vehicle wire.** Six new opcodes (0x21, 0x4C–0x50) and 0x26 promoted from reserved; new `VehicleSnapshotEntry` with its own `u16` change mask (new § 4.10); smallest-three quaternion packing in `Quantize` (§ 4.4); `SnapshotField.SeatInfo` finished on the actor entry, moving the full seated entry 20 → 23 B and the admitted-actor ceiling 58 → 50; new `VehicleIds` value space (new § 4.9), SpecChecker now gates spec ↔ code ↔ vehicle prefab; `S_PLAYER_LIST` (0x4B) given the struct, writer and router case it was declared without (new § 4.11) | **Yes** | (this PR) |
 | **3.0.0** (amended, Week 3) | Week 3 | the replication track | **The projectile wire, finished by V7.** `S_PROJECTILE_SPAWN` 19 → 20 bytes: gained `u16 projectileId` and `u8 remainingLifetimeDeciseconds`, and narrowed `spawnTick` from `u32` to its low 16 bits (§ 4.10). `ProjectileKind` renamed `Supply` → `AmmoBag` and appended `Medipack` = 5, `Bullet` = 6. `InputButtons` bit 7 `ThrowGrenade` → `Reserved7` (§ 4.2), no byte moved. **Amends the v3.0.0 row above rather than opening a 4.0.0**, per brainstorm D7: one protocol bump covers the whole vehicle-and-world track, the client and server ship together, and v3 has not been released to anything. The bytes did change relative to the row above, which is why this row exists rather than the edit being silent | **Yes** (inside v3) | (this PR) |
+
+| **4.0.0** | 2026-08-28 | the replication track | **The position window MOVED; it did not widen.** `Quantize.POS_MIN` `-2048f` → `-1024f` and `POS_MAX` `2048f` → `3072f`, with `POS_RANGE` unchanged at 4096 — the diff's own trailing comment reads `// 4096, unchanged` — so the resolution stays 6.25 cm and an encoded position stays 6 bytes. Reason and measurements are in § 4.4's note, cited rather than restated; ledger **X-53**. **Back-filled 2026-09-01 by P11 § 3.4a** (ledger **X-79**): the bump was live in `ProtocolConstants.cs` and in this file's header from the day it shipped, but condition 3 was never met, and nothing mechanical would ever have noticed because `SpecChecker` parses the § 1 fenced block and not this table. Reconstructed from `git show 9172920`, whose only files under `Ironfront.Net.Protocol/` are `ProtocolConstants.cs` and `Quantize.cs`; **nothing here is inferred beyond that diff and the commit message**, and no other v4 change is claimed because none is evidenced | **Yes** — in the commit's own words, *"a v3 client cannot talk to it, because the same i16 now decodes to a different metre"* | #222 |
+| **5.0.0** | 2026-09-01 | the client track | **`S_MATCH_STATE` (0x45) now carries the game's own win condition.** `Size` **8 → 10**: `tickets0`/`tickets1` become `score0`/`score1` at the same two offsets, and a `u16 victoryPoints` is appended. `WinningTeam` stops being `Tickets0 > Tickets1` — meaningless under a margin rule, since it can name a winner in a match that is not over — and becomes `ConquestScoreRule.Decide(score0, score1, victoryPoints)`, the same function the server ends the round with. `victoryPoints` crosses the wire because it is a host-editable match setting, not a constant, and both branches of the client's score-bar geometry divide by it. Phase **P11**; the score model and the layout are [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) §§ 1–2 | **Yes** — twice over, and either half alone would suffice: the size changed, AND the meaning of two unchanged byte positions INVERTED. A v4 client reading a v5 server renders an ascending score as a descending ticket count, so a round opening 0/0 reads as "both sides have already lost" and the winner answers backwards all match — a failure that *looks* like it works. `CONNECT_DENIED` code 2 is the outcome we want instead | (this PR) |
+| **6.0.0** | 2026-09-01 | the client track | **The joinTicket now carries the team, so the lobby's balancing reaches the match.** `displayName` **16 → 15** bytes and a `u8 team` takes the freed byte at offset 16, ahead of the name (§ 12). `JOIN_TICKET_SIZE` stays **64**, `SignedPayloadSize` stays **32**, and the HMAC still covers exactly the first 32 bytes — the byte came out of the name, not out of spare room, because there was none. Team sits before the name so a truncation bug costs a name character rather than a side, and inside the signed span so a side cannot be forged by editing one byte. Also adds `ConnectDenyReason.TeamFull` = 7 (§ 3.2) and its post-handshake counterpart `DisconnectReason.TeamFull` = 9 — **that value adds no byte and would not bump the version on its own**; it is in this row because it shipped with the layout change, not because it caused it. Phase **P13**; the layout and the value space are [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) §§ 3–4. **P11 had already shipped when this landed** (v5 is live in `ProtocolConstants.cs` and in this table), so this is 5 → 6 on its own rather than an amendment to the v5 row — the check § 3.2 of the contracts demands, answered | **Yes** — every byte from offset 16 onward moved. A v5 client's ticket puts a name byte where a v6 server reads the team, so `"N"` (0x4E) decodes as team 78 and the join is refused for a side that does not exist; a v6 ticket read by a v5 server renders every name one character short with a leading ``. `CONNECT_DENIED` code 2 is the outcome we want instead | (this PR) |
+| **7.0.0** | 2026-09-02 | the client track | **The scoreboard's numbers reach the client.** New opcode `S_PLAYER_SCORES` (0x51, § 4.13): `u8 playerCount`, then per row `u8 actorId`, `u16 kills`, `u16 deaths`, `u8 team` — 6 B a row, worst case `1 + 64 × 6 = 385 B`. `MatchScoreTally` has counted these since P6 and no message carried them; this is that message, sent on change and coalesced to one per tick. **Not bolted onto `S_PLAYER_LIST`**, whose worst case leaves 28 bytes inside `MAX_CHANNEL_PAYLOAD` while the smallest useful widening costs 64 — § 4.11's "names only" sentence is amended to say so and to keep its `S_MATCH_STATE` reasoning, which is untouched: the team score does not move. The `u8 team` duplicates § 4.3's actor-entry field on purpose, because `InterestManager` sheds actors and a client therefore knows sides only for what it can see (§ 4.13). Phase **P18**; the scoreboard is [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) § 6's assembly seal applied to a HUD element. **v6 had shipped when this landed** (it is live in `ProtocolConstants.cs` and in the row above), so this is 6 → 7 on its own rather than an amendment to the v6 row — the check P18 § 3.1 demands, answered | **Yes** — a new opcode, on the **3.0.0** row's precedent, where six of them were recorded as a wire change. Milder than any bump before it: a v6 client receiving 0x51 counts it in `UnknownMessages` and drops it, so nothing decodes wrongly. It is still a bump, because the alternative is a fleet where "which opcodes does the other end know" has no answer on the wire, and because the freeze gate's own precedent says new opcodes are a wire change | (this PR) |
+
+| **7.0.1** | 2026-09-03 | the client track | **`ErrorCode.InvalidDisplayName` = 1005, and a blank display name stops being a credential problem.** `AuthService.Register` refused `IsNullOrWhiteSpace(displayName)` and reported it as `WrongCredentials` (1000), so the register screen — whose own field is labelled *"Display name (optional)"* and whose docstring promised *"Left blank, the master applies its own rule"* — answered **every** account creation with "Wrong username or password." on a form that has no credentials yet. Account creation failed 100% of the time. Blank now falls back to the username (the promised rule, written down at last); a name that was supplied and is over 32 characters gets 1005, on the `TeamsWouldUnbalance` precedent that a refusal the player can act on deserves its own code. **Also back-fills § 13's missing `2005` row**, added to the enum by P16 and never to this table. Found by playing the game, not by a gate: every one of the 2,103 tests passed a display name | **No** — no byte moved. `errorCode` is already a `u16` in `REGISTER_RESPONSE`; a value added to its space is invisible to a decoder that never receives it, and an older client renders an unrecognised code as its number rather than misreading it (`MasterErrorText`) | (this PR) |
+| **8.0.0** | 2026-09-03 | the client track | **`C_SPAWN_REQUEST` (0x23) grows a body — see § 4.14.** Empty since the freeze; now `u8` × 5 loadout slots + `u8 spawnPointIndex` = 6 bytes. A join no longer places the body (`ServerTickLoop.OnClientConnected`), so this message now drives the first deploy as well as every later respawn, arming the body from the loadout the client actually chose (`ServerCombatBridge.PlaceAtSpawn`) instead of the server's own `controller.GetLoadout()` draw. Ledger **X-11** | **Yes** — an empty body decoded by the V8 parser's fixed 6-byte read fails `TryParse` outright; a v7 client's spawn/respawn requests would all be counted as malformed rather than silently misread | (this PR) |
+| **9.0.0** | 2026-09-07 | the client track | **The fifth Ravenfield loadout slot can be selected over `C_INPUT`.** Bit 15 changes from reserved to `SwitchWeapon4`; the human keyboard and mouse-wheel path now produces the same absolute slot intent that the server already consumes for slots 0–3. | **Yes** — the bytes are the same width, but bit 15 gained gameplay meaning. A v8 server would silently ignore a v9 client's gear-3 selection and keep firing the previous weapon, so the peers must refuse the mismatch. | (this change) |
+| **10.0.0** | 2026-09-14 | the server track | **The reserve, the reload state and eight more vehicle ids.** `S_SNAPSHOT`'s `weapon` field (bit 5) goes 2 → 5 bytes, adding `u16 spareAmmoEncoded` and `u8 weaponStateFlags` (§ 4.3); `MAX_VEHICLES` 16 → 24 (§ 4.10). Also pins the sprint-fire window as a shared constant so both sides refuse the same shots — no byte carries it, but the behaviour on an unchanged `C_INPUT` byte layout changes, which is the other half of what a version means. | **Yes** — every field after bit 5 in an actor entry shifts by three bytes. A v9 client parsing a v10 entry reads the reserve's low byte as `team` and then walks off the end of the entry; the peers must refuse the mismatch rather than try. `MAX_VEHICLES` alone would also do it: a v9 client sizes its vehicle array to 16 and a 24-vehicle snapshot overruns it | (this change) |
+| **11.0.1** | 2026-09-26 | the client track | **The two grenades stop sharing a `ProjectileKind`.** `Spearhead` = 7 appended to `ProjectileKind` (§ 4.10). `frag.prefab` and `spearhead.prefab` point at different projectile prefabs with different meshes, but both carry the `GrenadeProjectile` script, and the kind is the only projectile identity `S_PROJECTILE_SPAWN` carries — so both were announced as `Grenade` = 3 and every client drew the frag prefab for a spearhead throw. The prefab cannot separate them, so the *weapon* does, at the announce site; nothing is authored for it to work. Both scenes' `_prefabsByKind` arrays gained the eighth entry, which the asset gate demands off the enum itself. Reported by playing: *"there are two types of grenades, and the object that appears is the same for both"* | **No** — the same argument the `7.0.1` row makes for `ErrorCode.InvalidDisplayName`, and the one the enum's own doc makes for `Medipack` and `Bullet`: `Kind` is already a `u8`, nothing behind it misaligns, and a value added to its space is invisible to a decoder that never receives it. A client older than the value sees `PrefabFor` return null and counts the throw in `UnrenderableKinds` rather than drawing the wrong grenade, and both sides ship together. **Filed under v11 without causing it**: the bump in the row above is the `PendingRelease` bit's, and this append rides along with it rather than opening a version of its own | (this change) |
+| **11.0.0** | 2026-09-25 | the replication track | **A reserved weapon-state bit gains delayed-release semantics.** `weaponStateFlags` bit 1 is now `PendingRelease`: one throwable use has been accepted and reserved but has not reached its authored release tick. The five-byte weapon field is unchanged in width, but snapshots now distinguish a genuinely ready `1/N` state from a `1/N` object already committed to an in-progress throw. | **Yes** — the byte width is unchanged, but an unchanged bit pattern gains mandatory gameplay meaning. A v10 client ignores bit 1 and can predict a second use from the same held object while a v11 server is awaiting release; peers must refuse the mismatch. | (this change) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with
@@ -1360,4 +1673,4 @@ Each row was an open checkbox in the replication track's phase-00 Task 1. Record
 | Is an `actorId` reused immediately when an actor dies? | **No — 5-second quarantine** | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
 | Is an 8-bit `changeMask` enough for the future? | Yes for v1 — 7 used, 1 spare. **Reopened and answered at v3.0.0: all 8 are now used and populated**, so a ninth actor field is a wire change. The vehicle mask is a `u16` from the start for exactly this reason | [§ 4.3.1](#431-actorid--allocation-and-lifetime), [§ 4.10](#410-the-vehicle-stream) |
 | MSP `msgType` byte order (raised during implementation, not on the original list) | **Little-endian**, per the § 0 default | [§ 10](#10-framing) |
-| The `Serialization/` ownership boundary between the transport track and the replication track | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay the transport track's in `Ironfront.Net.Replication/Serialization/` | [conventions.md § 7](conventions.md#7-file-ownership-boundaries) |
+| The `Serialization/` ownership boundary between the transport track and the replication track | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay the transport track's in `Ironfront.Net.Replication/Serialization/` | [`docs/code-conventions.md` § 7](../../docs/code-conventions.md#7-scope-discipline) |

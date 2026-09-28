@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
-using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Client;
+using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Unity;
 using UnityEngine;
@@ -53,6 +53,10 @@ namespace Ironfront.Net.Unity.Client
         // shows up as a flat frame-time tax instead.
         private readonly Dictionary<ushort, RemoteActorView> _views =
             new Dictionary<ushort, RemoteActorView>(ProtocolConstants.MAX_ACTORS);
+
+        // Network-player positions are CharacterController centres; original AI positions are
+        // feet/root pivots. S_SPAWN_ACTOR's IsBot bit preserves that distinction for rendering.
+        private readonly HashSet<ushort> _centrePivotActors = new HashSet<ushort>();
 
         /// <summary>Actors currently drawn.</summary>
         public int LiveCount => _live.Count;
@@ -136,31 +140,55 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null || _live.Count == 0) return;
 
             SnapshotInterpolator buffer = _client.Router.Interpolator;
+            if (buffer.Count < 2) return;
 
-            // Alpha comes from the prediction clock so motion is smooth above 30 fps. Without
-            // it the render tick advances in whole steps and the interpolation is quantised to
-            // the very tick rate it exists to hide.
-            double renderTick = buffer.RenderTick(NetPredictionClock.Current?.Alpha ?? 0f);
+            // The router's clock, not the newest tick plus the prediction clock's Alpha: Alpha
+            // wraps at 30 Hz while snapshots land at 20, and that sum threw every remote body
+            // back a tick every 100 ms. See InterpolationClock.
+            double renderTick = _client.Router.Clock.AdvanceTo(Time.unscaledTimeAsDouble);
 
-            if (buffer.TrySample(renderTick, out WorldSnapshot from, out WorldSnapshot to, out double alpha)
-                == InterpolationResult.Starved)
-            {
-                return;
-            }
+            byte localTeam = ResolveLocalTeam();
 
             foreach (KeyValuePair<ushort, Transform> pair in _live)
             {
-                if (SnapshotInterpolator.TryLerpPosition(from, to, alpha, pair.Key, out Vec3 p))
-                    pair.Value.position = new Vector3(p.X, p.Y, p.Z);
+                InterpolationResult result = buffer.TrySampleActor(pair.Key, renderTick, out ActorSample sample);
+                bool hasSample = result != InterpolationResult.NotPresent
+                                 && result != InterpolationResult.Starved;
 
-                if (SnapshotInterpolator.TryLerpYaw(from, to, alpha, pair.Key, out float yaw))
-                    pair.Value.rotation = Quaternion.Euler(0f, yaw, 0f);
+                // A corpse lying as a runtime ragdoll keeps the transform it fell from: its bones
+                // are simulated in the root's space, so moving the root would drag the body along.
+                bool frozen = _views.TryGetValue(pair.Key, out RemoteActorView lying)
+                              && lying != null && lying.IsRagdollPosed;
+
+                if (!frozen && hasSample)
+                {
+                    Vec3 p = sample.Position;
+                    float y = p.Y;
+                    if (_centrePivotActors.Contains(pair.Key))
+                    {
+                        bool crouching = (sample.State.StateFlags & ActorStateFlags.IsCrouching) != 0;
+                        y -= MovementCore.HeightFor(crouching) * 0.5f;
+                    }
+                    pair.Value.SetPositionAndRotation(
+                        new Vector3(p.X, y, p.Z), Quaternion.Euler(0f, sample.YawDegrees, 0f));
+                }
 
                 // Everything past position and yaw -- pitch, stance, aim, ragdoll, weapon, team
-                // -- was decoded and discarded until phase-V10. It is read from `to` rather than
+                // -- was decoded and discarded until phase-V10. It is stepped rather than
                 // interpolated: these are discrete states, and lerping a crouch is meaningless.
                 if (!_views.TryGetValue(pair.Key, out RemoteActorView view) || view == null) continue;
-                if (to.TryFind(pair.Key, out ActorSnapshotEntry entry)) view.Apply(in entry);
+                if (hasSample) view.Apply(in sample.State);
+
+                // P3 task 3.4. Team arrives with the snapshot, not with the spawn, so the
+                // colour is written every frame rather than once. SetMarker is idempotent by
+                // subject -- a repeat recolours in place -- so this costs one dictionary hit
+                // and one Color assignment per live actor and never stacks a second icon.
+                //
+                // P12 D-3: and only for friendlies. Both directions are written every frame
+                // because a team is replicated state that can change under us -- a body that
+                // stops qualifying must lose the icon it was given, or the enemy blip this
+                // filter exists to remove simply freezes on screen instead.
+                ApplyMinimapMarker(pair.Value, view.Team, localTeam);
             }
         }
 
@@ -171,13 +199,61 @@ namespace Ironfront.Net.Unity.Client
             if (_live.ContainsKey(message.ActorId)) return;
 
             Transform t = _pool.Count > 0 ? _pool.Pop() : NewPooled();
+
+            // PLACED from the spawn message, not left wherever the pool parked it. X-17.
+            //
+            // This looks like a redundant write -- the Update loop below positions everything
+            // every frame -- and it is not, for two reasons that only bite together.
+            //
+            // TryLerpPosition needs the actor in BOTH interpolation endpoints, and interest
+            // culling REMOVES a distant actor from the accumulated world (DeltaDecoder.Current),
+            // so an actor past InterestManager.CullRadius is in neither. Meanwhile
+            // AnnounceNewActors announces EVERY actor to every client regardless of interest.
+            // Together those describe an actor that is spawned and never replicated, and for
+            // that actor this message carries the only position it will ever be given.
+            //
+            // Without this the proxy renders at the pool's parking spot and stays there. Measured
+            // 2026-08-22 (artifacts/lane-b/x17-measure-01): a client 2570 m from its target drew
+            // it at (0, 2000, 0) at every one of seven checkpoints, while the snapshot -- whenever
+            // it did arrive -- carried (1088.11, 103.41, 954.30), the victim's exact position to
+            // the centimetre. Nothing was wrong with the wire, the interest manager or the
+            // decoder. The scripted aim solver reported `resolved: true` and fired 240 rounds
+            // into open sky, and a human's crosshair would have done the same.
+            float spawnY = Quantize.UnpackPos(message.PosY);
+            if (!message.IsBot)
+                spawnY -= MovementCore.HeightFor(crouching: false) * 0.5f;
+
+            t.position = new Vector3(
+                Quantize.UnpackPos(message.PosX),
+                spawnY,
+                Quantize.UnpackPos(message.PosZ));
+            t.rotation = Quaternion.Euler(0f, Quantize.UnpackYaw(message.Yaw), 0f);
+
             t.gameObject.SetActive(true);
             _live[message.ActorId] = t;
+            if (message.IsBot) _centrePivotActors.Remove(message.ActorId);
+            else _centrePivotActors.Add(message.ActorId);
+
+            // P3 task 3.4. The icon is bound HERE rather than waiting for the first snapshot,
+            // because an actor past InterestManager.CullRadius may never appear in a snapshot at
+            // all (see the placement comment above). Waiting would leave exactly those actors --
+            // the far ones, the ones a minimap is FOR -- with no icon.
+            //
+            // P12 D-3 corrects this comment as well as the call. It read "SpawnActorMessage does
+            // not carry a team", and it does: ServerTickLoop.AnnounceNewActors constructs it as
+            // `new SpawnActorMessage(actor.ActorId, actor.Team, ...)`. That is why the neutral -1
+            // is gone -- the team is known at the spawn, so the filter can be applied at the
+            // spawn, and a body that is never in a snapshot is filtered rather than drawn.
+            //
+            // Ledger A-2 is not touched: nothing here registers a proxy with ActorManager, so
+            // ActorManager.Player still resolves to the local body. That is the whole reason
+            // this goes through MinimapUi.SetMarker (Transform-keyed) and not AddActorBlip.
+            ApplyMinimapMarker(t, message.Team, ResolveLocalTeam());
 
             RemoteActorView view = t.GetComponent<RemoteActorView>();
             if (view != null)
             {
-                view.Bind(message.ActorId);
+                view.Bind(message.ActorId, message.Team);
                 _views[message.ActorId] = view;
             }
             else
@@ -191,12 +267,95 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        /// <summary>
+        /// Gives <paramref name="subject"/> a minimap icon if this client should see it, and
+        /// takes the icon away if it should not. P12 <b>D-3</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The networked minimap showed every enemy.</b> The registry marked every live
+        /// remote actor and <c>MinimapUi.SetMarker</c> has no team test, so a client saw the
+        /// position of every hostile inside <c>InterestManager.CullRadius</c> — a regression
+        /// against the offline game's OWN rule, which <c>ActorBlip.LateUpdate</c> states as
+        /// <c>actor.team == FpsActorController.playerTeam || actor.IsHighlighted()</c>.
+        /// </para>
+        /// <para>
+        /// <b>Filtered here, not in <c>MinimapUi.SetMarker</c>.</b> That method is a generic
+        /// keyed setter — capture points and spawn points go through it too — so teaching it
+        /// about teams would hand every future caller a rule it never asked for.
+        /// </para>
+        /// <para>
+        /// <b>The <c>IsHighlighted()</c> half of the offline rule is NOT implemented, and it is
+        /// not an omission.</b> Nothing carries a highlight bit across the wire:
+        /// <c>ActorSnapshotEntry</c> (<c>Ironfront.Net.Protocol/Messages/SnapshotMessage.cs</c>,
+        /// fields <c>ActorId</c>, <c>ChangeMask</c>, position, <c>Yaw</c>, <c>Pitch</c>,
+        /// velocity, <c>StateFlags</c>, <c>Health</c>, <c>WeaponId</c>, <c>AmmoInClip</c>,
+        /// <c>Team</c>, <c>VehicleId</c>, <c>SeatIndex</c>) has no such field, and neither does
+        /// <c>SpawnActorMessage</c>. So spotting an enemy is already impossible over the
+        /// network, for a reason that predates this filter and is not fixed by weakening it. A
+        /// disjunct over a value that can only ever be false would be a seam with no producer,
+        /// which reads as working and is not. <b>When a spotted bit lands, this predicate is
+        /// where it goes</b> — and until then the gap is recorded rather than papered over.
+        /// </para>
+        /// <para>
+        /// <b>An unresolved local team marks nothing.</b> Before the first snapshot names this
+        /// client's side there is no way to tell friend from enemy, and the failure directions
+        /// are not symmetric: marking everything shows the enemy positions this exists to hide,
+        /// while marking nothing costs a blank minimap for the fraction of a second before the
+        /// team arrives. <c>MinimapUi.UpdateSpawnPointButtons</c> takes the same branch for the
+        /// same reason.
+        /// </para>
+        /// </remarks>
+        private static void ApplyMinimapMarker(Transform subject, byte team, byte localTeam)
+        {
+            IMinimapMarkers minimap = NetClientBindings.Minimap;
+            if (minimap == null) return;
+
+            if (ShouldMarkOnMinimap(team, localTeam))
+                minimap.SetBodyMarker(subject, CapturePointOwnership.ToSpawnPointOwner(team));
+            else
+                minimap.RemoveMarker(subject);
+        }
+
+        /// <summary>
+        /// This client's own team, or <see cref="TeamId.None"/> when it is not known yet.
+        /// </summary>
+        /// <remarks>
+        /// Resolved ONCE per <see cref="Update"/> and passed down, not asked per actor: the
+        /// answer walks the snapshot dictionary, and a run carrying fifty-odd remote bodies would
+        /// otherwise repeat that walk fifty-odd times a frame for a value that cannot change
+        /// within one.
+        /// </remarks>
+        private static byte ResolveLocalTeam()
+            => NetPresenterGate.TryResolveLocalTeam(out byte team) ? team : TeamId.None;
+
+        /// <summary>
+        /// Whether a body on <paramref name="team"/> belongs on the minimap of a client on
+        /// <paramref name="localTeam"/>.
+        /// </summary>
+        /// <remarks>
+        /// Pure, and split out of <see cref="ApplyMinimapMarker"/> for exactly that reason: the
+        /// whole of P12 D-3 is this one rule, and a rule that needs a <c>Transform</c>, a marker
+        /// sink and a live snapshot to observe is a rule that gets quietly widened later. See
+        /// <c>RemoteActorMinimapFilterTests</c>.
+        /// </remarks>
+        internal static bool ShouldMarkOnMinimap(byte team, byte localTeam)
+            => team != TeamId.None && localTeam != TeamId.None && team == localTeam;
+
         private void OnDespawn(DespawnActorMessage message)
         {
             if (!_live.TryGetValue(message.ActorId, out Transform t)) return;
 
             _live.Remove(message.ActorId);
             _views.Remove(message.ActorId);
+            _centrePivotActors.Remove(message.ActorId);
+
+            // BEFORE the transform goes back to the pool. The marker is keyed by that
+            // transform, and the pool hands the same one to the NEXT actor -- so a marker left
+            // behind is not merely stale, it is an icon wearing the previous occupant's team
+            // that SetMarker would then recolour instead of replacing.
+            NetClientBindings.Minimap?.RemoveMarker(t);
+
             t.gameObject.SetActive(false);
             _pool.Push(t);
         }

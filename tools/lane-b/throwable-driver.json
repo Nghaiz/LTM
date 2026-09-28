@@ -1,0 +1,14 @@
+{
+  "name": "throwable-driver",
+  "steps": [
+    { "seconds": 9.0, "yawDegrees": 0, "pitchDegrees": 20, "respawn": true },
+    { "checkpoint": "equipped", "seconds": 1.0, "yawDegrees": 0, "pitchDegrees": 20, "switchWeaponSlot": 2 },
+    { "checkpoint": "throw-1-trigger", "seconds": 0.2, "yawDegrees": 0, "pitchDegrees": 20, "switchWeaponSlot": 2, "fire": true },
+    { "checkpoint": "throw-1-release", "seconds": 3.0, "yawDegrees": 0, "pitchDegrees": 20, "switchWeaponSlot": 2 },
+    { "checkpoint": "throw-2-trigger", "seconds": 0.2, "yawDegrees": 0, "pitchDegrees": 20, "switchWeaponSlot": 2, "fire": true },
+    { "checkpoint": "throw-2-release", "seconds": 3.0, "yawDegrees": 0, "pitchDegrees": 20, "switchWeaponSlot": 2 },
+    { "checkpoint": "throw-3-trigger", "seconds": 0.2, "yawDegrees": 0, "pitchDegrees": 20, "switchWeaponSlot": 2, "fire": true },
+    { "checkpoint": "throw-3-release", "seconds": 3.0, "yawDegrees": 0, "pitchDegrees": 20, "switchWeaponSlot": 2 },
+    { "checkpoint": "settled", "seconds": 2.0, "yawDegrees": 0, "pitchDegrees": 20, "switchWeaponSlot": 2 }
+  ]
+}

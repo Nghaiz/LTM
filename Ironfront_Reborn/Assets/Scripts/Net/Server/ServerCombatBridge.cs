@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
@@ -82,7 +83,7 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>
         /// Steps combat for one accepted frame and emits whatever it produced.
         /// </summary>
-        public void StepCombat(ServerPlayer player, in InputFrame frame)
+        public void StepCombat(ServerPlayer player, uint frameTick, in InputFrame frame)
         {
             NetServerActor actor = player.Actor;
             if (actor == null) return;
@@ -101,9 +102,35 @@ namespace Ironfront.Net.Unity.Server
             // meant (V6-D7) -- a Gunner fires through the HasMountedWeapon() clause and never
             // through the carried one -- and letting both run would have one trigger pull spend a
             // turret round AND hitscan from the gunner's chest.
+            // Weapon selection, BEFORE the mounted-weapon return and before anything reads the
+            // active weapon. A gunner may still re-select what they will be holding when they
+            // leave the seat, and Actor.SwitchWeapon refuses on its own if the seat forbids it.
+            //
+            // Bits 11-14 have been on the wire since the freeze with zero producers and zero
+            // consumers. This is the consumer; the producer is InputButtonPacker's weaponSlot
+            // overload. Both landed together deliberately -- a bit only one half understands is
+            // how a protocol field becomes permanently zero, which is the packer's own remark.
+            //
+            // This is also what makes check 4 (two-client grenade parity) runnable at all: a
+            // grenade is thrown by selecting the gear slot and pressing Fire, the path V6 already
+            // made server-authoritative. Bit 7 was ThrowGrenade and V7-D10 retired it rather than
+            // implementing it, because a dedicated throw bit is a second route to firing that
+            // does not pass Weapon.CanFire().
+            actor.ApplyWeaponSwitchIntent(frame.WeaponSlot);
+            AdoptTheWeaponTheBodyIsHolding(session, actor);
             if (StepMountedWeapon(session, actor, in frame, now)) return;
 
             BuildTargets(tick);
+
+            // Before the authority resolves anything, and after the weapon switch above has
+            // settled which gun the body is holding: the engine's own counters are made to agree
+            // with the session's, so the launch below cannot be refused by a gun that thinks it
+            // is empty or still holstered. See IGameplayActorSource.MirrorAuthorityWeaponState
+            // for what the two copies cost while they were free to disagree.
+            actor.MirrorAuthorityWeaponState(
+                session.Weapon.AmmoInClip,
+                session.Weapon.Unholstered,
+                now - session.Weapon.LastFiredTime);
 
             // Hoisted to a local because WeaponConfig is a property since phase-V2 (D9) and an
             // explicit `in` argument needs an lvalue. This IS the struct copy that decision
@@ -112,30 +139,263 @@ namespace Ironfront.Net.Unity.Server
             // local, and deliberately not a second stored field.
             WeaponConfig weapon = session.WeaponConfig;
 
+            // Protocol 10. The trigger state is the SESSION's, not a local: an effective trigger
+            // is measured against the previous PROCESSED frame, and a fresh one per call makes
+            // every frame a rising edge -- which is the defect, restored by accident.
+            //
+            // The ammo source is the session's too, and it answers "I do not know" when the
+            // loadout slot is unresolved rather than guessing slot 0 (handoff section 4.5).
+            ActorAmmoSource ammo = session.AmmoSourceFrom(_loop.SpareAmmo);
+
+            // AFTER the mirror, so a weapon asked about its trigger holds the authority's clip;
+            // BEFORE the authority, because a trigger the weapon keeps must never reach it.
+            InputFrame resolved = SteerCarriedWeapon(session, actor, in frame);
+
             CombatTickResult result = _authority.Step(
                 ref session.Weapon,
+                ref session.Trigger,
                 in weapon,
                 session.ActorId,
-                in frame,
+                in resolved,
                 in session.State,
                 new ReadOnlySpan<HitscanTarget>(_targets, 0, _targetCount),
-                actor.IsAlive,
+                new ActorFireEligibility(actor.IsAlive, isDeployed: true),
+                in ammo,
                 now,
                 SmoothedRttMs(session.ConnectionId),
                 tick,
-                _hits);
+                _hits,
+                frameTick);
 
             // The line that closes the reported bug: the server's clip is now the actor's clip,
             // so a reload or a shot changes SnapshotField.Weapon and the client's _reloadPending
             // finally clears.
-            actor.AmmoInClip = session.Weapon.AmmoInClip;
+            //
+            // Protocol 10 adds the other two thirds of that field. The reserve and the reload
+            // flag were authoritative on the server the whole time and had no way onto the wire,
+            // so the client ran its own Ravenfield pool beside the authoritative clip -- two
+            // sources for one number, and the clip-of-one weapons are where they visibly
+            // disagreed.
+            PublishWeaponState(session, actor, in weapon, in ammo);
+
+            LogShot(session, in frame, in result, tick);
 
             if (!result.Fired) return;
+
+            // Ledger X-42. A launcher and a throwable are simulated by the ENGINE (V7-D1), and
+            // the netcode's own fire path never reached them: Actor.Update gets there through
+            // controller.Fire(), and a networked body's controller is the SUSPENDED bot brain.
+            // So a FRAG was spent, swept as a hitscan bullet, hit at 1.2 m for zero damage, and
+            // detonated nowhere -- explosionsTotal 0 on all three clients with the recorder
+            // proven live (artifacts/lane-b/r1-grenade-03).
+            //
+            // AFTER the authority, never instead of it: the round is already spent and the
+            // cooldown already stamped, so Weapon.CanFire() is the game's second opinion on a
+            // decision the server has made. BEFORE the cosmetic emit, so the ordering reads the
+            // way it happens.
+            if (result.LaunchedProjectile) LaunchCarriedProjectile(session, actor, in result);
 
             EmitWeaponFire(session, actor, in result);
             EmitHitConfirms(session, in result);
 
             if (result.VictimDied) EmitDeath(session, in result);
+        }
+
+        /// <summary>
+        /// Hands the carried weapon this frame's aim, and returns the frame the combat authority
+        /// resolves -- without its trigger when the weapon kept the trigger for itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The Javelin, and why its trigger is not a shot.</b> Offline an unlocked launcher's
+        /// trigger marks the point it is looking at; the missile leaves on a later pull once the
+        /// lock has held for two seconds, or at once if the trigger is still held when it does.
+        /// The authority knows none of that -- every pull of a clip-of-one launcher is a round to
+        /// it -- so an unlocked pull reaching it spent the round and launched nothing, and the
+        /// engine threw on the way (<c>pointSampler</c> is destroyed on a server-side body).
+        /// </para>
+        /// <para>
+        /// <b>Withholding the bit reproduces the shipped timing exactly.</b> The trigger state is
+        /// edge-measured against the previous processed frame, so while the weapon keeps the
+        /// trigger the authority sees it released; the frame the lock completes with the trigger
+        /// still down is a fresh rising edge, and the launch happens there -- the offline
+        /// "hold fire and it goes when the lock does".
+        /// </para>
+        /// <para>
+        /// <b>The server decides the lock, from the server's own aim.</b> The client draws its own
+        /// lock box from the same algorithm over the same input, and never says what it locked:
+        /// a client-named target would be a target the server could not refuse.
+        /// </para>
+        /// </remarks>
+        private static InputFrame SteerCarriedWeapon(
+            ClientSession session, NetServerActor actor, in InputFrame frame)
+        {
+            Vec3 eye = ServerCombatAuthority.ShotOrigin(in session.State, in frame);
+            Vec3 aim = ServerCombatAuthority.AimDirection(frame.YawDegrees, frame.PitchDegrees);
+
+            actor.SteerCarriedWeapon(
+                eye.X, eye.Y, eye.Z, aim.X, aim.Y, aim.Z, frame.IsPressed(InputButtons.Aim));
+
+            if (!frame.IsPressed(InputButtons.Fire)) return frame;
+            if (!actor.TryWithholdCarriedTrigger(aim.X, aim.Y, aim.Z)) return frame;
+
+            return new InputFrame(
+                frame.MoveX, frame.MoveZ, frame.Yaw, frame.Pitch,
+                frame.Buttons & ~InputButtons.Fire);
+        }
+
+        /// <summary>
+        /// Advances all delayed carried-weapon releases once for this simulation tick.
+        /// Inventory commit, engine spawn and rollback are kept in this one transaction.
+        /// </summary>
+        public void AdvancePendingActions(IReadOnlyList<ServerPlayer> players, uint tick)
+        {
+            for (int i = 0; i < players.Count; i++)
+            {
+                ServerPlayer player = players[i];
+                ClientSession session = player.Session;
+                if (!session.Weapon.PendingRelease) continue;
+
+                NetServerActor actor = player.Actor;
+                WeaponConfig weapon = session.WeaponConfig;
+                ActorAmmoSource ammo = session.AmmoSourceFrom(_loop.SpareAmmo);
+                ThrowableTransition transition = _authority.AdvancePendingRelease(
+                    ref session.Weapon, in weapon, tick, in ammo);
+                if (!transition.Released) continue;
+
+                // The thrower's posture now, not at the trigger: the release is ticks later and
+                // has no frame of its own. A default frame would drop a held Prone button and
+                // release a prone player's throw from standing eye height.
+                InputFrame posture = player.LastAcceptedFrame;
+                Vec3 origin = ServerCombatAuthority.ShotOrigin(in session.State, in posture);
+                Vec3 aim = transition.Aim;
+                bool launched = false;
+                try
+                {
+                    launched = actor != null && actor.ReleaseCarriedThrowable(
+                        origin.X, origin.Y, origin.Z, aim.X, aim.Y, aim.Z);
+                }
+                catch (Exception exception)
+                {
+                    // Treat an engine/catalogue exception as the same transactional failure as
+                    // a false return. SpawnProjectile destroys its partial object before this
+                    // point; the inventory rollback below restores the held use.
+                    Debug.LogException(exception);
+                }
+
+                if (!launched)
+                {
+                    ThrowableLifecycle.RollbackRelease(
+                        ref session.Weapon, in transition, in ammo);
+                    FailedThrowableLaunches++;
+                    Debug.LogError(
+                        $"[net] actor {session.ActorId} reached its throwable release tick but "
+                        + "the engine created no projectile; the inventory transaction was "
+                        + "rolled back. Further failures are counted in FailedThrowableLaunches.");
+                }
+                else
+                {
+                    _authority.RecordDelayedProjectileLaunch();
+                    EmitWeaponFire(session, actor, in aim);
+                }
+
+                if (actor != null)
+                    PublishWeaponState(session, actor, in weapon, in ammo);
+            }
+        }
+
+        /// <summary>Due throwable releases the engine refused to instantiate.</summary>
+        public long FailedThrowableLaunches { get; private set; }
+
+        /// <summary>
+        /// Copies the session's authoritative weapon state onto the body the snapshot is built
+        /// from. Handoff section 4.5.
+        /// </summary>
+        /// <remarks>
+        /// <b>Three fields written together, always.</b> <c>DeltaEncoder.ComputeChangeMask</c>
+        /// masks the four weapon parts as one and <c>DeltaDecoder.ApplyEntry</c> replaces or
+        /// carries all four; writing the clip here and the reserve somewhere else would be the
+        /// only way to put a reload flag from one tick beside a clip from another.
+        /// </remarks>
+        private static void PublishWeaponState(
+            ClientSession session, NetServerActor actor, in WeaponConfig config,
+            in ActorAmmoSource ammo)
+        {
+            WeaponSnapshotFields fields =
+                SnapshotBuilder.ResolveWeaponFields(in session.Weapon, in config, in ammo);
+
+            actor.AmmoInClip = fields.AmmoInClip;
+            actor.SpareAmmoEncoded = fields.SpareAmmoEncoded;
+            actor.WeaponStateFlags = fields.StateFlags;
+        }
+
+        /// <summary>
+        /// Points the session at the loadout slot the body's weapon came out of, and says so
+        /// when the body holds a weapon the loadout does not have.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Holding NOTHING is not a disagreement, and it is the common case.</b> The body holds
+        /// <see cref="WeaponIds.NONE"/> whenever it is dead (<c>Actor.Die</c> drops every slot),
+        /// driving or riding a seat that holsters the carried weapon, or manning a turret, whose
+        /// weapon carries no network id. The slot is forgotten there -- there is no reserve to
+        /// draw -- but the warning used to say "the session and the body disagree about the
+        /// loadout" for it: 40 times in one 2026-09-27 Island match, every one of them for weapon
+        /// 0, and it read to a playtester as a reload bug.
+        /// </para>
+        /// <para>
+        /// <b>Once per change, which the callers already are.</b>
+        /// <see cref="AdoptTheWeaponTheBodyIsHolding"/> returns before calling this when the id
+        /// has not changed, and <see cref="PlaceAtSpawn"/> calls it once per spawn. It used to
+        /// also require the slot to have been known a moment before, and that gate hid the one
+        /// case worth reporting: a body re-armed with a weapon outside its loadout right after a
+        /// death, when the slot was already unknown because the corpse held nothing.
+        /// </para>
+        /// </remarks>
+        internal static void ResolveActiveLoadoutSlot(ClientSession session, byte weaponId)
+        {
+            if (session.ResolveActiveLoadoutSlotFrom(weaponId)) return;
+            if (weaponId == WeaponIds.NONE) return;
+
+            Debug.LogWarning(
+                $"[net] actor {session.ActorId} is holding weapon {weaponId}, which is in none "
+                + "of its five loadout slots. The session and the body disagree about the "
+                + "loadout, so its reserve reports no-resupply and its reloads are refused "
+                + "until they agree again.");
+        }
+
+        /// <summary>Launches this actor's carried projectile weapon. Ledger <b>X-42</b>.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A body holding nothing is LOGGED, not swallowed.</b> The server has just spent a
+        /// round on a weapon the actor does not have, which means the session and the body
+        /// disagree about the loadout -- the shape X-11 named and the shape a silent zero would
+        /// hide. Without this line the symptom is a grenade count that goes down and an
+        /// explosion that never happens, which is the row being closed.
+        /// </para>
+        /// <para>
+        /// The direction is the shot's own aim, already computed by
+        /// <c>ServerCombatAuthority.AimDirection</c> from the frame's yaw and pitch. Recomputing
+        /// it here would be a second transcription of a sign convention whose inversion still
+        /// hits at short range -- see that method's own remark.
+        /// </para>
+        /// </remarks>
+        private static void LaunchCarriedProjectile(
+            ClientSession session, NetServerActor actor, in CombatTickResult result)
+        {
+            if (actor.FireCarriedWeapon(
+                    result.Origin.X, result.Origin.Y, result.Origin.Z,
+                    result.AimDirection.X, result.AimDirection.Y, result.AimDirection.Z))
+                return;
+
+            Debug.LogError(
+                $"[net] actor {session.ActorId} spent a round of weapon {session.WeaponId} on a "
+                + "projectile launch and NOTHING WAS LAUNCHED: the body is either holding no "
+                + "weapon at all, or its engine weapon refused the trigger. Weapon.CanFire is "
+                + "unholstered && !reloading && HasLoadedAmmo() && (auto || !holdingFire) && "
+                + "!CoolingDown(); run with IRONFRONT_LOG_SHOTS=1 to see which gate answered. "
+                + "Before this line said so, a refusal here spent the round, launched nothing "
+                + "and produced no message at all.");
         }
 
         /// <summary>
@@ -168,16 +428,71 @@ namespace Ironfront.Net.Unity.Server
 
             // Tracked, not merely seated. A passenger in a seat with no mounted weapon keeps
             // their own rifle and takes the infantry path, which is the shipped behaviour.
-            if (!_mountedWeapons.IsTracked(vehicleId, seatIndex)) return false;
+            if (!_mountedWeapons.IsTracked(vehicleId, seatIndex))
+            {
+                // A human gunner's weapon declares itself once, from Seat.SetOccupant; a bot's
+                // re-declares on every CanFire. When that one declaration was lost, a player in a
+                // tank fired through the carried path with nothing in hand and the cannon never
+                // answered (2026-09-23). Ask again rather than trust the seat-entry edge.
+                if (!actor.DeclareMountedWeapon()
+                    || !_mountedWeapons.IsTracked(vehicleId, seatIndex))
+                    return false;
+
+                LateMountedDeclarations++;
+                if (LateMountedDeclarations == 1)
+                    Debug.LogWarning(
+                        $"[net] the mounted weapon on vehicle {vehicleId} seat {seatIndex} was not "
+                        + "declared when actor " + session.ActorId + " sat down; declared on its "
+                        + "first trigger instead. Further late declarations are counted in "
+                        + "LateMountedDeclarations.");
+            }
 
             MountedFireResult result = _mountedWeaponAuthority.Step(
                 vehicleId, seatIndex, in frame, actor.IsAlive, now);
 
+            // The mounted counterpart of LogShot, which this path returns before reaching. With
+            // no line here a seated gunner's trigger was invisible to IRONFRONT_LOG_SHOTS=1.
+            if (ShotLoggingEnabled && frame.IsPressed(InputButtons.Fire))
+            {
+                Debug.Log(
+                    $"[mounted-shot] actor={session.ActorId} vehicle={vehicleId} seat={seatIndex} "
+                    + $"fired={result.Fired} rejection={result.Rejection} tick={_loop.CurrentTick}");
+            }
+
             if (!result.Fired) return true;
 
             MountedShotsFired++;
+
+            // The authority books the shot; the engine has to FIRE it. Without this a human
+            // gunner's tank spent a shell, played the report on every client and launched nothing
+            // (2026-09-23, "tanks cannot shoot"). A bot's turret fires through Actor.UpdateWeapon
+            // instead, which a networked body never runs.
+            if (!actor.FireMountedWeapon()) ReportUnlaunchedMountedShot(session, vehicleId, seatIndex);
+
             EmitMountedFire(session, vehicleId, seatIndex);
             return true;
+        }
+
+        /// <summary>Mounted weapons first declared from a trigger rather than from seat entry.</summary>
+        public long LateMountedDeclarations { get; private set; }
+
+        /// <summary>Approved mounted shots the engine could not launch. Zero on a healthy server.</summary>
+        public long UnlaunchedMountedShots { get; private set; }
+
+        /// <summary>
+        /// A mounted shot was paid for and nothing left the barrel. Logged once, counted always,
+        /// because the alternative is the silent "the tank fires and hits nothing" this closed.
+        /// </summary>
+        private void ReportUnlaunchedMountedShot(ClientSession session, ushort vehicleId, byte seatIndex)
+        {
+            UnlaunchedMountedShots++;
+            if (UnlaunchedMountedShots != 1) return;
+
+            Debug.LogError(
+                $"[net] actor {session.ActorId} fired the mounted weapon on vehicle {vehicleId} seat "
+                + $"{seatIndex}; the authority spent the shot but the body is not holding a "
+                + "MountedWeapon, so NOTHING WAS LAUNCHED. Further occurrences are counted in "
+                + "UnlaunchedMountedShots and not logged.");
         }
 
         /// <summary>
@@ -190,22 +505,9 @@ namespace Ironfront.Net.Unity.Server
         /// heading here would draw a tracer that the shell does not follow.
         /// </remarks>
         private void EmitMountedFire(ClientSession shooter, ushort vehicleId, byte seatIndex)
-        {
-            var message = new WeaponFireMessage(
-                shooter.ActorId,
-                _mountedWeapons.WeaponIdOf(vehicleId, seatIndex),
-                0, 0, 0);
-
-            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
-            if (written < 0) return;
-
-            _loop.SendToListenersInEarshot(
-                shooter.State.Position,
-                ServerEventWriter.WeaponFireAudibleRadius,
-                new ReadOnlySpan<byte>(_eventPayload, 0, written),
-                (byte)ServerEventWriter.CosmeticChannel,
-                reliable: false);
-        }
+            => _loop.EmitWeaponFire(
+                shooter.ActorId, _mountedWeapons.WeaponIdOf(vehicleId, seatIndex),
+                shooter.State.Position, Vec3.Zero);
 
         /// <summary>
         /// Grants a respawn if the gate allows it, and silently drops it otherwise.
@@ -216,10 +518,26 @@ namespace Ironfront.Net.Unity.Server
         /// thing this message will ever do, and treating it as a protocol violation would
         /// disconnect honest players over clock skew.
         /// </remarks>
-        public bool TryRespawn(ServerPlayer player)
+        public bool TryRespawn(ServerPlayer player, SpawnRequestMessage? request = null)
         {
             NetServerActor actor = player.Actor;
             if (actor == null) return false;
+
+            // A LIVING body has nothing to respawn from, and moving it would be a teleport the
+            // player did not ask for. The respawn gate cannot express this: it times a DEATH, so
+            // for a body that has never died it reports the cooldown as long elapsed and says
+            // yes. Both production callers already arrive with a dead body -- the ordinary death
+            // path, and ServerPlayer.KillForFallingOutOfTheWorld, which sets IsAlive false on the
+            // line above its call -- so this refuses nothing that used to be granted.
+            //
+            // What it does refuse is a DUPLICATE first-deploy request that crosses its own
+            // placement in flight. The client re-sends that request until it observes the body
+            // placed (NetClientLocalCombatDriver.ResendDeployUntilPlaced, ledger X-86), and
+            // ISpawnRequestHandler.OnSpawnRequested routes every request after the first one here
+            // -- so without this line the repair for a DROPPED request would have introduced a
+            // rarer bug in its place: a player yanked back to a spawn point a moment after
+            // deploying. The two halves are one fix and neither is correct alone.
+            if (actor.IsAlive) return false;
 
             ClientSession session = player.Session;
             float now = _loop.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE;
@@ -228,10 +546,162 @@ namespace Ironfront.Net.Unity.Server
 
             _respawnGate.MarkRespawned(session.ActorId);
 
+            PlaceAtSpawn(player, request);
+            return true;
+        }
+
+        /// <summary>
+        /// Re-points the combat session at whatever weapon the body is now holding.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Without this, a weapon switch changes the body and not the gun that fires.</b>
+        /// <see cref="ClientSession.WeaponId"/> was assigned in exactly three places — join,
+        /// respawn and round reset — all of them spawn-shaped, and
+        /// <c>ApplyWeaponSwitchIntent</c> is none of them. So the actor's
+        /// <c>activeWeapon.NetworkId</c> moved to the grenade while
+        /// <see cref="ClientSession.WeaponConfig"/> — derived from the session's id — stayed the
+        /// rifle's, and <c>ServerCombatAuthority</c> went on resolving hitscan with rifle
+        /// ballistics.
+        /// </para>
+        /// <para>
+        /// <b>Measured, not reasoned:</b> <c>artifacts/lane-b/r1-grenade-02</c> logs
+        /// <c>[switch] actor=41 slot=2 outcome=forwarded weaponId=7</c> — the switch arrived and
+        /// took — beside 60 of 60 <c>[shot] actor=41 weapon=1</c>. The body held the FRAG and
+        /// every trigger pull spent a rifle round. That is the whole distance between X-31's fix
+        /// and a detonation, and it is why R1.1's acceptance asks for both.
+        /// </para>
+        /// <para>
+        /// <b>On change only, and the three statements are <see cref="PlaceAtSpawn"/>'s own, in
+        /// its order</b> — id, then <c>ResetWeapon</c>, then the actor's clip. That order is not
+        /// stylistic: <see cref="ClientSession.ResetWeapon"/> takes its clip size from the config
+        /// the id derives, so re-arming before assigning loads a clip of zero and presents as
+        /// <see cref="FireRejection.NoAmmo"/> forever.
+        /// </para>
+        /// <para>
+        /// <b>A switch used to reload, and X-43 is where that stopped.</b> The session modelled
+        /// ONE weapon, so there was nowhere to park the outgoing clip and nothing to restore the
+        /// incoming one's, and re-arming was the only state this method could reach — a player
+        /// who switched away and back had a full magazine. The row deferred it on the grounds
+        /// that "the wire, the session and the snapshot would all have to grow"; only the session
+        /// did. <c>SnapshotField</c> is 8/8 full and <c>AmmoInClip</c> already travels for the
+        /// weapon in hand, and a switch is a local event on both sides, so
+        /// <c>ClientSession.SwitchWeaponTo</c> keeping a clip per weapon id was the whole of it.
+        /// </para>
+        /// </remarks>
+        private static void AdoptTheWeaponTheBodyIsHolding(ClientSession session, NetServerActor actor)
+        {
+            if (actor.WeaponId == session.WeaponId) return;
+
+            // Ledger X-43. This used to assign the id and then call ResetWeapon(), because a
+            // full clip was the only weapon state reachable from here. SwitchWeaponTo parks the
+            // outgoing weapon's whole runtime state under its own id and restores the incoming
+            // one's, so switching away and back no longer hands out a magazine.
+            session.SwitchWeaponTo(actor.WeaponId);
+
+            // The new weapon draws from a different pouch, so the slot is re-resolved here
+            // rather than only at spawn. Leaving it pointing at the old slot would have a
+            // grenade reload spend the rifle's magazines -- a double-spend with no error
+            // anywhere, which is precisely what ISpareAmmoPool's seam exists to prevent.
+            ResolveActiveLoadoutSlot(session, actor.WeaponId);
+
+            // Unchanged, and still after: this field MIRRORS the session, which is why it could
+            // never have supplied the missing half itself.
+            actor.AmmoInClip = session.Weapon.AmmoInClip;
+        }
+
+        /// <summary>
+        /// Puts a claimed body into the world: full health, alive, standing on a spawn point of
+        /// its own team, holding a reloaded weapon.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This exists because the JOIN path did every step of it except the one that
+        /// matters.</b> <c>OnClientConnected</c> set <c>Health</c> and <c>IsAlive</c>, then
+        /// <c>WeaponId</c> / <c>ResetWeapon</c> / <c>AmmoInClip</c> — the same five statements in
+        /// the same order as the respawn below — and never moved the body. The claimed actor
+        /// therefore stayed wherever <c>Instantiate</c> left it: the world origin, falling.
+        /// Measured on <c>artifacts/lane-b/combat-roster01</c>, where the local actor reports
+        /// <c>x=0, z=0</c> with <c>y</c> descending 996.73 → 967.44 across all seven checkpoints
+        /// while the snapshot cheerfully reported it alive on 100 health.
+        /// </para>
+        /// <para>
+        /// <b>And <c>IsAlive = true</c> was not merely insufficient, it was actively
+        /// disqualifying.</b> <c>ActorManager.SpawnWave</c> — the only code in the project that
+        /// ever calls <c>Actor.SpawnAt</c> — selects on <c>actor.dead</c>, and
+        /// <c>NetServerActor.IsAlive</c> is a pass-through to that flag. So the join cleared the
+        /// one bit that would have let a wave place the body, and nothing else ever would. The
+        /// comment on those two lines explains why they clear the previous occupant's corpse,
+        /// which is correct and remains correct; what neither line did was finish the spawn.
+        /// </para>
+        /// <para>
+        /// <b>Still short of a gameplay spawn, deliberately and visibly.</b>
+        /// <see cref="MoveToSpawnPoint"/> teleports; it does not run <c>Actor.SpawnAt</c>, so
+        /// <c>SpawnLoadoutWeapons</c> never runs and <c>actor.WeaponId</c> — which reads
+        /// <c>activeWeapon.NetworkId</c> — stays 0 for a claimed body. That was already true of
+        /// every respawn and is ledger row <b>X-11</b>; it needs a seam that does not exist yet
+        /// (<c>IGameplayActorSource</c> has no spawn hook) and a decision about whether driving
+        /// <c>controller.EnableInput()</c> server-side is right for a remotely-driven body.
+        /// Fixing the position without claiming to have fixed the loadout.
+        /// </para>
+        /// </remarks>
+        public void PlaceAtSpawn(ServerPlayer player, SpawnRequestMessage? request = null)
+        {
+            NetServerActor actor = player.Actor;
+            if (actor == null) return;
+
+            ClientSession session = player.Session;
+
             actor.Health = NetServerActor.DefaultSpawnHealth;
             actor.IsAlive = true;
 
-            MoveToSpawnPoint(player);
+            MoveToSpawnPoint(player, request);
+
+            // THE BOT-RELEASE ANCHOR. A player body is now in the world, so the 30s clock that
+            // holds the AI roster back starts here -- and only here, because this is the one
+            // place a human body is placed on the networked path. Both teams' bots release from
+            // this single anchor whichever team this player is on: anchoring per team would
+            // hand the map to whichever side happened to be occupied first.
+            //
+            // After MoveToSpawnPoint rather than before, so the clock starts from the body
+            // actually being somewhere. Idempotent -- only the first call per round anchors, so
+            // every respawn and every later joiner below costs one field read.
+            NetBotRelease.NotifyPlayerSpawned();
+
+            // X-11's second half: a deploy request carries the loadout the CLIENT chose, and
+            // the body must be armed from THAT rather than from the server's own
+            // controller.GetLoadout() draw -- the two disagreeing is the original defect this
+            // whole handshake exists to close. Stamped into NetServerBindings immediately
+            // before EquipLoadout, one-shot-consumed on the far side of the asmdef boundary by
+            // Actor.SpawnLoadoutWeapons -- see DeployLoadoutSelection's own remarks for why this
+            // is a guarded static and not an interface parameter, and for the ordering
+            // guarantees the guard depends on. request == null (a server-initiated respawn with
+            // no client message, e.g. KillForFallingOutOfTheWorld's auto-respawn) leaves nothing
+            // pending, so EquipLoadout falls through to its original behaviour unchanged.
+            if (request.HasValue)
+            {
+                SpawnRequestMessage r = request.Value;
+                NetServerBindings.SetPendingDeploySelection(
+                    new DeployLoadoutSelection(
+                        actor.ActorId, r.Primary, r.Secondary, r.Gear1, r.Gear2, r.Gear3));
+
+                // The same five ids, kept on the session. The body can be asked what it is
+                // HOLDING but not which slot that came from, so this table is the only inverse
+                // of that question the server has -- and without it every reserve would have to
+                // be guessed. Handoff section 4.5.
+                session.SetLoadout(r.Primary, r.Secondary, r.Gear1, r.Gear2, r.Gear3);
+                SeedSpareAmmo(session);
+            }
+
+            // Arms the body. MoveToSpawnPoint teleports and does not call Actor.SpawnAt, so
+            // until 2026-08-21 SpawnLoadoutWeapons never ran for a claimed body and every
+            // networked player spawned holding nothing: weaponId 0, ammo 0/0, and eight seconds
+            // of point-blank fire doing zero damage. That was X-11's predicted "next one".
+            //
+            // BEFORE the WeaponId read below, necessarily: that read goes through
+            // Actor.activeWeapon.NetworkId, which does not exist until the loadout is spawned
+            // and the first weapon unholstered.
+            actor.EquipLoadout();
 
             // BEFORE ResetWeapon, always. The clip size comes from the config, the config is
             // derived from this id (phase-V2 D9), and re-arming an unassigned id loads a clip of
@@ -240,9 +710,43 @@ namespace Ironfront.Net.Unity.Server
             session.WeaponId = actor.WeaponId;
 
             session.ResetWeapon();
-            actor.AmmoInClip = session.Weapon.AmmoInClip;
 
-            return true;
+            ResolveActiveLoadoutSlot(session, actor.WeaponId);
+
+            ActorAmmoSource spawnAmmo = session.AmmoSourceFrom(_loop.SpareAmmo);
+            WeaponConfig spawnWeapon = session.WeaponConfig;
+            PublishWeaponState(session, actor, in spawnWeapon, in spawnAmmo);
+        }
+
+        /// <summary>
+        /// Fills this player's five spare-ammo slots from the weapon catalogue. V10.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The pool existed and nothing ever put rounds in it.</b> Before protocol 10 the
+        /// infantry reload refilled the clip unconditionally, so every slot sitting at zero was
+        /// invisible; wiring the reload to the pool without this would leave every player unable
+        /// to reload at all, which is a worse bug than the one being closed.
+        /// </para>
+        /// <para>
+        /// <b>The authored figure is the ceiling too.</b> <c>Actor.ResupplyAmmo</c> clamps to
+        /// <c>configuration.spareAmmo</c>, so an ammo bag refills a slot to what the player
+        /// spawned with -- which is exactly the number being written here.
+        /// </para>
+        /// </remarks>
+        private void SeedSpareAmmo(ClientSession session)
+        {
+            for (byte slot = 0; slot < ActorSpareAmmoPool.SlotsPerActor; slot++)
+            {
+                short spare = WeaponCatalog.For(session.LoadoutWeaponAt(slot)).SpareAmmo;
+
+                // Resupply per pulse is left at zero: how much one ammo-bag pulse adds is a per
+                // weapon number this catalogue does not carry yet, and a guess here would be a
+                // balance change wearing a netcode commit's clothes. A zero means the bag adds
+                // nothing, which is what happens today.
+                _loop.SpareAmmo.SetLoadout(
+                    session.ActorId, slot, spare, spare, resupplyPerPulse: 0);
+            }
         }
 
         /// <summary>
@@ -253,6 +757,210 @@ namespace Ironfront.Net.Unity.Server
         /// actor set does not change between them. Rebuilding per shot would be 16 scans of 64
         /// actors per tick for one answer.
         /// </remarks>
+        /// <summary>
+        /// One line per trigger frame, when <c>IRONFRONT_LOG_SHOTS=1</c>. Silent otherwise.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Ledger row X-15 exists because this did not.</b> On 2026-08-21 a client held
+        /// Fire|Aim at six metres, the server drained a thirty-round clip on its own accounting,
+        /// and the victim finished on 100 health -- and there was no way to tell from any
+        /// artifact whether the shots were refused, fired and missed, or fired at a target list
+        /// that was empty. Three very different bugs, one indistinguishable symptom.
+        /// </para>
+        /// <para>
+        /// <b>Off by default, and by an env var rather than a define</b>, so a running dedicated
+        /// server can be asked the question without a rebuild. Bounded by the fire rate rather
+        /// than the tick rate: only a frame that pulled the trigger or was refused for pulling it
+        /// prints, so an idle player costs one branch.
+        /// </para>
+        /// <para>
+        /// <c>hitboxes</c> is the total across every candidate target, because a target with no
+        /// hitboxes cannot be hit and would otherwise be indistinguishable from a miss. That is
+        /// the first hypothesis this line was written to kill or confirm.
+        /// </para>
+        /// </remarks>
+        /// <summary>
+        /// <c>ShotsOccluded</c> as of the previous logged shot, so the occlusion description can
+        /// be dated rather than reprinted. See <c>ServerTickLoop.OcclusionFor</c>.
+        /// </summary>
+        private long _occludedAtLastShotLog;
+
+        /// <summary>
+        /// <c>NearestMissesMeasured</c> as of the previous logged shot, so the nearest-miss
+        /// description can be dated rather than reprinted. See
+        /// <c>LagCompensator.NearestMissFor</c>.
+        /// </summary>
+        private long _nearestMissesAtLastShotLog;
+
+        private void LogShot(
+            ClientSession session, in InputFrame frame, in CombatTickResult result, uint tick)
+        {
+            if (!ShotLoggingEnabled) return;
+            if (!frame.IsPressed(InputButtons.Fire)) return;
+
+            // A HitboxSet is always four AABBs, so counting them proves nothing. What can be
+            // wrong is that they are DEGENERATE -- Aabb.IsEmpty -- which is indistinguishable
+            // from a miss in every artifact that exists today. So count the targets whose torso
+            // is a real box, and print the nearest other target's torso outright.
+            int alive = 0;
+            int solid = 0;
+            int nearestIndex = -1;
+            float nearestDistance = float.MaxValue;
+
+            for (int i = 0; i < _targetCount; i++)
+            {
+                HitscanTarget target = _targets[i];
+                if (target.IsAlive) alive++;
+                if (!target.Present.Torso.IsEmpty) solid++;
+                if (target.ActorId == session.ActorId) continue;
+
+                Vec3 delta = target.Present.Torso.Center - result.Origin;
+                float distance = MathF.Sqrt(delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z);
+                if (distance >= nearestDistance) continue;
+
+                nearestDistance = distance;
+                nearestIndex = i;
+            }
+
+            string nearest = "none";
+            if (nearestIndex >= 0)
+            {
+                HitscanTarget target = _targets[nearestIndex];
+                nearest = $"actor={target.ActorId} alive={target.IsAlive} d={nearestDistance:F1}m "
+                          + $"torso={target.Present.Torso.Center.X:F1},{target.Present.Torso.Center.Y:F1},"
+                          + $"{target.Present.Torso.Center.Z:F1} "
+                          + $"extents={target.Present.Torso.Extents.X:F2},{target.Present.Torso.Extents.Y:F2},"
+                          + $"{target.Present.Torso.Extents.Z:F2}";
+            }
+
+            // X-20 freshness: LastOcclusion is last-write-wins and only written on a HIT, so a
+            // shot nothing blocked would otherwise reprint the previous shot's collider. The
+            // counter rises exactly when a description is written, so it dates it.
+            long occludedNow = _authority.FireResolver.LagCompensator.ShotsOccluded;
+            string occlusion = ServerTickLoop.OcclusionFor(
+                occludedNow, _occludedAtLastShotLog, ServerTickLoop.LastOcclusion);
+            _occludedAtLastShotLog = occludedNow;
+
+            // X-24: `hits=0` reads identically for a shot aimed at the sky, a shot three
+            // centimetres high, and a shot the boxes never saw. This says WHICH box the ray came
+            // closest to and on WHICH SIDE of it -- the measurement the row required before any
+            // fix, so a widening is sized from a run rather than from the constants that produced
+            // the gap. Dated the same way the occlusion line is, and for the same reason.
+            long nearestMissesNow = _authority.FireResolver.LagCompensator.NearestMissesMeasured;
+            string nearestMiss = LagCompensator.NearestMissFor(
+                nearestMissesNow, _nearestMissesAtLastShotLog,
+                _authority.FireResolver.LagCompensator.LastNearestMiss);
+            _nearestMissesAtLastShotLog = nearestMissesNow;
+
+            Debug.Log(
+                $"[shot] actor={session.ActorId} weapon={session.WeaponId} "
+                // Ledger X-31. The grenade is never held, and the loss is somewhere between the
+                // programme's switchWeaponSlot and frame.WeaponSlot: the slots ARE armed
+                // (slot2[FRAG toggleable=False]), the wire carries the full ushort, this very
+                // method runs 60 times in the run that reports it, and `fire` from the SAME step
+                // object arrives while the slot bit does not. These two fields are the only place
+                // left to look -- what the server actually received, before anything interprets it.
+                + $"buttons=0x{(ushort)frame.Buttons:X4} slot={frame.WeaponSlot} "
+                + $"ammo={session.Weapon.AmmoInClip} rejection={result.Rejection} "
+                + $"fired={result.Fired} hits={result.HitCount} "
+                + $"targets={_targetCount} alive={alive} solidTorsos={solid} "
+                + $"origin={result.Origin.X:F1},{result.Origin.Y:F1},{result.Origin.Z:F1} "
+                + $"aim={result.AimDirection.X:F2},{result.AimDirection.Y:F2},{result.AimDirection.Z:F2} "
+                + $"nearest[{nearest}] "
+                // A ray can be PROVEN to enter a hitbox and still resolve as a miss. These are
+                // the two ways, and without them a rejected hit is indistinguishable from a
+                // bad aim -- which cost a slab test done by hand on 2026-08-22 to rule out. X-19.
+                + $"occluded={_authority.FireResolver.LagCompensator.ShotsOccluded} "
+                // X-20: occluded counts rejections; this says WHAT rejected them. The two
+                // readings the 2026-08-23 run could not separate are "there is a wall between
+                // them" and "the victim's own capsule blocked the shot that hit it", and the
+                // collider name tells them apart on sight.
+                + $"occlusionHit[{occlusion}] "
+                + $"nearestMiss[{nearestMiss}] "
+                + $"presentFallbacks={_authority.FireResolver.LagCompensator.PresentFallbacks} "
+                + $"resolved={_authority.FireResolver.LagCompensator.ShotsResolved} "
+                + DescribeX19(session, nearestIndex, tick));
+        }
+
+        /// <summary>
+        /// The five fields phase-3F section 3 names, on the same line as the shot they belong to.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Three runs could not tell two different files apart, because the line printed one
+        /// pose and the resolver used another.</b> <c>nearest[... torso=...]</c> above comes from
+        /// <c>HitscanTarget.Present</c> -- the pose the server holds NOW -- while
+        /// <see cref="LagCompensator.ResolveHitscan"/> raycasts against
+        /// <c>HitboxHistory.Frame.Boxes</c> at the REWOUND tick. Both are printed here, so the
+        /// artifact separates "the pose was recorded low" from "the pose is fine and the body is
+        /// drawn low". Those are different defects in different files, and X-19 has been stuck on
+        /// exactly that fork since 2026-08-22.
+        /// </para>
+        /// <para>
+        /// <b>The rewind tick is recomputed, not read back.</b> <c>CombatTickResult</c> carries
+        /// the tick only on a <see cref="HitResult"/>, and the shots this line exists to explain
+        /// are the ones that produced no hit at all. Recomputing through the same
+        /// <see cref="LagCompensator.ResolveTargetTick"/> the resolver used, from the same tick
+        /// and the same RTT, is the only way to name the frame a MISS was judged against -- and
+        /// it is the same static function, so it cannot drift from the resolver's answer.
+        /// </para>
+        /// <para>
+        /// <b><c>shooter.movement</c> and <c>shooter.transform</c> are printed separately on
+        /// purpose.</b> The first is <c>NetMovementAgent.State.Position</c>, which is what
+        /// <see cref="ServerCombatAuthority.ShotOrigin"/> adds the eye height to; the second is
+        /// where the body actually stands in the scene. On the server those are written together
+        /// by <c>NetMovementAgent.CharacterMove</c> and must agree; a gap between them is the
+        /// server-side half of the same disagreement the clients report at every checkpoint.
+        /// </para>
+        /// </remarks>
+        private string DescribeX19(ClientSession session, int nearestIndex, uint tick)
+        {
+            uint rewindTick = LagCompensator.ResolveTargetTick(
+                tick, SmoothedRttMs(session.ConnectionId));
+
+            string present = "none";
+            string recorded = "none";
+            string recordedTick = "absent";
+
+            if (nearestIndex >= 0)
+            {
+                HitscanTarget target = _targets[nearestIndex];
+                present = Describe(target.Present.Torso.Center);
+
+                if (_loop.HitboxHistory.TryGetFrame(
+                        target.ActorId, rewindTick, out HitboxHistory.Frame recordedFrame))
+                {
+                    recorded = Describe(recordedFrame.Boxes.Torso.Center);
+                    recordedTick = recordedFrame.Tick.ToString();
+                }
+            }
+
+            string movement = "absent";
+            string drawn = "absent";
+
+            if (_registry.TryFind(session.ActorId, out NetServerActor shooter) && shooter != null)
+            {
+                if (shooter.Movement != null)
+                    movement = Describe(shooter.Movement.State.Position);
+
+                Vector3 p = shooter.transform.position;
+                drawn = $"{p.x:F3},{p.y:F3},{p.z:F3}";
+            }
+
+            return $"present.torso={present} frame.torso={recorded} "
+                   + $"frame.tick={recordedTick} wanted.tick={rewindTick} tick={tick} "
+                   + $"shooter.movement={movement} shooter.transform={drawn}";
+        }
+
+        /// <summary>Three decimals: the offset under investigation is a third of a metre.</summary>
+        private static string Describe(in Vec3 v) => $"{v.X:F3},{v.Y:F3},{v.Z:F3}";
+
+        /// <summary>Read once: this is consulted on every trigger frame.</summary>
+        private static bool ShotLoggingEnabled =>
+            _shotLogging ??= Environment.GetEnvironmentVariable("IRONFRONT_LOG_SHOTS") == "1";
+
+        private static bool? _shotLogging;
         private void BuildTargets(uint tick)
         {
             if (_targetsBuiltForTick == tick) return;
@@ -316,16 +1024,182 @@ namespace Ironfront.Net.Unity.Server
         /// where they were, which is the previous behaviour.
         /// </para>
         /// </remarks>
-        private static void MoveToSpawnPoint(ServerPlayer player)
+        // Once-only, because a player who cannot spawn will keep asking: the respawn path calls
+        // MoveToSpawnPoint on every request, and a warning that repeats sixty times a second is
+        // filtered out as noise, which is the same as not warning at all.
+        private static readonly System.Collections.Generic.HashSet<string> _warned =
+            new System.Collections.Generic.HashSet<string>();
+
+        private static void WarnOnce(string key, string message)
+        {
+            if (!_warned.Add(key)) return;
+            Debug.LogWarning(message);
+        }
+
+        /// <summary>
+        /// The <c>SpawnPoint.owner</c> value for a point no team holds, passed to
+        /// <see cref="ChooseSpawnIndex"/> <i>as</i> a team. That is not a trick: eligibility is
+        /// "the point's owner is this team", so asking on behalf of team -1 asks for exactly the
+        /// neutral points, and a directory that decides ownership some other way keeps its own
+        /// answer instead of having this one imposed on it.
+        /// </summary>
+        private const int NeutralOwner = -1;
+
+        /// <summary>
+        /// Reused across every placement so the near-teammate draw allocates nothing (M1
+        /// criterion 9) — the same reason <see cref="_targets"/> is a preallocated array rather
+        /// than a fresh list per shot. Capacity is <see cref="ProtocolConstants.MAX_ACTORS"/>
+        /// because <see cref="ServerActorRegistry.Actors"/> never holds more than that.
+        /// </summary>
+        private static readonly List<Vector3> _teammateAnchors =
+            new List<Vector3>(ProtocolConstants.MAX_ACTORS);
+
+        /// <summary>
+        /// Refills <see cref="_teammateAnchors"/> with every living, announceable, same-team body
+        /// other than <paramref name="spawning"/> itself. BOT-05: a joining player used to be
+        /// handed a uniform random point on their team's whole base, up to ~800 m from every
+        /// living teammate and clear across <c>InterestManager.CullRadius</c> (500 m).
+        /// </summary>
+        private static void CollectLivingTeammateAnchors(NetServerActor spawning)
+        {
+            _teammateAnchors.Clear();
+
+            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
+            for (int i = 0; i < actors.Count; i++)
+            {
+                NetServerActor candidate = actors[i];
+
+                // isActiveAndEnabled reads live component/GameObject state, so it stays here in
+                // the registry-driven loop rather than in IsLivingTeammateAnchor below — the
+                // same split ServerTickLoop.AnnounceNewActors already draws around its own
+                // isActiveAndEnabled check.
+                if (candidate == null || !candidate.isActiveAndEnabled) continue;
+                if (!IsLivingTeammateAnchor(candidate, spawning, spawning.Team)) continue;
+
+                _teammateAnchors.Add(TeammateAnchorPosition(candidate));
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="candidate"/> is a valid anchor for placing
+        /// <paramref name="spawning"/> near team <paramref name="team"/>. Extracted as a pure
+        /// predicate — independent of <see cref="ServerActorRegistry"/> and of
+        /// <c>isActiveAndEnabled</c> — so the EditMode suite can drive every branch with bare
+        /// <see cref="NetServerActor"/> rigs, the same way <c>AnnounceableActorTests</c>
+        /// already does for <see cref="ServerTickLoop.IsAnnounceable"/>.
+        /// </summary>
+        internal static bool IsLivingTeammateAnchor(
+            NetServerActor candidate, NetServerActor spawning, int team)
+        {
+            if (candidate == null) return false;
+            if (candidate == spawning) return false;
+            if (candidate.Team != team) return false;
+            if (!candidate.IsAlive) return false;
+
+            // Excludes unclaimed player-slot bodies parked near (0, 1000, 0) — the same
+            // sentinel-position problem X-18 closed for the client's own view of the world, and
+            // exactly as wrong an anchor as it would be a spawn.
+            return ServerTickLoop.IsAnnounceable(candidate);
+        }
+
+        /// <summary>
+        /// A living actor's own position: the simulation state for a player, the transform for a
+        /// bot — the same split <see cref="NetServerActor.Capture"/> already draws around
+        /// <see cref="NetServerActor.Movement"/> being null.
+        /// </summary>
+        private static Vector3 TeammateAnchorPosition(NetServerActor actor)
+            => actor.Movement != null
+                ? MovementSimulation.ToUnity(actor.Movement.State.Position)
+                : actor.transform.position;
+
+        /// <summary>
+        /// The distance from <paramref name="ground"/> to the closest entry in
+        /// <see cref="_teammateAnchors"/>, or -1 when there is none. Log-line diagnostics only.
+        /// </summary>
+        private static float NearestTeammateDistanceMetres(Vector3 ground)
+        {
+            if (_teammateAnchors.Count == 0) return -1f;
+
+            float nearestSqr = float.PositiveInfinity;
+            for (int i = 0; i < _teammateAnchors.Count; i++)
+            {
+                float sqr = (ground - _teammateAnchors[i]).sqrMagnitude;
+                if (sqr < nearestSqr) nearestSqr = sqr;
+            }
+
+            return Mathf.Sqrt(nearestSqr);
+        }
+
+        private static void MoveToSpawnPoint(ServerPlayer player, SpawnRequestMessage? request)
         {
             NetServerActor actor = player.Actor;
             ISpawnPointDirectory spawnPoints = NetServerBindings.SpawnPoints;
-            if (spawnPoints == null) return;
 
-            int chosen = ChooseSpawnIndex(spawnPoints, actor.Team);
-            if (chosen < 0) return;
+            // BOTH of these used to return in silence, and a spawn that silently does not happen
+            // is the single most expensive shape of bug in this subsystem: the actor stays where
+            // Instantiate left it, the snapshot reports it alive on full health, every client
+            // renders a healthy player at the world origin, and no log anywhere says why. That
+            // cost a whole investigation on 2026-08-21 (X-12) — and then cost a second one,
+            // because after the join was taught to call this, the body STILL did not move and
+            // there was no way to tell which of these two branches had fired.
+            if (spawnPoints == null)
+            {
+                WarnOnce(
+                    "spawn-no-directory",
+                    "[net] no ISpawnPointDirectory, so no player can ever be placed. "
+                    + "NetServerBindings.SpawnPoints is installed by IronfrontNetBindings; a "
+                    + "scene with no ActorManager has nothing to install.");
+                return;
+            }
 
-            Vector3 position = spawnPoints.GetSpawnPosition(chosen);
+            // BOT-05: gathered once, ahead of both draws below, so the team draw AND the neutral
+            // fallback both favour landing near whoever on this team is still alive rather than
+            // a uniform point anywhere on the whole base.
+            CollectLivingTeammateAnchors(actor);
+
+            int chosen = ChooseRequestedOrRandomSpawnIndex(
+                spawnPoints, actor.Team, request, _teammateAnchors);
+            if (chosen < 0)
+            {
+                // Every point this team held has been captured. A neutral point is a worse spawn
+                // than a base — it is contested by definition — but it is authored ground, and
+                // the alternative is not "spawn a moment later": it is standing at the prefab
+                // origin, alive on full health, falling, until EnforceWireVolume kills the body
+                // for leaving the world. Losing every flag is a legitimate match state, so this
+                // degrades rather than refuses.
+                chosen = ChooseSpawnIndexNearTeammates(spawnPoints, NeutralOwner, _teammateAnchors);
+                WarnOnce(
+                    "spawn-no-owned-point-team" + actor.Team,
+                    $"[net] team {actor.Team} owns none of the {spawnPoints.Count} spawn points, "
+                    + "so its placements fall back to a neutral one. A team spawning onto "
+                    + "contested ground has already lost the round; this is the match state, not "
+                    + "a spawn bug.");
+            }
+
+            if (chosen < 0)
+            {
+                WarnOnce(
+                    "spawn-none-eligible-team" + actor.Team,
+                    $"[net] actor {actor.ActorId} (team {actor.Team}) has no eligible spawn point "
+                    + $"among {spawnPoints.Count} and no neutral one either, so it stays where it "
+                    + "is — for a freshly instantiated body that means the prefab origin, and a "
+                    + "fall out of the world. Every SpawnPoint.owner in the scene names some "
+                    + "other team.");
+                return;
+            }
+
+            Vector3 ground = spawnPoints.GetSpawnPosition(chosen);
+            Vector3 position = StandingBodyPosition(ground);
+
+            float nearestTeammateMetres = NearestTeammateDistanceMetres(ground);
+            string nearestTeammateText = nearestTeammateMetres >= 0f
+                ? $"{nearestTeammateMetres:F1} m"
+                : "none alive";
+
+            Debug.Log($"[net] actor {actor.ActorId} (team {actor.Team}) placed at spawn point "
+                      + $"{chosen} of {spawnPoints.Count} {position} "
+                      + $"(ground {ground} + {StandingLiftMetres:F2} m capsule lift, "
+                      + $"nearest teammate {nearestTeammateText})");
 
             // Teleport, not a transform write: it disables the CharacterController around the
             // assignment, which otherwise fights it and lands the actor somewhere else.
@@ -335,8 +1209,72 @@ namespace Ironfront.Net.Unity.Server
             Vec3 core = MovementSimulation.ToCore(position);
             player.Session.State.Position = core;
             player.Session.State.Velocity = Vec3.Zero;
+
+            // The lift above is half the STANDING height, so the stance has to agree with it or
+            // the capsule NetMovementAgent.ApplyStanceHeight builds is not the capsule that was
+            // measured. A gameplay spawn calls FpsActorController.ForceEndCrouch for the same
+            // reason; nothing here used to, so a player who died crouching respawned with a
+            // 0.5 m capsule lifted for a 1.8 m one and dropped the difference.
+            player.Session.State.IsCrouching = false;
+
             player.Session.PreviousPosition = core;
         }
+
+        /// <summary>
+        /// How far above the ground a standing body's transform sits.
+        /// </summary>
+        /// <remarks>
+        /// Read from <see cref="MovementCore.HeightFor"/> rather than from the live
+        /// <c>CharacterController</c>, because that is the same source
+        /// <c>NetMovementAgent.ApplyStanceHeight</c> assigns the capsule height FROM — so the two
+        /// cannot drift apart, and a test can check the derivation without a loaded scene.
+        /// </remarks>
+        internal static float StandingLiftMetres => MovementCore.HeightFor(crouching: false) * 0.5f;
+
+        /// <summary>
+        /// Lifts a ground position to where a standing body's transform belongs.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A spawn position is a point on the GROUND; a body's transform is the centre of its
+        /// capsule.</b> <c>SpawnPoint.GetSpawnPosition</c> ends in
+        /// <c>GroundSnap.TrySnap</c>, which returns <c>hit.point</c> — the surface itself — and
+        /// the player prefab's <c>CharacterController</c> is authored with <c>center.y = 0</c> and
+        /// <c>height = 1.8</c>, so its capsule runs from 0.9 m below the transform to 0.9 m above
+        /// it. Teleporting the transform to the surface therefore buries the lower half of the
+        /// capsule in whatever it was standing on. The game's own spawn has always known this:
+        /// <c>FpsActorController.SpawnAt</c> is
+        /// <c>controller.transform.position = position + Vector3.up * (characterController.height / 2f)</c>.
+        /// <see cref="MoveToSpawnPoint"/> is the netcode's stand-in for that call and was missing
+        /// its one arithmetic step.
+        /// </para>
+        /// <para>
+        /// <b>Measured on <c>artifacts/lane-b/predict-01</c>, and it is two symptoms, not one.</b>
+        /// (1) <i>On thick ground the body never stops being corrected.</i> Actor 33 was placed at
+        /// <c>(2085.34, 8.82, 1139.82)</c>; the client's <c>CharacterController</c> de-penetrated
+        /// its buried capsule upward to <c>y = 9.81</c> — ground + 0.9 + the 0.08 skin width — and
+        /// the server went on insisting on 8.83, so <c>[predict]</c> reported
+        /// <c>err = 0.98 m</c> unchanged for 250 consecutive ticks and 197 corrections in ten
+        /// seconds with zero convergence. That is the floating-and-juddering report, and no
+        /// tolerance can absorb it because the disagreement is structural rather than transient.
+        /// (2) <i>On a thin authored floor the body falls through it.</i> Actor 34 was placed on
+        /// spawn point 0 at <c>(1090.03, 103.50, 956.66)</c> — a snap that SUCCEEDED, no X-81
+        /// warning anywhere in the run — and a capsule buried 0.9 m into a surface only
+        /// centimetres thick is a capsule under it, with nothing beneath: <c>[fall]</c> logged
+        /// <c>probe=MISS within 5 m</c> from <c>y = 101.27</c> down to <c>y = -104.71</c>,
+        /// <c>ctrlEnabled=True</c>, <c>bypassed=0</c>, <c>flags=None</c> throughout. That is
+        /// "spawns in a corner, walks off the edge, killed by the world", and it is the mechanism
+        /// ledger <b>X-82</b> left open after ruling out <c>SyncTransforms</c>.
+        /// </para>
+        /// <para>
+        /// <b>Why here and not in <see cref="GroundSnap"/> or <c>SpawnPoint</c>.</b> Both of those
+        /// answer "where is the ground", which is the question the AI wave and the gameplay spawn
+        /// also ask — and <c>FpsActorController.SpawnAt</c> adds this lift itself, so moving it
+        /// down there would double it for every offline spawn in the game.
+        /// </para>
+        /// </remarks>
+        internal static Vector3 StandingBodyPosition(Vector3 ground)
+            => ground + Vector3.up * StandingLiftMetres;
 
         /// <summary>
         /// Picks one spawn slot this team may use, or -1 when the scene offers none.
@@ -365,29 +1303,136 @@ namespace Ironfront.Net.Unity.Server
             return chosen;
         }
 
+        /// <summary>
+        /// <see cref="ChooseSpawnIndex"/>, biased toward the eligible point nearest a living
+        /// teammate. BOT-05.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The reservoir draw always runs first, over every call.</b> <paramref name="anchors"/>
+        /// never changes which indices are eligible or how many <c>Random.Range</c> calls that
+        /// costs — only which of the (already eligible) indices the RETURN VALUE names — so a
+        /// seeded lane-B/load run consumes the exact same RNG sequence whether or not any
+        /// teammate is alive to draw anchors from.
+        /// </para>
+        /// <para>
+        /// <b>Never widens eligibility.</b> The nearest search only ever looks at an index that
+        /// already passed <see cref="ISpawnPointDirectory.IsEligible"/> — a
+        /// <see cref="PinnedSpawnPointDirectory"/> still exposes exactly one candidate per team,
+        /// so <c>candidateCount</c> stays below 2 and this degrades to the reservoir pick,
+        /// keeping <c>-SpawnIndex</c> exactly as deterministic as before.
+        /// </para>
+        /// <para>
+        /// Reads positions through <see cref="ISpawnPointDirectory.GetAnchorPosition"/> only,
+        /// never <see cref="ISpawnPointDirectory.GetSpawnPosition"/> — see that member's remarks
+        /// for why probing candidates through the jittering, rotation-advancing member would be a
+        /// different (and, for a pinned directory, wrong) behaviour.
+        /// </para>
+        /// </remarks>
+        internal static int ChooseSpawnIndexNearTeammates(
+            ISpawnPointDirectory spawnPoints, int eligibilityTeam, IReadOnlyList<Vector3> anchors)
+        {
+            bool haveAnchors = anchors != null && anchors.Count > 0;
+
+            int reservoirPick = -1;
+            int candidateCount = 0;
+            int count = spawnPoints.Count;
+
+            int nearestIndex = -1;
+            float nearestSqrDistance = float.PositiveInfinity;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (!spawnPoints.IsEligible(i, eligibilityTeam)) continue;
+
+                candidateCount++;
+                if (UnityEngine.Random.Range(0, candidateCount) == 0) reservoirPick = i;
+
+                if (!haveAnchors) continue;
+
+                Vector3 candidatePosition = spawnPoints.GetAnchorPosition(i);
+                for (int a = 0; a < anchors.Count; a++)
+                {
+                    // Strictly less, never <=, so the FIRST (lowest-index) candidate to reach a
+                    // given distance keeps it — the tie-break the plan calls for.
+                    float sqrDistance = (candidatePosition - anchors[a]).sqrMagnitude;
+                    if (sqrDistance >= nearestSqrDistance) continue;
+
+                    nearestSqrDistance = sqrDistance;
+                    nearestIndex = i;
+                }
+            }
+
+            // No anchors, or fewer than two eligible points to choose between, leaves nothing
+            // for proximity to decide — the reservoir draw is already the whole answer, and is
+            // the ONLY answer for a pinned directory's single-candidate team.
+            if (!haveAnchors || candidateCount < 2) return reservoirPick;
+
+            return nearestIndex;
+        }
+
+        /// <summary>
+        /// Honours the deploying client's requested spawn point when it names one this actor's
+        /// team may actually use; falls back to <see cref="ChooseSpawnIndexNearTeammates"/>
+        /// otherwise.
+        /// </summary>
+        /// <remarks>
+        /// <b>Never trusted outright.</b> <see cref="SpawnRequestMessage.SpawnPointIndex"/> is
+        /// validated against the SAME <see cref="ISpawnPointDirectory"/> the random draw reads —
+        /// out of range or ineligible for this team is treated exactly like
+        /// <see cref="SpawnRequestMessage.NoSpawnPointPreference"/>, which is what every sender
+        /// writes today (see that field's own remark). No client input reaches
+        /// <see cref="ISpawnPointDirectory.GetSpawnPosition"/> unchecked.
+        /// </remarks>
+        internal static int ChooseRequestedOrRandomSpawnIndex(
+            ISpawnPointDirectory spawnPoints, int team, SpawnRequestMessage? request,
+            IReadOnlyList<Vector3> anchors)
+        {
+            if (request.HasValue)
+            {
+                int requested = DirectoryIndexOfFlag(
+                    spawnPoints, NetSceneBindings.CapturePoints, request.Value.SpawnPointIndex);
+                if (requested >= 0 && spawnPoints.IsEligible(requested, team))
+                {
+                    return requested;
+                }
+            }
+
+            return ChooseSpawnIndexNearTeammates(spawnPoints, team, anchors);
+        }
+
+        /// <summary>
+        /// The spawn-directory slot standing on the capture point a client named by wire id, or
+        /// -1 when the id names nothing.
+        /// </summary>
+        /// <remarks>
+        /// The client sends the capture point's wire id rather than a directory index because
+        /// the directory is <c>FindObjectsOfType</c> order and the wire ids are authored — see
+        /// <see cref="SpawnPointChoice"/>. The two are joined here by the flag's authored
+        /// position, which both processes read from the same scene.
+        /// </remarks>
+        internal static int DirectoryIndexOfFlag(
+            ISpawnPointDirectory spawnPoints, ICapturePointDirectory capturePoints, byte wireIndex)
+        {
+            if (wireIndex == SpawnRequestMessage.NoSpawnPointPreference) return -1;
+            if (spawnPoints == null || capturePoints == null || wireIndex >= capturePoints.Count) return -1;
+
+            Vector3 flag = capturePoints.GetDefinition(wireIndex).Position;
+            for (int i = 0; i < spawnPoints.Count; i++)
+            {
+                if (SpawnPointChoice.Matches(spawnPoints.GetAnchorPosition(i), flag)) return i;
+            }
+
+            return -1;
+        }
+
         private void EmitWeaponFire(
             ClientSession shooter, NetServerActor actor, in CombatTickResult result)
-        {
-            var message = new WeaponFireMessage(
-                shooter.ActorId,
-                actor.WeaponId,
-                Quantize.PackVel16(result.AimDirection.X),
-                Quantize.PackVel16(result.AimDirection.Y),
-                Quantize.PackVel16(result.AimDirection.Z));
+            => EmitWeaponFire(shooter, actor, in result.AimDirection);
 
-            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
-            if (written < 0) return;
-
-            // Cosmetic channel, and only to clients close enough to hear it — a gunshot is a
-            // muzzle flash and a sound, so a client 300 m away gains nothing from it and a
-            // client that can hear every shot on the map has been handed an audio wallhack.
-            _loop.SendToListenersInEarshot(
-                shooter.State.Position,
-                ServerEventWriter.WeaponFireAudibleRadius,
-                new ReadOnlySpan<byte>(_eventPayload, 0, written),
-                (byte)ServerEventWriter.CosmeticChannel,
-                reliable: false);
-        }
+        private void EmitWeaponFire(
+            ClientSession shooter, NetServerActor actor, in Vec3 aim)
+            => _loop.EmitWeaponFire(shooter.ActorId, actor.WeaponId, shooter.State.Position, in aim);
 
         private void EmitHitConfirms(ClientSession shooter, in CombatTickResult result)
         {

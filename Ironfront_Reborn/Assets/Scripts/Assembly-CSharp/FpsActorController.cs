@@ -49,7 +49,44 @@ public class FpsActorController : ActorController
 
 	public static FpsActorController instance;
 
-	public static int playerTeam = -1;
+	/// <summary>
+	/// The team the human at this keyboard is fighting for, or <see cref="UNKNOWN_TEAM"/> when
+	/// there is no local body to ask.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A property over the body, not a field latched at <c>Awake</c> — P12 D-1.</b> This was
+	/// <c>public static int playerTeam = -1;</c> assigned once from <c>actor.team</c> in
+	/// <c>Awake</c>. On a networked client the body's team arrives with the first snapshot,
+	/// which is always AFTER <c>Awake</c>, so the latch held the prefab's authored value for the
+	/// whole session: every reader below answered for the wrong side and nothing errored.
+	/// </para>
+	/// <para>
+	/// Reading through to the body is the fix rather than a second write, because a second write
+	/// only moves the question to "did that one run late enough". There is exactly one answer to
+	/// "what team is the local player on" and it lives on the local player. The three readers —
+	/// <c>ActorBlip.LateUpdate</c>, <c>AiActorController</c> twice — are unchanged and now
+	/// cannot observe a stale value at all.
+	/// </para>
+	/// <para>
+	/// <b><see cref="UNKNOWN_TEAM"/> is still <c>-1</c>, deliberately.</b> That is the value the
+	/// shipped code used and the value <c>AiActorController</c>'s own comment names; the wire's
+	/// <c>TeamId.None</c> (255) is a different sentinel for a different layer and
+	/// <c>MinimapUi</c> is where the two meet. What matters to every reader here is only that it
+	/// is neither 0 nor 1 — a sentinel of 0 is exactly the bug P12 closes.
+	/// </para>
+	/// </remarks>
+	public static int playerTeam
+	{
+		get
+		{
+			FpsActorController local = instance;
+			return local != null && local.actor != null ? local.actor.team : UNKNOWN_TEAM;
+		}
+	}
+
+	/// <summary>The team value meaning "no local body, or its team has not arrived yet".</summary>
+	public const int UNKNOWN_TEAM = -1;
 
 	public Camera fpCamera;
 
@@ -100,6 +137,31 @@ public class FpsActorController : ActorController
 
 	private bool crouchInput;
 
+	// Unity key/mouse edges last for one rendered frame, while C_INPUT is sampled by a separate
+	// 30 Hz clock. Keep these edges until that clock has actually included them in a frame. A
+	// scripted test held both values for seconds and therefore could not expose this race.
+	private int pendingNetworkWeaponSlot = -1;
+
+	private bool pendingNetworkFire;
+
+	/// <summary>
+	/// Set when the trigger goes up, and carried to the server by its own frame.
+	/// </summary>
+	/// <remarks>
+	/// <b>A release is not a formality on the accepted-input path.</b> That path re-arms a
+	/// semi-automatic's trigger edge only on a frame that ARRIVES with <c>Fire</c> clear -- see
+	/// <c>SemiAutoTriggerEdgeTests.ReleasingAndPressingAgainArmsTheEdgeForASecondRound</c>. A
+	/// client that sends a frame only when it has something pending never sends that one, so
+	/// after the first press the edge stayed spent and every later press was ignored until
+	/// something else -- a slot change, a sprint, a reload -- happened to push a frame out.
+	/// For a throwable the visible half of that is a throw whose animation played, whose ammo
+	/// was spent, and whose grenade never left: the server had no edge to fire on.
+	/// </remarks>
+	private bool pendingNetworkFireRelease;
+
+	/// <summary>Last render frame's trigger state, so the release is read as an edge.</summary>
+	private bool wasFireHeld;
+
 	// Phase-00 task 3: every gameplay input below arrives through this, so a networked
 	// controller can supply one. UI and debug keys keep reading Input directly -- criterion 6
 	// permits it, and widening the seam to cover them buys nothing and risks the loadout screen.
@@ -121,11 +183,121 @@ public class FpsActorController : ActorController
 		inputSource = source ?? NullInputSource.Instance;
 	}
 
+	/// <summary>
+	/// Hands the netcode's tick loop this actor's fire/aim/reload bits and aim pitch.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// PUSHED FROM HERE, NOT PULLED FROM THERE. NetPredictionClock lives in the
+	/// Ironfront.Net.Unity.Shared assembly, which declares no references and is the assembly the
+	/// dedicated SERVER builds on; IInputSource lives in Assembly-CSharp, one layer up. Shared
+	/// naming it would be a layering inversion the compiler refuses outright. So the layer that
+	/// owns the seam installs a delegate into the layer that needs the value.
+	/// </para>
+	/// <para>
+	/// Closures over the FIELD, not over its current value, so a later SetInputSource -- a
+	/// scripted client, a network-driven actor -- is picked up with no re-install. That is also
+	/// what makes debt-closure phase 3C's Lane B work without a second input path.
+	/// </para>
+	/// <para>
+	/// Until this existed, ClientPredictionStage built its C_INPUT button mask from Jump, Sprint
+	/// and Crouch alone and sent a hard-coded level pitch, so no networked player could fire,
+	/// aim or reload at all and no shot could have been aimed -- debt-ledger row X-3.
+	/// </para>
+	/// </remarks>
+	private void InstallNetworkCombatIntent()
+	{
+		Ironfront.Net.Unity.NetPredictionClock clock =
+			GetComponent<Ironfront.Net.Unity.NetPredictionClock>();
+		if (clock == null) return;
+
+		clock.AimPitchSource = () => inputSource.Pitch;
+		clock.SimulationEnabled = () => inputEnabled && actor != null && !actor.dead && !actor.IsSeated();
+		clock.KeepButtonsWhileSuspended = () => inputEnabled && actor != null && !actor.dead && actor.IsSeated();
+		clock.CombatButtonSource = SampleNetworkCombatButtons;
+
+		// Crouch() and not Input.GetButton("Crouch"): with the toggle-crouch option on the state
+		// is a latch, so a player who taps once and releases is crouched while the button reads
+		// false. Everything downstream reads the state -- Actor.Update calls StartCrouch() from
+		// Crouch() -- so the wire and NetMovementAgent.ApplyStanceHeight have to as well, or the
+		// capsule has two writers that disagree every tick and the server stands the body up
+		// behind cover the player believes they are behind.
+		clock.CrouchSource = () => Crouch();
+
+		// The composite, not the key, and this one is the difference between a shot and no shot:
+		// a sprinting body's weapon is holstered on both sides of the wire. Holding Shift while
+		// aiming is NOT sprinting -- the game fires and spends the round -- so sending the raw key
+		// made the client's prediction and the server refuse a shot the game had already taken,
+		// and the next snapshot wrote the round back. The magazine never emptied.
+		clock.SprintSource = () => IsSprinting();
+
+		clock.OnTickSimulated += OnNetworkTickSimulated;
+	}
+
+	private Ironfront.Net.Protocol.InputButtons SampleNetworkCombatButtons()
+	{
+		Ironfront.Net.Protocol.InputButtons buttons =
+			(Ironfront.Net.Protocol.InputButtons)inputSource.Buttons;
+		if (pendingNetworkFire)
+		{
+			buttons |= Ironfront.Net.Protocol.InputButtons.Fire;
+		}
+		// Ravenfield starts auto-reload inside Weapon.AmmoChanged(), not from an input button.
+		// Mirror that already-started reload onto C_INPUT so the server fills the authoritative
+		// clip too; otherwise the local animation spends reserve ammo and the next snapshot puts
+		// the clip straight back to zero. This also covers grenades and launchers.
+		if (actor != null && actor.activeWeapon != null && actor.activeWeapon.reloading)
+		{
+			buttons |= Ironfront.Net.Protocol.InputButtons.Reload;
+		}
+		buttons |= Ironfront.Net.Protocol.InputFrame.SlotBit(pendingNetworkWeaponSlot);
+		return buttons;
+	}
+
+	private void OnNetworkTickSimulated(
+		uint tick, Ironfront.Net.Replication.Movement.MoveInput input)
+	{
+		if (pendingNetworkWeaponSlot < 0 && !pendingNetworkFire && !pendingNetworkFireRelease) return;
+
+		bool sentFire = pendingNetworkFire && input.Fire;
+		bool sentRelease = pendingNetworkFireRelease && !input.Fire;
+		bool sentSlot = pendingNetworkWeaponSlot >= 0
+			&& input.WeaponSlot == pendingNetworkWeaponSlot;
+		if (!sentFire && !sentRelease && !sentSlot) return;
+
+		Debug.Log($"[input] C_INPUT tick {tick} buffered fire={sentFire} release={sentRelease} slot="
+			+ $"{(sentSlot ? input.WeaponSlot : -1)}");
+		if (sentFire) pendingNetworkFire = false;
+		if (sentRelease) pendingNetworkFireRelease = false;
+		if (sentSlot) pendingNetworkWeaponSlot = -1;
+	}
+
 	private void Awake()
 	{
 		instance = this;
-		playerTeam = actor.team;
+
+		// P12 D-1. The prefab used to author `team: 0` on this body, and that literal was the
+		// ONLY thing that ever set the local player's team: GameManager.StartGame instantiates
+		// the rig and nothing calls SetTeam on it (ActorManager.CreateAIActor does that for
+		// bots, IronfrontNetBindings.CreatePlayerBody for server-side bodies). On a networked
+		// client the literal was simply wrong — a team-1 player believed it was team 0 — so the
+		// prefab now authors UNKNOWN_TEAM and the answer comes from whoever knows it.
+		//
+		// Offline, that is here, and the literal 0 is the same one MinimapUi.UpdateSpawnPointButtons
+		// already carries for the same reason (V10 D16): the human is always team 0 in
+		// single-player, so this keeps offline byte-for-byte what it was. Networked, the answer
+		// comes from the snapshot via NetClientLocalCombatDriver — deliberately not from here,
+		// because it has not arrived yet at Awake and that is the whole defect.
+		//
+		// SetTeam rather than a bare field write: it also recolours the two skinned renderers,
+		// which is what the prefab's authored literal never did.
+		if (NetContext.IsOffline && actor != null && actor.team == UNKNOWN_TEAM)
+		{
+			actor.SetTeam(0);
+		}
+
 		controller = GetComponent<FirstPersonController>();
+		controller.externalMovementAuthority = NetContext.IsClient;
 		characterController = GetComponent<CharacterController>();
 		thirdpersonRenderers = actor.ragdoll.AnimatedRenderers();
 		fpCameraParent = fpCamera.transform.parent;
@@ -146,13 +318,29 @@ public class FpsActorController : ActorController
 			// ServerVehicleInputBridge replaces it with a NetInputSource the moment somebody
 			// actually drives.
 			// Aiming() folds in toggleAim and a latch LocalInputSource cannot see, so it is
-			// handed over as a live delegate rather than duplicated there.
-			inputSource = new LocalInputSource(fpCamera.transform, Aiming);
+			// handed over as a live delegate rather than duplicated there. The sprint bit is
+			// handed over for the same reason and one more: it is the COMPOSITE the trigger rule
+			// on both sides of the wire is built on, and sending the raw Sprint key in its place
+			// made a held Shift while aiming refuse every shot the game had already fired.
+			//
+			// It takes the three keys rather than reading them back, and that is what keeps this
+			// from recursing. The gate is written in terms of Crouch() and Aiming(), which read
+			// through inputSource -- so a no-argument delegate asked inputSource for the crouch
+			// bit while inputSource was still working out the sprint bit, and that recomputed the
+			// sprint bit. Infinite, and it overflowed the stack on the first frame after a map
+			// loaded. CrouchFrom/AimFrom are the same two rules taking the key as an argument, so
+			// there is still exactly one definition of each and no route back into the source.
+			inputSource = new LocalInputSource(
+				fpCamera.transform, Aiming, SampleWeaponSlotIntent,
+				(crouchKey, aimKey, sprintKey) =>
+					!CrouchFrom(crouchKey) && !AimFrom(aimKey) && !IsReloading()
+					&& sprintKey && !actor.IsSeated());
 			// Temporary, and deliberately unconditional: the harness that says whether the
 			// substitution above was correct. Delete both this line and InputShadowCompare.cs
 			// once a playtest has come back quiet.
 			InputShadowCompare.Install(base.gameObject, inputSource);
 		}
+		InstallNetworkCombatIntent();
 		ForceEndCrouch();
 	}
 
@@ -175,11 +363,20 @@ public class FpsActorController : ActorController
 
 	public override bool Aiming()
 	{
+		return AimFrom(inputSource.Aim());
+	}
+
+	/// <summary>
+	/// <see cref="Aiming"/>'s rule, given the key rather than fetching it from the input source.
+	/// </summary>
+	/// <remarks>Same reason as <see cref="CrouchFrom"/>.</remarks>
+	private bool AimFrom(bool key)
+	{
 		if (OptionsUi.GetOptions().toggleAim)
 		{
 			return aimToggle && !LoadoutUi.IsOpen();
 		}
-		return inputSource.Aim();
+		return key;
 	}
 
 	public override bool Reload()
@@ -289,6 +486,22 @@ public class FpsActorController : ActorController
 		defaultMix.TransitionTo(8f);
 	}
 
+	/// <summary>
+	/// Whether this controller is currently reading the player's input. Read-only.
+	/// </summary>
+	/// <remarks>
+	/// Exists for the lane-B artifact and nothing else. Check 13 is "death -> input disable ->
+	/// respawn screen", and the harness could record the death and the respawn window and NOT
+	/// the term in the middle: <c>inputEnabled</c> is private, and the obvious proxy is a trap,
+	/// because <c>DisableInput</c> also clears <c>characterController.enabled</c> while X-19's
+	/// fix has <c>ClientPredictionStage</c> RE-ASSERTING that capsule every tick. So the capsule
+	/// says nothing about input.
+	///
+	/// Observation only -- no setter, no behaviour. Phase-3d section 6 permits read-only
+	/// accessors by a decision recorded in that file.
+	/// </remarks>
+	public bool IsInputEnabled => inputEnabled;
+
 	public override void DisableInput()
 	{
 		characterController.enabled = false;
@@ -364,6 +577,9 @@ public class FpsActorController : ActorController
 
 	public override void Die()
 	{
+		// Cleared here so the deploy screen can come back for the next life. This is the one
+		// place that must undo it: a corpse is exactly the state the menu view is FOR.
+		deployedView = false;
 		ThirdPersonCamera();
 		UpdateThirdPersonCamera(true);
 		Invoke("OpenLoadoutWhileDead", 2f);
@@ -371,6 +587,20 @@ public class FpsActorController : ActorController
 
 	public void OpenLoadoutWhileDead()
 	{
+		// Ledger X-48. GameManager schedules this by name through Invoke("OpenPlayerLoadout", 1f),
+		// so it lands a full second after StartGame -- and on a networked client the server's
+		// S_SPAWN_ACTOR can arrive inside that second. Without this guard the deploy screen we
+		// just dismissed reopens on a timer nobody can see, which is worse than never dismissing
+		// it: it looks intermittent.
+		//
+		// Guarded on deployedView rather than on actor.dead because the two are not the same
+		// question on this path. actor.dead is the CLIENT's copy of a flag the server owns, and
+		// nothing on the client's spawn path clears it -- ServerCombatBridge.PlaceAtSpawn writes
+		// IsAlive on the SERVER's actor, one process over.
+		if (deployedView)
+		{
+			return;
+		}
 		if (actor.dead)
 		{
 			OpenLoadout();
@@ -383,10 +613,92 @@ public class FpsActorController : ActorController
 		controller.SetMouseEnabled(false);
 	}
 
+	/// <summary>
+	/// Opens the stock loadout UI for a network player's first life without pretending the
+	/// player died and without granting a spawn locally.  The server still places the body only
+	/// after the UI's Deploy button is consumed by NetClientLocalCombatDriver.
+	/// </summary>
+	public void OpenInitialNetworkLoadout()
+	{
+		if (deployedView || LoadoutUi.IsOpen())
+		{
+			return;
+		}
+
+		DisableInput();
+		OpenLoadout();
+	}
+
+	/// <summary>
+	/// The networked counterpart of <see cref="OpenLoadoutWhileDead"/>, for a body the server
+	/// killed. <see cref="Die"/> is what clears <see cref="deployedView"/> offline and a networked
+	/// body never runs it, so the guard in <see cref="OpenLoadoutWhileDead"/> would refuse; this
+	/// clears it first, then opens the same screen.
+	/// </summary>
+	public void OpenLoadoutAfterNetworkDeath()
+	{
+		deployedView = false;
+		if (!LoadoutUi.IsOpen())
+		{
+			OpenLoadout();
+		}
+	}
+
 	public void CloseLoadout()
 	{
 		LoadoutUi.Hide();
 		controller.SetMouseEnabled(true);
+	}
+
+	/// <summary>
+	/// Set by <see cref="DeployFromLoadout"/> and cleared by
+	/// <see cref="ConsumeLoadoutDeployPressed"/>. An edge, not a level.
+	/// </summary>
+	private bool loadoutDeployPressed;
+
+	/// <summary>
+	/// The loadout screen's Deploy button, as distinct from every other reason the loadout
+	/// closes.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why this is not simply <see cref="CloseLoadout"/>.</b> <see cref="EnterDeployedView"/>
+	/// calls <c>CloseLoadout</c> too, and it runs when the SERVER confirms a spawn — so latching
+	/// the edge inside <c>CloseLoadout</c> would post a deploy request in response to the
+	/// server's answer to the previous one. The two callers want different things and only one
+	/// of them is the player asking.
+	/// </para>
+	/// <para>
+	/// <b>Why the edge exists at all.</b> Offline, closing the loadout IS the deploy: a spawn
+	/// wave puts the body down and nothing has to be asked for. On a client the body is placed
+	/// by the server and only <c>C_SPAWN_REQUEST</c> starts that, so this screen — the one the
+	/// player is actually looking at on their first spawn — had no way to send it. The deploy
+	/// screen's own button could not stand in: that panel is authored as the DEATH screen,
+	/// titled in the scene, and showing it before anyone has died is what put "YOU WERE KILLED /
+	/// Killed by actor 0" in front of every player on their first spawn.
+	/// </para>
+	/// <para>
+	/// The request carries the loadout, so reading the edge after <c>LoadoutUi</c> has finalized
+	/// the selection is also what makes the five slots the player just chose the ones that go on
+	/// the wire.
+	/// </para>
+	/// </remarks>
+	public void DeployFromLoadout()
+	{
+		loadoutDeployPressed = true;
+		CloseLoadout();
+	}
+
+	/// <summary>Reads and clears the loadout Deploy edge. See <see cref="DeployFromLoadout"/>.</summary>
+	public bool ConsumeLoadoutDeployPressed()
+	{
+		if (!loadoutDeployPressed)
+		{
+			return false;
+		}
+
+		loadoutDeployPressed = false;
+		return true;
 	}
 
 	public override void SpawnAt(Vector3 position)
@@ -398,6 +710,108 @@ public class FpsActorController : ActorController
 		controller.SetMouseEnabled(true);
 		FirstPersonCamera();
 		ForceEndCrouch();
+		deployedView = true;
+	}
+
+	/// <summary>
+	/// Whether this controller has been switched from the pre-deploy menu view to the in-world
+	/// view. Set by <see cref="SpawnAt"/> and by <see cref="EnterDeployedView"/>, cleared on
+	/// death.
+	/// </summary>
+	private bool deployedView;
+
+	/// <summary>
+	/// The presentation half of <see cref="SpawnAt"/>, with no write to the body's transform.
+	/// Ledger <b>X-48</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A networked client rendered the deploy menu for the whole match, on every run ever
+	/// captured.</b> <c>SpawnAt</c> is the only code in the project that turns the menu backdrop
+	/// off, gives the player their controls and switches to the first-person camera — and a
+	/// networked body deliberately never runs it (<c>Actor.EquipLoadout</c>, "not SpawnAt, and
+	/// not controller.EnableInput()"), because it would teleport a body the server owns.
+	/// <c>Start</c> above turns the backdrop ON and calls <c>DisableInput</c>, so on a networked
+	/// client both stayed that way forever. Measured across 90 checkpoint records of five runs:
+	/// <c>Scenery Camera</c> enabled at depth 100 in every one, <c>localInputEnabled</c> false in
+	/// every one — and <c>SceneryCamera</c> clears to skybox on a full culling mask, so at the
+	/// highest depth in the scene it repaints over the live FP camera rather than blending with
+	/// it. That is why the frames are truthful and still show no game.
+	/// </para>
+	/// <para>
+	/// <b>What is deliberately NOT here.</b> <c>controller.transform.position</c> and
+	/// <c>ResetVelocity()</c>. The server places a claimed body through
+	/// <c>ServerCombatBridge.MoveToSpawnPoint</c> and owns it thereafter; writing the transform
+	/// from the client's presentation path would make two writers for one position, which is the
+	/// authority split AD-1 exists to prevent. Everything else <c>SpawnAt</c> does is
+	/// presentation, and presentation is this client's to run.
+	/// </para>
+	/// <para>
+	/// <b>Idempotent, so a repeated spawn message costs a few bool writes and nothing else.</b>
+	/// Each call below already no-ops when it is already in the requested state.
+	/// </para>
+	/// </remarks>
+	public void EnterDeployedView()
+	{
+		// CloseLoadout also does controller.SetMouseEnabled(true), which is SpawnAt's line.
+		CloseLoadout();
+
+		// Actor.Awake parks every body as dead.  The offline SpawnAt path normally clears that
+		// flag, but the network path intentionally cannot call SpawnAt because it would overwrite
+		// the server-owned transform.  Clear the gameplay half explicitly before arming the
+		// loadout: SwitchToFirstAvailableWeapon itself refuses to run on a dead actor.
+		actor.EnterNetworkDeployedState();
+
+		// X-11's other half. SpawnAt arms a body through SpawnLoadoutWeapons (Actor.cs:266);
+		// this path is the one SpawnAt never runs for a networked body (see this method's own
+		// remark above), and nothing else on the client ever called EquipLoadout either -- its
+		// only production caller was ServerCombatBridge.PlaceAtSpawn, one process over. So the
+		// client's own rendering of its weapon never armed: the deploy screen closed, the body
+		// stood there, and activeWeapon stayed null. EquipLoadout is SpawnLoadoutWeapons() and
+		// nothing else (Actor.cs:313-316), so it writes no transform and does not reopen the
+		// authority split this method's own remark protects.
+		actor.EquipLoadout();
+
+		// SpawnAt normally owns these three HUD writes.  A network deploy deliberately skips
+		// SpawnAt because the transform is server-owned, so reproduce only its local presentation
+		// here after the chosen loadout has created an active weapon.
+		if (IngameUi.instance != null)
+		{
+			IngameUi.instance.Show();
+			IngameUi.instance.SetHealth(Mathf.Max(0f, actor.health));
+			actor.UpdateAmmoUi();
+		}
+
+		// Null-guarded where SpawnAt is not. SpawnAt runs from a spawn wave, which cannot happen
+		// before the scene's singletons exist; this runs off a network message, which can arrive
+		// during a scene change. GameManager.cs makes the same argument for its own read.
+		SceneryCamera scenery = SceneryCamera.instance;
+		if (scenery != null && scenery.camera != null)
+		{
+			scenery.camera.enabled = false;
+		}
+
+		EnableInput();
+
+		// The prefab deliberately ships its network clock disabled so an offline game and the
+		// parked pre-deploy body do not start producing C_INPUT.  Lane B used to be the only
+		// caller that enabled it, which made the automated clients move and throw grenades while
+		// the real menu/deploy flow never sent a single input frame.  The visible symptom was a
+		// live first-person weapon that could play its local muzzle flash, but WASD left the body
+		// fixed and a locally thrown grenade never received the server explosion that owns its
+		// detonation.  Deployment is the authority boundary at which this body becomes playable,
+		// so start the clock here and leave it running through death: SimulationEnabled above
+		// turns dead/seated input into neutral frames while keeping acknowledgements current.
+		Ironfront.Net.Unity.NetPredictionClock networkClock =
+			GetComponent<Ironfront.Net.Unity.NetPredictionClock>();
+		if (networkClock != null)
+		{
+			networkClock.enabled = true;
+		}
+
+		FirstPersonCamera();
+		ForceEndCrouch();
+		deployedView = true;
 	}
 
 	public override void ApplyRecoil(Vector3 impulse)
@@ -456,6 +870,18 @@ public class FpsActorController : ActorController
 
 	private void FixedUpdate()
 	{
+		// A network client does not own the body's grounded/ragdoll state. Its CharacterController
+		// is deliberately decoupled from the server transform while prediction/reconciliation is
+		// running, so isGrounded can remain false on perfectly valid authoritative terrain. Letting
+		// the offline 1.5-second airborne detector run here made every movement correction call
+		// Actor.FallOver(): the player stood up, moved, fell over, and repeated forever at 100 HP.
+		// Server death/respawn messages already own the client-side ragdoll lifecycle.
+		if (NetContext.IsClient)
+		{
+			hasNotBeenGroundedAction.Start();
+			return;
+		}
+
 		if (!characterController.enabled || characterController.isGrounded || actor.fallenOver || actor.dead || actor.IsSeated())
 		{
 			hasNotBeenGroundedAction.Start();
@@ -468,6 +894,23 @@ public class FpsActorController : ActorController
 
 	private void Update()
 	{
+		// Capture the edge every render frame. NetPredictionClock may or may not simulate a tick
+		// in this frame; OnNetworkTickSimulated clears it only after it reached C_INPUT.
+		bool fireHeldNow = Input.GetButton("Fire1") || Input.GetMouseButton(0);
+		if (NetContext.IsClient && inputEnabled && !LocalTextEntry.Composing
+			&& !LoadoutUi.IsOpen())
+		{
+			if (Input.GetButtonDown("Fire1") || Input.GetMouseButtonDown(0))
+			{
+				pendingNetworkFire = true;
+			}
+			else if (!fireHeldNow && wasFireHeld)
+			{
+				pendingNetworkFireRelease = true;
+			}
+		}
+		wasFireHeld = fireHeldNow;
+
 		controller.sprinting = IsSprinting();
 		if (IsSprinting())
 		{
@@ -503,7 +946,11 @@ public class FpsActorController : ActorController
 				fpCameraParent.transform.localRotation = Quaternion.RotateTowards(fpCameraParent.transform.localRotation, Quaternion.identity, Time.deltaTime * 400f);
 			}
 		}
-		if (Input.GetButtonDown("Loadout"))
+		// Not while a text field owns the keyboard. The "Loadout" axis is bound to return with
+		// enter as its alternate (ProjectSettings/InputManager.asset), and the chat line sends
+		// on Return -- so without this guard one press both sent the message and toggled the
+		// deploy screen, which is the shape the defect took when chat first shipped.
+		if (Input.GetButtonDown("Loadout") && !LocalTextEntry.Composing)
 		{
 			if (LoadoutUi.IsOpen())
 			{
@@ -524,15 +971,12 @@ public class FpsActorController : ActorController
 		}
 		if (Input.GetButtonDown("Slowmotion") && !IngameMenuUi.IsOpen())
 		{
-			if (Time.timeScale < 1f)
-			{
-				Time.timeScale = 1f;
-			}
-			else
-			{
-				Time.timeScale = 0.2f;
-			}
-			Time.fixedDeltaTime = Time.timeScale / 60f;
+			// PhysicsRate, not a second Time.fixedDeltaTime = Time.timeScale / 60f here. That
+			// literal made this component an unwitting authority on the project's physics rate:
+			// a peer that never constructed it -- a dedicated server build -- kept the 50 Hz
+			// project setting while this one forced 60, and rigidbody integration is not
+			// step-independent. Issue #123.
+			PhysicsRate.SetTimeScale(Time.timeScale < 1f ? 1f : 0.2f);
 			mixer.SetFloat("pitch", Time.timeScale);
 		}
 		if (inputEnabled)
@@ -540,6 +984,26 @@ public class FpsActorController : ActorController
 			UpdateInput();
 		}
 		if (!Input.GetButtonDown("Use"))
+		{
+			return;
+		}
+		// SEAT AUTHORITY IS THE SERVER'S AT CLIENT ROLE (design D2, ledger X-30).
+		//
+		// Everything below decides, locally and immediately, that this player is now in a seat
+		// -- SampleUseRay -> actor.EnterSeat, and the else-branch's actor.LeaveSeat. That is
+		// correct offline and is exactly the local decision the netcode forbids: the client would
+		// seat itself in a vehicle the SeatArbiter may refuse (occupied, destroyed, out of reach,
+		// still inside the re-entry lockout) and nothing would ever put it back on its feet,
+		// because the refusal it ignored was the only message that could have.
+		//
+		// Before ClientSeatRequester existed this was harmless in the way an unreachable bug is
+		// harmless: no client sent C_SEAT_REQUEST at all, so a networked player pressing Use next
+		// to a car simply got a seat nobody else could see. It stops being harmless the moment
+		// one press produces BOTH a local entry here and a server request there.
+		//
+		// Guarded rather than deleted: offline and the original single-player game still run this
+		// path, and NetContext.Role is Offline until something calls SetRole.
+		if (NetContext.IsClient)
 		{
 			return;
 		}
@@ -556,32 +1020,38 @@ public class FpsActorController : ActorController
 		}
 	}
 
-	// Everything below is edge-triggered -- GetKeyDown, GetButtonDown, mouseScrollDelta --
-	// and IInputSource reports levels, not edges. Weapon and seat selection do affect gameplay
-	// and phase-00 section 5 books them as debt to be paid in phase 02, when the C_INPUT
-	// weapon-switch bits (11..14) get a consumer. Routing an edge through a level channel now
-	// would either drop presses or fire them twice.
+	// Everything below is edge-triggered -- GetKeyDown, GetButtonDown, mouseScrollDelta.
+	// Weapon selection is predicted here for Ravenfield responsiveness and independently sampled
+	// as an absolute slot by SampleWeaponSlotIntent for the authoritative C_INPUT stream. Seat
+	// selection remains on its dedicated network seam.
 	private void UpdateInput()
 	{
+		// One guard for the whole method rather than eleven. Every read below is a bare key --
+		// the digits especially -- so typing "1st squad" into the chat line would otherwise
+		// switch weapon three times on the way through the sentence.
+		if (LocalTextEntry.Composing)
+		{
+			return;
+		}
 		if (Input.GetKeyDown(KeyCode.Alpha1))
 		{
-			actor.SwitchWeapon(0);
+			QueueWeaponSwitch(0);
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha2))
 		{
-			actor.SwitchWeapon(1);
+			QueueWeaponSwitch(1);
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha3))
 		{
-			actor.SwitchWeapon(2);
+			QueueWeaponSwitch(2);
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha4))
 		{
-			actor.SwitchWeapon(3);
+			QueueWeaponSwitch(3);
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha5))
 		{
-			actor.SwitchWeapon(4);
+			QueueWeaponSwitch(4);
 		}
 		if (Input.GetKeyDown(KeyCode.F1))
 		{
@@ -621,12 +1091,32 @@ public class FpsActorController : ActorController
 		}
 		if (Input.mouseScrollDelta.y < 0f)
 		{
-			actor.NextWeapon();
+			QueueWeaponSwitch(actor.FindWeaponSlot(1, skipToggleable: true));
 		}
 		else if (Input.mouseScrollDelta.y > 0f)
 		{
-			actor.PreviousWeapon();
+			QueueWeaponSwitch(actor.FindWeaponSlot(-1, skipToggleable: false));
 		}
+	}
+
+	private void QueueWeaponSwitch(int slot)
+	{
+		if (slot < 0) return;
+		actor.SwitchWeapon(slot);
+		if (!NetContext.IsClient) return;
+
+		pendingNetworkWeaponSlot = slot;
+		Debug.Log($"[input] queued weapon slot {slot} for C_INPUT");
+	}
+
+	/// <summary>
+	/// Returns the base game's number-key or wheel selection until the 30 Hz network clock has
+	/// actually carried it. <see cref="UpdateInput"/> owns the edge and immediate presentation;
+	/// <see cref="OnNetworkTickSimulated"/> owns clearing it after transmission.
+	/// </summary>
+	private int SampleWeaponSlotIntent()
+	{
+		return LocalTextEntry.Composing ? -1 : pendingNetworkWeaponSlot;
 	}
 
 	private void SampleUseRay()
@@ -706,16 +1196,86 @@ public class FpsActorController : ActorController
 
 	public override WeaponManager.LoadoutSet GetLoadout()
 	{
-		return LoadoutUi.instance.loadout;
+		WeaponManager.LoadoutSet chosen = LoadoutUi.instance.loadout;
+
+		// Ledger X-27, second half. With no pin installed -- every configuration that ships, and
+		// every ordinary Play session -- this returns the loadout screen's own selection and the
+		// behaviour is what it was before the seam existed. The same shape, and the same
+		// argument, as AiActorController.PinnedOr on the server side.
+		//
+		// THIS is the seam and not NetClientLocalCombatDriver.RequestRespawn, deliberately: that
+		// one rewrites only the ids the spawn request carries, which would arm the SERVER body
+		// with the pinned weapon and leave this client rendering and predicting the drawn one --
+		// X-11's disagreement, reintroduced for exactly the runs being measured. Everything that
+		// asks what this player chose comes through here, so one override keeps both sides
+		// holding the same gun.
+		ClientLoadoutPin pin = ClientLoadoutPin.Active;
+		if (pin == null || chosen == null)
+		{
+			return chosen;
+		}
+
+		// A COPY. LoadoutUi.instance.loadout is the screen's own object and is handed out by
+		// reference; overwriting its fields would make the pin outlive the harness that set it
+		// and silently rewrite what the player sees selected.
+		WeaponManager.LoadoutSet pinned = new WeaponManager.LoadoutSet
+		{
+			primary = pin.PinnedOr(chosen.primary, ClientLoadoutSlot.Primary, EntryNamedOrNull),
+			secondary = pin.PinnedOr(chosen.secondary, ClientLoadoutSlot.Secondary, EntryNamedOrNull),
+			gear1 = pin.PinnedOr(chosen.gear1, ClientLoadoutSlot.Gear1, EntryNamedOrNull),
+
+			// Untouched: the pin covers the three slots PinnedLoadoutDirectory covers, so the
+			// two halves of X-27 pin the same set and a run cannot be half-pinned depending on
+			// which body was armed.
+			gear2 = chosen.gear2,
+			gear3 = chosen.gear3
+		};
+
+		// ONCE per pin, on the respawn path. LogError rather than LogWarning: an unmatched name
+		// means the run is not the experiment it was asked for, and the whole reason this row
+		// was reopened is that the old pin reported success while pinning nothing.
+		if (pin.TryTakeReport(out string report))
+		{
+			if (pin.HasUnresolved)
+			{
+				Debug.LogError(report);
+			}
+			else
+			{
+				Debug.Log(report);
+			}
+		}
+
+		return pinned;
+	}
+
+	// WeaponManager.EntryNamed dereferences `instance` without a guard, so a scene that has not
+	// built the catalogue yet would take an NRE on a path that is meant to degrade to the draw.
+	private static WeaponManager.WeaponEntry EntryNamedOrNull(string name)
+	{
+		return WeaponManager.instance == null ? null : WeaponManager.EntryNamed(name);
 	}
 
 	public override bool Crouch()
+	{
+		return CrouchFrom(inputSource.Crouch());
+	}
+
+	/// <summary>
+	/// <see cref="Crouch"/>'s rule, given the key rather than fetching it from the input source.
+	/// </summary>
+	/// <remarks>
+	/// The two-argument form exists so the sprint gate can apply the same rule without reading
+	/// back through <c>inputSource</c> while <c>inputSource</c> is still computing. See the
+	/// delegate passed to <see cref="LocalInputSource"/> for what that cost when it did.
+	/// </remarks>
+	private bool CrouchFrom(bool key)
 	{
 		if (OptionsUi.GetOptions().toggleCrouch)
 		{
 			return crouchInput;
 		}
-		return inputSource.Crouch();
+		return key;
 	}
 
 	public override void StartCrouch()

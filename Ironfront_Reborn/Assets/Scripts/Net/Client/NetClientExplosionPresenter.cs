@@ -96,7 +96,10 @@ namespace Ironfront.Net.Unity.Client
         public static NetClientExplosionPresenter Current { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetCurrentOnLoad() => Current = null;
+        private static void ResetCurrentOnLoad()
+        {
+            Current = null;
+        }
 
         private void Awake()
         {
@@ -150,7 +153,10 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!enabled) return;
 
-            RenderExplosion(position, radiusMetres, kind);
+            if (RenderExplosion(position, radiusMetres, kind))
+                Debug.Log($"[net] predicted local explosion {kind} rendered at "
+                          + $"{position.x:F2},{position.y:F2},{position.z:F2} "
+                          + $"(radius {radiusMetres:F2}m).");
 
             if (NetClientPresenterGuard.TryResolveLocalActorId(out ushort localId))
                 _suppressor.PredictLocal(localId, Time.time);
@@ -171,25 +177,31 @@ namespace Ironfront.Net.Unity.Client
             // same reason PosX/Y/Z go through Quantize.UnpackPos: the packing and its inverse
             // are one decision, and V1 task 1 gave it one home. The emitter rounds UP, so this
             // radius is never smaller than the blast that did the damage.
-            RenderExplosion(
-                position, ExplosionEncoding.UnpackRadiusMetres(message.RadiusMetres), message.Kind);
+            float radiusMetres = ExplosionEncoding.UnpackRadiusMetres(message.RadiusMetres);
+            if (RenderExplosion(position, radiusMetres, message.Kind))
+                Debug.Log($"[net] authoritative explosion {message.Kind} from actor "
+                          + $"{message.SourceActorId} rendered at "
+                          + $"{position.x:F2},{position.y:F2},{position.z:F2} "
+                          + $"(radius {radiusMetres:F2}m).");
         }
 
-        private void RenderExplosion(Vector3 position, float radiusMetres, ExplosionKind kind)
+        private bool RenderExplosion(Vector3 position, float radiusMetres, ExplosionKind kind)
         {
-            PlayEffect(position, radiusMetres, kind);
+            bool drewParticles = PlayEffect(position, radiusMetres, kind);
             ApplyScreenshake(position, radiusMetres);
 
-            // No scorch DecalType exists (the enum is Impact / BloodBlue / BloodRed), so this
-            // reuses Impact -- the same choice GrenadeProjectile's own direct-hit decal already
-            // makes. There is no surface normal to read off the wire, so this projects straight
-            // up rather than raycasting for one; a slightly wrong decal orientation is a cosmetic
-            // detail, not a correctness one.
-            DecalManager.AddDecal(
-                position, Vector3.up, radiusMetres * _decalSizePerMetre, DecalManager.DecalType.Impact);
+            // debt-closure phase 2 task 2d (ledger C-7): a blast now draws a scorch mark rather
+            // than the bullet chip it reused for want of an enum member. DecalManager falls back
+            // to Impact when Scorch has no authored drawer, so this is safe on a build that
+            // predates that authoring. There is still no surface normal on the wire, so this
+            // projects straight up rather than raycasting for one; a slightly wrong decal
+            // orientation is a cosmetic detail, not a correctness one.
+            NetClientBindings.Decals?.AddScorch(
+                position, Vector3.up, radiusMetres * _decalSizePerMetre);
+            return drewParticles;
         }
 
-        private void PlayEffect(Vector3 position, float radiusMetres, ExplosionKind kind)
+        private bool PlayEffect(Vector3 position, float radiusMetres, ExplosionKind kind)
         {
             int index = (int)kind;
 
@@ -201,7 +213,7 @@ namespace Ironfront.Net.Unity.Client
                     "explosion-unknown-kind:" + index,
                     "[net] NetClientExplosionPresenter received an ExplosionKind with no "
                     + "configured effect slot. Drawing nothing for it rather than throwing.");
-                return;
+                return false;
             }
 
             ParticleSystem effect = _effectsByKind[index];
@@ -214,12 +226,46 @@ namespace Ironfront.Net.Unity.Client
                     "explosion-missing-effect:" + index,
                     "[net] NetClientExplosionPresenter has no ParticleSystem configured for "
                     + $"ExplosionKind {kind}. Client-track item E6.");
-                return;
+                return false;
             }
 
+            if (!effect.gameObject.activeSelf) effect.gameObject.SetActive(true);
             effect.transform.position = position;
-            effect.transform.localScale = Vector3.one * Mathf.Max(radiusMetres, 0.01f);
-            effect.Play();
+
+            // The scene container itself is a defaults-only placeholder with no material
+            // (emission disabled, m_Materials: {fileID: 0}); the real effect lives on its
+            // CHILDREN, which carry real materials, bursts and lifetimes already authored in
+            // the scene. Playing the container plays its children with it, so this only needs
+            // to reject the case where nothing under it can actually draw.
+            if (!HasDrawableMaterial(effect))
+            {
+                NetClientPresenterGuard.WarnOnce(
+                    "explosion-undrawable-effect:" + index,
+                    $"[net] {kind} explosion effect has no enabled child ParticleSystemRenderer "
+                    + "with a drawable material. The event was received but no particles were "
+                    + "rendered.");
+                return false;
+            }
+
+            effect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            effect.Play(true);
+            return true;
+        }
+
+        /// <summary>
+        /// True when at least one enabled <see cref="ParticleSystemRenderer"/> under
+        /// <paramref name="effect"/> (itself or a child) has a material assigned. Never creates
+        /// or assigns one -- a scene-authored effect with no material is a content bug to fix in
+        /// the scene, not something to patch at runtime.
+        /// </summary>
+        private static bool HasDrawableMaterial(ParticleSystem effect)
+        {
+            foreach (ParticleSystemRenderer renderer in
+                     effect.GetComponentsInChildren<ParticleSystemRenderer>(true))
+            {
+                if (renderer.enabled && renderer.sharedMaterial != null) return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -234,20 +280,20 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void ApplyScreenshake(Vector3 position, float radiusMetres)
         {
-            FpsActorController local = FpsActorController.instance;
-            if (local == null || local.fpParent == null) return;
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.CanApplyScreenshake) return;
 
             float audible = radiusMetres * _shakeRadiusMultiplier;
             if (audible <= 0f) return;
 
-            float distance = Vector3.Distance(local.transform.position, position);
+            float distance = Vector3.Distance(local.Position, position);
             if (distance >= audible) return;
 
             float falloff = 1f - distance / audible;
             float magnitude = radiusMetres * _shakeMagnitudePerMetre * falloff;
             if (magnitude <= 0f) return;
 
-            local.fpParent.ApplyScreenshake(magnitude, _shakeIterations);
+            local.ApplyScreenshake(magnitude, _shakeIterations);
         }
     }
 }

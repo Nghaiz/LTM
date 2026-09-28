@@ -50,6 +50,76 @@ namespace Ironfront.Net.Protocol
         public float PitchDegrees => Quantize.UnpackPitch(Pitch);
 
         public bool IsPressed(InputButtons button) => (Buttons & button) != 0;
+
+        /// <summary>
+        /// The weapon slot this frame selects, or <c>-1</c> when it selects none.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>SwitchWeapon0..4</c> are bits 11-15 (protocol-spec § 4.2). Slots 0..3 were declared at
+        /// the freeze and had zero producers and zero consumers until 2026-08-21, which is why
+        /// this decoder lives here rather than in either peer: two transcriptions of the same
+        /// slot bits is how the halves drift. Slot 4 joined the same shared mapping in v9.
+        /// </para>
+        /// <para>
+        /// <b>Lowest set bit wins.</b> More than one is not a state a producer should send, and
+        /// the alternatives on receiving it are worse: rejecting the frame drops the movement
+        /// with it, and taking the highest would make a stuck low bit invisible.
+        /// </para>
+        /// </remarks>
+        public int WeaponSlot => SlotOf(Buttons);
+
+        /// <summary>
+        /// The weapon slot a button mask selects, or <c>-1</c> when it selects none.
+        /// </summary>
+        /// <remarks>
+        /// The instance property above is the usual way in; this static form exists so a
+        /// producer holding a bare mask can ask the same question without framing a throwaway
+        /// frame first.
+        /// </remarks>
+        public static int SlotOf(InputButtons buttons)
+        {
+            if ((buttons & InputButtons.SwitchWeapon0) != 0) return 0;
+            if ((buttons & InputButtons.SwitchWeapon1) != 0) return 1;
+            if ((buttons & InputButtons.SwitchWeapon2) != 0) return 2;
+            if ((buttons & InputButtons.SwitchWeapon3) != 0) return 3;
+            if ((buttons & InputButtons.SwitchWeapon4) != 0) return 4;
+
+            return -1;
+        }
+
+        /// <summary>
+        /// The single bit a slot selects, or <see cref="InputButtons.None"/> when the slot is out
+        /// of range. The inverse of <see cref="SlotOf"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The one encoder for bits 11-15, and it lives in Protocol because there are two
+        /// producers in two assemblies that cannot see each other.</b> <c>InputButtonPacker</c>
+        /// is in <c>Ironfront.Net.Unity</c> and <c>MoveInput.ToButtons</c> is in
+        /// <c>Ironfront.Net.Replication</c>; neither may reference the other, so before this
+        /// existed the only way for both to speak the slot bits was to transcribe them twice. Rows
+        /// X-3 and X-31 are both what happens when one transcription learns a bit and the other
+        /// does not — X-31 because <c>MoveInput.ToButtons</c> had never heard of a slot at all.
+        /// </para>
+        /// <para>
+        /// Out of range is <see cref="InputButtons.None"/> rather than an exception: this is
+        /// called once per input frame on a hot path, and a scripted programme with a typo'd
+        /// slot should produce a run that visibly does not switch, not one that dies at frame 1.
+        /// </para>
+        /// </remarks>
+        public static InputButtons SlotBit(int slot)
+        {
+            switch (slot)
+            {
+                case 0:  return InputButtons.SwitchWeapon0;
+                case 1:  return InputButtons.SwitchWeapon1;
+                case 2:  return InputButtons.SwitchWeapon2;
+                case 3:  return InputButtons.SwitchWeapon3;
+                case 4:  return InputButtons.SwitchWeapon4;
+                default: return InputButtons.None;
+            }
+        }
     }
 
     /// <summary>

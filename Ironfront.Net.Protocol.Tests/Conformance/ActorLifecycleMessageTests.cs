@@ -102,7 +102,11 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             SpawnActorMessage.TryParse(buffer, out SpawnActorMessage parsed);
 
             // Within one 6.25 cm quantum of where it started.
-            Assert.Equal(123.45f, Quantize.UnpackPos(parsed.PosX), 1);
+            // Against the quantizer's real bound, not a decimal place. At 6.25 cm steps the
+            // round-trip error is up to 3.1 cm, which straddles the first decimal of 123.45 --
+            // so the old assertion passed on where the window happened to sit rather than on
+            // the round trip, and X-53's move made that visible.
+            Assert.True(Math.Abs(Quantize.UnpackPos(parsed.PosX) - 123.45f) < 0.07f);
         }
 
         // ------------------------------------------------------------------ S_DESPAWN_ACTOR
@@ -196,6 +200,78 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             Assert.False(ExplosionMessage.TryParse(truncated, out _));
         }
 
+        // ------------------------------------------------------------------ C_SPAWN_REQUEST
+
+        [Fact]
+        public void SpawnRequestRoundTripsEveryField()
+        {
+            var original = new SpawnRequestMessage(
+                primary: 1, secondary: 7, gear1: 15, gear2: 0, gear3: 3, spawnPointIndex: 4);
+
+            Span<byte> buffer = stackalloc byte[SpawnRequestMessage.Size];
+            Assert.Equal(SpawnRequestMessage.Size, original.Write(buffer));
+            Assert.True(SpawnRequestMessage.TryParse(buffer, out SpawnRequestMessage parsed));
+
+            Assert.Equal(original.Primary, parsed.Primary);
+            Assert.Equal(original.Secondary, parsed.Secondary);
+            Assert.Equal(original.Gear1, parsed.Gear1);
+            Assert.Equal(original.Gear2, parsed.Gear2);
+            Assert.Equal(original.Gear3, parsed.Gear3);
+            Assert.Equal(original.SpawnPointIndex, parsed.SpawnPointIndex);
+        }
+
+        [Fact]
+        public void SpawnRequestIsSixBytes()
+        {
+            Assert.Equal(6, SpawnRequestMessage.Size);
+        }
+
+        [Fact]
+        public void SpawnRequestDefaultsToNoSpawnPointPreference()
+        {
+            // The constructor's default parameter is what every sender writes today -- the
+            // minimap-driven spawn choice is not yet wired across the network (see the type's
+            // own remark) -- so this is the shape every real C_SPAWN_REQUEST currently has.
+            var message = new SpawnRequestMessage(primary: 1, secondary: 0, gear1: 0, gear2: 0, gear3: 0);
+
+            Assert.Equal(SpawnRequestMessage.NoSpawnPointPreference, message.SpawnPointIndex);
+        }
+
+        [Fact]
+        public void SpawnRequestZeroSlotMeansEmptyNotWeaponZero()
+        {
+            // 0 is WeaponManager's reserved "no/unknown weapon" id (protocol-spec.md § 4.8), so a
+            // slot the client left unset must round-trip as 0, not silently substitute a real id.
+            var message = new SpawnRequestMessage(primary: 1, secondary: 0, gear1: 0, gear2: 0, gear3: 0);
+
+            Span<byte> buffer = stackalloc byte[SpawnRequestMessage.Size];
+            message.Write(buffer);
+            Assert.True(SpawnRequestMessage.TryParse(buffer, out SpawnRequestMessage parsed));
+
+            Assert.Equal(0, parsed.Secondary);
+            Assert.Equal(0, parsed.Gear1);
+            Assert.Equal(0, parsed.Gear2);
+            Assert.Equal(0, parsed.Gear3);
+        }
+
+        [Fact]
+        public void SpawnRequestRefusesATooSmallBuffer()
+        {
+            var message = new SpawnRequestMessage(1, 0, 0, 0, 0);
+            Span<byte> tooSmall = stackalloc byte[SpawnRequestMessage.Size - 1];
+
+            Assert.Equal(-1, message.Write(tooSmall));
+        }
+
+        [Fact]
+        public void SpawnRequestRefusesATruncatedPacket()
+        {
+            // The v7 shape this replaces: an EMPTY body. A v7 client talking to this v8 parser
+            // must be counted as malformed rather than silently accepted -- see protocol-spec.md
+            // § 4.14 and the PROTOCOL_VERSION bump this message's own row records.
+            Assert.False(SpawnRequestMessage.TryParse(ReadOnlySpan<byte>.Empty, out _));
+        }
+
         // ------------------------------------------------------------------ msgType table
 
         [Fact]
@@ -220,7 +296,12 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //   v3  the vehicle wire (§ 4.10): six new opcodes, a second entity stream, and
             //       SnapshotField.SeatInfo finished on the actor entry. S_EXPLOSION's layout was
             //       not touched by any of it and still is not what moved the number.
-            Assert.Equal(3, ProtocolConstants.PROTOCOL_VERSION);
+            //   v10 the actor entry's weapon field (§ 4.3) went 2 -> 5 bytes and MAX_VEHICLES
+            //       went 16 -> 24. S_SPAWN_ACTOR, S_DESPAWN_ACTOR and S_EXPLOSION all sit
+            //       outside the snapshot entry, so none of their three layouts moved.
+            //   v11 weaponStateFlags bit 1 gained pending-release semantics. These layouts
+            //       remain untouched even though peers must reject the behavioral mismatch.
+            Assert.Equal(11, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

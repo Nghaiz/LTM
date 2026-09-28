@@ -44,7 +44,7 @@ namespace Ironfront.Net.Protocol
         SwitchWeapon1 = 1 << 12,
         SwitchWeapon2 = 1 << 13,
         SwitchWeapon3 = 1 << 14,
-        // Bit 15 reserved.
+        SwitchWeapon4 = 1 << 15,
     }
 
     /// <summary>
@@ -66,6 +66,45 @@ namespace Ironfront.Net.Protocol
     }
 
     /// <summary>
+    /// The authoritative weapon state bits carried by <see cref="SnapshotField.Weapon"/>.
+    /// protocol-spec.md section 4.3. One byte; bits 1..7 are reserved.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The trigger is deliberately absent. A held trigger is not state the client needs to
+    /// reconstruct — <c>S_WEAPON_FIRE</c> already names each round the server accepted, and a
+    /// bit sampled at the 20 Hz snapshot rate would miss taps between snapshots while implying
+    /// it had seen them.
+    /// </para>
+    /// <para>
+    /// A reserved bit is written 0 by the server and ignored by the client. That is not the
+    /// same as forwards compatibility: giving one of them meaning changes what a peer must do
+    /// with it and so bumps <c>PROTOCOL_VERSION</c>, exactly as adding a field would.
+    /// </para>
+    /// </remarks>
+    [Flags]
+    public enum WeaponStateFlags : byte
+    {
+        None      = 0,
+
+        /// <summary>
+        /// The server has accepted a reload and it has neither completed nor been cancelled.
+        /// </summary>
+        /// <remarks>
+        /// Set at the moment the server accepts the reload, not when the client asks for one:
+        /// a request the server refused (clip already full, no reserve, actor dead) must not
+        /// leave the client playing a reload animation for a reload that is not happening.
+        /// </remarks>
+        Reloading = 1 << 0,
+
+        /// <summary>
+        /// The server accepted one delayed throwable use and has not released or cancelled it.
+        /// While set, another trigger cannot reserve the same held object.
+        /// </summary>
+        PendingRelease = 1 << 1,
+    }
+
+    /// <summary>
     /// Snapshot changeMask bits. Bit i = 1 means field i is present in this packet.
     /// protocol-spec.md section 4.3.
     /// </summary>
@@ -83,7 +122,20 @@ namespace Ironfront.Net.Protocol
         StateFlags = 1 << 3,
         /// <summary>u8, 0..100. 1 byte.</summary>
         Health     = 1 << 4,
-        /// <summary>u8 weaponId + u8 ammoInClip. 2 bytes.</summary>
+        /// <summary>
+        /// u8 weaponId + u8 ammoInClip + u16 spareAmmoEncoded + u8
+        /// <see cref="WeaponStateFlags"/>. 5 bytes as of v11.
+        /// </summary>
+        /// <remarks>
+        /// It was 2 bytes through v9, and the two it lacked are why a bazooka could read
+        /// <c>0/N</c> on the server and <c>1/N</c> on the client. The reserve and the reload
+        /// state were authoritative on the server and simply never crossed the wire, so the
+        /// client kept its own Ravenfield-side pool beside the clip it was told about: two
+        /// sources of one number, free to disagree, and most visibly wrong on the clip-of-one
+        /// weapons where a single round is the whole magazine. The fields widened this field
+        /// rather than claiming a ninth mask bit because <see cref="SnapshotField"/> has none
+        /// left — see § 4.3 of the spec.
+        /// </remarks>
         Weapon     = 1 << 5,
         /// <summary>u8. Only sent on change (rare). 1 byte.</summary>
         Team       = 1 << 6,
@@ -243,16 +295,117 @@ namespace Ironfront.Net.Protocol
         SessionExpired    = 1003,
         WrongClientVersion= 1004,
 
+        /// <summary>A display name was supplied and is not usable. Blank is NOT this: it is
+        /// accepted, and the master falls back to the username.</summary>
+        /// <remarks>
+        /// Its own code rather than <see cref="WrongCredentials"/>, for the reason
+        /// <see cref="TeamsWouldUnbalance"/> records: the client renders the refusal, and this
+        /// one names a field the player can fix. Until 2026-09-03 a display-name problem was
+        /// reported as WrongCredentials, so the register screen answered every attempt with
+        /// "Wrong username or password." on a form where no credentials existed yet -- which
+        /// sent the player to re-type a password that was never the problem.
+        /// </remarks>
+        InvalidDisplayName= 1005,
+
+        /// <summary>
+        /// The account exists, the password was RIGHT, and it is locked out after too many
+        /// failed attempts. Carries <c>retryAfterSec</c> on <c>MSP_LOGIN_RES</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Only ever returned to somebody who proved they own the account.</b> That is the
+        /// whole answer to the username-enumeration objection this code raises. A lockout state
+        /// with a name is a statement that the account exists, so it is withheld from anybody
+        /// who has not supplied the correct password — a guesser sees <see cref="WrongCredentials"/>
+        /// on every attempt against a locked account exactly as they do against one that does not
+        /// exist, and learns nothing they could not learn before. The player typing their own
+        /// password learns why the door is shut. There is no branch where the trade-off is paid.
+        /// </para>
+        /// <para>
+        /// Until 2026-09-03 this was <see cref="WrongCredentials"/>, so ten fat-fingered
+        /// attempts bought fifteen minutes during which the correct password was answered
+        /// "Wrong username or password." — advice that sends the player to reset a password that
+        /// was never wrong, and cannot work, because the reset does not clear the lock either.
+        /// </para>
+        /// </remarks>
+        AccountLocked     = 1006,
+
+        /// <summary>
+        /// The account exists, the password was RIGHT, and it is banned. Withheld from a wrong
+        /// password for the reason <see cref="AccountLocked"/> gives.
+        /// </summary>
+        AccountBanned     = 1007,
+
         RoomNotFound      = 2000,
         RoomFull          = 2001,
         WrongRoomPassword = 2002,
         MatchAlreadyStarted = 2003,
         AlreadyInAnotherRoom= 2004,
+        /// <summary>
+        /// The requested side change would leave the two sides differing by more than one.
+        /// P16 3.5.
+        /// </summary>
+        /// <remarks>
+        /// Its own code rather than <see cref="InternalServerError"/> because the client renders
+        /// the refusal, and the player can act on this one: the other side has room again as
+        /// soon as somebody joins or switches. A generic "internal error" would read as a bug
+        /// and send them to a bug report instead of to the button.
+        /// </remarks>
+        TeamsWouldUnbalance = 2005,
 
         NoGameServerAvailable = 3000,
         GameServerNotResponding = 3001,
 
+        /// <summary>
+        /// The chat line was longer than <see cref="MspChatLimits.MaxTextCharacters"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Its own code because the player's next move differs.</b> Every chat refusal used to
+        /// arrive as <see cref="RateLimited"/>, whose message is "wait and try again" — correct
+        /// advice for flooding and useless for a long message, which is still too long after the
+        /// wait. A player following it re-sent the same text and got the same sentence forever.
+        /// </remarks>
+        ChatMessageTooLong  = 4000,
+
+        /// <summary>Nothing survived trimming and control-character stripping.</summary>
+        ChatMessageEmpty    = 4001,
+
+        /// <summary>The channel byte is not one <see cref="MspChatChannel"/> defines.</summary>
+        ChatChannelInvalid  = 4002,
+
+        /// <summary>
+        /// A room-channel line from a sender who is in no room. Previously dropped in silence,
+        /// which is indistinguishable from a delivery nobody answered.
+        /// </summary>
+        NotInARoom          = 4003,
+
+        /// <summary>
+        /// Over the per-player chat flood budget. This one genuinely IS "wait and try again".
+        /// </summary>
+        /// <remarks>
+        /// <b>Separate from <see cref="RateLimited"/> because the two windows differ and the
+        /// client can only phrase what the code tells it.</b> Chat flooding is five messages per
+        /// ten seconds per player; the login budget is five attempts per sixty seconds per source
+        /// address. One code for both forces a message that is wrong about one of them —
+        /// and it was wrong about both, since it also carried every non-flood chat refusal.
+        /// </remarks>
+        ChatTooFast         = 4004,
+
         InternalServerError = 9000,
+
+        /// <summary>
+        /// Too many attempts inside the window. <c>MSP_LOGIN_RES</c> carries
+        /// <c>retryAfterSec</c> with the seconds left; <c>MSP_ERROR_PUSH</c> carries the wait in
+        /// its message.
+        /// </summary>
+        /// <remarks>
+        /// The login budget is counted <b>per source address</b> over a 60-second window, so two
+        /// people behind one home router share it. That is deliberate — it is the control against
+        /// a brute-force attempt from one address, and splitting it per account would let an
+        /// attacker buy a fresh budget per username they guess — but it means the message has to
+        /// say <i>network</i> rather than <i>you</i>, or the second person in the house reads a
+        /// true statement as a lie.
+        /// </remarks>
         RateLimited         = 9001,
     }
 }

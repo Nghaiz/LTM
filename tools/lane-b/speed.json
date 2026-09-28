@@ -1,0 +1,11 @@
+{
+  "name": "speed",
+  "note": "Measures on-foot walk and sprint speed. A checkpoint marks the START of its step, so distance between consecutive checkpoints over the step's seconds is the speed held during that step. Read both localActor (client) and authoritative (server) positions. Original values: walk 3.5 m/s, sprint 6.5 m/s (Player Fps Actor.prefab m_WalkSpeed/m_RunSpeed). An obstacle can only shorten a leg, so a reading above 6.5 is a real excess.",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 90, "respawn": true },
+    { "checkpoint": "settled", "seconds": 3.0, "yawDegrees": 90 },
+    { "checkpoint": "walk-start", "seconds": 4.0, "yawDegrees": 90, "moveZ": 1.0 },
+    { "checkpoint": "sprint-start", "seconds": 4.0, "yawDegrees": 90, "moveZ": 1.0, "sprint": true },
+    { "checkpoint": "sprint-end", "seconds": 2.0, "yawDegrees": 90 }
+  ]
+}

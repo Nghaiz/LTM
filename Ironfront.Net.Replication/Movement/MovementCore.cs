@@ -16,6 +16,20 @@ namespace Ironfront.Net.Replication.Movement
 
         public bool IsCrouching;
 
+        /// <summary>
+        /// Whether the jump button was held at the END of the previous step. The jump is an
+        /// edge, and this is the half of it the simulation has to remember — see
+        /// <see cref="MovementCore.Step"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>In the state rather than at the input source, deliberately.</b> The edge has to be
+        /// computed from one contiguous frame sequence, and the two sides do not share a source:
+        /// the client predicts from the frames it generates, the server replays the frames it
+        /// received. Recomputing the rise here makes it the same rise on both, which is the same
+        /// argument that keeps every other line of this file shared.
+        /// </remarks>
+        public bool JumpHeld;
+
         public static MoveState AtRest(Vec3 position, bool grounded = true)
             => new MoveState { Position = position, Velocity = Vec3.Zero, IsGrounded = grounded };
     }
@@ -110,16 +124,36 @@ namespace Ironfront.Net.Replication.Movement
         /// Chooses the speed for this tick.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <b>There is no crouch speed, and that is not an oversight.</b> The phase-00 sketch
         /// assumed a <c>CROUCH_SPEED</c> of 2.0 m/s. The shipped game has no such value:
         /// <c>FpsActorController.StartCrouch()</c> only changes the CharacterController's
-        /// height, and <c>FirstPersonController.GetInput()</c> picks between exactly two
-        /// speeds on the sprint flag alone. Inventing a crouch speed here would make the
-        /// server authoritatively slower than the client every time a player crouches, which
-        /// presents as rubber-banding while crouch-walking and would have been extremely
-        /// annoying to trace back to a constant nobody wrote down.
+        /// height. Inventing a crouch speed here would make the server authoritatively slower
+        /// than the client every time a player crouches, which presents as rubber-banding while
+        /// crouch-walking and would have been extremely annoying to trace back to a constant
+        /// nobody wrote down.
+        /// </para>
+        /// <para>
+        /// <b>Sprint is the controller's <c>sprinting</c> FIELD, not the Sprint button.</b> This
+        /// read the raw button, on the reasoning that <c>FirstPersonController.GetInput()</c>
+        /// "picks between exactly two speeds on the sprint flag alone". It does — but the flag it
+        /// reads is written every render frame by <c>FpsActorController.Update()</c> as
+        /// <c>IsSprinting()</c>, which is <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading()
+        /// &amp;&amp; InputSource.Sprint() &amp;&amp; !IsSeated()</c>. The shipped game therefore gives
+        /// WALK speed to a player holding Sprint while aiming, crouching or reloading, and this
+        /// method gave them run speed — 6.5 m/s against 3.5, on both sides at once, so it never
+        /// rubber-banded and nothing caught it.
+        /// </para>
+        /// <para>
+        /// <b>The seated term of that composite is absent here on purpose.</b> A seated body is
+        /// not simulated by this file at all: <c>FpsActorController</c>'s <c>SimulationEnabled</c>
+        /// is false while <c>IsSeated()</c>, so no tick reaches this line to be gated.
+        /// </para>
         /// </remarks>
-        public static float SpeedFor(in MoveInput input) => input.Sprint ? RunSpeed : WalkSpeed;
+        public static float SpeedFor(in MoveInput input)
+            => (input.Sprint && !input.Crouch && !input.Aim && !input.Reload)
+                ? RunSpeed
+                : WalkSpeed;
 
         /// <summary>
         /// Advances one tick and returns the motion the caller should feed to
@@ -161,7 +195,17 @@ namespace Ironfront.Net.Replication.Movement
             {
                 velocity = new Vec3(velocity.X, -StickToGroundForce, velocity.Z);
 
-                if (input.Jump)
+                // The jump is an EDGE, not a level. Holding the key in the shipped game gives one
+                // jump: FirstPersonController latches it on the button's down-transition and
+                // FixedUpdate consumes it -- `if (!m_Jump) m_Jump = GetButtonDown("Jump")`.
+                // Re-applying JumpSpeed on every grounded tick instead turns a held key into a
+                // hop, which is what reading the button as a level here did.
+                //
+                // The rise is computed from the previous frame's own bit rather than from a
+                // "jump pressed" flag the caller sets, because the caller differs on the two
+                // sides and this file must not: the client predicts from frames it generated and
+                // the server replays frames it received.
+                if (input.Jump && !state.JumpHeld)
                     velocity = new Vec3(velocity.X, JumpSpeed, velocity.Z);
             }
             else
@@ -171,6 +215,7 @@ namespace Ironfront.Net.Replication.Movement
 
             state.Velocity    = velocity;
             state.IsCrouching = input.Crouch;
+            state.JumpHeld    = input.Jump;
 
             return velocity * dt;
         }

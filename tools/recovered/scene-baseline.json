@@ -1,0 +1,87 @@
+{
+  "provenance": {
+    "generatedBy": "tools/extract_recovered.py",
+    "recoveredBuild": "tmp/recovered",
+    "engineOriginal": "Unity 5.4.0f3",
+    "note": "Regenerate with `python tools/extract_recovered.py`. Do not hand-edit."
+  },
+  "sceneCount": 4,
+  "scenes": {
+    "Dustbowl": {
+      "original": {
+        "gameObjects": 5587,
+        "meshRenderers": 2307,
+        "staticFlagged": 1096,
+        "source": "tmp/recovered/UnityProject/ExportedProject/Assets/Scenes/Dustbowl.unity"
+      },
+      "current": {
+        "gameObjects": 5465,
+        "meshRenderers": 2173,
+        "staticFlagged": 1036,
+        "source": "Ironfront_Reborn/Assets/Scenes/Dustbowl.unity"
+      },
+      "delta": {
+        "gameObjects": -122,
+        "meshRenderers": -134,
+        "staticFlagged": -60
+      }
+    },
+    "Island": {
+      "original": {
+        "gameObjects": 2584,
+        "meshRenderers": 829,
+        "staticFlagged": 345,
+        "source": "tmp/recovered/UnityProject/ExportedProject/Assets/Scenes/Island.unity"
+      },
+      "current": {
+        "gameObjects": 2602,
+        "meshRenderers": 829,
+        "staticFlagged": 344,
+        "source": "Ironfront_Reborn/Assets/Scenes/Island.unity"
+      },
+      "delta": {
+        "gameObjects": 18,
+        "meshRenderers": 0,
+        "staticFlagged": -1
+      }
+    },
+    "Menu": {
+      "original": {
+        "gameObjects": 362,
+        "meshRenderers": 22,
+        "staticFlagged": 0,
+        "source": "tmp/recovered/UnityProject/ExportedProject/Assets/Scenes/Menu.unity"
+      },
+      "current": {
+        "gameObjects": 879,
+        "meshRenderers": 22,
+        "staticFlagged": 0,
+        "source": "Ironfront_Reborn/Assets/Scenes/Menu.unity"
+      },
+      "delta": {
+        "gameObjects": 517,
+        "meshRenderers": 0,
+        "staticFlagged": 0
+      }
+    },
+    "Splash": {
+      "original": {
+        "gameObjects": 62,
+        "meshRenderers": 6,
+        "staticFlagged": 0,
+        "source": "tmp/recovered/UnityProject/ExportedProject/Assets/Scenes/Splash.unity"
+      },
+      "current": {
+        "gameObjects": 62,
+        "meshRenderers": 6,
+        "staticFlagged": 0,
+        "source": "Ironfront_Reborn/Assets/Scenes/Splash.unity"
+      },
+      "delta": {
+        "gameObjects": 0,
+        "meshRenderers": 0,
+        "staticFlagged": 0
+      }
+    }
+  }
+}

@@ -181,6 +181,7 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(1 << 12, (ushort)InputButtons.SwitchWeapon1);
             Assert.Equal(1 << 13, (ushort)InputButtons.SwitchWeapon2);
             Assert.Equal(1 << 14, (ushort)InputButtons.SwitchWeapon3);
+            Assert.Equal(1 << 15, (ushort)InputButtons.SwitchWeapon4);
         }
 
         [Fact]
@@ -199,6 +200,50 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(-1f, frame.MoveZFloat, 3);
             Assert.Equal(180f, frame.YawDegrees, 2);
             Assert.Equal(45f, frame.PitchDegrees, 2);
+        }
+
+        /// <summary>
+        /// <c>InputFrame.WeaponSlot</c> decodes bits 11-15, and -1 when none is set.
+        /// </summary>
+        /// <remarks>
+        /// The original four bits sat on the wire from the freeze until 2026-08-21 with no
+        /// producer and no consumer. The decoder is shared so the two halves cannot transcribe them
+        /// differently; these are its pins.
+        /// </remarks>
+        [Theory]
+        [InlineData(InputButtons.SwitchWeapon0, 0)]
+        [InlineData(InputButtons.SwitchWeapon1, 1)]
+        [InlineData(InputButtons.SwitchWeapon2, 2)]
+        [InlineData(InputButtons.SwitchWeapon3, 3)]
+        [InlineData(InputButtons.SwitchWeapon4, 4)]
+        public void EachSwitchBitDecodesToItsOwnSlot(InputButtons bit, int expected)
+        {
+            var frame = new InputFrame(0, 0, 0, 0, bit);
+
+            Assert.Equal(expected, frame.WeaponSlot);
+        }
+
+        [Fact]
+        public void NoSwitchBitDecodesToNoSlot()
+        {
+            var held = new InputFrame(0, 0, 0, 0, InputButtons.Fire | InputButtons.Sprint);
+
+            Assert.Equal(-1, held.WeaponSlot);
+            Assert.Equal(-1, new InputFrame(0, 0, 0, 0, InputButtons.None).WeaponSlot);
+        }
+
+        /// <summary>Two bits at once resolves to the LOWEST, and never throws.</summary>
+        /// <remarks>
+        /// A producer should not send this. Rejecting the frame would drop the movement with it,
+        /// and taking the highest would make a stuck low bit invisible.
+        /// </remarks>
+        [Fact]
+        public void MoreThanOneSwitchBitTakesTheLowest()
+        {
+            var frame = new InputFrame(0, 0, 0, 0,
+                InputButtons.SwitchWeapon3 | InputButtons.SwitchWeapon1);
+
+            Assert.Equal(1, frame.WeaponSlot);
         }
     }
 }

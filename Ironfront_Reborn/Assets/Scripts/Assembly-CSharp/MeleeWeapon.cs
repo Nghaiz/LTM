@@ -45,7 +45,11 @@ public class MeleeWeapon : Weapon
 			Hitbox component = hitInfo.collider.GetComponent<Hitbox>();
 			HitSomething(hitInfo.collider);
 			audio.PlayOneShot(hitSound);
-			if (component.parent.Damage(damage, balanceDamage, false, hitInfo.point, ray.direction, ray.direction * force))
+			// Null for a client's remote corpse: RemoteRagdoll builds its colliders on the Ragdoll
+			// layer with no Hitbox behind them (see Projectile.Hit). The swing lands and has nothing
+			// to damage.
+			if (component != null
+				&& component.parent.Damage(damage, balanceDamage, false, hitInfo.point, ray.direction, ray.direction * force))
 			{
 				IngameUi.Hit();
 			}

@@ -41,10 +41,34 @@ namespace Ironfront.Net.Replication.Interest
         public const float NearRadius = 60f;
 
         /// <summary>Under this distance, 10 Hz.</summary>
-        public const float MidRadius = 150f;
+        /// <remarks>
+        /// <para>
+        /// <b>150 -> 100 for B-16.</b> The worst client measured 6,419 B/s against a 5,120 B/s
+        /// budget at the criterion's own population (16 clients + 32 bots = 48 actors), 70% of
+        /// it the actor snapshot stream. Reducing the population from 56 actors did NOT move it
+        /// -- 6,251 B/s at 56, 6,419 at 48 -- so the overrun is not an actor-count result and
+        /// cutting bodies further would not have paid. This does: it moves actors between 100 m
+        /// and 150 m from 10 Hz to 4 Hz.
+        /// </para>
+        /// <para>
+        /// <b>Nothing becomes unshootable.</b> <see cref="ShootableThreshold"/> is
+        /// <c>Far</c>, not <c>Mid</c>, precisely so that the 150-300 m band a rifle can reach
+        /// stays replicated -- see its own remark. This changes the RATE inside that band, not
+        /// whether it is sent, and <c>SendEveryN</c> is untouched so interpolation is unaffected.
+        /// </para>
+        /// </remarks>
+        public const float MidRadius = 100f;
 
         /// <summary>Under this distance, 4 Hz.</summary>
-        public const float FarRadius = 300f;
+        /// <remarks>
+        /// <b>300 -> 200 for B-16.</b> Read carefully before assuming this is the big lever: it
+        /// is NOT in the distance ladder. <c>LevelFor</c> tests Near, then Mid, then
+        /// <see cref="CullRadius"/> -- so this constant bounds only the TEAMMATE floor, the
+        /// clause that lifts a team-mate within it to <c>Mid</c>. Narrowing it means team-mates
+        /// between 200 m and 300 m drop to <c>Far</c> like anyone else. The saving is small and
+        /// it is listed second for that reason.
+        /// </remarks>
+        public const float FarRadius = 200f;
 
         /// <summary>
         /// The real cull distance. Between <see cref="FarRadius"/> and this, actors stay at

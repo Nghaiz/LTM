@@ -1,0 +1,1167 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+
+namespace Ironfront.Tools.ClientWiringGate
+{
+    /// <summary>
+    /// The authoring checks for the P15 menu Canvas: one per screen, over the fields that decide
+    /// whether its controls do anything. P15 3.4.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why these exist at all.</b> The nine existing <see cref="AssetWiringDetectors"/> checks
+    /// passed <c>Ingame UI Container.prefab</c> with <c>capturePointMarkerPrefab</c> null
+    /// (P3 § 3.3): an authoring gate only sees the fields it was told about, and is otherwise
+    /// exactly as green as one that checks nothing. Four new screens with twenty-two references
+    /// between them is precisely the surface that failure lives on.
+    /// </para>
+    /// <para>
+    /// <b>The shape is <c>ScoreUiTextRefsAreAssigned</c>'s, and that shape was earned.</b> Its
+    /// first draft compared each field against its own fallback and was proved green, by
+    /// mutation, on two authorings it exists to forbid — cross-swapped assignments, and fileIDs
+    /// naming no object at all (which Unity deserializes to null, so the gate reported clean
+    /// while the field was effectively unassigned). So every field below is graded on three
+    /// clauses, not one:
+    /// </para>
+    /// <list type="number">
+    /// <item>assigned at all — <c>fileID: 0</c> is the unassigned case;</item>
+    /// <item>the anchor resolves to an object that exists in the asset — a fileID naming nothing
+    /// loads as null and is the unassigned case wearing a number;</item>
+    /// <item>no two fields on one screen name the same object — a Log-in button that is also the
+    /// Create-account button resolves perfectly and is still one missing control.</item>
+    /// </list>
+    /// <para>
+    /// <b>Why fields and not authored <c>m_OnClick</c> entries.</b> The screens wire their buttons
+    /// with <c>AddListener</c> over a serialized <c>Button</c> reference, so the field IS the
+    /// whole failure surface — an unassigned one means no listener and a dead button, and there
+    /// is nothing else to check. The authored-persistent-call alternative would additionally
+    /// store the method name and the assembly-qualified type name as strings, and a rename breaks
+    /// those silently in a way no YAML check can grade. This detector can therefore see every
+    /// fault its screens can have, which is the property <c>green-that-proves-nothing.md</c> asks
+    /// for and the reason the wiring is shaped this way rather than the check being bent to fit.
+    /// </para>
+    /// <para>
+    /// <b>Script guids are read from the <c>.cs.meta</c> beside each source file</b>, unlike the
+    /// hardcoded constants in <see cref="AssetWiringDetectors"/>. Same reason those are guids at
+    /// all — the YAML carries a guid, not a type name, and these assemblies are not loadable here
+    /// — but a constant transcribed once can go stale silently if a script is ever reimported
+    /// with a new guid, and the failure mode of a stale constant is a check that matches zero
+    /// instances and reports nothing. Reading the meta cannot drift, and a missing meta throws
+    /// <see cref="AssetGateUnknownException"/> rather than passing.
+    /// </para>
+    /// </remarks>
+    public static class MenuScreenWiringDetectors
+    {
+        /// <summary>The ledger row these findings are filed under.</summary>
+        private const string Row = "P15";
+
+        /// <summary>The Editor command that authors the menu Canvas.</summary>
+        private const string DefaultBuildCommand = "Ironfront/Net/Build multiplayer menu Canvas";
+
+        /// <summary>Where the single-reference rule is written down. P15 declared it.</summary>
+        private const string DefaultFieldClause = "P15 3.4";
+
+        /// <summary>Where the array rule is written down. P16 added it, one section later.</summary>
+        private const string DefaultArrayClause = "P16 3.7";
+
+        /// <summary>Where the menu Canvas is authored, for a screen that is on nothing.</summary>
+        private const string DefaultAbsentClause = "P15 3.2";
+
+        /// <summary>
+        /// A screen: the script that draws it, and every reference that must be authored on it.
+        /// </summary>
+        /// <remarks>
+        /// <c>Consequence</c> is per FIELD rather than per screen because "this button does
+        /// nothing" and "the error line never renders" send a reader to different places, and a
+        /// gate whose message is generic costs the reader the investigation the gate was supposed
+        /// to have done.
+        /// </remarks>
+        internal readonly struct Screen
+        {
+            public Screen(string name, string sourcePath, params (string Field, string Consequence)[] fields)
+                : this(name, sourcePath, System.Array.Empty<(string, int, string)>(), fields)
+            {
+            }
+
+            public Screen(
+                string name,
+                string sourcePath,
+                (string Field, int Length, string Consequence)[] arrays,
+                params (string Field, string Consequence)[] fields)
+                : this(Row, DefaultBuildCommand, DefaultFieldClause, DefaultArrayClause,
+                       DefaultAbsentClause, name, sourcePath, arrays, fields)
+            {
+            }
+
+            /// <summary>
+            /// The full form, for a screen that is not one of P15's menu panels.
+            /// </summary>
+            /// <remarks>
+            /// <b>The ledger row and the repair command travel WITH the screen</b>, added by P17
+            /// when the in-match HUD reused this grading. The alternative was a second copy of
+            /// <see cref="Grade"/> and <see cref="GradeArrays"/> under a different constant, and
+            /// two copies of a check are two checks that can disagree about what they forbid —
+            /// which is the failure this file's own remarks keep describing one level down.
+            /// </remarks>
+            public Screen(
+                string row,
+                string buildCommand,
+                string fieldClause,
+                string arrayClause,
+                string absentClause,
+                string name,
+                string sourcePath,
+                (string Field, int Length, string Consequence)[] arrays,
+                params (string Field, string Consequence)[] fields)
+            {
+                LedgerRow = row;
+                BuildCommand = buildCommand;
+                FieldClause = fieldClause;
+                ArrayClause = arrayClause;
+                AbsentClause = absentClause;
+                Name = name;
+                SourcePath = sourcePath;
+                Arrays = arrays;
+                Fields = fields;
+            }
+
+            /// <summary>What findings about this screen are filed under.</summary>
+            public string LedgerRow { get; }
+
+            /// <summary>The Editor command that authors this screen, named in every finding.</summary>
+            public string BuildCommand { get; }
+
+            /// <summary>The plan clause a single-reference finding cites.</summary>
+            public string FieldClause { get; }
+
+            /// <summary>The plan clause an array finding cites. Not the same section.</summary>
+            public string ArrayClause { get; }
+
+            /// <summary>The plan clause cited when the screen is on no GameObject at all.</summary>
+            public string AbsentClause { get; }
+
+            public string Name { get; }
+
+            /// <summary>Relative to the Assets root, so the guid is read from its <c>.meta</c>.</summary>
+            public string SourcePath { get; }
+
+            public (string Field, string Consequence)[] Fields { get; }
+
+            /// <summary>
+            /// Serialized reference ARRAYS, with the length the screen must have.
+            /// </summary>
+            /// <remarks>
+            /// Graded separately from <see cref="Fields"/> because an array has a failure the
+            /// single references do not: the right entries at the WRONG LENGTH. A roster sized
+            /// six on a sixteen-seat room drops four players with no null anywhere in the asset,
+            /// so every clause a single field is graded on would pass.
+            /// </remarks>
+            public (string Field, int Length, string Consequence)[] Arrays { get; }
+        }
+
+        private static readonly Screen[] Screens =
+        {
+            new Screen(
+                "MenuScreenController", "Scripts/Net/Client/Menu/MenuScreenController.cs",
+                ("_titleScreen",
+                 "the Title screen never becomes visible, so a player reaching the menu sees "
+                 + "nothing at all and criterion 1 fails on the pixels"),
+                ("_loginScreen",
+                 "Multiplayer moves the flow to LoginScreen and no form appears, which reads as "
+                 + "the button being broken rather than the screen being unassigned"),
+                ("_registerScreen",
+                 "'Create an account' does nothing visible, so criterion 2 has no way in"),
+                ("_authenticatingScreen",
+                 "the screen goes blank while the master is answering, which is indistinguishable "
+                 + "from a hang"),
+                ("_lobbyScreen",
+                 "a successful login lands on an empty screen, so criterion 2's second shot has "
+                 + "nothing to show"),
+                ("_practiceBackBar",
+                 "Practice reveals the legacy menu with no way back to multiplayer short of "
+                 + "restarting the game"),
+                ("_practiceBackButton",
+                 "the Back bar renders but its button is unwired, which is worse than no bar: the "
+                 + "player presses it"),
+                ("_signedInText",
+                 "the Lobby screen cannot say WHO is signed in, which is the evidence criterion 2 "
+                 + "is graded on")),
+
+            new Screen(
+                "MenuTitleScreen", "Scripts/Net/Client/Menu/MenuTitleScreen.cs",
+                ("_controller",
+                 "both Title buttons are wired to a null controller, so the primary path into "
+                 + "multiplayer does nothing — F1 exactly as it was before this phase"),
+                ("_multiplayerButton",
+                 "no listener is added to the primary action, so there is still no way into "
+                 + "multiplayer from the menu (criterion 1)"),
+                ("_practiceButton",
+                 "Practice is unreachable and the offline game loses its entry (criterion 5)"),
+                ("_settingsButton",
+                 "Settings renders but cannot open the existing options UI"),
+                ("_exitButton",
+                 "Exit renders but cannot reach the application's single quit path")),
+
+            new Screen(
+                "MenuLoginScreen", "Scripts/Net/Client/Menu/MenuLoginScreen.cs",
+                ("_controller",
+                 "Log in and Create an account are both inert, so no account can be used or made"),
+                ("_usernameField",
+                 "the username reads as empty, so every login is refused with a message about a "
+                 + "field the player did fill in"),
+                ("_passwordField",
+                 "the password reads as empty AND is never cleared, so it is neither sent nor "
+                 + "dropped"),
+                ("_logInButton",
+                 "no listener is added, so the login form cannot be submitted at all"),
+                ("_createAccountButton",
+                 "the register screen is unreachable, so criterion 2 cannot be performed"),
+                ("_rememberMeToggle",
+                 "Remember username renders but cannot express the player's choice"),
+                ("_backButton",
+                 "the sign-in screen has no way back to the title"),
+                ("_errorText",
+                 "a wrong password produces NO visible message, which is criterion 3 failing "
+                 + "exactly as the M3 clause describes")),
+
+            new Screen(
+                "MenuRegisterScreen", "Scripts/Net/Client/Menu/MenuRegisterScreen.cs",
+                ("_controller",
+                 "Create and Back are both inert, so an account cannot be made from the UI"),
+                ("_usernameField",
+                 "the username reads as empty and the master refuses it as invalid"),
+                ("_passwordField",
+                 "the password reads as empty, so the account is created against a hash of "
+                 + "nothing — or refused, depending on the master"),
+                ("_confirmPasswordField",
+                 "the confirmation reads as empty and never matches, so registration is blocked "
+                 + "by a check meant to catch typos"),
+                ("_displayNameField",
+                 "the display name is always blank, so the optional field silently is not one"),
+                ("_createButton",
+                 "no listener is added, so the register form cannot be submitted (criterion 2)"),
+                ("_backButton",
+                 "there is no way back to the login form once the register screen is up"),
+                ("_errorText",
+                 "'that username is already taken' renders nowhere, so a failed registration "
+                 + "looks like a frozen button")),
+
+            // ---------------------------------------------------------------- P16 3.7
+
+            new Screen(
+                "MenuRoomBrowserScreen", "Scripts/Net/Client/Menu/MenuRoomBrowserScreen.cs",
+                // A row used to be two parallel arrays, `_roomButtons` and `_roomLabels`, and this
+                // gate checked those names. They are now the cells of one `RoomRow` struct, so
+                // the old names resolve to nothing — and "absent" reads identically to "never
+                // wired", which is how a rename produced two findings about a browser that was
+                // fully authored. Grading the columns of the struct keeps the guarantee the old
+                // pair carried and adds the three cells it never covered.
+                new[]
+                {
+                    ("_rows[].Join", RoomBrowserRows,
+                     "the rows a player presses to join are missing or the wrong number of them "
+                     + "exists, so some rooms are listed with no way in and criterion 1 shows a "
+                     + "list that cannot be used"),
+                    ("_rows[].Name", RoomBrowserRows,
+                     "a row renders with no room name, so the list criterion 1 is graded on "
+                     + "cannot be told apart room from room"),
+                    ("_rows[].Map", RoomBrowserRows,
+                     "the map column is blank, so a player cannot see what they are joining"),
+                    ("_rows[].Players", RoomBrowserRows,
+                     "the player count never renders, so a full room looks the same as an empty "
+                     + "one until the join is refused"),
+                    ("_rows[].Status", RoomBrowserRows,
+                     "the lifecycle and lock glyph have nowhere to be written, so a locked or "
+                     + "in-progress room is presented as joinable"),
+                },
+                ("_controller",
+                 "every control on the browser is inert, so there is no way from the signed-in "
+                 + "screen into a room at all -- F2 exactly as the audit found it"),
+                ("_searchField",
+                 "the search box renders but cannot filter the current room snapshot"),
+                ("_refreshButton",
+                 "the list can never be re-fetched, so a room created on the OTHER machine never "
+                 + "appears and criterion 2 cannot be performed"),
+                ("_createRoomButton",
+                 "the create-room form is unreachable, so criterion 2's first step -- make a "
+                 + "room from the UI -- has no button"),
+                ("_pingText",
+                 "the labelled master round trip renders nowhere, which is half of criterion 1"),
+                ("_overflowText",
+                 "a ninth room is dropped SILENTLY rather than counted, so the browser lies "
+                 + "about what the master returned"),
+                ("_errorText",
+                 "'that room is full' and the private-room prompt render nowhere, so a refused "
+                 + "click looks like a dead button"),
+                ("_passwordPrompt",
+                 "a private room can never be entered: the prompt cannot be shown, so criterion "
+                 + "7 has nothing to type into"),
+                ("_passwordField",
+                 "the prompt appears with no field, so the password reads as empty and the join "
+                 + "is refused for a reason the player cannot fix"),
+                ("_passwordJoinButton",
+                 "the password prompt has no way to submit, so a private room is unenterable "
+                 + "even with the right password (criterion 7)"),
+                ("_passwordCancelButton",
+                 "the prompt cannot be dismissed, so a mis-click on a private room traps the "
+                 + "player on the browser")),
+
+            new Screen(
+                "MenuCreateRoomScreen", "Scripts/Net/Client/Menu/MenuCreateRoomScreen.cs",
+                ("_controller",
+                 "Create and Back are both inert, so a room cannot be made from the UI and "
+                 + "criterion 2 cannot start"),
+                ("_nameField",
+                 "the room name reads as empty and the form refuses itself, blaming the player "
+                 + "for a field they did fill in"),
+                ("_mapDropdown",
+                 "the map cannot be chosen, so every room is made on the default and P18's "
+                 + "Island is unreachable from the UI"),
+                ("_maxPlayersField",
+                 "the seat count reads as empty, so criterion 8's even-number check has no "
+                 + "input to refuse and no screenshot to be graded on"),
+                ("_botCountField",
+                 "the bot count is always zero, so the field silently is not one"),
+                ("_privateToggle",
+                 "no room can be made private, so criterion 7 has no private room to join"),
+                ("_passwordField",
+                 "a private room is created with an empty password, which the master refuses -- "
+                 + "or worse, accepts, leaving a room nobody can enter"),
+                ("_createButton",
+                 "no listener is added, so the form cannot be submitted at all"),
+                ("_backButton",
+                 "there is no way back to the browser once the form is up"),
+                ("_errorText",
+                 "'players must be an even number' renders nowhere, so criterion 8 fails on the "
+                 + "pixels even though the check runs")),
+
+            new Screen(
+                "MenuRoomLobbyScreen", "Scripts/Net/Client/Menu/MenuRoomLobbyScreen.cs",
+                new[]
+                {
+                    ("_teamZeroRows", RosterRowsPerSide,
+                     "team 1's roster cannot show every member a full room can hold, so "
+                     + "criteria 2 and 3 are graded on a column that silently truncates"),
+                    ("_teamOneRows", RosterRowsPerSide,
+                     "team 2's roster cannot show every member a full room can hold, so a "
+                     + "player who switches side can vanish from BOTH columns"),
+                },
+                ("_controller",
+                 "ready, switch side, chat and leave are all inert, so a player who reaches a "
+                 + "room can do nothing in it and criterion 2 stops one step short"),
+                ("_teamZeroHeading",
+                 "team 1's column is unlabelled and uncoloured, so the two sides criterion 3 is "
+                 + "graded on are told apart by position alone"),
+                ("_teamOneHeading",
+                 "team 2's column is unlabelled and uncoloured, with the same consequence"),
+                ("_switchSideButton",
+                 "there is no way to change side, so criteria 3, 4 and 5 have no control to "
+                 + "press"),
+                ("_switchSideLabel",
+                 "the control cannot say SIDES LOCKED, so criterion 5's screenshot shows a "
+                 + "greyed button with no stated reason"),
+                ("_readyButton",
+                 "nobody can mark ready, so P14's start rule is never satisfied and criterion "
+                 + "2's match never begins"),
+                ("_readyLabel",
+                 "the button cannot say whether pressing it marks ready or unready, so its state "
+                 + "is invisible in the screenshot criterion 2 is graded on"),
+                ("_leaveButton",
+                 "a player who joins a room can only leave it by quitting the process"),
+                ("_headingText",
+                 "the room's name renders nowhere, so two screenshots from two machines cannot "
+                 + "be shown to be of the SAME room"),
+                ("_statusText",
+                 "the lifecycle and the start condition render nowhere, so a room waiting for a "
+                 + "second player is indistinguishable from one that is stuck"),
+                ("_errorText",
+                 "the refusals in criteria 4 and 5 render nowhere, which is those two criteria "
+                 + "failing exactly as written"),
+                ("_chatLog",
+                 "a delivered chat line is dropped rather than shown, so criterion 6 fails on "
+                 + "the receiving machine"),
+                ("_chatField",
+                 "nothing can be typed, so criterion 6 has no message to send"),
+                ("_chatSendButton",
+                 "no listener is added, so lobby chat cannot be sent at all")),
+        };
+
+        /// <summary>
+        /// Row counts the screens declare in code, mirrored here.
+        /// </summary>
+        /// <remarks>
+        /// Transcribed rather than referenced because this tool cannot load the Unity assemblies
+        /// the constants live in -- the same reason script guids are read from <c>.meta</c>. The
+        /// transcription is guarded: <see cref="RowCountsMatchTheScreens"/> reads the numbers back
+        /// out of the source files, so a change on either side fails the gate rather than
+        /// silently grading the old shape.
+        /// </remarks>
+        private const int RoomBrowserRows = 8;
+
+        /// <summary>Half of <c>ProtocolConstants.MAX_PLAYERS</c>. Guarded as above.</summary>
+        private const int RosterRowsPerSide = 8;
+
+        /// <summary>
+        /// <b>P15</b> — every reference each menu screen needs is assigned, resolves to an object
+        /// that exists, and is not an object another field on the same screen already drives.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Zero instances is a finding, not an exception</b> — the call
+        /// <c>ScoreUiTextRefsAreAssigned</c> makes, for its reason: an absent component and an
+        /// unassigned field render the same nothing, so a check satisfiable by deleting the
+        /// screen would be satisfiable by deleting the menu. Deleting the Canvas is precisely the
+        /// regression this phase's criterion 1 forbids, so it must be the loudest case, not the
+        /// quietest.
+        /// </para>
+        /// <para>
+        /// <b>What this deliberately does not check: where the control sits.</b> A Button
+        /// reference pointing at a genuine, unclaimed Button that lives on a different screen
+        /// passes every clause here and is still wrong. That is the same boundary
+        /// <c>ScoreUiTextRefsAreAssigned</c> draws and for the same reason — descendant-of-this-
+        /// panel is a LAYOUT invariant, YAML can say a reference resolves but never that a player
+        /// can see or reach it, and encoding it would fail a legitimate reorganisation. Criteria
+        /// 1, 2, 3 and 5 are screenshots because of exactly this gap.
+        /// </para>
+        /// </remarks>
+        public static IEnumerable<GateFinding> MenuScreenRefsAreAssigned(UnityAssetIndex index)
+            => GradeScreens(index, Screens);
+
+        /// <summary>
+        /// Grades every field and array on <paramref name="screens"/>, and reports a screen that
+        /// is on no GameObject at all.
+        /// </summary>
+        /// <remarks>
+        /// <b>Shared with P17's in-match HUD rather than copied for it.</b> The three clauses
+        /// this file's header describes were earned by mutation against <c>ScoreUi</c>, and a
+        /// second copy of them under a different constant is two checks free to disagree about
+        /// what they forbid. What differs per screen — the ledger row, the plan clause, the
+        /// Editor command that repairs it — travels on the <see cref="Screen"/> itself.
+        /// </remarks>
+        internal static IEnumerable<GateFinding> GradeScreens(
+            UnityAssetIndex index, IEnumerable<Screen> screens)
+        {
+            var findings = new List<GateFinding>();
+
+            foreach (Screen screen in screens)
+            {
+                string guid = ScriptGuid(index, screen.SourcePath);
+                int seen = 0;
+
+                foreach ((UnityAssetDocument document, string path)
+                         in AssetWiringDetectors.Instances(index, guid))
+                {
+                    seen++;
+                    findings.AddRange(Grade(index, screen, document, path));
+                }
+
+                if (seen == 0)
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, "(nothing)", 0,
+                        $"{screen.Name} is on no GameObject in any scene or prefab, so its "
+                        + "references are unassignable by construction and that screen does not "
+                        + $"exist. Run '{screen.BuildCommand}' ({screen.AbsentClause})."));
+            }
+
+            return findings;
+        }
+
+        internal static IEnumerable<GateFinding> Grade(
+            UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            findings.AddRange(GradeArrays(index, screen, document, path));
+            findings.AddRange(GradeDevelopmentNotices(index, screen, document, path));
+
+            foreach ((string field, string consequence) in screen.Fields)
+            {
+                UnityObjectRef? maybe = document.Reference(field);
+
+                if (maybe == null || maybe.Value.IsNull)
+                {
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
+                        $"{screen.Name}.{field} is unassigned, so {consequence} ({screen.FieldClause})."));
+                    continue;
+                }
+
+                UnityObjectRef assigned = maybe.Value;
+
+                // A reference into another asset is legal YAML but wrong here: every one of these
+                // fields names an object on the same Canvas, authored by the same builder run.
+                string? target = assigned.Guid == null ? path : index.PathOf(assigned.Guid);
+
+                if (target == null)
+                    throw new AssetGateUnknownException(
+                        $"{path}: {screen.Name}.{field} names guid {assigned.Guid}, which no "
+                        + "asset in the tree carries. The reference is dangling; this check "
+                        + "cannot grade it.");
+
+                bool resolves = index.Documents(target)
+                    .Any(d => d.AnchorId == assigned.FileId);
+
+                if (!resolves)
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
+                        $"{screen.Name}.{field} names fileID {assigned.FileId}, which no object "
+                        + $"in {AssetWiringDetectors.Rel(index, target)} carries. Unity loads "
+                        + $"that as null, so {consequence} — and it reads exactly like the "
+                        + $"unassigned case at runtime ({screen.FieldClause})."));
+
+                foreach ((string other, string _) in screen.Fields)
+                {
+                    if (other == field) continue;
+
+                    UnityObjectRef? held = document.Reference(other);
+                    if (held == null || held.Value.IsNull) continue;
+                    if (held.Value.FileId != assigned.FileId) continue;
+                    if (!string.Equals(held.Value.Guid, assigned.Guid,
+                                       StringComparison.OrdinalIgnoreCase)) continue;
+
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
+                        $"{screen.Name}.{field} points at the same object as {other}. Two "
+                        + "controls cannot be one object: whichever is written last wins, so "
+                        + $"this does not add a control — it takes one over, and {consequence} "
+                        + $"({screen.FieldClause})."));
+                }
+            }
+
+            findings.AddRange(GradeDeclaredTypes(index, screen, document, path));
+
+            return findings;
+        }
+
+        /// <summary>
+        /// Reports a reference that resolves to a component of the WRONG declared type.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The fourth clause, added by P17 against a hole it confirmed by mutation.</b> The
+        /// three clauses above are "assigned", "resolves", "not already driven" — and a
+        /// <c>Button</c> field pointed at a <c>Text</c> passes all three. It resolves to a real
+        /// anchor, no other field names it, and Unity loads a type mismatch as <b>null</b>: the
+        /// Deploy control then does nothing, which is the unassigned case the first clause exists
+        /// to catch, wearing a resolving fileID. Pointed at the deploy screen's own heading
+        /// label, the gate reported clean.
+        /// </para>
+        /// <para>
+        /// <b>The expected type is read from the SOURCE, and the guid from a sibling.</b>
+        /// <c>ScoreUiTextRefsAreAssigned</c> learned not to hardcode a component guid — uGUI's
+        /// <c>Text</c> carries one in the legacy DLL form and another in the package form, and
+        /// this tree is mid-migration — so what is compared is AGREEMENT: two fields declared
+        /// as different C# types may not resolve to the same script. A field declared as
+        /// <c>GameObject</c> needs no oracle at all and is checked directly, because a
+        /// <c>GameObject</c> is class 1 and a component never is.
+        /// </para>
+        /// <para>
+        /// <b>What this still cannot see.</b> A field pointed at a component type NO other field
+        /// on the screen declares — a <c>Button</c> field aimed at the <c>Image</c> beside it —
+        /// has nothing to disagree with and passes. Closing that means pinning uGUI's guids,
+        /// which is what the paragraph above says goes wrong. Recorded rather than silently
+        /// left: the residual gap is one component type deep, and the mutation that motivated
+        /// this clause is caught.
+        /// </para>
+        /// </remarks>
+        private static IEnumerable<GateFinding> GradeDeclaredTypes(
+            UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            IReadOnlyDictionary<string, string> declared = DeclaredTypes(index, screen);
+            if (declared.Count == 0) return findings;
+
+            // Script guid -> the declared C# type that first claimed it, on THIS screen.
+            var claimedBy = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach ((string field, string consequence) in AllFields(screen))
+            {
+                if (!declared.TryGetValue(field, out string? type)) continue;
+
+                foreach (UnityObjectRef reference in ReferencesOf(document, field))
+                {
+                    if (reference.IsNull) continue;
+
+                    // Same-asset references only: one that leaves the asset is already reported
+                    // by the resolves clause above.
+                    if (reference.Guid != null) continue;
+
+                    UnityAssetDocument? resolved = index.Documents(path)
+                        .FirstOrDefault(d => d.AnchorId == reference.FileId);
+
+                    if (resolved == null) continue;
+
+                    if (string.Equals(type, "GameObject", StringComparison.Ordinal))
+                    {
+                        if (resolved.ClassId == 1) continue;
+
+                        findings.Add(new GateFinding(
+                            screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
+                            $"{screen.Name}.{field} is declared as a GameObject and names fileID "
+                            + $"{reference.FileId}, which is a class-{resolved.ClassId} object. "
+                            + $"Unity loads that as null, so {consequence} — and it reads exactly "
+                            + $"like the unassigned case at runtime ({screen.FieldClause})."));
+                        continue;
+                    }
+
+                    string? script = resolved.ScriptGuid;
+                    if (script == null) continue;
+
+                    if (!claimedBy.TryGetValue(script, out string? owner))
+                    {
+                        claimedBy.Add(script, type);
+                        continue;
+                    }
+
+                    if (string.Equals(owner, type, StringComparison.Ordinal)) continue;
+
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
+                        $"{screen.Name}.{field} is declared as a {type} and names fileID "
+                        + $"{reference.FileId}, whose component is the same script this screen's "
+                        + $"{owner} fields point at. Unity loads a type mismatch as null, so "
+                        + $"{consequence} — and an anchor that resolves is still the unassigned "
+                        + $"case at runtime ({screen.FieldClause})."));
+                }
+            }
+
+            return findings;
+        }
+
+        /// <summary>Every graded field on a screen, single references and arrays alike.</summary>
+        private static IEnumerable<(string Field, string Consequence)> AllFields(Screen screen)
+        {
+            foreach ((string field, string consequence) in screen.Fields)
+                yield return (field, consequence);
+
+            foreach ((string field, int _, string consequence) in screen.Arrays)
+                yield return (field, consequence);
+        }
+
+        /// <summary>
+        /// The C# type each graded field is declared as, read off the screen's own source.
+        /// </summary>
+        /// <remarks>
+        /// Read rather than listed in the table beside the consequence, so a field whose type
+        /// changes cannot leave a stale expectation behind — the failure mode of every
+        /// transcribed constant this file already argues against. A field the pattern cannot
+        /// find is simply not graded here; the other three clauses still apply to it.
+        /// </remarks>
+        private static IReadOnlyDictionary<string, string> DeclaredTypes(
+            UnityAssetIndex index, Screen screen)
+        {
+            string source = Path.Combine(
+                index.AssetsRoot, screen.SourcePath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!File.Exists(source))
+                throw new AssetGateUnknownException(
+                    $"no '{screen.SourcePath}' to read, so {screen.Name}'s field types cannot be "
+                    + "resolved and a reference of the wrong type cannot be graded. Has the "
+                    + "screen moved?");
+
+            var types = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (string line in File.ReadLines(source))
+            {
+                Match match = DeclaredField.Match(line);
+                if (!match.Success) continue;
+
+                types[match.Groups["field"].Value] = match.Groups["type"].Value;
+            }
+
+            return types;
+        }
+
+        /// <summary>
+        /// <c>[SerializeField] private Button? _logInButton;</c>, and its array form.
+        /// </summary>
+        /// <remarks>
+        /// The nullable annotation and any array brackets are stripped, so <c>Text[]</c> and
+        /// <c>Text?</c> both read as <c>Text</c> — an entry of an array resolves to the element
+        /// type either way.
+        /// </remarks>
+        private static readonly Regex DeclaredField = new Regex(
+            @"\[SerializeField\]\s+private\s+(?<type>[A-Za-z_][A-Za-z0-9_]*)\??(?:\[\])?\s+"
+            + @"(?<field>_[A-Za-z0-9_]+)\s*(?:=|;)",
+            RegexOptions.Compiled);
+
+        /// <summary>One field's references, single or array.</summary>
+        private static IEnumerable<UnityObjectRef> ReferencesOf(
+            UnityAssetDocument document, string field)
+        {
+            UnityObjectRef? single = document.Reference(field);
+            if (single != null) return new[] { single.Value };
+
+            return document.ReferenceArray(field)
+                   ?? (IEnumerable<UnityObjectRef>)System.Array.Empty<UnityObjectRef>();
+        }
+
+        /// <summary>
+        /// Grades one screen's serialized reference ARRAYS. P16 3.7.
+        /// </summary>
+        /// <remarks>
+        /// Four clauses, and the first is the one a per-field check cannot express: the array is
+        /// the RIGHT LENGTH. A roster of six rows on a sixteen-seat room, or a browser of four
+        /// rows, contains no null and no duplicate and is still a screen that hides players from
+        /// the two people comparing screenshots.
+        /// </remarks>
+        /// <summary>
+        /// Buttons whose whole job is to say the feature is not in this build, and the screen
+        /// each sits on.
+        /// </summary>
+        /// <remarks>
+        /// <b>This replaces a field check that could not see the behaviour it was grading.</b>
+        /// The gate used to require <c>MenuLoginScreen._forgotPasswordButton</c>, and the builder
+        /// deliberately leaves it null: the announcement is made by
+        /// <c>MenuDevelopmentControls</c>, which shows a toast, so wiring the screen's own field
+        /// as well would add a second listener writing a second message. The old check therefore
+        /// reported a break on a screen that works. What actually has to hold is here instead —
+        /// the button exists, something announces for it, and that something has a toast to
+        /// announce into.
+        /// </remarks>
+        private static readonly (string Screen, string Button, string Consequence)[] DevelopmentNotices =
+        {
+            ("MenuLoginScreen", "ForgotPassword",
+             "Forgot password renders but cannot show the classroom-build limitation"),
+        };
+
+        private const string DevelopmentControlsSource =
+            "Scripts/Net/Client/Menu/MenuDevelopmentControls.cs";
+
+        /// <summary>
+        /// Grades the announce-only buttons in <see cref="DevelopmentNotices"/> against the
+        /// <c>MenuDevelopmentControls</c> on the same panel.
+        /// </summary>
+        internal static IEnumerable<GateFinding> GradeDevelopmentNotices(
+            UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
+        {
+            var findings = new List<GateFinding>();
+            string rel = AssetWiringDetectors.Rel(index, path);
+
+            foreach ((string owner, string button, string consequence) in DevelopmentNotices)
+            {
+                if (!string.Equals(owner, screen.Name, StringComparison.Ordinal)) continue;
+
+                long? panel = document.OwningGameObjectId;
+                // A screen on no GameObject is already reported by GradeScreens, and repeating it
+                // here would file the same break twice under two different sentences.
+                if (panel == null) continue;
+
+                string controlsGuid = ScriptGuid(index, DevelopmentControlsSource);
+                UnityAssetDocument? controls = index.Documents(path)
+                    .FirstOrDefault(d => d.IsMonoBehaviour
+                                         && d.OwningGameObjectId == panel
+                                         && d.ScriptGuid == controlsGuid);
+
+                if (controls == null)
+                {
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, rel, 0,
+                        $"{screen.Name} carries no MenuDevelopmentControls, so {button} has "
+                        + $"nothing to announce with and {consequence} ({screen.FieldClause})."));
+                    continue;
+                }
+
+                if (controls.Reference("_toast")?.IsNull != false)
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, rel, 0,
+                        $"MenuDevelopmentControls on {screen.Name} has no _toast, so the "
+                        + $"listener it adds to {button} runs and shows nothing -- "
+                        + $"{consequence} ({screen.FieldClause})."));
+
+                IReadOnlyList<UnityObjectRef>? buttons = controls.ReferenceArray("_buttons");
+                bool announced = buttons != null && buttons.Any(
+                    b => !b.IsNull && string.Equals(
+                        OwnerName(index, path, b.FileId), button, StringComparison.Ordinal));
+
+                if (!announced)
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, rel, 0,
+                        $"{button} is not in MenuDevelopmentControls._buttons on {screen.Name}, "
+                        + $"so pressing it does nothing at all and {consequence} "
+                        + $"({screen.FieldClause})."));
+            }
+
+            return findings;
+        }
+
+        /// <summary>The name of the GameObject a component reference inside this asset sits on.</summary>
+        private static string? OwnerName(UnityAssetIndex index, string path, long componentId)
+        {
+            long? owner = index.Documents(path)
+                .FirstOrDefault(d => d.AnchorId == componentId)?.OwningGameObjectId;
+
+            return owner == null
+                ? null
+                : index.Documents(path)
+                    .FirstOrDefault(d => d.AnchorId == owner.Value && d.ClassId == 1)?.Name;
+        }
+
+        internal static IEnumerable<GateFinding> GradeArrays(
+            UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
+        {
+            var findings = new List<GateFinding>();
+            string rel = AssetWiringDetectors.Rel(index, path);
+
+            foreach ((string spec, int length, string consequence) in screen.Arrays)
+            {
+                // `_rows[].Join` grades one COLUMN of a struct array: the Join cell of every row.
+                // Five such specs cover a five-cell row, and each reuses every clause below —
+                // count, null, dangling and duplicate — rather than growing a parallel grader.
+                int marker = spec.IndexOf("[].", StringComparison.Ordinal);
+                string field = marker < 0 ? spec : spec.Substring(0, marker);
+                string? member = marker < 0 ? null : spec.Substring(marker + 3);
+
+                // Two rows sharing a cell is still caught, because the duplicate clause runs
+                // per column: row 2's Name and row 5's Name pointing at one Text is a real bug.
+                string Cell(int i) => member == null
+                    ? $"{screen.Name}.{field}[{i}]"
+                    : $"{screen.Name}.{field}[{i}].{member}";
+
+                IReadOnlyList<UnityObjectRef>? entries = member == null
+                    ? document.ReferenceArray(field)
+                    : document.StructReferenceArray(field, member);
+
+                if (entries == null)
+                {
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, rel, 0,
+                        $"{screen.Name}.{spec} is not an authored array at all, so "
+                        + $"{consequence} ({screen.ArrayClause})."));
+                    continue;
+                }
+
+                if (entries.Count != length)
+                {
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, rel, 0,
+                        $"{screen.Name}.{spec} holds {entries.Count} entries and the screen "
+                        + $"needs {length}. Nothing in the asset is null and nothing is "
+                        + $"duplicated, so no other clause here can see it -- and "
+                        + $"{consequence} ({screen.ArrayClause})."));
+                    continue;
+                }
+
+                var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    UnityObjectRef entry = entries[i];
+
+                    if (entry.IsNull)
+                    {
+                        findings.Add(new GateFinding(
+                            screen.LedgerRow, rel, 0,
+                            $"{Cell(i)} is unassigned, so {consequence} "
+                            + $"({screen.ArrayClause})."));
+                        continue;
+                    }
+
+                    string? target = entry.Guid == null ? path : index.PathOf(entry.Guid);
+
+                    if (target == null)
+                        throw new AssetGateUnknownException(
+                            $"{path}: {Cell(i)} names guid {entry.Guid}, which "
+                            + "no asset in the tree carries. The reference is dangling; this "
+                            + "check cannot grade it.");
+
+                    if (!index.Documents(target).Any(d => d.AnchorId == entry.FileId))
+                        findings.Add(new GateFinding(
+                            screen.LedgerRow, rel, 0,
+                            $"{Cell(i)} names fileID {entry.FileId}, which no "
+                            + $"object in {AssetWiringDetectors.Rel(index, target)} carries. "
+                            + $"Unity loads that as null, so {consequence} -- and it reads "
+                            + $"exactly like the unassigned case at runtime ({screen.ArrayClause})."));
+
+                    string key = entry.Guid + "/" + entry.FileId;
+                    if (seen.TryGetValue(key, out int first))
+                        findings.Add(new GateFinding(
+                            screen.LedgerRow, rel, 0,
+                            $"{Cell(i)} points at the same object as row {first}. "
+                            + "Two rows cannot be one object: whichever is written last wins, so "
+                            + $"this row does not exist and {consequence} ({screen.ArrayClause})."));
+                    else
+                        seen.Add(key, i);
+                }
+            }
+
+            return findings;
+        }
+
+        /// <summary>
+        /// <b>P16</b> — the roster's colours come from <c>ITeamPalette</c>, not from the asset.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Criterion 10, and the reason it needs a check of its own.</b> Every other clause
+        /// here grades whether a reference RESOLVES. A roster whose two columns were authored red
+        /// and blue in the scene resolves perfectly, renders correctly on the day, and is a
+        /// second copy of the team-colour mapping that <c>ColorScheme.TeamColor</c> already owns
+        /// (contracts § 6.3) -- so the palette seam becomes decoration and the two copies drift
+        /// the first time the game's colours change.
+        /// </para>
+        /// <para>
+        /// <b>Two clauses, because either alone is a green that proves nothing.</b> The asset
+        /// clause says the authored colours are all the SAME, which is what an unpainted roster
+        /// looks like; on its own it also passes an all-grey roster whose runtime colouring was
+        /// deleted. The source clause says the runtime colouring is still there; on its own it
+        /// passes a screen that calls the palette AND has red baked into the asset underneath.
+        /// Together they pin the failure from both sides.
+        /// </para>
+        /// <para>
+        /// <b>Identity, not a transcribed constant.</b> Comparing against the builder's own ink
+        /// value would be a fourth copy of a colour, and would go stale the day the menu is
+        /// restyled. What is asserted is that the roster is uniform, which stays true under any
+        /// restyle and false under exactly the authoring this forbids.
+        /// </para>
+        /// </remarks>
+        public static IEnumerable<GateFinding> RoomLobbyTeamColoursComeFromThePalette(
+            UnityAssetIndex index)
+        {
+            const string Source = "Scripts/Net/Client/Menu/MenuRoomLobbyScreen.cs";
+
+            // The open paren, and doc comments stripped before the search. Both learned by
+            // mutation: deleting the CALL left the identical string standing in this screen's
+            // own <remarks>, so the first draft of this clause was satisfied by a sentence
+            // ABOUT the call and reported clean on a roster that no longer asked the palette
+            // anything. A check a comment can satisfy is decoration.
+            const string PaletteCall = "NetClientBindings.TeamColourRgb(";
+
+            var findings = new List<GateFinding>();
+
+            string sourceFile = Path.Combine(
+                index.AssetsRoot, Source.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!File.Exists(sourceFile))
+                throw new AssetGateUnknownException(
+                    $"no '{Source}' to read, so criterion 10's runtime half cannot be graded. "
+                    + "Has the screen moved?");
+
+            if (!CodeOf(sourceFile).Contains(PaletteCall, StringComparison.Ordinal))
+                findings.Add(new GateFinding(
+                    Row, Source, 0,
+                    $"MenuRoomLobbyScreen no longer calls {PaletteCall}, so the roster renders "
+                    + "in whatever colour the scene authored and the ITeamPalette seam is "
+                    + "decoration. Criterion 10 (P16 3.7)."));
+
+            string guid = ScriptGuid(index, Source);
+            int seen = 0;
+
+            foreach ((UnityAssetDocument document, string path)
+                     in AssetWiringDetectors.Instances(index, guid))
+            {
+                seen++;
+                findings.AddRange(GradeColours(index, document, path));
+            }
+
+            if (seen == 0)
+                findings.Add(new GateFinding(
+                    Row, "(nothing)", 0,
+                    "MenuRoomLobbyScreen is on no GameObject in any scene or prefab, so there is "
+                    + "no roster to colour and criteria 2, 3, 4, 5 and 6 have no screen. Run "
+                    + "'Ironfront/Net/Build multiplayer menu Canvas' (P16 3.4)."));
+
+            return findings;
+        }
+
+        private static IEnumerable<GateFinding> GradeColours(
+            UnityAssetIndex index, UnityAssetDocument document, string path)
+        {
+            var findings = new List<GateFinding>();
+            string rel = AssetWiringDetectors.Rel(index, path);
+
+            var colours = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (string field in new[]
+                     { "_teamZeroHeading", "_teamOneHeading", "_teamZeroRows", "_teamOneRows" })
+            {
+                foreach (UnityObjectRef reference in Referenced(document, field))
+                {
+                    if (reference.IsNull) continue;
+
+                    // A colour lives on the Text component in the SAME asset; the assigned-and-
+                    // resolves clauses above already report a reference that leaves it.
+                    if (reference.Guid != null) continue;
+
+                    UnityAssetDocument? text = index.Documents(path)
+                        .FirstOrDefault(d => d.AnchorId == reference.FileId);
+
+                    string? colour = text?.Scalar("m_Color");
+                    if (colour == null) continue;
+
+                    if (!colours.ContainsKey(colour)) colours.Add(colour, $"{field} ({reference.FileId})");
+                }
+            }
+
+            if (colours.Count > 1)
+                findings.Add(new GateFinding(
+                    Row, rel, 0,
+                    "the roster carries " + colours.Count + " different authored colours ("
+                    + string.Join("; ", colours.Select(pair => $"{pair.Value} = {pair.Key}"))
+                    + "). A team colour authored in the scene is a second copy of the mapping "
+                    + "ColorScheme.TeamColor owns, and it is the copy that wins at load: "
+                    + "ITeamPalette then decorates a decision the asset has already made. "
+                    + "Criterion 10 (P16 3.7)."));
+
+            return findings;
+        }
+
+        /// <summary>
+        /// One field's references, whether it is a single reference or an array.
+        /// </summary>
+        /// <remarks>
+        /// <b>The single form is tried FIRST, and the order is not cosmetic.</b>
+        /// <c>ReferenceArray</c> returns an EMPTY list for a single-reference field — the key
+        /// exists, so it is not absent, and the line after it is the next key, so no entries are
+        /// read. Asking the array first therefore swallowed both roster headings silently: this
+        /// detector read the sixteen rows and neither heading, and a team colour painted onto a
+        /// heading passed. Found by mutation, which is the only thing that could have found it.
+        /// <c>Reference</c> is safe on an array field by contrast — the value after the colon is
+        /// empty rather than a brace, so it returns null and the array branch is taken.
+        /// </remarks>
+        private static IEnumerable<UnityObjectRef> Referenced(
+            UnityAssetDocument document, string field)
+        {
+            UnityObjectRef? single = document.Reference(field);
+            if (single != null) return new[] { single.Value };
+
+            return document.ReferenceArray(field) ?? (IEnumerable<UnityObjectRef>)System.Array.Empty<UnityObjectRef>();
+        }
+
+        /// <summary>
+        /// A source file with its doc comments removed, so a check cannot be satisfied by prose.
+        /// </summary>
+        /// <remarks>
+        /// Only <c>///</c> lines are stripped, not <c>//</c> ones: an ordinary comment sits
+        /// beside code and rarely restates an API call, while a <c>&lt;see cref&gt;</c> or a
+        /// <c>&lt;c&gt;</c> tag names one by design. Stripping both would be more thorough and
+        /// would also delete the line a reader is most likely to be looking for when this fires.
+        /// </remarks>
+        private static string CodeOf(string file)
+        {
+            var code = new System.Text.StringBuilder();
+
+            foreach (string line in File.ReadLines(file))
+                if (!line.TrimStart().StartsWith("///", StringComparison.Ordinal))
+                    code.Append(line).Append('\n');
+
+            return code.ToString();
+        }
+
+        /// <summary>
+        /// <b>P16</b> — the row counts transcribed above still match the screens' own constants.
+        /// </summary>
+        /// <remarks>
+        /// The transcription exists because this tool cannot load the Unity assemblies. A stale
+        /// one fails in the quietest possible way: the gate would assert the OLD length, pass a
+        /// correctly-rebuilt Canvas, and report a screen as fully wired while grading a shape
+        /// nothing has any more. Read back from the source so a change on either side is loud.
+        /// </remarks>
+        public static IEnumerable<GateFinding> RowCountsMatchTheScreens(UnityAssetIndex index)
+        {
+            var findings = new List<GateFinding>();
+
+            int browser = ReadConstant(
+                index, "Scripts/Net/Client/Menu/MenuRoomBrowserScreen.cs", "public const int Rows = ");
+
+            if (browser != RoomBrowserRows)
+                findings.Add(new GateFinding(
+                    Row, "Scripts/Net/Client/Menu/MenuRoomBrowserScreen.cs", 0,
+                    $"MenuRoomBrowserScreen.Rows is {browser}; this gate grades the browser's "
+                    + $"row arrays against {RoomBrowserRows}. Update RoomBrowserRows in "
+                    + "MenuScreenWiringDetectors.cs in the same commit, or the check passes a "
+                    + "Canvas built to the new shape while asserting the old one (P16 3.7)."));
+
+            int roster = ReadConstant(
+                index, "Scripts/Net/Client/Menu/MenuRoomLobbyScreen.cs",
+                "public const int RowsPerSide = ");
+
+            if (roster != RosterRowsPerSide)
+                findings.Add(new GateFinding(
+                    Row, "Scripts/Net/Client/Menu/MenuRoomLobbyScreen.cs", 0,
+                    $"MenuRoomLobbyScreen.RowsPerSide resolves to {roster}; this gate grades the "
+                    + $"roster arrays against {RosterRowsPerSide}. Update RosterRowsPerSide in "
+                    + "MenuScreenWiringDetectors.cs in the same commit (P16 3.7)."));
+
+            return findings;
+        }
+
+        /// <summary>
+        /// The integer a named <c>const</c> line declares, resolving the one expression used.
+        /// </summary>
+        /// <remarks>
+        /// <c>RowsPerSide</c> is written <c>ProtocolConstants.MAX_PLAYERS / 2</c> so the roster
+        /// cannot silently fall behind the protocol. Rather than teach this a C# evaluator, the
+        /// one form that appears is resolved by name; anything else throws, because a constant
+        /// this cannot read is one it must not guess at.
+        /// </remarks>
+        private static int ReadConstant(UnityAssetIndex index, string sourcePath, string declaration)
+        {
+            string file = Path.Combine(
+                index.AssetsRoot, sourcePath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!File.Exists(file))
+                throw new AssetGateUnknownException(
+                    $"no '{sourcePath}' to read '{declaration.Trim()}' from. Has the screen "
+                    + "moved? This gate's row counts cannot be checked against it.");
+
+            foreach (string line in File.ReadLines(file))
+            {
+                int at = line.IndexOf(declaration, StringComparison.Ordinal);
+                if (at < 0) continue;
+
+                string value = line.Substring(at + declaration.Length).TrimEnd(';', ' ').Trim();
+
+                if (int.TryParse(value, out int literal)) return literal;
+
+                if (value == "ProtocolConstants.MAX_PLAYERS / 2")
+                    return Ironfront.Net.Protocol.ProtocolConstants.MAX_PLAYERS / 2;
+
+                throw new AssetGateUnknownException(
+                    $"'{sourcePath}' declares '{declaration.Trim()}{value}', which this gate "
+                    + "cannot evaluate. Add the form to ReadConstant rather than letting the "
+                    + "row-count guard silently stop guarding.");
+            }
+
+            throw new AssetGateUnknownException(
+                $"'{sourcePath}' no longer declares '{declaration.Trim()}', so the row counts "
+                + "this gate transcribes cannot be checked against it.");
+        }
+
+        /// <summary>
+        /// The guid Unity assigned <paramref name="sourcePath"/>, read from its <c>.meta</c>.
+        /// </summary>
+        /// <remarks>
+        /// A missing meta or a meta with no guid throws rather than returning something that
+        /// would match nothing: a guid that matches no instance produces the "on no GameObject"
+        /// finding above, which would send a reader looking for an unauthored Canvas when the
+        /// real fault is a moved source file.
+        /// </remarks>
+        internal static string ScriptGuid(UnityAssetIndex index, string sourcePath)
+        {
+            string meta = Path.Combine(index.AssetsRoot, sourcePath.Replace('/', Path.DirectorySeparatorChar))
+                          + ".meta";
+
+            if (!File.Exists(meta))
+                throw new AssetGateUnknownException(
+                    $"no .meta beside '{sourcePath}', so its script guid cannot be read and the "
+                    + "menu screens cannot be graded. Has the file moved?");
+
+            foreach (string line in File.ReadLines(meta))
+            {
+                string trimmed = line.Trim();
+                if (!trimmed.StartsWith("guid:", StringComparison.Ordinal)) continue;
+
+                string guid = trimmed.Substring("guid:".Length).Trim();
+                if (guid.Length > 0) return guid;
+            }
+
+            throw new AssetGateUnknownException(
+                $"'{sourcePath}.meta' carries no guid line, so the menu screens cannot be graded.");
+        }
+    }
+}

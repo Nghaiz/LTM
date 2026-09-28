@@ -23,7 +23,7 @@ namespace Ironfront.Net.Transport
         private readonly CongestionControl _congestion = new CongestionControl();
         private readonly FlowControl _flow = new FlowControl();
         private readonly Action<ReadOnlyMemory<byte>> _deliverMessage;
-        private readonly Action<byte[], int> _resendCallback;
+        private readonly Action<byte[], int, ushort> _resendCallback;
         private readonly long[] _lossReliableSent = new long[LossWindowBucketCount];
         private readonly long[] _lossReliableRetried = new long[LossWindowBucketCount];
         private readonly long[] _lossPacketsReceived = new long[LossWindowBucketCount];
@@ -126,6 +126,81 @@ namespace Ironfront.Net.Transport
         /// </remarks>
         public uint PlayerId { get; internal set; }
 
+        /// <summary>
+        /// The sanitized display name from the same signed ticket <see cref="PlayerId"/> came
+        /// from. Empty when the ticket carried none, or on a transport with no ticket at all.
+        /// </summary>
+        /// <remarks>
+        /// Set once, on the handshake, beside <see cref="PlayerId"/> — the two are read out of
+        /// one <c>JoinTicket.TryReadFields</c> call after the HMAC has verified, and neither is
+        /// trustworthy before that. Never null: <c>ConnectionInfo.DisplayName</c> promises the
+        /// same, and a nullable hop in the middle would only move the guard.
+        /// </remarks>
+        public string DisplayName { get; internal set; } = string.Empty;
+
+        /// <summary>
+        /// The side from the same signed ticket <see cref="PlayerId"/> and
+        /// <see cref="DisplayName"/> came from. 0 when there was no ticket to read.
+        /// </summary>
+        /// <remarks>
+        /// Set once on the handshake, out of the one <c>JoinTicket.TryReadFields</c> call that
+        /// already ran after the HMAC verified — so carrying the team costs no second parse,
+        /// no new opcode and no extra round trip. It is trustworthy for exactly the same
+        /// reason the other two are: the master signed it and the signature checked out.
+        /// </remarks>
+        public byte Team { get; internal set; }
+
+        /// <summary>
+        /// The lobby room from the same signed ticket <see cref="PlayerId"/>,
+        /// <see cref="DisplayName"/> and <see cref="Team"/> came from. 0 when there was no
+        /// ticket to read.
+        /// </summary>
+        /// <remarks>
+        /// The fourth field taken out of the one post-verify <c>JoinTicket.TryReadFields</c>
+        /// call, and the one that lets a game server learn which room it is hosting without a
+        /// master → game-server message that does not exist. See
+        /// <c>Ironfront.Net.Replication.Server.ServerRoomIdentity</c>.
+        /// </remarks>
+        public ushort RoomId { get; internal set; }
+
+        /// <summary>
+        /// Datagrams discarded because a v1-reserved flag bit was set.
+        /// </summary>
+        /// <remarks>
+        /// The three Dropped* counters exist because <see cref="Receive"/> has three bare
+        /// <c>return</c>s that leave no trace of any kind. That is survivable on the server,
+        /// which counts its own rejections before ever calling in here; on the CLIENT these
+        /// were the whole diagnostic surface, and they were blank. A client that silently
+        /// discards every reliable packet and a client that never receives one present
+        /// identically — the far side gives up after ten resends either way, and the reason
+        /// code it reports (<c>TransportError</c>) is the same. Distinguishing them is the
+        /// entire difference between "our parser rejects this" and "the wire lost it", so the
+        /// counters are the measurement that has to exist before any theory is worth holding.
+        /// </remarks>
+        public long DroppedReservedFlags { get; private set; }
+
+        /// <summary>Datagrams discarded because this side is not <c>Connected</c>.</summary>
+        /// <remarks>See <see cref="DroppedReservedFlags"/>.</remarks>
+        public long DroppedNotConnected { get; private set; }
+
+        /// <summary>Datagrams discarded because the header named a different connection.</summary>
+        /// <remarks>See <see cref="DroppedReservedFlags"/>.</remarks>
+        public long DroppedWrongConnectionId { get; private set; }
+
+        /// <summary>Reliable datagrams accepted by this side.</summary>
+        /// <remarks>
+        /// Paired with <see cref="AckKeepAlivesSent"/>: the two must move together, because the
+        /// ack-keep-alive is emitted on exactly this event. A gap between them is a send that
+        /// failed; a zero in BOTH while the far side is resending is a delivery failure, and
+        /// the two diagnoses have nothing in common.
+        /// </remarks>
+        public long ReliablePacketsReceived { get; private set; }
+
+        /// <summary>Ack-carrying keep-alives emitted on reliable receipt.</summary>
+        /// <remarks>See <see cref="ReliablePacketsReceived"/>. Distinct from
+        /// <see cref="PeriodicKeepAlivesSent"/>, which counts only the idle timer's.</remarks>
+        public long AckKeepAlivesSent { get; private set; }
+
         public bool CanSendReliable => _flow.CanSendReliable(_reliability.PendingReliableCount)
             && _reliability.CanSendReliable;
 
@@ -173,7 +248,11 @@ namespace Ironfront.Net.Transport
         internal void Receive(in GspHeader header, ReadOnlyMemory<byte> datagram, double nowMs)
         {
             if (_disposed) return;
-            if ((header.Flags & PacketFlags.ReservedMask) != 0) return;
+            if ((header.Flags & PacketFlags.ReservedMask) != 0)
+            {
+                DroppedReservedFlags++;
+                return;
+            }
 
             if (_isClient && State != ConnectionState.Connected)
             {
@@ -181,12 +260,23 @@ namespace Ironfront.Net.Transport
                 return;
             }
 
-            if (State != ConnectionState.Connected || header.ConnectionId != ConnectionId) return;
+            if (State != ConnectionState.Connected)
+            {
+                DroppedNotConnected++;
+                return;
+            }
+
+            if (header.ConnectionId != ConnectionId)
+            {
+                DroppedWrongConnectionId++;
+                return;
+            }
 
             _lastReceiveMs = nowMs;
             _stats.PacketsReceived++;
             _stats.BytesReceived += datagram.Length;
-            _reliability.ProcessIncomingAck(header.Ack, header.AckBitfield, nowMs);
+            _reliability.ProcessIncomingAck(
+                header.Ack, header.AckBitfield, nowMs, IsRttSampleTrusted(nowMs));
             _reliability.OnPacketReceived(header.Sequence);
 
             // There is no standalone ACK datagram in GSP. A prompt keep-alive carries the
@@ -194,9 +284,11 @@ namespace Ironfront.Net.Transport
             // before the next one-second idle keep-alive.
             if (header.IsReliable)
             {
+                ReliablePacketsReceived++;
                 Span<byte> ackPayload = stackalloc byte[3];
                 WriteFlowControl(ackPayload);
                 SendPacket(PacketType.Keepalive, PacketFlags.None, ackPayload, false, nowMs, false);
+                AckKeepAlivesSent++;
             }
 
             ReadOnlyMemory<byte> payload = datagram.Slice(GspHeader.Size, header.PayloadLength);
@@ -227,6 +319,39 @@ namespace Ironfront.Net.Transport
                     return;
             }
         }
+
+        /// <summary>
+        /// Longest gap between two polls of this connection across which an ack still counts
+        /// as an RTT sample.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A datagram read <c>g</c> ms after the previous poll has been waiting in the socket for
+        /// anything up to <c>g</c>, so an RTT taken from it is the network round trip plus an
+        /// unknown share of this process's own stall. When the stall is a frame or two that
+        /// error is noise. When it is the one-second first frame after a map load it is the
+        /// whole sample: every ack of that burst reads about a second, the smoothed RTT crosses
+        /// <see cref="CongestionControl"/>'s 250 ms line, and because the connection is younger
+        /// than its ten-second good streak it is held BAD for twenty seconds. That happened on
+        /// every join, and every later BAD episode on the Azure servers lined up with a client
+        /// frame of 300-1100 ms rather than with the network (plans/reports/
+        /// 2026-09-28-azure-gameserver-host.md).
+        /// </para>
+        /// <para>
+        /// Such acks are still acknowledged -- only the timing is thrown away. 100 ms bounds the
+        /// local share of any sample that is kept to less than half the BAD threshold, and a
+        /// process that cannot poll ten times a second has a frame rate problem that a
+        /// congestion signal cannot help with.
+        /// </para>
+        /// </remarks>
+        internal const double MaxRttSamplePollGapMs = 100.0;
+
+        /// <summary>
+        /// Whether an ack read now arrived close enough to now for its round trip to be the
+        /// network's. See <see cref="MaxRttSamplePollGapMs"/>.
+        /// </summary>
+        private bool IsRttSampleTrusted(double nowMs)
+            => _lastUpdateMs <= 0.0 || nowMs - _lastUpdateMs <= MaxRttSamplePollGapMs;
 
         /// <summary>Services retries, keep-alive, retransmission and fragment expiry.</summary>
         public void Update(double nowMs)
@@ -564,9 +689,23 @@ namespace Ironfront.Net.Transport
             }
         }
 
-        private void Resend(byte[] datagram, int length)
+        /// <summary>
+        /// Puts a retransmission on the wire under the fresh sequence the reliability layer
+        /// just assigned it, with this connection's current ack window.
+        /// </summary>
+        /// <remarks>
+        /// <b>The re-stamp is the point.</b> Shipping the stored bytes verbatim kept the
+        /// original sequence, which the peer's 32-entry ack bitfield stops being able to
+        /// address after about 0.64 s of ordinary traffic — so the copy arrived and could not
+        /// be acknowledged, and the sender killed the connection over a packet the peer
+        /// already held. That was X-32.
+        /// </remarks>
+        private void Resend(byte[] datagram, int length, ushort sequence)
         {
             if (_send == null) return;
+            (ushort ack, uint bitfield) = _reliability.BuildAck();
+            if (!PacketBuilder.TryRestamp(datagram.AsSpan(0, length), sequence, ack, bitfield))
+                return;
             _send(datagram, length, RemoteEndPoint, _lastUpdateMs);
             _stats.PacketsResent++;
             _stats.PacketsSent++;
@@ -693,14 +832,32 @@ namespace Ironfront.Net.Transport
             if (notify) Disconnected?.Invoke(reason);
         }
 
-        private static DisconnectReason MapDeniedReason(ConnectDenyReason reason)
+        /// <summary>
+        /// Maps a CONNECT_DENIED reason code onto the disconnect reason the client reports.
+        /// </summary>
+        /// <remarks>
+        /// <b>Internal rather than private so the unknown-code branch can be tested.</b> That
+        /// branch is the whole of P13 criterion 7 and it is unreachable from the public API:
+        /// no server in this repository sends a code the client does not know, which is
+        /// precisely why the branch existed for five protocol versions while mapping every
+        /// unrecognised code to <see cref="DisconnectReason.InvalidTicket"/> — a WRONG reason,
+        /// not an unknown one.
+        /// </remarks>
+        internal static DisconnectReason MapDeniedReason(ConnectDenyReason reason)
             => reason switch
             {
                 ConnectDenyReason.ServerFull => DisconnectReason.ServerFull,
                 ConnectDenyReason.ProtocolVersionMismatch => DisconnectReason.ProtocolMismatch,
                 ConnectDenyReason.Banned => DisconnectReason.Banned,
                 ConnectDenyReason.AlreadyConnected => DisconnectReason.AlreadyConnected,
-                _ => DisconnectReason.InvalidTicket,
+                ConnectDenyReason.InvalidTicket => DisconnectReason.InvalidTicket,
+                ConnectDenyReason.TeamFull => DisconnectReason.TeamFull,
+
+                // Anything this build does not recognise, including a code added after it
+                // shipped. It used to fall to InvalidTicket, which is a WRONG reason rather
+                // than an unknown one: a player told their ticket is invalid re-logs in, and
+                // the real answer was that their side was full. Say only what is true.
+                _ => DisconnectReason.Refused,
             };
 
         private static ulong CreateSalt()

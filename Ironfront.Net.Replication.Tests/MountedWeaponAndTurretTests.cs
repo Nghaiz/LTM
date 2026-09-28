@@ -289,6 +289,34 @@ namespace Ironfront.Net.Replication.Tests
                 new MountedWeaponAuthority(registry, pool ?? MountedSpareAmmoPool.Instance));
         }
 
+        /// <summary>
+        /// A single-shell cannon fires, reloads by itself, and fires again with nobody touching R.
+        /// </summary>
+        /// <remarks>
+        /// 2026-09-23: a human's tank fired once and then answered NoAmmo for the rest of the
+        /// match, because this authority reloaded only on the Reload button. The shipped cannon
+        /// carries forceAutoReload.
+        /// </remarks>
+        [Fact]
+        public void AnEmptiedMountedWeaponReloadsWithoutTheReloadButton()
+        {
+            WeaponConfig config = MountedGun(cooldown: 0.1f, clipSize: 1, spareAmmo: 30);
+            (_, MountedWeaponAuthority authority) = Armed(in config);
+
+            MountedFireResult first = authority.Step(
+                VehicleId, GunnerSeat, Frame(InputButtons.Fire), true, nowSeconds: 10f);
+            Assert.True(first.Fired);
+
+            MountedFireResult empty = authority.Step(
+                VehicleId, GunnerSeat, Frame(InputButtons.Fire), true, nowSeconds: 10.5f);
+            Assert.False(empty.Fired);
+
+            float reloaded = 10f + ServerReloadPolicy.ReloadSeconds + 0.1f;
+            MountedFireResult second = authority.Step(
+                VehicleId, GunnerSeat, Frame(InputButtons.Fire), true, nowSeconds: reloaded);
+            Assert.True(second.Fired);
+        }
+
         [Fact]
         public void AMountedWeaponSpendsServerAmmoAndHonoursItsOwnCooldown()
         {

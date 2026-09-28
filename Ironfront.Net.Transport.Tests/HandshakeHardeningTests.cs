@@ -224,6 +224,7 @@ namespace Ironfront.Net.Transport.Tests
                 serverId: 1,
                 roomId: 2,
                 expiresAtUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 30_000,
+                team: 0,
                 displayName: "tester",
                 sharedSecret: secret) > 0);
 
@@ -233,7 +234,8 @@ namespace Ironfront.Net.Transport.Tests
         private static uint ReadPlayerId(byte[] ticket)
         {
             Assert.True(JoinTicket.TryReadFields(
-                ticket, out uint playerId, out ushort _, out ushort _, out long _, out string _));
+                ticket, out uint playerId, out ushort _, out ushort _, out long _,
+                out byte _, out string _));
             return playerId;
         }
     }

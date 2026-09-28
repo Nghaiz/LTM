@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Process B of the debt-closure phase-3 harness: N synthetic clients over real UDP against
+    the Unity game server (plans/debt-closure/phases/phase-3-harness.md section 4).
+
+    NOT Ironfront.Tools.LoadTest. That one is the right SHAPE and the wrong TARGET — it drives
+    the MASTER server over MSP/TCP to grade login and matchmaking. This one drives the GAME
+    server over GSP/UDP to grade replication. They share a percentile helper and nothing else.
+
+    ENGINE-FREE ON PURPOSE, and the reason is acceptance criterion 4. This project references
+    Ironfront.Net.Transport and Ironfront.Net.Replication so it drives the SHIPPED
+    UdpTransportClient and the SHIPPED DeltaDecoder. A harness carrying its own decoder would
+    grade its own decoder, and would agree with the server precisely when both were wrong
+    together. tools/check-harness-no-decoder.ps1 is the gate that keeps this true; it is a
+    grep, not a promise.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Net.LoadHarness</RootNamespace>
+    <AssemblyName>Ironfront.Net.LoadHarness</AssemblyName>
+    <Description>Synthetic GSP clients for measuring the Unity game server.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Replication\Ironfront.Net.Replication.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+
+    <!--
+      For LatencyRecorder, and for nothing else. Duplicating a percentile helper to avoid an
+      awkward-looking reference would be two implementations of one number, which is the exact
+      thing development-principles.md forbids and the exact thing this harness exists to avoid
+      doing to the decoder. Referencing an OutputType=Exe project is supported; the referenced
+      assembly is consumed as a library and its entry point is ignored.
+    -->
+    <ProjectReference Include="..\Ironfront.Tools.LoadTest\Ironfront.Tools.LoadTest.csproj" />
+  </ItemGroup>
+
+  <!--
+    debt-closure, phase 3C's handoff item 2. The harness has to ack, or every byte lane A
+    measures is a FULL snapshot — a case no real client has been in since 3C shipped the
+    sender, which makes the harness's bandwidth numbers a description of nothing.
+
+    Linked rather than reimplemented, and that distinction is the whole point. 3C found
+    SnapshotFlowIntegrationTests hand-rolling its own ack beside the one a real client would
+    send, so the delta path was being exercised against a second implementation free to drift
+    from the shipped one. A synthetic client with its own ack policy would rebuild exactly that
+    trap, one project over, in the place the measurements come from.
+
+    Same <Compile Include> arrangement Ironfront.Net.Replication.Tests uses, for the same
+    reason: the file lives under Ironfront_Reborn/Assets/Scripts because that is where Unity
+    compiles it from, Assets/ has no .asmdef, and there is no assembly to reference.
+
+    THE ONE RULE: no UnityEngine in a linked file. A `using UnityEngine;` added to
+    BaselineAckPolicy fails this build rather than silently dropping out of coverage.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\BaselineAckPolicy.cs"
+             Link="Linked\BaselineAckPolicy.cs" />
+
+    <!--
+      verdict-closure R5 task R5.1, ledger X-34. The Combat behaviour has to point at a body,
+      and where to point is arithmetic the project already owns: ScriptedAim is what lane B's
+      scripted clients aim with, it is engine-free by construction (its own remark forbids a
+      `using UnityEngine;` for exactly this reason), and Ironfront.Net.Replication.Tests already
+      links it the same way.
+
+      LINKED RATHER THAN TRANSCRIBED, and X-25 is what a transcription costs. That row was one
+      aim convention (raise the shooter's eye, aim at the target's torso) written down twice
+      and drifting; the copy aimed level at 1.6 m, put every shot through the 3 cm seam X-24
+      names, and no lane-B combat run scored a hit for a month while every test of the copy
+      passed. A second copy in the harness would be free to drift the same way, in the place the
+      verdicts are measured from.
+    -->
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\ScriptedAim.cs"
+             Link="Linked\ScriptedAim.cs" />
+  </ItemGroup>
+
+</Project>

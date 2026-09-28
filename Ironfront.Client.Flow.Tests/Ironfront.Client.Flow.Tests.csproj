@@ -82,6 +82,8 @@
              Link="Linked\SnapshotHoldingQueue.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\MasterSession.cs"
              Link="Linked\MasterSession.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\MatchTransportHandoff.cs"
+             Link="Linked\MatchTransportHandoff.cs" />
   </ItemGroup>
 
 </Project>

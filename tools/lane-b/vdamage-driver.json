@@ -1,0 +1,50 @@
+{
+  "name": "vdamage-driver",
+  "note": "Weapon damage reaches an EMPTY vehicle. Pinned spawn 3,5 on Dustbowl puts the driver about 3 m from vehicle 9 at yaw ~6 degrees. Walk there before the bots are released (30 s after the first player body), stay OUT of the vehicle, and fire the pinned launcher (run with -Gear \"BEU AW1\") into its side. Grade vehicle 9's health on every client: before the 2026-09-23 fix an empty vehicle ignored all weapon damage on a server, so health stayed 1.0.",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "respawn": true
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "walking-to-vehicle",
+      "seconds": 12.0,
+      "approachVehicle": true,
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 3.0,
+      "sprint": true
+    },
+    {
+      "checkpoint": "at-vehicle",
+      "seconds": 2.0,
+      "approachVehicle": true,
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 3.0,
+      "switchWeaponSlot": 2,
+      "yawDegrees": 6
+    },
+    {
+      "checkpoint": "throw-1",
+      "seconds": 2.0,
+      "pitchDegrees": 15,
+      "fire": true,
+      "yawDegrees": 6
+    },
+    {
+      "checkpoint": "thrown-1",
+      "seconds": 6.0,
+      "pitchDegrees": 15,
+      "yawDegrees": 6
+    },
+    {
+      "checkpoint": "after-1",
+      "seconds": 2.0
+    }
+  ]
+}

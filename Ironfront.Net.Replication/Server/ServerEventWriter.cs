@@ -167,6 +167,79 @@ namespace Ironfront.Net.Replication.Server
         }
 
         /// <summary>
+        /// Writes S_PLAYER_SCORES as a channel-2 payload. Broadcast, on change. P18 task 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Beside <see cref="WritePlayerList"/> and not inside it.</b> The two carry different
+        /// facts at different rates — names on join and on change, scores on every death — and
+        /// the name table has 28 bytes of headroom left inside one un-fragmented channel-2
+        /// payload, which the smallest useful score field already overruns (P18 § 1.2).
+        /// </para>
+        /// <para>
+        /// Reliable, for <see cref="WritePlayerList"/>'s reason: nothing re-sends this on a
+        /// timer, so a client that misses one keeps a stale scoreboard until the next death.
+        /// </para>
+        /// <para>
+        /// <paramref name="bodyScratch"/> is the caller's rather than a <c>stackalloc</c>, the
+        /// same way both variable-length writers on this class take one. It is far smaller here
+        /// (<see cref="PlayerScoresMessage.MaxBodySize"/>, 321 B), and it is the caller's anyway
+        /// so that the three read alike and the buffer is sized once at construction.
+        /// </para>
+        /// </remarks>
+        public static int WritePlayerScores(
+            Span<byte> destination,
+            Span<byte> bodyScratch,
+            ReadOnlySpan<PlayerScoreEntry> entries)
+        {
+            int bodyLength = PlayerScoresMessage.Write(bodyScratch, entries);
+            return bodyLength < 0
+                ? -1
+                : Frame(
+                    destination, ReliableChannel, ServerMessageType.PlayerScores,
+                    bodyScratch.Slice(0, bodyLength));
+        }
+
+        /// <summary>
+        /// Writes S_CHAT as a channel-2 payload. Broadcast. Phase P6 task 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Reliable, and broadcast to everyone.</b> Chat is a fact, not a cue: a line
+        /// delivered to eleven of twelve players is a conversation one person is silently
+        /// excluded from, with nothing to re-send it and no way for them to know they missed
+        /// anything. There is no earshot filter either — lobby chat is global by definition, and
+        /// the proximity question is a different feature with a different opcode.
+        /// </para>
+        /// <para>
+        /// <paramref name="bodyScratch"/> is the caller's rather than a <c>stackalloc</c>, for
+        /// <see cref="WritePlayerList"/>'s reason: the body is variable-length. It is far
+        /// smaller here (<see cref="ChatTextMessage.MaxServerBodySize"/>, 122 B), so the stack would
+        /// survive it — the caller supplies it anyway so that both variable-length writers on
+        /// this class read the same way, and so the buffer is sized once at construction rather
+        /// than per message.
+        /// </para>
+        /// <para>
+        /// <b>The text is not sanitized here, and it must already have been.</b> This class
+        /// turns an event into bytes; deciding what a label may render is
+        /// <c>PlayerNameSanitizer</c>'s job and the server does it at ingress, where the bytes
+        /// first cross the socket. Sanitizing again here would leave two places to keep one
+        /// security rule in step.
+        /// </para>
+        /// </remarks>
+        public static int WriteChat(
+            Span<byte> destination, Span<byte> bodyScratch, byte actorId,
+            ReadOnlySpan<byte> textUtf8)
+        {
+            int bodyLength = ChatTextMessage.WriteServer(bodyScratch, actorId, textUtf8);
+            return bodyLength < 0
+                ? -1
+                : Frame(
+                    destination, ReliableChannel, ServerMessageType.Chat,
+                    bodyScratch.Slice(0, bodyLength));
+        }
+
+        /// <summary>
         /// Writes S_VEHICLE_SPAWN as a channel-2 payload. Broadcast. Phase-V8 task 6.
         /// </summary>
         /// <remarks>

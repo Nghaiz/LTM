@@ -62,8 +62,8 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   spawnTime: 0.1
-  team0Bots: 20
-  team1Bots: 20
+  team0Bots: 16
+  team1Bots: 16
   actorPrefab: {fileID: 1576652965907357, guid: 8dca75998d685bf4395acf5abb1b472b, type: 2}
 --- !u!114 &114924296564444106
 MonoBehaviour:
@@ -222,7 +222,7 @@ MonoBehaviour:
   ingameUiPrefab: {fileID: 1827090739459004, guid: 8adbfb3c0de5c3e42bb18e9204ca3b2d, type: 2}
   playerPrefab: {fileID: 1705635239785974, guid: 0ccfeaf94c01746408ab6b16946245f7, type: 2}
   reverseMode: 0
-  assaultMode: 1
+  assaultMode: 0
   nightMode: 0
   noVehicles: 0
   victoryPoints: 200

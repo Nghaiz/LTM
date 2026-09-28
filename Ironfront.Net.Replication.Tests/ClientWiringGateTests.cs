@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Ironfront.Tools.ClientWiringGate;
 using Microsoft.CodeAnalysis;
 using Xunit;
@@ -112,6 +113,47 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void TheGateFlagsTheSeamSpellingOfTheSameSingletonTouch()
+        {
+            // Phase C4a re-spelled every FpsActorController.instance read in Net/Client as
+            // NetClientBindings.LocalPlayer, so that the folder could become an assembly. The
+            // singleton, the per-actor paths and the A16 hazard are all unchanged — only the name
+            // is different, and a detector that knew one name would have gone silently green
+            // across the whole folder while reporting its own exemptions as "no longer needed".
+            //
+            // This is the red path for the new spelling. It is a separate fact from the one above
+            // because the two names can regress independently: deleting either row from
+            // LocalOnlySingletons leaves the other test passing.
+            IReadOnlyList<GateFinding> findings = ClientWiringDetectors
+                .FindUnguardedLocalSingletonTouches(
+                    Parse(
+                        @"class Actor { void Hurt() { NetClientBindings.LocalPlayer.FellBody(); } }",
+                        ActorPath),
+                    ActorPath);
+
+            GateFinding finding = Assert.Single(findings);
+            Assert.Equal("G4", finding.RuleId);
+
+            // The message must NAME the spelling it caught. "FpsActorController.instance is
+            // reached..." printed over a NetClientBindings touch would send the reader to a line
+            // that does not exist.
+            Assert.Contains("NetClientBindings.LocalPlayer", finding.Message);
+        }
+
+        [Fact]
+        public void TheGateAcceptsAGuardedSeamSingletonTouch()
+        {
+            // The green twin for the seam spelling, for the reason the twin below gives: a rule
+            // that fires on correct code is a rule people delete.
+            Assert.Empty(ClientWiringDetectors.FindUnguardedLocalSingletonTouches(
+                Parse(
+                    @"class Actor { void Hurt() { if (NetClientPresenterGuard.IsLocalActor(this))"
+                    + @" { NetClientBindings.LocalPlayer.FellBody(); } } }",
+                    ActorPath),
+                ActorPath));
+        }
+
+        [Fact]
         public void TheGateAcceptsAGuardedLocalSingletonTouch()
         {
             // The green twin. Without it, G4 could be passing by flagging everything — and a
@@ -184,6 +226,83 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void TheEngineNeverTalliesTheOfflineScoreboardOnANetworkedPath()
+        {
+            // G15's red path (P12 D-2), the mirror of G5 above. That rule stops a Net/Client
+            // presenter feeding the server's TOTALS through delta mutators; this one stops the
+            // legacy engine keeping its own tally while a networked client is running, which
+            // ScoreUi.UpdateUi then paints over the server's numbers.
+            //
+            // Both call sites P12 fixed -- Actor.Die and CapturePoint.SetOwner -- were reached
+            // from paths the SERVER drives, and three sibling call sites in the same tree already
+            // carried the guard. That is the shape a reviewer reads as "this file already handles
+            // that", which is why it is a gate.
+            IReadOnlyList<GateFinding> findings = ClientWiringDetectors
+                .FindUnguardedEngineScoreMutation(
+                    Parse(
+                        @"class A { void Die() { MatchScoreboard.Current.AddScore(1, 0); } }",
+                        ActorPath),
+                    ActorPath);
+
+            GateFinding finding = Assert.Single(findings);
+            Assert.Equal("G15", finding.RuleId);
+
+            // The green twin: the guard its three siblings already carry.
+            Assert.Empty(ClientWiringDetectors.FindUnguardedEngineScoreMutation(
+                Parse(
+                    @"class A { void Die() { if (NetContext.IsOffline) "
+                    + @"{ MatchScoreboard.Current.AddScore(1, 0); } } }",
+                    ActorPath),
+                ActorPath));
+
+            // Fully-qualified reads the same. The engine tree mixes both spellings -- Actor.cs
+            // has no `using Ironfront.Net.Unity` and CapturePoint.cs does -- so a rule that only
+            // recognised one would be green on half the files it governs for no stated reason.
+            Assert.Empty(ClientWiringDetectors.FindUnguardedEngineScoreMutation(
+                Parse(
+                    @"class A { void Die() { if (Ironfront.Net.Unity.NetContext.IsOffline) "
+                    + @"{ MatchScoreboard.Current.AddScore(1, 0); } } }",
+                    ActorPath),
+                ActorPath));
+        }
+
+        [Fact]
+        public void TheOfflineGuardMustBeTheBranchTheMutationIsIn()
+        {
+            // The half of G15 that is easy to get wrong and impossible to notice: a containment
+            // check that merely asked "is there an enclosing if that mentions IsOffline" would
+            // clear a mutation sitting in the ELSE -- which is the NETWORKED path, and precisely
+            // the case the rule exists to catch. A gate that passes its own defect is decoration.
+            IReadOnlyList<GateFinding> findings = ClientWiringDetectors
+                .FindUnguardedEngineScoreMutation(
+                    Parse(
+                        @"class A { void Die() { if (NetContext.IsOffline) { } "
+                        + @"else { MatchScoreboard.Current.AddFlag(1, 0); } } }",
+                        ActorPath),
+                    ActorPath);
+
+            GateFinding finding = Assert.Single(findings);
+            Assert.Equal("G15", finding.RuleId);
+        }
+
+        [Fact]
+        public void TheScoreboardsOwnMutatorsAreNotGoverned()
+        {
+            // MatchScoreboard DECLARES AddScore and AddFlag. A call from inside the type is the
+            // type doing its job; gating it there would be wrong rather than merely noisy, so the
+            // exclusion is asserted rather than left to the fact that nothing happens to call
+            // them today.
+            const string scoreboardPath =
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MatchScoreboard.cs";
+
+            Assert.Empty(ClientWiringDetectors.FindUnguardedEngineScoreMutation(
+                Parse(
+                    @"class MatchScoreboard { void R() { MatchScoreboard.Current.AddScore(0, 0); } }",
+                    scoreboardPath),
+                scoreboardPath));
+        }
+
+        [Fact]
         public void TheGateFailsWhenItScansZeroFiles()
         {
             // A gate that passes because it looked at nothing is worse than no gate: it reports
@@ -208,6 +327,247 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("OnDeath", names);
             Assert.Contains("OnCapturePoint", names);
             Assert.Contains("OnSnapshotApplied", names);
+        }
+
+        [Fact]
+        public void PerActorGuardExemptions_HasNoStaleEntries()
+        {
+            // The companion pinned-baseline-test-companion.md asks for. Each G4 exemption is a
+            // stored judgement about code that moves underneath it: rename the file, delete the
+            // member, or refactor the singleton touch away, and the entry keeps suppressing
+            // nothing while still reading as deliberate. Nothing else in the suite would notice.
+            //
+            // Asserted by IDENTITY, not by count - a count is satisfied by any five entries,
+            // including five entirely different ones.
+            string scripts = Path.Combine(RepoRoot(), "Ironfront_Reborn", "Assets", "Scripts");
+            Assert.True(Directory.Exists(scripts), "scripts tree not found at " + scripts);
+
+            string[] allFiles = Directory.GetFiles(scripts, "*.cs", SearchOption.AllDirectories);
+            Assert.NotEmpty(allFiles);
+
+            foreach ((string pathMatch, string? member, string reason)
+                     in ClientWiringDetectors.PerActorGuardExemptionsView)
+            {
+                string label = pathMatch + (member == null ? " (whole file)" : "." + member);
+
+                string[] matches = allFiles
+                    .Where(f => Slash(f).Contains(pathMatch, StringComparison.Ordinal))
+                    .ToArray();
+
+                Assert.True(matches.Length > 0,
+                    $"STALE G4 EXEMPTION: {label} matches no file under Assets/Scripts. The file "
+                    + "was renamed or deleted and the entry now suppresses nothing. DELETE the "
+                    + "entry - do not repoint it at whatever file looks closest, and do not leave "
+                    + $"it because the reason still reads well (\"{reason}\").");
+
+                foreach (string file in matches)
+                {
+                    string rel = Slash(file);
+
+                    Assert.True(ClientWiringDetectors.IsInPerActorGuardScopeIgnoringExemptions(rel),
+                        $"POINTLESS G4 EXEMPTION: {label} names {rel}, which G4 does not govern "
+                        + "even without the exemption. Exempting a file from a rule that never "
+                        + "applied to it is a no-op that reads as a considered decision. DELETE "
+                        + "the entry.");
+
+                    IReadOnlyList<string> touches = ClientWiringDetectors.LocalOnlySingletonTouchMembers(
+                        ClientWiringDetectors.Parse(File.ReadAllText(file), rel));
+
+                    if (member == null)
+                    {
+                        Assert.True(touches.Count > 0,
+                            $"STALE G4 EXEMPTION: {label} exempts the whole of {rel}, which no "
+                            + "longer touches a local-only singleton at all. The reason it was "
+                            + "written for is gone. DELETE the entry - do NOT keep it as "
+                            + "insurance against a touch coming back.");
+                        continue;
+                    }
+
+                    Assert.True(touches.Contains(member),
+                        $"STALE G4 EXEMPTION: {label} exempts a member that no longer reaches a "
+                        + $"local-only singleton in {rel}. Either the member was renamed or "
+                        + "deleted, or the touch was refactored away - in every case the "
+                        + "exemption now hides nothing. DELETE the entry. Do NOT re-point it at "
+                        + "whichever member currently does touch one: that would silently move a "
+                        + "judgement made about different code onto code nobody judged.");
+                }
+            }
+        }
+
+        [Fact]
+        public void TheGateAcceptsTheScriptedRespawnExemption()
+        {
+            // The green half of the entry added for X-23, as a fixture rather than against the
+            // real file, so it keeps its meaning if that file changes. Same shape as the file
+            // the exemption names: one per-actor path (which is why G4 scopes the file at all)
+            // and one local-only helper reached from Update().
+            const string path =
+                "Ironfront_Reborn/Assets/Scripts/Net/Client/NetClientLocalCombatDriver.cs";
+
+            IReadOnlyList<GateFinding> findings =
+                ClientWiringDetectors.FindUnguardedLocalSingletonTouches(
+                    Parse(
+                        "class D { void OnSpawnActor(M m) { } "
+                        + "static bool ScriptedRespawnPressed() "
+                        + "{ return FpsActorController.instance != null; } }",
+                        path),
+                    path);
+
+            Assert.Empty(findings);
+        }
+
+        [Fact]
+        public void TheGateStillFlagsAnUnexemptedMemberInTheSameFile()
+        {
+            // The red twin, and the one that matters: the exemption is per MEMBER, so it must not
+            // hand the whole file a pass. Without this, narrowing the entry to a file would look
+            // identical on every run.
+            const string path =
+                "Ironfront_Reborn/Assets/Scripts/Net/Client/NetClientLocalCombatDriver.cs";
+
+            IReadOnlyList<GateFinding> findings =
+                ClientWiringDetectors.FindUnguardedLocalSingletonTouches(
+                    Parse(
+                        "class D { void OnRemoteActor(M m) "
+                        + "{ IngameUi.instance.SetHealth(1f); } }",
+                        path),
+                    path);
+
+            GateFinding finding = Assert.Single(findings);
+            Assert.Equal("G4", finding.RuleId);
+        }
+
+        /// <summary>
+        /// Path separators as the detector normalizes them. Written through
+        /// <see cref="Path.DirectorySeparatorChar"/> rather than a literal so the test reads the
+        /// same on Windows and Linux, where CI runs both.
+        /// </summary>
+        private static string Slash(string path)
+            => path.Replace(Path.DirectorySeparatorChar, '/');
+
+        private static string RepoRoot()
+        {
+            for (DirectoryInfo? d = new DirectoryInfo(Directory.GetCurrentDirectory());
+                 d != null; d = d.Parent)
+            {
+                if (File.Exists(Path.Combine(d.FullName, "Ironfront.sln"))) return d.FullName;
+            }
+
+            throw new InvalidOperationException(
+                "Ironfront.sln not found walking up from " + Directory.GetCurrentDirectory());
+        }
+
+        // ------------------------------------------------- G14, the declared-client host guard
+
+        // Not a file on disk, for the fixture reason in the class remark. The path is what puts
+        // it in scope; the body is the shape of NetServerBootstrap.Awake, reduced to the two
+        // statements the rule is about.
+        private const string ServerBootstrapPath =
+            "Ironfront_Reborn/Assets/Scripts/Net/Server/NetServerBootstrap.cs";
+
+        private static IReadOnlyList<GateFinding> DeclaredClientHost(string body) =>
+            ClientWiringDetectors.FindUnguardedDeclaredClientHost(
+                Parse("class NetServerBootstrap { " + body + " }", ServerBootstrapPath),
+                ServerBootstrapPath);
+
+        [Fact]
+        public void TheGateAcceptsAGuardedServerBootstrap()
+        {
+            Assert.Empty(DeclaredClientHost(
+                "void Awake() { if (NetContext.IsDeclaredClient) { return; } "
+                + "ResolveConfiguration(); StartServer(); }"));
+        }
+
+        /// <summary>The defect itself: the role is deferred, the startup is not.</summary>
+        [Fact]
+        public void TheGateFlagsAServerBootstrapThatOnlyDefersTheRole()
+        {
+            GateFinding finding = Assert.Single(DeclaredClientHost(
+                "void Awake() { if (!NetContext.IsClient) NetContext.SetRole(NetRole.Server); "
+                + "ResolveConfiguration(); StartServer(); }"));
+
+            Assert.Equal("G14", finding.RuleId);
+            Assert.Contains("hosts one of its own", finding.Message, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Position, separately from presence. This was G11's author's own first draft, and the
+        /// same misplacement is available here.
+        /// </summary>
+        [Fact]
+        public void TheGateFlagsAGuardPlacedBelowResolveConfiguration()
+        {
+            GateFinding finding = Assert.Single(DeclaredClientHost(
+                "void Awake() { ResolveConfiguration(); "
+                + "if (NetContext.IsDeclaredClient) { return; } StartServer(); }"));
+
+            Assert.Equal("G14", finding.RuleId);
+            Assert.Contains("AFTER", finding.Message, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// A guard that reads the RACE rather than the declaration is not a guard. Spelled out
+        /// because "simplifying" the condition to IsClient is the plausible future edit, and it
+        /// would make an Editor Play session stop hosting depending on component order (X-9).
+        /// </summary>
+        [Fact]
+        public void TheGateRejectsTheIsClientSpellingOfTheGuard()
+        {
+            GateFinding finding = Assert.Single(DeclaredClientHost(
+                "void Awake() { if (NetContext.IsClient) { return; } "
+                + "ResolveConfiguration(); StartServer(); }"));
+
+            Assert.Equal("G14", finding.RuleId);
+        }
+
+        /// <summary>A guard with no return stops nothing.</summary>
+        [Fact]
+        public void TheGateRejectsAGuardThatDoesNotReturn()
+        {
+            Assert.Single(DeclaredClientHost(
+                "void Awake() { if (NetContext.IsDeclaredClient) { Log(); } "
+                + "ResolveConfiguration(); StartServer(); }"));
+        }
+
+        [Fact]
+        public void TheGateFlagsAServerBootstrapWithNoAwakeAtAll()
+        {
+            GateFinding finding = Assert.Single(DeclaredClientHost("void Start() { }"));
+
+            Assert.Equal("G14", finding.RuleId);
+            Assert.Contains("move this rule with it", finding.Message, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Scope, both directions. Without the negative case the rule could be scoped to nothing
+        /// and every assertion above would still pass on its own fixture path.
+        /// </summary>
+        [Fact]
+        public void TheRuleIsScopedToTheServerBootstrapAndNothingElse()
+        {
+            Assert.True(ClientWiringDetectors.IsDeclaredClientHostScoped(ServerBootstrapPath));
+            Assert.False(ClientWiringDetectors.IsDeclaredClientHostScoped(ProductionPath));
+
+            Assert.Empty(ClientWiringDetectors.FindUnguardedDeclaredClientHost(
+                Parse("class P { void Awake() { StartServer(); } }", ProductionPath),
+                ProductionPath));
+        }
+
+        /// <summary>
+        /// The real file, so the rule is graded against what ships rather than only against
+        /// fixtures. This is what goes red if somebody deletes the guard.
+        /// </summary>
+        [Fact]
+        public void TheShippedServerBootstrapIsGuarded()
+        {
+            string path = Path.Combine(
+                RepoRoot(), "Ironfront_Reborn", "Assets", "Scripts", "Net", "Server",
+                "NetServerBootstrap.cs");
+
+            Assert.True(File.Exists(path), $"no NetServerBootstrap at {path}");
+
+            Assert.Empty(ClientWiringDetectors.FindUnguardedDeclaredClientHost(
+                Parse(File.ReadAllText(path), path), path));
         }
 
         private static SyntaxTree Parse(string source, string path)

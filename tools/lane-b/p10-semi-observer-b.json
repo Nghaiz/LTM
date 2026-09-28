@@ -1,0 +1,12 @@
+{
+  "name": "p10-semi-witness-b",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 180, "respawn": true },
+    { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 180 },
+    { "checkpoint": "armed", "seconds": 3.0, "yawDegrees": 180 },
+    { "checkpoint": "press-1", "seconds": 5.0, "yawDegrees": 180 },
+    { "checkpoint": "released", "seconds": 2.0, "yawDegrees": 180 },
+    { "checkpoint": "press-2", "seconds": 5.0, "yawDegrees": 180 },
+    { "checkpoint": "settled", "seconds": 4.0, "yawDegrees": 180 }
+  ]
+}

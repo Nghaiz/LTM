@@ -9,8 +9,9 @@ namespace Ironfront.Net.Unity.Client
     public enum VehicleClientMode
     {
         /// <summary>
-        /// Kinematic, drawn from the snapshot stream at <c>DelayTicks</c> behind newest. Every
-        /// vehicle this client is not driving, and — when the fallback is on — the one it is.
+        /// Kinematic, drawn from the snapshot stream at the router's <c>InterpolationClock</c>
+        /// render time. Every vehicle this client is not driving, and — when the fallback is on —
+        /// the one it is.
         /// </summary>
         Remote = 0,
 
@@ -49,19 +50,21 @@ namespace Ironfront.Net.Unity.Client
     /// </remarks>
     internal sealed class NetClientVehicle
     {
-        private readonly Vehicle _vehicle;
+        private readonly IGameplayVehicleBody _vehicle;
         private readonly Rigidbody _rigidbody;
 
         private VehicleCorrectionStats _stats;
         private bool _hasPose;
         private float _lastCorrectionTime;
 
-        internal NetClientVehicle(ushort vehicleId, VehicleKind kind, Vehicle vehicle)
+        internal NetClientVehicle(
+            ushort vehicleId, VehicleKind kind, IGameplayVehicleBody vehicle, byte seatCount)
         {
             VehicleId = vehicleId;
             Kind      = kind;
+            SeatCount = seatCount;
             _vehicle  = vehicle;
-            _rigidbody = vehicle != null ? vehicle.rigidbody : null;
+            _rigidbody = vehicle != null ? vehicle.Rigidbody : null;
 
             SetMode(VehicleClientMode.Remote);
         }
@@ -74,11 +77,41 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         internal VehicleKind Kind { get; }
 
-        /// <summary>The scene object. Null once it has been destroyed.</summary>
-        internal Vehicle Vehicle => _vehicle;
+        /// <summary>
+        /// How many seats this vehicle has, from <c>S_VEHICLE_SPAWN</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Kept so the client can bound a seat search</b> (ledger X-30). It was on the wire
+        /// from V3 and the client threw it away, which was fine while nothing could ask for a
+        /// seat; <c>ClientSeatRequester</c> needs an upper bound on the seat index it offers, or
+        /// it walks the whole 0..255 range against a server that answers
+        /// <c>RejectedNoSuchSeat</c> to every one of them.
+        /// </para>
+        /// <para>
+        /// <b>The server's copy is still the authority.</b> <c>SeatArbiter.Decide</c> re-checks
+        /// the index against its own <c>VehicleState.SeatCount</c>, so this being stale or wrong
+        /// costs a refusal rather than a seat nobody is entitled to.
+        /// </para>
+        /// </remarks>
+        internal byte SeatCount { get; }
 
-        /// <summary>False once the underlying <c>Vehicle</c> has been destroyed.</summary>
-        internal bool Exists => _vehicle != null;
+        /// <summary>
+        /// The scene object, behind the seam. Null on a record whose vehicle never resolved.
+        /// </summary>
+        /// <remarks>
+        /// <b>Renamed from <c>Vehicle</c> in phase C4b</b>, because its type is no longer
+        /// <c>Vehicle</c> and <c>vehicle.Vehicle.Transform</c> reads as a typo. Phase C4's § 0
+        /// asked for this member to be DECIDED with the vehicle cluster rather than left to the
+        /// sealing sub-phase, because <c>Net/Diagnostics</c> reads through it and
+        /// <c>internal</c> stops working the moment the two folders become separate assemblies.
+        /// It stays <c>internal</c> here; C4c settles the visibility when it knows which assembly
+        /// Diagnostics is reading from.
+        /// </remarks>
+        internal IGameplayVehicleBody Body => _vehicle;
+
+        /// <summary>False once the underlying vehicle has been destroyed.</summary>
+        internal bool Exists => _vehicle != null && _vehicle.Exists;
 
         /// <summary>Remote or Predicted.</summary>
         internal VehicleClientMode Mode { get; private set; }
@@ -113,25 +146,33 @@ namespace Ironfront.Net.Unity.Client
         /// only.
         /// </summary>
         /// <remarks>
-        /// <c>Rigidbody.position</c>/<c>.rotation</c> rather than <c>transform</c>: on a
-        /// kinematic body the two are equivalent for rendering, but writing through the body
-        /// keeps the physics transform and the render transform in step, so anything that
-        /// raycasts against this vehicle in the same frame hits it where it is drawn.
+        /// <para>
+        /// <b>The Transform is written, not only the body.</b> This used to write
+        /// <c>Rigidbody.position</c>/<c>.rotation</c> alone, on the belief that the two are
+        /// equivalent for rendering. They are not: a body write reaches the Transform — what is
+        /// drawn — only at the next physics step. Measured in the Editor on 2026-09-27: a
+        /// kinematic body written to (10, 0, 0) still read (0, 0, 0) on its Transform until one
+        /// <c>Physics.Simulate</c>. Physics steps at 60 Hz, so every remote vehicle was drawn at
+        /// the fixed rate from a pose one step old, and at any frame rate above 60 it held for a
+        /// frame or two and then jumped.
+        /// </para>
+        /// <para>
+        /// The body is still written after it, so a raycast against this vehicle in the same
+        /// frame hits it where it is now drawn whatever <c>Physics.autoSyncTransforms</c> says.
+        /// </para>
         /// </remarks>
         internal void ApplyRemote(in VehiclePose pose)
         {
             if (_vehicle == null) return;
 
+            var position = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
+            Quaternion rotation = ToQuaternion(in pose.Rotation);
+
+            _vehicle.Transform.SetPositionAndRotation(position, rotation);
             if (_rigidbody != null)
             {
-                _rigidbody.position = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
-                _rigidbody.rotation = ToQuaternion(in pose.Rotation);
-            }
-            else
-            {
-                _vehicle.transform.SetPositionAndRotation(
-                    new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z),
-                    ToQuaternion(in pose.Rotation));
+                _rigidbody.position = position;
+                _rigidbody.rotation = rotation;
             }
 
             ApplyAuthoritativeState(in pose);
@@ -174,6 +215,16 @@ namespace Ironfront.Net.Unity.Client
                 out VehiclePose corrected, out float positionError, out float angleError);
 
             _stats.Record(mode, positionError, angleError);
+            LogCorrection(in local, in server, mode, positionError, angleError, rttSeconds);
+
+            // Inside the dead zone the body is not touched at all: writing even its own pose back
+            // is a teleport that PhysX treats as one.
+            if (mode == CorrectionMode.Hold)
+            {
+                ApplyAuthoritativeState(in server);
+                _hasPose = true;
+                return;
+            }
 
             _rigidbody.position = new Vector3(
                 corrected.Position.X, corrected.Position.Y, corrected.Position.Z);
@@ -213,6 +264,19 @@ namespace Ironfront.Net.Unity.Client
         /// <inheritdoc cref="TurretYaw"/>
         internal float TurretPitch { get; private set; }
 
+        /// <summary>The normalized health from the last authoritative pose.</summary>
+        internal float AuthoritativeHealth { get; private set; }
+
+        /// <summary>The state flags from the last authoritative pose.</summary>
+        internal VehicleStateFlags AuthoritativeFlags { get; private set; }
+
+        /// <summary>
+        /// Whether this proxy already played its death from a snapshot flagged Dead, so the
+        /// despawn that follows only removes the wreck instead of killing it a second time
+        /// (Tank.Die is not idempotent -- PR #325 measured the throw).
+        /// </summary>
+        internal bool DiedFromSnapshot { get; private set; }
+
         /// <summary>
         /// Health, burning, in-water and the subtype tail: the parts of the snapshot that are
         /// statements about the world rather than about where the vehicle is.
@@ -228,12 +292,34 @@ namespace Ironfront.Net.Unity.Client
             // predicts the hull, never the gunner's traverse.
             TurretYaw   = pose.TurretYaw;
             TurretPitch = pose.TurretPitch;
+            AuthoritativeHealth = pose.Health;
+            AuthoritativeFlags = pose.Flags;
 
-            _vehicle.SetHealthAuthoritative(pose.Health * _vehicle.MaxHealth);
+            // Health zero is valid only once the authoritative state machine has entered
+            // Burning or Dead. A newly announced vehicle can briefly be sampled from a sparse
+            // delta with default health before its full baseline arrives; feeding that transient
+            // zero into Vehicle starts the irreversible burn presentation on frame one.
+            bool hasZeroHealthState = (pose.Flags
+                & (VehicleStateFlags.Burning | VehicleStateFlags.Dead)) != 0;
+            if (pose.Health > 0f || hasZeroHealthState)
+            {
+                _vehicle.SetHealthAuthoritative(pose.Health * _vehicle.MaxHealth);
+            }
 
             _vehicle.ApplyReplicatedFlags(
                 (pose.Flags & VehicleStateFlags.InWater) != 0,
                 (pose.Flags & VehicleStateFlags.Airborne) != 0);
+
+            // The server keeps a destroyed vehicle replicated, flagged Dead, for as long as its
+            // wreck exists (Vehicle.DespawnWhenDestroyed). Die here, once, and stay kinematic and
+            // snapshot-driven: the wreck this client draws is then the server's, thrown by the
+            // server's impulse and blocking what it blocks, instead of a private copy thrown a
+            // different way that live proxies then shoved around (2026-09-27 Island report).
+            if ((pose.Flags & VehicleStateFlags.Dead) != 0 && !DiedFromSnapshot)
+            {
+                DiedFromSnapshot = true;
+                _vehicle.Die();
+            }
 
             _vehicle.ApplyReplicatedSubtypeTail(pose.SubtypeA, pose.SubtypeB);
         }
@@ -247,6 +333,37 @@ namespace Ironfront.Net.Unity.Client
         /// taking them from the local side would have a <c>Blend</c> write the client's own
         /// health back over the server's.
         /// </remarks>
+        private static bool? _correctionLogging;
+
+        /// <summary>
+        /// One line per correction of the vehicle this client drives, when
+        /// <c>IRONFRONT_LOG_VEHICLE=1</c>. Silent otherwise.
+        /// </summary>
+        /// <remarks>
+        /// The checkpoint record carries only the LOCAL pose and the last error, which cannot
+        /// separate "prediction diverged" from "the pose the server sent is stale": on
+        /// 2026-09-23 a driver's car sat still under full throttle and steer while a witness saw
+        /// the same vehicle 47 m away, and the error read about 2 m. Printing what arrived beside
+        /// what was predicted is what answers that.
+        /// </remarks>
+        private void LogCorrection(
+            in VehiclePose local, in VehiclePose server, CorrectionMode mode,
+            float positionError, float angleError, float rttSeconds)
+        {
+            _correctionLogging ??=
+                System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_VEHICLE") == "1";
+            if (_correctionLogging != true) return;
+
+            Debug.Log(
+                $"[veh-correct] t={Time.time:F2} id={VehicleId} mode={mode} "
+                + $"srv=({server.Position.X:F1},{server.Position.Z:F1}) "
+                + $"srvVel=({server.LinearVelocity.X:F1},{server.LinearVelocity.Z:F1}) "
+                + $"local=({local.Position.X:F1},{local.Position.Z:F1}) "
+                + $"localVel=({local.LinearVelocity.X:F1},{local.LinearVelocity.Z:F1}) "
+                + $"err={positionError:F2}m/{angleError:F1}deg rtt={rttSeconds * 1000f:F0}ms "
+                + $"kinematic={_rigidbody.isKinematic}");
+        }
+
         private VehiclePose ReadLocalPose(in VehiclePose server)
         {
             Vector3 p = _rigidbody.position;

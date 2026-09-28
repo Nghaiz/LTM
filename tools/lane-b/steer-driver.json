@@ -1,0 +1,88 @@
+{
+  "name": "steer-driver",
+  "note": "Reproduces the owner's early-match report: a jeep/motorbike that only drives straight and jitters under steering. Enter the nearest vehicle, drive straight, then hold full right steer (moveX=1) with throttle. Grade the driven vehicle's yaw across the turn-* checkpoints against correctionSnaps / lastAngleErrorDeg. Lane-B always runs in the first minutes of a match, which is exactly the window the report is about. The walk is 12 s so the seat request lands before the bots are released (30 s after the first player body); at 40 s a bot took the seat first and the request came back RejectedOccupied. Run with -SpawnIndex 3,5.",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "respawn": true
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "walking-to-vehicle",
+      "seconds": 12.0,
+      "approachVehicle": true,
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0,
+      "sprint": true
+    },
+    {
+      "checkpoint": "at-vehicle",
+      "seconds": 2.0,
+      "approachVehicle": true,
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seat-requested",
+      "seconds": 3.0,
+      "approachVehicle": true,
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0,
+      "seatToggle": true
+    },
+    {
+      "checkpoint": "straight-0",
+      "seconds": 3.0,
+      "moveZ": 1.0
+    },
+    {
+      "checkpoint": "straight-1",
+      "seconds": 1.0,
+      "moveZ": 1.0
+    },
+    {
+      "checkpoint": "turn-0",
+      "seconds": 1.0,
+      "moveZ": 1.0,
+      "moveX": 1.0
+    },
+    {
+      "checkpoint": "turn-1",
+      "seconds": 1.0,
+      "moveZ": 1.0,
+      "moveX": 1.0
+    },
+    {
+      "checkpoint": "turn-2",
+      "seconds": 1.0,
+      "moveZ": 1.0,
+      "moveX": 1.0
+    },
+    {
+      "checkpoint": "turn-3",
+      "seconds": 1.0,
+      "moveZ": 1.0,
+      "moveX": 1.0
+    },
+    {
+      "checkpoint": "turn-4",
+      "seconds": 1.0,
+      "moveZ": 1.0,
+      "moveX": 1.0
+    },
+    {
+      "checkpoint": "turn-5",
+      "seconds": 2.0,
+      "moveZ": 1.0
+    },
+    {
+      "checkpoint": "done",
+      "seconds": 1.0
+    }
+  ]
+}

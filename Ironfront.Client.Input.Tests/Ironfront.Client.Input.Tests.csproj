@@ -58,7 +58,17 @@
     UnityEngine errors that look like a broken build rather than a misplaced file.
   -->
   <ItemGroup>
-    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Input\IInputSource.cs"
+    <!--
+      IInputSource lives under Net/Shared, NOT Net/Input, since phase C5b. It moved because
+      ILocalPlayerRig.InputSource returns one and LocalPlayerRigBinding implements that interface
+      from Assembly-CSharp, which can only name a type in an auto-referenced assembly — and
+      Ironfront.Net.Unity.Client was being sealed. The implementations below stayed put.
+
+      This link is why a file move under Assets/ can break a dotnet project that never mentions
+      Unity: the reference is a PATH, and nothing resolves it until the compiler tries. Worse,
+      `dotnet test` reports the CS2001 and still exits 0, so only reading the log catches it.
+    -->
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\IInputSource.cs"
              Link="Linked\IInputSource.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Input\InputButtonPacker.cs"
              Link="Linked\InputButtonPacker.cs" />

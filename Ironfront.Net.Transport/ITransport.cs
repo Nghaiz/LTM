@@ -22,6 +22,22 @@ namespace Ironfront.Net.Transport
         Banned           = 6,
         TransportError   = 7,
         AlreadyConnected = 8,
+
+        /// <summary>
+        /// The side named by the join ticket had no free body. The counterpart of
+        /// <c>ConnectDenyReason.TeamFull</c>, and needed separately because the slot claim
+        /// happens AFTER the handshake: by then the server disconnects rather than denying,
+        /// so a deny code alone could never reach the player.
+        /// </summary>
+        TeamFull         = 9,
+
+        /// <summary>
+        /// Refused for a reason this build does not know. The generic fallback for an
+        /// unrecognised <c>ConnectDenyReason</c> — a wrong specific reason reads as
+        /// authoritative and sends the player chasing the wrong fix, so an unknown code
+        /// must say only what is true: the server refused it.
+        /// </summary>
+        Refused          = 10,
     }
 
     /// <summary>Handed to the client when a handshake completes.</summary>
@@ -56,6 +72,72 @@ namespace Ironfront.Net.Transport
         public readonly uint PlayerId;
         public readonly TransportStats Stats;
 
+        /// <summary>
+        /// The name this peer joined under, already sanitized, or <see cref="string.Empty"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Read out of the signed join ticket and nowhere else</b> (protocol-spec § 12 has
+        /// carried <c>u8[16] displayNameUtf8</c> since the freeze). The transport already
+        /// verified the HMAC and already parsed the ticket to bind <see cref="PlayerId"/>; this
+        /// is the field beside it that the same parse used to discard with an <c>out string _</c>.
+        /// So a real name reaching the killfeed costs no new opcode, no layout change and no
+        /// <c>PROTOCOL_VERSION</c> move — ledger X-36 was filed believing it needed all three.
+        /// </para>
+        /// <para>
+        /// <b>Empty is the normal state on a transport with no ticket to read</b> — the loopback
+        /// has none, and a development stub may carry a ticket whose name field is all zeroes.
+        /// It is never null, so a consumer never has to guard, and the consumer that renders it
+        /// supplies its own fallback (<c>ServerTickLoop.DisplayNameFor</c>).
+        /// </para>
+        /// <para>
+        /// <b>Sanitized at the transport, not at the label</b>, because this is the ingress: the
+        /// bytes have crossed a socket by the time anything else sees them, and every later
+        /// reader would otherwise have to remember. See <see cref="Ironfront.Net.Protocol.PlayerNameSanitizer"/>.
+        /// </para>
+        /// </remarks>
+        public readonly string DisplayName;
+
+        /// <summary>
+        /// The side the master server put this player on, read out of the same signed ticket
+        /// <see cref="PlayerId"/> and <see cref="DisplayName"/> came from. 0 or 1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is what makes the lobby's balancing arrive.</b> Before it, the game server
+        /// re-derived a side from slot parity, so a player's team was an accident of join
+        /// order and the lobby's answer was computed and thrown away.
+        /// </para>
+        /// <para>
+        /// <b>0 on a transport with no ticket to read</b> — the loopback has none, and a
+        /// development stub carries a ticket whose payload is all zeroes. That is the same
+        /// side the first slot has always had, so a ticketless join behaves exactly as it did
+        /// before this field existed; it is a default, not a decision.
+        /// </para>
+        /// </remarks>
+        public readonly byte Team;
+
+        /// <summary>
+        /// The lobby room the master put this player in, read out of the same signed ticket
+        /// <see cref="PlayerId"/>, <see cref="DisplayName"/> and <see cref="Team"/> came from.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is how a game server learns which room it is hosting.</b> Every opcode
+        /// between the game server and the master runs game-server → master; nothing pushes an
+        /// allocation the other way. The room number arrives here instead, inside the signed
+        /// payload, which is why P14 needed no new opcode — see
+        /// <c>Ironfront.Net.Replication.Server.ServerRoomIdentity</c>.
+        /// </para>
+        /// <para>
+        /// <b>0 on a transport with no ticket to read</b>, exactly as <see cref="Team"/> is:
+        /// the loopback carries none and a development stub carries a zeroed payload. 0 means
+        /// "this join names no room", and the room identity treats it as such rather than as a
+        /// room called zero.
+        /// </para>
+        /// </remarks>
+        public readonly ushort RoomId;
+
         public ConnectionInfo(
             ushort connectionId, string remoteAddress, float smoothedRttMs, ConnectionState state)
             : this(connectionId, remoteAddress, smoothedRttMs, state, 0, default)
@@ -69,6 +151,45 @@ namespace Ironfront.Net.Transport
             ConnectionState state,
             uint playerId,
             TransportStats stats)
+            : this(connectionId, remoteAddress, smoothedRttMs, state, playerId, stats, string.Empty, 0)
+        {
+        }
+
+        public ConnectionInfo(
+            ushort connectionId,
+            string remoteAddress,
+            float smoothedRttMs,
+            ConnectionState state,
+            uint playerId,
+            TransportStats stats,
+            string displayName)
+            : this(connectionId, remoteAddress, smoothedRttMs, state, playerId, stats, displayName, 0)
+        {
+        }
+
+        public ConnectionInfo(
+            ushort connectionId,
+            string remoteAddress,
+            float smoothedRttMs,
+            ConnectionState state,
+            uint playerId,
+            TransportStats stats,
+            string displayName,
+            byte team)
+            : this(connectionId, remoteAddress, smoothedRttMs, state, playerId, stats, displayName, team, 0)
+        {
+        }
+
+        public ConnectionInfo(
+            ushort connectionId,
+            string remoteAddress,
+            float smoothedRttMs,
+            ConnectionState state,
+            uint playerId,
+            TransportStats stats,
+            string displayName,
+            byte team,
+            ushort roomId)
         {
             ConnectionId  = connectionId;
             RemoteAddress = remoteAddress;
@@ -76,6 +197,9 @@ namespace Ironfront.Net.Transport
             State         = state;
             PlayerId      = playerId;
             Stats         = stats;
+            DisplayName   = displayName ?? string.Empty;
+            Team          = team;
+            RoomId        = roomId;
         }
     }
 

@@ -33,6 +33,26 @@ namespace Ironfront.Net.Replication.Client
         /// despawned across the pair, or it is out of interest. No pose.
         /// </summary>
         NotPresent = 4,
+
+        /// <summary>
+        /// Held at a single snapshot's pose: the vehicle's first sample while the render tick is
+        /// still before it, or the end of an extrapolation that ran to its limit.
+        /// </summary>
+        /// <remarks>
+        /// <b>No longer the steady state past 60 m.</b> A rate-limited vehicle is in every 2nd
+        /// (Mid) or 5th (Far) snapshot and never in two ADJACENT worlds; ledger X-64 made that
+        /// drawable by holding the one real end, which stepped the body at 10 Hz or 4 Hz. It is
+        /// now bracketed by its own samples, so Mid interpolates and Far interpolates or
+        /// extrapolates, and a Held sample is the exception it looks like.
+        /// </remarks>
+        Held = 5,
+
+        /// <summary>
+        /// Newer snapshots exist but the vehicle is in none of them — the server rate-limited it
+        /// out. Carried along its own velocities for at most
+        /// <see cref="SnapshotInterpolator.MaxExtrapolationTicks"/>.
+        /// </summary>
+        Extrapolated = 6,
     }
 
     /// <summary>
@@ -45,15 +65,19 @@ namespace Ironfront.Net.Replication.Client
     /// not its code (V5-D1).</b> The actor interpolator lerps a position and a single yaw,
     /// because an infantryman does not roll. A vehicle needs a full quaternion slerp, rides its
     /// own stream at its own cadence, and needs its own ring. What the two must agree on is
-    /// <i>when</i> to render, so <see cref="DelayTicks"/> and <see cref="Capacity"/> are read
-    /// from <see cref="SnapshotInterpolator"/> rather than redeclared — two definitions of the
-    /// render delay is how the vehicle and the man standing on it end up 33 ms apart.
+    /// <i>when</i> to render, and both are sampled at the one <see cref="InterpolationClock"/>
+    /// the router owns — two render times is how the vehicle and the man standing on it end up
+    /// a tick apart.
     /// </para>
     /// <para>
-    /// <b>It never extrapolates (V5-D2).</b> When the buffer runs dry the caller holds the last
-    /// known pose and <see cref="StalledCount"/> moves. A vehicle at 30 m/s extrapolated across
-    /// a 200 ms gap is 6 metres wrong and then snaps back; the freeze is both less wrong and
-    /// more informative, because a freeze is what a bad network looks like and a snap is not.
+    /// <b>A stall never extrapolates (V5-D2); a rate-limited gap does.</b> When the render tick
+    /// reaches the newest snapshot the stream has stopped, the caller holds the last known pose
+    /// and <see cref="StalledCount"/> moves: a vehicle at 30 m/s projected across a 200 ms stall
+    /// is 6 metres wrong and then snaps back, and the freeze is what a bad network honestly looks
+    /// like. A Far vehicle is different — its samples are 7.5 ticks apart by design while newer
+    /// snapshots keep arriving without it — and carrying it on its own velocities for up to
+    /// <see cref="SnapshotInterpolator.MaxExtrapolationTicks"/> is what keeps it moving between
+    /// them instead of stopping and jumping at 4 Hz.
     /// </para>
     /// <para>
     /// <b>Snapshots are copied in, not referenced.</b> <see cref="VehicleDeltaDecoder"/> mutates
@@ -67,12 +91,6 @@ namespace Ironfront.Net.Replication.Client
     /// </remarks>
     public sealed class VehicleSnapshotInterpolator
     {
-        /// <summary>
-        /// How far behind the newest snapshot to render, in simulation ticks. The actor value,
-        /// by reference — see the type remarks.
-        /// </summary>
-        public const int DelayTicks = SnapshotInterpolator.DelayTicks;
-
         /// <summary>Snapshots retained. The actor value, by reference.</summary>
         public const int Capacity = SnapshotInterpolator.Capacity;
 
@@ -101,12 +119,27 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Samples that ran off the newest end of the buffer. A starvation indicator.</summary>
         public long StalledCount { get; private set; }
 
+        /// <summary>Samples held at a single pose. See <see cref="VehicleSampleResult.Held"/>.</summary>
+        /// <remarks>
+        /// <b>Counted because the silence is what made X-64 survive.</b> The old code returned
+        /// <see cref="VehicleSampleResult.NotPresent"/> without touching
+        /// <see cref="StalledCount"/>, so a permanently frozen vehicle read as a perfectly
+        /// healthy stream on every counter there was -- the lane-B regrade measured 303 m of
+        /// divergence at <c>vehicleInterpStalled 0</c>. Every way of not interpolating is counted.
+        /// </remarks>
+        public long HeldCount { get; private set; }
+
+        /// <summary>Samples carried past a vehicle's newest sample across a rate-limited gap.</summary>
+        public long ExtrapolatedCount { get; private set; }
+
         /// <summary>Drops everything. Call on disconnect, or when the baseline is reset.</summary>
         public void Reset()
         {
             _count = 0;
             OutOfOrderCount = 0;
             StalledCount = 0;
+            HeldCount = 0;
+            ExtrapolatedCount = 0;
         }
 
         /// <summary>
@@ -138,26 +171,16 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
-        /// The tick to render right now: <see cref="DelayTicks"/> behind the newest snapshot.
-        /// </summary>
-        /// <param name="tickFraction">
-        /// How far the local clock has advanced into the current tick, 0..1. Without it the
-        /// render tick only advances in whole steps and the interpolation is quantised to the
-        /// very rate it exists to hide.
-        /// </param>
-        public double RenderTick(double tickFraction)
-        {
-            if (_count == 0) return 0.0;
-            return Newest().ServerTick + tickFraction - DelayTicks;
-        }
-
-        /// <summary>
         /// Samples one vehicle's pose at <paramref name="renderTick"/>.
         /// </summary>
+        /// <param name="vehicleId">The vehicle to sample.</param>
+        /// <param name="renderTick">Normally <see cref="InterpolationClock.RenderTick"/>.</param>
+        /// <param name="pose">Default for <see cref="VehicleSampleResult.NotPresent"/>.</param>
         /// <remarks>
-        /// Position and velocities lerp, rotation slerps, turret yaw takes the short way round,
-        /// flags and the subtype tail come from the earlier snapshot — see
-        /// <see cref="VehiclePose"/> for why the tail is not blended.
+        /// The vehicle is bracketed by its OWN samples, not by adjacent worlds — see
+        /// <see cref="VehicleSampleResult.Held"/>. Position and velocities lerp, rotation slerps,
+        /// turret yaw takes the short way round, flags and the subtype tail come from the earlier
+        /// sample — see <see cref="VehiclePose"/> for why the tail is not blended.
         /// </remarks>
         public VehicleSampleResult TrySample(ushort vehicleId, double renderTick, out VehiclePose pose)
         {
@@ -173,54 +196,107 @@ namespace Ironfront.Net.Replication.Client
                     : VehicleSampleResult.NotPresent;
             }
 
-            int held = Count;
-            long oldestIndex = _count - held;
+            long oldestIndex = _count - Count;
 
-            VehicleWorldSnapshot oldest = At(oldestIndex);
-            if (renderTick <= oldest.ServerTick)
+            // Newest to oldest. `later` keeps being overwritten while the samples are still after
+            // the render tick, so it ends as the EARLIEST of them -- the bracket's far end.
+            bool hasLater = false, hasEarlier = false;
+            VehicleSnapshotEntry later = default, earlier = default;
+            uint laterTick = 0, earlierTick = 0;
+
+            for (long i = _count - 1; i >= oldestIndex; i--)
             {
-                return Single(oldest, vehicleId, out pose)
-                    ? VehicleSampleResult.TooOld
-                    : VehicleSampleResult.NotPresent;
+                VehicleWorldSnapshot world = At(i);
+                if (!world.TryFind(vehicleId, out VehicleSnapshotEntry entry)) continue;
+
+                if (world.ServerTick > renderTick)
+                {
+                    later = entry;
+                    laterTick = world.ServerTick;
+                    hasLater = true;
+                    continue;
+                }
+
+                earlier = entry;
+                earlierTick = world.ServerTick;
+                hasEarlier = true;
+                break;
             }
 
-            VehicleWorldSnapshot newest = Newest();
-            if (renderTick >= newest.ServerTick)
+            // In no buffered snapshot: genuinely gone. The explicit S_VEHICLE_DESPAWN on channel 2
+            // is what retires the proxy; this only declines to draw it.
+            if (!hasEarlier && !hasLater) return VehicleSampleResult.NotPresent;
+
+            if (hasEarlier && hasLater)
             {
-                StalledCount++;
-                return Single(newest, vehicleId, out pose)
-                    ? VehicleSampleResult.Stalled
-                    : VehicleSampleResult.NotPresent;
-            }
+                // The vehicle's own span, not a world's. A dropped snapshot or a rate limit leaves
+                // more than one tick between its samples, and dividing by a hardcoded 1 would cover
+                // the gap in a fraction of the time and then wait.
+                double span = laterTick - (double)earlierTick;
+                float alpha = span <= 0.0 ? 0f : (float)((renderTick - earlierTick) / span);
 
-            // Linear scan from the newest backwards. `held` is 16 and the answer is almost
-            // always the first or second entry, because the render tick trails the newest by
-            // DelayTicks -- a binary search costs more in branches than it saves.
-            for (long i = _count - 1; i > oldestIndex; i--)
-            {
-                VehicleWorldSnapshot later = At(i);
-                VehicleWorldSnapshot earlier = At(i - 1);
-
-                if (renderTick < earlier.ServerTick || renderTick >= later.ServerTick) continue;
-
-                if (!earlier.TryFind(vehicleId, out VehicleSnapshotEntry a)) return VehicleSampleResult.NotPresent;
-                if (!later.TryFind(vehicleId, out VehicleSnapshotEntry b)) return VehicleSampleResult.NotPresent;
-
-                // The gap is not always 1: a dropped snapshot leaves a two-tick span, and
-                // dividing by a hardcoded 1 would cover it in half the time and then wait --
-                // the exact stutter this class exists to remove.
-                double span = later.ServerTick - (double)earlier.ServerTick;
-                float alpha = span <= 0.0 ? 0f : (float)((renderTick - earlier.ServerTick) / span);
-
-                pose = Blend(in a, in b, alpha);
+                pose = Blend(in earlier, in later, alpha);
                 return VehicleSampleResult.Interpolated;
             }
 
-            StalledCount++;
-            return Single(newest, vehicleId, out pose)
-                ? VehicleSampleResult.Stalled
-                : VehicleSampleResult.NotPresent;
+            if (!hasEarlier)
+            {
+                // Only samples after the render tick: the vehicle has just appeared, or the render
+                // tick is older than the whole buffer. Its first pose, never a projection backwards.
+                pose = VehiclePose.FromEntry(in later);
+                if (renderTick <= At(oldestIndex).ServerTick) return VehicleSampleResult.TooOld;
+
+                HeldCount++;
+                return VehicleSampleResult.Held;
+            }
+
+            pose = VehiclePose.FromEntry(in earlier);
+
+            if (renderTick >= Newest().ServerTick)
+            {
+                StalledCount++;
+                return VehicleSampleResult.Stalled;
+            }
+
+            double gap = renderTick - earlierTick;
+            bool capped = gap > SnapshotInterpolator.MaxExtrapolationTicks;
+            if (capped) gap = SnapshotInterpolator.MaxExtrapolationTicks;
+
+            pose = Extrapolate(in pose, (float)(gap / ProtocolConstants.SIM_TICK_RATE));
+
+            if (capped)
+            {
+                HeldCount++;
+                return VehicleSampleResult.Held;
+            }
+
+            ExtrapolatedCount++;
+            return VehicleSampleResult.Extrapolated;
         }
+
+        /// <summary>
+        /// Carries a pose along its own linear and angular velocity for <paramref name="seconds"/>.
+        /// </summary>
+        /// <remarks>
+        /// The wire velocities, not a finite difference: unlike an actor's, a vehicle's are never
+        /// culled by distance, and they are the server's own numbers for the instant the sample
+        /// was taken. Everything else — health, flags, turret, tail — stays as sampled.
+        /// </remarks>
+        private static VehiclePose Extrapolate(in VehiclePose pose, float seconds)
+            => new VehiclePose(
+                new Vec3(
+                    pose.Position.X + pose.LinearVelocity.X * seconds,
+                    pose.Position.Y + pose.LinearVelocity.Y * seconds,
+                    pose.Position.Z + pose.LinearVelocity.Z * seconds),
+                QuatMath.IntegrateAngularVelocity(in pose.Rotation, in pose.AngularVelocity, seconds),
+                pose.LinearVelocity,
+                pose.AngularVelocity,
+                pose.Health,
+                pose.Flags,
+                pose.TurretYaw,
+                pose.TurretPitch,
+                pose.SubtypeA,
+                pose.SubtypeB);
 
         /// <summary>
         /// Blends two dequantized entries. Public so a test can pin the arithmetic without

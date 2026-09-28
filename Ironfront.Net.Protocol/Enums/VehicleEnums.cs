@@ -179,6 +179,38 @@ namespace Ironfront.Net.Protocol
         /// </para>
         /// </remarks>
         RejectedLockedOut  = 7,
+
+        /// <summary>
+        /// The actor's authoritative position is outside the wire's representable range, so no
+        /// distance to the seat can be measured at all.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Added in V5 because "too far" was a lie four times in one run.</b> In
+        /// <c>p5-e11-03</c> a client stood 4.08 m from a hull and was refused four times with
+        /// <see cref="RejectedTooFar"/>. The refusal was arithmetically correct and completely
+        /// misleading: the server's copy of that body sat at y = -1024.67 — on
+        /// <c>Quantize.POS_MIN</c>, having fallen out of the world — so the measured distance
+        /// was ~1037 m, roughly 29,900x the limit. Ledger <b>X-67</b> was filed against a
+        /// client/server origin mismatch on the strength of that message and spent a day being
+        /// investigated in the wrong direction; the mismatch it named had already been closed
+        /// in <c>c0923f4</c> the day after the run.
+        /// </para>
+        /// <para>
+        /// <b>A body that is nowhere is not a body that is far.</b> The remedy for
+        /// <see cref="RejectedTooFar"/> is "walk closer", and it cannot work here — the
+        /// position the client is walking is not the position being measured. Ledger
+        /// <b>X-75</b> owns the fall itself; this code exists so the next occurrence names it
+        /// rather than sending a player to walk at a vehicle they are already touching.
+        /// </para>
+        /// <para>
+        /// <b>Appending a value is not a wire change</b>, for the reason
+        /// <see cref="RejectedLockedOut"/> states in full: <c>S_SEAT_CHANGE</c> stays 6 bytes,
+        /// <c>result</c> stays a <c>u8</c>, and
+        /// <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is unchanged.
+        /// </para>
+        /// </remarks>
+        RejectedActorUnplaced = 8,
     }
 
     /// <summary>What is being launched, carried by <c>S_PROJECTILE_SPAWN</c>.</summary>
@@ -229,6 +261,36 @@ namespace Ironfront.Net.Protocol
         /// before anything sent it.
         /// </summary>
         Bullet        = 6,
+        /// <summary>
+        /// Thrown spearhead grenade (<c>Spearhead Grenade.prefab</c>, a
+        /// <c>GrenadeProjectile</c>). Appended 2026-09-25.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A component type could not separate the two grenades, and the kind is the only
+        /// projectile identity the wire has.</b> <c>frag.prefab</c> and <c>spearhead.prefab</c>
+        /// point at different projectile prefabs — <c>Frag Grenade.prefab</c> and
+        /// <c>Spearhead Grenade.prefab</c>, different meshes — but both carry the same
+        /// <c>GrenadeProjectile</c> script, so <c>ProjectileNetAnnouncer.KindOf</c> folded them
+        /// onto <see cref="Grenade"/> and every client drew the frag for both. The player's
+        /// report: "there are two types of grenades, and the object that appears is the same for
+        /// both". The distinction is real in the assets and was only ever lost on the wire.
+        /// </para>
+        /// <para>
+        /// <b>Which of the two a throw is, is a fact about the WEAPON rather than about the
+        /// prefab</b> — see <c>ProjectileNetAnnouncer.KindOf(Projectile, Actor)</c> — because that
+        /// is the only place the difference exists. Nothing has to be authored for it to work.
+        /// </para>
+        /// <para>
+        /// <b>Appending is not a wire change.</b> The field stays a <c>u8</c>, nothing behind it
+        /// misaligns, and on its own it would not move <see cref="ProtocolConstants.PROTOCOL_VERSION"/>
+        /// — the same argument V7 made for <see cref="Medipack"/> and <see cref="Bullet"/>. It ships
+        /// in v11 only because the <c>PendingRelease</c> weapon-state bit bumped it. What a client
+        /// older than this value sees is <c>PrefabFor</c> returning null and the throw counted in
+        /// <c>UnrenderableKinds</c>, which is why both sides ship together.
+        /// </para>
+        /// </remarks>
+        Spearhead     = 7,
     }
 
     /// <summary>Why a vehicle left the world. Carried by <c>S_VEHICLE_DESPAWN</c>.</summary>
@@ -247,5 +309,30 @@ namespace Ironfront.Net.Protocol
 
         /// <summary>Torn down between rounds, with the rest of the world.</summary>
         WorldReset = 1,
+
+        /// <summary>
+        /// Taken back by its own pad after being abandoned, so its id can be spent again.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this is not <see cref="WorldReset"/>, which behaves identically today.</b> The
+        /// only consumer branches on <see cref="Destroyed"/> and treats everything else as a
+        /// quiet removal, so reusing <c>WorldReset</c> would have worked and would have put
+        /// "the round ended" in the log every time a jeep nobody was using went away. A reason
+        /// code exists to say why; spending the byte to say the wrong thing is how a reader
+        /// three months from now spends an afternoon looking for a round boundary that never
+        /// happened.
+        /// </para>
+        /// <para>
+        /// <b>Backward compatible in both directions, which is why it needs no
+        /// <c>PROTOCOL_VERSION</c> bump.</b> <c>VehicleDespawnMessage.TryParse</c> casts the
+        /// byte straight across with no range check, and
+        /// <c>RemoteVehicleRegistry.OnVehicleDespawn</c> asks only whether the reason IS
+        /// <see cref="Destroyed"/> — so an older client receiving this value falls into the
+        /// quiet-destroy branch, which is exactly the intended behaviour. An older server never
+        /// sends it. Same shape as the one-sided sprint-bit change.
+        /// </para>
+        /// </remarks>
+        Reclaimed = 2,
     }
 }

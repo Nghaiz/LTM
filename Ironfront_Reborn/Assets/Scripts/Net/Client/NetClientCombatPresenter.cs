@@ -1,4 +1,4 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Movement;
 using UnityEngine;
@@ -44,11 +44,59 @@ namespace Ironfront.Net.Unity.Client
 
         private NetClientBootstrap _client;
 
+        [Tooltip("Push the killfeed to the HUD. Off leaves the rows blank for a clean capture.")]
+        [SerializeField] private bool _drawKillfeed = true;
+
+        // What was last pushed to the HUD, so Update writes strings only when the visible feed
+        // has actually changed. -1 is "nothing pushed yet", which is also what a HUD arriving
+        // late resets this to -- see PushKillfeed.
+        private int _pushedCount = -1;
+        private long _pushedTotalKills = -1;
+        private int _pushedNameRevision = -1;
+
         private readonly KillfeedModel _killfeed = new KillfeedModel();
         private readonly HitmarkerModel _hitmarker = new HitmarkerModel();
+        private readonly PlayerNameTable _names = new PlayerNameTable();
+        private readonly PlayerScoreTable _scores = new PlayerScoreTable();
+
+        [Tooltip("The key that holds the scoreboard open. P18 3.3.")]
+        [SerializeField] private KeyCode _scoreboardKey = KeyCode.Tab;
+
+        /// <summary>
+        /// An extra way to hold the board open, for a run with no keyboard. P18 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <b><c>MinimapUi.HoldSource</c>'s pattern, and it exists for the identical reason</b>
+        /// (ledger X-61): a scripted lane-B client presses no keys, so a board that only ever
+        /// read <see cref="Input"/> could never appear in a captured artifact -- and P18's
+        /// criteria 2, 3, 4 and 7 are all graded on one. A LEVEL rather than an edge, because
+        /// that is what a held key is.
+        /// </remarks>
+        public static System.Func<bool> ScoreboardHoldSource;
+
+        /// <summary>What was last pushed to the board, so an unchanged board writes nothing.</summary>
+        private int _pushedScoreRevision = -1;
+        private int _pushedScoreNameRevision = -1;
+        private bool _pushedScoreboardVisible;
+
+        /// <summary>Reused across pushes; a scoreboard that allocated a list per frame would be
+        /// the IMGUI killfeed's mistake with more rows.</summary>
+        private readonly System.Collections.Generic.List<ushort> _scoreboardOrder =
+            new System.Collections.Generic.List<ushort>(ProtocolConstants.MAX_ACTORS);
 
         /// <summary>The last few kills, newest first. Drawn by the HUD; pruned here.</summary>
         public KillfeedModel Killfeed => _killfeed;
+
+        /// <summary>
+        /// Actor id to display name, rebuilt from every S_PLAYER_LIST.
+        /// debt-closure phase 2 task 2a.
+        /// </summary>
+        public PlayerNameTable Names => _names;
+
+        /// <summary>
+        /// Per-actor kills and deaths, rebuilt from every S_PLAYER_SCORES. P18 task 3.1.
+        /// </summary>
+        public PlayerScoreTable Scores => _scores;
 
         /// <summary>The newest confirmed hit and how long it stays up.</summary>
         public HitmarkerModel Hitmarker => _hitmarker;
@@ -86,6 +134,18 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnDeath += OnDeath;
             _client.Router.OnWeaponFire += OnWeaponFire;
             _client.Router.OnHitConfirm += OnHitConfirm;
+
+            // debt-closure phase 2 task 2a. This subscription is what retires OnPlayerList from
+            // ClientWiringGate's KnownUnwiredEvents: the exemption retires on SUBSCRIPTION, and
+            // this presenter is the killfeed's owner, so the name table belongs beside it rather
+            // than on a component of its own that the scene would then have to carry.
+            _client.Router.OnPlayerList += _names.Apply;
+
+            // P18 task 3.1. The subscriber ClientWiringGate demands for 0x51 -- the gate reads
+            // the router's events by reflection, so OnPlayerScores is a blocker from the moment
+            // it exists until this line does. It sits beside the name table because the two are
+            // the two halves of one board and nothing else reads either.
+            _client.Router.OnPlayerScores += _scores.Apply;
         }
 
         private void OnDisable()
@@ -94,6 +154,19 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnDeath -= OnDeath;
             _client.Router.OnWeaponFire -= OnWeaponFire;
             _client.Router.OnHitConfirm -= OnHitConfirm;
+            _client.Router.OnPlayerList -= _names.Apply;
+            _client.Router.OnPlayerScores -= _scores.Apply;
+            _names.Reset();
+            _scores.Reset();
+
+            // A presenter going away leaves no rows behind. Without this, disconnecting mid-match
+            // freezes the last five kills on screen with nothing left to prune them.
+            NetClientBindings.MatchHud?.SetKillfeedLineCount(0);
+            NetClientBindings.MatchHud?.SetScoreboardVisible(false);
+            _pushedCount = -1;
+            _pushedScoreRevision = -1;
+            _pushedScoreNameRevision = -1;
+            _pushedScoreboardVisible = false;
         }
 
         private void Update()
@@ -101,7 +174,241 @@ namespace Ironfront.Net.Unity.Client
             // KillfeedModel deliberately has no clock of its own, so expiry is the caller's to
             // run. Once a frame, before anything reads it.
             _killfeed.Prune(Time.time);
+
+            PushKillfeed();
+            PushScoreboard();
         }
+
+        /// <summary>
+        /// Rewrites the HUD's killfeed when the visible feed has changed. P17 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This replaces an IMGUI drawer, and the replacement was specified by the thing it
+        /// replaces.</b> That drawer's remark said "delete it when a HUD element reads
+        /// <see cref="Killfeed"/> and <see cref="Names"/> instead", and also that it allocated
+        /// its strings every frame — "the honest cost of the stopgap ... the replacement does
+        /// not have this problem". So this writes only on a change, and the change key is three
+        /// cheap integers rather than a comparison of the rendered text.
+        /// </para>
+        /// <para>
+        /// <b>Why the name revision is in the key.</b> S_PLAYER_LIST arrives on join and on
+        /// change, routinely AFTER the first kills of a match. Without it a feed whose lines
+        /// read "actor 7" would keep reading "actor 7" for the rest of those lines' lives, and
+        /// the one message that could have fixed them would have been ignored because the count
+        /// did not move.
+        /// </para>
+        /// <para>
+        /// <b>A team is NOT in the key, and that is a stated limit.</b> Teams are resolved when
+        /// a line is written, from the decoded snapshot; an actor whose team changed after its
+        /// line was drawn keeps the old colour until the feed next changes. A team changes at
+        /// most once a life and a line lives five seconds, so the window is narrow — and closing
+        /// it would mean re-resolving 64 actors every frame to detect a change that a kill will
+        /// push out of the feed anyway.
+        /// </para>
+        /// <para>
+        /// <b><c>_drawKillfeed</c> off is a count of zero, not a skipped push.</b> Returning
+        /// early would leave whatever was on screen when it was switched off, which is worse
+        /// than either state: a lane-B run turning it off wants the rows blank.
+        /// </para>
+        /// </remarks>
+        private void PushKillfeed()
+        {
+            IMatchHud hud = NetClientBindings.MatchHud;
+
+            if (hud == null)
+            {
+                // The HUD prefab is instantiated by GameManager.StartGame, which can land after
+                // the first kills. Forgetting what was pushed is what makes the feed appear in
+                // full the frame a HUD registers, rather than staying empty until the next kill.
+                _pushedCount = -1;
+                return;
+            }
+
+            int count = _drawKillfeed ? _killfeed.Count : 0;
+
+            if (count == _pushedCount
+                && _killfeed.TotalKills == _pushedTotalKills
+                && _names.Revision == _pushedNameRevision)
+            {
+                return;
+            }
+
+            _pushedCount = count;
+            _pushedTotalKills = _killfeed.TotalKills;
+            _pushedNameRevision = _names.Revision;
+
+            hud.SetKillfeedLineCount(count);
+
+            for (int i = 0; i < count; i++)
+            {
+                KillfeedEntry entry = _killfeed[i];
+
+                string killer = entry.KilledByEnvironment ? "The world" : NameFor(entry.KillerActorId);
+
+                // The world has no side. TeamId.None reaches the HUD, which draws it neutrally
+                // -- the same answer NetClientBindings.TeamColourRgb gives for an unknown team,
+                // and for the same reason: a guessed blue or red would look entirely plausible.
+                int killerTeam = entry.KilledByEnvironment
+                    ? TeamId.None
+                    : TeamOf(entry.KillerActorId);
+
+                hud.SetKillfeedLine(
+                    i, killer, killerTeam,
+                    NameFor(entry.VictimActorId), TeamOf(entry.VictimActorId),
+                    entry.Headshot);
+            }
+        }
+
+        /// <summary>
+        /// Raises the Tab board while the key is held, and rewrites it when it has moved.
+        /// P18 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The sides come from <c>PlayerScoreTable</c>, not from <see cref="TeamOf"/>.</b>
+        /// That resolver reads the decoded snapshot, which <c>InterestManager</c> sheds under a
+        /// per-snapshot ceiling — fine for a killfeed, where a miss is one neutral-coloured name,
+        /// and useless for a scoreboard, where it would put most of a 41-bot roster on no side at
+        /// all. <c>S_PLAYER_SCORES</c> carries the team for exactly this reason.
+        /// </para>
+        /// <para>
+        /// <b>Rows are keyed on the ACTOR ID, and the name is looked up afterwards.</b> The two
+        /// tables fill from two messages that arrive independently and scores routinely land
+        /// first; a row keyed on the name table would make a player appear only once their name
+        /// did. Criterion 5 is that case.
+        /// </para>
+        /// <para>
+        /// <b>Sorted by kills, then by fewer deaths, then by id.</b> The last term is what makes
+        /// the order STABLE — without it two players on the same K/D swap places whenever a
+        /// broadcast arrives, and a board that reshuffles under a reader is unreadable. The id is
+        /// also what makes the two clients' boards agree, which criterion 4 grades.
+        /// </para>
+        /// <para>
+        /// <b>Written only when something moved.</b> The key is the two tables' revisions plus
+        /// the visibility, the same three-integer discipline <see cref="PushKillfeed"/> uses —
+        /// a held Tab must not rebuild 42 rows of string every frame.
+        /// </para>
+        /// </remarks>
+        private void PushScoreboard()
+        {
+            IMatchHud hud = NetClientBindings.MatchHud;
+
+            if (hud == null)
+            {
+                // Forget what was pushed, for PushKillfeed's reason: the HUD prefab is
+                // instantiated by GameManager.StartGame and can register after the first
+                // broadcast, and a board that remembered would then stay empty until the next.
+                _pushedScoreRevision = -1;
+                _pushedScoreboardVisible = false;
+                return;
+            }
+
+            bool held = Input.GetKey(_scoreboardKey)
+                        || (ScoreboardHoldSource != null && ScoreboardHoldSource());
+
+            if (held == _pushedScoreboardVisible
+                && _scores.Revision == _pushedScoreRevision
+                && _names.Revision == _pushedScoreNameRevision)
+            {
+                return;
+            }
+
+            _pushedScoreboardVisible = held;
+            _pushedScoreRevision = _scores.Revision;
+            _pushedScoreNameRevision = _names.Revision;
+
+            hud.SetScoreboardVisible(held);
+            if (!held) return;
+
+            // False before the server has assigned one, and the out value is then the unassigned
+            // sentinel -- which is a real actor id nobody holds, so it must not be compared
+            // against. No local row is highlighted until there is a local actor to highlight.
+            bool hasLocal = NetClientPresenterGuard.TryResolveLocalActorId(out ushort localActorId);
+
+            for (int team = TeamId.Team0; team <= TeamId.Team1; team++)
+            {
+                _scoreboardOrder.Clear();
+
+                int totalKills = 0;
+                int totalDeaths = 0;
+
+                for (ushort actorId = 0; actorId < ProtocolConstants.MAX_ACTORS; actorId++)
+                {
+                    if (!_scores.Has(actorId)) continue;
+                    if (_scores.TeamOf(actorId) != team) continue;
+
+                    _scoreboardOrder.Add(actorId);
+                    totalKills += _scores.KillsOf(actorId);
+                    totalDeaths += _scores.DeathsOf(actorId);
+                }
+
+                _scoreboardOrder.Sort(CompareScoreRows);
+
+                hud.BeginScoreboardColumn(team, _scoreboardOrder.Count, totalKills, totalDeaths);
+
+                for (int i = 0; i < _scoreboardOrder.Count; i++)
+                {
+                    ushort actorId = _scoreboardOrder[i];
+
+                    hud.AddScoreboardRow(
+                        team,
+                        NameFor(actorId),
+                        _scores.KillsOf(actorId),
+                        _scores.DeathsOf(actorId),
+                        hasLocal && actorId == localActorId);
+                }
+            }
+
+            hud.EndScoreboard();
+        }
+
+        /// <summary>
+        /// Scoreboard order: most kills first, then fewest deaths, then lowest actor id.
+        /// </summary>
+        /// <remarks>
+        /// A method rather than a lambda, so the comparison does not allocate a closure over
+        /// <c>_scores</c> on every push. The final id term is not a tie-break nicety — it is what
+        /// makes the order deterministic across clients, which is what lets two screenshots be
+        /// compared row by row.
+        /// </remarks>
+        private int CompareScoreRows(ushort left, ushort right)
+        {
+            int byKills = _scores.KillsOf(right).CompareTo(_scores.KillsOf(left));
+            if (byKills != 0) return byKills;
+
+            int byDeaths = _scores.DeathsOf(left).CompareTo(_scores.DeathsOf(right));
+            if (byDeaths != 0) return byDeaths;
+
+            return left.CompareTo(right);
+        }
+
+        /// <summary>
+        /// The team the snapshot gives this actor, or <c>TeamId.None</c> when it does not carry
+        /// one.
+        /// </summary>
+        /// <remarks>
+        /// A miss is a NORMAL outcome and not a defect — a kill outside this client's interest
+        /// radius names two actors this client never spawned. The resolver is
+        /// <c>NetClientPresenterGuard</c>'s, the same one the local readout and the minimap read
+        /// through, so there is one answer to "what team is that actor on" rather than a second
+        /// one growing inside the killfeed.
+        /// </remarks>
+        private static int TeamOf(ushort actorId)
+            => NetClientPresenterGuard.TryResolveActorTeam(actorId, out byte team)
+                ? team
+                : TeamId.None;
+
+        /// <summary>
+        /// The name S_PLAYER_LIST gave this actor, or the id when no broadcast named it.
+        /// </summary>
+        /// <remarks>
+        /// The fallback is HERE and not in <c>PlayerNameTable</c>, which returns null: only the
+        /// caller knows what an unnamed actor should read as, and manufacturing it in the table
+        /// would make a genuinely missing name indistinguishable from a real one. "actor 7" is
+        /// exactly what this feed rendered for every line before this phase.
+        /// </remarks>
+        private string NameFor(ushort actorId) => _names.NameOr(actorId, "actor " + actorId);
 
         /// <summary>
         /// One death message, two consumers: the feed takes the line, the ragdoll takes the
@@ -122,9 +429,11 @@ namespace Ironfront.Net.Unity.Client
             // The local player is deliberately absent from the remote registry — it is
             // predicted, not interpolated — so its own death must be resolved first or it
             // looks like an actor this client never heard of.
+            var hitbox = (HitboxType)message.HitboxHit;
+
             if (NetClientPresenterGuard.IsLocalActor(message.VictimActorId))
             {
-                KnockOverLocalActor(force);
+                KnockOverLocalActor(force, hitbox);
                 return;
             }
 
@@ -135,7 +444,7 @@ namespace Ironfront.Net.Unity.Client
             // simply no body to fell. This must not log.
             if (!_registry.TryFindView(message.VictimActorId, out RemoteActorView view)) return;
 
-            FellBody(view, force);
+            FellBody(view, force, hitbox);
         }
 
         /// <summary>
@@ -154,45 +463,64 @@ namespace Ironfront.Net.Unity.Client
         /// documents that the netcode deliberately does not call it.
         /// </para>
         /// <para>
-        /// <b>The impulse goes to the main rigidbody only.</b> <c>ApplyRigidbodyForce</c> is
-        /// hardcoded to <c>MainRigidbody()</c> and there is no per-bone API. V10 does not add
-        /// one: the bone map depends on rig naming authored in the Editor. <c>HitboxHit</c> is
-        /// still consumed — <c>KillfeedEntry.From</c> reads it for the headshot icon — so the
-        /// byte is not orphaned; per-bone ragdoll targeting is the recorded, unowned gap.
+        /// <b>The impulse goes to the bone that was hit.</b> debt-closure phase 2 task 2d closed
+        /// ledger C-8: <c>ActiveRaggy.RigidbodyForBone</c> resolves through the animator's
+        /// humanoid bone map, so it does not depend on rig NAMING the way V10 assumed when it
+        /// left this open — a humanoid avatar has already normalised that. A bone the rig does
+        /// not simulate falls back to the main body, which is what every corpse used to get.
         /// </para>
         /// </remarks>
-        private static void FellBody(RemoteActorView view, Vector3 force)
+        private static void FellBody(RemoteActorView view, Vector3 force, HitboxType hitbox)
         {
             if (view == null) return;
 
-            if (view.Actor != null && view.HasRagdollRig)
-            {
-                view.Actor.KnockOver(force);
-                return;
-            }
+            if (view.TryFellBody(force, BoneFor(hitbox))) return;
 
             // Degraded, and loudly. A silent no-op here is indistinguishable from the bug this
             // whole phase exists to close.
             NetClientPresenterGuard.WarnOnce(
                 "death-no-rig",
                 "[net] a remote actor died but its prefab carries no Actor with a ragdoll rig, "
-                + "so the corpse cannot be felled. Hiding the body instead. Client-track item E1.");
-            view.gameObject.SetActive(false);
+                + "so the corpse cannot be felled. Hiding its renderers until the respawn snapshot. "
+                + "Client-track item E1.");
+            view.HideForDeathFallback();
         }
 
-        private static void KnockOverLocalActor(Vector3 force)
+        /// <summary>
+        /// Which bone an impulse lands on, from the hitbox S_DEATH carries.
+        /// </summary>
+        /// <remarks>
+        /// <b>Three hitboxes, not a skeleton.</b> The wire carries Body/Head/Limb and nothing
+        /// finer, so this maps to three bones and stops. <c>Limb</c> resolves to the right upper
+        /// leg rather than to the limb that was actually hit — the byte does not say which — and
+        /// that is a visible improvement over the pelvis without pretending to information the
+        /// protocol does not carry. Widening it means widening <c>HitboxType</c>, which is a
+        /// PROTOCOL_VERSION decision.
+        /// </remarks>
+        private static HumanBodyBones BoneFor(HitboxType hitbox)
+        {
+            switch (hitbox)
+            {
+                case HitboxType.Head: return HumanBodyBones.Head;
+                case HitboxType.Limb: return HumanBodyBones.RightUpperLeg;
+                default: return HumanBodyBones.Hips;
+            }
+        }
+
+        private static void KnockOverLocalActor(Vector3 force, HitboxType hitbox)
         {
             // ClientCombatState owns the local player's death STATE — respawn timer, ammo,
-            // health — and V10 does not duplicate it. It is a pure model and no Unity component
-            // holds one yet, which is a recorded gap, not this presenter's to close. What is
-            // this presenter's is that the body falls over: at the client role Actor.Damage
-            // never reaches Die() (ownsHealth is false), so without this the local player takes
-            // hits, staggers, and stands there dead.
-            FpsActorController local = FpsActorController.instance;
-            if (local == null || local.actor == null) return;
-            if (local.actor.ragdoll == null) return;
+            // health — and V10 does not duplicate it. NetClientLocalCombatDriver declares itself
+            // the one production owner and holds one, at its own :50. Until 2026-08-30 this
+            // remark still called that a recorded gap — the last surviving copy of a sentence
+            // that stopped being true when the driver landed, which is precisely the decay
+            // ledger X-29 was filed against. What is this presenter's is that the body falls
+            // over: at the client role Actor.Damage never reaches Die() (ownsHealth is false),
+            // so without this the local player takes hits, staggers, and stands there dead.
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.HasFellableBody) return;
 
-            local.actor.KnockOver(force);
+            local.FellBody(force, BoneFor(hitbox));
         }
 
         /// <summary>
@@ -226,13 +554,10 @@ namespace Ironfront.Net.Unity.Client
             ShotEvent shot = ShotEvent.From(in message);
             Vector3 direction = new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z);
 
-            Weapon weapon = view.ActiveWeapon;
-            if (weapon != null)
-            {
-                // One report per message, never the Fire() loop: each S_WEAPON_FIRE is one shot,
-                // and Shoot alone is SILENT on an automatic weapon (V10 D8).
-                weapon.PlayFireCosmetics();
-            }
+            // One report per message, never the Fire() loop: each S_WEAPON_FIRE is one shot, and
+            // Shoot alone is SILENT on an automatic weapon (V10 D8). The liveness check the
+            // weapon needs lives with the view, which is the only thing holding one.
+            view.PlayActiveWeaponFireCosmetics();
 
             if (_tracers != null) _tracers.Fire(view.MuzzlePosition, direction);
         }
@@ -254,8 +579,9 @@ namespace Ironfront.Net.Unity.Client
 
             // The newest hit wins, including a quieter one — that is HitmarkerModel's documented
             // semantics, and the severity travels as an int so Assembly-CSharp takes no
-            // dependency on the replication library for a cosmetic.
-            IngameUi.Hit((int)_hitmarker.Current.Severity);
+            // dependency on the replication library for a cosmetic. Silent when this build
+            // registered no HUD, which is what a headless client and an EditMode test are.
+            NetClientBindings.ShowHit((int)_hitmarker.Current.Severity);
         }
     }
 }

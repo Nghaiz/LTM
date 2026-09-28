@@ -45,9 +45,9 @@ public class MainMenu : MonoBehaviour
 
 	private bool greenlightActivated;
 
-	private string greenlightWebUrl = "https://twitter.com/SteelRaven7";
+	private string greenlightWebUrl = string.Empty;
 
-	private string greenlightSteamUrl = "https://twitter.com/SteelRaven7";
+	private string greenlightSteamUrl = string.Empty;
 
 	private void Start()
 	{
@@ -216,7 +216,7 @@ public class MainMenu : MonoBehaviour
 
 	public void OpenTwitter()
 	{
-		Application.OpenURL("http://twitter.com/SteelRaven7");
+		Debug.Log("Ironfront Reborn is developed by Team 10 LTM.");
 	}
 
 	public void OpenGreenlightWeb()

@@ -7,6 +7,8 @@ public class GotoMenu : MonoBehaviour
 
 	private Action nextSceneAction = new Action(1f);
 
+	private bool loadingNextScene;
+
 	private void Start()
 	{
 		nextSceneAction.StartLifetime(duration);
@@ -22,8 +24,25 @@ public class GotoMenu : MonoBehaviour
 
 	private void GotoNextScene()
 	{
-		PlayerPrefs.SetInt("SeenIntro", 1);
-		PlayerPrefs.Save();
+		if (loadingNextScene)
+		{
+			return;
+		}
+
+		loadingNextScene = true;
+		try
+		{
+			PlayerPrefs.SetInt("SeenIntro", 1);
+			PlayerPrefs.Save();
+		}
+		catch (PlayerPrefsException exception)
+		{
+			// A read-only/locked registry must not trap a Windows client on the intro scene.
+			// Remembering the skip is optional; entering the menu is not.
+			Debug.LogWarning("[startup] could not save SeenIntro; continuing to the menu. "
+				+ exception.Message);
+		}
+
 		SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
 	}
 

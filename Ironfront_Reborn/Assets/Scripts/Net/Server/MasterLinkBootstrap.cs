@@ -70,6 +70,15 @@ namespace Ironfront.Net.Unity.Server
         private GameServerMatchReporter _link;
         private GameServerConfig _config;
 
+        /// <summary>The shared secret, kept so a re-registration does not have to re-read it.</summary>
+        private string _secret;
+
+        /// <summary>When to dial again after a loss. See <see cref="MasterLinkKeepAlive"/>.</summary>
+        private readonly MasterLinkKeepAlive _keepAlive = new MasterLinkKeepAlive();
+
+        /// <summary>An attempt is in flight; <see cref="Update"/> must not start a second.</summary>
+        private bool _connecting;
+
         /// <summary>The id the master assigned, or 0 when standalone or not yet registered.</summary>
         public ushort ServerId { get; private set; }
 
@@ -80,6 +89,33 @@ namespace Ironfront.Net.Unity.Server
 
         private void Start()
         {
+            // A PROCESS THAT REFUSED TO START A SERVER MUST NOT ADVERTISE ONE.
+            //
+            // Same question NetServerBootstrap.Awake already answered one component over (AD-1),
+            // and the same answer: IsDeclaredClient, not IsClient, because the ROLE is an Awake
+            // ordering between two components that defer to each other while the DECLARATION has
+            // one meaning and one setter. Offline therefore still advertises, so the Editor
+            // sandbox and the dedicated build behave exactly as they did.
+            //
+            // Measured: a playtest of one master, one headless server and two rendered clients
+            // put THREE servers in the registry. Each client logged "[net] this process is a
+            // client: no local server will be started." and then registered anyway -- serverId 2
+            // and serverId 3, both claiming 127.0.0.1:27015, the port the real server holds --
+            // because everything below decides standalone-vs-linked purely from configuration,
+            // and IRONFRONT_MASTER_HOST is set on a client for the match list it needs. The
+            // matchmaker then had two rooms it could hand a player, neither of which was hosted
+            // by anything: the socket at that address belongs to the headless server, so a client
+            // sent to "server 2" would have joined a stranger's match or nothing at all.
+            //
+            // Above the configuration resolve for AD-1's reason as well: everything below is
+            // server startup, and a client has no business parsing a server's registration.
+            if (NetContext.IsDeclaredClient)
+            {
+                Debug.Log(
+                    "[net] master link: declared client, so this process advertises no server (AD-1).");
+                return;
+            }
+
             // Resolved here rather than shared with NetServerBootstrap's instance on purpose:
             // this component works in a scene that has no NetServerBootstrap, and both read
             // the same variables through the same type, so the two cannot drift the way the
@@ -129,7 +165,68 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
+            _secret = secret;
+            _keepAlive.WantsLink = true;
+
             _ = ConnectAsync(secret);
+        }
+
+        /// <summary>
+        /// Keeps the registration alive: notices a lost link and re-registers on a backoff.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Registration used to be a once-per-process event, and losing it was silent.</b>
+        /// <see cref="GameServerMatchReporter"/> guards Heartbeat, MatchStarted and MatchEnded
+        /// with <c>if (!IsConnected) return;</c>, so a server whose master link died went on
+        /// playing complete matches while reporting nothing at all, and logged not one line
+        /// about it. The master drops a server that stops heartbeating, so the two ends agree
+        /// on the outcome and disagree on whether anything is wrong: the registry shows no
+        /// server, the server shows a healthy match.
+        /// </para>
+        /// <para>
+        /// <b>Observed on 2026-09-14</b> — a VMware host was suspended for some hours with two
+        /// game servers registered. The master saw the heartbeats stop, marked both unhealthy
+        /// and dropped them (<c>gsRegistered</c> 2 to 0). On resume both processes carried on
+        /// with dead sockets, never re-registered, and were invisible to matchmaking for the
+        /// rest of their lifetime. A suspended VM is only the cheapest way to produce this; a
+        /// master restart, a NAT rebind or a dropped Wi-Fi link do the same thing.
+        /// </para>
+        /// <para>
+        /// <b>The id is re-adopted, not assumed.</b> The master assigns a fresh id on each
+        /// registration, so a reconnect can come back as a different server — and the ticket
+        /// validator is checking tickets against the OLD id until
+        /// <see cref="AdoptServerIdOnValidator"/> runs again. Skipping that would admit no
+        /// player at all, which is a worse silence than the one this fixes.
+        /// </para>
+        /// </remarks>
+        private void MaintainLink(float deltaSeconds)
+        {
+            if (!_keepAlive.WantsLink || _connecting) return;
+
+            // A link we registered has since died. Stand the reporter down BEFORE disposing the
+            // old one: ServerMasterReporter heartbeats every tick from its own Update, and a
+            // disposed link underneath it is a race this ordering removes rather than guards.
+            if (_link != null && !_link.IsConnected)
+            {
+                Debug.LogWarning(
+                    $"[net] master link: lost the link to {_config.MasterHost}:{_config.MasterPort} "
+                    + $"(was server {ServerId}). Matches will not be advertised until it is back. "
+                    + "Re-registering.");
+
+                _reporter.SetReporter(new NullMatchReporter());
+
+                GameServerMatchReporter dead = _link;
+                _link = null;
+                ServerId = 0;
+                dead.Dispose();
+
+                _keepAlive.OnLinkDown();
+                return;
+            }
+
+            if (_link == null && _keepAlive.ShouldAttempt(deltaSeconds))
+                _ = ConnectAsync(_secret);
         }
 
         // async void is what a MonoBehaviour lifecycle method would force; an async Task the
@@ -146,7 +243,32 @@ namespace Ironfront.Net.Unity.Server
                 MapIds       = _config.MapIds,
             };
 
+            _connecting = true;
+
             var reporter = new GameServerMatchReporter(new GameServerLink(), ownsLink: true);
+
+            // ASSIGNED BEFORE THE AWAIT, AND THAT ORDER IS THE WHOLE FIX (P14).
+            //
+            // GameServerLink follows the Poll() contract: ReceiveLoopAsync only ENQUEUES each
+            // frame, and HandleOnMainThread -- which is what calls _pending.TrySetResult and so
+            // completes RegisterAsync -- runs solely from Poll(). The only caller of Poll() is
+            // this component's Update(), through _link. Assigning _link after the await
+            // therefore deadlocked by construction: the registration response sat in the queue,
+            // nothing drained it, the await never returned, _link was never assigned, and
+            // SetReporter was never called.
+            //
+            // The symptom was silent and looked like health. The master logged GS_REGISTER and
+            // counted the server healthy off its registration timestamp, so `run-e2e.ps1` saw
+            // "1 healthy game server" and passed -- while the reporter stayed NullMatchReporter,
+            // no heartbeat was ever sent, and no match start or end was ever reported. Every
+            // harness finished inside the registry's grace window, so nothing outlived the lie
+            // until P14 asked a room to wait ten seconds and then start.
+            //
+            // The same order fixes AdoptServerIdOnValidator below. Poll() runs on Unity's main
+            // thread, TrySetResult resumes the continuation on the completing thread, so
+            // FindObjectOfType is reached on the main thread rather than on a pool thread that
+            // would have thrown into a discarded Task.
+            _link = reporter;
 
             try
             {
@@ -161,22 +283,43 @@ namespace Ironfront.Net.Unity.Server
                 // Caught, not rethrown, and the reporter is disposed rather than installed. A
                 // master that is down must not stop a match from running -- that is the whole
                 // point of the standalone contingency, and it is worth more than a stack trace.
-                Debug.LogWarning($"[net] master link: registration failed, staying standalone. {ex.Message}");
+                // Caught, not rethrown, and the reporter is disposed rather than installed. A
+                // master that is down must not stop a match from running -- that is the whole
+                // point of the standalone contingency, and it is worth more than a stack trace.
+                //
+                // "Standalone FOR NOW", since MaintainLink retries: the previous wording said
+                // "staying standalone" and meant it literally, so a master that was down for the
+                // ten seconds this process happened to boot in was never contacted again.
+                _link = null;
                 reporter.Dispose();
+                _connecting = false;
+                _keepAlive.OnLinkDown();
+
+                Debug.LogWarning(
+                    "[net] master link: registration failed, standalone for now, retrying in "
+                    + $"{_keepAlive.RetryInSeconds:0}s. {ex.Message}");
                 return;
             }
 
             if (ServerId == 0)
             {
-                Debug.LogWarning("[net] master link: the master refused registration. Staying standalone.");
+                _link = null;
                 reporter.Dispose();
+                _connecting = false;
+                _keepAlive.OnLinkDown();
+
+                Debug.LogWarning(
+                    "[net] master link: the master refused registration. Standalone for now, "
+                    + $"retrying in {_keepAlive.RetryInSeconds:0}s.");
                 return;
             }
 
-            _link = reporter;
             _reporter.SetReporter(reporter);
 
             AdoptServerIdOnValidator();
+
+            _keepAlive.OnRegistered();
+            _connecting = false;
 
             Debug.Log($"[net] master link: registered as server {ServerId} with {_config.MasterHost}:{_config.MasterPort}.");
         }
@@ -227,7 +370,17 @@ namespace Ironfront.Net.Unity.Server
         // The Poll() contract from the master-server track's plan section 5: every event and Task continuation
         // fires on the thread that calls this, so Unity API use stays on the main thread and the
         // whole off-main-thread bug class disappears. One frame of latency, on a lobby link.
-        private void Update() => _link?.Poll();
+        private void Update()
+        {
+            // Poll FIRST. GameServerLink only enqueues what it reads; Poll is what runs the
+            // continuations, and so it is what turns a closed socket into State.Disconnected.
+            // Checking the link before draining it would read a stale state for one frame --
+            // harmless here, but it is the same ordering trap that made registration deadlock
+            // in P14, and it costs nothing to get right.
+            _link?.Poll();
+
+            MaintainLink(Time.unscaledDeltaTime);
+        }
 
         private void OnDestroy()
         {

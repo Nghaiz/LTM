@@ -178,7 +178,10 @@ namespace Ironfront.MasterServer.Tests.Net
             // fix, one byte every 20 s held a slot for 89 s against a 30 s limit, and would
             // have held it indefinitely.
             //
-            // The deadline runs from accept, so dribbling cannot extend it.
+            // The deadline now runs from the last COMPLETE frame rather than from accept
+            // (so a player can fill in a form without being reaped mid-form), and this
+            // dribble is exactly the case that distinction is drawn for: it produces bytes
+            // and never a frame, so it cannot extend anything.
             //
             // Held clock, because on a real one this test could go green for the wrong reason.
             // It asserts that a connection IS reaped, and a stalled CI runner reaps it whether
@@ -293,23 +296,27 @@ namespace Ironfront.MasterServer.Tests.Net
             Assert.Equal(0, harness.Host.TotalTimedOut);
         }
 
+        /// <summary>
+        /// A player filling in the create-account form is not reaped mid-form.
+        /// </summary>
+        /// <remarks>
+        /// <b>The reported fault, in the shape the screen produces it.</b> REGISTER does not
+        /// authenticate a connection — a successful register returns to the login form, by
+        /// design — so before the deadline moved off <c>ConnectedAtMs</c> the create-account
+        /// screen ran on a fuse lit at accept that nothing the player did could reset, and four
+        /// form fields take longer than thirty seconds. The only traffic in that window is the
+        /// 15 s HEARTBEAT the client has sent since the socket opened, which is why that is
+        /// what this sends.
+        /// </remarks>
         [Fact]
-        public async Task HeartbeatsDoNotExtendAnUnauthenticatedDeadline()
+        public async Task AHeartbeatingClientSurvivesTheFormItIsFillingIn()
         {
-            // The realistic form of the attack, and the one raw dribbled bytes do not cover: a
-            // client speaking the protocol perfectly, sending well-formed HEARTBEAT frames
-            // forever, and never authenticating. Every frame is valid, so nothing looks wrong;
-            // if the deadline reset on traffic this connection would hold its slot for as long
-            // as the attacker cared to keep beating.
-            // Held clock, for the same reason as the dribble test: this asserts that a
-            // connection IS reaped, so on a real clock a stalled runner would reap it and the
-            // test would go green without the deadline having done anything. Stepping the clock
-            // ourselves makes the reap attributable.
             var clock = new HeldClock();
             await using var harness = new MasterHostHarness(o =>
             {
                 o.Clock                  = clock;
                 o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);
+                o.UnauthenticatedCeiling = TimeSpan.FromMinutes(5);
             });
 
             TcpClient client = await harness.ConnectAsync();
@@ -318,33 +325,88 @@ namespace Ironfront.MasterServer.Tests.Net
             NetworkStream stream = client.GetStream();
             byte[] heartbeat = Frame(Heartbeat, "{}");
 
-            // Five well-formed beats 5 s apart — 25 s, inside the 30 s deadline, each one
-            // confirmed PARSED before the clock moves. These are the exact frames that keep an
-            // authenticated connection alive; the whole question is whether they do anything for
-            // a connection that never logged in.
-            for (int i = 0; i < 5; i++)
+            // Eight beats at the client's own 15 s cadence: two minutes on the form, four times
+            // the old deadline. Each beat is confirmed PARSED before the clock moves, so the gap
+            // the server measures is exactly the 15 s stepped here.
+            for (int i = 0; i < 8; i++)
             {
                 await stream.WriteAsync(heartbeat);
                 await stream.FlushAsync();
 
-                clock.Advance(TimeSpan.FromSeconds(5));
-
                 int expected = i + 1;
                 Assert.True(
                     await MasterHostHarness.WaitUntilAsync(() => harness.Host.TotalHeartbeats >= expected),
-                    $"heartbeat {expected} of 5 was never parsed");
+                    $"heartbeat {expected} of 8 was never parsed");
+
+                clock.Advance(TimeSpan.FromSeconds(15));
             }
 
             Assert.Equal(1, harness.Host.ConnectionCount);
+            Assert.Equal(0, harness.Host.TotalTimedOut);
+        }
 
-            // Cross the deadline. The idle gap is at most 5 s; the deadline is 30 s. A reap here
-            // is the deadline and can be nothing else.
-            clock.Advance(TimeSpan.FromSeconds(6));
+        /// <summary>
+        /// Heartbeating holds an unauthenticated slot, but only as far as the ceiling.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This test used to assert the opposite, and the reversal is deliberate.</b> It was
+        /// written for the realistic attack that dribbled bytes do not cover — a peer speaking
+        /// the protocol perfectly, beating forever, never authenticating — and it pinned the
+        /// answer "reaped at thirty seconds, traffic or no traffic". That answer also reaped the
+        /// player on the create-account screen, who is the same shape on the wire and cannot be
+        /// told apart from the squatter by anything the connection does.
+        /// </para>
+        /// <para>
+        /// <b>So the deadline is raised rather than removed, and the intent survives intact:</b>
+        /// a well-behaved squatter still cannot hold a slot indefinitely, which is the property
+        /// that mattered. What changed is the number — five minutes instead of thirty seconds,
+        /// against a per-IP cap of five. The cost is stated rather than hidden: such a squatter
+        /// is now ten times cheaper to sustain. A silent peer, and one dribbling bytes that
+        /// never complete a frame, still die in thirty seconds
+        /// (<see cref="ADribblingClientIsClosedOnTheDeadlineNotTheIdleGap"/>), and that is the
+        /// shape a Slowloris actually takes.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public async Task HeartbeatsExtendAnUnauthenticatedDeadlineOnlyToTheCeiling()
+        {
+            // Held clock, for the same reason as the dribble test: this asserts that a
+            // connection IS reaped, so on a real clock a stalled runner would reap it and the
+            // test would go green without the ceiling having done anything.
+            var clock = new HeldClock();
+            await using var harness = new MasterHostHarness(o =>
+            {
+                o.Clock                  = clock;
+                o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);
+                o.UnauthenticatedCeiling = TimeSpan.FromMinutes(5);
+            });
+
+            TcpClient client = await harness.ConnectAsync();
+            Assert.True(await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 1));
+
+            NetworkStream stream = client.GetStream();
+            byte[] heartbeat = Frame(Heartbeat, "{}");
+
+            // Beats 5 s apart, far inside the 30 s rule, until the ceiling ends it. Capped so a
+            // ceiling that never fired shows up as a failed assertion rather than a hung test.
+            for (int i = 0; i < 80 && harness.Host.ConnectionCount == 1; i++)
+            {
+                await stream.WriteAsync(heartbeat);
+                await stream.FlushAsync();
+
+                int expected = i + 1;
+                await MasterHostHarness.WaitUntilAsync(() => harness.Host.TotalHeartbeats >= expected);
+
+                clock.Advance(TimeSpan.FromSeconds(5));
+            }
 
             Assert.True(
                 await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0),
-                "a client that never authenticated held its slot by heartbeating — the "
-                + "unauthenticated timeout is an idle gap, not a deadline");
+                "a peer that never authenticated held its slot indefinitely by heartbeating — "
+                + "the unauthenticated ceiling did not fire");
+
+            Assert.True(harness.Host.TotalTimedOut >= 1);
         }
 
         /// <summary>

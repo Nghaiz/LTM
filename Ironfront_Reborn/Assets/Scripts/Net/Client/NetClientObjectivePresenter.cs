@@ -1,15 +1,13 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Match;
-using Ironfront.Net.Unity.Server;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client
 {
     /// <summary>
     /// Renders the server's authoritative match state -- phase, tickets, phase timer and human
-    /// count -- onto <see cref="ScoreUi"/>. phase-V10 task 7.
+    /// count -- onto the match scoreboard, through <see cref="IObjectiveHud"/>. phase-V10 task 7.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -29,16 +27,17 @@ namespace Ironfront.Net.Unity.Client
     /// <b>The <see cref="MatchPhase.Playing"/> timer rule.</b>
     /// <c>MatchStateMessage.PhaseSecondsRemaining</c> is 0 during <c>Playing</c> by design --
     /// that phase ends on tickets, not a clock. <see cref="MatchStateModel.HasTimer"/> is false
-    /// there, and this presenter passes <c>-1</c> to <see cref="ScoreUi.SetAuthoritativeState"/>
+    /// there, and this presenter passes <c>-1</c> to <see cref="IObjectiveHud.SetAuthoritativeState"/>
     /// in that case, which is documented there as "hide the timer", never "render 0:00".
     /// </para>
     /// <para>
     /// <b>Staleness dims rather than freezes-and-lies.</b>
     /// <see cref="MatchStateModel.IsStale"/> stops new numbers from being pushed (the fixed
-    /// <see cref="ScoreUi.SetAuthoritativeState"/> signature has no confidence flag to carry,
+    /// <see cref="IObjectiveHud.SetAuthoritativeState"/> signature has no confidence flag to carry,
     /// so a stale value cannot be told apart from a live one once it is inside that call) and
-    /// instead dims the same Text elements the last good render used, via their already-public
-    /// fields on <see cref="ScoreUi.instance"/>. "Errors Over Silent Fallbacks", applied to a
+    /// instead dims the whole scoreboard through <see cref="IObjectiveHud.SetAlpha"/> — which
+    /// label elements that covers is the HUD's own business (phase C4b; before it, this file
+    /// listed six of them by name). "Errors Over Silent Fallbacks", applied to a
     /// clock: unknown is shown as unknown, not as the last known-good number pretending to be
     /// current.
     /// </para>
@@ -106,7 +105,7 @@ namespace Ironfront.Net.Unity.Client
         /// <para>
         /// <b>Only dirty points are written.</b> The view returns false for a repeat, and
         /// <c>ApplyAuthoritativeOwner</c> is not free: it calls <c>SetOwner</c> on a change of
-        /// hands, which drives <c>ScoreUi.AddFlag</c> and <c>MinimapUi.UpdateSpawnPointButtons</c>.
+        /// hands, which drives the scoreboard's flag count and <c>MinimapUi.UpdateSpawnPointButtons</c>.
         /// Writing unconditionally at message rate would add a scoreboard flag repeatedly for a
         /// point nobody touched -- the failure ApplyAuthoritativeOwner's own remarks describe.
         /// </para>
@@ -132,19 +131,88 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!_view.Apply(in message)) return;
 
-            ICapturePointDirectory points = NetServerBindings.CapturePoints;
+            RecomputeCapturePointCounts();
+
+            ICapturePointDirectory points = NetSceneBindings.CapturePoints;
             if (points == null) return;
 
+            int spawnOwner = CapturePointOwnership.ToSpawnPointOwner(message.OwningTeam);
+            float control = CapturePointOwnership.ToControl(message.Owner);
+
+            // P3 task 3.1 -- THE measurement, taken where the wire is still a wire. Everything
+            // downstream of this line is derived, so a report built from CapturePoint's fields
+            // cannot tell "the server sent 0" from "the client threw the magnitude away". The
+            // raw quantized byte is printed beside the float because they are the two halves
+            // of the question: OwnerQ is what crossed the socket, Owner is what it decodes to.
+            //
+            // The raw wire measurement is opt-in. A point sends once per quantized percent and
+            // Unity's development logger appends a stack trace, making this unexpectedly costly
+            // during ordinary play even though _view.Apply already drops exact repeats.
+            if (CaptureLoggingEnabled)
+            {
+                Debug.Log($"[net] capture point {message.PointId}: OwnerQ {message.OwnerQ} "
+                          + $"-> Owner {message.Owner:F2}, OwningTeam {message.OwningTeam} "
+                          + $"-> spawn owner {spawnOwner}, control {control:F2}, "
+                          + $"contested {message.IsContested} -- flag "
+                          + (control > 0f ? "VISIBLE" : "HIDDEN")
+                          + $" at pole height {(1.2f + 4.8f * control):F2}");
+            }
+
             points.ApplyAuthoritativeOwner(
-                message.PointId,
-                CapturePointOwnership.ToSpawnPointOwner(message.OwningTeam),
-                CapturePointOwnership.ToControl(message.Owner),
-                message.IsContested);
+                message.PointId, spawnOwner, control, message.IsContested);
+        }
+
+        // Capture progress can change once per quantized percent. Unity's player logger adds a
+        // stack trace to every Debug.Log entry in this build, so two clients capturing one point
+        // produced thousands of lines and contributed directly to server/client tick overruns.
+        // Keep the wire diagnostic available for a targeted run without taxing normal play.
+        private static bool CaptureLoggingEnabled
+            => _captureLogging ??= System.Environment.GetEnvironmentVariable(
+                "IRONFRONT_LOG_CAPTURE") == "1";
+
+        private static bool? _captureLogging;
+
+        /// <summary>
+        /// Tallies <see cref="_view"/>'s known points by owner and pushes the two counts to the
+        /// HUD. The client-side twin of <c>MatchStateMachine.OwnedPointCount</c> -- ownership is
+        /// already fully replicated per point (this method runs off the same message
+        /// <see cref="OnCapturePoint"/> just latched), so summing it here needs no new wire
+        /// field and cannot disagree with the server's own tally.
+        /// </summary>
+        /// <remarks>
+        /// Neutral (<see cref="TeamId.None"/>) and never-reported points count toward neither
+        /// team, the same as the server's <c>OwnedPointCount</c>.
+        /// </remarks>
+        private void RecomputeCapturePointCounts()
+        {
+            int blue = 0;
+            int red = 0;
+
+            for (int i = 0; i < _view.Capacity; i++)
+            {
+                if (!_view.IsKnown(i)) continue;
+
+                byte owner = _view.OwningTeam(i);
+                if (owner == TeamId.Team0) blue++;
+                else if (owner == TeamId.Team1) red++;
+            }
+
+            NetClientBindings.Objectives?.SetCapturePointCounts(blue, red);
         }
 
         private void Update()
         {
-            if (_client == null || !_model.HasState) return;
+            if (_client == null) return;
+
+            // Level-triggered, like the scores below, and ahead of the HasState return. The join
+            // replays every capture point BEFORE GameManager.StartGame has built the HUD, so the
+            // edge-triggered push in OnCapturePoint lands on nothing, _view has already latched the
+            // values, and a point that never changes owner is never sent again: the flag labels
+            // kept the prefab's authored "0" with flags visibly owned (x0 / x0 on the 2026-09-27
+            // Island loadout screen). ScoreUi drops a repeat, so this costs no string per frame.
+            RecomputeCapturePointCounts();
+
+            if (!_model.HasState) return;
 
             float now = Time.time;
 
@@ -158,14 +226,15 @@ namespace Ironfront.Net.Unity.Client
 
             MatchStateMessage state = _model.Current;
 
-            // -1 sentinel: "no timer this phase" (Playing). ScoreUi.SetAuthoritativeState hides
+            // -1 sentinel: "no timer this phase" (Playing). The HUD hides
             // the timer element on that value rather than rendering a zero.
             int secondsRemaining = _model.HasTimer
                 ? Mathf.CeilToInt(_model.SecondsRemaining(now))
                 : -1;
 
-            ScoreUi.SetAuthoritativeState(
-                (int)state.Phase, state.Tickets0, state.Tickets1, secondsRemaining, state.HumanPlayerCount);
+            NetClientBindings.Objectives?.SetAuthoritativeState(
+                (int)state.Phase, state.Score0, state.Score1, secondsRemaining,
+                state.HumanPlayerCount, state.VictoryPoints);
         }
 
         private void SetDimmed(bool dimmed)
@@ -173,28 +242,13 @@ namespace Ironfront.Net.Unity.Client
             if (_isDimmed == dimmed) return;
             _isDimmed = dimmed;
 
-            if (ScoreUi.instance == null) return;
-
-            float alpha = dimmed ? DimmedAlpha : LiveAlpha;
-            SetAlpha(ScoreUi.instance.blueScoreText, alpha);
-            SetAlpha(ScoreUi.instance.redScoreText, alpha);
-            SetAlpha(ScoreUi.instance.blueFlagsText, alpha);
-            SetAlpha(ScoreUi.instance.redFlagsText, alpha);
-
-            // The dedicated phase/timer elements too, when the prefab has them. Dimming only
-            // the four legacy fields would leave the timer reading as live while the numbers
-            // beside it are flagged stale -- worse than not dimming at all.
-            SetAlpha(ScoreUi.instance.phaseText, alpha);
-            SetAlpha(ScoreUi.instance.phaseTimerText, alpha);
-        }
-
-        private static void SetAlpha(Text text, float alpha)
-        {
-            if (text == null) return;
-
-            Color color = text.color;
-            color.a = alpha;
-            text.color = color;
+            // One call, not six labels. Which elements the scoreboard owns -- and the standing
+            // rule that dimming only SOME of them is worse than dimming none, because a
+            // live-looking timer beside numbers flagged stale is the worst of the three states --
+            // is the HUD's business. Since C4b that rule is enforced on the HUD's side of the
+            // seam rather than remembered at this call site, which previously had to list all six
+            // by name and would have failed silently on a seventh.
+            NetClientBindings.Objectives?.SetAlpha(dimmed ? DimmedAlpha : LiveAlpha);
         }
     }
 }

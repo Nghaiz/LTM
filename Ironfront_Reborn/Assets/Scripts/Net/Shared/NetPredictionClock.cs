@@ -18,13 +18,13 @@ namespace Ironfront.Net.Unity
     /// <para>
     /// <b>Why option A could not have worked, whatever anyone chose.</b> Option A was to set
     /// <c>ProjectSettings/TimeManager.asset</c> to 0.0333 and let <c>FixedUpdate</c> be the
-    /// tick. That setting does not survive the first frame: <c>IngameMenuUi.Hide()</c>
-    /// assigns <c>Time.fixedDeltaTime = Time.timeScale / 60f</c>, and it is called from
-    /// <c>IngameMenuUi.Awake()</c>. <c>FpsActorController</c> assigns the same expression
-    /// again on every slow-motion toggle. So the live timestep is 1/60 during play and
-    /// 0.2/60 in slow motion, never the 0.02 in the asset and never the 0.0333 option A would
-    /// have written there. A tick rate that three unrelated files can overwrite is not a tick
-    /// rate. This component owns the netcode's clock outright, which is the only arrangement
+    /// tick. That setting did not survive the first frame: <c>IngameMenuUi.Hide()</c>
+    /// assigned <c>Time.fixedDeltaTime = Time.timeScale / 60f</c> and was called from
+    /// <c>IngameMenuUi.Awake()</c>, and <c>FpsActorController</c> assigned the same expression
+    /// again on every slow-motion toggle. Issue #123 routed both through <c>PhysicsRate</c>, so
+    /// the live timestep is now the asset's own value scaled by <c>Time.timeScale</c> — but that
+    /// is still a rate the pause menu moves, and option A would have made it the simulation's
+    /// tick. A tick rate any unrelated file can scale is not a tick rate. This component owns the netcode's clock outright, which is the only arrangement
     /// those assignments cannot break.
     /// </para>
     /// <para>
@@ -75,6 +75,122 @@ namespace Ironfront.Net.Unity
         /// a bot, or a received input frame can replace it without touching this component.
         /// </summary>
         public Func<MoveInput> InputSource;
+
+        /// <summary>
+        /// Whether the local body IS crouching this tick, when raw <c>Input</c> cannot answer it.
+        /// Null leaves the Crouch button in place.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A source here, and not a raw read inside <c>MovementSimulation</c>, for the same reason
+        /// the aim pitch and the combat mask are: the answer lives in <c>Assembly-CSharp</c>, one
+        /// layer up, and this assembly may not name it.
+        /// </para>
+        /// <para>
+        /// <b>It exists because the Crouch button is not the crouch STATE.</b> With the
+        /// toggle-crouch option on, the state is a flag latched by the button's down-edge, so a
+        /// player taps once and stays crouched while the button itself reads false. The raw read
+        /// then did two things wrong at once: it put "standing" on the wire for the whole of that
+        /// crouch, and it made <c>NetMovementAgent.ApplyStanceHeight</c> fight
+        /// <c>Actor.Update</c> over the CharacterController's height on every tick.
+        /// </para>
+        /// <para>
+        /// Null is the honest answer for the diagnostics that drive this component with no player
+        /// rig behind them.
+        /// </para>
+        /// </remarks>
+        public Func<bool> CrouchSource;
+
+        /// <summary>
+        /// Whether the local body IS sprinting this tick, when raw <c>Input</c> cannot answer it.
+        /// Null leaves the Sprint button in place.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The sibling of <see cref="CrouchSource"/> and here for the same reason, but this one
+        /// decides more than a speed: the trigger rule on both sides of the wire refuses a
+        /// sprinting body, so the bit this feeds is the difference between a shot that happens and
+        /// a shot that is drawn, spent and then quietly unspent by the next snapshot.
+        /// </para>
+        /// <para>
+        /// <b>"Sprinting" is a composite, not the key.</b>
+        /// <c>FpsActorController.IsSprinting()</c> is
+        /// <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading() &amp;&amp; Sprint()
+        /// &amp;&amp; !IsSeated()</c>; a player holding Shift while aiming is not sprinting, and the
+        /// raw key said they were.
+        /// </para>
+        /// </remarks>
+        public Func<bool> SprintSource;
+
+        /// <summary>
+        /// Aim pitch, in degrees, as of the last simulated tick. -90..90.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why it is here and not on <see cref="MoveInput"/>.</b> Pitch is an aim quantity;
+        /// <c>MovementCore</c> never reads it and must not start. But it does have to reach the
+        /// wire — <c>ServerCombatAuthority.AimDirection</c> and <c>ShotOrigin</c> both read
+        /// <c>InputFrame.PitchDegrees</c> — so the sender needs it, and the sender must have the
+        /// value the TICK saw rather than whatever the render frame holds by the time the packet
+        /// is built.
+        /// </para>
+        /// <para>
+        /// <b>And not read directly by the sender.</b> <c>ClientPredictionStage</c> lives under
+        /// <c>Net/Client/</c>, where the client-wiring gate's G4 rule forbids reaching
+        /// <c>FpsActorController.instance</c> without a local-actor guard — the A16 camera-hijack
+        /// class. That rule is right, and the answer is to keep the resolution out of
+        /// <c>Net/Client/</c> rather than to write a G4 exemption for it.
+        /// </para>
+        /// </remarks>
+        public float AimPitchDegrees { get; private set; }
+
+        /// <summary>
+        /// This tick's <c>C_INPUT</c> button bits for fire, aim and reload. Installed by
+        /// <c>FpsActorController</c>; null means nothing pressed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Pushed in, not pulled.</b> This component is in <c>Ironfront.Net.Unity.Shared</c>,
+        /// an assembly with no references and the one the SERVER assembly builds on. The input
+        /// seam (<c>IInputSource</c>, <c>LocalInputSource</c>) is in Assembly-CSharp, a layer
+        /// up, so this side cannot name it and the controller installs a delegate instead. A
+        /// <c>Func</c> rather than a cached value because the whole seam is deliberately live —
+        /// <c>LocalInputSource</c>'s own remark explains why latching a frame's input changes
+        /// behaviour.
+        /// </para>
+        /// <para>
+        /// <b>This is the seam a scripted client drives.</b> A programme calls
+        /// <c>FpsActorController.SetInputSource</c> and the same tick loop, the same sender and
+        /// the same frame layout carry its buttons — Lane B needs no second path. Movement is
+        /// scripted through <see cref="InputSource"/> instead, which replaces the whole
+        /// <see cref="MoveInput"/> rather than its combat half.
+        /// </para>
+        /// </remarks>
+        public Func<InputButtons> CombatButtonSource;
+
+        /// <summary>Aim pitch in degrees for this tick. Installed alongside
+        /// <see cref="CombatButtonSource"/>; null reports level.</summary>
+        public Func<float> AimPitchSource;
+
+        /// <summary>
+        /// Whether this tick may move the local body. Input packets still advance while false,
+        /// keeping acknowledgements current during loadout, death and vehicle seating.
+        /// </summary>
+        public Func<bool> SimulationEnabled;
+
+        /// <summary>
+        /// Whether a tick that does NOT move the body still carries the player's buttons and aim.
+        /// True while seated in a vehicle; null or false blanks the whole frame, as before.
+        /// </summary>
+        /// <remarks>
+        /// A seated body is not simulated on foot, but the player in it is still pulling a
+        /// trigger: a tank's cannon, a turret, or a rifle from a passenger seat all fire from the
+        /// accepted C_INPUT frame. Blanking every suspended tick to <c>default</c> sent a seated
+        /// player's Fire, Reload and aim as zero, so no human in a vehicle could ever shoot
+        /// (2026-09-23, "tanks cannot fire"). Death and the loadout screen still blank it: a dead
+        /// or deploying player has no trigger to pull.
+        /// </remarks>
+        public Func<bool> KeepButtonsWhileSuspended;
 
         private void Awake()
         {
@@ -153,8 +269,18 @@ namespace Ironfront.Net.Unity
             int ticks = 0;
             while (_accumulator >= TickInterval && ticks < MaxTicksPerFrame)
             {
+                // Sampled with the tick, not when the sender gets round to it. Two reads a
+                // frame apart is how a shot leaves along a direction the player was not
+                // looking in, and it is unreproducible when it happens.
+                AimPitchDegrees = AimPitchSource != null ? AimPitchSource() : 0f;
+
                 MoveInput input = InputSource();
-                _agent.Tick(in input, TickInterval);
+                if (SimulationEnabled == null || SimulationEnabled())
+                    _agent.Tick(in input, TickInterval);
+                else if (KeepButtonsWhileSuspended != null && KeepButtonsWhileSuspended())
+                    input = input.WithAxes(0f, 0f);
+                else
+                    input = default;
 
                 // Unchecked: a u32 tick at 30 Hz wraps after 4.5 years, and every comparison
                 // downstream uses SequenceMath.IsNewer32, which handles the wrap.
@@ -189,6 +315,19 @@ namespace Ironfront.Net.Unity
             _secondTimer = 0f;
         }
 
-        private MoveInput DefaultInput() => MovementSimulation.FromUnityInput(_cameraParent.eulerAngles.y);
+        /// <remarks>
+        /// All three live sources reach the frame in one call, written inline rather than through
+        /// temporaries so that a reader — and the source-text gate in
+        /// <c>ClientInputSenderTests</c> — can see which question each argument answers. Each falls
+        /// back to a raw read when nothing installed a source; see <see cref="CrouchSource"/> and
+        /// <see cref="SprintSource"/> for why "is crouching" and "is sprinting" are not the same
+        /// questions as the two keys, and why the sprint one decides whether a shot happens at all.
+        /// </remarks>
+        private MoveInput DefaultInput()
+            => MovementSimulation.FromUnityInput(
+                _cameraParent.eulerAngles.y,
+                CombatButtonSource != null ? CombatButtonSource() : InputButtons.None,
+                CrouchSource != null ? CrouchSource() : Input.GetButton("Crouch"),
+                SprintSource != null ? SprintSource() : Input.GetButton("Sprint"));
     }
 }

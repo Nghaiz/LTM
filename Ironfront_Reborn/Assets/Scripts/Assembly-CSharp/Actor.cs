@@ -1,8 +1,10 @@
-using System;
+﻿using System;
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity;
+using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
-public class Actor : Hurtable
+public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresence
 {
 	/// <summary>
 	/// How long the actor's hitboxes stay on the vehicle layer after leaving a seat, in fixed
@@ -10,14 +12,19 @@ public class Actor : Hurtable
 	/// accumulator, which is why it is a named constant rather than the literal it replaced.
 	/// </summary>
 	/// <remarks>
-	/// <b>The rate is 60 Hz at runtime, not the project setting's 50.</b> V0 shipped 25 on the
-	/// strength of TimeManager's <c>Fixed Timestep: 0.02</c>, but both
-	/// <see cref="FpsActorController"/> and <see cref="IngameMenuUi"/> assign
-	/// <c>Time.fixedDeltaTime = Time.timeScale / 60f</c> at runtime, and the server deliberately
-	/// does not fight them (NetServerBootstrap decision A5). So the project setting is the value
-	/// physics runs at for as long as it takes those two to wake up, and 25 ticks was 0.417 s in
-	/// every real session — a 17% shortening of a window Task 8 said it was preserving. Found by
-	/// the Editor behavioural pass, confirmed against the Profiler at 16.667 ms.
+	/// <b>The rate is 60 Hz, and every peer now agrees on that.</b> V0 shipped 25 on the strength
+	/// of TimeManager's then <c>Fixed Timestep: 0.02</c>, but <see cref="FpsActorController"/>
+	/// and <see cref="IngameMenuUi"/> each overwrote it with <c>Time.timeScale / 60f</c> at
+	/// runtime, so 25 ticks was 0.417 s in every real session — a 17% shortening of a window
+	/// Task 8 said it was preserving. Found by the Editor behavioural pass, confirmed against the
+	/// Profiler at 16.667 ms, and corrected to 30.
+	/// <para>
+	/// Issue #123 removed the disagreement rather than the symptom: <c>TimeManager.asset</c> now
+	/// declares 0.016666668 and both call sites go through <c>PhysicsRate</c>, which SCALES that
+	/// setting instead of declaring a second one. A peer that constructs neither component — a
+	/// dedicated server build — therefore runs the same step a rendered client does, which it
+	/// previously did not. 30 ticks is 0.5 s everywhere.
+	/// </para>
 	/// </remarks>
 	private const int REACTIVATE_COLLISION_TICKS = 30;
 
@@ -122,6 +129,15 @@ public class Actor : Hurtable
 	[NonSerialized]
 	public bool inWater;
 
+	/// <summary>
+	/// Whether <see cref="UpdateSwimWeapon"/> is the one holding the weapon out of sight.
+	/// </summary>
+	/// <remarks>
+	/// Edge state, so the swim stow gives back exactly what it took and never re-shows a weapon
+	/// a seat, a death or a ragdoll put away for its own reasons.
+	/// </remarks>
+	private bool swimWeaponStowed;
+
 	[NonSerialized]
 	public Weapon activeWeapon;
 
@@ -212,6 +228,41 @@ public class Actor : Hurtable
 		lastUpdate = Time.time;
 	}
 
+	/// <summary>
+	/// Leaves ActorManager's registers on the way out. Ledger <b>X-49</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Nothing did this, and the cost was ~1,650 NullReferenceExceptions per lane-B run.</b>
+	/// <c>Register</c> above adds to <c>actors</c> and <c>SpawnAt</c> adds to
+	/// <c>aliveActors[team]</c>; the only removal was <c>SetDead</c> from <c>Die</c>, so an actor
+	/// that was DESTROYED while alive stayed in both lists for the rest of the match.
+	/// <c>ActorManager.Drop</c> already existed for exactly this and had <b>zero callers</b> —
+	/// present, never wired — while the vehicle twin <c>DropVehicle</c> was wired all along.
+	/// </para>
+	/// <para>
+	/// <b>Why it surfaces as a null-ref rather than as an empty list.</b> Unity's overloaded
+	/// <c>==</c> reports a destroyed object as equal to null, so a stale entry passes every
+	/// <c>x != somethingElse</c> test in the consumers and is then dereferenced:
+	/// <c>AiActorController.FindPotentialTargets</c> reaches <c>Actor.Position()</c> through
+	/// <c>HasEffectiveWeaponAgainst</c>, and <c>NewWaypoint</c> reaches
+	/// <c>Vehicle.IsStill</c>'s <c>rigidbody.linearVelocity</c>. Both are the same defect one
+	/// register apart, which is why this is fixed HERE rather than by null-guarding each
+	/// consumer — a guard at the call site leaves the next consumer exposed and leaves a
+	/// destroyed body in the list to be counted, sorted and distance-tested forever.
+	/// </para>
+	/// <para>
+	/// <b>Unconditional, not gated on <c>dead</c>.</b> An actor destroyed while alive is exactly
+	/// the case that leaked; <c>List.Remove</c> on an absent entry is a no-op, so calling both
+	/// removals on an already-dead actor costs a failed scan and nothing else.
+	/// </para>
+	/// </remarks>
+	private void OnDestroy()
+	{
+		ActorManager.SetDead(this);
+		ActorManager.Drop(this);
+	}
+
 	public bool IsAiming()
 	{
 		return aiming;
@@ -226,8 +277,11 @@ public class Actor : Hurtable
 		SpawnLoadoutWeapons();
 		if (seat != null)
 		{
-			seat.OccupantLeft();
+			// X-58: same pair discipline as LeaveSeat. A respawn is the other route out of a
+			// seat and it carried the identical window.
+			Seat leaving = seat;
 			seat = null;
+			leaving.OccupantLeft();
 		}
 		ik.turnBody = true;
 		ik.weight = 1f;
@@ -247,7 +301,7 @@ public class Actor : Hurtable
 		animator.SetBool("seated", false);
 		// V10 task 3: local-only HUD, not bot-only. A remote human spawning must not touch this
 		// client's IngameUi.
-		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
+		if (Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this))
 		{
 			IngameUi.instance.Show();
 			IngameUi.instance.SetHealth(Mathf.Max(0f, health));
@@ -255,17 +309,166 @@ public class Actor : Hurtable
 		ActorManager.SetAlive(this);
 	}
 
+	// Arms the body from its loadout and unholsters the first weapon, WITHOUT the rest of
+	// SpawnAt. Added 2026-08-21 for the networked player slot.
+	//
+	// A claimed body is placed by ServerCombatBridge.MoveToSpawnPoint, which teleports and does
+	// not call SpawnAt -- so SpawnLoadoutWeapons never ran and the body spawned with no weapon
+	// at all. Measured: eight seconds of point-blank fire, weaponId 0, ammo 0/0, zero damage.
+	//
+	// Deliberately NOT SpawnAt, and deliberately not controller.EnableInput(): a networked body
+	// is driven by MoveInput from the server, not by a local controller, and enabling local input
+	// on a headless server is a second input path nobody wants. Everything else SpawnAt does --
+	// ragdoll, animator, IngameUi, ActorManager.SetAlive -- either already happened on the join
+	// path or belongs to the client that renders this body.
+	public void EquipLoadout()
+	{
+		DiscardCarriedWeapons();
+		SpawnLoadoutWeapons();
+	}
+
+	// Destroys every weapon this body still carries, so arming it again leaves exactly one set.
+	//
+	// The offline death runs Die, which drops all five slots, so SpawnAt always arms an empty
+	// body. A networked body on a client never runs Die -- FellBody only topples it -- so every
+	// respawn armed five new weapons on top of the last five, and SwitchToFirstAvailableWeapon
+	// unholsters without holstering: whenever the previous weapon was still shown, both stayed
+	// in the first-person view (owner report 2026-09-27, "two rifles after respawning").
+	private void DiscardCarriedWeapons()
+	{
+		for (int i = 0; i < weapons.Length; i++)
+		{
+			Weapon weapon = weapons[i];
+			weapons[i] = null;
+			// DropWeapon is the one thing that clears the parent, and Weapon.Drop has already
+			// destroyed what it let go of; the Destroy lands at the end of the frame, so a weapon
+			// dropped this frame is parentless but not yet null.
+			if (weapon == null || weapon.transform.parent == null)
+			{
+				continue;
+			}
+			weapon.gameObject.SetActive(false);
+			UnityEngine.Object.Destroy(weapon.gameObject);
+		}
+		activeWeapon = null;
+	}
+
+	/// <summary>
+	/// Restores the local, visual half of a server-authoritative deploy without moving the body.
+	/// </summary>
+	/// <remarks>
+	/// A freshly-instantiated <see cref="Actor"/> starts with <c>dead = true</c>.  The normal
+	/// offline path clears it in <see cref="SpawnAt"/>, but a network client must not call that
+	/// method because it also writes the transform owned by the server.  Leaving the flag set
+	/// makes <see cref="Update"/> return before weapon fire, aiming, reload, animation and weapon
+	/// switching; it is the single reason a deployed network player can see a rifle but cannot
+	/// use any Ravenfield gameplay attached to it.
+	/// </remarks>
+	public void EnterNetworkDeployedState()
+	{
+		ik.turnBody = true;
+		ik.weight = 1f;
+		fallenOver = false;
+		animator.enabled = true;
+		animator.SetLayerWeight(3, 0f);
+		animator.SetTrigger("reset");
+		ragdoll.SetDrive(700f, 3f);
+		balance = 100f;
+		health = 100f;
+		dead = false;
+		ragdoll.InstantAnimate();
+		controller.EndRagdoll();
+		needsResupply = false;
+		animator.SetBool("dead", false);
+		animator.SetBool("seated", false);
+	}
+
+	/// <summary>
+	/// Stops local gameplay simulation after the server reports this actor dead.
+	/// </summary>
+	public void MarkNetworkDead()
+	{
+		dead = true;
+		animator.SetBool("dead", true);
+	}
 	private void SpawnLoadoutWeapons()
 	{
 		hasAmmoBox = false;
 		hasMedipack = false;
-		WeaponManager.LoadoutSet loadout = controller.GetLoadout();
+		WeaponManager.LoadoutSet loadout = ResolveDeployLoadout() ?? controller.GetLoadout();
 		SpawnWeapon(loadout.primary, 0);
 		SpawnWeapon(loadout.secondary, 1);
 		SpawnWeapon(loadout.gear1, 2);
 		SpawnWeapon(loadout.gear2, 3);
 		SpawnWeapon(loadout.gear3, 4);
 		SwitchToFirstAvailableWeapon();
+		LogLoadoutSlots();
+	}
+
+	// X-11's other half, and the guarded fallback DeployLoadoutSelection's own remarks describe:
+	// IGameplayActorSource.EquipLoadout takes no loadout argument, and giving it one is one new
+	// forwarding line on NetServerActor.cs, which is out of scope for this change. This is the
+	// documented alternative, not a shortcut taken instead of looking -- see that type's remarks
+	// for the ordering guarantee this depends on and what breaks if it is ever violated.
+	//
+	// Null (not a set with every slot empty) when nothing is pending, so a bot or an offline
+	// actor -- neither of which carries a NetServerActor component to stamp a selection against
+	// -- falls straight through to controller.GetLoadout() exactly as before this change.
+	private WeaponManager.LoadoutSet ResolveDeployLoadout()
+	{
+		NetServerActor networked = GetComponent<NetServerActor>();
+		if (networked == null) return null;
+
+		if (!NetServerBindings.TryConsumeDeploySelection(networked.ActorId, out DeployLoadoutSelection selection))
+			return null;
+
+		var loadout = new WeaponManager.LoadoutSet();
+		WeaponManager.TryGetEntry(selection.Primary, out loadout.primary);
+		WeaponManager.TryGetEntry(selection.Secondary, out loadout.secondary);
+		WeaponManager.TryGetEntry(selection.Gear1, out loadout.gear1);
+		WeaponManager.TryGetEntry(selection.Gear2, out loadout.gear2);
+		WeaponManager.TryGetEntry(selection.Gear3, out loadout.gear3);
+		return loadout;
+	}
+
+	// Ledger X-31. A lane-B run pinned gear1 to FRAG, asked for slot 2 every frame, and the
+	// client's weaponId never left the rifle -- and no artifact could say whether slot 2 was
+	// EMPTY or whether SwitchWeapon took its IsToggleable() branch and toggled instead of
+	// unholstering. Those are different files and the run could not distinguish them.
+	//
+	// One line, at the only moment both facts are true at once. Off unless asked for, matching
+	// ServerCombatBridge's IRONFRONT_LOG_SHOTS gate; observation only, per the phase-3d
+	// section 6 decision that permits diagnostic logging in shipped code.
+	private static bool? _loadoutLogging;
+
+	private void LogLoadoutSlots()
+	{
+		_loadoutLogging ??= System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_LOADOUT") == "1";
+		if (_loadoutLogging != true)
+		{
+			return;
+		}
+
+		var sb = new System.Text.StringBuilder("[loadout] actor=").Append(name).Append(" active=")
+			.Append(activeWeaponSlot);
+
+		for (int i = 0; i < weapons.Length; i++)
+		{
+			Weapon w = weapons[i];
+			sb.Append(" slot").Append(i).Append('[');
+			if (w == null)
+			{
+				sb.Append("empty");
+			}
+			else
+			{
+				sb.Append(w.name).Append(" toggleable=").Append(w.IsToggleable())
+				  .Append(" netId=").Append(w.NetworkId);
+			}
+			sb.Append(']');
+		}
+
+		Debug.Log(sb.ToString());
 	}
 
 	private void SwitchToFirstAvailableWeapon()
@@ -305,6 +508,10 @@ public class Actor : Hurtable
 		}
 		component.FindRenderers(aiControlled);
 		component.Equip(this);
+		if (!aiControlled && (team == 0 || team == 1))
+		{
+			component.SetFirstPersonTeamColor(ColorScheme.TeamColor(team));
+		}
 		component.transform.parent = controller.WeaponParent();
 		component.transform.localPosition = Vector3.zero;
 		component.transform.localRotation = Quaternion.identity;
@@ -409,7 +616,20 @@ public class Actor : Hurtable
 		{
 			return;
 		}
-		if (inWater && !fallenOver)
+		// A server-side player slot is instantiated from the AI prefab, then its
+		// AiActorController is disabled when the network connection claims it.  Unity only
+		// stops callbacks on that disabled controller; Actor.Update still calls the controller
+		// directly.  In particular UpdateMovement -> ProjectToGround could call FallOver on a
+		// perfectly healthy network player at a terrain step, enabling the ragdoll as a second
+		// position writer while ServerPlayer continued to simulate its CharacterController.
+		// The transform then fell away from Session.State and eventually pulled the client below
+		// the map.  A suspended AI controller means this body is parked or network-driven, so the
+		// entire legacy AI presentation/gameplay loop must stay parked with it.
+		if (aiControlled && controller != null && !controller.enabled)
+		{
+			return;
+		}
+		if (inWater && !fallenOver && !IsNetworkDrivenLocalBody())
 		{
 			if (IsSeated())
 			{
@@ -417,6 +637,7 @@ public class Actor : Hurtable
 			}
 			FallOver();
 		}
+		UpdateSwimWeapon();
 		if (!hurtAction.Done() && !fallenOver && !dead)
 		{
 			float num = hurtAction.Ratio();
@@ -472,12 +693,53 @@ public class Actor : Hurtable
 		balance = Mathf.Min(balance + Time.deltaTime * 10f, 100f);
 	}
 
+	/// <summary>
+	/// The direction this actor's weapon fires along, aim included.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>On a server the controller does not know where the player is aiming.</b> Player rotation
+	/// in the original game comes from <c>FpsActorController</c> reading the mouse, and batch mode
+	/// has no mouse — so that camera keeps the heading it spawned with and
+	/// <c>controller.FacingDirection()</c> answers the same vector for the whole match. Every shot
+	/// and every throw resolved from it went that one fixed way, which is why a grenade thrown at
+	/// the sky still came out flat.
+	/// </para>
+	/// <para>
+	/// <b>The aim the server does have arrives on the input frame.</b> <c>ServerPlayer</c> writes
+	/// it onto <c>NetServerActor</c>, which is why the snapshot already carries it and remote
+	/// clients already draw the shooter facing the right way. This reads the same two numbers back
+	/// for gameplay: pitch is positive looking DOWN, so it goes straight into a Unity X euler.
+	/// </para>
+	/// <para>
+	/// <b>NaN is the bot case, and the check is what keeps bots correct.</b> An AI actor never
+	/// receives an input frame — its own controller turns the transform, and that IS the truth for
+	/// it. Reading the property unguarded would snap every bot to face north.
+	/// </para>
+	/// </remarks>
+	private Vector3 AimDirection()
+	{
+		NetServerActor networked = GetComponent<NetServerActor>();
+		if (networked != null && !float.IsNaN(networked.YawDegrees))
+		{
+			return Quaternion.Euler(networked.PitchDegrees, networked.YawDegrees, 0f) * Vector3.forward;
+		}
+
+		return controller.FacingDirection();
+	}
+
 	private void UpdateWeapon()
 	{
+		// A stowed swimmer's weapon is not aimed, fired or reloaded. Without this the shipped
+		// `!fallenOver` guard would let a networked swimmer -- who no longer ragdolls for water
+		// -- fire a weapon whose GameObject is switched off, which is a shot with no muzzle,
+		// no sound and no animation that the server nonetheless resolves.
+		if (swimWeaponStowed) return;
+
 		bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());
 		if (flag)
 		{
-			activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection());
+			activeWeapon.Fire(AimDirection(), controller.UseMuzzleDirection());
 		}
 		else if (wasFiring)
 		{
@@ -498,6 +760,58 @@ public class Actor : Hurtable
 		{
 			activeWeapon.Reload();
 		}
+	}
+
+	/// <summary>
+	/// Tells the carried weapon of a networked body where its player is looking and whether they
+	/// aim. Server only; called once per accepted input frame.
+	/// </summary>
+	/// <remarks>
+	/// The server's half of the aiming lines in <see cref="UpdateWeapon"/>: a claimed body's
+	/// controller is the suspended bot brain, so nothing else ever tells its weapon either fact.
+	/// The eligibility is the same -- not stowed for a swim, not fallen over, a weapon that can
+	/// be aimed -- minus <c>aimingAction</c>'s minimum hold, which is camera feel for the local
+	/// player. A turret is skipped: it has its own aim authority.
+	/// </remarks>
+	public void SteerCarriedWeaponByNetwork(Vector3 eye, Vector3 forward, bool aimHeld)
+	{
+		if (activeWeapon == null || swimWeaponStowed)
+		{
+			return;
+		}
+		if (IsSeated() && activeWeapon == seat.weapon)
+		{
+			return;
+		}
+		activeWeapon.SteerByNetwork(eye, forward, aimHeld && !fallenOver && activeWeapon.CanBeAimed());
+	}
+
+	/// <summary>
+	/// Hands a networked body's pulled trigger to a carried weapon that takes it for itself, and
+	/// reports whether it did. Server only.
+	/// </summary>
+	/// <remarks>
+	/// Through <see cref="Weapon.Fire"/>, the entry point <see cref="UpdateWeapon"/> uses offline,
+	/// under the same eligibility: an unlocked Javelin marks the point it is looking at and
+	/// launches nothing, exactly as a local player's does. False means the trigger is an ordinary
+	/// shot and belongs to the server's combat authority.
+	/// </remarks>
+	public bool TryWithholdCarriedTriggerByNetwork(Vector3 forward)
+	{
+		if (activeWeapon == null || swimWeaponStowed || fallenOver)
+		{
+			return false;
+		}
+		if (IsSeated() && !seat.CanUseCarriedWeapon())
+		{
+			return false;
+		}
+		if (!activeWeapon.WithholdsTrigger())
+		{
+			return false;
+		}
+		activeWeapon.Fire(forward, false);
+		return true;
 	}
 
 	private void UpdateGetup()
@@ -665,10 +979,34 @@ public class Actor : Hurtable
 
 	public void KnockOver(Vector3 force)
 	{
+		if (IsServerClaimedBody())
+		{
+			return;
+		}
 		if (!ragdoll.IsRagdoll())
 		{
 			FallOver();
 			ApplyRigidbodyForce(force);
+		}
+	}
+
+	/// <summary>
+	/// Fells the body and throws it from one bone. debt-closure phase 2 task 2d, ledger C-8.
+	/// </summary>
+	/// <remarks>
+	/// The same re-entrancy guard as <see cref="KnockOver(Vector3)"/>: a snapshot confirming a
+	/// death that S_DEATH already delivered must not throw the corpse a second time.
+	/// </remarks>
+	public void KnockOver(Vector3 force, HumanBodyBones bone)
+	{
+		if (IsServerClaimedBody())
+		{
+			return;
+		}
+		if (!ragdoll.IsRagdoll())
+		{
+			FallOver();
+			ApplyRigidbodyForce(force, bone);
 		}
 	}
 
@@ -677,8 +1015,156 @@ public class Actor : Hurtable
 		ragdoll.MainRigidbody().AddForce(force, ForceMode.Impulse);
 	}
 
+	/// <summary>
+	/// Applies an impulse at one bone, falling back to the main body when the rig does not
+	/// simulate it. debt-closure phase 2 task 2d, ledger C-8.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Every corpse impulse in the game went to <c>MainRigidbody()</c> — the pelvis — whatever
+	/// was actually hit, so a headshot and a leg shot threw the body identically.
+	/// <c>S_DEATH</c> has been carrying the hitbox byte since phase-02 and
+	/// <c>KillfeedEntry.From</c> reads it for the headshot icon, so the information was on the
+	/// wire and only the force application ignored it.
+	/// </para>
+	/// <para>
+	/// <b>The fallback is deliberate and silent.</b> A bone this rig does not break out is the
+	/// common case, not an error (see <c>ActiveRaggy.RigidbodyForBone</c>), and warning once per
+	/// corpse would be noise on a purely cosmetic path.
+	/// </para>
+	/// </remarks>
+	public void ApplyRigidbodyForce(Vector3 force, HumanBodyBones bone)
+	{
+		Rigidbody target = ragdoll.RigidbodyForBone(bone);
+		if (target == null)
+		{
+			ApplyRigidbodyForce(force);
+			return;
+		}
+		target.AddForce(force, ForceMode.Impulse);
+	}
+
+	/// <summary>
+	/// Whether this body's position belongs to the netcode rather than to this Actor.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Water must not ragdoll such a body.</b> <c>FallOver</c> calls
+	/// <c>controller.DisableInput</c>, and for the local networked player that closes a loop
+	/// with no exit: input off means the client sends no move command, the server therefore
+	/// holds the body exactly where it is, <c>inWater</c> stays true, and
+	/// <c>UpdateRagdollStates</c>' getup gate -- which requires <c>!inWater</c> -- never opens.
+	/// A player who swam out of their depth lost control of their character for the rest of the
+	/// round. Ledger <b>X-86</b>.
+	/// </para>
+	/// <para>
+	/// <b>The server was never affected and is not changed here.</b> <c>Update</c> returns
+	/// early, above, for a network-claimed body whose AI controller is suspended, so the water
+	/// branch is unreachable on a game server. This is a client-role fix.
+	/// </para>
+	/// <para>
+	/// <b><c>NetContext.IsClient</c> is load-bearing, not belt-and-braces.</b>
+	/// <c>NetPresenterGate.IsLocalActor</c> answers literally <c>!aiControlled</c> when offline
+	/// -- by design, so single-player keeps its shipped behaviour -- and without this term the
+	/// gate would strip the ragdoll swim from offline play too, which nobody asked for.
+	/// </para>
+	/// <para>
+	/// <b>Skipping the block also skips its <c>LeaveSeat</c>, and that is a correction.</b>
+	/// Seat authority at the client role is the server's (design D2, ledger X-30); a client
+	/// deciding locally that its occupant has left a vehicle is exactly the local decision the
+	/// netcode forbids elsewhere in this file.
+	/// </para>
+	/// </remarks>
+	private bool IsNetworkDrivenLocalBody()
+	{
+		return Ironfront.Net.Unity.NetContext.IsClient
+			&& Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this);
+	}
+
+	/// <summary>
+	/// A player's body on the server: the AI prefab whose controller the connection switched off.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>It must never fall over.</b> <c>Update</c> parks it before the get-up logic runs, so a
+	/// ragdoll switched on here stays on for the rest of the life and past the respawn, which
+	/// <c>ServerCombatBridge.PlaceAtSpawn</c> does without <c>SpawnAt</c>. Meanwhile
+	/// <c>ServerPlayer</c> keeps moving the capsule, so the skeleton is left behind:
+	/// <c>CenterPosition</c> reads the fallen spine, <c>FallOver</c> has hidden the rifle the
+	/// server fires from, and a corpse whose colliders were switched off sinks under the terrain.
+	/// Lane-B <c>death-01</c> and <c>death-02</c> both "drowned" a respawned player standing on
+	/// dry ground eight seconds after the respawn, that spine being under the water plane.
+	/// </para>
+	/// <para>
+	/// <b>Server only.</b> Nothing on a client reaches this state, and every client draws its own
+	/// ragdoll for a death from <c>S_DEATH</c>.
+	/// </para>
+	/// </remarks>
+	private bool IsServerClaimedBody()
+	{
+		return Ironfront.Net.Unity.NetContext.IsServer
+			&& aiControlled && controller != null && !controller.enabled;
+	}
+
+	/// <summary>
+	/// Stands a revived player body back up on the server. A no-op for every other actor.
+	/// </summary>
+	/// <remarks>
+	/// A shot that kills still runs <see cref="Die(Vector3)"/>, which switches the ragdoll on
+	/// and the animator off, and the respawn that follows is not <c>SpawnAt</c> (see
+	/// <see cref="IsServerClaimedBody"/>). <see cref="EnterNetworkDeployedState"/> is exactly
+	/// <c>SpawnAt</c>'s reset without the move, and its controller call is a guarded no-op on a
+	/// switched-off controller.
+	/// </remarks>
+	public void StandUpAfterNetworkRevival()
+	{
+		if (!IsServerClaimedBody())
+		{
+			return;
+		}
+		EnterNetworkDeployedState();
+	}
+
+	/// <summary>
+	/// Puts the weapon away while swimming and takes it back out on dry land.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The ragdoll swim stows the weapon inside <c>FallOver</c> and restores it inside the
+	/// getup. A body that no longer ragdolls for water needs the same two edges without the
+	/// ragdoll, which is what this is: losing the gun in the water is the intended rule, losing
+	/// the controls was not.
+	/// </para>
+	/// <para>
+	/// <b>It only ever undoes its own stow.</b> <see cref="swimWeaponStowed"/> is the edge, so
+	/// a weapon hidden by a death, a seat or a ragdoll is left exactly as that path left it.
+	/// </para>
+	/// </remarks>
+	private void UpdateSwimWeapon()
+	{
+		bool shouldStow = inWater && !fallenOver && !dead;
+		if (shouldStow == swimWeaponStowed) return;
+
+		swimWeaponStowed = shouldStow;
+		if (!HasUnholsteredWeapon()) return;
+
+		if (shouldStow)
+		{
+			activeWeapon.SetAiming(false);
+			activeWeapon.StopFire();
+			// UpdateWeapon returns early from here on, so it will not run the `else if
+			// (wasFiring)` branch that normally clears this.
+			wasFiring = false;
+		}
+		activeWeapon.gameObject.SetActive(!shouldStow);
+	}
+
 	public void FallOver()
 	{
+		if (IsServerClaimedBody())
+		{
+			return;
+		}
 		if (IsSeated())
 		{
 			LeaveSeat();
@@ -722,6 +1208,15 @@ public class Actor : Hurtable
 		}
 	}
 
+	/// <summary>Recovers a living authoritative bot whose physical ragdoll never settled.</summary>
+	public void RecoverFromStuckRagdoll()
+	{
+		if (!dead && fallenOver)
+		{
+			InstantGetUp();
+		}
+	}
+
 	private void Die(Vector3 impactForce)
 	{
 		Vector3 point = Position();
@@ -748,13 +1243,26 @@ public class Actor : Hurtable
 		ApplyRigidbodyForce(impactForce);
 		dead = true;
 		// V10 task 3: a remote actor's death must not hide the local player's HUD.
-		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
+		if (Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this))
 		{
 			IngameUi.instance.Hide();
 		}
 		ActorManager.SetDead(this);
 		PathfindingManager.RegisterDeath(point);
-		ScoreUi.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);
+		// debt-closure phase 2 task 2c: the scoreboard, not the HUD. ScoreUi.AddScore opened
+		// with "if (instance == null) return;", so on a headless server this kill scored nothing
+		// at all -- V8 D9's recorded divergence, and the reason it was invisible.
+		//
+		// P12 D-2: offline only, the gate its three siblings already carry (CapturePoint.cs:147,
+		// MinimapUi.cs:195, Projectile.cs:214). A networked client runs Die() for every death it
+		// is told about, so without this it kept its own private tally -- and ScoreUi.UpdateUi
+		// then painted that tally over the server's authoritative numbers. The server keeps its
+		// own team score in MatchStateMachine.ReportDeath, not here, so nothing authoritative
+		// reads what this gate stops writing.
+		if (Ironfront.Net.Unity.NetContext.IsOffline)
+		{
+			MatchScoreboard.Current.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);
+		}
 	}
 
 	public virtual Vector3 Position()
@@ -812,6 +1320,16 @@ public class Actor : Hurtable
 	//              feedback that waited for a round trip would feel broken at any real ping.
 	public override bool Damage(float healthDamage, float balanceDamage, bool piercing, Vector3 point, Vector3 direction, Vector3 impactForce)
 	{
+		return DamageAttributed(healthDamage, balanceDamage, piercing, point, direction, impactForce, null);
+	}
+
+	/// <summary>
+	/// The stock damage path plus the actor that caused it. Projectiles and explosions know this
+	/// at their call site; keeping it as an argument prevents a non-lethal hit from leaving stale
+	/// attribution behind for a later fall or collision.
+	/// </summary>
+	public bool DamageAttributed(float healthDamage, float balanceDamage, bool piercing, Vector3 point, Vector3 direction, Vector3 impactForce, Actor attacker)
+	{
 		bool flag = IsSeated() && seat.enclosed;
 		if (!piercing && flag)
 		{
@@ -842,7 +1360,7 @@ public class Actor : Hurtable
 		if (ownsHealth && health <= 0f)
 		{
 			Die(impactForce);
-			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(this, impactForce);
+			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(this, impactForce, attacker);
 		}
 		else if (ragdoll.IsRagdoll())
 		{
@@ -858,7 +1376,7 @@ public class Actor : Hurtable
 		}
 		// V10 task 3 (A16): was `!aiControlled`, so a remote human taking damage wrote THIS
 		// client's health bar from THEIR health. Gated on IsLocalActor instead.
-		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
+		if (Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this))
 		{
 			IngameUi.instance.SetHealth(Mathf.Max(0f, health));
 			float intensity = Mathf.Clamp01(0.3f + (1f - health / 100f));
@@ -888,7 +1406,7 @@ public class Actor : Hurtable
 			activeWeapon.Hide();
 		}
 		// V10 task 3: local-only weapon HUD.
-		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
+		if (Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this))
 		{
 			IngameUi.instance.SetWeapon(weapon);
 			UpdateAmmoUi();
@@ -949,6 +1467,19 @@ public class Actor : Hurtable
 		return IsSeated() && (seat.type == Seat.Type.Driver || seat.type == Seat.Type.Pilot);
 	}
 
+	/// <summary>
+	/// Whether a person rather than the bot brain steers this actor: a player's own controller,
+	/// or on the server the body a connection claimed.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="aiControlled"/> alone answers wrongly on the server, where every player's body is
+	/// the AI prefab with its brain switched off (see <see cref="IsServerClaimedBody"/>).
+	/// </remarks>
+	public bool IsSteeredByAPerson()
+	{
+		return !aiControlled || IsServerClaimedBody();
+	}
+
 	public bool CanEnterSeat()
 	{
 		return !IsSeated() && cannotEnterVehicleAction.TrueDone();
@@ -960,17 +1491,52 @@ public class Actor : Hurtable
 		{
 			InstantGetUp();
 		}
-		if (seat.vehicle.dead || seat.IsOccupied())
+		// IsSeated() is the SECOND X-58 producer, and the run that closed the first one found
+		// it: s2-combat-01 still reported a one-sided booking on a jeep Passenger seat, at a
+		// match reset. Nothing here refused a body that is ALREADY sitting somewhere else, so
+		// a second successful entry re-pointed this actor's half at the new seat and left the
+		// OLD seat booked by a body that no longer agrees -- the same corrupt pair the window
+		// above used to make, by a different route.
+		//
+		// Three of the four callers already guard it and the fourth is the hole: the AI and
+		// the use-ray both go through CanEnterSeat() (`!IsSeated() && ...`), and SwitchSeat
+		// calls LeaveSeat() first -- but IronfrontNetBindings.TryEnterSeat, added later for
+		// the network path, checks only that the seat and the actor exist. The arbiter is
+		// supposed to refuse it with RejectedAlreadySeated, and does, EXCEPT when its record
+		// and the scene disagree -- which ServerVehicleRegistry.Clear() causes deliberately at
+		// every round boundary, and which is exactly where the surviving booking was found.
+		//
+		// The scene is authoritative about the scene, so the refusal belongs here rather than
+		// in the binding: TryEnterSeat turns a false into a refusal the bridge rolls back
+		// (V4-D7), so the arbiter is corrected by it instead of being trusted over the truth.
+		if (seat.vehicle.dead || seat.IsOccupied() || IsSeated())
 		{
 			return false;
 		}
 		animator.SetInteger("seated type", (int)seat.animation);
+		// Ledger X-58. BOTH halves of the seat link, published together and before anything
+		// that can call out or throw. seat.SetOccupant's own first statement is occupant =
+		// actor, so no callback runs between the two writes and there is no window to observe
+		// a half-booked seat in. The body's half used to be assigned five statements LATER,
+		// after SetOccupant (-> Vehicle.OccupantEntered -> Car/Tank.DriverEntered), the
+		// re-parent and controller.StartSeated -- so any throw in that window left the seat
+		// booked by a body whose own seat field was still null. X-45 closed one such throw and
+		// the strict Driver() of O6 section 6b manufactured another; the window is structural,
+		// which is why no single producer was ever identifiable. Closing the window makes the
+		// state unproducible by ANY throw rather than by the one that happened to be found.
+		//
+		// It also fixes a second defect the same window was hiding: SetOccupant calls
+		// MountedWeapon.DeclareToNet -> ResolveNetSeat, which opens with
+		// `user == null || user.seat == null` and so took its early return every time,
+		// leaving netVehicleId 0 and NetWeaponAuthority.Declare uncalled. On a dedicated
+		// server nothing drives a networked gunner's controller, so CanFire never re-resolved
+		// it either -- V6 task 3's "THE registration trigger" announced nothing at all.
+		this.seat = seat;
 		seat.SetOccupant(this);
 		base.transform.parent = seat.transform;
 		base.transform.localPosition = Vector3.zero;
 		base.transform.localRotation = Quaternion.identity;
 		controller.StartSeated(seat);
-		this.seat = seat;
 		animator.SetLayerWeight(2, 0f);
 		if (!seat.CanUseCarriedWeapon())
 		{
@@ -1004,8 +1570,13 @@ public class Actor : Hurtable
 		{
 			HolsterActiveWeapon();
 		}
-		seat.OccupantLeft();
+		// X-58, the mirror of EnterSeat above. OccupantLeft reaches Vehicle.OccupantLeft ->
+		// Car/Tank.DriverExited, so clearing the seat's half FIRST and the body's half after
+		// left the opposite one-sided state -- a body that still thinks it is sitting in a
+		// seat nobody occupies -- for any throw in between.
+		Seat leaving = seat;
 		seat = null;
+		leaving.OccupantLeft();
 		Quaternion quaternion = Quaternion.LookRotation(Vector3.Scale(forward, removeY), Vector3.up);
 		controller.EndSeated(vector, quaternion);
 		base.transform.parent = originalParent;
@@ -1058,15 +1629,8 @@ public class Actor : Hurtable
 		{
 			return;
 		}
-		for (int i = 1; i < 4; i++)
-		{
-			int num = (activeWeaponSlot + i) % 5;
-			if (weapons[num] != null && !weapons[num].IsToggleable())
-			{
-				SwitchWeapon(num);
-				break;
-			}
-		}
+		int slot = FindWeaponSlot(1, skipToggleable: true);
+		if (slot >= 0) SwitchWeapon(slot);
 	}
 
 	public void PreviousWeapon()
@@ -1075,15 +1639,25 @@ public class Actor : Hurtable
 		{
 			return;
 		}
-		for (int i = 1; i < 4; i++)
+		int slot = FindWeaponSlot(-1, skipToggleable: false);
+		if (slot >= 0) SwitchWeapon(slot);
+	}
+
+	/// <summary>
+	/// Resolves the exact absolute slot a mouse-wheel step would select, without changing state.
+	/// The client sends this number to the server so both peers execute the same switch.
+	/// </summary>
+	public int FindWeaponSlot(int direction, bool skipToggleable)
+	{
+		int step = direction < 0 ? -1 : 1;
+		for (int i = 1; i < 5; i++)
 		{
-			int num = (activeWeaponSlot - i + 5) % 5;
-			if (weapons[num] != null)
-			{
-				SwitchWeapon(num);
-				break;
-			}
+			int slot = (activeWeaponSlot + step * i + 5) % 5;
+			Weapon candidate = weapons[slot];
+			if (candidate != null && (!skipToggleable || !candidate.IsToggleable())) return slot;
 		}
+
+		return -1;
 	}
 
 	public void SwitchWeapon(int slot)
@@ -1138,9 +1712,29 @@ public class Actor : Hurtable
 	public void SetTeam(int team)
 	{
 		base.team = team;
+		// The renderer colour and the replicated team must come from the same assignment. AI
+		// actors are created from a prefab whose NetServerActor serializes team 0; previously this
+		// method only recoloured the server-side mesh, leaving every team-1 bot to advertise team
+		// 0 in snapshots and therefore appear blue on every client.
+		NetServerActor networked = GetComponent<NetServerActor>();
+		if (networked != null)
+		{
+			networked.Team = (byte)team;
+		}
 		Color color = ColorScheme.TeamColor(base.team);
 		skinnedRenderer.material.color = color;
 		skinnedRendererRagdoll.material.color = color;
+
+		// The visible FP arms live inside each weapon prefab, not on either actor renderer.
+		// Network team assignment can arrive before or after the loadout is spawned, so recolour
+		// existing weapons here while SpawnWeapon handles the opposite ordering.
+		if (!aiControlled)
+		{
+			foreach (Weapon weapon in weapons)
+			{
+				if (weapon != null) weapon.SetFirstPersonTeamColor(color);
+			}
+		}
 	}
 
 	private bool ControllingVehicle()
@@ -1178,7 +1772,7 @@ public class Actor : Hurtable
 			int num2 = Mathf.Max(0, num - howmuch);
 			spareAmmo[slot] = num2;
 			// V10 task 3: local-only ammo HUD.
-			if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
+			if (Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this))
 			{
 				UpdateAmmoUi();
 			}
@@ -1194,7 +1788,7 @@ public class Actor : Hurtable
 			needsResupply = true;
 		}
 		// V10 task 3: local-only ammo HUD.
-		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
+		if (Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this))
 		{
 			UpdateAmmoUi();
 		}
@@ -1222,7 +1816,7 @@ public class Actor : Hurtable
 		{
 			AmmoChanged();
 			// V10 task 3: local-only resupply HUD.
-			if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
+			if (Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this))
 			{
 				IngameUi.instance.Resupply();
 			}
@@ -1238,7 +1832,7 @@ public class Actor : Hurtable
 		float num = health;
 		health = Mathf.Min(health + 30f, 100f);
 		// V10 task 3: local-only heal HUD.
-		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this) && num != health)
+		if (Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this) && num != health)
 		{
 			UpdateHealthUi();
 			IngameUi.instance.Heal();
@@ -1262,6 +1856,18 @@ public class Actor : Hurtable
 		// that decides whether they update at 5 Hz or every frame.
 		Camera camera = Camera.main;
 		if (camera == null)
+		{
+			return false;
+		}
+		// A server has no viewer, so no visibility or distance test on it means anything -- and
+		// the Camera.main guard above does not catch it: Island ships an enabled "Scenery Camera"
+		// tagged MainCamera, and a -nographics process never renders, so isVisible is false for
+		// every bot and EVERY bot took the 5 Hz path below. Measured on lane-A bug2-before-01
+		// (Island, headless server): a bot's replicated position held unchanged for exactly four
+		// 20 Hz snapshots -- 0.2 s -- 1,015 times, against 197 and 115 for two and three. Clients
+		// then drew each bot moving in 0.2 s jumps, which no interpolation can smooth, because the
+		// jumps are in the authoritative positions themselves.
+		if (NetContext.IsServer)
 		{
 			return false;
 		}

@@ -51,6 +51,16 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
+. "$PSScriptRoot/lib/build-stamp.ps1"
+
+# Read BEFORE anything touches the tree, for the same reason build-player.ps1 reads it early: the
+# question is "does the commit describe the code in this binary", and only Ironfront_Reborn/
+# becomes the binary. A scratch file in tmp/, a run under artifacts/ or an edit to this script
+# cannot change what Unity compiles, and counting them would make -dirty fire on almost every
+# build until nobody read it.
+$unityProjectDirty = [bool](
+    (& git -C $repoRoot status --porcelain -- "Ironfront_Reborn" 2>$null) -join "" )
+
 try {
     if ([string]::IsNullOrWhiteSpace($UnityPath)) {
         Write-Warning @"
@@ -121,8 +131,23 @@ Set it to your Unity Editor executable and re-run, e.g.:
         '-logFile', $logFile
     )
 
-    $unityProcess = Start-Process -FilePath $UnityPath -ArgumentList $unityArgs -Wait -PassThru
-    $unityExit = $unityProcess.ExitCode
+    # STAMPED, so the deployed server can say which commit it is. Without this the dedicated
+    # server reported "build dev (built from the Editor, not by tools/build-player.ps1)", which is
+    # byte-identical to what somebody's local Editor build reports -- so a game server running in
+    # staging could not be told apart from an experiment, and the handoff manifest's sourceCommit
+    # had nothing on the running process to check against. Only the client build stamped until
+    # 2026-09-14; the logic is shared now rather than copied, so the next build script cannot
+    # forget it the same way.
+    $stamp = Write-BuildStamp -RepoRoot $repoRoot -Dirty $unityProjectDirty
+    try {
+        $unityProcess = Start-Process -FilePath $UnityPath -ArgumentList $unityArgs -Wait -PassThru
+        $unityExit = $unityProcess.ExitCode
+    }
+    finally {
+        # In a finally, not after the call. These files are tracked, so a build that throws
+        # between the rewrite and the restore leaves a commit hash committed into somebody's tree.
+        Restore-BuildStamp -Originals $stamp.Originals
+    }
 
     if ($unityExit -ne 0) {
         Write-Host ""

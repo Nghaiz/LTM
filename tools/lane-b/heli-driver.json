@@ -1,0 +1,81 @@
+{
+  "name": "heli-driver",
+  "note": "Owner report 2026-09-27: a human-flown helicopter shakes constantly and cannot be controlled. Dustbowl with -SpawnIndex 3,5 puts helicopter 4 about 18 m from team 0's spawn. Walk to it, take the pilot seat before the bots are released, lift off, fly forward, hover. Grade the driver's [veh-correct] lines (IRONFRONT_LOG_VEHICLE=1): blend/snap counts and the per-snapshot position and angle error while airborne.",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "respawn": true
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 1.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "walking-to-heli",
+      "seconds": 10.0,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0,
+      "sprint": true
+    },
+    {
+      "checkpoint": "seat-requested",
+      "seconds": 3.0,
+      "approachVehicle": true,
+      "vehicleKind": "Helicopter",
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0,
+      "seatToggle": true
+    },
+    {
+      "checkpoint": "spool-up",
+      "seconds": 3.0
+    },
+    {
+      "checkpoint": "lift-0",
+      "seconds": 2.0,
+      "heliCollective": 1.0
+    },
+    {
+      "checkpoint": "lift-1",
+      "seconds": 2.0,
+      "heliCollective": 1.0
+    },
+    {
+      "checkpoint": "forward-0",
+      "seconds": 2.0,
+      "heliCollective": 0.6,
+      "heliPitch": 0.5
+    },
+    {
+      "checkpoint": "forward-1",
+      "seconds": 2.0,
+      "heliCollective": 0.6,
+      "heliPitch": 0.5
+    },
+    {
+      "checkpoint": "turn-0",
+      "seconds": 2.0,
+      "heliCollective": 0.6,
+      "heliYaw": 0.6
+    },
+    {
+      "checkpoint": "hover-0",
+      "seconds": 2.0,
+      "heliCollective": 0.5
+    },
+    {
+      "checkpoint": "hover-1",
+      "seconds": 2.0,
+      "heliCollective": 0.5
+    },
+    {
+      "checkpoint": "done",
+      "seconds": 1.0,
+      "heliCollective": 0.5
+    }
+  ]
+}

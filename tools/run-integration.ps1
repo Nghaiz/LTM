@@ -84,7 +84,7 @@ if (-not $serverReady -or -not $clientReady) {
     Write-Host "Not run, because there is nothing to integrate yet:" -ForegroundColor Yellow
     if (-not $serverReady) {
         Write-Host "  - Ironfront.MasterServer opens no socket — still the Program.cs stub." -ForegroundColor Yellow
-        Write-Host "    the master-server track, plans/master-server/phases/phase-01-auth-lobby.md" -ForegroundColor Yellow
+        Write-Host "    the master server (spec deleted 2026-08-29; see plans/plan.md)" -ForegroundColor Yellow
     }
     if (-not $clientReady) {
         Write-Host "  - Ironfront.Tools.LoadTest opens no socket — still the Program.cs stub." -ForegroundColor Yellow

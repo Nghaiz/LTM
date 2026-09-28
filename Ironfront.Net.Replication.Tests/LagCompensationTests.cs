@@ -161,7 +161,7 @@ namespace Ironfront.Net.Replication.Tests
             HitResult before = world.Fire(rttMs: 150f, currentTick: 100);
             Assert.True(before.Hit);
 
-            world.Compensator.Occlusion = (_, _, _) => throw new InvalidOperationException("boom");
+            world.Compensator.Occlusion = (_, _, _, _) => throw new InvalidOperationException("boom");
             Assert.Throws<InvalidOperationException>(() => world.Fire(rttMs: 150f, currentTick: 100));
 
             world.Compensator.Occlusion = null;
@@ -286,7 +286,7 @@ namespace Ironfront.Net.Replication.Tests
             // with a line-of-sight check". This is that check's seam.
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _) => true,
+                Occlusion = (_, _, _, _) => true,
             };
 
             HitResult hit = compensator.ResolveHitscan(
@@ -304,7 +304,7 @@ namespace Ironfront.Net.Replication.Tests
             int calls = 0;
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _) => { calls++; return false; },
+                Occlusion = (_, _, _, _) => { calls++; return false; },
             };
 
             var targets = new[]
@@ -319,6 +319,72 @@ namespace Ironfront.Net.Replication.Tests
                 maxDistance: 100f, smoothedRttMs: 0f, currentTick: 10);
 
             Assert.Equal(1, calls);
+        }
+
+        [Fact]
+        public void TheOcclusionTestIsToldWhichActorWasHit()
+        {
+            // Ledger row X-26. The endpoint of the occlusion query sits INSIDE the body that was
+            // hit, so the first collider a linecast meets there is that body's own rig bone --
+            // measured as 34 of 34 occlusions across x27-pinned-01..03, every one
+            // `collider=Bone_002 layer=8` at frac 0.94. Excluding the victim's own colliders is
+            // a question only the engine can answer, and it cannot answer it without being told
+            // WHOSE body the shot landed on.
+            //
+            // This pins the seam that carries the id. Without it the Unity side has no way to
+            // tell the victim's capsule from a wall, and there is no fix it could implement.
+            ushort seen = 0;
+            int calls = 0;
+
+            var compensator = new LagCompensator(new HitboxHistory())
+            {
+                Occlusion = (_, _, _, victim) => { seen = victim; calls++; return false; },
+            };
+
+            HitResult hit = compensator.ResolveHitscan(
+                new[] { new HitscanTarget(Target, true, HitboxSet.Humanoid(new Vec3(0f, 0f, 10f))) },
+                Shooter, MuzzleOrigin, new Vec3(0f, 0f, 1f),
+                maxDistance: 100f, smoothedRttMs: 0f, currentTick: 10);
+
+            Assert.True(hit.Hit);
+            Assert.Equal(1, calls);
+            Assert.Equal(Target, seen);
+            Assert.Equal(hit.TargetActorId, seen);
+        }
+
+        [Fact]
+        public void APointBlankShotResolvesWhenTheVictimIsNotItsOwnCover()
+        {
+            // The behavioural half, engine-free: an occlusion implementation that excludes the
+            // victim's own colliders resolves the shot; the pre-fix one, which could not tell
+            // whose collider it had found, rejected it. 0.96 m apart, which is where the lane-B
+            // pair stood when 12 of 30 shots were blocked by the victim's own Bone_002.
+            var victimIsNotCover = new LagCompensator(new HitboxHistory())
+            {
+                // The endpoint is inside the victim, so the first collider met belongs to them.
+                Occlusion = (_, _, _, victim) => victim != Target,
+            };
+
+            var blocksEverything = new LagCompensator(new HitboxHistory())
+            {
+                Occlusion = (_, _, _, _) => true,
+            };
+
+            var targets = new[]
+            {
+                new HitscanTarget(Target, true, HitboxSet.Humanoid(new Vec3(0f, 0f, 0.96f))),
+            };
+
+            Assert.True(
+                victimIsNotCover.ResolveHitscan(
+                    targets, Shooter, MuzzleOrigin, new Vec3(0f, 0f, 1f),
+                    maxDistance: 100f, smoothedRttMs: 0f, currentTick: 10).Hit,
+                "a point-blank shot was still rejected with the victim excluded from cover");
+
+            Assert.False(
+                blocksEverything.ResolveHitscan(
+                    targets, Shooter, MuzzleOrigin, new Vec3(0f, 0f, 1f),
+                    maxDistance: 100f, smoothedRttMs: 0f, currentTick: 10).Hit);
         }
 
         [Fact]

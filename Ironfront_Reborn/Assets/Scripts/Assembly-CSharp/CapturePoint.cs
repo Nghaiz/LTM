@@ -35,7 +35,16 @@ public class CapturePoint : SpawnPoint
 {
 	private const float UPDATE_RATE = 1f;
 
-	private const float CAPTURE_RATE_PER_PERSON = 0.05f;
+	// CAPTURE_RATE_PER_PERSON was here, holding 0.05f. It is gone because it was never read:
+	// UpdateOwner spelled the rate as a bare 0.05f literal, twice, so the named constant and
+	// the arithmetic had already drifted into two things. Both literals now read `captureSpeed`
+	// -- the same authored, per-point field the SERVER reads through
+	// SceneCapturePoints.GetDefinition -- so offline and networked capture at one rate by
+	// construction rather than by two numbers that happen to be close.
+	//
+	// This departs from V8 D2's "offline is byte-for-byte unchanged", deliberately and on the
+	// owner's instruction (2026-09-20). Offline capture moves from 0.05/s to the authored
+	// 0.06/s, which is a shipped-behaviour change and is the point: one number, not two.
 
 	private const int HQ_QUALITY_LEVEL = 5;
 
@@ -59,7 +68,26 @@ public class CapturePoint : SpawnPoint
 	/// by this component — the offline arithmetic below keeps its own long-standing 0.05
 	/// per-person-per-second rate so that D2's promise is literal.
 	/// </remarks>
-	public float captureSpeed = 0.2f;
+	/// <remarks>
+	/// <para>
+	/// <b>The paragraph above is superseded on both counts (2026-09-20).</b> The offline
+	/// arithmetic in <c>UpdateOwner</c> now reads THIS field rather than its own 0.05, so there
+	/// is one rate for both modes; and the default is 0.06, not 0.2.
+	/// </para>
+	/// <para>
+	/// <b>Why 0.2 was wrong.</b> A single body inside a 25 m radius took a neutral point in
+	/// 4.5s and an enemy point in 9s — a rate you clear by walking through rather than by
+	/// holding. At 0.06 those become 16.7s and 33.3s. Measured on Dustbowl 2026-09-20: at the
+	/// old rate 32 bots carved up the entire map within two minutes of Playing while three
+	/// human clients captured nothing.
+	/// </para>
+	/// <para>
+	/// <b>Changing this default alone changes nothing on a shipped map.</b> Every point in
+	/// Dustbowl and Island serializes its own value, so the authored scene data moved with it.
+	/// This default governs points authored from here on.
+	/// </para>
+	/// </remarks>
+	public float captureSpeed = 0.06f;
 
 	public bool canBeCaptured = true;
 
@@ -80,6 +108,12 @@ public class CapturePoint : SpawnPoint
 	private Action unsafeAction = new Action(10f);
 
 	private bool playerWasInRadius;
+
+	private Transform rigidFlagVisual;
+
+	private Quaternion rigidFlagBaseRotation;
+
+	private float rigidFlagPhase;
 
 	protected override void Awake()
 	{
@@ -112,6 +146,18 @@ public class CapturePoint : SpawnPoint
 			lqFlag.SetActive(true);
 			hqFlag.SetActive(false);
 			flagRenderer = lqFlag.GetComponent<Renderer>();
+		}
+
+		// Island's HQ flags have Cloth, but Dustbowl and every lower quality level use a rigid
+		// mesh. Give that fallback a small deterministic pole-side sway so a network match does
+		// not render a cardboard flag. Cloth visuals retain their authored solver motion.
+		GameObject activeFlag = flagRenderer != null ? flagRenderer.gameObject : null;
+		if (activeFlag != null && activeFlag.GetComponent<Cloth>() == null)
+		{
+			rigidFlagVisual = activeFlag.transform;
+			rigidFlagBaseRotation = rigidFlagVisual.localRotation;
+			rigidFlagPhase = base.transform.position.x * 0.031f
+				+ base.transform.position.z * 0.017f;
 		}
 	}
 
@@ -155,6 +201,13 @@ public class CapturePoint : SpawnPoint
 		Vector3 localPosition = flagParent.localPosition;
 		localPosition.y = 1.2f + 4.8f * control;
 		flagParent.localPosition = Vector3.Lerp(flagParent.localPosition, localPosition, 3f * Time.deltaTime);
+		if (rigidFlagVisual != null)
+		{
+			float wave = Mathf.Sin(Time.time * 3.2f + rigidFlagPhase) * 7f
+				+ Mathf.Sin(Time.time * 6.7f + rigidFlagPhase * 1.9f) * 2f;
+			rigidFlagVisual.localRotation = rigidFlagBaseRotation * Quaternion.Euler(0f, wave, wave * 0.35f);
+		}
+		UpdateFlagIndicator();
 	}
 
 	private void UpdateOwner()
@@ -164,7 +217,6 @@ public class CapturePoint : SpawnPoint
 			return;
 		}
 		int num = owner;
-		bool flag = false;
 		List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, captureRange);
 		Dictionary<int, int> dictionary = new Dictionary<int, int>();
 		isContested = false;
@@ -195,10 +247,6 @@ public class CapturePoint : SpawnPoint
 					UpdateContestedSpawnpointSafeFlags(item);
 				}
 			}
-			if (!item.aiControlled)
-			{
-				flag = true;
-			}
 		}
 		int num2 = -1;
 		int num3 = 0;
@@ -217,7 +265,7 @@ public class CapturePoint : SpawnPoint
 		{
 			if (num2 != pendingOwner)
 			{
-				control -= (float)num5 * 0.05f;
+				control -= (float)num5 * captureSpeed;
 				if (control <= 0f)
 				{
 					SetOwner(num2);
@@ -226,7 +274,7 @@ public class CapturePoint : SpawnPoint
 			}
 			else
 			{
-				control = Mathf.Clamp01(control + (float)num5 * 0.05f);
+				control = Mathf.Clamp01(control + (float)num5 * captureSpeed);
 				if (control == 1f && owner != pendingOwner)
 				{
 					SetOwner(pendingOwner);
@@ -237,20 +285,57 @@ public class CapturePoint : SpawnPoint
 		{
 			unsafeAction.Start();
 		}
-		if (flag && !playerWasInRadius)
+		SetFlagVisible(control > 0f);
+	}
+
+	/// <summary>
+	/// Drives the top-left capture indicator from the LOCAL player's distance to this point.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>This lived in <see cref="UpdateOwner"/> and therefore never ran in a networked match.</b>
+	/// That method is started by <c>InvokeRepeating</c> only when <c>NetContext.IsOffline</c>, so
+	/// the V8 split that role-gated the capture arithmetic took the three HUD calls with it. The
+	/// indicator is authored, wired and anchored top-left in <c>Ingame UI Container.prefab</c>,
+	/// and it was simply never turned on. It belongs in <see cref="Update"/>, which runs in every
+	/// role, every frame, and already reads <see cref="control"/> and <c>owner</c>.
+	/// </para>
+	/// <para>
+	/// <b>The subject is the local player, not "any non-AI actor".</b> The old test set its flag
+	/// for any actor with <c>!aiControlled</c> in range, which in single-player is the local
+	/// player by coincidence and in a networked match is any human on the map — so a stranger
+	/// capturing a point would have flashed the indicator on this client's HUD. Asking about
+	/// <c>FpsActorController.instance</c> is the same question the widget is actually answering.
+	/// </para>
+	/// <para>
+	/// Both singletons are null-guarded for <see cref="SetFlagVisible"/>'s reason: a dedicated
+	/// server runs this component with no local player and no HUD.
+	/// </para>
+	/// </remarks>
+	private void UpdateFlagIndicator()
+	{
+		if (IngameUi.instance == null)
+		{
+			return;
+		}
+		FpsActorController local = FpsActorController.instance;
+		bool inRadius = local != null && local.actor != null && !local.actor.dead
+			&& (local.actor.transform.position - base.transform.position).sqrMagnitude
+			   <= captureRange * captureRange;
+
+		if (inRadius && !playerWasInRadius)
 		{
 			IngameUi.instance.ShowFlagIndicator();
 		}
-		else if (!flag && playerWasInRadius)
+		else if (!inRadius && playerWasInRadius)
 		{
 			IngameUi.instance.HideFlagIndicator();
 		}
-		if (flag)
+		if (inRadius)
 		{
 			IngameUi.instance.SetFlagIndicator(control, owner);
 		}
-		SetFlagVisible(control > 0f);
-		playerWasInRadius = flag;
+		playerWasInRadius = inRadius;
 	}
 
 	/// <summary>
@@ -264,7 +349,7 @@ public class CapturePoint : SpawnPoint
 	/// <remarks>
 	/// <para>
 	/// <see cref="SetOwner"/> is called only on an actual change of hands, so
-	/// <c>ScoreUi.AddFlag</c> and <c>MinimapUi.UpdateSpawnPointButtons</c> still fire exactly
+	/// <c>MatchScoreboard.AddFlag</c> and <c>MinimapUi.UpdateSpawnPointButtons</c> still fire exactly
 	/// once per flip and no more — at 30 Hz an unconditional call would add a flag to the
 	/// scoreboard thirty times a second for a point nobody touched.
 	/// </para>
@@ -437,8 +522,26 @@ public class CapturePoint : SpawnPoint
 		{
 			flagRenderer.material.color = Color.Lerp(ColorScheme.TeamColor(team), Color.black, 0.2f);
 		}
-		ScoreUi.AddFlag(num2, num);
+		// debt-closure phase 2 task 2c. See Actor.Die for why this is no longer the HUD's call.
+		//
+		// P12 D-2: offline only, the same gate line 147 puts on this file's own arithmetic.
+		// SetOwner is reached from ApplyAuthoritativeOwner -- the SERVER-DRIVEN capture path --
+		// so on a networked client every flip fed the local scoreboard, and ScoreUi.UpdateUi
+		// then painted those locally-counted numbers over the server's. The server's own flag
+		// count for the kill multiplier lives in MatchStateMachine.OwnedPointCount, not here,
+		// so nothing authoritative reads what this gate stops writing.
+		//
+		// The two MinimapUi calls below are deliberately NOT gated: they are how a client
+		// RENDERS a flip it was told about, which is exactly what it should be doing.
+		if (NetContext.IsOffline)
+		{
+			MatchScoreboard.Current.AddFlag(num2, num);
+		}
 		MinimapUi.UpdateSpawnPointButtons();
+		// debt-closure phase 2 task 2d, ledger C-6: the point now carries a minimap marker that
+		// recolours as it flips. SetMarker is idempotent by subject, so calling it on every flip
+		// recolours rather than stacking a second icon per capture.
+		MinimapUi.SetMarker(base.transform, ColorScheme.TeamColor(team));
 	}
 
 	public override float GotoRadius()
@@ -455,6 +558,12 @@ public class CapturePoint : SpawnPoint
 		return base.GetSpawnPosition();
 	}
 
+	/// <summary>
+	/// Picks a contested-safe child, ground-snapped. Same defect as X-81's container-branch
+	/// fix, one field over: this used to return <c>contestedSpawnpointContainer.GetChild(...)
+	/// .position</c> verbatim. Shares <see cref="SpawnPoint.SnappedContainerChildPosition"/>
+	/// rather than a second snap/warn implementation.
+	/// </summary>
 	private Vector3 GetSafeSpawnPosition()
 	{
 		int childCount = contestedSpawnpointContainer.childCount;
@@ -468,9 +577,9 @@ public class CapturePoint : SpawnPoint
 			int num2 = (num + i) % childCount;
 			if (contestedSpawnpointIsSafe[num2])
 			{
-				return contestedSpawnpointContainer.GetChild(num2).position;
+				return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num2));
 			}
 		}
-		return contestedSpawnpointContainer.GetChild(num).position;
+		return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num));
 	}
 }

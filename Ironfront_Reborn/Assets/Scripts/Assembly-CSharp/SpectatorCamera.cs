@@ -59,7 +59,14 @@ public class SpectatorCamera : MonoBehaviour
 		if (Input.GetKeyDown(KeyCode.L))
 		{
 			string screenshotName = "screenshot.png";
-			ScreenCapture.CaptureScreenshot(screenshotName);
+
+			// P27. The `3` is the original's supersize factor, restored. Unity renamed
+			// Application.CaptureScreenshot to ScreenCapture.CaptureScreenshot and the rewrite
+			// dropped the second argument, which the rename never required -- the (string, int)
+			// overload still exists. Nothing in the tree documented the drop, and the whole point
+			// of a spectator-camera screenshot is a capture worth keeping, so this had been
+			// silently writing at 1x since the Unity 6 migration.
+			ScreenCapture.CaptureScreenshot(screenshotName, 3);
 		}
 		RaycastHit hitInfo;
 		if (Input.GetMouseButtonDown(0) && Physics.Raycast(base.transform.position, base.transform.forward, out hitInfo) && !hitInfo.collider.gameObject.isStatic)

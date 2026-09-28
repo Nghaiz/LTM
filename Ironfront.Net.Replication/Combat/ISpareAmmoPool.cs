@@ -1,5 +1,102 @@
+﻿using Ironfront.Net.Protocol;
+
 namespace Ironfront.Net.Replication.Combat
 {
+    /// <summary>
+    /// Which pool, and which slot of it, a particular actor's carried weapon draws from —
+    /// including the case where the server does not know. Handoff section 4.5.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>"I do not know which slot" is a value here rather than a caller's convention.</b>
+    /// Section 4.5 forbids assuming slot 0 when the active loadout slot cannot be resolved: slot
+    /// 0 is somebody's primary, so guessing it drains a magazine the player never touched and
+    /// reports its count on the HUD. Modelled as <see cref="SlotIsKnown"/> so the two callers
+    /// that matter — the reserve the snapshot reports and the reload that spends it — cannot
+    /// each invent their own fallback.
+    /// </para>
+    /// <para>
+    /// <b>A struct, and the pool is the only reference in it.</b> This is built once per accepted
+    /// input frame per player at 30 Hz; a class here would allocate on that path.
+    /// </para>
+    /// </remarks>
+    public readonly struct ActorAmmoSource
+    {
+        private ActorAmmoSource(ISpareAmmoPool pool, ushort ownerId, byte slot, bool slotIsKnown)
+        {
+            Pool = pool;
+            OwnerId = ownerId;
+            Slot = slot;
+            SlotIsKnown = slotIsKnown;
+        }
+
+        /// <summary>Where the rounds come from. Never null.</summary>
+        public ISpareAmmoPool Pool { get; }
+
+        /// <summary>Whose pool — an <c>actorId</c> for <see cref="ActorSpareAmmoPool"/>.</summary>
+        public ushort OwnerId { get; }
+
+        /// <summary>The loadout slot. Meaningless unless <see cref="SlotIsKnown"/>.</summary>
+        public byte Slot { get; }
+
+        /// <summary>
+        /// False when the server could not resolve the active loadout slot. A reload is refused
+        /// and the snapshot reports no-resupply until it can.
+        /// </summary>
+        public bool SlotIsKnown { get; }
+
+        /// <summary>
+        /// The pre-V10 shape: a pool that never runs out, so a reload refills the clip whatever
+        /// the reserve says.
+        /// </summary>
+        /// <remarks>
+        /// Kept as a named constructor rather than as a null pool, for the reason
+        /// <see cref="UnlimitedSpareAmmoPool"/> itself gives: "no pool was wired" and "this
+        /// weapon genuinely has infinite spare" must not look the same.
+        /// </remarks>
+        public static ActorAmmoSource Unlimited(ushort ownerId = 0)
+            => new ActorAmmoSource(UnlimitedSpareAmmoPool.Instance, ownerId, 0, slotIsKnown: true);
+
+        /// <summary>A resolved slot of a real pool.</summary>
+        public static ActorAmmoSource FromSlot(ISpareAmmoPool pool, ushort ownerId, byte slot)
+            => new ActorAmmoSource(
+                pool ?? throw new System.ArgumentNullException(nameof(pool)),
+                ownerId, slot, slotIsKnown: true);
+
+        /// <summary>
+        /// The session and its loadout disagree, so no slot may be spent. Section 4.5's
+        /// state-inconsistency case.
+        /// </summary>
+        public static ActorAmmoSource UnknownSlot(ISpareAmmoPool pool, ushort ownerId)
+            => new ActorAmmoSource(
+                pool ?? throw new System.ArgumentNullException(nameof(pool)),
+                ownerId, 0, slotIsKnown: false);
+
+        /// <summary>
+        /// What this actor's reserve is, in the one form the wire and the reload rules both
+        /// read.
+        /// </summary>
+        /// <remarks>
+        /// <b>The weapon config decides no-resupply, not the pool</b>, and
+        /// <see cref="SpareAmmo.FromPoolRemaining"/> says why in its own remarks: a pool answers
+        /// <c>0</c> both for a weapon that has spent its reserve and for one that never had a
+        /// reserve at all, and those are the same to a pool but not to a player reading a HUD.
+        /// The caller holding the config is the only one that can tell them apart, so the
+        /// decision is made here, once, rather than at each of the two call sites.
+        /// </remarks>
+        public SpareAmmo Reserve(in WeaponRuntimeState state, in WeaponConfig config)
+        {
+            if (!SlotIsKnown) return SpareAmmo.NoResupply;
+            if (config.SpareAmmo == WeaponConfig.NoResupplySpareAmmo) return SpareAmmo.NoResupply;
+
+            return SpareAmmo.FromPoolRemaining(Pool.Remaining(OwnerId, Slot, in state));
+        }
+
+        /// <summary>Removes up to <paramref name="count"/> rounds. Zero when no slot is known.</summary>
+        public int Take(ref WeaponRuntimeState state, int count)
+            => SlotIsKnown ? Pool.Take(OwnerId, Slot, ref state, count) : 0;
+    }
+
     /// <summary>
     /// Where a reload draws its rounds from. The engine-free mirror of
     /// <c>Weapon.RemoveSpareAmmo</c>, which the game overrides at <c>MountedWeapon</c>. V6-D6.

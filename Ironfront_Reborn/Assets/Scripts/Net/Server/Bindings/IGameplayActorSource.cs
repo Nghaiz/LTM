@@ -1,4 +1,4 @@
-namespace Ironfront.Net.Unity.Server
+﻿namespace Ironfront.Net.Unity.Server
 {
     /// <summary>
     /// The gameplay actor's authoritative health, death flag and held-weapon id, as the
@@ -40,6 +40,38 @@ namespace Ironfront.Net.Unity.Server
         bool IsDead { get; set; }
 
         /// <summary>
+        /// Whether this actor's head is under water: the crown of its Head bone below the water
+        /// plane. The drowning rule's sensor.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Deliberately NOT <c>Actor.inWater</c>, which it used to be.</b> That field samples
+        /// the spine plus half a metre and means "deep enough that the shipped body swims" -- a
+        /// bot floating on its back as a ragdoll keeps it true with its head in the air. Read as
+        /// "the head is under", it drowned swimming bots (measured 2026-09-27:
+        /// <c>sampleDepth=0.29m headDepth=0.00m</c> on a drowned bot).
+        /// </para>
+        /// <para>
+        /// <b>Computed from bone positions, so it is live on the server</b> for a claimed body as
+        /// much as for a bot; nothing here depends on <c>Actor.Update</c> running.
+        /// </para>
+        /// </remarks>
+        bool IsSubmerged { get; }
+
+        /// <summary>
+        /// One line of what the body's water state is made of: where its feet are, how deep the
+        /// crown <see cref="IsSubmerged"/> reads and the shipped swim sample sit, whether it has
+        /// fallen over into a ragdoll, and which seat it is in. For the drowning log.
+        /// </summary>
+        /// <remarks>
+        /// A drowning line that says only "actor 32 drowned" cannot tell a player who waded in
+        /// from a bot that sank while swimming, a body that fell through the terrain below the
+        /// water plane, or a passenger in a sinking boat -- and the 2026-09-27 Island match
+        /// drowned one bot three times running with nothing else to go on.
+        /// </remarks>
+        string DescribeSubmersion();
+
+        /// <summary>
         /// Staggers the actor by <paramref name="balanceDamage"/>. phase-V2 D6.
         /// </summary>
         /// <remarks>
@@ -69,5 +101,181 @@ namespace Ironfront.Net.Unity.Server
         /// only for the first. Maps to <c>Actor.activeWeapon.NetworkId</c>.
         /// </remarks>
         bool TryGetActiveWeaponNetworkId(out byte networkId);
+
+        /// <summary>
+        /// Selects a weapon slot. Maps to <c>Actor.SwitchWeapon</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>No guards here.</b> <c>Actor.SwitchWeapon</c> already returns early when the actor
+        /// is dead, fallen over, or seated without <c>CanUseCarriedWeapon</c>, and re-stating
+        /// those three on this side of the seam would be a second copy free to drift from the
+        /// one the offline game uses.
+        /// </para>
+        /// <para>
+        /// <b>The caller must edge it.</b> A slot holding a <c>ToggleableItem</c> TOGGLES on
+        /// every call, so driving this from a held bit would flip a binocular in and out at tick
+        /// rate. <see cref="NetServerActor.ApplyWeaponSwitchIntent"/> owns that edge.
+        /// </para>
+        /// </remarks>
+        void SwitchWeapon(int slot);
+
+        /// <summary>
+        /// Arms the body from its loadout and unholsters the first weapon.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Maps to <c>Actor.EquipLoadout</c>, which is <c>SpawnLoadoutWeapons</c> and nothing
+        /// else. NOT <c>Actor.SpawnAt</c>: a networked body is driven by <c>MoveInput</c> from
+        /// the server rather than by a local controller, so <c>controller.EnableInput()</c>
+        /// would open a second input path on a headless process.
+        /// </para>
+        /// <para>
+        /// Called from <c>ServerCombatBridge.PlaceAtSpawn</c>, which is the one place a claimed
+        /// body enters the world. Before this seam existed that path teleported the body and
+        /// left it holding nothing, which is what made every combat check unrunnable.
+        /// </para>
+        /// </remarks>
+        void EquipLoadout();
+
+        /// <summary>
+        /// Pulls the trigger on the weapon the body is holding, along the given direction.
+        /// Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The call <c>Actor.Update</c> makes offline, made by the netcode instead.</b>
+        /// Offline the path is
+        /// <c>controller.Fire()</c> -&gt; <c>activeWeapon.Fire(controller.FacingDirection(), ...)</c>;
+        /// on a server a networked body's controller is the SUSPENDED bot brain, so that line
+        /// never runs and nothing ever reached the weapon. A thrown grenade was therefore
+        /// resolved as a hitscan bullet and never detonated -- <c>hits=1</c> at 1.2 m, zero
+        /// damage, <c>explosionsTotal 0</c> on all three clients
+        /// (<c>artifacts/lane-b/r1-grenade-03</c>).
+        /// </para>
+        /// <para>
+        /// <b>Three floats, not a vector type.</b> Every other member here is a float, a byte or
+        /// a bool for the same reason: this interface is implemented in <c>Assembly-CSharp</c>
+        /// and consumed inside an asmdef, and the narrower the type surface crossing that seam
+        /// the less there is to keep aligned. <c>UnityEngine.Vector3</c> would work and
+        /// <c>Vec3</c> would too; neither buys anything a caller cannot do in one line.
+        /// </para>
+        /// <para>
+        /// <b>No guards on this side.</b> <c>Weapon.Fire</c> checks <c>CanFire()</c> itself, and
+        /// the server has ALREADY applied its own authority before calling --
+        /// <c>ServerFireResolver.ResolveLaunch</c> spent the round and stamped the cooldown.
+        /// Restating either here would be a second copy free to drift from the one the offline
+        /// game uses, which is the reason <see cref="SwitchWeapon"/> carries no guards either.
+        /// </para>
+        /// </remarks>
+        /// <returns>
+        /// False when the body is holding nothing. Distinguished from "fired and nothing
+        /// happened" so a run that reports launches against a body with no weapon is legible as
+        /// the loadout failure it is, rather than as a silent zero.
+        /// </returns>
+        /// <param name="originX">
+        /// The spawn point the authority computed for this shot, in world space -- on the forward
+        /// and right axes and on the vertical axis alike. <b>Supplied rather than read off the
+        /// weapon, because the pose a server-side body offers is not a pose anybody is standing
+        /// in.</b> A carried weapon's <c>muzzle</c> hangs off the view-model rig that
+        /// <c>PlayerFpParent</c> drives for the LOCAL player's eyes; a headless server runs no
+        /// such rig, so that transform reports a bind pose. Measured 2026-09-25: a player's
+        /// rocket left from a skeleton bone, and a grenade from 1.85 m above his feet. The
+        /// authority's own origin (<c>CombatTickResult.Origin</c>) is built from the session's
+        /// deterministic capsule centre and the eye height the hitboxes already use, so it is the
+        /// same point on every body prefab.
+        /// </param>
+        bool FireCarriedWeapon(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ);
+
+        /// <summary>
+        /// Releases a throwable whose delay and inventory transaction were already approved by
+        /// the server authority. This entry point must not run the engine's ammo or timer logic.
+        /// </summary>
+        bool ReleaseCarriedThrowable(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ);
+
+        /// <summary>
+        /// Tells the carried weapon where this body's player looks and whether they aim, from
+        /// one accepted input frame. Maps to <c>Actor.SteerCarriedWeaponByNetwork</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>What it is for: the Javelin's lock-on.</b> Offline the launcher samples a transform
+        /// on the first-person rig; a server-side body has no rig, and <c>CullFpsObjects</c>
+        /// destroys that transform on every body that is not the local player. So the lock-on
+        /// read a destroyed object and every networked Javelin pull threw (2026-09-27). The eye
+        /// is <c>ServerCombatAuthority.ShotOrigin</c>, the same point the shot would leave from.
+        /// </remarks>
+        void SteerCarriedWeapon(
+            float eyeX, float eyeY, float eyeZ,
+            float forwardX, float forwardY, float forwardZ,
+            bool aimHeld);
+
+        /// <summary>
+        /// Gives a pulled trigger to a carried weapon that keeps it for itself instead of firing,
+        /// and reports whether it did. Maps to <c>Actor.TryWithholdCarriedTriggerByNetwork</c>.
+        /// </summary>
+        /// <returns>
+        /// True when the weapon took the trigger -- an unlocked Javelin marks a point -- and the
+        /// combat authority must not spend a round on it. False for every ordinary shot.
+        /// </returns>
+        bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ);
+
+        /// <summary>
+        /// Writes the authority's carried-weapon state into the engine weapon the body is holding.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Because a carried weapon's trigger passes two independent gates, and only one of
+        /// them is the authority.</b> <c>ServerFireResolver</c> decides on the SESSION's
+        /// <c>WeaponRuntimeState</c>; the round only becomes a projectile when the ENGINE's
+        /// <c>Weapon.CanFire()</c> agrees, and that reads the engine's own <c>ammo</c>,
+        /// <c>unholstered</c> and <c>lastFired</c>. Nothing on a server ever refills the engine's
+        /// copy: <c>Actor.UpdateWeapon</c> -- the only caller of <c>controller.Reload()</c> -- is
+        /// unreachable for a body whose AI driver is suspended, and <c>AmmoChanged</c>'s auto-reload
+        /// is gated off server-side. Measured 2026-09-25: after one SMAW round, every later launch
+        /// spent the round and produced nothing -- <c>NOTHING WAS LAUNCHED</c>, once per player,
+        /// in the server log -- however many times the player reloaded, because their reload was
+        /// the authority's and the engine's copy stayed at zero.
+        /// </para>
+        /// <para>
+        /// <b>A mirror rather than a second reload path, and that is the client's own established
+        /// shape.</b> A client's <c>Weapon.ammo</c> is ASSIGNED from the reconciled prediction
+        /// every snapshot rather than decremented twice; this is the same rule on the other side
+        /// of the wire, so the engine's counters stop being a second opinion and become a copy.
+        /// It is idempotent, so a divergence can never persist for more than one accepted frame.
+        /// </para>
+        /// <para>
+        /// <b>Called BEFORE the shot is resolved, not after.</b> The session has already spent
+        /// this frame's round by the time the launch is asked for, so a mirror that ran after it
+        /// would hand the engine one round fewer than the shot it is about to fire.
+        /// </para>
+        /// </remarks>
+        /// <param name="elapsedSinceLastShot">
+        /// Seconds since the authority last accepted a shot from this weapon, or
+        /// <see cref="float.PositiveInfinity"/> if it never has. A duration rather than a
+        /// timestamp because the two sides count from different clocks: the authority reads the
+        /// tick-derived seconds the frame carried, the engine reads <c>Time.time</c>.
+        /// </param>
+        void MirrorAuthorityWeaponState(
+            int ammoInClip, bool unholstered, float elapsedSinceLastShot);
+
+        /// <summary>
+        /// Fires the vehicle-mounted weapon this body is manning, for a shot the server's
+        /// <c>MountedWeaponAuthority</c> has already approved and paid for.
+        /// </summary>
+        /// <returns>False when the body is not holding a mounted weapon.</returns>
+        bool FireMountedWeapon();
+
+        /// <summary>
+        /// Asks the mounted weapon this body is manning to announce itself to the server's
+        /// registry. False when the body is not holding one.
+        /// </summary>
+        bool DeclareMountedWeapon();
+
+        /// <summary>Current gameplay velocity, including AI-driven actors without a net movement agent.</summary>
+        void GetVelocity(out float x, out float y, out float z);
     }
 }

@@ -5,7 +5,8 @@
 Every number in this chapter was measured by
 [`Ironfront.Tools.MspBench`](../Ironfront.Tools.MspBench) or
 [`Ironfront.Tools.LoadTest`](../Ironfront.Tools.LoadTest), and the raw output is committed
-under [`plans/master-server/reports/data/`](../plans/master-server/reports/data/).
+under `plans/master-server/reports/data/`, deleted from the tree 2026-08-29 and recoverable with
+`git checkout 68acdd9 -- plans/master-server/reports/data/`.
 Anything not measured is labelled as an argument rather than dressed up as a result.
 
 **Measurement environment:** one Windows 11 machine, 16 logical cores, .NET 8.0, master
@@ -481,7 +482,7 @@ it is not running.
 
 ### Z.8.2 The hand-written reader against `System.IO.Pipelines` (experiment 4)
 
-Team policy ([conventions.md § 3.4](../plans/00-shared/conventions.md)): write it yourself
+Project policy ([code-conventions.md § 3.4](code-conventions.md)): write it yourself
 first because that is the lesson, then compare against the standard library.
 
 `System.IO.Pipelines` solves exactly the problem of § Z.2 — accumulating buffers, finding

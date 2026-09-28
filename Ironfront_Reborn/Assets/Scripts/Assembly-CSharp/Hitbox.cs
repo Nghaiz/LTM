@@ -21,6 +21,19 @@ public class Hitbox : MonoBehaviour
 
 	public bool ProjectileHit(Projectile p, Vector3 position)
 	{
+		Actor actor = parent as Actor;
+		if (actor != null)
+		{
+			return actor.DamageAttributed(
+				p.Damage() * multiplier,
+				p.BalanceDamage(),
+				p.configuration.piercing,
+				position,
+				p.transform.forward,
+				p.configuration.impactForce * p.transform.forward,
+				p.source);
+		}
+
 		return parent.Damage(p.Damage() * multiplier, p.BalanceDamage(), p.configuration.piercing, position, p.transform.forward, p.configuration.impactForce * p.transform.forward);
 	}
 

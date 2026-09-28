@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using Ironfront.Net.Unity.Bindings;
 using Ironfront.Net.Unity.Server;
 using Pathfinding;
 using UnityEngine;
@@ -305,6 +306,10 @@ public class AiActorController : ActorController
 	[NonSerialized]
 	public Squad squad;
 
+	// Set when SpawnAt asked for the AI coroutines before this bot had a squad. See
+	// StartAiCoroutines.
+	private bool aiCoroutinesAwaitSquad;
+
 	[NonSerialized]
 	public bool squadLeader;
 
@@ -367,8 +372,39 @@ public class AiActorController : ActorController
 	// did before this seam existed, which is what makes the nine call sites safe to land ahead
 	// of any measurement. Unity's overloaded == also makes a destroyed gate read as null here,
 	// so a bot outliving its gate keeps thinking rather than freezing.
+	/// <summary>
+	/// Whether this brain should think this tick. The LOD gate, and — ledger <b>X-57</b> — whether
+	/// this controller is steering this body at all.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b><c>enabled</c> is checked here because Unity does not stop a coroutine when a
+	/// MonoBehaviour is disabled.</b> <c>IAiDriver.Suspend</c> sets <c>enabled = false</c> when a
+	/// networked player claims this body, which stops <c>Update</c> and nothing else: all eight AI
+	/// coroutines kept running on a body the server was driving. The suspension was half a
+	/// suspension, and the half that was missing is the one that carries state.
+	/// </para>
+	/// <para>
+	/// <b>What that cost.</b> <c>AiVehicle</c> reached <c>PushAntiStuckEvent</c>, which dereferences
+	/// <c>squad.squadVehicle</c> — and a player-slot body has never had a squad. That is X-45's
+	/// defect at a site X-45 did not reach, and it only became reachable once X-46 let a networked
+	/// player actually drive: <c>artifacts/lane-a/o6/o6-combat-01</c>, 5 throws in 150 s, the only
+	/// null-reference site left after O6's first two fixes.
+	/// </para>
+	/// <para>
+	/// <b>Here rather than at <c>PushAntiStuckEvent</c>.</b> The same coroutine calls
+	/// <c>squad.ExitVehicle()</c> and <c>squad.MoveTo()</c> two branches away, and seven other
+	/// coroutines are running on the same suspended brain. Guarding the one site that happened to
+	/// throw would leave the rest, which is the difference between fixing a suspension and muting a
+	/// stack trace.
+	/// </para>
+	/// </remarks>
 	private bool AiWorkAllowed()
 	{
+		if (!base.enabled)
+		{
+			return false;
+		}
 		return lodGate == null || lodGate.AllowAiWork;
 	}
 
@@ -419,8 +455,37 @@ public class AiActorController : ActorController
 	}
 
 
+	/// <summary>
+	/// Starts the eight AI coroutines, or defers them until <see cref="AssignedToSquad"/> when
+	/// this bot has no squad yet.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The coroutines assume a squad</b> -- <c>squad.GetTarget()</c> in AiTarget,
+	/// <c>squad.MemberNeedsResupply()</c> in AiWeapon and dozens more -- and in the original
+	/// that always held: <c>ActorManager.SpawnActorList</c> placed every body and formed every
+	/// squad in the same frame, and each coroutine yields before its first read. This project
+	/// spreads a wave's placements over frames (<c>SPAWN_WORK_BUDGET_SECONDS</c>) and still forms
+	/// the squads at the end, so a bot placed in an early frame ran with <c>squad == null</c> for
+	/// a few frames. On the server every bot release threw one NullReferenceException from
+	/// whichever coroutine got there first, and that coroutine was dead for the bot's whole
+	/// life: a bot whose AiTarget died never picked a target again until it respawned.
+	/// </para>
+	/// <para>
+	/// Deferring restores the original order -- squad first, then the coroutines -- without
+	/// touching the time slicing. The spawn wave assigns a squad to every bot it placed that is
+	/// still alive, so nothing waits indefinitely; a bot that dies while waiting is skipped by
+	/// that wave and deferred again by the next one.
+	/// </para>
+	/// </remarks>
 	private void StartAiCoroutines()
 	{
+		if (squad == null)
+		{
+			aiCoroutinesAwaitSquad = true;
+			return;
+		}
+		aiCoroutinesAwaitSquad = false;
 		StartCoroutine(AiBlocked());
 		StartCoroutine(AiVehicle());
 		StartCoroutine(AiOrders());
@@ -620,11 +685,57 @@ public class AiActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// Marks the vehicle this body is driving as stuck and walks the squad out of it. Ledger
+	/// <b>X-60</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>X-60's filed cause was wrong, and the branch above says so.</b> It was filed as "a
+	/// squadless body with an enabled controller reaches here and dereferences a null squad",
+	/// with the candidate fix of gating <c>AiWorkAllowed()</c> on having a squad. But this
+	/// method has one caller — the Car/Tank arm of <c>AiVehicle</c> — and that arm is entered
+	/// only after <c>IsSquadLeader()</c>, which is <c>squad.Leader() == this</c> with no null
+	/// guard. A null <c>squad</c> throws THERE and never arrives here. <c>AiOrders</c> would
+	/// have thrown on <c>squad.Update()</c> twice a second besides, and no artifact carries
+	/// either site. <c>squad</c> is not the null.
+	/// </para>
+	/// <para>
+	/// <b><c>squad.squadVehicle</c> is.</b> It is written only by <c>Squad.EnterVehicle</c> and
+	/// <c>Squad.SetAlreadyInVehicle</c>, so a squad whose member boarded on its own has none —
+	/// and <c>AiVehicle</c>'s own tail boards exactly that way,
+	/// <c>actor.EnterSeat(targetVehicle.GetEmptySeat())</c>, with no squad order behind it. That
+	/// member can then be driving, get stuck three times, and dereference a vehicle its squad
+	/// never took. It needs a lone boarder AND a stuck vehicle, which is the intermittency the
+	/// counts show: 5, 3, 2 and five zeroes across the eight Combat runs on record.
+	/// </para>
+	/// <para>
+	/// <b>So this is a wrong reference corrected, not a null check added.</b> The vehicle that
+	/// is stuck is the one this body is sitting in, which is what the Boat arm of the same
+	/// coroutine already marks. The squad is still ordered out of it, because the squad is not
+	/// the thing that was missing.
+	/// </para>
+	/// </remarks>
 	private void PushAntiStuckEvent()
 	{
 		if ((float)recentAntiStuckEvents > 2f)
 		{
-			squad.squadVehicle.stuck = true;
+			if (actor.IsSeated() && actor.seat.vehicle != null)
+			{
+				actor.seat.vehicle.stuck = true;
+			}
+			else
+			{
+				// Unreachable through the one caller, which enters only for a seated driver.
+				// Reported rather than skipped: a body pushing an anti-stuck event from outside
+				// a vehicle is a state nothing has explained, and X-59 is what a quiet fallback
+				// buys.
+				Debug.LogError(
+					$"[ai] '{base.name}' pushed an anti-stuck event without driving anything, "
+					+ "so the caller's seated-driver precondition no longer holds. Nothing was "
+					+ "marked stuck; the squad is still being walked out.");
+			}
+
 			squad.ExitVehicle();
 			squad.MoveTo(lastGotoPoint);
 			recentAntiStuckEvents = 0;
@@ -781,6 +892,21 @@ public class AiActorController : ActorController
 			Actor closestHighlighted = null;
 			foreach (Actor a in potentialTargets)
 			{
+				// Ledger X-49, the half the registry fix cannot reach. potentialTargets is a
+				// SNAPSHOT taken above, and this loop yields 0.2s between elements -- so on a
+				// long list it walks for seconds while the world moves on, and any entry can be
+				// destroyed mid-walk. Deregistering on destroy does not help a private copy that
+				// was already taken.
+				//
+				// The check has to be `== null` and not `!a.dead`. Unity's overloaded == is the
+				// only operator that reports a destroyed object as null; `dead` is an ordinary
+				// managed field, which a destroyed Actor answers perfectly happily -- so the
+				// existing `!a.dead` waves the corpse through and HasEffectiveWeaponAgainst then
+				// reaches Actor.Position() -> Component.get_transform() and throws. That was
+				// measured: 50 NullReferenceExceptions per combat run still came through here
+				// after the registry leak was closed, all from this one coroutine.
+				if (a == null) continue;
+
 				if (!a.dead && HasEffectiveWeaponAgainst(a) && CanSeeActor(a, true))
 				{
 					SetTarget(a);
@@ -1221,7 +1347,19 @@ public class AiActorController : ActorController
 		}
 		else if (ragdollAutokillAction.TrueDone())
 		{
-			actor.Damage(100f, 0f, true, actor.Position(), Vector3.zero, Vector3.zero);
+			// Headless multiplayer cannot use an animation/physics timeout as a damage source.
+			// It used to kill otherwise healthy bots with a null attacker after 60 seconds,
+			// producing the repeated "The world -> actor" feed and continuously recycling bots.
+			// Recover the stuck rig in-place; retain Ravenfield's original offline behaviour.
+			if (Ironfront.Net.Unity.NetContext.IsServer)
+			{
+				actor.RecoverFromStuckRagdoll();
+				ragdollAutokillAction.Start();
+			}
+			else
+			{
+				actor.Damage(100f, 0f, true, actor.Position(), Vector3.zero, Vector3.zero);
+			}
 		}
 		if (!InCover() || IsReloading() || CoolingDown())
 		{
@@ -1530,8 +1668,42 @@ public class AiActorController : ActorController
 		moveTimeoutAction.Start();
 	}
 
+	/// <summary>
+	/// The on-foot stick. Ledger <b>X-69</b> and <b>X-71</b>: a SUSPENDED controller steers
+	/// nothing, because a claimed body's only writer is <c>ServerPlayer</c>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>One missing guard, two ledger rows.</b> <c>IAiDriver.Suspend</c> sets
+	/// <c>enabled = false</c> when a connection claims this body, and Unity's flag gates the
+	/// engine's own callbacks only -- an override another component CALLS runs regardless. That
+	/// is why <see cref="CarInput"/>, <see cref="BoatInput"/>, <see cref="HelicopterInput"/>,
+	/// <see cref="StartSeated"/>, <see cref="EndSeated"/> and <c>AiWorkAllowed</c> each open with
+	/// this check. This one did not, so on a claimed body it kept returning a real walk vector:
+	/// the server walked the body 518 m across the map while its owner sent no movement input
+	/// (<b>X-71</b>), and the same call reached <c>LocalAvoidanceVelocity</c>, which enumerates
+	/// <c>squad.members</c> on a slot that is squadless by design -- 10,126 NREs in one 600 s
+	/// soak (<b>X-69</b>).
+	/// </para>
+	/// <para>
+	/// <b>Zero, not the relayed axes.</b> <see cref="CarInput"/> returns what the server accepted
+	/// because a vehicle's physics needs a stick either way. On foot there is no equivalent:
+	/// <c>NetMovementAgent</c> applies the accepted input to the <c>CharacterController</c>
+	/// itself, so anything returned here would be a SECOND writer to one position -- which is the
+	/// condition <c>IAiDriver</c> exists to prevent.
+	/// </para>
+	/// <para>
+	/// Above the <c>hasPath</c> branch rather than inside it, for the reason <see cref="CarInput"/>
+	/// states: a claimed body that happens to be pathing is the only state either defect was ever
+	/// observed in.
+	/// </para>
+	/// </remarks>
 	public override Vector3 Velocity()
 	{
+		if (!base.enabled)
+		{
+			return Vector3.zero;
+		}
 		if (hasPath)
 		{
 			float num = 3.2f;
@@ -1549,8 +1721,22 @@ public class AiActorController : ActorController
 		return Vector3.zero;
 	}
 
+	/// <summary>
+	/// The swimming stick. Guarded for the reason <see cref="Velocity"/> is, and in the same
+	/// change: it reads the same path on the same claimed body.
+	/// </summary>
+	/// <remarks>
+	/// No defect was observed through this one -- the shipping map has no water a claimed body
+	/// swims in. It is guarded anyway because leaving the sibling unguarded is precisely how
+	/// <see cref="Velocity"/> survived six hand-applied guards, and the companion test
+	/// <c>EverySteeringOverrideCarriesTheGuardRatherThanAListOfSix</c> now refuses the seventh.
+	/// </remarks>
 	public override Vector3 SwimInput()
 	{
+		if (!base.enabled)
+		{
+			return Vector3.zero;
+		}
 		if (hasPath)
 		{
 			return GetWaypointDeltaBlockable().ToGround().normalized;
@@ -1588,8 +1774,20 @@ public class AiActorController : ActorController
 		return Vector3.zero;
 	}
 
+	/// <summary>
+	/// The boat's stick. Ledger <b>X-46</b>: a SUSPENDED controller returns the axes the server
+	/// accepted, not the bot's opinion and not zero.
+	/// </summary>
+	/// <remarks>
+	/// See <see cref="CarInput"/> for why the guard is on <c>enabled</c> and why it sits above the
+	/// <c>hasPath</c> return rather than replacing it.
+	/// </remarks>
 	public override Vector2 BoatInput()
 	{
+		if (!base.enabled)
+		{
+			return NetVehicleAxisRelay.CarAxesFor(this);
+		}
 		if (!hasPath)
 		{
 			return Vector2.zero;
@@ -1605,8 +1803,39 @@ public class AiActorController : ActorController
 		return Vector2.ClampMagnitude(vector, 1f);
 	}
 
+	/// <summary>
+	/// The car's stick. Ledger <b>X-46</b>: a SUSPENDED controller returns the axes the server
+	/// accepted for this body, which is how a networked driver's vehicle moves at all.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why this class is the one that reads a network relay.</b> <c>Car.FixedUpdate</c> pulls
+	/// through <c>Driver().controller.CarInput()</c>, and a networked player's server-side body
+	/// carries an <c>AiActorController</c> because <c>IronfrontNetBindings.CreatePlayerBody</c>
+	/// instantiates the bot prefab. So this override IS the driver seam for every real networked
+	/// driver, and until X-46 it answered with a bot's pathfinding — or, having no path, with
+	/// nothing. Measured: 1,285 accepted <c>C_VEHICLE_INPUT</c> messages against a hull that never
+	/// moved (<c>artifacts/lane-a/r5/r5-combat-05</c>).
+	/// </para>
+	/// <para>
+	/// <b><c>enabled</c>, not <c>squad != null</c> (O-D2).</b> <c>NetServerActor.Claim</c> suspends
+	/// the bot brain through <c>IAiDriver.Suspend</c>, which sets <c>enabled = false</c>, so
+	/// <c>!enabled</c> names exactly "this controller is not steering this body" — the same
+	/// condition X-45 and X-47 established. A real bot's controller is enabled and never reaches
+	/// the relay, so an AI convoy still drives itself.
+	/// </para>
+	/// <para>
+	/// <b>Above the <c>hasPath</c> return, not folded into it.</b> A suspended controller has no
+	/// path either, so ordering them the other way would return zero before the relay was ever
+	/// consulted — and the symptom would be indistinguishable from the defect being fixed.
+	/// </para>
+	/// </remarks>
 	public override Vector2 CarInput()
 	{
+		if (!base.enabled)
+		{
+			return NetVehicleAxisRelay.CarAxesFor(this);
+		}
 		if (!hasPath)
 		{
 			return Vector2.zero;
@@ -1747,8 +1976,47 @@ public class AiActorController : ActorController
 		return vector;
 	}
 
+	/// <summary>
+	/// The bot brain's helicopter stick. Ledger <b>X-47</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A SUSPENDED controller flies nothing, and without this guard it throws once per physics
+	/// step.</b> <c>Helicopter.FixedUpdate</c> asks its driver's controller for a stick position
+	/// every step — <c>Driver().controller.HelicopterInput()</c> — and a networked player's
+	/// server-side body carries an <c>AiActorController</c> with no <see cref="squad"/>, because
+	/// <c>IronfrontNetBindings.CreatePlayerBody</c> instantiates the bot character. The first line
+	/// below dereferences it.
+	/// </para>
+	/// <para>
+	/// <b>Measured:</b> 309 <c>NullReferenceException</c>s in a 150 s lane-A Combat run and 1,204
+	/// in a 300 s one, all of them this line
+	/// (<c>artifacts/lane-a/r5/r5-combat-05-server.log</c>). Check 11 asks whether a headless
+	/// server SURVIVES a networked driver; a throw per physics step for as long as a player sits
+	/// in a pilot seat is the answer it was written to find.
+	/// </para>
+	/// <para>
+	/// <b>Why <see cref="BoatInput"/> and <see cref="CarInput"/> did not throw.</b> Both opened
+	/// with <c>if (!hasPath) return zero</c>, and a suspended AI has no path — so they were
+	/// already returning a neutral stick where this one reached its squad first. Since X-46 all
+	/// three carry the same explicit <c>enabled</c> guard, and the incidental <c>hasPath</c> cover
+	/// is no longer what is holding the other two up.
+	/// </para>
+	/// <para>
+	/// <b>The relay, not the takeoff ramp below, and not zero either since X-46.</b> The real
+	/// driver input for a networked pilot arrives through <c>NetDriverInputSink</c>, which hands
+	/// a body with no <c>FpsActorController</c> a <c>NetVehicleAxisRelay</c> instead — so this
+	/// returns the stick the server accepted. It falls back to zero when nothing is driving, which
+	/// is what a suspended controller owes a vehicle. What this method must not do, and still does
+	/// not, is supply the BOT's opinion to a vehicle a player is sitting in.
+	/// </para>
+	/// </remarks>
 	public override Vector4 HelicopterInput()
 	{
+		if (!base.enabled)
+		{
+			return NetVehicleAxisRelay.HelicopterAxesFor(this);
+		}
 		if (!squad.AllSeated() || !helicopterTakeoffAction.TrueDone())
 		{
 			return new Vector4(0f, -1f + helicopterTakeoffAction.Ratio() * 1.5f, 0f, 0f);
@@ -1844,8 +2112,52 @@ public class AiActorController : ActorController
 	{
 	}
 
+	/// <summary>
+	/// The bot brain's seat bookkeeping. Ledger <b>X-45</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A SUSPENDED controller does none of it, and that guard is load-bearing.</b> Everything
+	/// below is AI STEERING state -- squad leadership, the seeker's tag penalties, the two
+	/// pathfinding modifiers -- and a body that has been claimed by a connection is steered by
+	/// <c>ServerPlayer</c> through <c>NetMovementAgent</c> instead. <c>NetServerActor.Claim</c>
+	/// says so and disables this component to make it true (<c>IAiDriver.Suspend</c>).
+	/// </para>
+	/// <para>
+	/// <b>Disabling the component was not enough on its own</b>, and it buys even less than this
+	/// remark used to claim. It was written as "stops <c>Update</c> and the eight coroutines";
+	/// <b>it does not stop the coroutines</b> — Unity only stops those when the GameObject is
+	/// deactivated — which is <b>X-57</b>, found by a run on 2026-08-28 and closed by gating
+	/// <c>AiWorkAllowed()</c> on <c>enabled</c>. What it stops is <c>Update</c>. Separately,
+	/// <c>Actor.EnterSeat</c> calls <c>controller.StartSeated</c> DIRECTLY, and a direct call
+	/// runs on a disabled MonoBehaviour. So the one AI path a networked player could reach was
+	/// this one, and it dereferenced <see cref="squad"/>, which a player-slot body has never had:
+	/// <c>IronfrontNetBindings.CreatePlayerBody</c> instantiates <c>ActorManager.actorPrefab</c>
+	/// -- the bot character -- and no squad ever adopts it.
+	/// </para>
+	/// <para>
+	/// <b>What it cost, and why it was invisible until 2026-08-27.</b> A
+	/// <c>NullReferenceException</c> out of <c>ServerSeatBridge.Apply</c>, thrown AFTER
+	/// <c>Seat.SetOccupant</c> and the transform re-parent and BEFORE <c>Actor.EnterSeat</c>
+	/// finished -- so the seat was booked, the body was welded to it, and the rest of the entry
+	/// never ran. Nothing in the shipped client could reach it (X-30: <c>SeatRequestMessage</c>
+	/// had no production sender until R2) and lane A could not either (X-34: every frame carried
+	/// <c>InputButtons.None</c>), so check 11's <i>drive</i> verb had never once been executed
+	/// against a real server. The first lane-A Combat run found it in ninety seconds.
+	/// </para>
+	/// <para>
+	/// <b>Guarded on <c>enabled</c> rather than on <c>squad != null</c>.</b> A null squad on a
+	/// genuine bot is an AI setup fault and should still throw where it is thrown today -- line
+	/// 644 dereferences it unguarded, so bots always have one. <c>enabled</c> names the actual
+	/// condition: this controller is not driving this body.
+	/// </para>
+	/// </remarks>
 	public override void StartSeated(Seat seat)
 	{
+		if (!base.enabled)
+		{
+			return;
+		}
 		if (seat.type == Seat.Type.Driver || seat.type == Seat.Type.Pilot)
 		{
 			squad.MakeLeader(this);
@@ -1874,8 +2186,22 @@ public class AiActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// Unwinds what <see cref="StartSeated"/> set. Ledger <b>X-45</b>.
+	/// </summary>
+	/// <remarks>
+	/// Guarded for <see cref="StartSeated"/>'s reason and one more: this method is the exact
+	/// inverse of a call the guard above may have declined, so running it on a suspended
+	/// controller would clear pathfinding state that this component never set -- and would do it
+	/// on behalf of a body it is not steering. <c>Actor.ExitSeat</c> reaches it by the same
+	/// direct call.
+	/// </remarks>
 	public override void EndSeated(Vector3 exitPosition, Quaternion flatFacing)
 	{
+		if (!base.enabled)
+		{
+			return;
+		}
 		flying = false;
 		aquatic = false;
 		radiusModifier.enabled = false;
@@ -1892,8 +2218,22 @@ public class AiActorController : ActorController
 	{
 	}
 
+	/// <summary>
+	/// Re-arms the path after a ragdoll. Guarded for <see cref="Velocity"/>'s reason, and found
+	/// by its companion test rather than by inspection.
+	/// </summary>
+	/// <remarks>
+	/// Both branches START movement on this body -- <c>Goto</c> issues a new path, and
+	/// <c>RecalculatePath</c> re-issues the one it had. On a claimed body that is X-71's exact
+	/// mechanism arriving through a second door: the brain is suspended, and a ragdoll ending
+	/// hands it the wheel back.
+	/// </remarks>
 	public override void EndRagdoll()
 	{
+		if (!base.enabled)
+		{
+			return;
+		}
 		if (inCover)
 		{
 			Goto(cover.transform.position);
@@ -1908,8 +2248,23 @@ public class AiActorController : ActorController
 	{
 		LeaveCover();
 		CancelPath();
-		squad.DropMember(this);
+
+		// A squadless body is ORDINARY here, not exceptional. Every networked player slot is one
+		// of these characters, built by NetServerBindings.PlayerBodyFactory, and nothing ever puts
+		// it in a squad -- InSquad() exists precisely because the field is allowed to be null.
+		//
+		// Without the guard the first death threw here, which ABORTED the rest of Actor.Die, so
+		// the body never finished dying and died again the next frame, and the frame after that:
+		// 676 NullReferenceExceptions in one 90-second lane-B run (combat-01/server.log). The
+		// noise was the small half of the cost; the large half is that no player body has ever
+		// completed Actor.Die on a headless server.
+		if (InSquad())
+		{
+			squad.DropMember(this);
+		}
+
 		squad = null;
+		aiCoroutinesAwaitSquad = false;
 		StopAllCoroutines();
 		CancelInvoke();
 	}
@@ -2045,6 +2400,38 @@ public class AiActorController : ActorController
 		return HasCover() && !InCover();
 	}
 
+	/// <summary>
+	/// Leaves the squad roster on the way out. Ledger <b>X-55</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <c>Squad.DropMember</c> had exactly one caller -- <see cref="Die"/> -- so a bot that DIED
+	/// left the roster and a bot that was DESTROYED did not. <c>Squad</c> is a plain C# object
+	/// with no lifecycle of its own, so nothing else was ever going to notice.
+	/// </para>
+	/// <para>
+	/// <b>Why a stale member is a crash and not an empty slot.</b> Unity's overloaded <c>==</c>
+	/// reports a destroyed object as equal to null, so the corpse passes <c>member != this</c> in
+	/// <c>LocalAvoidanceVelocity</c>, passes <c>member.actor.fallenOver</c> (a managed field read,
+	/// which does not throw), and is then asked for <c>Position()</c> -- which reaches
+	/// <c>base.transform</c> and throws. Same defect, same mechanism and the same remedy as
+	/// <c>Actor.OnDestroy</c> (X-49) one register out.
+	/// </para>
+	/// <para>
+	/// <b>The backstop, not the fix.</b> The path that actually destroyed seated bots is
+	/// <c>VehicleSpawner.OnWorldReset</c>, closed by <c>Vehicle.EjectOccupants</c>. This is here
+	/// so that the NEXT path to destroy a bot -- a slot pool being cleared, a scene torn down, one
+	/// not yet written -- does not reopen the same 2,044-exception cascade (O-D9).
+	/// </para>
+	/// </remarks>
+	private void OnDestroy()
+	{
+		if (InSquad())
+		{
+			squad.DropMember(this);
+		}
+	}
+
 	public bool InSquad()
 	{
 		return squad != null;
@@ -2060,6 +2447,10 @@ public class AiActorController : ActorController
 		else
 		{
 			EmoteHailLeaderSlow();
+		}
+		if (aiCoroutinesAwaitSquad)
+		{
+			StartAiCoroutines();
 		}
 	}
 
@@ -2187,10 +2578,34 @@ public class AiActorController : ActorController
 	public override WeaponManager.LoadoutSet GetLoadout()
 	{
 		WeaponManager.LoadoutSet loadoutSet = new WeaponManager.LoadoutSet();
-		loadoutSet.primary = WeaponManager.EntryNamed(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)]);
-		loadoutSet.secondary = WeaponManager.EntryNamed(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)]);
-		loadoutSet.gear1 = WeaponManager.EntryNamed(gearNames[UnityEngine.Random.Range(0, gearNames.Length)]);
+		loadoutSet.primary = WeaponManager.EntryNamed(PinnedOr(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)], LoadoutSlot.Primary));
+		loadoutSet.secondary = WeaponManager.EntryNamed(PinnedOr(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)], LoadoutSlot.Secondary));
+		loadoutSet.gear1 = WeaponManager.EntryNamed(PinnedOr(gearNames[UnityEngine.Random.Range(0, gearNames.Length)], LoadoutSlot.Gear1));
 		return loadoutSet;
+	}
+
+	// Ledger X-27. A networked player's server-side body comes through here, so which weapon
+	// a lane-B shooter holds was a random draw and two runs of one programme were not
+	// comparable shot-for-shot (weapon 1, 1, 15 across three runs; 30 shots against 14).
+	//
+	// THE DRAW IS ALWAYS CONSUMED, and that is structural rather than a discipline: `drawn` is
+	// an ARGUMENT, so C# evaluates the Random.Range call before this method is entered and no
+	// edit inside it can skip one. Pinning a loadout therefore cannot shift the RNG sequence
+	// for anything else the seed governs — the same argument PinnedSpawnPointDirectory makes
+	// for spawn selection, where the reservoir draw is likewise still taken.
+	//
+	// With no directory installed — every configuration that ships — this returns `drawn`
+	// and the behaviour is what it was before the seam existed.
+	private static string PinnedOr(string drawn, LoadoutSlot slot)
+	{
+		ILoadoutDirectory directory = NetServerBindings.Loadouts;
+		if (directory == null)
+		{
+			return drawn;
+		}
+
+		string forced = directory.OverrideFor(slot);
+		return string.IsNullOrEmpty(forced) ? drawn : forced;
 	}
 
 	private void SwitchToPrimaryWeapon()

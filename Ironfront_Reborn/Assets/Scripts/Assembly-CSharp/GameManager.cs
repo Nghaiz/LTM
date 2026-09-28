@@ -77,6 +77,27 @@ public class GameManager : MonoBehaviour
 	private void StartGame()
 	{
 		ingame = true;
+
+		// P27. The offline scoreboard is zeroed HERE because nothing else does it, and because
+		// ScoreUi.Awake says so: "Resetting belongs to whatever starts a match, not to whatever
+		// draws it." That reasoning is right and it is why the reset left Awake -- but the owner
+		// it named was never given the call. `MatchScoreboard.Reset` shipped with zero callers,
+		// its own summary reading "Called when a match starts".
+		//
+		// The original got this free. Ravenfield's ScoreUi zeroed all four counters in Awake and
+		// the HUD prefab is re-instantiated per match, so every match began at 0-0. Ours moved
+		// the state onto a plain static that survives scene loads, so the second offline match in
+		// a process opened holding the first one's score AND its latched `GameEnded` -- which
+		// makes `Win()` early-return, so that match, and every later one, could never end. The
+		// carried-over flags also multiply every kill through `ScoreMultiplier`.
+		//
+		// Before the HUD is instantiated below, deliberately: zero the match state before
+		// anything that draws it exists, so the first paint cannot show the previous round.
+		//
+		// Networked play is unaffected either way -- there the server scores in
+		// MatchStateMachine, `Changed` is subscribed offline only, and AddScore/AddFlag are
+		// already gated on NetContext.IsOffline at both call sites.
+		MatchScoreboard.Current.Reset();
 		// The HUD, the player and the decal pool are the client's half of a match. A dedicated
 		// server that instantiates them gets a Canvas nobody looks at, an FpsActorController
 		// reaching for SceneryCamera.instance in Start, and a null-instance singleton behind

@@ -21,7 +21,10 @@ public class IngameMenuUi : MonoBehaviour
 		MouseLook.paused = true;
 		Cursor.lockState = CursorLockMode.None;
 		Cursor.visible = true;
-		Time.timeScale = 0f;
+		// Pausing never wrote fixedDeltaTime; Unity issues no fixed step at timeScale 0, and
+		// a zero step would be handed to every `rate * Time.fixedDeltaTime` in the project.
+		// PhysicsRate preserves that asymmetry rather than tidying it away.
+		PhysicsRate.SetTimeScale(0f);
 		instance.mixer.SetFloat("pitch", Time.timeScale);
 	}
 
@@ -33,8 +36,10 @@ public class IngameMenuUi : MonoBehaviour
 		}
 		instance.canvas.enabled = false;
 		MouseLook.paused = false;
-		Time.timeScale = 1f;
-		Time.fixedDeltaTime = Time.timeScale / 60f;
+		// PhysicsRate, not a second `Time.timeScale / 60f`. That literal made this UI script
+		// an authority on the project's physics rate, and a peer that never constructed it --
+		// a dedicated server build -- kept a different one. Issue #123.
+		PhysicsRate.SetTimeScale(1f);
 		instance.mixer.SetFloat("pitch", Time.timeScale);
 		Cursor.lockState = CursorLockMode.Locked;
 		Cursor.visible = false;

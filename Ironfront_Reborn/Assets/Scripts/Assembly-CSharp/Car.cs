@@ -138,6 +138,7 @@ public class Car : Vehicle
 	protected override void FixedUpdate()
 	{
 		base.FixedUpdate();
+		LogDrive();
 		// V5-D3. The body is kinematic on a replicated client, so every WheelCollider write
 		// below steers something PhysX will not move -- and steerAngle would be integrated
 		// from an input this peer does not have, which is exactly what the subtype tail
@@ -183,6 +184,45 @@ public class Car : Vehicle
 				}
 			}
 		}
+	}
+
+	private static bool? _driveLogging;
+
+	private float _nextDriveLog;
+
+	// One line a second per driven car, when IRONFRONT_LOG_VEHICLE=1: what this car's physics
+	// actually read from its driver and what the wheels did with it. The client's [veh-correct]
+	// line showed a server car standing still under a driver holding full throttle and steer
+	// (2026-09-23); this is the line that says whether the input or the wheels are at fault.
+	private void LogDrive()
+	{
+		if (_driveLogging == null)
+		{
+			_driveLogging = System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_VEHICLE") == "1";
+		}
+		if (_driveLogging != true || Time.time < _nextDriveLog)
+		{
+			return;
+		}
+		_nextDriveLog = Time.time + 1f;
+		bool driven = HasDriver();
+		if (!driven && seats[0].occupant == null)
+		{
+			return;
+		}
+		Vector2 input = driven ? Vehicle.Clamp2(Driver().controller.CarInput()) : Vector2.zero;
+		float brake = 0f;
+		float averageRpm = 0f;
+		bool grounded = false;
+		foreach (WheelConfiguration wheel in wheels)
+		{
+			brake = Mathf.Max(brake, wheel.collider.brakeTorque);
+			averageRpm += wheel.collider.rpm / wheels.Length;
+			grounded |= wheel.collider.isGrounded;
+		}
+		Debug.Log($"[car-drive] t={Time.time:F2} name={base.gameObject.name} role={(Ironfront.Net.Unity.NetContext.IsServer ? "server" : Ironfront.Net.Unity.NetContext.IsClient ? "client" : "offline")} "
+			+ $"hasDriver={driven} networkDriven={NetworkDriven} burning={burning} input=({input.x:F2},{input.y:F2}) steerAngle={steerAngle:F1} rpm={averageRpm:F0} brake={brake:F0} grounded={grounded} "
+			+ $"kinematic={rigidbody.isKinematic} speed={rigidbody.linearVelocity.magnitude:F1} pos={rigidbody.position}");
 	}
 
 	// Cosmetic only: the steering-wheel prop reads the steerAngle the fixed step integrated,

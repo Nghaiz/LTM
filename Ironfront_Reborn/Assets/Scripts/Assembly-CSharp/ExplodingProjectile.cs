@@ -44,7 +44,22 @@ public class ExplodingProjectile : Projectile
 	{
 		base.transform.position = hitInfo.point;
 		bool flag = false;
-		if (hitInfo.collider.gameObject.layer == 12)
+		// `source` is null on every projectile NetClientProjectilePresenter spawns, and that is
+		// deliberate rather than a gap: V7-D3 puts damage entirely on the server, so a cosmetic
+		// client instance must not carry the field Weapon.SpawnProjectile sets to make a
+		// projectile do real damage. The base Projectile.Hit already honours that -- its two
+		// reads of `source` are a reference COMPARISON and a conjunct behind
+		// EngineAppliesProjectileDamage, which is false on a client. This override did not, and
+		// threw on every rocket a client watched (95 NullReferenceExceptions across three
+		// clients in artifacts/lane-b/p4-combat-01).
+		//
+		// SKIPPING THE WHOLE LAYER-12 BLOCK IS THE BEHAVIOUR-PRESERVING FIX, not a narrower
+		// null-check on line 1 of it. Before this change `source.IsSeated()` threw before
+		// `componentInParent.Damage` was ever reached, so a source-less projectile applied no
+		// vehicle damage. Guarding only the dereference would let that Damage call through for
+		// the first time -- a client applying vehicle damage, which is precisely what V7-D3
+		// forbids. A throw is not an authority check, but it was doing the work of one here.
+		if (source != null && hitInfo.collider.gameObject.layer == 12)
 		{
 			Vehicle componentInParent = hitInfo.collider.gameObject.GetComponentInParent<Vehicle>();
 			if (source.IsSeated() && componentInParent == source.seat.vehicle)
@@ -54,7 +69,11 @@ public class ExplodingProjectile : Projectile
 			flag = !componentInParent.dead;
 			componentInParent.Damage(Damage());
 		}
-		if ((Explode(hitInfo.point, hitInfo.normal) || flag) && !source.aiControlled)
+		// The hitmarker belongs to a human shooter. No source means nobody local fired this, so
+		// there is no one to mark for -- the real marker reaches the real shooter as
+		// S_HIT_CONFIRM (V7 task 3). Explode() still runs: the blast is the cosmetic half and is
+		// the entire reason a client instantiates the projectile at all.
+		if ((Explode(hitInfo.point, hitInfo.normal) || flag) && source != null && !source.aiControlled)
 		{
 			IngameUi.Hit();
 		}
@@ -66,8 +85,16 @@ public class ExplodingProjectile : Projectile
 		// V1 task 3: Explode now needs to know WHO set it off and WHAT KIND it is, so the
 		// server can attribute the S_EXPLOSION and a client can recognise its own blast.
 		// Rocket covers every ExplodingProjectile in scope -- rockets and tank shells alike.
-		bool result = ActorManager.Explode(
-			position, explosionConfiguration, source, Ironfront.Net.Protocol.ExplosionKind.Rocket);
+		// debt-closure phase 2 task 2e. LibraryOwnsProjectileDamage, NOT the negation of
+		// EngineAppliesProjectileDamage: this call also applies the corpse ragdoll impulse, which
+		// is kept at every role because corpses are never replicated (AD-4), so gating it on
+		// "does the engine apply damage" would switch corpses off on every client. The narrower
+		// question is false offline and on a client, so both are byte-for-byte unchanged; it goes
+		// true only on a server that has handed flight to the library stepper (ledger C-1).
+		bool result = !Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
+			&& ActorManager.Explode(
+				position, explosionConfiguration, source,
+				Ironfront.Net.Protocol.ExplosionKind.Rocket);
 		base.transform.rotation = Quaternion.LookRotation(up);
 		base.enabled = false;
 		Renderer[] array = renderers;

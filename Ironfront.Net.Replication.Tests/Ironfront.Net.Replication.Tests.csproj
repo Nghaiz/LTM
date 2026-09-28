@@ -61,6 +61,60 @@
       the wire, which is what makes watching them go red the point.
     -->
     <ProjectReference Include="..\tools\SpecChecker\SpecChecker.csproj" />
+    <!--
+      debt-closure, issue #151. JoinTicketSenderTests grades the ticket a Unity client presents,
+      and both halves of that ticket come from configuration: GameClientConfig.PlayerId (which
+      must differ per instance, or the server's one-session-per-player claim turns the second
+      join into a bare InvalidTicket) and DisplayName (which is where a killfeed line gets its
+      name). Pinning the mint without the config would grade JoinTicket.Issue, which was never
+      the broken half.
+    -->
+    <ProjectReference Include="..\Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj" />
+  </ItemGroup>
+
+  <!--
+    debt-closure phase 3C. Same arrangement Ironfront.Client.Input.Tests and
+    Ironfront.Client.Flow.Tests already use, and for the same reason: the code lives under
+    Ironfront_Reborn/Assets/Scripts because that is where Unity has to compile it from, Assets/
+    has no .asmdef, so there is no assembly for a .NET project to reference and no Unity Test
+    Framework either. Compiling the source a second time here is the only way `dotnet test`
+    reaches it.
+
+    Linked here rather than into Ironfront.Client.Flow.Tests because the pin that matters drives
+    the payload through the real ServerMessageRouter, and Flow.Tests deliberately does not
+    reference Ironfront.Net.Replication.
+
+    THE ONE RULE: no UnityEngine in a linked file. A `using UnityEngine;` added to
+    BaselineAckPolicy fails this build rather than silently dropping it out of coverage - which
+    is exactly the fate its subject, AckBaselineMessage, had for four phases.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\BaselineAckPolicy.cs"
+             Link="Linked\BaselineAckPolicy.cs" />
+
+    <!--
+      debt-closure phase 3D lane B. The scripted-input programme and the cursor that walks it
+      are the only arithmetic in lane B's client half; the rest is Unity wiring nothing in this
+      repository compiles. Linking them keeps the half that CAN be graded graded.
+    -->
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\ScriptedInputProgramme.cs"
+             Link="Linked\ScriptedInputProgramme.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\ScriptedInputCursor.cs"
+             Link="Linked\ScriptedInputCursor.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\ScriptedAim.cs"
+             Link="Linked\ScriptedAim.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\LaneBSpawnPin.cs"
+             Link="Linked\LaneBSpawnPin.cs" />
+
+    <!--
+      The client-side half of the loadout pin. It lives in Net/Shared rather than in
+      Diagnostics because Assembly-CSharp has to name it (FpsActorController.GetLoadout is the
+      seam), and LaneBHarness.cs's own header states the rule that nothing outside Diagnostics
+      may name a type from that folder: a build defining IRONFRONT_NO_DIAGNOSTICS loses the type
+      and Assembly-CSharp stops compiling.
+    -->
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\ClientLoadoutPin.cs"
+             Link="Linked\ClientLoadoutPin.cs" />
   </ItemGroup>
 
 </Project>

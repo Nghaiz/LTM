@@ -70,6 +70,19 @@ namespace Ironfront.Net.Protocol
         Banned                  = 4,
         ServerShuttingDown      = 5,
         AlreadyConnected        = 6,
+        /// <summary>
+        /// The side this ticket names is full; the other one may not be. Distinct from
+        /// <see cref="ServerFull"/> on purpose — "the server is full" has no remedy, and
+        /// "your side is full" has one the player can act on, so rendering them as the same
+        /// sentence throws away the only actionable half. protocol-spec.md § 3.2.
+        /// </summary>
+        /// <remarks>
+        /// Adding a value moves no byte — the reason field was already a <c>u8</c> — so this
+        /// is not a wire change on its own and does not bump PROTOCOL_VERSION by itself. A
+        /// client that predates it must degrade to a generic refusal rather than to silence
+        /// or to a wrong reason; <c>Connection.MapDeniedReason</c> is where that is enforced.
+        /// </remarks>
+        TeamFull                = 7,
     }
 
     /// <summary>Connection state machine. protocol-spec.md section 9.</summary>

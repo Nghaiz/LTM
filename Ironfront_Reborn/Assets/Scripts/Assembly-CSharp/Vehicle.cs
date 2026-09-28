@@ -1,9 +1,10 @@
 using System;
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
-public class Vehicle : MonoBehaviour
+public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehicleBody
 {
 	/// <summary>
 	/// The attacker id meaning "nobody in particular" -- world damage, decay, a crash.
@@ -76,6 +77,24 @@ public class Vehicle : MonoBehaviour
 
 	/// <summary>This prefab's vehicle-type id. 0 means unauthored, and never ships.</summary>
 	public byte NetworkId => networkId;
+
+	/// <summary>
+	/// World position of one seat, or <c>Vector3.positiveInfinity</c> when there is no such seat.
+	/// </summary>
+	/// <remarks>
+	/// <b>The single implementation both ends of the reach check read.</b> The server judges a
+	/// seat request against this; the client picks which seat to offer using the same call.
+	/// Before X-67 there were two measurements -- this one on the server and the hull origin on
+	/// the client -- against one 6 m constant, so a player standing beside a tank could be shown
+	/// a prompt the server then refused with "Too far from the seat."
+	/// </remarks>
+	public Vector3 GetSeatPosition(int seatIndex)
+	{
+		if (seats == null || seatIndex < 0 || seatIndex >= seats.Length) return Vector3.positiveInfinity;
+
+		Seat seat = seats[seatIndex];
+		return seat != null ? seat.transform.position : Vector3.positiveInfinity;
+	}
 
 	public float maxHealth = 1000f;
 
@@ -157,6 +176,8 @@ public class Vehicle : MonoBehaviour
 
 	private Action crashDamageCooldown = new Action(0.2f);
 
+	private float networkCrashDamageNotBefore;
+
 	private Action drainClaimAction = new Action(10f);
 
 	[NonSerialized]
@@ -164,11 +185,79 @@ public class Vehicle : MonoBehaviour
 
 	private int stopBurningRepairs;
 
+	// X-58. One report per vehicle; see HasDriver.
+	private bool reportedOneSidedDriverBooking;
+
+	/// <summary>
+	/// Whether seat 0 holds a body that agrees it is sitting there. Ledger <b>X-58</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Both halves of the link, not just the seat's.</b> <c>Seat.occupant</c> and
+	/// <c>Actor.seat</c> are two separate facts and they can disagree: X-45's remark describes how
+	/// one is made -- a throw AFTER <c>Seat.SetOccupant</c> and the transform re-parent but BEFORE
+	/// <c>Actor.EnterSeat</c> finishes, leaving "the seat booked, the body welded to it, and the
+	/// rest of the entry never ran".
+	/// </para>
+	/// <para>
+	/// <b>What the seat-only reading cost.</b> <c>Car.FixedUpdate</c> asks <c>HasDriver()</c> and
+	/// then reads <c>Driver().controller.CarInput()</c>, whose first act is <c>actor.seat.vehicle</c>
+	/// -- so a one-sided booking threw once per physics step. Measured twice in
+	/// <c>artifacts/lane-a/o6/o6-combat-03-server.log</c>, both immediately after a transport
+	/// <c>Connection.Fail</c>. <c>Boat</c>, <c>Helicopter</c>, <c>Tank</c>, <c>Javelin</c> and this
+	/// class's own ram-damage check read the same pair and were latently exposed to it.
+	/// </para>
+	/// <para>
+	/// <b>Reported once per vehicle, not per frame.</b> This runs inside FixedUpdate for every
+	/// vehicle in the map; a <c>Debug.LogError</c> per call would bury the thing it is reporting.
+	/// The eject path logs the same corruption with more detail when a world reset meets one.
+	/// </para>
+	/// </remarks>
 	public bool HasDriver()
 	{
-		return seats[0].IsOccupied();
+		Actor driver = seats[0].occupant;
+		if (driver == null)
+		{
+			return false;
+		}
+		if (driver.seat == seats[0])
+		{
+			return true;
+		}
+		if (!reportedOneSidedDriverBooking)
+		{
+			reportedOneSidedDriverBooking = true;
+			Debug.LogError(
+				$"[net] the driver seat of '{base.gameObject.name}' is booked by "
+				+ $"'{driver.gameObject.name}', which does not think it is seated there. Treating the "
+				+ "vehicle as driverless. Reported once per vehicle; the booking belongs to X-58.");
+		}
+		return false;
 	}
 
+	/// <summary>
+	/// Seat 0's occupant, whatever that occupant thinks. Deliberately NOT the strict reading
+	/// <see cref="HasDriver"/> uses. Ledger <b>X-58</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A strict version of this was written and reverted, and the reason is worth keeping.</b>
+	/// <c>Actor.EnterSeat</c> calls <c>seat.SetOccupant(this)</c> BEFORE it assigns its own
+	/// <c>seat</c> field, and <c>SetOccupant</c> reaches <c>Vehicle.OccupantEntered</c> →
+	/// <c>DriverEntered</c> → <c>Tank.DriverEntered</c>, which reads <c>Driver().team</c>. Inside
+	/// that window the two halves ALWAYS disagree, so a strict <c>Driver()</c> returned null and
+	/// threw — which aborted <c>EnterSeat</c> and left the seat booked with the body's half unset.
+	/// It manufactured the very corruption it was written to survive: 6 vehicles reporting a
+	/// one-sided booking in a single lane-B run that had none before it.
+	/// </para>
+	/// <para>
+	/// <b>Safe because of how it is used.</b> Every reader outside the entry sequence pairs this
+	/// with <see cref="HasDriver"/>, which IS strict, so a corrupt booking is skipped before this
+	/// is called. The two callers that do not pair it — <c>Tank.DriverEntered</c> and
+	/// <c>Tank.DriverExited</c> — run at the entry and exit moments, which is exactly when the
+	/// permissive answer is the correct one.
+	/// </para>
+	/// </remarks>
 	public Actor Driver()
 	{
 		return seats[0].occupant;
@@ -205,12 +294,30 @@ public class Vehicle : MonoBehaviour
 
 	protected virtual void Awake()
 	{
+		networkCrashDamageNotBefore = VehicleSpawnSettle.DeadlineFrom(Time.time);
 		rigidbody = GetComponent<Rigidbody>();
 		audio = GetComponent<AudioSource>();
 		ActorManager.RegisterVehicle(this);
 		// Through ApplyHealth like every other write, so there is exactly one assignment to
 		// health in this file and no second copy of the ladder to drift from it.
 		ApplyHealth(maxHealth, 0f, NoAttacker);
+		// Tank and helicopter author their damage smoke with Play On Awake. ApplyHealth's edge
+		// cache also starts false, so a full-health spawn previously saw "false == false" and
+		// never issued Stop(): every fresh vehicle looked as if it was already burning. Seed the
+		// presentation explicitly; later transitions remain edge-triggered in ApplyHealth.
+		damageParticlesOn = false;
+		if (damageParticles != null)
+		{
+			ParticleSystem.MainModule main = damageParticles.main;
+			main.playOnAwake = false;
+			damageParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		}
+		if (burnParticles != null)
+		{
+			ParticleSystem.MainModule main = burnParticles.main;
+			main.playOnAwake = false;
+			burnParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		}
 		colliders = GetComponentsInChildren<Collider>();
 		if (HasBlockSensor())
 		{
@@ -273,12 +380,65 @@ public class Vehicle : MonoBehaviour
 			DropSeatClaim();
 			drainClaimAction.Start();
 		}
+
+		KeepInsideLevelBounds();
+	}
+
+	/// <summary>
+	/// Pulls this vehicle back into the play area when it leaves it. Ledger <b>E-6</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Server-only, because the fault it prevents is a wire fault.</b> Past the wire's
+	/// ±2048 m, <c>Quantize.PackPos</c> clamps every snapshot to the boundary while this server
+	/// keeps simulating the true position — so every client sees the vehicle pinned, forever,
+	/// with nothing logged. Offline there is no wire and no observer to disagree with, so the
+	/// same flight is merely eccentric and is left alone (D11's posture: single-player is not
+	/// changed by a networking fix).
+	/// </para>
+	/// <para>
+	/// <b>The outward velocity goes with the position.</b> Clamping alone leaves the rigidbody
+	/// still pushing into the wall, so it re-crosses on the next step and the counter climbs
+	/// once per physics tick — a clamp that fires 60 times a second reads as broken rather than
+	/// as a boundary. Only the component pointing out is removed; motion ALONG the face is
+	/// untouched, so a helicopter at the edge flies sideways rather than stopping dead.
+	/// </para>
+	/// </remarks>
+	private void KeepInsideLevelBounds()
+	{
+		if (!NetContext.IsServer || rigidbody == null) return;
+
+		if (!LevelBounds.ClampInside(rigidbody.position, out Vector3 inside)) return;
+
+		Vector3 pushedBackBy = inside - rigidbody.position;
+		rigidbody.position = inside;
+
+		Vector3 velocity = rigidbody.linearVelocity;
+		if (pushedBackBy.x != 0f) velocity.x = 0f;
+		if (pushedBackBy.y != 0f) velocity.y = 0f;
+		if (pushedBackBy.z != 0f) velocity.z = 0f;
+		rigidbody.linearVelocity = velocity;
 	}
 
 	public void OccupantEntered(Seat seat)
 	{
+		// Published FIRST, for the reason Actor.EnterSeat publishes the seat link before
+		// anything that can call out or throw (X-58): the table the snapshot reads is corrected
+		// by the state change itself rather than by reaching the end of this method.
+		//
+		// Here rather than at the call sites because Seat.SetOccupant is the single choke point
+		// every way into a seat funnels through -- and because the AI boards with a direct
+		// Actor.EnterSeat and sends no request, so no other writer exists for a bot.
+		NetVehicleAuthority.PublishSeatOccupancy(
+			base.gameObject,
+			SeatIndexOf(seat),
+			(seat.occupant != null) ? seat.occupant.gameObject : null);
+
 		if (seat == seats[0])
 		{
+			// Scene vehicles Awake long before anybody drives them, so the spawn window has
+			// expired by then. A fresh one covers the driver pulling off the pad.
+			networkCrashDamageNotBefore = VehicleSpawnSettle.DeadlineFrom(Time.time);
 			DriverEntered();
 		}
 		if (!seat.occupant.aiControlled)
@@ -438,7 +598,27 @@ public class Vehicle : MonoBehaviour
 	/// </remarks>
 	public void SetNetworkDriven(bool value)
 	{
-		if (NetworkDriven == value)
+		// Re-resolved rather than trusted. Awake caches this, and Awake has NOT run when a
+		// prefab is instantiated inactive -- which is exactly when the replication layer binds
+		// its proxy and calls this. Ledger X-64.
+		if (rigidbody == null) rigidbody = GetComponent<Rigidbody>();
+
+		// The flag AND the body. The old form returned early on the flag alone, so a call that
+		// arrived before the Rigidbody was resolved recorded NetworkDriven = true, skipped the
+		// isKinematic write, and made every later call a no-op -- the handover was recorded as
+		// done and had never happened. The body then ran local PhysX against the incoming
+		// snapshots for the rest of the match: it settled somewhere near the pad and stayed
+		// there while ApplyRemote's writes were overwritten by the solver every step.
+		//
+		// That is X-64 exactly, and the remark above predicted it before it was measured --
+		// "jitter that looks exactly like a network problem and is not. Nothing above this layer
+		// can diagnose that, because every number on the wire is correct." One observer read
+		// vehicle 15 as 303 m behind with vehicleInterpStalled 0, vehicleBaselineMiss 0 and 74
+		// snapshots applied over the interval; its copy was 9 m off before anyone drove.
+		//
+		// Comparing against the body makes this self-healing: the next call re-applies rather
+		// than confirming a state nothing ever reached.
+		if (NetworkDriven == value && rigidbody != null && rigidbody.isKinematic == value)
 		{
 			return;
 		}
@@ -448,7 +628,16 @@ public class Vehicle : MonoBehaviour
 		if (rigidbody != null)
 		{
 			rigidbody.isKinematic = value;
+			return;
 		}
+
+		// Errors over silent fallbacks. A replicated vehicle with no Rigidbody cannot be handed
+		// over at all, and the failure is invisible from the wire -- which is what made the last
+		// one cost two lane-B runs and a milestone.
+		Debug.LogError(
+			$"[net] vehicle '{name}' has no Rigidbody, so it cannot be handed to the replication "
+			+ "layer. Its rendered copy will run local physics against every incoming snapshot "
+			+ "and drift, while the wire reports no fault at all.");
 	}
 
 	/// <summary>
@@ -479,6 +668,12 @@ public class Vehicle : MonoBehaviour
 
 	public void OccupantLeft(Seat seat, Actor leaver)
 	{
+		// The mirror of OccupantEntered's publish, and first for the same reason. A null occupant
+		// is the registry's own encoding for an empty seat, so nothing here has to test whether
+		// the vehicle is now empty -- IsEmpty() below is a different question with a different
+		// answer on a vehicle that still has a gunner.
+		NetVehicleAuthority.PublishSeatOccupancy(base.gameObject, SeatIndexOf(seat), null);
+
 		if (seat == seats[0])
 		{
 			DriverExited();
@@ -526,6 +721,15 @@ public class Vehicle : MonoBehaviour
 	{
 	}
 
+	/// <summary>
+	/// The live hull value. Read-only -- <c>ApplyHealth</c> remains the single writer.
+	/// </summary>
+	/// <remarks>
+	/// This is what the <c>[vehicle-spawn-state]</c> line protocol 10 § 8.3 asks for reads.
+	/// Not <c>GetHealthRatio() * maxHealth</c>, which does not round-trip: a full-health hull
+	/// comes back a fraction under its own ceiling, and the invariant that line exists to
+	/// prove is <c>health == maxHealth</c> exactly.
+	/// </remarks>
 	public float Health
 	{
 		get { return health; }
@@ -579,6 +783,11 @@ public class Vehicle : MonoBehaviour
 	/// </remarks>
 	public void Damage(float amount, int attackerActorId)
 	{
+		// No settle check here, deliberately. This is WEAPON damage -- bullets, explosions,
+		// AutoDamage -- and the settle grace is about collisions only (OnCollisionEnter). It used
+		// to be asked here as well, with no deadline for an empty vehicle, which made every
+		// driverless vehicle on a server immune to everything for the whole match: the
+		// "vehicles are invulnerable" report of 2026-09-23. The original damages empty vehicles.
 		if (NetVehicleAuthority.TryApplyDamage(base.gameObject, amount, attackerActorId))
 		{
 			return;
@@ -732,6 +941,66 @@ public class Vehicle : MonoBehaviour
 		return result;
 	}
 
+	/// <summary>
+	/// Empties every seat WITHOUT killing anyone. Ledger <b>X-55</b>/<b>X-56</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>An occupant is a CHILD of this GameObject.</b> <c>Actor.EnterSeat</c> parents the body
+	/// to <c>seat.transform</c>, so destroying a vehicle destroys everyone riding it -- and does
+	/// so without <c>Actor.Die</c> ever running, which is a very different thing from killing
+	/// them. <see cref="Die"/> has always emptied the seats first for exactly this reason; a
+	/// vehicle destroyed WITHOUT dying had nothing doing it.
+	/// </para>
+	/// <para>
+	/// <b>Measured:</b> <c>VehicleSpawner.OnWorldReset</c> destroys a live, occupied vehicle at
+	/// every round transition, and <c>artifacts/lane-a/o1/o1-combat-01-server.log</c> carries
+	/// 4,183 <c>NullReferenceException</c>s in 150 s -- none of them before the first reset, and
+	/// 2,044 of them one frame apart in <c>AiActorController.LocalAvoidanceVelocity</c>, reading
+	/// a squad member that no longer has a transform.
+	/// </para>
+	/// <para>
+	/// <b>Not <see cref="Die"/>, deliberately (O-D8).</b> A round transition is not a kill.
+	/// Routing the reset through <c>Die</c> would score deaths, spawn a wreck, detonate an
+	/// explosion and hand 200 balance damage to every bot that happened to be seated when the
+	/// clock ran out.
+	/// </para>
+	/// </remarks>
+	public void EjectOccupants()
+	{
+		Seat[] array = seats;
+		foreach (Seat seat in array)
+		{
+			if (seat == null || !seat.IsOccupied())
+			{
+				continue;
+			}
+			Actor occupant = seat.occupant;
+			if (occupant.seat == seat)
+			{
+				occupant.LeaveSeat();
+				continue;
+			}
+			// A ONE-SIDED link: the seat is booked and the body does not think it is sitting in
+			// it. X-45's own remark describes how one is made -- a throw AFTER Seat.SetOccupant
+			// and the transform re-parent but BEFORE Actor.EnterSeat finishes, so "the seat was
+			// booked, the body was welded to it, and the rest of the entry never ran".
+			//
+			// Actor.LeaveSeat opens with seat.transform and would throw on the null half, which
+			// would abort this loop and leave every LATER seat of this vehicle un-ejected -- the
+			// one thing an eject must not do. Reported rather than skipped (X-58 was filed off
+			// this line): the body is still WELDED to a hierarchy that is about to be destroyed,
+			// so the parent has to go whatever the seat records say.
+			Debug.LogError(
+				$"[net] seat {seat.type} of '{base.gameObject.name}' is booked by "
+				+ $"'{occupant.gameObject.name}', which does not think it is seated there. Ejecting "
+				+ "by unparenting so it is not destroyed with this vehicle; the booking is a "
+				+ "half-finished Actor.EnterSeat and belongs to X-58.");
+			occupant.transform.SetParent(null, worldPositionStays: true);
+			seat.OccupantLeft();
+		}
+	}
+
 	public virtual void Die()
 	{
 		dead = true;
@@ -768,8 +1037,42 @@ public class Vehicle : MonoBehaviour
 		Invoke("Explode", 0.3f);
 	}
 
+	private static bool? _hitLogging;
+
+	/// <summary>
+	/// One line per new contact on a server vehicle, when IRONFRONT_LOG_VEHICLE=1: what touched
+	/// it, how hard, and how the hull was moving afterwards. Written for the 2026-09-27 report of
+	/// a tank thrown into the air as its driver climbed out, where the question is which collider
+	/// did the throwing.
+	/// </summary>
+	private void LogContact(Collision c)
+	{
+		_hitLogging ??= System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_VEHICLE") == "1";
+		if (_hitLogging != true || !NetContext.IsServer)
+		{
+			return;
+		}
+		Vector3 v = rigidbody != null ? rigidbody.linearVelocity : Vector3.zero;
+		Vector3 w = rigidbody != null ? rigidbody.angularVelocity : Vector3.zero;
+		Debug.Log($"[veh-hit] t={Time.time:F2} name={base.gameObject.name} other={c.collider.name} "
+			+ $"layer={c.collider.gameObject.layer} root={c.collider.transform.root.name} "
+			+ $"relVel={c.relativeVelocity.magnitude:F1} impulse={c.impulse.magnitude:F0} "
+			+ $"vel={v.magnitude:F1} angVel={w.magnitude:F2} up={base.transform.up.y:F2}");
+	}
+
 	private void OnCollisionEnter(Collision c)
 	{
+		LogContact(c);
+		// Network vehicles are instantiated into a live PhysX world. Let them settle on their
+		// authored pads before collision damage is authoritative; otherwise touching the ground
+		// or a neighbouring spawn in the first frames starts the burn ladder for every client.
+		// The same short window follows a driver entering (DriverEntered arms it), which covers
+		// pulling a vehicle off its pad. Bounded both times: past it, a crash is gameplay.
+		if (VehicleSpawnSettle.CollisionDamageIsSuppressed(
+			NetContext.IsServer, Time.time, networkCrashDamageNotBefore))
+		{
+			return;
+		}
 		float num = Mathf.Abs(Vector3.Dot(c.relativeVelocity, c.contacts[0].normal));
 		if (crashDamageCooldown.TrueDone() && num > crashDamageSpeedThrehshold && c.collider.gameObject.layer != 8 && c.collider.gameObject.layer != 10)
 		{
@@ -793,6 +1096,26 @@ public class Vehicle : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// The wreck goes off: an impulse that throws it, particles and a sound. It damages nothing.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Exactly the original's <c>Vehicle.Explode</c>, by the owner's ruling of 2026-09-27.</b>
+	/// Ledger C-10 (debt-closure phase 2, PR #145) had this also call <c>ActorManager.Explode</c>
+	/// for 300 damage over 6 m, on the reasoning that taking cover behind a burning vehicle should
+	/// be dangerous. In play it made every wreck kill its neighbours: an empty vehicle decays to
+	/// death after about 80 s (original behaviour, <see cref="AutoDamage"/>), bots leave vehicles
+	/// parked side by side on pads and roads, and each wreck set off the next 0.3 s after it — the
+	/// "smoking, burning, exploding in a chain" the 2026-09-27 Island playtest reported. The owner
+	/// chose the original over "infantry only" and "reduced damage".
+	/// </para>
+	/// <para>
+	/// Every client still draws and hears the blast: <see cref="Die"/> runs on each client when the
+	/// vehicle is destroyed, so this method's particles and sound play there locally, as they
+	/// always have. Do not re-add area damage here.
+	/// </para>
+	/// </remarks>
 	protected virtual void Explode()
 	{
 		// The impulse is gameplay -- it is what throws the wreck -- so it runs unguarded. Only
@@ -818,7 +1141,35 @@ public class Vehicle : MonoBehaviour
 
 	private void Cleanup()
 	{
+		// A replicated proxy's wreck belongs to the server: it is shown from snapshots until the
+		// server's S_VEHICLE_DESPAWN, which arrives when the server's own wreck is cleaned up.
+		// Destroying it on a local timer as well would race that despawn and could drop the
+		// minimap marker keyed by this transform before the registry got to remove it.
+		if (NetworkDriven) return;
 		UnityEngine.Object.Destroy(base.gameObject);
+	}
+
+	/// <summary>
+	/// The network id this dead vehicle still holds; despawned when the wreck object goes.
+	/// </summary>
+	private ushort wreckNetId;
+
+	/// <summary>
+	/// Keeps this dead vehicle replicated, with <c>VehicleStateFlags.Dead</c>, until the wreck is
+	/// destroyed, and announces the despawn then. Server only; called by <c>VehicleSpawner</c>.
+	/// </summary>
+	/// <remarks>
+	/// <b>The server's wreck is the one every client sees.</b> Until 2026-09-27 the despawn went
+	/// out the moment the vehicle died, while the server kept the wreck for 15 s as a solid,
+	/// unreplicated body thrown by its own random impulse — something live vehicles and bots hit
+	/// and no player could see — and every client turned ITS copy into a free physics body thrown
+	/// by a different random impulse, which kinematic live vehicles then shoved around. Holding the
+	/// id costs the pool 15 s per wreck; the replacement never waits on it, because the spawner's
+	/// scheduler is told of the death immediately.
+	/// </remarks>
+	public void DespawnWhenDestroyed(ushort netId)
+	{
+		wreckNetId = netId;
 	}
 
 	public Vector3 Velocity()
@@ -931,6 +1282,29 @@ public class Vehicle : MonoBehaviour
 	public bool IsCoarseOverlapping(Vector3 point, float lineRadius = 0f)
 	{
 		return Vector3.Distance(base.transform.position, point) < avoidanceCoarseRadius + lineRadius;
+	}
+
+	/// <summary>
+	/// Leaves ActorManager's vehicle register on the way out. Ledger <b>X-49</b>.
+	/// </summary>
+	/// <remarks>
+	/// <c>DropVehicle</c> was already called from <c>Die</c>, so a vehicle that BURNED left the
+	/// list — and a vehicle that was destroyed without dying did not. See <c>Actor.OnDestroy</c>
+	/// for the full account; this is the same defect one register over, and it is what put a
+	/// destroyed vehicle in front of <see cref="IsStill"/>'s <c>rigidbody</c> read below.
+	/// </remarks>
+	private void OnDestroy()
+	{
+		ActorManager.DropVehicle(this);
+
+		// Here rather than in Cleanup, so every way a wreck can go -- its 15 s cleanup, a world
+		// reset, a scene unload -- takes its id off the wire exactly once.
+		if (wreckNetId != 0)
+		{
+			ushort netId = wreckNetId;
+			wreckNetId = 0;
+			NetVehicleLifecycle.ReportDespawned(netId, Ironfront.Net.Protocol.VehicleDespawnReason.Destroyed);
+		}
 	}
 
 	public bool IsStill()

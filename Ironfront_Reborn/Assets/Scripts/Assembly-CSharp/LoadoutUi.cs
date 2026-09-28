@@ -396,7 +396,10 @@ public class LoadoutUi : MonoBehaviour
 
 	public void OnDeployClick()
 	{
-		FpsActorController.instance.CloseLoadout();
+		// DeployFromLoadout, not CloseLoadout: it does the same close and additionally posts the
+		// edge a networked client turns into C_SPAWN_REQUEST. Offline ignores the edge, so this
+		// is the same call it always was for the single-player game.
+		FpsActorController.instance.DeployFromLoadout();
 	}
 
 	/// <summary>

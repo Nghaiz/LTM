@@ -4,6 +4,7 @@
     "references": [
         "Ironfront.Net.Unity.Server",
         "Ironfront.Net.Unity.Shared",
+        "Ironfront.Net.Unity.Diagnostics",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

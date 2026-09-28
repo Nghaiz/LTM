@@ -44,15 +44,15 @@ namespace Ironfront.Net.Unity.Client
     public sealed class NetClientProjectilePresenter : MonoBehaviour
     {
         [Tooltip("Indexed by (byte)ProjectileKind: Shell=0, Rocket=1, GuidedMissile=2, "
-                 + "Grenade=3, AmmoBag=4, Medipack=5, Bullet=6. An empty slot draws nothing and "
+                 + "Grenade=3, AmmoBag=4, Medipack=5, Bullet=6, Spearhead=7. An empty slot draws nothing and "
                  + "must not throw. Client-track item.")]
         [SerializeField] private GameObject[] _prefabsByKind;
 
         private NetClientBootstrap _client;
         private ClientProjectileTracker _tracker;
 
-        private readonly Dictionary<ushort, Projectile> _spawned =
-            new Dictionary<ushort, Projectile>();
+        private readonly Dictionary<ushort, IProjectileBody> _spawned =
+            new Dictionary<ushort, IProjectileBody>();
 
         // Reused every frame. Sized to the id pool so a mass expiry cannot overflow it and leave
         // a projectile alive on screen with nothing left to expire it.
@@ -60,6 +60,9 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>Projectiles this client is currently drawing.</summary>
         public int ActiveCount => _spawned.Count;
+
+        /// <summary>Distinct authoritative projectile ids accepted as new spawns.</summary>
+        public long ProjectilesSpawned { get; private set; }
 
         /// <summary>
         /// Messages naming a kind with no prefab authored. Non-zero means a client-track gap,
@@ -83,7 +86,11 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            _tracker = new ClientProjectileTracker(ProjectileCatalogBuilder.FromPrefabs(_prefabsByKind));
+            // The catalogue is read off the prefabs by the side that can name Projectile and its
+            // configuration; this side receives the finished ProjectileCatalog, which is a
+            // replication-library type and crosses the seam unwrapped.
+            _tracker = new ClientProjectileTracker(
+                NetClientBindings.BuildProjectileCatalog(_prefabsByKind));
         }
 
         private void OnEnable()
@@ -124,17 +131,28 @@ namespace Ironfront.Net.Unity.Client
 
             ProjectileApplyResult result = _tracker.Apply(in message, NetContext.CurrentTick);
 
+            if (IsGrenade(message.Kind))
+            {
+                Debug.Log($"[net] grenade {message.ProjectileId} from actor "
+                          + $"{message.OwnerActorId}: {result.Action}, age "
+                          + $"{result.FastForwardedTicks} ticks, remaining "
+                          + $"{result.RemainingLifetimeSeconds:F2}s, position "
+                          + $"{result.Position.X:F2},{result.Position.Y:F2},{result.Position.Z:F2}");
+            }
+
             if (result.Action == ProjectileApplyAction.Ignore)
             {
                 Despawn(result.ProjectileId);
                 return;
             }
 
+            if (result.Action == ProjectileApplyAction.Spawn) ProjectilesSpawned++;
+
             if (result.Action == ProjectileApplyAction.ReSeat
-                && _spawned.TryGetValue(result.ProjectileId, out Projectile live)
-                && live != null)
+                && _spawned.TryGetValue(result.ProjectileId, out IProjectileBody live)
+                && live != null && live.Exists)
             {
-                live.transform.SetPositionAndRotation(
+                live.Transform.SetPositionAndRotation(
                     ToUnity(result.Position), RotationFor(result.Velocity));
 
                 // THE VELOCITY IS THE POINT OF THE CORRECTION, not the pose. A guided missile
@@ -150,18 +168,27 @@ namespace Ironfront.Net.Unity.Client
             if (prefab == null)
             {
                 UnrenderableKinds++;
+                if (IsGrenade(message.Kind))
+                    Debug.LogError("[net] grenade spawn has no client prefab; the explosion can "
+                                   + "arrive but the thrown grenade cannot be drawn.");
                 return;
             }
 
             GameObject instance = Object.Instantiate(
                 prefab, ToUnity(result.Position), RotationFor(result.Velocity));
 
-            var projectile = instance.GetComponent<Projectile>();
+            IProjectileBody projectile = NetClientBindings.ResolveProjectileBody(instance);
             if (projectile != null)
             {
                 // source stays null on purpose: it is the field Weapon.SpawnProjectile sets to
                 // make a projectile do real damage, and a cosmetic instance must never carry it.
-                projectile.netProjectileId = result.ProjectileId;
+                // Since C4b the seam simply does not expose it, so that is structural rather
+                // than a comment asking nicely.
+                projectile.SetNetProjectileId(result.ProjectileId);
+                // Instantiate happens before Projectile.Start in this frame. Apply the actual
+                // authoritative velocity now as well as on later re-seats so rigidbody-backed
+                // grenades do not sit invisibly at the spawn point for their first rendered step.
+                projectile.ApplyNetVelocity(ToUnity(result.Velocity));
 
                 // A grenade's fuse counts from the launch tick, so both sides detonate on the
                 // same integer rather than on whichever frame each side's own float crossed.
@@ -171,14 +198,22 @@ namespace Ironfront.Net.Unity.Client
                 // roughly four billion and hand the grenade a fuse that never fires. A clamp
                 // costs one comparison and the worst case is a grenade that detonates slightly
                 // early on a client during the first two seconds of a round.
-                if (projectile is GrenadeProjectile grenade)
+                // "Does this thing have a fuse", asked of the projectile itself. It replaces a
+                // `projectile is GrenadeProjectile` type test this assembly may no longer write,
+                // and is the better question: a second fused type would have needed a second
+                // branch here and now needs none.
                 {
                     uint now = NetContext.CurrentTick;
                     var caughtUp = (uint)result.FastForwardedTicks;
-                    grenade.ArmFuse(now >= caughtUp ? now - caughtUp : 0u);
+                    projectile.TryArmFuse(now >= caughtUp ? now - caughtUp : 0u);
                 }
 
                 _spawned[result.ProjectileId] = projectile;
+            }
+            else if (IsGrenade(message.Kind))
+            {
+                Debug.LogError($"[net] grenade prefab '{prefab.name}' has no projectile body; "
+                               + "the instantiated mesh cannot follow authoritative flight.");
             }
         }
 
@@ -190,12 +225,47 @@ namespace Ironfront.Net.Unity.Client
             return _prefabsByKind[index];
         }
 
+        private static bool IsGrenade(ProjectileKind kind)
+            => kind == ProjectileKind.Grenade || kind == ProjectileKind.Spearhead;
+
+        /// <summary>
+        /// Drops a projectile and lets whatever it has to say be heard first.
+        /// </summary>
+        /// <remarks>
+        /// <b>Two things end a client's grenade on the same tick, and only one of them makes a
+        /// sound.</b> The grenade counts its own fuse down from the launch tick and calls
+        /// <c>Explode</c>, which plays the report; this presenter counts the same three seconds
+        /// from the spawn message and destroys the object. Which runs first is frame order, and
+        /// <c>[trace-grenade]</c> showed the instance dying at 3.1 s rather than at the ten
+        /// seconds <c>Explode</c> would have held it — so on a client <c>Explode</c> was not
+        /// running at all. The blast survived that because it is drawn from <c>S_EXPLOSION</c> by
+        /// <c>NetClientExplosionPresenter</c>, a separate path that always runs; the report had no
+        /// such second home, so a client heard nothing.
+        /// </remarks>
         private void Despawn(ushort projectileId)
         {
-            if (!_spawned.TryGetValue(projectileId, out Projectile projectile)) return;
+            if (!_spawned.TryGetValue(projectileId, out IProjectileBody projectile)) return;
 
             _spawned.Remove(projectileId);
-            if (projectile != null) Object.Destroy(projectile.gameObject);
+            if (projectile == null || !projectile.Exists) return;
+
+            GameObject instance = projectile.GameObject;
+
+            AudioSource report = instance.GetComponent<AudioSource>();
+            if (report != null && report.clip != null)
+            {
+                if (!report.isPlaying) report.Play();
+
+                // The source dies with the GameObject, and Destroy takes effect at the end of the
+                // frame -- destroying here would cut the report off before a single sample is
+                // heard, which is exactly what an earlier version of this fix did. Holding the
+                // object for the clip's own length is what makes the sound audible at all; the
+                // renderers are already off, so nothing is drawn while it plays.
+                Object.Destroy(instance, report.clip.length);
+                return;
+            }
+
+            Object.Destroy(instance);
         }
 
         private static Vector3 ToUnity(in Ironfront.Net.Replication.Movement.Vec3 v)

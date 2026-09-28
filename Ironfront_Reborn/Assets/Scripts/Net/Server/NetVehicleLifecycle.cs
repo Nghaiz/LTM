@@ -48,6 +48,63 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>True when something is actually putting these reports on the wire.</summary>
         public static bool IsReplicating => !(_sink is NullVehicleLifecycleSink);
 
+        /// <summary>
+        /// Why the last <see cref="ReportSpawned"/> returned 0, in the server's own words, or
+        /// an empty string when the installed sink cannot say.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>X-70, and what a two-cause message costs.</b> <c>VehicleSpawner</c> reported a
+        /// refused spawn as <i>"either the prefab's networkId is unauthored ... or every vehicle
+        /// id is in use"</i> -- two causes, no way to tell them apart, and a reader picked the
+        /// wrong one: P5 concluded the quadbike and helicopter prefabs were unauthored, and both
+        /// have carried ids since the V3 commit that introduced the field. Every id in
+        /// <c>VehicleIds</c> (1..5) is known to <c>TryGetKind</c>, so by elimination the refusal
+        /// was the id pool -- but nothing on disk said so, and the row sat open for a day being
+        /// investigated in the wrong direction.
+        /// </para>
+        /// <para>
+        /// The sink has counted the two separately the whole time. This is the reading of those
+        /// counters, so the log line names the cause instead of offering a choice.
+        /// </para>
+        /// </remarks>
+        public static string DescribeSpawnRefusal()
+        {
+            if (!(_sink is ServerVehicleLifecycleSink server)) return string.Empty;
+
+            VehicleIdPool ids = server.Ids;
+
+            return $"unauthored={server.UnauthoredPrefabCount} idExhausted={server.IdExhaustedCount}"
+                   + $" | ids in-use={ids.InUseCount} quarantined={ids.QuarantinedCount}"
+                   + $" free={ids.FreeCount} capacity={ids.Capacity}";
+        }
+
+        /// <summary>
+        /// Whether the id pool could replicate one more vehicle right now.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>X-70's capacity half.</b> <c>MAX_VEHICLES</c> is 16 and both shipping maps author
+        /// 14 pads, which <c>VehicleIdPool</c>'s own remark reasoned left two spare. It counts
+        /// PADS, not live vehicles. Four of Dustbowl's pads are <c>AfterMoved</c>: they schedule
+        /// a replacement the moment the first driver enters, while the original is alive and
+        /// still holding its id, so those pads need TWO ids at once. Peak demand is 14 + 4 = 18
+        /// against a capacity of 16, and the last two spawns are refused.
+        /// </para>
+        /// <para>
+        /// <b>True on a client and offline</b>, where the null sink means there is no pool to be
+        /// out of: the spawner must keep producing vehicles in single-player, and 0 is a normal
+        /// id there rather than a refusal.
+        /// </para>
+        /// <para>
+        /// Reads <c>FreeCount</c> without draining quarantine, so it is conservative by exactly
+        /// the ids that are about to come back. A pad that defers one tick too long respawns a
+        /// tick later; a pad that spawns anyway produces a vehicle no client can ever see.
+        /// </para>
+        /// </remarks>
+        public static bool CanReplicateAnotherVehicle
+            => !(_sink is ServerVehicleLifecycleSink server) || server.Ids.FreeCount > 0;
+
         /// <summary>Installs the server's sink. Called from <c>ServerTickLoop.Bind</c>.</summary>
         public static void Install(IVehicleLifecycleSink sink)
             => _sink = sink ?? NullVehicleLifecycleSink.Instance;
@@ -97,10 +154,15 @@ namespace Ironfront.Net.Unity.Server
             // vehicle nothing will ever despawn again, because the sink drops a second despawn
             // for an id it has already quarantined.
             //
-            // This is NOT on its own what keeps a dead vehicle out of the snapshot — the capture
-            // that matters is the one that already ran. ServerTickLoop resolves deaths BEFORE it
-            // captures, for exactly that reason; see BuildAndSendSnapshots.
+            // A DEAD vehicle is meant to be in the snapshot, flagged Dead, until its wreck is
+            // destroyed: VehicleSpawner defers the despawn to Vehicle.OnDestroy so that every
+            // client draws the server's wreck. What this ordering guards is the step after that.
             if (vehicleId != 0) ServerVehicleRegistry.Instance.Unregister(vehicleId);
+
+            // The interest rows go with the id, here where the id actually leaves the wire. The
+            // tick loop also forgets at death, but the wreck is captured -- and re-tracked -- for
+            // 15 s after that, and VehicleInterestTracker leaks per viewer unless told.
+            if (vehicleId != 0) ServerTickLoop.Current?.VehicleInterest.Forget(vehicleId);
 
             _sink.OnVehicleDespawned(vehicleId, reason);
         }

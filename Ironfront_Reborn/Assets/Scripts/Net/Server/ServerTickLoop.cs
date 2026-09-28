@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Interest;
+using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Projectiles;
 using Ironfront.Net.Replication.Server;
@@ -27,19 +29,66 @@ namespace Ironfront.Net.Unity.Server
     /// What is left here is wiring, and wiring is what a playtest is good at catching.
     /// </para>
     /// <para>
-    /// <b>The tick is not driven by the FixedUpdate count.</b> The project assigns
-    /// <c>Time.fixedDeltaTime</c> at runtime — <c>IngameMenuUi.cs:29</c> and
-    /// <c>FpsActorController.cs:497</c> both set it to <c>Time.timeScale / 60f</c> — so
-    /// FixedUpdate runs at 60 Hz, not the 30 the simulation needs, and the value in
-    /// <c>TimeManager.asset</c> is never what runs. The scheduler is fed the wall clock and
+    /// <b>The tick is not driven by the FixedUpdate count.</b> FixedUpdate runs at the project's
+    /// physics rate — 60 Hz, <c>TimeManager.asset</c> — not the 30 the simulation needs. (Until
+    /// issue #123 that rate was also a moving target: <c>IngameMenuUi</c> and
+    /// <c>FpsActorController</c> each overwrote <c>Time.fixedDeltaTime</c> with
+    /// <c>Time.timeScale / 60f</c>, so the value in <c>TimeManager.asset</c> was never what ran
+    /// on a client and always what ran on a server. Both now scale the project setting through
+    /// <c>PhysicsRate</c> instead.) The scheduler is fed the wall clock and
     /// reports how many 30 Hz ticks are owed, which makes the netcode independent of the
     /// physics rate exactly as decision A5 option B requires. Most fixed steps owe 0 ticks and
     /// every second one owes 1.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IReliablePayloadSender
+    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender, IShotAnnouncer
     {
+        /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the protocol ceiling.</summary>
+        private readonly PlayerListEntry[] _playerListEntries =
+            new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+
+        /// <summary>The variable-length body S_PLAYER_LIST is framed from. Never a stackalloc.</summary>
+        private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
+
+        /// <summary>The variable-length body S_CHAT is framed from. Phase P6 task 3.3.</summary>
+        private readonly byte[] _chatBody = new byte[ChatTextMessage.MaxServerBodySize];
+
+        /// <summary>Rows for the next S_PLAYER_SCORES. Reused; sized to the protocol ceiling.</summary>
+        private readonly PlayerScoreEntry[] _playerScoreEntries =
+            new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
+        /// <summary>The variable-length body S_PLAYER_SCORES is framed from. P18 task 3.1.</summary>
+        private readonly byte[] _playerScoreBody = new byte[PlayerScoresMessage.MaxBodySize];
+
+        /// <summary>
+        /// Something has moved the scoreboard since the last broadcast. P18 task 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <b>A flag rather than a send at the call site, and not a timer either.</b> A death is
+        /// the only thing that moves these numbers and <see cref="EmitDeath"/> is where one is
+        /// resolved — but a grenade landing in a crowd resolves several inside one tick, and
+        /// sending from there would put four reliable broadcasts on the wire for one explosion.
+        /// A timer would be the opposite mistake: it would send on ticks where nothing happened
+        /// and still lag the death that did. This coalesces to at most one send per tick, which
+        /// is the cadence the numbers actually change at.
+        /// </remarks>
+        private bool _scoresDirty;
+
+        /// <summary>
+        /// Per-player kills and deaths for this match. Phase P6 task 3.1, checklist A13.
+        /// </summary>
+        /// <remarks>
+        /// Fed from <see cref="EmitDeath"/>, which is the single point where a death is
+        /// RESOLVED on this server -- the same call that costs the dying team its ticket. Read
+        /// once, at match end, by <c>ServerMasterReporter</c>.
+        /// </remarks>
+        private readonly MatchScoreTally _scoreTally = new MatchScoreTally();
+
+        /// <summary>Backing list for <see cref="ScoreRows"/>. Reused; never handed out to keep.</summary>
+        private readonly List<ServerPlayerScoreRow> _scoreRows =
+            new List<ServerPlayerScoreRow>(ProtocolConstants.MAX_PLAYERS);
+
         private readonly Dictionary<ushort, ServerPlayer> _byConnection =
             new Dictionary<ushort, ServerPlayer>(ProtocolConstants.MAX_ACTORS);
 
@@ -72,9 +121,31 @@ namespace Ironfront.Net.Unity.Server
             new HitscanTarget[ProtocolConstants.MAX_ACTORS];
         private int _projectileTargetCount;
         private readonly SpawnAckTracker _spawnAcks = new SpawnAckTracker();
+
+        /// <summary>
+        /// Which vehicles each viewer has been told about. Ledger <b>X-64</b>.
+        /// </summary>
+        /// <remarks>
+        /// A second <see cref="SpawnAckTracker"/> rather than a new type: the tracker is a
+        /// viewer-by-target pair table over two <c>ushort</c>s and does not care that the second
+        /// one names a vehicle. Sharing ONE instance with <see cref="_spawnAcks"/> would be the
+        /// bug, though -- actor 15 and vehicle 15 are different objects with the same number, and
+        /// one table would report a vehicle as already announced because an actor with its id
+        /// had been.
+        /// </remarks>
+        private readonly SpawnAckTracker _vehicleSpawnAcks = new SpawnAckTracker();
         private readonly LagCompensator _lagCompensator;
 
         private readonly ServerRespawnGate _respawnGate = new ServerRespawnGate();
+
+        /// <summary>
+        /// Which corpses still have colliders a vehicle pad refuses to spawn into. Protocol-10
+        /// handoff § 7; Island logged a pad held for thirty retries by a dead actor's
+        /// <c>Bone_002</c>. Held here rather than on <see cref="NetServerActor"/> because there
+        /// is one deadline for the server, not one per body, and because
+        /// <see cref="ResetForNewMatch"/> has to be able to clear it.
+        /// </summary>
+        private readonly CorpseColliderLedger _corpses = new CorpseColliderLedger();
         private readonly ServerFireResolver _fireResolver;
         private readonly ServerActorDamageSink _damageSink;
         private readonly ServerCombatAuthority _combatAuthority;
@@ -131,6 +202,9 @@ namespace Ironfront.Net.Unity.Server
         // fresh list every round.
         private readonly List<ushort> _retainedIds = new List<ushort>(ProtocolConstants.MAX_ACTORS);
 
+        // Reused by ResetForNewMatch: the players whose body is still dead as the round resets.
+        private readonly List<ushort> _stillDeadPlayers = new List<ushort>(16);
+
         /// <summary>Layers a bullet cannot pass through. Mirrors <c>Projectile.cs</c>'s mask.</summary>
         private const int BulletBlockingLayers = -2049;
 
@@ -139,6 +213,15 @@ namespace Ironfront.Net.Unity.Server
         private double _stepStartMs;
         private double _lastPumpMs;
         private bool _running;
+
+        // The two stage spans, split out of the one number RecordTickTime already keeps.
+        // P7 task 4.2: "the netcode is 300 us and the frame is 28 ms" has to be
+        // distinguishable from "the snapshot stage is 20 ms", and a single total cannot say
+        // which. Written here rather than measured by the sink for HeadlessLoadBootstrap's
+        // stated reason -- the sink is a writer, and a second implementation of a number the
+        // loop already has is how a harness ends up grading its own arithmetic.
+        private double _inputStageMs;
+        private double _snapshotStageMs;
 
         /// <summary>So a rebind does not repeat the phase-V2 placeholder-weapon warning.</summary>
         private bool _warnedAboutPlaceholderWeapons;
@@ -155,7 +238,18 @@ namespace Ironfront.Net.Unity.Server
             _lagCompensator.Occlusion = IsOccluded;
             _fireResolver = new ServerFireResolver(_lagCompensator);
             _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
-            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink, _respawnGate);
+            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink);
+            // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
+            // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
+            // pool would drain the gunner's rifle magazines to refill a coaxial.
+            //
+            // BEFORE the combat bridge, which captures it. It was constructed forty lines further
+            // down, so the bridge was handed null and StepMountedWeapon returned on its first
+            // line for every human gunner, forever: no player could fire a tank cannon or a
+            // turret while the authority stood fully built beside it (2026-09-23).
+            _mountedWeaponAuthority = new MountedWeaponAuthority(
+                _mountedWeapons, MountedSpareAmmoPool.Instance);
+
             _combat = new ServerCombatBridge(
                 this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate,
                 _mountedWeapons, _mountedWeaponAuthority);
@@ -198,14 +292,13 @@ namespace Ironfront.Net.Unity.Server
                 _vehicleInputAuthority, ServerActorRegistry.Instance, () => _scheduler.CurrentTick,
                 _turretAuthority);
 
-            // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
-            // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
-            // pool would drain the gunner's rifle magazines to refill a coaxial.
-            _mountedWeaponAuthority = new MountedWeaponAuthority(
-                _mountedWeapons, MountedSpareAmmoPool.Instance);
-
             _router.SpawnRequests = this;
             _router.SeatRequests = _seatBridge;
+
+            // Phase P6 task 3.3. Before this, C_CHAT fell to default: UnknownMessages++, which
+            // is why the client shipped no sender for four phases -- a chat message would have
+            // been counted as corruption on every send (ledger X-8).
+            _router.Chat = this;
 
             // Before V5 this stayed null and every C_VEHICLE_INPUT was counted and dropped --
             // which was V4's honest shipped state, because nothing could drive a vehicle yet.
@@ -300,14 +393,105 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>When a dead actor may come back. Phase-05 task 1.</summary>
         public ServerRespawnGate RespawnGate => _respawnGate;
 
+        /// <summary>The corpse-cleanup record, read by <see cref="NetServerActor"/>'s life edge.</summary>
+        public CorpseColliderLedger Corpses => _corpses;
+
+        /// <summary>
+        /// The respawn edge of protocol-10 handoff § 7: the corpse record is cleared and the
+        /// first snapshot of the new life is made a full one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why the baseline has to go.</b> A delta snapshot only carries what CHANGED, and a
+        /// respawned body legitimately comes back holding the same weapon on the same team — so
+        /// the entry that announces the new life can be three fields wide. That is enough for a
+        /// client that kept its record, and not enough for one that tore the model down when the
+        /// body died, which is what the client track does. <c>DeltaEncoder.Reset</c> has said
+        /// "used on respawn/rejoin" since phase-02 and had no respawn caller until here.
+        /// </para>
+        /// <para>
+        /// <b>Only the respawning player's own session, and the rest is a stated gap.</b> Every
+        /// OTHER client also has to rebuild that model, and the cheap way to reach them is
+        /// <see cref="SpawnAckTracker.Forget"/>, which withholds the actor until a fresh
+        /// <c>S_SPAWN_ACTOR</c> has gone out — one small reliable message per client rather than
+        /// sixteen full 1677-byte snapshots. It is not done here because re-announcing a spawn
+        /// for an id a client already knows is a client-side behaviour this branch cannot
+        /// exercise, and guessing at it would be the kind of repair that masks its own symptom.
+        /// </para>
+        /// <para>
+        /// <b>The death gate is re-armed here too, and for bots nothing else does it.</b>
+        /// <see cref="EmitDeath"/> runs its whole body -- the <c>S_DEATH</c> broadcast, the
+        /// killfeed, the team score and the tally -- only when
+        /// <see cref="ServerRespawnGate.TryBeginDeath"/> answers true, which it does once until
+        /// <see cref="ServerRespawnGate.MarkRespawned"/> clears the record. A player's respawn
+        /// goes through <c>ServerCombatBridge.TryRespawn</c>, which clears it. A bot's respawn
+        /// is the original game's <c>ActorManager</c> wave calling <c>Actor.SpawnAt</c>, which
+        /// knows nothing of the gate, so from protocol 10 (#271) until this line every bot died
+        /// exactly once as far as the match was concerned: its second and later deaths were
+        /// swallowed as "duplicates", no <c>S_DEATH</c> went out and the enemy scored nothing.
+        /// A 32-bot Island round then crawled to 52/39 in eleven minutes and never ended. This
+        /// method is the one place both kinds of respawn meet, so the gate is cleared here; for
+        /// a player it is already clear and the call changes nothing.
+        /// </para>
+        /// </remarks>
+        public void NoteRespawned(ushort actorId)
+        {
+            _respawnGate.MarkRespawned(actorId);
+            _corpses.NoteRespawn(actorId);
+
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ClientSession session = _players[i].Session;
+                if (session.ActorId != actorId) continue;
+
+                session.Encoder.Reset();
+                return;
+            }
+        }
+
         /// <summary>Pacing and the tick-time distribution M1 criterion 1 is graded on.</summary>
         public ServerTickScheduler Scheduler => _scheduler;
+
+        /// <summary>
+        /// Milliseconds the last <see cref="RunInputStage"/> took: poll, decode and the input
+        /// half of every owed tick.
+        /// </summary>
+        public double LastInputStageMs => _inputStageMs;
+
+        /// <summary>Due throwable releases whose engine spawn failed and was rolled back.</summary>
+        public long FailedThrowableLaunches => _combat.FailedThrowableLaunches;
+
+        /// <summary>
+        /// Milliseconds the last <see cref="RunSnapshotStage"/> took: hitbox history, projectile
+        /// stepping and the snapshot build and send.
+        /// </summary>
+        /// <remarks>
+        /// <b>What is in neither.</b> Everything between the two stages runs at Unity's default
+        /// execution order -- actors, the AI, vehicle scripts, <c>MatchController</c> -- so
+        /// <c>Scheduler.TickTimes.Last</c> minus these two is the gameplay span. PhysX is in
+        /// none of the three: every one of these <c>FixedUpdate</c>s runs before Unity steps
+        /// physics, so a tick figure built from them is a SCRIPT figure and P7's report says so
+        /// rather than calling it the frame.
+        /// </remarks>
+        public double LastSnapshotStageMs => _snapshotStageMs;
 
         /// <summary>Inbound message counters, for the HUD and the phase report.</summary>
         public ServerMessageRouter Router => _router;
 
         /// <summary>Connected players.</summary>
         public int PlayerCount => _players.Count;
+
+        /// <summary>
+        /// The lobby room this server is hosting, learned from the join tickets that arrive at
+        /// it. 0 in standalone. P14 3.1.
+        /// </summary>
+        /// <remarks>
+        /// It lives on the loop rather than on <see cref="ServerMasterReporter"/>, which is what
+        /// reports it, because the loop owns the ingress: the ticket is verified here and a
+        /// ticket for the wrong room has to be refused here, before it claims a body. The
+        /// reporter reads it.
+        /// </remarks>
+        public ServerRoomIdentity RoomIdentity { get; } = new ServerRoomIdentity();
 
         /// <summary>The tick the loop is on.</summary>
         public uint CurrentTick => _scheduler.CurrentTick;
@@ -403,6 +587,10 @@ namespace Ironfront.Net.Unity.Server
                 _mountedWeapons,
                 () => _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
+            // A bot's hand-held shot reaches the wire through this, from Weapon.Shoot -- which
+            // cannot name this assembly. Cleared in Unbind with the other weapon seams.
+            NetShotAnnouncements.Announcer = this;
+
             WarnAboutPlaceholderWeapons();
         }
 
@@ -458,6 +646,12 @@ namespace Ironfront.Net.Unity.Server
             _vehicleInterest.Reset();
             _seatArbiter.Reset();
             _burnClock.Reset();
+
+            // Phase P6. AFTER the report, not before it: MatchStateMachine raises MatchEnded at
+            // the end of Playing and ResetRequested only once PostMatchSeconds has run out, so
+            // ServerMasterReporter has already read this by the time the round turns over.
+            // Clearing it anywhere earlier would report an empty scoreboard for every match.
+            _scoreTally.Clear();
             _vehicleInputBridge.Reset();
 
             if (Transport == null) return;
@@ -475,6 +669,7 @@ namespace Ironfront.Net.Unity.Server
             // authority. NetVehicleAuthority.Uninstall exists for the same reason.
             NetTurretAim.Clear();
             NetWeaponAuthority.Clear();
+            NetShotAnnouncements.Clear();
         }
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
@@ -521,13 +716,21 @@ namespace Ironfront.Net.Unity.Server
 
                 for (int i = 0; i < _players.Count; i++)
                     _players[i].Tick(_scheduler.FixedDeltaTime);
+
+                // Delayed throws advance from the simulation clock, not from packet arrival.
+                // This also runs during a catch-up step, once for every tick actually simulated.
+                _combat.AdvancePendingActions(_players, NetContext.CurrentTick);
             }
+
+            _inputStageMs = NowMs() - _stepStartMs;
         }
 
         /// <summary>Stage 2, at execution order +200. Capture the simulated world and send it.</summary>
         public void RunSnapshotStage()
         {
             if (!_running || Transport == null || _ticksOwedThisStep == 0) return;
+
+            double snapshotStartMs = NowMs();
 
             // The input stage advanced CurrentTick once per owed tick, so by the time this runs
             // it names the LAST of them. Recording every owed tick's history under that one
@@ -561,10 +764,23 @@ namespace Ironfront.Net.Unity.Server
 
             _ticksOwedThisStep = 0;
 
+            // P18 task 3.1. Once per step that ran ticks, and only when a death moved the
+            // numbers -- the send rule the phase specifies, expressed where the tick boundary
+            // already is. A step that resolved five deaths sends one table.
+            if (_scoresDirty) EmitPlayerScores();
+
             // One sample per fixed step that actually ran ticks, covering the input stage, the
-            // physics and AI between the two stages, and the snapshot build. That whole span is
-            // what has to fit inside the tick budget, so it is what p99 is measured on.
-            _scheduler.RecordTickTime(NowMs() - _stepStartMs);
+            // AI and gameplay scripts between the two stages, and the snapshot build. That whole
+            // span is what has to fit inside the tick budget, so it is what p99 is measured on.
+            //
+            // NOT the physics. Every one of these stages is a FixedUpdate, and Unity steps PhysX
+            // after the last of them, so this number is the SCRIPT span and P7 reports it under
+            // that name -- with Time.unscaledDeltaTime recorded beside it as the frame that does
+            // include physics. Calling a script span "the tick" is how a p99 passes while the
+            // frame it lives in is over budget.
+            double nowMs = NowMs();
+            _snapshotStageMs = nowMs - snapshotStartMs;
+            _scheduler.RecordTickTime(nowMs - _stepStartMs);
         }
 
         /// <summary>
@@ -670,6 +886,7 @@ namespace Ironfront.Net.Unity.Server
                 ClientSession session = _players[i].Session;
 
                 AnnounceNewActors(session);
+                AnnounceNewVehicles(session);
 
                 // Interest management picks which actors this client is sent and how often. The
                 // per-client view is what the encoder files as its baseline, so a client can
@@ -750,10 +967,59 @@ namespace Ironfront.Net.Unity.Server
                 in viewer, _vehicleWorld, _snapshotIndex, _vehicleView,
                 VehicleSnapshotMessage.MaxBodySize, session.VehicleShedCursor);
 
+            LogDriverVehicleView(session, in viewer);
+
             if (_vehicleView.VehicleCount == 0) return 0;
 
             int written = session.VehicleEncoder.Write(_vehicleBody, _vehicleView);
             return written > 0 ? written : 0;
+        }
+
+        private static bool? _vehicleViewLogging;
+
+        /// <summary>
+        /// About once a second per seated player, when <c>IRONFRONT_LOG_VEHICLE=1</c>: where
+        /// the interest viewer stands, how many vehicles this snapshot carries, and the pose of
+        /// the player's OWN vehicle in it. The server half of the client's
+        /// <c>[veh-correct]</c> line -- together they say whether a stuck predicted vehicle is
+        /// being corrected toward a pose the server never sent.
+        /// </summary>
+        private void LogDriverVehicleView(ClientSession session, in InterestSubject viewer)
+        {
+            _vehicleViewLogging ??=
+                System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_VEHICLE") == "1";
+            if (_vehicleViewLogging != true) return;
+            if (_snapshotIndex % 20 != 0) return;
+            if (!ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                    session.ActorId, out ushort vehicleId, out byte seatIndex))
+                return;
+
+            string own = "absent";
+            for (int i = 0; i < _vehicleView.VehicleCount; i++)
+            {
+                ref VehicleSnapshotEntry e = ref _vehicleView.Vehicles[i];
+                if (e.VehicleId != vehicleId) continue;
+                own = $"({Quantize.UnpackPos(e.PosX):F1},{Quantize.UnpackPos(e.PosZ):F1})";
+                break;
+            }
+
+            string world = "absent";
+            for (int i = 0; i < _vehicleWorld.VehicleCount; i++)
+            {
+                ref VehicleSnapshotEntry e = ref _vehicleWorld.Vehicles[i];
+                if (e.VehicleId != vehicleId) continue;
+                world = $"({Quantize.UnpackPos(e.PosX):F1},{Quantize.UnpackPos(e.PosZ):F1})";
+                break;
+            }
+
+            Debug.Log(
+                $"[veh-view] tick={CurrentTick} actor={session.ActorId} vehicle={vehicleId} "
+                + $"seat={seatIndex} viewer=({Quantize.UnpackPos(viewer.PosX):F1},"
+                + $"{Quantize.UnpackPos(viewer.PosZ):F1}) inView={_vehicleView.VehicleCount}/"
+                + $"{_vehicleWorld.VehicleCount} ownInView={own} ownInWorld={world} "
+                + $"input[accepted={_vehicleInputAuthority.Accepted} stale={_vehicleInputAuthority.RefusedStale} "
+                + $"notDriver={_vehicleInputAuthority.RefusedNotDriver} decayed={_vehicleInputAuthority.DecayedReads} "
+                + $"sinceLast={_vehicleInputAuthority.TicksSinceLastInput(session.ActorId, CurrentTick)}]");
         }
 
         /// <summary>
@@ -868,6 +1134,18 @@ namespace Ironfront.Net.Unity.Server
         /// the actor out of the snapshot until it has gone (the tracker handed to
         /// <c>BuildView</c>) makes the ordering a property of the send rather than a race.
         /// </remarks>
+        /// <summary>
+        /// Whether this actor is something a client should be told about at all. X-18.
+        /// </summary>
+        /// <remarks>
+        /// Extracted from <see cref="AnnounceNewActors"/> so the EditMode suite can drive it:
+        /// the loop it came from needs a session, a transport and a payload buffer, and the
+        /// decision itself needs none of those. The comment at the call site carries the why;
+        /// this carries the rule.
+        /// </remarks>
+        internal static bool IsAnnounceable(NetServerActor actor)
+            => actor != null && !(actor.AvailableForPlayers && !actor.IsClaimed);
+
         private void AnnounceNewActors(ClientSession session)
         {
             IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
@@ -876,13 +1154,42 @@ namespace Ironfront.Net.Unity.Server
             {
                 NetServerActor actor = actors[i];
                 if (actor == null || !actor.isActiveAndEnabled) continue;
+
+                // An UNCLAIMED player slot is not an actor yet. X-18.
+                //
+                // ServerPlayerSlotPool fills sixteen of these at startup and
+                // IronfrontNetBindings.CreatePlayerBody Instantiates them with no position, so
+                // they all sit on the prefab's authored spot near (0, 1000, 0) until somebody
+                // joins and MoveToSpawnPoint places them. Announcing one there told every client
+                // a position that was wrong the moment it was sent -- and MarkSpawnSent fires
+                // once, so the real spawn point was never sent afterwards.
+                //
+                // Harmless while the body is inside the viewer's interest radius, where
+                // snapshots overwrite it every frame. Outside InterestManager.CullRadius it is
+                // the ONLY position the client ever has, which is X-17: measured 2026-08-22, a
+                // driver held (0.03, 999.98, 0.03) for a whole run while the server had placed
+                // that actor at (1885.33, 26.46, 1805.13).
+                //
+                // Waiting for the claim means the announce carries a position that is already
+                // true. A slot that is released and re-claimed is re-announced, because the
+                // leave path runs ForgetActor -> SpawnAckTracker.Forget and drops its rows.
+                //
+                // Bots are unaffected: AvailableForPlayers is set only by the slot pool.
+                if (!IsAnnounceable(actor)) continue;
+
                 if (!_spawnAcks.MarkSpawnSent(session.ActorId, actor.ActorId)) continue;
 
                 ActorSnapshotEntry entry = actor.Capture();
+                SpawnFlags spawnFlags = actor.Movement == null
+                    ? SpawnFlags.IsBot
+                    : SpawnFlags.None;
+                if (actor.ActorId == session.ActorId)
+                    spawnFlags |= SpawnFlags.IsLocalPlayer;
+
                 var message = new SpawnActorMessage(
                     actor.ActorId,
                     actor.Team,
-                    actor.ActorId == session.ActorId ? SpawnFlags.IsLocalPlayer : SpawnFlags.None,
+                    spawnFlags,
                     entry.PosX, entry.PosY, entry.PosZ,
                     entry.Yaw,
                     entry.Health,
@@ -902,6 +1209,125 @@ namespace Ironfront.Net.Unity.Server
                     reliable: true);
             }
         }
+
+        /// <summary>
+        /// Sends S_VEHICLE_SPAWN for every live vehicle this client has not been told about yet.
+        /// Ledger <b>X-64</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Vehicles had no catch-up at all, and actors have had one for phases.</b> The only
+        /// sender of <c>S_VEHICLE_SPAWN</c> in the repository is
+        /// <c>ServerVehicleLifecycleSink.OnVehicleSpawned</c>, which calls
+        /// <c>BroadcastReliable</c> -- to whoever is connected at that instant. Nothing replayed
+        /// it. So a client that joined AFTER a vehicle spawned was never told that vehicle
+        /// exists, and <c>IReliablePayloadSender</c>'s own remark had already written down what
+        /// that costs: <i>"a client that misses the spawn has no vehicle to apply the snapshots
+        /// that follow it to."</i>
+        /// </para>
+        /// <para>
+        /// <b>This is what P20 measured in the one uncontaminated run.</b> At t = 47 s, two
+        /// clients standing on the SAME pinned spawn point held different vehicle sets -- OBS-B
+        /// listed four vehicles and had seen vehicle 15 since t = 5 s, while the driver listed
+        /// zero -- and every client's set GREW over the run, 0 to 4 to 14 to 16. That is not an
+        /// interpolator and not a cull radius; it is each client only ever learning about the
+        /// vehicles that happened to spawn after it connected.
+        /// </para>
+        /// <para>
+        /// <b>The CURRENT pose is sent, not the spawn pose</b>, which is the whole lesson of
+        /// X-17 one object over. <c>AnnounceNewActors</c> announces
+        /// <c>actor.Capture()</c> for exactly this reason: a position that was true when the
+        /// object spawned is harmless inside the viewer's interest radius, where snapshots
+        /// overwrite it every frame, and is the ONLY position the client ever has outside
+        /// <c>InterestManager.CullRadius</c>. Replaying a stored spawn message would have put a
+        /// late joiner's copy of a driven vehicle back on its pad and left it there -- which is
+        /// the frozen-copy symptom X-64 is named after.
+        /// </para>
+        /// </remarks>
+        private void AnnounceNewVehicles(ClientSession session)
+        {
+            ServerVehicleRegistry vehicles = ServerVehicleRegistry.Instance;
+            if (vehicles == null || Transport == null) return;
+
+            VehicleRegistry registry = vehicles.Registry;
+            ushort[] liveIds = registry.LiveIds;
+
+            // LiveCount, NOT liveIds.Length. The array is capacity-sized and its own remark says
+            // "valid for LiveCount" -- Remove is a swap-remove, so every entry past the count is
+            // a STALE id belonging to a vehicle that has already despawned. Walking the whole
+            // array would announce those, and the client would build a proxy for a vehicle that
+            // no longer exists and never receive a despawn for it.
+            int liveCount = registry.LiveCount;
+
+            // A client that joins an empty table is never told about a vehicle again unless one
+            // spawns later, and NOTHING ELSE IN THE PROCESS SAYS SO. The loop below iterates
+            // nothing, this method returns, and the client's world simply has no vehicles in it
+            // for reasons its own log cannot show. That is the shape of the 2026-09-17 session:
+            // both client logs contain the word "vehicle" zero times, which proves the absence
+            // and says nothing about the cause -- and the server's log, which would have, was not
+            // kept. This line is what makes the next occurrence decidable, and it is logged per
+            // join rather than once per process because a join is already a rare event.
+            if (liveCount == 0)
+            {
+                Debug.LogWarning(
+                    "[net] a client joined while the replicated vehicle table is EMPTY. No "
+                    + "S_VEHICLE_SPAWN will be sent for anything, so this client sees no vehicles "
+                    + "at all. Read the spawners above this line: a pad that gave up logs 'gave up "
+                    + "after N blocked attempts', a vehicle with no id logs 'could not replicate', "
+                    + "and a pad that has never spawned since the last world reset logs NOTHING -- "
+                    + "which is the one shape that leaves this method silent.");
+            }
+
+            for (int i = 0; i < liveCount && i < liveIds.Length; i++)
+            {
+                ushort vehicleId = liveIds[i];
+                if (vehicleId == 0) continue;
+
+                if (!registry.TryGetState(vehicleId, out VehicleState state)) continue;
+                if (!vehicles.TryFind(vehicleId, out IGameplayVehicleSource source)) continue;
+                if (source == null || !source.Exists) continue;
+
+                if (!_vehicleSpawnAcks.MarkSpawnSent(session.ActorId, vehicleId)) continue;
+
+                source.ReadPose(out Vector3 position, out Quaternion rotation, out _, out _);
+
+                var message = new VehicleSpawnMessage(
+                    vehicleId,
+                    state.Kind,
+                    source.NetworkTypeId,
+                    Quantize.PackPos(position.x),
+                    Quantize.PackPos(position.y),
+                    Quantize.PackPos(position.z),
+                    Quantize.PackQuat(rotation.x, rotation.y, rotation.z, rotation.w),
+                    state.SeatCount,
+                    flags: 0);
+
+                int written = ServerEventWriter.WriteVehicleSpawn(_eventPayload, in message);
+                if (written < 0)
+                {
+                    Debug.LogError($"[net] vehicle spawn for {vehicleId} did not frame");
+                    continue;
+                }
+
+                Transport.Send(
+                    session.ConnectionId,
+                    (byte)ServerEventWriter.ReliableChannel,
+                    new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                    reliable: true);
+
+                VehicleSpawnsAnnounced++;
+            }
+        }
+
+        /// <summary>
+        /// Catch-up vehicle spawns sent to clients that joined after the spawn. Ledger X-64.
+        /// </summary>
+        /// <remarks>
+        /// Zero on a run where every client connected before the first vehicle -- which is the
+        /// shape a single-client test has, and is exactly why this defect survived. A lane-B run
+        /// with three staggered joins should see it non-zero.
+        /// </remarks>
+        public long VehicleSpawnsAnnounced { get; private set; }
 
         /// <summary>
         /// Sends one already-framed payload to every connected client on a reliable channel.
@@ -966,18 +1392,61 @@ namespace Ironfront.Net.Unity.Server
         /// killfeed saw it, whether the ticket came off the right team.
         /// </para>
         /// <para>
-        /// Stamping the gate here is safe even though the hitscan path already did:
-        /// <c>ServerRespawnGate.MarkDeath</c> ignores a second stamp within one life, precisely
-        /// so a death arriving from more than one place does not push the countdown out by the
-        /// gap between them.
+        /// <b>The gate is stamped HERE and nowhere else.</b> Everything below — the
+        /// <c>S_DEATH</c> broadcast, the killfeed, the corpse, the ticket and the score — sits
+        /// behind a true from <see cref="ServerRespawnGate.TryBeginDeath"/>, so any call site that
+        /// stamps the gate first CONSUMES that edge and this method returns having emitted
+        /// nothing. That is not hypothetical. The hitscan path stamped it, and every
+        /// player-versus-player kill resolved to silence: the victim's client learned it was dead
+        /// from the snapshot, disabled its own input and stood there, and no other client saw a
+        /// thing. The stamp is the death EDGE, not a clock to be set defensively.
+        /// </para>
+        /// <para>
+        /// The paragraph that stood here called the second stamp "safe" because
+        /// <c>MarkDeath</c> ignored a repeat within one life. It was safe when the gate swallowed
+        /// repeats silently. It stopped being safe the moment the gate was changed to RETURN the
+        /// edge — which is the change that made this method correct — and the stamp upstream was
+        /// left behind, defended by a sentence that had gone stale.
         /// </para>
         /// </remarks>
         public void EmitDeath(
             ushort victimActorId, ushort killerActorId, in Vec3 force, byte hitbox,
             CauseOfDeath cause)
         {
-            _respawnGate.MarkDeath(
-                victimActorId, _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
+            float now = _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE;
+
+            // THE DEATH EDGE, and everything below it runs exactly once per life. The gate was
+            // already idempotent -- a second MarkDeath never re-stamped the clock -- but it
+            // swallowed the repeat silently, so this method went on to broadcast a second
+            // S_DEATH, write a second killfeed line and take a second ticket off the team. Two
+            // damage paths reach one actor (ServerCombatBridge's hitscan resolution, and the
+            // engine's own Actor.Damage guard through ServerCombatEvents.ReportDeath), so the
+            // repeat is ordinary rather than exotic. Protocol-10 handoff § 7.
+            if (!_respawnGate.TryBeginDeath(victimActorId, now)) return;
+
+            // The corpse's cleanup deadline starts here, at the same instant the respawn clock
+            // does, so "was this body cleaned up in time" is measured from the one edge rather
+            // than from whenever the collider work happened to be noticed.
+            _corpses.NoteDeath(victimActorId, now);
+
+            // A dead shooter's last shot is forgotten, so the first shot of the next life cannot
+            // read as a redundant copy of it on a tick counter that has come back around.
+            _projectiles?.ForgetShooter(victimActorId);
+
+            // A running reload dies with its owner. Nothing cleared it at THIS edge before --
+            // only ResetWeapon at respawn did -- so a player shot mid-reload kept the timer
+            // running while dead, and the reload completed into a corpse: the snapshot carried
+            // Reloading for the rest of the death, and the reserve was spent on a clip the new
+            // life throws away. The trigger latch goes with it, so a player who died holding
+            // Fire does not fire on the first tick of the next life without releasing first.
+            // Bots have no session and clear their combat state through the authority instead.
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ClientSession session = _players[i].Session;
+                if (session.ActorId != victimActorId) continue;
+                session.ClearCombatStateOnDeath();
+                break;
+            }
 
             var message = new DeathMessage(
                 victimActorId, killerActorId, cause,
@@ -997,6 +1466,17 @@ namespace Ironfront.Net.Unity.Server
             }
 
             ReportDeathToMatch(victimActorId);
+
+            // Phase P6 task 3.1, checklist A13. HERE and not at the serialisation above, even
+            // though the two are three lines apart: this call runs once per resolved death,
+            // whereas the broadcast's bytes may be retransmitted by the reliability layer any
+            // number of times. A tally reading the wire would count one kill per lost ack.
+            _scoreTally.RecordDeath(victimActorId, killerActorId);
+
+            // P18 task 3.1. The tally moved, so the scoreboard is stale until the next snapshot
+            // stage flushes it. Set here rather than sent here: see _scoresDirty for why one
+            // explosion must not become four reliable broadcasts.
+            _scoresDirty = true;
         }
 
         /// <summary>
@@ -1057,12 +1537,86 @@ namespace Ironfront.Net.Unity.Server
                 reliable: true);
         }
 
+        /// <summary>
+        /// Puts one shot on the wire as <c>S_WEAPON_FIRE</c>, to the clients close enough to
+        /// hear it. The one emitter for every shooter: a player's shot (ServerCombatBridge) and a
+        /// bot's (Weapon.Shoot).
+        /// </summary>
+        /// <remarks>
+        /// <b>Bots had no emitter at all until 2026-09-27.</b> A client plays a remote shot's
+        /// report, muzzle flash and tracer only from this message, and the only producers took
+        /// a <c>ClientSession</c> -- which a bot does not have -- while a bot's hitscan bullet
+        /// leaves <c>ServerProjectileBridge.Launch</c> unannounced by design. So on the Island
+        /// playtest the only combat a player could hear was explosions. Cosmetic and unreliable,
+        /// like the player path: a lost shot costs one report, never state.
+        /// </remarks>
+        public void EmitWeaponFire(ushort shooterActorId, byte weaponId, in Vec3 position, in Vec3 aim)
+        {
+            var message = new WeaponFireMessage(
+                shooterActorId,
+                weaponId,
+                Quantize.PackVel16(aim.X),
+                Quantize.PackVel16(aim.Y),
+                Quantize.PackVel16(aim.Z));
+
+            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
+            if (written < 0) return;
+
+            // Only to clients close enough to hear it: a client that could hear every shot on the
+            // map would have been handed an audio wallhack.
+            SendToListenersInEarshot(
+                position,
+                ServerEventWriter.WeaponFireAudibleRadius,
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.CosmeticChannel,
+                reliable: false);
+        }
+
+        /// <summary>
+        /// A bot's hand-held shot, announced from <c>Weapon.Shoot</c> through
+        /// <see cref="NetShotAnnouncements"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>IsClaimed, not aiControlled.</b> A player's body on the server is the AI character
+        /// prefab, so it reads <c>aiControlled == true</c> for the whole match; testing that would
+        /// announce every human shot twice, because ServerCombatBridge already announces it from
+        /// the input frame that fired it.
+        /// </remarks>
+        void IShotAnnouncer.AnnounceShot(GameObject shooter, Vector3 direction)
+        {
+            NetServerActor replicated = shooter.GetComponent<NetServerActor>();
+            if (replicated == null || replicated.IsClaimed) return;
+
+            EmitWeaponFire(
+                replicated.ActorId,
+                replicated.WeaponId,
+                MovementSimulation.ToCore(shooter.transform.position),
+                MovementSimulation.ToCore(direction));
+        }
+
         /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>
         /// <remarks>
+        /// <para>
         /// Resolved through the registry rather than taken as a team argument so the caller
         /// cannot get the team wrong — the actor knows which side it was on, and passing that
         /// through the combat path would mean threading a team byte through code that has no
         /// other use for one.
+        /// </para>
+        /// <para>
+        /// <b>The VICTIM's team is what is passed, and that is not an oversight.</b>
+        /// <c>MatchStateMachine.ReportDeath</c> awards the team OPPOSITE the one named here —
+        /// the game's own rule, keyed on the victim and never on the killer, which is exactly
+        /// what makes a team-kill score for the enemy. Changing this to the killer's team would
+        /// invert the scoreboard and quietly repeal the friendly-fire penalty. Before P11 the
+        /// machine subtracted a ticket from this team instead; the argument did not change, the
+        /// rule on the other side of it did.
+        /// </para>
+        /// <para>
+        /// <b>This is the death edge and the only scoring call.</b> The single-fire property is
+        /// structural — <c>ServerActorDamageSink.ApplyDamage</c> has already flipped
+        /// <c>IsAlive</c> false, so a second hit on the same actor never reaches here. Do not
+        /// add a scoring call in the damage path.
+        /// </para>
         /// </remarks>
         public void ReportDeathToMatch(ushort victimActorId)
         {
@@ -1074,6 +1628,139 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
+        /// Per-player kills and deaths for the match in progress. Phase P6, checklist A13.
+        /// </summary>
+        /// <remarks>
+        /// Exposed rather than reported from here because reporting is
+        /// <c>ServerMasterReporter</c>'s job and this class has no opinion about the master.
+        /// Cleared by <see cref="ResetForNewMatch"/>, which runs after the report -- the match
+        /// machine raises <c>MatchEnded</c> at the end of Playing and <c>ResetRequested</c> only
+        /// once the post-match seconds have run out.
+        /// </remarks>
+        public MatchScoreTally Scores => _scoreTally;
+
+        /// <summary>
+        /// One connected player's identity, for the end-of-match report. Phase P6.
+        /// </summary>
+        /// <remarks>
+        /// A pair rather than two parallel lookups, because the reporter needs both halves for
+        /// the same row and resolving them separately would mean walking the player list twice
+        /// per row.
+        /// </remarks>
+        public readonly struct ServerPlayerScoreRow
+        {
+            /// <summary>The actor this connection drives -- the key the tally is counted on.</summary>
+            public readonly ushort ActorId;
+
+            /// <summary>
+            /// The master's account id from the signed join ticket, or 0.
+            /// </summary>
+            /// <remarks>
+            /// <para>
+            /// <b>0 is an honest answer, not a failure.</b> A loopback session, a lane-B harness
+            /// client and a development stub all join without a ticket to read a player id out
+            /// of. The report says 0 for those rows rather than substituting the actor id: the
+            /// field it lands in is <c>MatchPlayerResult.PlayerId</c>, which the master reads as
+            /// one of its own account ids, and an actor id smuggled into that space would name a
+            /// real and entirely unrelated account.
+            /// </para>
+            /// <para>
+            /// The cost is stated rather than hidden: several ticketless clients in one match
+            /// all report 0, so a lane-B run produces rows the master cannot tell apart. That is
+            /// the correct amount of information -- this server genuinely does not know who they
+            /// were.
+            /// </para>
+            /// </remarks>
+            public readonly int PlayerId;
+
+            public ServerPlayerScoreRow(ushort actorId, int playerId)
+            {
+                ActorId  = actorId;
+                PlayerId = playerId;
+            }
+        }
+
+        /// <summary>
+        /// The connected players, as (actor, account) pairs. Phase P6, checklist A13.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Rebuilt on each read into a reused list rather than maintained alongside
+        /// <c>_players</c>: it is read once per match, and a second table kept in step with the
+        /// join and disconnect paths is a third place for those two to drift.
+        /// </para>
+        /// <para>
+        /// Exists because <c>ServerPlayer</c> is internal and the report needs exactly two of
+        /// its fields. Exposing the type itself would hand a reporter the session, the actor and
+        /// the movement agent to reach a pair of ids.
+        /// </para>
+        /// </remarks>
+        public IReadOnlyList<ServerPlayerScoreRow> ScoreRows
+        {
+            get
+            {
+                _scoreRows.Clear();
+                for (int i = 0; i < _players.Count; i++)
+                {
+                    _scoreRows.Add(new ServerPlayerScoreRow(
+                        _players[i].Session.ActorId, (int)_players[i].PlayerId));
+                }
+
+                return _scoreRows;
+            }
+        }
+
+        /// <summary>
+        /// A client said something. Sanitized here, then broadcast to everyone. Phase P6.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The speaker is the session, never the message.</b> C_CHAT carries no actor id and
+        /// must not: the datagram arrived on this connection, so this server already knows who
+        /// sent it, and a self-declared id would be a client speaking as somebody else.
+        /// </para>
+        /// <para>
+        /// <b>Sanitized at THIS ingress</b>, where the bytes have just crossed a socket, using
+        /// the same <c>PlayerNameSanitizer</c> rule a display name gets and for the same
+        /// reasons -- rich-text markup that hides or enlarges a line, control characters that
+        /// split it, bidi overrides that re-order the text around it. The client sanitizes again
+        /// on receipt, because a client cannot verify the game server either.
+        /// </para>
+        /// <para>
+        /// <b>A line with nothing left is dropped silently.</b> Not logged: the cause is a
+        /// hostile or broken sender, and one log line per message is how that becomes a way to
+        /// fill the server's console.
+        /// </para>
+        /// </remarks>
+        void IChatHandler.OnChat(ClientSession session, ReadOnlySpan<byte> textUtf8)
+        {
+            if (Transport == null || session == null) return;
+
+            ushort actorId = session.ActorId;
+
+            // Same u8 narrowing S_PLAYER_LIST does, and the same refusal rather than truncation:
+            // a truncated id attributes the line to the WRONG player, which is worse than
+            // dropping it.
+            if (actorId > byte.MaxValue) return;
+
+            string text = PlayerNameSanitizer.Sanitize(
+                ChatTextMessage.TextOf(textUtf8), ChatTextMessage.MaxTextCharacters);
+            if (text.Length == 0) return;
+
+            Span<byte> encoded = stackalloc byte[ChatTextMessage.MaxTextBytes];
+            int textLength = ChatTextMessage.Encode(text, encoded);
+            if (textLength < 0) return;
+
+            int written = ServerEventWriter.WriteChat(
+                _eventPayload, _chatBody, (byte)actorId, encoded.Slice(0, textLength));
+            if (written < 0) return;
+
+            BroadcastReliable(
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.ReliableChannel);
+        }
+
+        /// <summary>
         /// A client asked to respawn. Granted only when the gate says the delay has elapsed.
         /// </summary>
         /// <remarks>
@@ -1081,11 +1768,23 @@ namespace Ironfront.Net.Unity.Server
         /// client clock running a few milliseconds fast, not a protocol violation, and treating
         /// it as one would disconnect honest players over clock skew.
         /// </remarks>
-        void ISpawnRequestHandler.OnSpawnRequested(ClientSession session)
+        void ISpawnRequestHandler.OnSpawnRequested(ClientSession session, in SpawnRequestMessage message)
         {
             if (!_byConnection.TryGetValue(session.ConnectionId, out ServerPlayer player)) return;
 
-            _combat.TryRespawn(player);
+            // The first request of this connection's life is not a RESPAWN and must not wait
+            // out ServerRespawnGate's cooldown: that clock times a death, and a body that has
+            // never been placed has never died. Granted unconditionally, once, per
+            // ServerPlayer.AwaitingFirstDeploy's own remark; every later request from the same
+            // connection falls through to the ordinary gated path below.
+            if (player.AwaitingFirstDeploy)
+            {
+                player.AwaitingFirstDeploy = false;
+                _combat.PlaceAtSpawn(player, message);
+                return;
+            }
+
+            _combat.TryRespawn(player, message);
         }
 
         /// <summary>
@@ -1188,7 +1887,24 @@ namespace Ironfront.Net.Unity.Server
             // Clears the vehicle registry, the vehicle pair table and the vehicle id pool too —
             // the audit owns the reset next to the check for it, so the two cannot drift.
             _stateAudit.ResetForNewMatch(_retainedIds);
-            _respawnGate.Reset();
+
+            // Player bodies survive the world reset, so one that was dead when the round ended
+            // is still dead now; a plain Reset() forgot the death and TryRespawn then refused
+            // that player for the whole of the next round. See ResetForNewRound.
+            _stillDeadPlayers.Clear();
+            for (int i = 0; i < _players.Count; i++)
+            {
+                NetServerActor body = _players[i].Actor;
+                if (body != null && !body.IsAlive && !_players[i].AwaitingFirstDeploy)
+                    _stillDeadPlayers.Add(_players[i].Session.ActorId);
+            }
+            _respawnGate.ResetForNewRound(
+                _stillDeadPlayers, CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
+
+            // Beside the respawn gate, because the two are stamped from the same death edge: a
+            // corpse record surviving into the next round would report a body that no longer
+            // exists as blocking a pad, forever.
+            _corpses.Reset();
 
             // Not the audit's, because neither is a per-pair table: the lockouts are per actor
             // and the burn counters are cumulative. A lockout surviving into the next round would
@@ -1240,6 +1956,13 @@ namespace Ironfront.Net.Unity.Server
             _vehicleInterest.ForgetViewer(actorId);
             _seatArbiter.Forget(actorId);
 
+            // A departing VIEWER leaks one vehicle row per vehicle it was ever told about, for
+            // the same reason the line above exists. Forget takes an id and clears it from BOTH
+            // sides of the pair, which is also what makes a reissued vehicle id safe: without it
+            // the new vehicle would inherit the previous incarnation's "already announced" rows
+            // and stream to a client that was never told it exists. X-64.
+            _vehicleSpawnAcks.Forget(actorId);
+
             // Both halves: the installed input source, and the axes it was last handed. An id
             // that is reissued would otherwise inherit the previous occupant's throttle for the
             // length of the hold window, on whatever vehicle they were last in.
@@ -1260,37 +1983,111 @@ namespace Ironfront.Net.Unity.Server
         {
             if (_byConnection.ContainsKey(connectionId)) return;
 
-            if (!ServerActorRegistry.Instance.TryClaimPlayerSlot(out NetServerActor actor))
+            // The side the master server put this player on, carried in the signed join ticket
+            // and parsed by the transport beside the playerId and the display name. Before
+            // P13 nothing read it — the ticket had no such byte — and the team was re-derived
+            // from slot parity here, so the lobby's balancing was computed and thrown away.
+            byte ticketTeam = info.Team;
+
+            // The room the master put this player in, out of the same signed ticket. P14 3.1:
+            // this is the ONLY channel that carries it, so the room is adopted here, at the
+            // ingress, rather than typed into a prefab field that silently disagreed with the
+            // master and made GsMatchStarted a no-op.
+            //
+            // Refused BEFORE the slot claim, not after: a ticket for another room must not
+            // consume a body, and a player admitted into the wrong room's match is a worse
+            // outcome than one told to reconnect.
+            if (!RoomIdentity.Observe(info.RoomId, out string roomConflict))
             {
-                Debug.LogError(
-                    $"[net] conn {connectionId} joined with no free player slot. Mark more "
-                    + "NetServerActors as available for players.");
-                Transport.Disconnect(connectionId, DisconnectReason.ServerFull);
+                Debug.LogError($"[net] conn {connectionId} refused — {roomConflict}");
+                Transport.Disconnect(connectionId, DisconnectReason.InvalidTicket);
                 return;
             }
 
-            // A slot is reused across the match, and the previous occupant may have left while
-            // dead. Without this the new player inherits that corpse: Health 0, Actor.dead true,
-            // and every shot they take rejected as ShooterDead until they work out that pressing
-            // respawn on a player who never died is what fixes it.
-            actor.Health  = NetServerActor.DefaultSpawnHealth;
-            actor.IsAlive = true;
+            if (!ServerActorRegistry.Instance.TryClaimPlayerSlot(ticketTeam, out NetServerActor actor))
+            {
+                // Two different facts, and they must not render as one sentence: "the server
+                // is full" has no remedy, "your side is full" has one the player can act on.
+                bool serverFull = !ServerActorRegistry.Instance.HasFreePlayerSlotOnAnyTeam();
 
-            var player = new ServerPlayer(connectionId, actor.ActorId, _combat) { Actor = actor };
+                Debug.LogError(
+                    serverFull
+                        ? $"[net] conn {connectionId} joined with no free player slot on any "
+                          + "team. Mark more NetServerActors as available for players."
+                        : $"[net] conn {connectionId} joined for team {ticketTeam}, which is "
+                          + "full — the other side is not. Refused with TeamFull rather than "
+                          + "ServerFull so the client can say which it was.");
+
+                Transport.Disconnect(
+                    connectionId,
+                    serverFull ? DisconnectReason.ServerFull : DisconnectReason.TeamFull);
+                return;
+            }
+
+            // P13 criterion 4 is graded on THIS line, and on purpose: after P12 the client can
+            // display its own team, and a client that displays the team it was told is not
+            // evidence that the team it was told is the team it has. Both numbers are printed
+            // rather than one, so the line distinguishes "the ticket said 1 and the body is 1"
+            // from "the ticket said 1 and the body is 0" — which is the whole defect.
+            Debug.Log(
+                $"[net] conn {connectionId} player {info.PlayerId} joined on team {ticketTeam} "
+                + $"(ticket) -> actor {actor.ActorId} team {actor.Team} (body)");
+
+            var player = new ServerPlayer(
+                connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),
+                info.PlayerId)
+            { Actor = actor };
             player.SyncFromActor();
 
-            // The session's clip and the actor's must agree from the first snapshot, or the
-            // client's first reload reconciles against a number nobody ever set. The weapon id
-            // is assigned first for the same reason it is at the other two ResetWeapon sites
-            // (phase-V2 D9): the clip size is derived from it.
-            player.Session.WeaponId = actor.WeaponId;
-            player.Session.ResetWeapon();
-            actor.AmmoInClip = player.Session.Weapon.AmmoInClip;
+            // A JOIN IS NO LONGER A SPAWN. It was, for a while: this path called PlaceAtSpawn
+            // directly, which set Health and IsAlive, then WeaponId / ResetWeapon / AmmoInClip —
+            // and armed the body from the SERVER's own drawn loadout before the client had ever
+            // said what it wanted to hold or where it wanted to stand. The deploy screen never
+            // got a chance to run: S_SPAWN_ACTOR (below, via AnnounceNewActors) reaches the
+            // client on interest alone, gated on nothing here, and used to arrive already
+            // dressed as "you are deployed."
+            //
+            // The claimed body is parked instead: Health 0, IsAlive false, exactly the corpse
+            // state the OLD comment on this line used to describe as merely "the previous
+            // occupant's leftovers." A reused slot still must not be handed to the next player
+            // alive at its last owner's position, and that is exactly what this now is, honestly,
+            // rather than as a one-tick waypoint on the way to PlaceAtSpawn. The body is placed
+            // and armed for the FIRST time when this connection's own C_SPAWN_REQUEST arrives,
+            // carrying the loadout the client actually chose — see
+            // ISpawnRequestHandler.OnSpawnRequested and ServerPlayer.AwaitingFirstDeploy.
+            actor.Health = 0f;
+            actor.IsAlive = false;
 
             _byConnection.Add(connectionId, player);
             _players.Add(player);
 
-            Debug.Log($"[net] conn {connectionId} joined as actor {actor.ActorId} ({info.RemoteAddress})");
+            // After the tables, so the joiner is in the table it is about to be sent.
+            EmitPlayerList();
+
+            // P18 task 3.1. The roster changed, so the scoreboard owes a row the last broadcast
+            // did not have. Through the dirty flag rather than a send here, so a join during a
+            // firefight still costs one table per tick.
+            _scoresDirty = true;
+
+            // P3. MatchController.SendFullMatchStateTo had ZERO callers in the repository --
+            // the same shape as WritePlayerList and WriteDespawn above, and found the same way.
+            // Its own summary reads "the state a joining client needs before its first
+            // snapshot", and nothing asked for it: capture points are broadcast only when
+            // DIRTY, and AdoptOpeningOwner deliberately marks the opening value as already
+            // sent, so a point nobody has walked onto emits nothing for the whole match. A
+            // client therefore rendered every flag from CapturePoint.Start's LOCAL defaults and
+            // the round phase, tickets and timer from nothing at all -- and it looked correct
+            // on Dustbowl only because the authored owner and the client default happen to
+            // agree at t=0. Join after a point has flipped and they do not.
+            _match?.SendFullMatchStateTo(connectionId);
+
+            // The room is on this line because P14 criterion 1 is graded by comparing it against
+            // the master's AssignedRoomId for the same room — two sides' logs, rather than a
+            // prefab field nobody can check. "room 0" is standalone and is the honest answer for
+            // a ticketless join, not a missing one.
+            Debug.Log(
+                $"[net] conn {connectionId} joined as actor {actor.ActorId} "
+                + $"({info.RemoteAddress}), hosting room {RoomIdentity.RoomId}");
         }
 
         private void OnClientDisconnected(ushort connectionId, DisconnectReason reason)
@@ -1316,13 +2113,267 @@ namespace Ironfront.Net.Unity.Server
                 Debug.LogError($"[net] despawn for actor {player.Session.ActorId} did not frame");
             }
 
+            // Before the slot goes back to the pool: this ServerPlayer is the only record of what
+            // it switched on the body (a seated capsule, an exit-grace collision pair), and the
+            // next connection to claim the body gets a fresh one that knows neither.
+            player.ReleaseBody();
             ServerActorRegistry.Instance.ReleaseSlot(player.Actor);
             ForgetActor(player.Session.ActorId);
 
             _byConnection.Remove(connectionId);
             _players.Remove(player);
 
+            // THE LAST PLAYER OUT RELEASES THE ROOM, and this mirrors the master exactly: it
+            // frees a game server when the room empties (LobbyService.RoomRemoved ->
+            // GameServerRegistry.Release), and then hands that same server to the next room.
+            //
+            // Releasing only on MatchEnded is not enough, and the end-to-end run proved it: a
+            // server that adopted a room, played no match and lost its player stayed pinned to
+            // a room the master had already deleted, and then refused every ticket for its NEXT
+            // allocation with the two-rooms anomaly line. The refusal was right; the room it was
+            // defending no longer existed.
+            //
+            // The invariant this settles: the identity is held while at least one player of that
+            // room is connected, and released the moment none is. So the anomaly it guards --
+            // two rooms on one server -- still needs a live player from the first room to be
+            // observable, which is exactly when a release would be wrong.
+            if (_players.Count == 0 && RoomIdentity.HasRoom)
+            {
+                Debug.Log(
+                    $"[net] last player left room {RoomIdentity.RoomId}; releasing it so the next "
+                    + "allocation can be adopted");
+                RoomIdentity.Release();
+
+                // ...and the round goes with the room. The next room is a new match: it must open
+                // at WaitingForPlayers, 0/0, every capture point at its opening owner and no bots,
+                // with the bot-release gate re-armed. Measured 2026-09-27 on Island: room 22's
+                // players timed out mid-round, bots played on alone for ~11 minutes, and room 23
+                // joined THAT round at 52/39 with all five points taken ("5 of 5 capture point(s)
+                // start owned" on both clients) and no Warmup, no Playing, no bot gate.
+                // ForceReset raises no MatchEnded, so the master -- which has already dropped the
+                // room -- is sent no match result for it.
+                if (_match != null && _match.Match != null)
+                {
+                    // The score goes in the line because the reset zeroes it, and every later
+                    // line -- the phase change included -- can then only say 0 / 0.
+                    Debug.Log("[net] resetting the match for the next room (it stood at "
+                              + $"{_match.Match.Score0} / {_match.Match.Score1}, phase "
+                              + $"{_match.Match.Phase})");
+                    _match.Match.ForceReset();
+                }
+            }
+
+            // After the removal, so the table no longer names the leaver. Sending the stale one
+            // would leave every remaining client able to render a name for an actor that has
+            // just been despawned.
+            EmitPlayerList();
+
+            // P18 task 3.1, and the same reasoning one column over: a scoreboard still carrying
+            // the leaver's row keeps them on screen for the rest of the round.
+            _scoresDirty = true;
+
             Debug.Log($"[net] conn {connectionId} left ({reason})");
+        }
+
+        /// <summary>
+        /// Broadcasts S_PLAYER_LIST. On join and on change, never per tick — names do not move.
+        /// debt-closure phase 2 task 2a, ledger C-3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the caller the opcode never had.</b> V3 shipped
+        /// <c>PlayerListMessage</c>, <c>ServerEventWriter.WritePlayerList</c> and the client
+        /// router case, and the writer had zero callers in the entire repository for four phases
+        /// — so a killfeed line knew an actor id had died and had nothing to render. The client
+        /// half was reported by <c>ClientWiringGate</c> on every run; the server half had no gate
+        /// at all, which is why this one survived. <c>WriterCoverageRunner</c>'s G6 is that gate.
+        /// </para>
+        /// <para>
+        /// <b>Reliable and unfiltered.</b> A client that misses this has no second chance to
+        /// learn who anybody is — nothing re-sends names on a timer, and the next broadcast is
+        /// whenever somebody else joins or leaves.
+        /// </para>
+        /// <para>
+        /// The two buffers are fields, not locals: the body's worst case is
+        /// <c>PlayerListMessage.MaxBodySize</c> (1153 B) and this runs on a join, which is
+        /// exactly when the server is already doing the most work per frame.
+        /// </para>
+        /// </remarks>
+        private void EmitPlayerList()
+        {
+            if (Transport == null) return;
+
+            int count = 0;
+            for (int i = 0; i < _players.Count && count < _playerListEntries.Length; i++)
+            {
+                ServerPlayer player = _players[i];
+                ushort actorId = player.Session.ActorId;
+
+                // PlayerListEntry.ActorId is a u8 where the rest of the protocol uses a u16 --
+                // safe while MAX_ACTORS is 64, and pinned by a test rather than by this comment
+                // (PlayerListVersionPinTests). Skipping rather than truncating, because a
+                // truncated id names the WRONG player, which is worse than naming none.
+                if (actorId > byte.MaxValue) continue;
+
+                _playerListEntries[count].ActorId = (byte)actorId;
+                _playerListEntries[count].Name = NameBytes(player.DisplayName);
+                count++;
+            }
+
+            int written = ServerEventWriter.WritePlayerList(
+                _eventPayload,
+                _playerListBody,
+                new ReadOnlySpan<PlayerListEntry>(_playerListEntries, 0, count));
+
+            if (written < 0)
+            {
+                Debug.LogError(
+                    $"[net] S_PLAYER_LIST with {count} row(s) did not frame. The killfeed will "
+                    + "keep rendering actor ids.");
+                return;
+            }
+
+            BroadcastReliable(
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.ReliableChannel);
+        }
+
+        /// <summary>
+        /// Broadcasts S_PLAYER_SCORES from the live tally. On change, coalesced to one per tick.
+        /// P18 task 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Read from <see cref="_scoreTally"/>, never counted again.</b> The tally is fed from
+        /// the single point a death is resolved and it already separates the cases that would
+        /// otherwise be silently wrong — a suicide, the world, an id outside the actor space. A
+        /// second count assembled here would be a second answer to a question that has one.
+        /// </para>
+        /// <para>
+        /// <b>Every registered actor gets a row, bots included</b> (P18 § 3.3, and the default it
+        /// records). The team score moves on every death regardless of who died, so a scoreboard
+        /// that omitted the bots could not be reconciled with the number above it — criterion 7
+        /// is that arithmetic. It also means a live player who has not killed anybody appears as
+        /// a 0/0 row rather than vanishing, which is what a player looking for their own name
+        /// expects.
+        /// </para>
+        /// <para>
+        /// <b>Actors, not <c>_players</c>.</b> The player list is human connections; the tally
+        /// counts whoever died. Iterating the registry is what makes those two agree.
+        /// </para>
+        /// <para>
+        /// The counters are clamped to <c>ushort</c> rather than wrapped. A match that somehow
+        /// passes 65535 kills renders a stuck maximum, which reads as an anomaly; a wrapped
+        /// counter renders as a small plausible number, which does not.
+        /// </para>
+        /// </remarks>
+        private void EmitPlayerScores()
+        {
+            _scoresDirty = false;
+
+            if (Transport == null) return;
+
+            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
+
+            int count = 0;
+            for (int i = 0; i < actors.Count && count < _playerScoreEntries.Length; i++)
+            {
+                NetServerActor actor = actors[i];
+                if (actor == null) continue;
+
+                ushort actorId = actor.ActorId;
+
+                // Skipped rather than truncated, for EmitPlayerList's reason: a truncated id
+                // credits the WRONG player, which is worse than crediting none.
+                if (actorId > byte.MaxValue) continue;
+
+                _playerScoreEntries[count].ActorId = (byte)actorId;
+                _playerScoreEntries[count].Kills   = ClampToU16(_scoreTally.KillsOf(actorId));
+                _playerScoreEntries[count].Deaths  = ClampToU16(_scoreTally.DeathsOf(actorId));
+
+                // The side, from the actor the server owns rather than from the snapshot the
+                // client will receive. The snapshot carries a team too, but InterestManager sheds
+                // actors under a per-snapshot ceiling, so a client holds one only for the actors
+                // it currently sees -- and a scoreboard has to place every row. See
+                // PlayerScoreEntry.Team for why that is not a second source of truth.
+                _playerScoreEntries[count].Team    = actor.Team;
+                count++;
+            }
+
+            int written = ServerEventWriter.WritePlayerScores(
+                _eventPayload,
+                _playerScoreBody,
+                new ReadOnlySpan<PlayerScoreEntry>(_playerScoreEntries, 0, count));
+
+            if (written < 0)
+            {
+                Debug.LogError(
+                    $"[net] S_PLAYER_SCORES with {count} row(s) did not frame. The scoreboard "
+                    + "will keep showing the previous table.");
+                return;
+            }
+
+            BroadcastReliable(
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.ReliableChannel);
+        }
+
+        /// <summary>A tally count as the wire's <c>u16</c>, saturating rather than wrapping.</summary>
+        private static ushort ClampToU16(int value)
+            => value < 0 ? (ushort)0
+             : value > ushort.MaxValue ? ushort.MaxValue
+             : (ushort)value;
+
+        /// <summary>
+        /// UTF-8 for one name, truncated to what the wire carries.
+        /// </summary>
+        /// <remarks>
+        /// Truncated on a BYTE boundary, which can split a multi-byte character — accepted,
+        /// because the alternative is refusing to name the player at all and the source of these
+        /// strings is currently ASCII by construction (see <c>ServerPlayer.DisplayName</c>).
+        /// Revisit when a real username reaches this side.
+        /// </remarks>
+        private static ReadOnlyMemory<byte> NameBytes(string displayName)
+        {
+            byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(displayName ?? string.Empty);
+
+            return utf8.Length <= PlayerListMessage.MaxNameBytes
+                ? new ReadOnlyMemory<byte>(utf8)
+                : new ReadOnlyMemory<byte>(utf8, 0, PlayerListMessage.MaxNameBytes);
+        }
+
+        /// <summary>
+        /// The best name this side actually holds for a joining connection.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Three sources, in falling order of how much a reader would recognise them</b>
+        /// (ledger X-36): the name from the signed join ticket, then <c>"#" + PlayerId</c>, then
+        /// the actor id. The first is what E7's "killfeed line with a name" asks for; the other
+        /// two are what this method used to be, kept because they are still the honest answer
+        /// when there is no ticket — a loopback session, a lane-B harness client, or a
+        /// development stub whose ticket leaves the name field zeroed.
+        /// </para>
+        /// <para>
+        /// <b>An absent or hostile name falls through rather than rendering blank</b>, and that
+        /// is the decision this method exists to record. <c>PlayerNameSanitizer</c> returns
+        /// <see cref="string.Empty"/> for a name made entirely of control characters, bidi
+        /// overrides or spaces — so a player who registers one gets <c>#5001</c>, exactly as
+        /// before. A blank feed line reads as a rendering fault and teaches nobody anything;
+        /// <c>#5001</c> at least distinguishes killer from victim, which is the half of E7 that
+        /// was already met.
+        /// </para>
+        /// <para>
+        /// It is NOT re-sanitized here. The transport did it at ingress
+        /// (<c>ConnectionInfo.DisplayName</c>), and sanitizing twice would leave two places to
+        /// keep in step with no reader able to tell which one was load-bearing.
+        /// </para>
+        /// </remarks>
+        private static string DisplayNameFor(in ConnectionInfo info, ushort actorId)
+        {
+            if (!string.IsNullOrEmpty(info.DisplayName)) return info.DisplayName;
+
+            return info.PlayerId != 0 ? "#" + info.PlayerId : "Player " + actorId;
         }
 
         /// <summary>
@@ -1338,13 +2389,187 @@ namespace Ironfront.Net.Unity.Server
         /// Triggers are ignored: a capture-point volume or a water trigger is not cover.
         /// </para>
         /// </remarks>
-        private static bool IsOccluded(Vec3 origin, Vec3 point, float distance)
+        private static bool IsOccluded(Vec3 origin, Vec3 point, float distance, ushort victimActorId)
         {
-            return Physics.Linecast(
-                MovementSimulation.ToUnity(origin),
-                MovementSimulation.ToUnity(point),
-                BulletBlockingLayers,
+            Vector3 from = MovementSimulation.ToUnity(origin);
+            Vector3 to = MovementSimulation.ToUnity(point);
+
+            Vector3 segment = to - from;
+            float length = segment.magnitude;
+            if (length <= 0.0001f) return false;   // muzzle inside the box: nothing to occlude
+
+            Transform victim = VictimRoot(victimActorId);
+
+            // RaycastNonAlloc, not Linecast: the nearest hit may be the victim's own rig bone,
+            // and a query that returns only the nearest cannot look past it. The buffer is a
+            // reused static -- this runs on the tick loop, and the one loop that must not
+            // allocate is this one (M1 criterion 9).
+            int count = Physics.RaycastNonAlloc(
+                from, segment / length, _occlusionHits, length, BulletBlockingLayers,
                 QueryTriggerInteraction.Ignore);
+
+            if (count >= _occlusionHits.Length) OcclusionBufferSaturations++;
+
+            RaycastHit nearest = default;
+            bool found = false;
+
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit candidate = _occlusionHits[i];
+
+                // X-26. The body that was HIT is not cover for the shot that hit it. Its
+                // colliders sit at the endpoint by construction, so without this every
+                // point-blank shot is rejected by its own target -- 34 of 34 occlusions across
+                // x27-pinned-01..03 were `Bone_002 layer=8` at frac 0.94.
+                if (IsPartOf(candidate.collider, victim)) continue;
+
+                if (found && candidate.distance >= nearest.distance) continue;
+
+                nearest = candidate;
+                found = true;
+            }
+
+            if (!found)
+            {
+                // Counted rather than silent: a run where this rises and ShotsOccluded does not
+                // is the direct evidence that the self-occlusion was what X-26 said it was.
+                if (count > 0) SelfOcclusionsIgnored++;
+                return false;
+            }
+
+            LastOcclusion = DescribeOcclusion(
+                nearest.collider == null ? "<destroyed>" : nearest.collider.name,
+                nearest.collider == null ? -1 : nearest.collider.gameObject.layer,
+                nearest.distance,
+                length);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Colliders the occlusion query may meet on one segment. Reused; never allocated per
+        /// shot.
+        /// </summary>
+        /// <remarks>
+        /// <b>A full buffer is a silently truncated query</b>, which would read as "no cover" on
+        /// exactly the busiest geometry. 32 is far past a rig's bone count plus the wall behind
+        /// it, and <see cref="OcclusionBufferSaturations"/> says outright when it was not enough
+        /// rather than leaving a reader to assume it never happens.
+        /// </remarks>
+        private static readonly RaycastHit[] _occlusionHits = new RaycastHit[32];
+
+        /// <summary>
+        /// Shots where every collider on the segment belonged to the victim, so nothing blocked.
+        /// X-26's counter: it rises exactly where the pre-fix build reported an occlusion.
+        /// </summary>
+        internal static long SelfOcclusionsIgnored { get; private set; }
+
+        /// <summary>Times the occlusion buffer filled, so the query may have missed a blocker.</summary>
+        internal static long OcclusionBufferSaturations { get; private set; }
+
+        /// <summary>The transform whose hierarchy belongs to <paramref name="actorId"/>, or null.</summary>
+        /// <remarks>
+        /// Null is the honest answer for an actor that has already left the world between the
+        /// resolve and this query, and it makes the loop below behave exactly as it did before
+        /// X-26 — nothing is excluded. A dead lookup must not make a body invulnerable.
+        /// </remarks>
+        private static Transform VictimRoot(ushort actorId)
+        {
+            if (actorId == 0) return null;
+
+            return ServerActorRegistry.Instance.TryFind(actorId, out NetServerActor actor) && actor != null
+                ? actor.transform
+                : null;
+        }
+
+        /// <summary>
+        /// True when <paramref name="collider"/> hangs off <paramref name="root"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>The whole hierarchy, not the root object.</b> The colliders that did the blocking
+        /// are ragdoll bones several levels down an imported rig (<c>Bone_002</c>), so a check
+        /// against the root GameObject alone would have excluded nothing and looked like a fix.
+        /// <c>Transform.IsChildOf</c> reports true for the transform itself, which covers the
+        /// capsule on the root as well.
+        /// </remarks>
+        internal static bool IsPartOf(Collider collider, Transform root)
+        {
+            if (collider == null || root == null) return false;
+
+            return collider.transform.IsChildOf(root);
+        }
+
+        /// <summary>
+        /// What the last occlusion linecast actually hit, for the shot log. <c>"none"</c> until
+        /// one has blocked a shot.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Ledger row X-20.</b> The first run in which any shot reached a hitbox at all read
+        /// <c>resolved=30 occluded=20 hits=0</c> with the victim on 100 health, and TWO readings
+        /// survive it: either the linecast is right and there is geometry between the pair — they
+        /// held at 10.1 m against a programmed 6.0 m, and stopping 4 m short is what an obstacle
+        /// looks like — or the endpoint lands inside the victim's OWN capsule, which mask -2049
+        /// does not exclude, so the victim's collider blocks the shot that hit it.
+        /// </para>
+        /// <para>
+        /// <b>Nothing in any artifact could separate them</b>, because <c>Physics.Linecast</c>'s
+        /// bool overload discards the hit. This is the same move 3F.1 made for X-19: put the two
+        /// quantities that disagree on one line and let the run answer. It prints facts and
+        /// states no verdict — the collider NAME is the discriminator (the victim's own body
+        /// versus terrain or a building), and the fraction corroborates it.
+        /// </para>
+        /// <para>
+        /// Read by <c>ServerCombatBridge.LogShot</c>, so it costs nothing unless
+        /// <c>IRONFRONT_LOG_SHOTS=1</c> asked for the line. It is deliberately last-write-wins
+        /// rather than a list: the compensator may test several candidates per shot, and the log
+        /// is one line per trigger frame.
+        /// </para>
+        /// </remarks>
+        internal static string LastOcclusion { get; private set; } = "none";
+
+        /// <summary>
+        /// The occlusion description that belongs to THIS shot, or a stated absence.
+        /// </summary>
+        /// <remarks>
+        /// <b><see cref="LastOcclusion"/> is last-write-wins and is only written when a linecast
+        /// HITS.</b> So a shot that was not occluded at all would otherwise print the previous
+        /// shot's collider, and the artifact would read as though a wall blocked a shot that
+        /// nothing blocked. Since the compensator's <c>ShotsOccluded</c> counter rises exactly
+        /// when a description is written, comparing it against its value at the previous logged
+        /// shot says whether the description is this shot's or a leftover.
+        /// </remarks>
+        internal static string OcclusionFor(
+            long occludedNow, long occludedAtLastLog, string lastDescription)
+        {
+            if (occludedNow <= occludedAtLastLog) return "none-this-shot";
+
+            return string.IsNullOrEmpty(lastDescription) ? "none" : lastDescription;
+        }
+
+        /// <summary>
+        /// Formats one occlusion hit. Pure, so the EditMode suite can pin it without a
+        /// <c>PhysicsScene</c>.
+        /// </summary>
+        /// <param name="rayLength">
+        /// Measured between the two endpoints rather than taken from <c>IsOccluded</c>'s
+        /// <c>distance</c> argument, which is the compensator's notion of the shot and not
+        /// necessarily the length of the segment that was actually cast.
+        /// </param>
+        internal static string DescribeOcclusion(
+            string colliderName, int layer, float hitDistance, float rayLength)
+        {
+            // A zero-length segment cannot have a fraction, and printing NaN or a divide-by-zero
+            // into the one artifact that is supposed to settle this would be worse than saying so.
+            string fraction = rayLength > 0.0001f
+                ? (hitDistance / rayLength).ToString("F3", CultureInfo.InvariantCulture)
+                : "n/a";
+
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "collider={0} layer={1} d={2:F2}m of {3:F2}m frac={4}",
+                string.IsNullOrEmpty(colliderName) ? "<unnamed>" : colliderName,
+                layer, hitDistance, rayLength, fraction);
         }
 
         private static double NowMs() => Time.realtimeSinceStartupAsDouble * 1000.0;

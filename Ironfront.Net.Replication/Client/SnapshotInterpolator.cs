@@ -5,55 +5,98 @@ using Ironfront.Net.Replication.Movement;
 namespace Ironfront.Net.Replication.Client
 {
     /// <summary>
-    /// Why <see cref="SnapshotInterpolator.TrySample"/> could not produce a pair.
+    /// What <see cref="SnapshotInterpolator.TrySampleActor"/> could make of one actor.
     /// </summary>
     public enum InterpolationResult
     {
-        /// <summary>Two snapshots bracket the render tick. <c>Alpha</c> is meaningful.</summary>
+        /// <summary>Two of the actor's own samples bracket the render tick. Blended.</summary>
         Interpolated = 0,
 
         /// <summary>Fewer than two snapshots have arrived. Nothing to draw yet.</summary>
         Starved = 1,
 
         /// <summary>
-        /// The render tick is older than everything buffered — the buffer has already moved
-        /// past it. Snap to the oldest snapshot rather than extrapolating backwards.
+        /// The render tick is older than everything buffered. The actor's earliest sample is
+        /// held rather than extrapolated backwards.
         /// </summary>
         TooOld = 2,
 
         /// <summary>
-        /// The render tick is newer than the newest snapshot: the next one has not arrived.
-        /// The caller holds the newest pose. See the type remarks on why this does not
-        /// extrapolate.
+        /// The render tick has reached the newest snapshot: the stream has stopped. The actor's
+        /// newest sample is held. See the type remarks on why a stall never extrapolates.
         /// </summary>
         Stalled = 3,
+
+        /// <summary>
+        /// Newer snapshots exist but the actor is in none of them — the server rate-limited it
+        /// out. Projected along its last two samples, for at most
+        /// <see cref="SnapshotInterpolator.MaxExtrapolationTicks"/>.
+        /// </summary>
+        Extrapolated = 4,
+
+        /// <summary>
+        /// Held at a single sample: the actor's only one, or the end of an extrapolation that
+        /// ran to its limit, or its first sample while the render tick is still before it.
+        /// </summary>
+        Held = 5,
+
+        /// <summary>In no buffered snapshot at all. Nothing to draw.</summary>
+        NotPresent = 6,
     }
 
     /// <summary>
-    /// Holds the last N world snapshots and finds the two that bracket a render time, so remote
-    /// actors move smoothly between 30 Hz updates instead of teleporting on each one.
+    /// One actor at one render tick: where to draw it, which way it faces, and the entry its
+    /// discrete state (stance, weapon, health, ragdoll) is read from.
+    /// </summary>
+    public readonly struct ActorSample
+    {
+        public readonly Vec3 Position;
+        public readonly float YawDegrees;
+
+        /// <summary>
+        /// The later of the two samples while interpolating, otherwise the one sample in use.
+        /// Discrete state is stepped, never blended — lerping a crouch is meaningless.
+        /// </summary>
+        public readonly ActorSnapshotEntry State;
+
+        public ActorSample(in Vec3 position, float yawDegrees, in ActorSnapshotEntry state)
+        {
+            Position = position;
+            YawDegrees = yawDegrees;
+            State = state;
+        }
+    }
+
+    /// <summary>
+    /// Holds the last N world snapshots and samples one actor at a render tick, so remote
+    /// actors move smoothly between 20 Hz updates instead of teleporting on each one.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The client half of phase-01; M1 criterion 7 is graded on what this
-    /// produces at 100 ms RTT and 5% loss.
+    /// The client half of phase-01; M1 criterion 7 is graded on what this produces at 100 ms
+    /// RTT and 5% loss. The render tick itself comes from <see cref="InterpolationClock"/>.
     /// </para>
     /// <para>
-    /// <b>Rendering runs deliberately in the past.</b> The client draws at
-    /// <c>newestServerTick - </c><see cref="DelayTicks"/> so that the snapshot after the one
-    /// being drawn has usually already arrived. Without that lead-in there is nothing to
-    /// interpolate *towards*, and every remote actor stutters between arrivals no matter how
-    /// good the transport is. Two ticks is 66 ms at 30 Hz, which covers one lost packet plus
-    /// ordinary jitter — the 5% loss in criterion 7 means roughly one snapshot in twenty is
-    /// missing, and a one-tick delay would visibly hitch on each of them.
+    /// <b>Each actor is bracketed by its OWN samples, not by adjacent worlds.</b>
+    /// <c>InterestManager.SendEveryN</c> sends a Mid actor (60–100 m) in every 2nd snapshot and
+    /// a Far one in every 5th, and <c>DeltaDecoder</c> rebuilds each world from its message
+    /// alone, so such an actor is never in two ADJACENT worlds. Bracketing by adjacent worlds
+    /// could only ever hold its one real end, and the body stepped at 10 Hz or 4 Hz — the
+    /// "teleports frame by frame" of the 2026-09-27 report for everything past 60 m. Searching
+    /// for the actor's own previous and next samples interpolates a Mid actor across its three
+    /// ticks exactly as it does a Near one across its one or two.
     /// </para>
     /// <para>
-    /// <b>It never extrapolates.</b> When the buffer runs dry the caller holds the last known
-    /// pose (<see cref="InterpolationResult.Stalled"/>) rather than projecting velocity forward.
-    /// Extrapolation looks smoother for about 100 ms and then produces a visible snap backwards
-    /// when the real snapshot disagrees, and it makes actors run through walls during a stall
-    /// because nothing in this layer knows about collision. A brief freeze is honest and, at 5%
-    /// loss, rare.
+    /// <b>A rate-limited gap is extrapolated; a stall is not.</b> A Far actor's samples are 7.5
+    /// ticks apart, more than the three-tick render delay can cover, so for part of every cycle
+    /// the render tick has passed its newest sample while newer snapshots — without it — keep
+    /// arriving. That gap is the band working as designed, and the actor is carried along its
+    /// last two samples for up to <see cref="MaxExtrapolationTicks"/>, which hands over to plain
+    /// interpolation without a jump whenever it kept a straight line. A STALL is different:
+    /// when the render tick reaches the newest snapshot the whole stream has stopped, and every
+    /// actor holds. Projecting through a stall looks smoother for 100 ms and then snaps back
+    /// when the real snapshot disagrees, and it carries actors through walls because nothing in
+    /// this layer knows about collision. A freeze is honest and, at 5% loss, rare.
     /// </para>
     /// <para>
     /// <b>Snapshots are copied in, not referenced.</b> <see cref="DeltaDecoder"/> mutates and
@@ -62,27 +105,30 @@ namespace Ironfront.Net.Replication.Client
     /// and nothing to see in a debugger that would explain why. The ring owns its copies.
     /// </para>
     /// <para>
-    /// <b>Zero allocation after construction.</b> The ring is allocated once and reused, which
-    /// is what M1 criterion 9 asks of the per-tick path.
+    /// <b>Zero allocation after construction.</b> The ring is allocated once and reused, and a
+    /// sample is a struct, which is what M1 criterion 9 asks of the per-tick path.
     /// </para>
     /// </remarks>
     public sealed class SnapshotInterpolator
     {
         /// <summary>
-        /// How far behind the newest snapshot to render, in simulation ticks.
-        /// </summary>
-        /// <remarks>
-        /// 2 ticks = 66 ms at <see cref="ProtocolConstants.SIM_TICK_RATE"/>. See the type
-        /// remarks for why one is not enough at criterion 7's 5% loss.
-        /// </remarks>
-        public const int DelayTicks = 2;
-
-        /// <summary>
-        /// Snapshots retained. Half a second at 30 Hz — enough to ride out a burst of loss,
-        /// short enough that a client which stalls longer than that resynchronises from a fresh
-        /// baseline rather than interpolating across a hole it cannot see the far side of.
+        /// Snapshots retained. 24 ticks at 20 Hz — enough for a Far actor's two most recent
+        /// samples (7.5 ticks apart) behind a three-tick render delay, and short enough that a
+        /// client which stalls longer than that resynchronises from a fresh baseline rather than
+        /// interpolating across a hole it cannot see the far side of.
         /// </summary>
         public const int Capacity = 16;
+
+        /// <summary>
+        /// The longest a rate-limited actor is carried past its newest sample, in ticks.
+        /// </summary>
+        /// <remarks>
+        /// A Far actor is in every 5th snapshot, and five snapshot strides of the 2,1,2,1 pattern
+        /// span 7 or 8 ticks. Its next sample lands about 4.5 ticks past the previous one's render
+        /// time, so eight covers that with jitter to spare and no more: an actor that has genuinely
+        /// left interest stops drifting a quarter of a second later.
+        /// </remarks>
+        public const int MaxExtrapolationTicks = 8;
 
         private readonly WorldSnapshot[] _ring = new WorldSnapshot[Capacity];
 
@@ -106,8 +152,11 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Snapshots rejected as older than one already held. A reorder indicator.</summary>
         public long OutOfOrderCount { get; private set; }
 
-        /// <summary>Samples that found no bracketing pair. A starvation indicator.</summary>
+        /// <summary>Samples taken with the stream starved or stalled. A starvation indicator.</summary>
         public long StalledCount { get; private set; }
+
+        /// <summary>Samples carried past an actor's newest sample across a rate-limited gap.</summary>
+        public long ExtrapolatedCount { get; private set; }
 
         /// <summary>Drops everything. Call on disconnect, or when the baseline is reset.</summary>
         public void Reset()
@@ -115,6 +164,7 @@ namespace Ironfront.Net.Replication.Client
             _count = 0;
             OutOfOrderCount = 0;
             StalledCount = 0;
+            ExtrapolatedCount = 0;
         }
 
         /// <summary>
@@ -146,145 +196,161 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
-        /// The tick to render right now: <see cref="DelayTicks"/> behind the newest snapshot.
+        /// Samples one actor at <paramref name="renderTick"/>.
         /// </summary>
-        /// <param name="tickFraction">
-        /// How far the local clock has advanced into the current tick, 0..1. Pass
-        /// <c>NetPredictionClock.Alpha</c>. It is what makes motion smooth at frame rates above
-        /// the 30 Hz tick — without it the render tick only ever advances in whole steps and the
-        /// interpolation is quantised to the tick rate it exists to hide.
+        /// <param name="actorId">The actor to sample.</param>
+        /// <param name="renderTick">Normally <see cref="InterpolationClock.RenderTick"/>.</param>
+        /// <param name="sample">
+        /// Meaningful for every result except <see cref="InterpolationResult.Starved"/> and
+        /// <see cref="InterpolationResult.NotPresent"/>, which leave it default.
         /// </param>
-        public double RenderTick(double tickFraction)
+        public InterpolationResult TrySampleActor(
+            ushort actorId, double renderTick, out ActorSample sample)
         {
-            if (_count == 0) return 0.0;
-            return Newest().ServerTick + tickFraction - DelayTicks;
-        }
-
-        /// <summary>
-        /// Finds the two snapshots bracketing <paramref name="renderTick"/>.
-        /// </summary>
-        /// <param name="from">The snapshot at or before the render tick.</param>
-        /// <param name="to">The snapshot after it. Same as <paramref name="from"/> unless the
-        /// result is <see cref="InterpolationResult.Interpolated"/>.</param>
-        /// <param name="alpha">
-        /// Position between the two, 0..1. Zero for every non-interpolated result, so a caller
-        /// that ignores the return value still lands exactly on <paramref name="from"/> rather
-        /// than somewhere arbitrary.
-        /// </param>
-        public InterpolationResult TrySample(
-            double renderTick, out WorldSnapshot? from, out WorldSnapshot? to, out double alpha)
-        {
-            alpha = 0.0;
-            from = null;
-            to = null;
+            sample = default;
 
             if (_count < 2)
             {
-                if (_count == 1) { from = to = Newest(); }
                 StalledCount++;
                 return InterpolationResult.Starved;
             }
 
-            int held = Count;
-            long oldestIndex = _count - held;
+            long oldestIndex = _count - Count;
 
-            WorldSnapshot oldest = At(oldestIndex);
-            if (renderTick <= oldest.ServerTick)
+            // Newest to oldest. `later` keeps being overwritten while the samples are still
+            // after the render tick, so it ends as the EARLIEST of them -- the bracket's far end.
+            bool hasLater = false, hasEarlier = false, hasPrior = false;
+            ActorSnapshotEntry later = default, earlier = default, prior = default;
+            uint laterTick = 0, earlierTick = 0, priorTick = 0;
+
+            for (long i = _count - 1; i >= oldestIndex; i--)
             {
-                from = to = oldest;
-                return InterpolationResult.TooOld;
+                WorldSnapshot world = At(i);
+                if (!world.TryFind(actorId, out ActorSnapshotEntry entry)) continue;
+
+                if (world.ServerTick > renderTick)
+                {
+                    later = entry;
+                    laterTick = world.ServerTick;
+                    hasLater = true;
+                    continue;
+                }
+
+                if (!hasEarlier)
+                {
+                    earlier = entry;
+                    earlierTick = world.ServerTick;
+                    hasEarlier = true;
+
+                    // A bracket needs nothing older. Only an extrapolation reads `prior`.
+                    if (hasLater) break;
+                    continue;
+                }
+
+                prior = entry;
+                priorTick = world.ServerTick;
+                hasPrior = true;
+                break;
             }
 
-            WorldSnapshot newest = Newest();
-            if (renderTick >= newest.ServerTick)
+            if (!hasEarlier && !hasLater) return InterpolationResult.NotPresent;
+
+            if (hasEarlier && hasLater)
             {
-                from = to = newest;
+                // The span is the actor's own, not a world's: a Mid actor's two samples are three
+                // ticks apart, and dividing by one would cover them in a third of the time and
+                // then wait -- the exact stutter this class exists to remove.
+                double span = laterTick - (double)earlierTick;
+                float t = span <= 0.0 ? 0f : (float)((renderTick - earlierTick) / span);
+
+                sample = new ActorSample(
+                    Lerp(PositionOf(in earlier), PositionOf(in later), t),
+                    LerpYaw(Quantize.UnpackYaw(earlier.Yaw), Quantize.UnpackYaw(later.Yaw), t),
+                    in later);
+                return InterpolationResult.Interpolated;
+            }
+
+            if (!hasEarlier)
+            {
+                // Only samples after the render tick: the actor has just appeared, or the render
+                // tick is older than the whole buffer. Its first known pose, never a projection
+                // backwards from it.
+                sample = new ActorSample(PositionOf(in later), Quantize.UnpackYaw(later.Yaw), in later);
+                return renderTick <= At(oldestIndex).ServerTick
+                    ? InterpolationResult.TooOld
+                    : InterpolationResult.Held;
+            }
+
+            // Past the actor's newest sample.
+            float earlierYaw = Quantize.UnpackYaw(earlier.Yaw);
+            if (renderTick >= Newest().ServerTick)
+            {
                 StalledCount++;
+                sample = new ActorSample(PositionOf(in earlier), earlierYaw, in earlier);
                 return InterpolationResult.Stalled;
             }
 
-            // Linear scan from the newest backwards. `held` is 16, and the answer is almost
-            // always the first or second entry because the render tick trails the newest by
-            // DelayTicks -- a binary search would cost more in branches than it saves.
-            for (long i = _count - 1; i > oldestIndex; i--)
+            if (!hasPrior)
             {
-                WorldSnapshot later = At(i);
-                WorldSnapshot earlier = At(i - 1);
-
-                if (renderTick >= earlier.ServerTick && renderTick < later.ServerTick)
-                {
-                    from = earlier;
-                    to = later;
-
-                    // The gap is not always 1: a dropped snapshot leaves a two-tick span, and
-                    // dividing by a hardcoded 1 would make the actor cover that span in half
-                    // the time and then wait -- the exact stutter this class exists to remove.
-                    double span = later.ServerTick - (double)earlier.ServerTick;
-                    alpha = span <= 0.0 ? 0.0 : (renderTick - earlier.ServerTick) / span;
-                    return InterpolationResult.Interpolated;
-                }
+                sample = new ActorSample(PositionOf(in earlier), earlierYaw, in earlier);
+                return InterpolationResult.Held;
             }
 
-            from = to = newest;
-            StalledCount++;
-            return InterpolationResult.Stalled;
+            // The actor's own spacing bounds the projection as well as the constant: a Mid actor
+            // three ticks apart has no business being carried eight.
+            double spacing = earlierTick - (double)priorTick;
+            double limit = Math.Min(spacing, MaxExtrapolationTicks);
+            double gap = renderTick - earlierTick;
+            bool capped = gap > limit;
+            if (capped) gap = limit;
+
+            Vec3 from = PositionOf(in prior);
+            Vec3 to = PositionOf(in earlier);
+            float ahead = spacing <= 0.0 ? 0f : (float)(gap / spacing);
+
+            sample = new ActorSample(
+                new Vec3(
+                    to.X + (to.X - from.X) * ahead,
+                    to.Y + (to.Y - from.Y) * ahead,
+                    to.Z + (to.Z - from.Z) * ahead),
+                earlierYaw,
+                in earlier);
+
+            if (capped) return InterpolationResult.Held;
+
+            ExtrapolatedCount++;
+            return InterpolationResult.Extrapolated;
         }
 
-        /// <summary>
-        /// Interpolates one actor's position between two snapshots, in world units.
-        /// </summary>
-        /// <returns>False when the actor is absent from either snapshot — it spawned or
-        /// despawned across the pair, and a position blended from one end is a slide in from
-        /// wherever the other end happened to leave it.</returns>
-        public static bool TryLerpPosition(
-            WorldSnapshot? from, WorldSnapshot? to, double alpha, ushort actorId, out Vec3 position)
-        {
-            position = default;
+        /// <summary>One entry's dequantized position.</summary>
+        private static Vec3 PositionOf(in ActorSnapshotEntry entry)
+            => new Vec3(
+                Quantize.UnpackPos(entry.PosX),
+                Quantize.UnpackPos(entry.PosY),
+                Quantize.UnpackPos(entry.PosZ));
 
-            if (from == null || to == null) return false;
-            if (!from.TryFind(actorId, out ActorSnapshotEntry a)) return false;
-            if (!to.TryFind(actorId, out ActorSnapshotEntry b)) return false;
-
-            float t = (float)alpha;
-            position = new Vec3(
-                Lerp(Quantize.UnpackPos(a.PosX), Quantize.UnpackPos(b.PosX), t),
-                Lerp(Quantize.UnpackPos(a.PosY), Quantize.UnpackPos(b.PosY), t),
-                Lerp(Quantize.UnpackPos(a.PosZ), Quantize.UnpackPos(b.PosZ), t));
-            return true;
-        }
+        private static Vec3 Lerp(in Vec3 a, in Vec3 b, float t)
+            => new Vec3(
+                a.X + (b.X - a.X) * t,
+                a.Y + (b.Y - a.Y) * t,
+                a.Z + (b.Z - a.Z) * t);
 
         /// <summary>
-        /// Interpolates one actor's yaw in degrees, taking the short way round.
+        /// Interpolates a yaw in degrees, taking the short way round.
         /// </summary>
         /// <remarks>
         /// A plain lerp from 350 to 10 spins the actor 340 degrees the wrong way over one tick.
         /// The wrap is not an edge case — it is any actor facing roughly north.
         /// </remarks>
-        public static bool TryLerpYaw(
-            WorldSnapshot? from, WorldSnapshot? to, double alpha, ushort actorId, out float yawDegrees)
+        private static float LerpYaw(float from, float to, float t)
         {
-            yawDegrees = 0f;
-
-            if (from == null || to == null) return false;
-            if (!from.TryFind(actorId, out ActorSnapshotEntry a)) return false;
-            if (!to.TryFind(actorId, out ActorSnapshotEntry b)) return false;
-
-            float ya = Quantize.UnpackYaw(a.Yaw);
-            float yb = Quantize.UnpackYaw(b.Yaw);
-
-            float delta = yb - ya;
+            float delta = to - from;
             while (delta > 180f) delta -= 360f;
             while (delta < -180f) delta += 360f;
 
-            float result = ya + delta * (float)alpha;
-            result %= 360f;
-            if (result < 0f) result += 360f;
-
-            yawDegrees = result;
-            return true;
+            float result = (from + delta * t) % 360f;
+            return result < 0f ? result + 360f : result;
         }
-
-        private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
         private WorldSnapshot Newest() => At(_count - 1);
 

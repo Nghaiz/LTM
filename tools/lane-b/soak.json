@@ -1,0 +1,86 @@
+{
+  "name": "soak",
+  "note": "Early-match stutter over time: every client stands still for 6.5 minutes while the server fills its bot roster and runs the opening. Run with IRONFRONT_LOG_FRAMES=1 and compare the [frames] lines (client and server) of minute 1 with minute 6; the owner reports everything stutters for about the first 5 minutes and then recovers. Checkpoints every 30 s carry snapshotsApplied / rttMs / remoteActorCount on the same clock.",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "respawn": true
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 5.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t030s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t060s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t090s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t120s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t150s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t180s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t210s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t240s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t270s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t300s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t330s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t360s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "t390s",
+      "seconds": 30.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "done",
+      "seconds": 1.0,
+      "yawDegrees": 0
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
@@ -46,10 +46,48 @@ namespace Ironfront.Net.Replication.Combat
         /// <summary>Where the shot originated — eye height above the shooter's feet (D10).</summary>
         public readonly Vec3 Origin;
 
+        /// <summary>
+        /// True when this shot LAUNCHED rather than swept, so the caller must pull the engine
+        /// weapon's trigger. Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// <b>A fact about what happened, not a re-read of the config.</b> The bridge could ask
+        /// <c>session.WeaponConfig.Delivery</c> again, and then two places would decide what this
+        /// shot was — including on the tick a weapon switch lands between the step and the emit.
+        /// <see cref="Fired"/> stays the answer to "was a round spent"; this says which of the
+        /// two things spending it meant.
+        /// </remarks>
+        public readonly bool LaunchedProjectile;
+
+        /// <summary>
+        /// True when this input reserved a delayed throwable; no ammo or projectile has been
+        /// committed yet.
+        /// </summary>
+        public readonly bool ReleaseBegan;
+
+        /// <summary>
+        /// The effective trigger after section 5.1's gates - NOT the raw Fire bit.
+        /// </summary>
+        /// <remarks>
+        /// Reported so a shot log can tell "the client asked and the server said no" apart from
+        /// "the client never asked". Before the sprint gate existed those were the same line,
+        /// which is how a magazine draining with no muzzle flash went unattributed.
+        /// </remarks>
+        public readonly bool EffectiveTriggerDown;
+
+        /// <summary>True when the sprint rule is what refused the trigger on this frame.</summary>
+        public readonly bool BlockedBySprint;
+
         public CombatTickResult(
             FireRejection rejection, bool fired, int hitCount, bool weaponChanged,
-            bool victimDied, ushort deadActorId, in Vec3 aimDirection, in Vec3 origin)
+            bool victimDied, ushort deadActorId, in Vec3 aimDirection, in Vec3 origin,
+            bool launchedProjectile = false,
+            bool effectiveTriggerDown = false,
+            bool blockedBySprint = false,
+            bool releaseBegan = false)
         {
+            EffectiveTriggerDown = effectiveTriggerDown;
+            BlockedBySprint = blockedBySprint;
             Rejection = rejection;
             Fired = fired;
             HitCount = hitCount;
@@ -58,6 +96,8 @@ namespace Ironfront.Net.Replication.Combat
             DeadActorId = deadActorId;
             AimDirection = aimDirection;
             Origin = origin;
+            LaunchedProjectile = launchedProjectile;
+            ReleaseBegan = releaseBegan;
         }
     }
 
@@ -90,16 +130,20 @@ namespace Ironfront.Net.Replication.Combat
     {
         private readonly ServerFireResolver _fireResolver;
         private readonly IActorDamageSink _damageSink;
-        private readonly ServerRespawnGate _respawnGate;
 
+        /// <remarks>
+        /// <b>No <c>ServerRespawnGate</c>, deliberately.</b> It used to take one and stamp it on
+        /// every kill, which meant this class consumed the death edge that
+        /// <c>ServerTickLoop.EmitDeath</c> gates the whole death — broadcast, killfeed, corpse,
+        /// ticket, score — behind. Every hitscan kill therefore emitted nothing at all. The gate
+        /// belongs to whoever emits the death, and that is EmitDeath alone.
+        /// </remarks>
         public ServerCombatAuthority(
             ServerFireResolver fireResolver,
-            IActorDamageSink damageSink,
-            ServerRespawnGate respawnGate)
+            IActorDamageSink damageSink)
         {
             _fireResolver = fireResolver ?? throw new ArgumentNullException(nameof(fireResolver));
             _damageSink = damageSink ?? throw new ArgumentNullException(nameof(damageSink));
-            _respawnGate = respawnGate ?? throw new ArgumentNullException(nameof(respawnGate));
         }
 
         /// <summary>Reload intents accepted. Non-zero is the reported bug being closed.</summary>
@@ -110,6 +154,70 @@ namespace Ironfront.Net.Replication.Combat
 
         /// <summary>Damage applications that took a victim from alive to dead.</summary>
         public long KillsResolved { get; private set; }
+
+        /// <summary>
+        /// Accepted trigger pulls on a <see cref="WeaponDelivery.Projectile"/> weapon. Ledger
+        /// <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// Counted here rather than inferred from the absence of hits: "fired and hit nothing"
+        /// and "fired a grenade" produce the same <c>hits=0</c>, and telling them apart from an
+        /// artifact was exactly what X-42 cost. A run that reports zero launches while a client
+        /// held a FRAG has found this row again.
+        /// </remarks>
+        public long ProjectilesLaunched { get; private set; }
+
+        /// <summary>
+        /// Accepted input frames that carried the raw <see cref="InputButtons.Fire"/> bit,
+        /// counted before any gate reads it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The denominator every other trigger counter was missing.</b>
+        /// <see cref="SprintBlockedTriggers"/> and the resolver's shot counters all describe what
+        /// the server DECIDED, so a client that stops sending the Fire bit and a gate that
+        /// refuses every Fire bit produce the same reading: nothing fired, nothing blocked.
+        /// Those are opposite faults in opposite processes and they were indistinguishable from
+        /// any artifact.
+        /// </para>
+        /// <para>
+        /// <b>Measured, not feared.</b> Four Island <c>p10-sprint</c> runs on 2026-09-14 held
+        /// Fire for four seconds after a sprint and fired nothing, and the sprint gate was
+        /// blamed for three of them. The client had walked into the sea:
+        /// <c>Actor.Update</c>'s water branch fells the body,
+        /// <c>FpsActorController.DisableInput</c> clears <c>inputEnabled</c>,
+        /// <c>NetPredictionClock</c> then sends <c>input = default</c> every tick, and the Fire
+        /// bit never left the machine. This counter reads flat across that window and says so in
+        /// one number; the only instrument that could say it before was <c>-LogShots</c>, which
+        /// is slow enough that it got blamed for changing the outcome.
+        /// See <c>docs/island-sprint-fire-drowning-2026-09-14.md</c>.
+        /// </para>
+        /// <para>
+        /// So the pair is the diagnostic, not either half: this rising with no shots fired is a
+        /// SERVER fault, and this flat while a client believes it is firing is a CLIENT one.
+        /// </para>
+        /// </remarks>
+        public long TriggerFramesSeen { get; private set; }
+
+        /// <summary>
+        /// Raw Fire bits refused by the sprint rule. Handoff section 2.1's symptom, counted.
+        /// </summary>
+        /// <remarks>
+        /// A healthy match drives this steadily - every player who fires the instant they stop
+        /// sprinting contributes - so it is a rate to watch rather than an error. Zero across a
+        /// whole match means the gate is not wired, which is the state this closes.
+        /// </remarks>
+        public long SprintBlockedTriggers { get; private set; }
+
+        /// <summary>
+        /// Reload intents refused because the active loadout slot could not be resolved.
+        /// </summary>
+        /// <remarks>
+        /// Non-zero is a SERVER inconsistency (section 4.5), not a player doing anything: the
+        /// session and the body disagree about the loadout. Counted rather than logged per
+        /// occurrence because it would otherwise print thirty lines a second per affected actor.
+        /// </remarks>
+        public long ReloadsRefusedForUnknownSlot { get; private set; }
 
         /// <summary>
         /// The resolver this authority steps, for diagnostics that need to reach
@@ -159,33 +267,187 @@ namespace Ironfront.Net.Replication.Combat
             uint currentTick,
             Span<HitResult> hits)
         {
+            // No trigger state supplied, so every effective frame reads as a rising edge and an
+            // infinite pool feeds the reload - which is exactly what this method did before
+            // protocol 10. Kept so the suites written against that shape keep measuring what
+            // they were written to measure; the server's own path never reaches it, because
+            // ServerCombatBridge carries the session's trigger.
+            EffectiveTrigger trigger = EffectiveTrigger.Idle;
+
+            return Step(
+                ref weapon, ref trigger, in config, shooterActorId, in frame, in state, targets,
+                new ActorFireEligibility(shooterIsAlive, isDeployed: true),
+                ActorAmmoSource.Unlimited(shooterActorId),
+                nowSeconds, smoothedRttMs, currentTick, hits, currentTick);
+        }
+
+        /// <summary>
+        /// Steps one actor's combat for one accepted input frame, through the effective-trigger
+        /// state machine. Handoff sections 5.1 to 5.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The order is load-bearing, and protocol 10 adds one step at the front.</b> The
+        /// sprint rule lowers or raises the weapon FIRST, because a lowered weapon is what
+        /// refuses the reload below it and the trigger below that. Then a running reload
+        /// completes, then a fresh reload intent, then the trigger. Any other order costs a
+        /// frame somewhere.
+        /// </para>
+        /// <para>
+        /// <b>A refusal has no side effect.</b> Nothing before
+        /// <see cref="ServerFireResolver.Resolve"/> touches the ammo count, so there is no
+        /// decrement to refund - section 16 forbids the refund, and this is the shape that makes
+        /// the ban free rather than a rule to remember.
+        /// </para>
+        /// </remarks>
+        /// <param name="trigger">
+        /// The session's trigger state, advanced in place by this call. One per player, not one
+        /// per weapon: see <see cref="EffectiveTrigger"/>.
+        /// </param>
+        /// <param name="actor">Alive, deployed, and whether the seat forbids a carried weapon.</param>
+        /// <param name="ammo">
+        /// Which pool and which loadout slot a reload spends. An <see cref="ActorAmmoSource"/>
+        /// with no known slot refuses reloads outright rather than guessing slot 0.
+        /// </param>
+        public CombatTickResult Step(
+            ref WeaponRuntimeState weapon,
+            ref EffectiveTrigger trigger,
+            in WeaponConfig config,
+            ushort shooterActorId,
+            in InputFrame frame,
+            in MoveState state,
+            ReadOnlySpan<HitscanTarget> targets,
+            in ActorFireEligibility actor,
+            in ActorAmmoSource ammo,
+            float nowSeconds,
+            float smoothedRttMs,
+            uint currentTick,
+            Span<HitResult> hits,
+            uint inputTick = 0)
+        {
             byte ammoBefore = weapon.AmmoInClip;
+            bool shooterIsAlive = actor.IsAlive;
+
+            // 0. The sprint rule, and the semi-auto edge, before anything reads Unholstered.
+            TriggerOutcome pull = EffectiveTriggerPolicy.Advance(
+                ref trigger, ref weapon, in frame, in actor, config.Automatic, nowSeconds);
+
+            bool firePressed = frame.IsPressed(InputButtons.Fire);
+
+            // Counted BEFORE every gate, including the sprint rule above, so this number is
+            // about the WIRE and not about any decision taken after it.
+            if (firePressed) TriggerFramesSeen++;
+
+            bool blockedBySprint =
+                firePressed && !pull.Effective
+                && (frame.IsPressed(InputButtons.Sprint)
+                    || nowSeconds < trigger.SprintFireBlockedUntil);
+
+            if (blockedBySprint) SprintBlockedTriggers++;
+
+            // A corpse's running reload does not finish. Without this the clip refills under a
+            // dead body and the next life starts from a number nobody can explain - and
+            // BeginReload's Dead rejection does not cover it, because that guards the START.
+            if (!shooterIsAlive)
+            {
+                ServerReloadPolicy.Abort(ref weapon);
+                trigger.ReArm();
+            }
 
             // 1. A reload already running finishes on the server's clock, before anything reads
             //    the ammo count. This is the line that makes SnapshotField.Weapon move.
-            if (ServerReloadPolicy.CompleteReloadIfElapsed(ref weapon, in config, nowSeconds))
+            if (ServerReloadPolicy.CompleteReloadIfElapsed(ref weapon, in config, nowSeconds, in ammo))
                 ReloadsCompleted++;
 
-            // 2. A fresh reload intent.
-            if (frame.IsPressed(InputButtons.Reload)
-                && ServerReloadPolicy.BeginReload(
-                       ref weapon, in config, shooterIsAlive, nowSeconds)
-                   == ServerReloadPolicy.Rejection.None)
-                ReloadsStarted++;
+            // 2. A fresh reload intent. The reserve is read ONCE and handed to the rule, so the
+            //    number that refuses the reload is the number the snapshot reports.
+            if (frame.IsPressed(InputButtons.Reload))
+            {
+                Protocol.SpareAmmo reserve = ammo.Reserve(in weapon, in config);
+
+                ServerReloadPolicy.Rejection reload = ServerReloadPolicy.BeginReload(
+                    ref weapon, in config, shooterIsAlive, nowSeconds, in ammo, in reserve);
+
+                if (reload == ServerReloadPolicy.Rejection.None) ReloadsStarted++;
+                else if (reload == ServerReloadPolicy.Rejection.LoadoutSlotUnknown)
+                    ReloadsRefusedForUnknownSlot++;
+            }
 
             Vec3 origin = ShotOrigin(in state, in frame);
 
-            if (!frame.IsPressed(InputButtons.Fire))
+            // 3. The gate. A semi-automatic reaches the resolver only on the rising edge, so
+            //    the several input frames inside one mouse press spend one round rather than one
+            //    each - and redundancy, which repeats a frame up to three times, cannot turn one
+            //    press into three shots even for an automatic, because a repeated frame never
+            //    gets this far: it is dropped by tick at InputAuthority.TryAccept.
+            if (!pull.AttemptShot)
                 return new CombatTickResult(
-                    FireRejection.None, fired: false, hitCount: 0,
+                    // A gate that swallowed the reason would cost the two signals a shot log is
+                    // read for. CheckCanFire is still the authority on both -- this only makes
+                    // sure a refusal that never reaches it reports the same word it would have.
+                    // Anything else (undeployed, a seat with no carried weapon, the window after
+                    // a sprint, or a semi-automatic whose edge is not armed) is None: the
+                    // trigger was not pulled, which is not a rejection.
+                    frame.IsPressed(InputButtons.Fire) && !pull.Effective
+                        ? !shooterIsAlive        ? FireRejection.ShooterDead
+                        : !weapon.Unholstered    ? FireRejection.Holstered
+                        :                          FireRejection.None
+                        : FireRejection.None,
+                    fired: false, hitCount: 0,
                     weaponChanged: weapon.AmmoInClip != ammoBefore,
-                    victimDied: false, deadActorId: 0, Vec3.Zero, in origin);
+                    victimDied: false, deadActorId: 0, Vec3.Zero, in origin,
+                    launchedProjectile: false,
+                    effectiveTriggerDown: pull.Effective,
+                    blockedBySprint: blockedBySprint);
 
-            // 3. The trigger. CheckCanFire runs inside Resolve against the SERVER clock, so a
+            // 4. The shot. CheckCanFire runs inside Resolve against the SERVER clock, so a
             //    client sending ten frames in one tick gets one shot and nine OnCooldown
             //    rejections — which is what moves FireRateViolations, the signal phase-05
             //    criterion 2 is graded on.
             Vec3 aim = AimDirection(frame.YawDegrees, frame.PitchDegrees);
+
+            // A carried throwable reserves one use now and commits it on the authored release
+            // tick. Launchers have no delay and continue through the immediate projectile path.
+            if (config.HasDelayedRelease)
+            {
+                ThrowableRejection delayed = ThrowableLifecycle.TryBegin(
+                    ref weapon, in config, inputTick, currentTick, in aim);
+                bool began = delayed == ThrowableRejection.None;
+
+                return new CombatTickResult(
+                    ToFireRejection(delayed), fired: false, hitCount: 0,
+                    // A reservation changes the weapon state; so does a reload that completed
+                    // earlier in this same Step, whether or not the throw was then refused.
+                    weaponChanged: began || weapon.AmmoInClip != ammoBefore,
+                    victimDied: false, deadActorId: 0, in aim, in origin,
+                    launchedProjectile: false,
+                    effectiveTriggerDown: pull.Effective,
+                    blockedBySprint: blockedBySprint,
+                    releaseBegan: began);
+            }
+
+            // 4a. A weapon that LAUNCHES does not sweep. Ledger X-42: the same trigger rules
+            //     apply -- CheckCanFire is shared, not restated -- but the flight and the
+            //     detonation belong to the engine (V7-D1), so this path spends the round and
+            //     stops. Sweeping it as well would resolve a thrown grenade as a bullet, which
+            //     is precisely what shipped: `rejection=None fired=True hits=1` at 1.2 m, zero
+            //     damage, and no explosion anywhere (artifacts/lane-b/r1-grenade-03).
+            if (config.Delivery == WeaponDelivery.Projectile)
+            {
+                FireRejection launchRejection = _fireResolver.ResolveLaunch(
+                    ref weapon, in config, shooterIsAlive, nowSeconds);
+
+                bool launched = launchRejection == FireRejection.None;
+                if (launched) ProjectilesLaunched++;
+
+                return new CombatTickResult(
+                    launchRejection, launched, hitCount: 0,
+                    weaponChanged: weapon.AmmoInClip != ammoBefore,
+                    victimDied: false, deadActorId: 0, in aim, in origin,
+                    launchedProjectile: launched,
+                    effectiveTriggerDown: pull.Effective,
+                    blockedBySprint: blockedBySprint);
+            }
 
             FireRejection rejection = _fireResolver.Resolve(
                 ref weapon, in config, targets, shooterActorId, shooterIsAlive,
@@ -218,18 +480,57 @@ namespace Ironfront.Net.Replication.Combat
                 deadActorId = hit.TargetActorId;
                 KillsResolved++;
 
-                _respawnGate.MarkDeath(hit.TargetActorId, nowSeconds);
+                // The death gate is deliberately NOT stamped here. ServerTickLoop.EmitDeath owns
+                // that edge and gates the S_DEATH broadcast, the killfeed line, the corpse, the
+                // ticket and the score on it, so stamping it first CONSUMED the edge: EmitDeath's
+                // TryBeginDeath answered false for a death this path had already recorded, and it
+                // returned before emitting anything. A hitscan kill produced no S_DEATH at all --
+                // the victim's client cleared IsAlive from the snapshot, disabled its own input
+                // and stood there unable to move, and no other client saw a thing.
+                //
+                // This call used to be defended by a comment in EmitDeath calling it safe, on the
+                // grounds that the gate ignored a repeat within one life. That was true while the
+                // gate swallowed repeats silently; it stopped being true when the gate was changed
+                // to RETURN the edge, which is what makes EmitDeath correct.
             }
 
             return new CombatTickResult(
                 rejection, fired, hitCount,
                 weaponChanged: weapon.AmmoInClip != ammoBefore,
-                victimDied, deadActorId, in aim, in origin);
+                victimDied, deadActorId, in aim, in origin,
+                launchedProjectile: false,
+                effectiveTriggerDown: pull.Effective,
+                blockedBySprint: blockedBySprint);
+        }
+
+        /// <summary>Advances a delayed throwable independently of input packet arrival.</summary>
+        public ThrowableTransition AdvancePendingRelease(
+            ref WeaponRuntimeState weapon, in WeaponConfig config,
+            uint serverTick, in ActorAmmoSource ammo)
+            => ThrowableLifecycle.TryRelease(ref weapon, in config, serverTick, in ammo);
+
+        /// <summary>Records a delayed projectile only after the engine confirms its spawn.</summary>
+        public void RecordDelayedProjectileLaunch() => ProjectilesLaunched++;
+
+        private static FireRejection ToFireRejection(ThrowableRejection rejection)
+        {
+            switch (rejection)
+            {
+                case ThrowableRejection.None: return FireRejection.None;
+                case ThrowableRejection.Holstered: return FireRejection.Holstered;
+                case ThrowableRejection.Reloading: return FireRejection.Reloading;
+                case ThrowableRejection.NoAmmo: return FireRejection.NoAmmo;
+                case ThrowableRejection.OnCooldown:
+                case ThrowableRejection.AlreadyPending:
+                    return FireRejection.OnCooldown;
+                default:
+                    return FireRejection.None;
+            }
         }
 
         /// <summary>
-        /// Where a shot leaves the shooter: their feet plus an eye height that drops when they
-        /// are crouched or prone. Decision D10.
+        /// Where a shot leaves the shooter: the capsule centre converted to feet, then raised
+        /// to eye height. Decision D10.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -255,7 +556,16 @@ namespace Ironfront.Net.Replication.Combat
                 ? ProtocolConstants.EYE_HEIGHT_CROUCHED
                 : ProtocolConstants.EYE_HEIGHT;
 
-            return new Vec3(state.Position.X, state.Position.Y + eye, state.Position.Z);
+            // NetMovementAgent stores the CharacterController transform, whose authored centre
+            // is zero. That transform is the CENTRE of the capsule, not its feet. Adding eye
+            // height directly put every network shot 0.9 m too high while the hitboxes were
+            // shifted by the same mistaken convention. It happened to look plausible in the
+            // first-person camera but rays passed over a remote player's torso.
+            float halfCapsule = MovementCore.HeightFor(state.IsCrouching) * 0.5f;
+            return new Vec3(
+                state.Position.X,
+                state.Position.Y - halfCapsule + eye,
+                state.Position.Z);
         }
 
         /// <summary>
@@ -288,6 +598,10 @@ namespace Ironfront.Net.Replication.Combat
             ReloadsStarted = 0;
             ReloadsCompleted = 0;
             KillsResolved = 0;
+            ProjectilesLaunched = 0;
+            TriggerFramesSeen = 0;
+            SprintBlockedTriggers = 0;
+            ReloadsRefusedForUnknownSlot = 0;
         }
     }
 }

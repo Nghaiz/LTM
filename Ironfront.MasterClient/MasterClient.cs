@@ -106,7 +106,7 @@ namespace Ironfront.MasterClient
         }
 
         public Task<LoginResult> LoginAsync(string username, string passwordHash, CancellationToken ct = default)
-            => RequestAsync(MspMessageType.LoginRequest, new { username, passwordHash, clientVersion = ProtocolConstants.PROTOCOL_VERSION }, MspMessageType.LoginResponse, response => new LoginResult(response.Ok, response.ErrorCode, response.SessionToken ?? string.Empty, response.PlayerId, response.DisplayName ?? string.Empty), ct);
+            => RequestAsync(MspMessageType.LoginRequest, new { username, passwordHash, clientVersion = ProtocolConstants.PROTOCOL_VERSION }, MspMessageType.LoginResponse, response => new LoginResult(response.Ok, response.ErrorCode, response.SessionToken ?? string.Empty, response.PlayerId, response.DisplayName ?? string.Empty, response.RetryAfterSec), ct);
 
         public Task<RegisterResult> RegisterAsync(string username, string passwordHash, string displayName, CancellationToken ct = default)
             => RequestAsync(MspMessageType.RegisterRequest, new { username, passwordHash, displayName }, MspMessageType.RegisterResponse, response => new RegisterResult(response.Ok, response.ErrorCode), ct);
@@ -124,6 +124,8 @@ namespace Ironfront.MasterClient
             => SendAsync(MspMessageType.RoomLeaveRequest, new { }, ct);
 
         public Task SetReadyAsync(bool ready, CancellationToken ct = default) => SendAsync(MspMessageType.RoomReadyRequest, new { ready }, ct);
+
+        public Task SetTeamAsync(byte team, CancellationToken ct = default) => SendAsync(MspMessageType.RoomTeamRequest, new { team }, ct);
 
         public Task SendChatAsync(byte channel, string text, CancellationToken ct = default)
             => SendAsync(MspMessageType.ChatSend, new { channel, text }, ct);
@@ -144,6 +146,24 @@ namespace Ironfront.MasterClient
             await _requestLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
+                // REFUSED RATHER THAN SENT, AND THE ALTERNATIVE IS A PERMANENT HANG.
+                //
+                // QueueDisconnected latches — `Interlocked.Exchange(ref _disconnected, 1) != 0`
+                // returns early on every later call — so it faults the pending request ONCE, at
+                // the moment the link drops. A request issued AFTER that point has nothing left
+                // to fault it: TCP allows writing to a half-closed socket, so SendAsync succeeds
+                // into a connection the peer has already finished with, no response ever
+                // arrives, and the await never completes. Measured: a client idled past the
+                // master's unauthenticated deadline and then asked to register sat there
+                // indefinitely, with the UI's in-flight flag stuck and the menu dead.
+                //
+                // Throwing IOException rather than a state exception is deliberate: this IS a
+                // link failure, and MasterSession.IsLinkFailure already routes it to the error
+                // line the player reads. A caller that checks State first — which the menu does
+                // — never reaches this.
+                if (State != MasterConnectionState.Connected)
+                    throw new IOException("Master connection closed.");
+
                 var completion = new TaskCompletionSource<Response>();
                 _pending = completion;
                 await SendAsync(requestType, body, ct).ConfigureAwait(false);
@@ -241,8 +261,48 @@ namespace Ironfront.MasterClient
             }
 
             response.Type = type;
-            if (type == MspMessageType.RoomStatePush) { OnRoomStatePush?.Invoke(response.RoomState); return; }
-            if (type == MspMessageType.ChatPush) { OnChat?.Invoke(response.Chat); return; }
+            // BUILT FROM THE FLAT FIELDS, not read out of a nested object that the wire has
+            // never carried. MSP_ROOM_STATE_PUSH's body is `{ roomId, members, state }` at the
+            // top level (MspMessageDispatcher.BroadcastRoom), and this class used to expose a
+            // `RoomState RoomState { get; set; } = new RoomState()` that no `roomState` field
+            // ever populated -- so every push handed its subscriber a default-constructed
+            // object: roomId 0, no members, and `state` 0, which reads as Waiting.
+            //
+            // That is not a cosmetic parse bug. MasterSession enters the match on this push
+            // when the lifecycle reaches Starting or InMatch (X-77), so the check could never
+            // pass, the automatic path never once fired, and the "Enter match now (debug)"
+            // button stayed the only way out of a room lobby -- which is exactly the state P14
+            // set out to fix, one layer below where it was looking. Found by the room-start
+            // walk: the master logged the room reaching Starting while both clients reported
+            // seeing nothing but Waiting.
+            if (type == MspMessageType.RoomStatePush)
+            {
+                OnRoomStatePush?.Invoke(new RoomState
+                {
+                    RoomId  = response.RoomId,
+                    Members = response.Members ?? Array.Empty<RoomMember>(),
+                    State   = response.State,
+                });
+                return;
+            }
+
+            // The same defect one field over, and fixed in the same commit for the same reason
+            // the debug button was deleted rather than left: a decoder known to be broken,
+            // sitting beside one just fixed, is how the next reader concludes the area works.
+            // MSP_CHAT_PUSH's body is a flat ChatMessage; `response.Chat` was never populated
+            // either, so every chat push delivered an empty message from player 0.
+            if (type == MspMessageType.ChatPush)
+            {
+                OnChat?.Invoke(new ChatMessage
+                {
+                    Channel      = response.Channel,
+                    FromPlayerId = response.FromPlayerId,
+                    FromName     = response.FromName ?? string.Empty,
+                    Text         = response.Text ?? string.Empty,
+                    Timestamp    = response.Timestamp,
+                });
+                return;
+            }
             if (type == MspMessageType.ErrorPush)
             {
                 string message = response.Message ?? string.Empty;
@@ -282,14 +342,29 @@ namespace Ironfront.MasterClient
             public string? SessionToken { get; set; }
             public int PlayerId { get; set; }
             public string? DisplayName { get; set; }
+
+            /// <summary>Seconds until a refused login may be retried. 0 from a master that
+            /// predates the field, which reads as "waiting will not help".</summary>
+            public int RetryAfterSec { get; set; }
+
             public int RoomId { get; set; }
             public int EstimatedWaitSec { get; set; }
             public RoomInfo[]? Rooms { get; set; }
             public string? GameServerIp { get; set; }
             public int GameServerPort { get; set; }
             public string? JoinTicket { get; set; }
-            public RoomState RoomState { get; set; } = new RoomState();
-            public ChatMessage Chat { get; set; } = new ChatMessage();
+            // The push bodies, flat, exactly as MspMessageDispatcher writes them. The two
+            // nested `RoomState`/`ChatMessage` properties that used to stand here matched no
+            // field on the wire and so were always default -- see HandleOnMainThread. They are
+            // gone rather than kept beside these: a property nothing populates reads as the one
+            // to use, and that is how the original bug survived.
+            public RoomMember[]? Members { get; set; }
+            public byte State { get; set; }
+            public byte Channel { get; set; }
+            public int FromPlayerId { get; set; }
+            public string? FromName { get; set; }
+            public string? Text { get; set; }
+            public long Timestamp { get; set; }
         }
     }
 }

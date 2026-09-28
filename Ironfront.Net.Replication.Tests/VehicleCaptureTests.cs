@@ -51,7 +51,14 @@ namespace Ironfront.Net.Replication.Tests
         {
             var registry = new VehicleRegistry();
 
-            Assert.False(registry.Add(Car(0), new FakePose()));
+            // Forged rather than built: VehicleState.Spawned refuses id 0 outright as of
+            // protocol 10 § 8.2, so presenting the registry with one now takes a deliberate
+            // write. The assertion is unchanged -- Add still answers false rather than throwing,
+            // because a spawner double-reporting must not be able to take the tick loop down.
+            VehicleState forged = Car(1);
+            forged.VehicleId = 0;
+
+            Assert.False(registry.Add(in forged, new FakePose()));
             Assert.True(registry.Add(Car(3), new FakePose()));
             Assert.False(registry.Add(Car(3), new FakePose()));
             Assert.Equal(1, registry.LiveCount);

@@ -205,7 +205,15 @@ namespace Ironfront.Net.Replication
             if (baseline.StateFlags != current.StateFlags) mask |= SnapshotField.StateFlags;
             if (baseline.Health     != current.Health)     mask |= SnapshotField.Health;
 
-            if (baseline.WeaponId != current.WeaponId || baseline.AmmoInClip != current.AmmoInClip)
+            // All four parts of the weapon field, not just the two that existed before v10. A
+            // reload that empties the reserve without changing the clip, and the reload flag
+            // going up and back down, are both changes the client must see; comparing only
+            // weaponId and clip would leave the HUD showing a reserve the server spent ticks
+            // ago and a reload bar that never clears.
+            if (baseline.WeaponId != current.WeaponId
+                || baseline.AmmoInClip != current.AmmoInClip
+                || baseline.SpareAmmoEncoded != current.SpareAmmoEncoded
+                || baseline.WeaponStateFlags != current.WeaponStateFlags)
                 mask |= SnapshotField.Weapon;
 
             if (baseline.Team != current.Team) mask |= SnapshotField.Team;

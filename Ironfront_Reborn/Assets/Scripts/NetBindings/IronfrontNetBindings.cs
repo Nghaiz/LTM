@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Unity.Server;
@@ -36,8 +36,278 @@ namespace Ironfront.Net.Unity.Bindings
             NetServerBindings.ActorSourceResolver = ResolveActorSource;
             NetServerBindings.VehicleSourceResolver = ResolveVehicleSource;
             NetServerBindings.DriverInputSinkResolver = NetDriverInputSink.Attach;
+            NetServerBindings.AiDriverResolver = ResolveAiDriver;
+            NetServerBindings.PlayerBodyFactory = CreatePlayerBody;
             NetServerBindings.SpawnPoints = new ActorManagerSpawnPoints();
-            NetServerBindings.CapturePoints = new SceneCapturePoints();
+            NetSceneBindings.CapturePoints = new SceneCapturePoints();
+            // C2. Ironfront.Net.Unity.Input cannot name LoadoutUi or OptionsUi, so the loadout
+            // screen's open state and the helicopter preferences are handed to it here. Before
+            // the first scene's Awake, and so before FpsActorController can build a
+            // LocalInputSource that reads them.
+            NetInputBindings.Environment = new LocalInputEnvironmentBinding();
+
+            // C4a. The client presenters may no longer name FpsActorController or IngameUi, so
+            // the local player's rig and the hitmarker are handed over here. Both are registered
+            // unconditionally, including on a dedicated server: each binding resolves its
+            // singleton per call and reports absent when there is none, so registering on a
+            // headless process costs one allocation and changes no behaviour. A role test here
+            // would be a second copy of a decision NetContext already owns.
+            NetClientBindings.LocalPlayer = new LocalPlayerRigBinding();
+            NetClientBindings.Hud = new HitmarkerHudBinding();
+
+            // C4b. The vehicle, projectile, decal and scoreboard seams. The two resolvers mirror
+            // the server's VehicleSourceResolver for the same reason it exists: many objects,
+            // arriving over the wire, and an adapter component on every prefab would be a change
+            // to authored assets that this refactor is forbidden from making.
+            NetClientBindings.VehicleBodyResolver = ResolveVehicleBody;
+            NetClientBindings.ProjectileBodyResolver = ResolveProjectileBody;
+            NetClientBindings.RemoteActorPresentationResolver = ResolveRemoteActorPresentation;
+            NetClientBindings.VehiclePrefabs = new SceneVehiclePrefabDirectory();
+            NetClientBindings.Decals = new DecalSinkBinding();
+            NetClientBindings.Objectives = new ScoreUiObjectiveHud();
+            NetClientBindings.ProjectileCatalogReader = ProjectileCatalogBinding.Read;
+
+            // P3 task 3.4. The minimap seam, for the same reason as the four above: the
+            // registries that own the replicated bodies live in Ironfront.Net.Unity.Client and
+            // may not name MinimapUi, which compiles into Assembly-CSharp.
+            NetClientBindings.Minimap = new MinimapMarkerBinding();
+
+            // C4d. The lane-B recorder observes the scoreboard HUD, the offline scoreboard and
+            // the scene's capture points, and may name none of them now that Net/Diagnostics is
+            // an assembly. Registered unconditionally: the probe resolves its singletons per call
+            // and reports absent when there are none, which is the "absent" the recorder's JSON
+            // already carried.
+            NetDiagnosticsBindings.Probe = new LaneBDiagnosticsProbe();
+            NetDiagnosticsBindings.LegacyMovementResolver = ResolveLegacyMovement;
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;FirstPersonController&gt;()</c> the diagnostics assembly cannot
+        /// do itself — that type is declared in <c>Assembly-CSharp-firstpass</c>, a second
+        /// predefined assembly no asmdef may reference. Null on a body that carries none, which
+        /// the shadow comparison reads as "cannot score this run". Phase C4d.
+        /// </summary>
+        private static IRemoteActorPresentation ResolveRemoteActorPresentation(GameObject gameObject)
+            => gameObject != null ? new RemoteActorPresentationBinding(gameObject) : null;
+
+        /// <summary>
+        /// Gives the lightweight network skeleton the same team materials and authored
+        /// third-person weapon models used by Ravenfield's AI actors.
+        /// </summary>
+        private sealed class RemoteActorPresentationBinding : IRemoteActorPresentation
+        {
+            private readonly GameObject _body;
+            private readonly Renderer[] _teamRenderers;
+            private Weapon _weapon;
+            private byte _weaponId = byte.MaxValue;
+
+            internal RemoteActorPresentationBinding(GameObject body)
+            {
+                _body = body;
+                _teamRenderers = body.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            }
+
+            public bool Exists => _body != null;
+
+            public void ApplyTeam(byte team)
+            {
+                if (!Exists || team == Ironfront.Net.Protocol.TeamId.None) return;
+
+                Color colour = ColorScheme.TeamColor(team);
+                for (int i = 0; i < _teamRenderers.Length; i++)
+                {
+                    Renderer renderer = _teamRenderers[i];
+                    if (renderer != null) renderer.material.color = colour;
+                }
+            }
+
+            public void SetVisible(bool visible)
+            {
+                if (!Exists) return;
+
+                for (int i = 0; i < _teamRenderers.Length; i++)
+                {
+                    Renderer renderer = _teamRenderers[i];
+                    if (renderer != null) renderer.enabled = visible;
+                }
+
+                if (_weapon == null) return;
+                if (visible) _weapon.Show();
+                else _weapon.Hide();
+            }
+
+            public IGameplayWeapon EquipWeapon(byte networkId, Transform weaponParent)
+            {
+                if (_weaponId == networkId && _weapon != null) return _weapon;
+
+                if (_weapon != null) UnityEngine.Object.Destroy(_weapon.gameObject);
+                _weapon = null;
+                _weaponId = networkId;
+
+                if (!Exists || weaponParent == null
+                    || !WeaponManager.TryGetEntry(networkId, out WeaponManager.WeaponEntry entry)
+                    || entry == null || entry.prefab == null)
+                    return null;
+
+                GameObject instance = UnityEngine.Object.Instantiate(entry.prefab);
+                _weapon = instance != null ? instance.GetComponent<Weapon>() : null;
+                if (_weapon == null)
+                {
+                    if (instance != null) UnityEngine.Object.Destroy(instance);
+                    return null;
+                }
+
+                _weapon.NetworkId = networkId;
+                _weapon.gameObject.name = entry.name + " (remote)";
+
+                if (_weapon.animator != null) UnityEngine.Object.Destroy(_weapon.animator);
+                if (_weapon.thirdPersonTransform != null)
+                {
+                    _weapon.thirdPersonTransform.localEulerAngles = new Vector3(0f, 0f, -90f);
+                    _weapon.thirdPersonTransform.localPosition = _weapon.thirdPersonOffset;
+                    float scale = _weapon.thirdPersonScale;
+                    _weapon.thirdPersonTransform.localScale = new Vector3(scale, scale, scale);
+                }
+
+                _weapon.CullFpsObjects();
+                _weapon.FindRenderers(true);
+                _weapon.transform.SetParent(weaponParent, false);
+                _weapon.transform.localPosition = Vector3.zero;
+                _weapon.transform.localRotation = Quaternion.identity;
+                _weapon.Show();
+                return _weapon;
+            }
+        }
+
+        private static ILegacyMovementProbe ResolveLegacyMovement(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            var controller = gameObject
+                .GetComponent<UnityStandardAssets.Characters.FirstPerson.FirstPersonController>();
+
+            return controller != null ? new LegacyMovementProbeBinding(controller) : null;
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;Vehicle&gt;()</c> the client assembly cannot do itself. Null
+        /// for a spawned object carrying no vehicle, which the registry reads as an unrenderable
+        /// spawn and counts. Phase C4b.
+        /// </summary>
+        private static IGameplayVehicleBody ResolveVehicleBody(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            Vehicle vehicle = gameObject.GetComponent<Vehicle>();
+            return vehicle != null ? vehicle : null;
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;Projectile&gt;()</c> the client assembly cannot do itself. Null
+        /// for an instance carrying no projectile — a purely decorative prefab — which the
+        /// presenter reads as "spawned but not tracked". Phase C4b.
+        /// </summary>
+        private static IProjectileBody ResolveProjectileBody(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            Projectile projectile = gameObject.GetComponent<Projectile>();
+            return projectile != null ? projectile : null;
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;AiActorController&gt;()</c> the server assembly cannot do
+        /// itself. Null for a body that is not bot-driven — the local player's own avatar, a
+        /// bare test rig — which the caller reads as "nothing to suspend". Phase-3A.
+        /// </summary>
+        private static IAiDriver ResolveAiDriver(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            AiActorController ai = gameObject.GetComponent<AiActorController>();
+            return ai != null ? new AiActorControllerDriver(ai) : null;
+        }
+
+        /// <summary>
+        /// Builds one player-slot body from the same AI character prefab, and by the same steps,
+        /// that <c>ActorManager.CreateAIActor</c> uses for a bot. Phase-3A.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The same prefab as a bot, deliberately.</b> The alternative was
+        /// <c>Player Fps Actor</c>, and it carries a camera, an <c>FpsActorController</c> and
+        /// the whole client-side prediction stack — stripping those on a server is the fragile
+        /// step, and <c>NetVerificationHarness.OpenSecondSlot</c>'s own remark said so before
+        /// this existed. The AI character already carries <c>NetServerActor</c> and none of
+        /// that.
+        /// </para>
+        /// <para>
+        /// <b><c>SetTeam</c> is not optional and cannot be done on the far side of the seam.</b>
+        /// It colours the renderer and the ragdoll's renderer from <c>ColorScheme.TeamColor</c>;
+        /// a body that skipped it would be on team 0 wearing the wrong colours, which no test
+        /// and no log would report. It also has to run after <c>Awake</c>, which
+        /// <c>Instantiate</c> guarantees, because it dereferences fields <c>Awake</c> assigns.
+        /// </para>
+        /// <para>
+        /// <b>The death stamp is a birth certificate, and nothing more.</b> It used to be load
+        /// bearing: <c>Actor.Awake</c> leaves every fresh actor <c>dead</c>, and
+        /// <c>ActorManager.SpawnWave</c> is the only caller of <c>Actor.SpawnAt</c>, so stamping
+        /// the current time was how a pool body got off the prefab's origin and onto the ground —
+        /// "eligible for the first wave, exactly as a bot is". That is no longer true and must
+        /// not be relied on. <c>ServerCombatBridge.PlaceAtSpawn</c> now owns the whole of it
+        /// (health, <c>IsAlive</c>, <c>MoveToSpawnPoint</c>, <c>EquipLoadout</c>) and runs from
+        /// the client's own <c>C_SPAWN_REQUEST</c>, and <c>SpawnWave</c> skips any body whose
+        /// <c>NetServerActor.AvailableForPlayers</c> is set — because a wave that placed a player
+        /// slot also cleared <c>dead</c>, which the client read through the snapshot as "the
+        /// server has deployed me" and so never showed the loadout screen at all.
+        /// </para>
+        /// <para>
+        /// An unclaimed slot therefore stands at the prefab's origin for the whole match, and
+        /// that is the intended state: <c>ServerTickLoop.IsAnnounceable</c> tells no client it
+        /// exists (X-18), and it is <c>dead</c>, so nothing simulates it and it does not fall.
+        /// </para>
+        /// </remarks>
+        private static GameObject CreatePlayerBody(byte team)
+        {
+            ActorManager manager = ActorManager.instance;
+
+            if (manager == null || manager.actorPrefab == null)
+            {
+                Debug.LogError(
+                    "[net] no ActorManager or no actorPrefab, so no player-slot body can be "
+                    + "built. A scene that runs a server needs the _Managers prefab in it.");
+                return null;
+            }
+
+            GameObject body = UnityEngine.Object.Instantiate(manager.actorPrefab);
+            Actor actor = body.GetComponent<Actor>();
+
+            if (actor == null)
+            {
+                Debug.LogError(
+                    $"[net] '{manager.actorPrefab.name}' has no Actor component, so it cannot "
+                    + "be a player-slot body.");
+                UnityEngine.Object.Destroy(body);
+                return null;
+            }
+
+            actor.SetTeam(team);
+            actor.deathTimestamp = Time.time;
+
+            // X-15. This body is driven by MoveInput from the server, not by its own controller,
+            // and ServerPlayer.Tick needs a NetMovementAgent to move it THROUGH COLLISION. The AI
+            // character prefab carries NetServerActor but not the agent -- that is authored on
+            // Player Fps Actor.prefab and nowhere else -- so without this the session MoveState
+            // took the detached branch and free-fell out of the world while the transform stood
+            // still, and every shot originated from wherever the ghost had fallen to.
+            //
+            // Here rather than on the prefab, deliberately: every bot uses the same prefab and
+            // is driven by AiActorController, so authoring the agent onto it would put a second
+            // driver on every character in the game.
+            NetServerActor replicated = body.GetComponent<NetServerActor>();
+            if (replicated != null) replicated.AttachMovementAgent();
+
+            return body;
         }
 
         /// <summary>
@@ -192,11 +462,14 @@ namespace Ironfront.Net.Unity.Bindings
             _vehicle.Die();
         }
 
+        /// <inheritdoc />
+        /// <remarks>
+        /// Delegated rather than re-derived. Two copies of one lookup is how the client and the
+        /// server came to measure a seat request from different origins (X-67), and the fix is
+        /// worth nothing if this class keeps its own.
+        /// </remarks>
         public Vector3 GetSeatPosition(int seatIndex)
-        {
-            Seat seat = SeatAt(seatIndex);
-            return seat != null ? seat.transform.position : Vector3.positiveInfinity;
-        }
+            => _vehicle != null ? _vehicle.GetSeatPosition(seatIndex) : Vector3.positiveInfinity;
 
         /// <inheritdoc />
         public bool TryEnterSeat(GameObject actorObject, int seatIndex)
@@ -232,6 +505,48 @@ namespace Ironfront.Net.Unity.Bindings
             return true;
         }
 
+        /// <summary>
+        /// The vehicle's own colliders, read fresh: occupants are parented under their seats, so
+        /// a cached read would hold whoever happened to be sitting there, and a burning tank
+        /// sheds its turret.
+        /// </summary>
+        private System.Collections.Generic.List<Collider> Colliders()
+        {
+            var own = new System.Collections.Generic.List<Collider>();
+            if (_vehicle == null) return own;
+
+            foreach (Collider collider in _vehicle.GetComponentsInChildren<Collider>(true))
+            {
+                if (collider != null && collider.GetComponentInParent<Actor>() == null) own.Add(collider);
+            }
+
+            return own;
+        }
+
+        public bool TryGetBounds(out Bounds bounds)
+        {
+            bounds = default;
+            bool any = false;
+            foreach (Collider collider in Colliders())
+            {
+                if (collider == null || !collider.enabled || collider.isTrigger) continue;
+                if (!any) bounds = collider.bounds;
+                else bounds.Encapsulate(collider.bounds);
+                any = true;
+            }
+
+            return any;
+        }
+
+        public void SetCollisionIgnored(Collider collider, bool ignored)
+        {
+            if (collider == null) return;
+            foreach (Collider own in Colliders())
+            {
+                if (own != null && own != collider) Physics.IgnoreCollision(collider, own, ignored);
+            }
+        }
+
         private Seat SeatAt(int seatIndex)
         {
             if (_vehicle == null || _vehicle.seats == null) return null;
@@ -260,10 +575,195 @@ namespace Ironfront.Net.Unity.Bindings
             set => _actor.health = value;
         }
 
+        /// <summary>
+        /// How far above the humanoid Head bone the top of the skull sits. The bone's pivot is the
+        /// base of the skull, where it meets the neck.
+        /// </summary>
+        private const float HeadCrownMetres = 0.2f;
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <para>
+        /// <b>The crown of the head, not <c>Actor.inWater</c>.</b> <c>inWater</c> samples the spine
+        /// plus half a metre, and it means "deep enough that the shipped body swims", not "the head
+        /// is under": a bot floating on its back as a ragdoll keeps that point under the surface
+        /// with its head in the air. Measured 2026-09-27 on lane-B: a floating bot drowned with
+        /// <c>sampleDepth=0.29m headDepth=0.00m</c>, and one Island match drowned the same bot three
+        /// times running. The drowning rule is the owner's own, and what it names is the head.
+        /// </para>
+        /// <para>
+        /// A ragdoll's head is its physical bone, since that is what floats; a standing body's is the
+        /// animated one. A rig with no Head bone falls back to the shipped sample.
+        /// </para>
+        /// </remarks>
+        public bool IsSubmerged => WaterLevel.InWater(CrownPosition());
+
+        private Vector3 CrownPosition()
+        {
+            Transform head = _actor.ragdoll.IsRagdoll()
+                ? _actor.ragdoll.HumanBoneTransform(HumanBodyBones.Head)
+                : _actor.ragdoll.HumanBoneTransformAnimated(HumanBodyBones.Head);
+
+            return head != null
+                ? head.position + Vector3.up * HeadCrownMetres
+                : _actor.CenterPosition() + Vector3.up * 0.5f;
+        }
+
+        public string DescribeSubmersion()
+        {
+            if (_actor == null) return "no body";
+
+            // The shipped swim sample (Actor.inWater's spine + 0.5 m) beside the crown this rule
+            // actually reads, so a line can show a swimmer whose sample is under and whose head is not.
+            Vector3 crown = CrownPosition();
+            Vector3 sample = _actor.CenterPosition() + Vector3.up * 0.5f;
+            Vector3 feet = _actor.transform.position;
+            bool ragdolled = _actor.ragdoll.IsRagdoll();
+            string seat = _actor.IsSeated() && _actor.seat != null && _actor.seat.vehicle != null
+                ? $"{_actor.seat.vehicle.name}/{_actor.seat.name}"
+                : "none";
+
+            // A live ragdoll in water is buoyant (Actor.FixedUpdate lifts the hip and the head), so
+            // one that drowns is either still sinking or held down -- the rise speed and whatever is
+            // overhead are what tell those apart. Measured 2026-09-27: a bot drowned lying 1.6 m
+            // down in 1.7 m of water, which neither the depth nor the seat explained.
+            string rise = ragdolled ? $"{_actor.ragdoll.Velocity().y:F2}m/s" : "n/a";
+
+            return $"feet=({feet.x:F1}, {feet.y:F2}, {feet.z:F1}) water={WaterLevel.height:F2} "
+                   + $"crownDepth={WaterLevel.Depth(crown):F2}m "
+                   + $"swimSampleDepth={WaterLevel.Depth(sample):F2}m "
+                   + $"fallenOver={_actor.fallenOver} ragdoll={ragdolled} rise={rise} "
+                   + $"overhead(crown)={Overhead(crown)} overhead(spine)={Overhead(_actor.CenterPosition())} "
+                   + $"seat={seat}";
+        }
+
+        /// <summary>
+        /// The nearest collider between a submerged point and the surface that is not part of the
+        /// body itself, or <c>"none"</c>: a swimmer trapped under a jetty or a hull, or inside a
+        /// rock it tunnelled into, cannot surface however buoyant it is. For the drowning log
+        /// only -- it allocates.
+        /// </summary>
+        /// <remarks>
+        /// Back faces count here, which a raycast ignores by default. A ragdoll that has tunnelled
+        /// into a mesh collider sees only that mesh's inside, and would otherwise read as having
+        /// open water above it -- which is what the first two measured cases, lying still on the
+        /// bottom with nothing overhead, could not rule out.
+        /// </remarks>
+        private string Overhead(Vector3 point)
+        {
+            float depth = WaterLevel.Depth(point);
+            if (depth <= 0f) return "n/a";
+
+            bool hitBackfaces = Physics.queriesHitBackfaces;
+            Physics.queriesHitBackfaces = true;
+            RaycastHit[] hits;
+            try
+            {
+                hits = Physics.RaycastAll(
+                    point, Vector3.up, depth, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            }
+            finally
+            {
+                Physics.queriesHitBackfaces = hitBackfaces;
+            }
+
+            Collider nearest = null;
+            float nearestDistance = float.MaxValue;
+            foreach (RaycastHit hit in hits)
+            {
+                if (hit.collider.transform.IsChildOf(_actor.transform) || hit.distance >= nearestDistance)
+                {
+                    continue;
+                }
+
+                nearest = hit.collider;
+                nearestDistance = hit.distance;
+            }
+
+            return nearest == null ? "none" : $"{nearest.name}@{nearestDistance:F2}m";
+        }
+
+        /// <summary>
+        /// The alive FLAG and the alive REGISTER, written as a pair. Ledger <b>X-59</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This was half a pair, and the cost was 39-76 <c>ArgumentException</c>s per lane-A
+        /// run.</b> <c>Actor.dead</c> is written in four places: <c>Actor.Awake</c>,
+        /// <c>Actor.SpawnAt</c> (which calls <c>ActorManager.SetAlive</c>), <c>Actor.Die</c>
+        /// (which calls <c>ActorManager.SetDead</c>) — and here, which called neither.
+        /// <c>ServerActorDamageSink</c> kills by writing <c>NetServerActor.IsAlive = false</c>
+        /// through this setter and deliberately does NOT call <c>Actor.Die()</c>, for the
+        /// reasons its own remark gives. But <c>Die()</c> was the only thing on that path that
+        /// left the register, so the corpse stayed in <c>aliveActors[team]</c>;
+        /// <c>ActorManager.SpawnWave</c> then selected the body on <c>dead</c> and
+        /// <c>Actor.SpawnAt</c> registered it a SECOND time.
+        /// </para>
+        /// <para>
+        /// <b>What the duplicate then did.</b> <c>AiActorController.FindPotentialTargets</c>
+        /// builds a <c>Dictionary&lt;Actor, float&gt;</c> over
+        /// <c>ActorManager.AliveActorsOnTeam(team)</c>, so the second entry throws
+        /// <c>ArgumentException: An item with the same key has already been added</c> — and it
+        /// throws out of the <c>AiTarget</c> coroutine, so that bot stops choosing targets for
+        /// the rest of the match. Same family as X-55/X-56/X-57: an AI coroutine throwing and
+        /// taking its own work with it.
+        /// </para>
+        /// <para>
+        /// <b>Here rather than a membership test at <c>SetAlive</c>.</b> A duplicate guard makes
+        /// the symptom unproducible without saying why a body was registered twice; this closes
+        /// the window that registered it. <c>SetAlive</c> does carry a guard now, but as a
+        /// REPORT of a second producer nobody has found yet, not as this fix.
+        /// </para>
+        /// <para>
+        /// <b>Idempotent, and that is load-bearing.</b> The flag is one fact in two places, so a
+        /// write that does not change it must not touch the register: without the early-out a
+        /// second <c>IsAlive = true</c> on a body already alive — which
+        /// <c>ServerCombatBridge.PlaceAtSpawn</c> can issue — would add a second entry and
+        /// reopen X-59 through the very setter that closes it.
+        /// </para>
+        /// <para>
+        /// <b>The <c>false</c> half is paired too, and it changes behaviour.</b> A claimed body
+        /// placed by <c>PlaceAtSpawn</c> never runs <c>Actor.SpawnAt</c>, so before this it was
+        /// alive by flag and absent from the register — invisible to every bot's target scan.
+        /// It is now registered, which means bots can see networked players. That is the
+        /// pairing being honest rather than a separate feature, and it is named here because no
+        /// existing measurement would have reported it.
+        /// </para>
+        /// </remarks>
         public bool IsDead
         {
             get => _actor.dead;
-            set => _actor.dead = value;
+            set
+            {
+                if (_actor.dead == value) return;
+
+                if (value && _actor.IsSeated())
+                {
+                    // Out of the seat, as Actor.Die does, and in its order: LeaveSeat first, the
+                    // dead flag after. The authority's kills (a hitscan through
+                    // ServerActorDamageSink, a drowning) set this flag and never call Die, so a
+                    // body killed in an open seat used to stay booked in it: every snapshot kept
+                    // reporting a seated corpse, the seat refused everybody else, and the respawn
+                    // teleported a body that was still welded to the vehicle.
+                    _actor.LeaveSeat();
+                }
+
+                _actor.dead = value;
+
+                if (value)
+                {
+                    ActorManager.SetDead(_actor);
+                }
+                else
+                {
+                    ActorManager.SetAlive(_actor);
+
+                    // A respawn is not SpawnAt, so without this a body that died as a ragdoll
+                    // came back as one: its spine left on the corpse, drowned under a water plane
+                    // it was standing metres above (lane-B death-01/02).
+                    _actor.StandUpAfterNetworkRevival();
+                }
+            }
         }
 
         /// <summary>
@@ -301,6 +801,174 @@ namespace Ironfront.Net.Unity.Bindings
             networkId = weapon.NetworkId;
             return true;
         }
+
+        public void GetVelocity(out float x, out float y, out float z)
+        {
+            Vector3 velocity = _actor != null ? _actor.Velocity() : Vector3.zero;
+            x = velocity.x;
+            y = velocity.y;
+            z = velocity.z;
+        }
+
+        /// <summary>Selects a weapon slot on the wrapped actor. See the seam for why there are
+        /// no guards on this side.</summary>
+        public void SwitchWeapon(int slot) => _actor.SwitchWeapon(slot);
+
+        /// <summary>Arms the wrapped actor from its loadout. See the seam for why this is not
+        /// <c>SpawnAt</c>.</summary>
+        public void EquipLoadout() => _actor.EquipLoadout();
+
+        /// <summary>
+        /// Fires the wrapped actor's active weapon. Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>useMuzzleDirection: false</c>, so the projectile flies along the SERVER'S aim: the
+        /// direction the combat authority built from the accepted frame's yaw and pitch. The flag
+        /// only picks the DIRECTION (<c>Weapon.Shoot</c>: <c>direction = muzzle.forward</c>); where
+        /// the projectile leaves from is <c>Weapon.ProjectileOrigin</c> either way. Offline the
+        /// muzzle follows the camera, which is why the original player passes true. On a headless
+        /// server nothing turns it: the weapon hangs off <c>WeaponParent</c>, which only
+        /// <c>PlayerFpParent</c> moves, for a local player's eyes. Passing true sent every
+        /// player-fired rocket along one fixed world axis (measured 2026-09-23, lane-B
+        /// <c>vdamage-before-4</c>: fired at yaw 17, blew up 22.7 m down +X), while the shooter's
+        /// own cosmetic copy flew true and burst on the target. That is the "bazooka does no
+        /// damage to vehicles" report. Throwables already ignore the flag
+        /// (<c>ThrowableWeapon.Fire</c>).
+        /// </para>
+        /// </remarks>
+        public bool FireCarriedWeapon(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            if (_actor == null) return false;
+
+            Weapon weapon = _actor.activeWeapon;
+            if (weapon == null) return false;
+
+            // The engine's own opinion, asked BEFORE Fire rather than assumed after it.
+            // Weapon.Fire returns void and sets holdingFire either way, so a refusal is
+            // invisible to the caller: the authority has already spent the round, nothing is
+            // launched, and FireCarriedWeapon said everything was fine. Returning false here
+            // turns that into the caller's error line, which is the only thing that ever named
+            // this failure.
+            if (!weapon.CanFire()) return false;
+
+            // AFTER the refusal check, so a weapon that will not fire is not left holding an
+            // origin for the next shot -- and consumed by Shoot, so it cannot outlive this one.
+            // The weapon's own muzzle is where the LOCAL player's view-model is, which on a
+            // headless server is a bind pose: see IGameplayActorSource.FireCarriedWeapon.
+            weapon.SetNetworkShotOrigin(new Vector3(originX, originY, originZ));
+
+            weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: false);
+
+            // THE LATCH. Weapon.Fire sets holdingFire unconditionally, and Actor.UpdateWeapon is
+            // what clears it -- but Actor.Update returns early for a body whose controller is
+            // suspended (Actor.cs:600-603), which is every networked player's body. Nothing on
+            // the server ever cleared it, so CanFire()'s (auto || !holdingFire) term refused
+            // every pull after the first for every NON-automatic weapon. A frag grenade and a
+            // bazooka fired once and never again; the rifle kept working because auto
+            // short-circuits that term.
+            //
+            // StopFire and not a direct write, because holdingFire is protected and this is the
+            // engine's own way to clear it. Conditional because for an auto weapon StopFire also
+            // stops the looping fire sound, and the authority calls this once per accepted frame
+            // -- stopping it there would stutter the loop.
+            if (!weapon.configuration.auto) weapon.StopFire();
+
+            return true;
+        }
+
+        public void SteerCarriedWeapon(
+            float eyeX, float eyeY, float eyeZ,
+            float forwardX, float forwardY, float forwardZ,
+            bool aimHeld)
+        {
+            if (_actor == null) return;
+
+            _actor.SteerCarriedWeaponByNetwork(
+                new Vector3(eyeX, eyeY, eyeZ), new Vector3(forwardX, forwardY, forwardZ), aimHeld);
+        }
+
+        public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
+            => _actor != null
+               && _actor.TryWithholdCarriedTriggerByNetwork(new Vector3(forwardX, forwardY, forwardZ));
+
+        public bool ReleaseCarriedThrowable(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            if (_actor == null) return false;
+            ThrowableWeapon throwable = _actor.activeWeapon as ThrowableWeapon;
+            if (throwable == null) return false;
+
+            throwable.SetNetworkShotOrigin(new Vector3(originX, originY, originZ));
+            return throwable.ReleaseApprovedByServer(
+                new Vector3(directionX, directionY, directionZ));
+        }
+
+        /// <summary>Writes the authority's weapon state into the engine weapon. See the seam.</summary>
+        public void MirrorAuthorityWeaponState(
+            int ammoInClip, bool unholstered, float elapsedSinceLastShot)
+        {
+            if (_actor == null) return;
+
+            Weapon weapon = _actor.activeWeapon;
+            if (weapon == null) return;
+
+            // The numbers are the CARRIED weapon's session state. A seated actor's activeWeapon
+            // is the seat's mounted weapon, whose clip the mounted authority owns; StepCombat
+            // normally leaves before the mirror for such a seat, but not when the mounted weapon
+            // failed to declare, and a turret must never be handed a rifle's clip.
+            if (_actor.IsSeated() && _actor.seat != null && weapon == _actor.seat.weapon) return;
+
+            weapon.MirrorAuthorityState(ammoInClip, unholstered, elapsedSinceLastShot);
+        }
+
+        /// <summary>
+        /// Fires the mounted weapon the wrapped actor is manning. See
+        /// <c>MountedWeapon.FireApprovedByServer</c> for why this is not <c>Fire</c>.
+        /// </summary>
+        public bool FireMountedWeapon()
+        {
+            if (_actor == null) return false;
+
+            return _actor.activeWeapon is MountedWeapon mounted && mounted.FireApprovedByServer();
+        }
+
+        /// <summary>Re-announces the mounted weapon the wrapped actor is manning.</summary>
+        public bool DeclareMountedWeapon()
+        {
+            if (_actor == null) return false;
+
+            MountedWeapon mounted = _actor.activeWeapon as MountedWeapon;
+            if (mounted == null && _actor.seat != null && _actor.seat.HasMountedWeapon())
+                mounted = _actor.seat.weapon;
+            if (mounted != null) mounted.DeclareToNet();
+
+            ReportDeclaration(mounted);
+            return mounted != null;
+        }
+
+        private bool _reportedDeclaration;
+
+        // Once per body: what the re-declaration found. The first human in a tank was the only
+        // thing that ever exercised this path, and it failed with nothing logged anywhere.
+        private void ReportDeclaration(MountedWeapon mounted)
+        {
+            if (_reportedDeclaration) return;
+            _reportedDeclaration = true;
+
+            Debug.Log(
+                $"[mounted-declare] actor='{_actor.name}' active="
+                + (_actor.activeWeapon != null ? _actor.activeWeapon.GetType().Name : "null")
+                + " seat=" + (_actor.seat != null ? _actor.seat.name : "null")
+                + " seatWeapon=" + (_actor.seat != null && _actor.seat.weapon != null ? _actor.seat.weapon.name : "null")
+                + " declared=" + (mounted != null
+                    ? $"vehicle {mounted.NetVehicleId} seat {mounted.NetSeatIndex} user="
+                      + (mounted.user != null ? mounted.user.name : "null")
+                    : "none"));
+        }
     }
 
     /// <summary>Adapts <c>ActorManager.spawnPoints</c> to <see cref="ISpawnPointDirectory"/>.</summary>
@@ -321,16 +989,53 @@ namespace Ironfront.Net.Unity.Bindings
             }
         }
 
+        /// <summary>
+        /// Whether team <paramref name="team"/> may spawn on slot <paramref name="index"/>: the
+        /// point's owner must BE that team.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This used to read <c>point.owner &lt; 0 || point.owner == team</c></b>, on the
+        /// reading that <c>owner &lt; 0</c> means "any team may use it". It does not. Every scene
+        /// spawn point is a capture point — <c>CapturePoint : SpawnPoint</c> is the only subclass
+        /// and <c>ActorManager.spawnPoints</c> is <c>FindObjectsOfType&lt;SpawnPoint&gt;()</c> —
+        /// and for a capture point <c>owner == -1</c> means NEUTRAL: held by nobody, contested,
+        /// out in the middle of the map. The game's own rule has always been the narrow one, and
+        /// this is the line it was supposed to mirror: <c>ActorManager.RandomSpawnPointForTeam</c>
+        /// accepts a point only when <c>owner == team</c>, which is why the AI wave never lands
+        /// on a neutral flag.
+        /// </para>
+        /// <para>
+        /// <b>Measured on Dustbowl, before the change.</b> Two of six points start owned (Oasis →
+        /// team 0, Fortress → team 1); the other four report <c>spawn owner -1</c>. The server
+        /// placed <c>actor 33 (team 0)</c> on point <c>4</c> at <c>(1211.47, 31.00, 1767.14)</c>
+        /// and <c>actor 34 (team 1)</c> on point <c>1</c> at <c>(1150.00, 60.50, 1340.04)</c> —
+        /// both neutral, neither anywhere near the base where that team's own bots spawned.
+        /// </para>
+        /// <para>
+        /// That single line is all three of the symptoms reported on 2026-09-04. <b>The empty
+        /// map:</b> a player dropped alone on a contested flag is further than
+        /// <c>InterestManager.CullRadius</c> (500 m) from every bot, so those bots are culled out
+        /// of the snapshot and their proxies can never be moved (X-17) — terrain and one player,
+        /// exactly as described. <b>Spawning in a corner and falling off the edge:</b> a neutral
+        /// flag sits wherever the map authored it, heightmap rim included, whereas a base is
+        /// authored inland. <b>"Killed by the world":</b> walking off that rim puts the
+        /// authoritative body under the wire floor and <c>ServerPlayer.EnforceWireVolume</c> does
+        /// what it is there to do. Spawning at the team's own base is what stops all three.
+        /// </para>
+        /// </remarks>
         public bool IsEligible(int index, int team)
         {
             SpawnPoint point = At(index);
             if (point == null) return false;
 
-            // owner < 0 means "any team", which is how SpawnPoint.owner already defines it.
-            return point.owner < 0 || point.owner == team;
+            return point.owner == team;
         }
 
         public Vector3 GetSpawnPosition(int index) => At(index).GetSpawnPosition();
+
+        /// <summary>The authored point's transform, no jitter, no side effects.</summary>
+        public Vector3 GetAnchorPosition(int index) => At(index).transform.position;
 
         private static SpawnPoint[] Points()
         {
@@ -447,7 +1152,56 @@ namespace Ironfront.Net.Unity.Bindings
             return count;
         }
 
+        /// <summary>
+        /// The scene's own opening ownership for this point, after <c>CapturePoint.Start</c>
+        /// has applied reverse/assault mode. -1 neutral, 0 team 0, 1 team 1.
+        /// </summary>
+        public int GetOwner(int index)
+        {
+            CapturePoint point = _points[index];
+            return point != null ? point.owner : -1;
+        }
+
         private static int CompareByName(CapturePoint a, CapturePoint b)
             => string.CompareOrdinal(a != null ? a.name : string.Empty, b != null ? b.name : string.Empty);
+    }
+
+    /// <summary>Adapts one <c>AiActorController</c> to <see cref="IAiDriver"/>. Phase-3A.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Enabled, not destroyed, and not replaced.</b> <c>Actor.aiControlled</c> is frozen in
+    /// <c>Awake</c> from <c>controller.GetType() == typeof(AiActorController)</c> and then read
+    /// by <c>ActorManager.Register</c>, the minimap, LOD, weapon culling and <c>Binoculars</c>.
+    /// Swapping the controller out would flip that flag's meaning under all of them at once —
+    /// the same argument <c>NetDriverInputSink</c>'s remark makes for not subclassing
+    /// <c>ActorController</c> (V5-D7), one layer over.
+    /// </para>
+    /// <para>
+    /// <b>The eight coroutines stop with the component.</b> Disabling a <c>MonoBehaviour</c>
+    /// halts its running coroutines, which is what actually stops the bot steering; a flag the
+    /// controller checked itself would leave every coroutine running and merely idle.
+    /// </para>
+    /// </remarks>
+    internal sealed class AiActorControllerDriver : IAiDriver
+    {
+        private readonly AiActorController _ai;
+
+        internal AiActorControllerDriver(AiActorController ai) => _ai = ai;
+
+        /// <summary>
+        /// The <c>UnityEngine.Object</c> null check, kept on this side of the seam where it
+        /// still means "the native half is alive".
+        /// </summary>
+        public bool Exists => _ai != null;
+
+        public void Suspend()
+        {
+            if (_ai != null) _ai.enabled = false;
+        }
+
+        public void Resume()
+        {
+            if (_ai != null) _ai.enabled = true;
+        }
     }
 }

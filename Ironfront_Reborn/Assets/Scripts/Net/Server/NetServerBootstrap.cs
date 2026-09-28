@@ -1,4 +1,5 @@
 using System;
+using System.Net.Sockets;
 using System.Text;
 using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
@@ -6,6 +7,8 @@ using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
 using Ironfront.Net.Transport.Loopback;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using JobsUtility = Unity.Jobs.LowLevel.Unsafe.JobsUtility;
 
 namespace Ironfront.Net.Unity.Server
 {
@@ -106,6 +109,12 @@ namespace Ironfront.Net.Unity.Server
         public ServerTickLoop TickLoop { get; private set; }
 
         /// <summary>
+        /// The claimable bodies this server hands to joining connections, one per transport
+        /// slot. Phase-3A.
+        /// </summary>
+        public ServerPlayerSlotPool SlotPool { get; } = new ServerPlayerSlotPool();
+
+        /// <summary>
         /// The join-ticket validator, or null when running with unsigned tickets. The
         /// connection lifecycle needs it to confirm and release player claims.
         /// </summary>
@@ -113,12 +122,69 @@ namespace Ironfront.Net.Unity.Server
 
         private void Awake()
         {
+            // Defect 2 of the lane-B report: until this call the transport's warnings went to a
+            // null delegate in every shipped build. Installed FIRST, so anything the rest of this
+            // Awake logs is already reaching somewhere.
+            NetLogUnitySink.Install();
+
             TickLoop = GetComponent<ServerTickLoop>();
+
+            // ABOVE the declared-client guard, deliberately. This caps how much time one frame
+            // may simulate, and it is an ENGINE knob rather than server startup: a client that
+            // hitches owes the same physics backlog a server does, and its prediction re-simulates
+            // that backlog. Every client set it before the guard below existed, so leaving it under
+            // the guard would have quietly restored Unity's 0.333 s default on exactly the
+            // processes this change was about -- a physics behaviour change nobody asked for,
+            // shipped inside a networking fix.
+            Time.maximumDeltaTime = MaxDeltaTime;
+
+            // The mirror of NetClientBootstrap's dedicated-server guard, and the other half of
+            // AD-1 ("server-authoritative, no host/listen-server"). X-50 stopped a headless host
+            // dialling itself; this stops a rendered process launched to JOIN a match from
+            // hosting one of its own. Measured on tmp/client-1.log + client-2.log, two clients
+            // started by tools/play-lan.ps1 against the sandbox server: both logged
+            // `[net] role = Client` and then went on to run a full authority anyway -- the first
+            // took UDP 27015 and reported `16 player slots will not fit: 51 actors are already
+            // registered`, the second threw an unhandled SocketException out of this very Awake
+            // because the first already held the port.
+            //
+            // NOT NetContext.IsClient, for NetContext.IsDeclaredClient's own reason: the ROLE is
+            // an Awake ordering between two components that defer to each other, so gating on it
+            // would make an Editor Play session stop hosting depending on component order --
+            // the race X-9 closed. IsDeclaredClient has one meaning and one setter.
+            //
+            // ABOVE ResolveConfiguration, like G11's guard and for the same reason: everything
+            // below is server startup, and a client has no business parsing a server's port,
+            // slot count or shared secret, nor logging a physics rate it is not the authority
+            // for. Left ENABLED rather than switched off -- `enabled = false` assigned inside
+            // Awake does not survive the activation pass that called it (DedicatedServerDeclines-
+            // LocalClientTests measured that), so a line claiming to disable this would lie. It
+            // costs nothing: every Update path here returns on a null Transport.
+            if (NetContext.IsDeclaredClient)
+            {
+                Debug.Log("[net] declared client: no local server will be started (AD-1).");
+                return;
+            }
 
             ResolveConfiguration();
 
-            NetContext.SetRole(NetRole.Server);
-            Time.maximumDeltaTime = MaxDeltaTime;
+            // Deference, mirroring NetClientBootstrap's `if (!NetContext.IsServer)`. Dustbowl
+            // carries an ACTIVE NetServer and an ACTIVE NetClient, both at -1000, so before this
+            // guard existed the role was decided by whichever Awake Unity happened to run
+            // second — and the client half always lost, because only the client deferred.
+            //
+            // That race is not cosmetic: every presenter guarded by
+            // NetClientPresenterGuard.IsPresentable latches `enabled = false` during the SAME
+            // Awake pass and never re-checks, so a process that becomes a client one callback
+            // later still has a dead combat driver and a dead killfeed for the rest of its life.
+            // Measured on lane-b/combat-fix01: `[net] role = Server` at driver.log:70,
+            // `role = Client` only at :173 — every client Awake in between read "server".
+            //
+            // A process that has DECLARED itself a client (see LaneBHarness.DeclareRole, which
+            // runs at BeforeSceneLoad — ahead of every scene Awake) now wins. With no
+            // declaration the role is Offline here and the server still claims it, so the
+            // Editor sandbox and the dedicated build behave exactly as they did.
+            if (!NetContext.IsClient) NetContext.SetRole(NetRole.Server);
 
             // Only in a real headless run. Capping the Editor to 30 fps would make the client track's
             // two-client test miserable to watch for no benefit, and vSync is meaningless
@@ -127,18 +193,223 @@ namespace Ironfront.Net.Unity.Server
             {
                 QualitySettings.vSyncCount = 0;
                 Application.targetFrameRate = ProtocolConstants.SIM_TICK_RATE * 2;
+                CapJobWorkers();
             }
 
             // NOT set here, deliberately: Time.fixedDeltaTime. Decision A5 chose option B — the
-            // netcode owns its own 30 Hz accumulator and the physics rate is left alone. Forcing
-            // 1/30 here would also lose the argument anyway: IngameMenuUi.cs:29 and
-            // FpsActorController.cs:497 both assign Time.timeScale / 60f at runtime, so the
-            // value would be overwritten before the first physics step.
+            // netcode owns its own 30 Hz accumulator and the physics rate is left alone.
+            //
+            // The second half of that argument is now obsolete and is recorded here rather than
+            // deleted, because it was true for a long time: IngameMenuUi and FpsActorController
+            // each used to assign `Time.timeScale / 60f` directly, so anything set here would
+            // have been overwritten before the first physics step. Both now go through
+            // PhysicsRate, which scales the PROJECT SETTING rather than declaring a rate of its
+            // own — so there is exactly one number, in TimeManager.asset, and this server and a
+            // rendered client no longer disagree about it. Issue #123.
+            //
+            // Logged rather than assumed. A server whose fixed step drifts from the clients'
+            // integrates rigidbodies differently for the same inputs, and that presents as a
+            // replication defect several layers away with nothing naming the cause.
+            Debug.Log(
+                $"[net] physics fixed step {Time.fixedDeltaTime * 1000f:F3} ms "
+                + $"({1f / Time.fixedDeltaTime:F1} Hz) — the project setting; the netcode's own "
+                + $"tick is {ProtocolConstants.SIM_TICK_RATE} Hz and is unrelated");
+
+            // Printed for the same reason as the line above it: a fact about THIS binary that a
+            // reader would otherwise have to assume. The assumption this one replaces is "the
+            // host is running the build I gave them", and it has already been wrong once — the
+            // X-89/X-90 spawn fix lives in Ironfront.Net.Unity.Server.dll rather than in
+            // Assembly-CSharp.dll, so a host who copied the file they expected to matter kept
+            // the old placement code and the old symptom.
+            ServerBuildStamp.LogAtStartup();
 
             if (_startOnAwake) StartServer();
         }
 
+        /// <summary>
+        /// Builds the player slots, once every other component in the scene has awoken.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Start, not Awake, and the execution order is why.</b> This component runs at
+        /// -1000 so the role is set before anything can read it, which puts its <c>Awake</c>
+        /// ahead of <c>LevelTester</c>'s — and <c>LevelTester</c> is what instantiates the
+        /// <c>_Managers</c> prefab that <c>ActorManager.instance</c> comes from. The body
+        /// factory needs that instance to reach the AI character prefab, so filling in
+        /// <c>Awake</c> would find nothing and build zero slots on a server that starts
+        /// perfectly cleanly.
+        /// </para>
+        /// <para>
+        /// Nothing can connect before this runs. The transport is bound in <c>Awake</c>, but
+        /// connections are only admitted when the tick loop polls it, and that is
+        /// <c>FixedUpdate</c> — after every <c>Start</c>.
+        /// </para>
+        /// </remarks>
+        private void Start()
+        {
+            if (_misconfigured || TickLoop == null || TickLoop.Transport == null) return;
+
+            FillPlayerSlots();
+        }
+
+        /// <summary>
+        /// The job-system workers a headless server keeps when the command line names none.
+        /// </summary>
+        public const int HeadlessJobWorkers = 2;
+
+        /// <summary>
+        /// Shrinks Unity's job-worker pool on a headless server, unless
+        /// <c>-job-worker-count</c> was passed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Measured on the VM on 2026-09-27, during the playtest that read as "everything
+        /// stutters".</b> Unity sizes the pool to the machine, so each game server ran 11
+        /// <c>Job.Worker</c> threads on a 12-vCPU VM inside a 2-CPU pod. The workers spend
+        /// their idle time spinning: the Island server's cgroup showed more kernel time than
+        /// user time (2261 s against 1371 s), 5805 throttled periods, and tick p99 of
+        /// 44-329 ms against a 33 ms budget, 2485 ticks dropped in one match. Every symptom
+        /// downstream of a slow server follows from that: bots and vehicles in slow motion,
+        /// the local player's prediction corrected against a server that fell behind.
+        /// </para>
+        /// <para>
+        /// With <c>-job-worker-count 2</c> the same pod idles at 2.3 s of user time per second
+        /// of kernel time instead of 0.6, and its throttle count stops climbing. Set in code
+        /// as well as in the manifests so a server started any other way gets it too.
+        /// </para>
+        /// </remarks>
+        private static void CapJobWorkers()
+        {
+            int before = JobsUtility.JobWorkerCount;
+            int maximum = JobsUtility.JobWorkerMaximumCount;
+
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-job-worker-count") >= 0)
+            {
+                Debug.Log($"[net] job workers {before} of {maximum}, from -job-worker-count.");
+                return;
+            }
+
+            if (before > HeadlessJobWorkers)
+                JobsUtility.JobWorkerCount = HeadlessJobWorkers;
+
+            Debug.Log(
+                $"[net] job workers {JobsUtility.JobWorkerCount} "
+                + $"of {maximum} (was {before}); pass -job-worker-count to choose another number.");
+        }
+
         private void OnDestroy() => StopServer();
+
+        /// <summary>
+        /// Creates one claimable body per admitted connection and reports what actually exists.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The count is read back from the registry, not restated from configuration.</b>
+        /// This line used to print <c>Config.MaxConnections</c> — sixteen — beside a world that
+        /// contained exactly one claimable body, and no code anywhere compared the two.
+        /// <c>ServerActorRegistry.ClaimableCount</c> is what <c>TryClaimPlayerSlot</c> will
+        /// actually walk, so a disagreement between the log and the world is now a disagreement
+        /// this method reports rather than one it prints.
+        /// </para>
+        /// <para>
+        /// <b>It sizes on <c>MaxPlayers</c>, not <c>MaxConnections</c> — P14 3.5.</b> They were
+        /// always two different numbers and the pool was reading the wrong one.
+        /// <c>MaxConnections</c> is the TRANSPORT cap, deliberately at or above the advertised
+        /// player count so spectators and reconnect churn have somewhere to go
+        /// (<c>IRONFRONT_GAMESERVER_MAX_CONNECTIONS</c> says exactly that).
+        /// <c>MaxPlayers</c> is the player count this server ADVERTISES to the master in
+        /// <c>GsRegister</c> — the number the matchmaker fills — so it is the number of bodies a
+        /// room can ever need. Every slot above it was a body nobody could claim.
+        /// </para>
+        /// <para>
+        /// <b>Why not the room's own <c>MaxPlayers</c>, which is what 3.5 asked for.</b> Nothing
+        /// carries it here. Capacity already flows the other way — the game server declares
+        /// <c>MaxPlayers</c> at <c>GsRegister</c> and the master stores it on
+        /// <c>GameServerRecord</c> — and the signed ticket's 32-byte payload is exactly full
+        /// (4+2+2+8+1+15), so a room capacity could only arrive via a new opcode or a
+        /// <c>PROTOCOL_VERSION</c> move. The master closes the gap from its end instead: at
+        /// allocation it clamps <c>Room.MaxPlayers</c> to the allocated server's advertised
+        /// figure, so a room can never advertise a seat this pool will not have built. Owner
+        /// ruling, 2026-09-02.
+        /// </para>
+        /// <para>
+        /// <b>Odd rounds DOWN to even.</b> Claiming is team-keyed since P13
+        /// (<c>TryClaimPlayerSlot(team)</c>) and the pool alternates 0,1,0,1 — so an odd count
+        /// hands one side an extra seat, and the last player on the short side is refused with
+        /// <c>TeamFull</c> while a free body stands on the other. Rounded here AND at the room,
+        /// so the lobby never advertises a number this server will not honour.
+        /// </para>
+        /// </remarks>
+        private void FillPlayerSlots()
+        {
+            int slots = EvenPlayerSlots(Config.MaxPlayers);
+
+            if (slots != Config.MaxPlayers)
+            {
+                Debug.LogWarning(
+                    $"[net] {EnvRegistry.GameServerMaxPlayers.Name} is {Config.MaxPlayers}, which "
+                    + $"is odd; building {slots} slots instead. Team-keyed claiming alternates "
+                    + "sides, so the odd seat would belong to one team and refuse the other's "
+                    + "last player with TeamFull beside a free body.");
+            }
+
+            SlotPool.Fill(slots, CreatePlayerBody);
+
+            int claimable = ServerActorRegistry.Instance.ClaimableCount;
+
+            if (claimable != slots)
+            {
+                Debug.LogError(
+                    $"[net] {claimable} claimable player bodies against {slots} advertised "
+                    + "player slots. The server will refuse the difference with ServerFull. "
+                    + "This is the phase-3A defect, not a warning about one.");
+                return;
+            }
+
+            // MaxConnections is printed beside it because the two are now visibly different
+            // numbers, and a reader who remembers the old line would otherwise read a drop from
+            // 16 to 8 as a regression rather than as the transport headroom it always was.
+            Debug.Log(
+                $"[net] {claimable} player slots ready (advertised MaxPlayers "
+                + $"{Config.MaxPlayers}, transport MaxConnections {Config.MaxConnections})");
+        }
+
+        /// <summary>
+        /// Rounds an advertised player count down to an even number of team-keyed slots.
+        /// </summary>
+        /// <remarks>
+        /// Down, never up: rounding up would build a seat the deployment did not ask for and
+        /// the master was never told about. A configured 0 or 1 stays as it is and is refused
+        /// by <c>ServerPlayerSlotPool.Fill</c>, which already says what a server admitting
+        /// nobody means — a second opinion here would only race it.
+        /// </remarks>
+        internal static int EvenPlayerSlots(int advertised)
+            => advertised < 2 ? advertised : advertised - (advertised % 2);
+
+        /// <summary>
+        /// One player-slot body, built by the game's own spawn path on the far side of the seam.
+        /// </summary>
+        private static NetServerActor CreatePlayerBody(byte team)
+        {
+            GameObject body = NetServerBindings.CreatePlayerBody(team);
+            if (body == null) return null;
+
+            NetServerActor actor = body.GetComponent<NetServerActor>();
+
+            if (actor == null)
+            {
+                // Loud, and cleaned up: a body with no NetServerActor is invisible to the
+                // registry, so leaving it standing would put an unreplicated character in the
+                // map that no client ever sees and every bot can shoot.
+                Debug.LogError(
+                    $"[net] player body '{body.name}' carries no NetServerActor, so it can "
+                    + "never be claimed. Add the component to the AI character prefab.");
+                Destroy(body);
+                return null;
+            }
+
+            return actor;
+        }
 
         /// <summary>
         /// Loads a <c>.env</c> if one is reachable, then layers the environment over the
@@ -179,6 +450,75 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// Tells the transport which map it is simulating, so <c>CONNECT_ACCEPTED</c> can say so.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b><c>UdpTransportServer.MapId</c> had no writer anywhere in the repository.</b> The
+        /// field existed, <c>SendAccepted</c> copied it into every accept, and it was 0 on every
+        /// connection ever made — so the one message that could have told a client which world it
+        /// was joining told it nothing. Found by P8 task 3.2, which needed exactly that answer:
+        /// a client cannot load the right scene without it, and until now no client loaded a
+        /// scene at all.
+        /// </para>
+        /// <para>
+        /// <b>Derived from the loaded scene, not from configuration.</b> The scene is the ground
+        /// truth about what this process is simulating — it is what the physics, the spawn points
+        /// and the capture points come from. Reading <c>IRONFRONT_GAMESERVER_SCENE</c> here
+        /// instead would announce the map somebody *asked* for, which is the same value right up
+        /// until the load falls back or a person opens a different scene in the Editor, and then
+        /// it is confidently wrong.
+        /// </para>
+        /// <para>
+        /// A scene with no catalog row leaves the id at 0 and warns. That is honest — 0 already
+        /// means "nobody said" on the client — and inventing an id here would have the server
+        /// naming a map no client can resolve.
+        /// </para>
+        /// </remarks>
+        private void AnnounceMap(UdpTransportServer udp)
+        {
+            string scene = SceneManager.GetActiveScene().name;
+
+            if (MapCatalog.TryGetId(scene, out ushort mapId))
+            {
+                udp.MapId = mapId;
+                return;
+            }
+
+            Debug.LogWarning(
+                $"[net] scene '{scene}' has no row in MapCatalog, so CONNECT_ACCEPTED will "
+                + "announce map 0. A client joining through the master will fall back to the "
+                + "room's map id, and a direct-connect client to the default map. Add a row to "
+                + "MapCatalog.All if this scene is meant to be playable.");
+        }
+
+        /// <summary>
+        /// Points the transport at the live simulation tick, so every CONNECT_ACCEPTED announces
+        /// where the server actually is.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A source rather than a value, and the difference is the whole defect.</b> X-76:
+        /// <c>UdpTransportServer.ServerTick</c> was declared, copied into every accept, and
+        /// assigned nowhere -- so every client seeded <c>NetPredictionClock.InputTick</c> at 0
+        /// against a server at tick N, and its first inputs were stamped with ticks the server
+        /// had already spent. Writing the tick here once at startup would have satisfied the
+        /// gate and kept the bug: the tick advances 60 times a second, and an accept is not a
+        /// startup event.
+        /// </para>
+        /// <para>
+        /// The lambda closes over <c>TickLoop</c>, which is assigned above this call and lives
+        /// as long as the transport does. Before the loop starts, <c>CurrentTick</c> is 0 --
+        /// which is honest, because that is where the server is.
+        /// </para>
+        /// </remarks>
+        private void AnnounceTick(UdpTransportServer udp)
+        {
+            ServerTickLoop loop = TickLoop;
+            udp.ServerTickSource = () => loop != null ? loop.CurrentTick : 0u;
+        }
+
         /// <summary>Creates the transport (unless one was injected) and starts the loop.</summary>
         public void StartServer()
         {
@@ -193,13 +533,44 @@ namespace Ironfront.Net.Unity.Server
                 _ownsTransport = true;
                 Udp = udp;
 
+                AnnounceMap(udp);
+                AnnounceTick(udp);
                 RegisterTicketValidator(udp);
-                udp.Start(Config.UdpPort, Config.MaxConnections);
+
+                try
+                {
+                    udp.Start(Config.UdpPort, Config.MaxConnections);
+                }
+                catch (SocketException ex)
+                {
+                    // Caught rather than allowed to escape, and the difference is not
+                    // cosmetic: this runs from Awake, so an escaping exception abandons the
+                    // REST of Awake -- leaving _ownsTransport set, Udp assigned and the tick
+                    // loop never bound, a half-built server that OnDestroy then tries to stop.
+                    // Observed exactly that in tmp/client-2.log.
+                    //
+                    // Still an error and still a stop, per errors-over-silent-fallbacks: the
+                    // server does not quietly fall back to another port or to loopback, because
+                    // a server the matchmaker keeps sending players who cannot reach it is
+                    // worse than one that refused to start and said why.
+                    _misconfigured = true;
+                    Udp = null;
+                    _ownsTransport = false;
+                    udp.Dispose();
+
+                    Debug.LogError(
+                        $"[net] UDP :{Config.UdpPort} could not be bound, so this server will "
+                        + $"not start: {ex.Message} Something already holds the port -- another "
+                        + "game server on this machine, or a client that is also hosting. "
+                        + $"Set {EnvRegistry.GameServerUdpPort.Name} to a free port, or stop the "
+                        + "other process.");
+                    return;
+                }
 
                 // Null clock pump: a real socket runs on the wall clock and needs no advancing.
                 TickLoop.Bind(udp, null);
 
-                Debug.Log($"[net] server up on UDP :{Config.UdpPort}, {Config.MaxConnections} slots");
+                Debug.Log($"[net] server up on UDP :{Config.UdpPort}, {Config.MaxConnections} connections");
                 return;
             }
 
@@ -214,7 +585,7 @@ namespace Ironfront.Net.Unity.Server
             // feeds it the real elapsed milliseconds once per fixed step.
             TickLoop.Bind(server, Loopback.Advance);
 
-            Debug.Log($"[net] server up on the loopback wire, {Config.MaxConnections} slots");
+            Debug.Log($"[net] server up on the loopback wire, {Config.MaxConnections} connections");
         }
 
         /// <summary>
@@ -263,10 +634,44 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
+            // A secret is present, so signed validation is what gets installed -- and the
+            // accept-unsigned flag is about to be ignored. Say so.
+            //
+            // It used to be ignored SILENTLY. The flag is only consulted on the branch above,
+            // where the secret is missing; with one present this method installed signed
+            // validation and never looked at the flag again. An operator who set it got the
+            // opposite of what they asked for, and the only evidence was a per-connection
+            // "join rejected: BadSignature" that names the symptom and not the cause. That trail
+            // consumed phase 3B and part of #152's. Issue #151.
+            //
+            // The flag is still ignored rather than honoured, deliberately: a server holding a
+            // real secret admitting unsigned tickets is a server anyone can join as anyone, and
+            // this method's whole contract is fail-closed. What changes is that the contradiction
+            // is now reported at start-up, once, by name.
+            if (Config.AcceptUnsignedTickets)
+            {
+                Debug.LogError(
+                    $"[net] {EnvRegistry.GameServerAcceptUnsignedTickets.Name} is set, but "
+                    + $"{SharedSecretVariable} is also set, so the flag is IGNORED and every "
+                    + "join ticket must carry a valid signature. Unsign an unsigned client by "
+                    + $"clearing {SharedSecretVariable}, or sign its ticket -- a Unity client "
+                    + $"mints one from {SharedSecretVariable} on its own.");
+            }
+
             // The ticket names a serverId, and the validator only enforces it once we have been
             // told our own — which is GS_REGISTER's answer and arrives later, if at all. 0 here
-            // means "signature and expiry only", which is the correct standalone behaviour;
-            // ServerMasterReporter re-registers a stricter validator once it has an id.
+            // means "signature and expiry only", which is the correct standalone behaviour.
+            //
+            // This is the ONLY validator anything registers. An earlier remark here claimed
+            // ServerMasterReporter re-registers a stricter one once it has a server id; it does
+            // not — it subscribes to MatchEnded and nothing else, and no second TicketValidator
+            // is constructed anywhere outside the tests. The claim cost phase 3B a hypothesis:
+            // because OnValidateTicket is a multicast event whose walk in
+            // UdpTransportServer.ValidateTicket refuses if ANY subscriber refuses, a second
+            // stricter validator would have been a plausible source of an unexplained
+            // BadSignature. Measured at runtime, the subscriber count is 1. If a serverId-aware
+            // validator is ever added, decide replace-vs-accumulate deliberately and pin it —
+            // an accumulating hook where every subscriber must agree is a footgun.
             Validator = new TicketValidator(Encoding.UTF8.GetBytes(secret), serverId: 0);
 
             Debug.Log("[net] join-ticket validation ON (HMAC + expiry + one-session-per-player)");
@@ -329,6 +734,8 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Unbinds the loop and disposes a transport this component created.</summary>
         public void StopServer()
         {
+            SlotPool.Clear();
+
             if (TickLoop != null) TickLoop.Unbind();
 
             if (_ownsTransport)
@@ -348,7 +755,12 @@ namespace Ironfront.Net.Unity.Server
                 _ownsTransport = false;
             }
 
-            NetContext.Clear();
+            // Only a process that IS the server hands its role back. A declared client keeps a
+            // declined bootstrap alive in the map, and destroying it (lane-B strips the half a
+            // process is not; any scene change unloads it) used to Clear() the CLIENT's role to
+            // Offline with nothing logged -- every lane-B client ran as Offline after its strip,
+            // measured 2026-09-23 by FrameTimeLog's role column.
+            if (NetContext.IsServer) NetContext.Clear();
         }
 
         private void Update()

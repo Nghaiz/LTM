@@ -127,6 +127,45 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
+        public void TheCpuMetricTravelsWithTheWindowItWasAveragedOver()
+        {
+            // P9 task 4.5. A rate over three seconds and a rate over forty minutes are different
+            // quantities, and the first sample after start can only be a lifetime average. If the
+            // window does not travel beside the value, "we have not measured this yet" renders
+            // identically to "the server is idle" -- which is the shape of green that ends an
+            // investigation with the wrong answer.
+            var snapshot = new MetricsSnapshot
+            {
+                UptimeSec = 42, ProcessCpuPercent = 12.5, CpuSampleWindowSec = 10,
+            };
+
+            string[] header = MetricsSnapshot.CsvHeader.Split(',');
+            string[] row = snapshot.ToCsvRow(DateTimeOffset.UnixEpoch).Split(',');
+
+            Assert.Equal(header.Length, row.Length);
+            Assert.Equal("12.5", row[Array.IndexOf(header, "processCpuPercent")]);
+            Assert.Equal("10", row[Array.IndexOf(header, "cpuWindowSec")]);
+
+            string json = snapshot.ToJson();
+            Assert.Contains("\"processCpuPercent\": 12.5", json, StringComparison.Ordinal);
+            Assert.Contains("\"cpuSampleWindowSec\": 10", json, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void TheHeartbeatsDeliberateMinusOneIsNotDisturbed()
+        {
+            // P9 acceptance 6, and section 6 "out of scope": ledger X-7 replaced a fabricated
+            // cpuPercent on the heartbeat with AverageTickMs as the matchmaking sort key,
+            // because a made-up routing input is worse than an absent one. Adding a REAL
+            // process-CPU metric to the observability endpoint must not put anything back on
+            // the heartbeat. This pins the two apart by name.
+            string metrics = new MetricsSnapshot { UptimeSec = 1 }.ToJson();
+
+            Assert.Contains("processCpuPercent", metrics, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"cpuPercent\"", metrics, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void TheSamplerWritesAHeaderOnceAndThenAppends()
         {
             string path = Path.Combine(Path.GetTempPath(), $"ironfront-csv-{Guid.NewGuid():N}.csv");

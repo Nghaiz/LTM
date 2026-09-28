@@ -16,7 +16,9 @@ public class Binoculars : ScopedWeapon
 	protected override void Update()
 	{
 		base.Update();
-		if (findRangeAction.TrueDone() && scope.activeInHierarchy)
+		// Headless server stripping destroys the scope visual but leaves the weapon component.
+		// Unity's destroyed-object wrapper throws when activeInHierarchy is dereferenced.
+		if (findRangeAction.TrueDone() && scope != null && scope.activeInHierarchy)
 		{
 			Ray ray = new Ray(configuration.muzzle.position, configuration.muzzle.forward);
 			RaycastHit hitInfo;

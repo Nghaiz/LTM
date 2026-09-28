@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server.Tests
@@ -19,10 +19,14 @@ namespace Ironfront.Net.Unity.Server.Tests
         {
             internal bool HoldsAWeapon = true;
             internal byte HeldWeaponNetworkId = 7;
+            internal Vector3 Velocity = Vector3.zero;
 
             public bool Exists { get; set; } = true;
             public float Health { get; set; } = 100f;
             public bool IsDead { get; set; }
+            public bool IsSubmerged { get; set; }
+
+            public string DescribeSubmersion() => "fake";
 
             /// <summary>Stagger the seam carried since phase-V2. Recorded, not simulated.</summary>
             internal float BalanceDamageTaken;
@@ -33,6 +37,99 @@ namespace Ironfront.Net.Unity.Server.Tests
             {
                 networkId = HoldsAWeapon ? HeldWeaponNetworkId : (byte)0;
                 return HoldsAWeapon;
+            }
+
+            /// <summary>Every slot this seam was asked for, in order. The edge is what is under
+            /// test, so the COUNT matters as much as the values.</summary>
+            internal readonly System.Collections.Generic.List<int> SwitchedSlots =
+                new System.Collections.Generic.List<int>();
+
+            public void SwitchWeapon(int slot) => SwitchedSlots.Add(slot);
+
+            /// <summary>How many times the body was armed. The join path calls this once.</summary>
+            internal int LoadoutsEquipped;
+
+            public void EquipLoadout() => LoadoutsEquipped++;
+
+            /// <summary>Every direction the carried weapon was fired along. Ledger X-42.</summary>
+            internal readonly System.Collections.Generic.List<Vector3> FiredDirections =
+                new System.Collections.Generic.List<Vector3>();
+
+            /// <summary>
+            /// Every origin the authority supplied with those shots, in the same order.
+            /// </summary>
+            /// <remarks>
+            /// Separate from <see cref="FiredDirections"/> rather than folded in, because the two
+            /// became independent the moment the origin stopped being read off the weapon: a shot
+            /// can now be fired along the right direction from the wrong place, which is the
+            /// defect this pair exists to tell apart.
+            /// </remarks>
+            internal readonly System.Collections.Generic.List<Vector3> FiredOrigins =
+                new System.Collections.Generic.List<Vector3>();
+
+            public bool FireCarriedWeapon(
+                float originX, float originY, float originZ,
+                float directionX, float directionY, float directionZ)
+            {
+                if (!HoldsAWeapon) return false;
+
+                FiredOrigins.Add(new Vector3(originX, originY, originZ));
+                FiredDirections.Add(new Vector3(directionX, directionY, directionZ));
+                return true;
+            }
+
+            public bool ReleaseCarriedThrowable(
+                float originX, float originY, float originZ,
+                float directionX, float directionY, float directionZ)
+                => FireCarriedWeapon(
+                    originX, originY, originZ, directionX, directionY, directionZ);
+
+            /// <summary>Every aim the carried weapon was handed, in order.</summary>
+            internal readonly System.Collections.Generic.List<(Vector3 Eye, Vector3 Forward, bool Aim)> Steers =
+                new System.Collections.Generic.List<(Vector3, Vector3, bool)>();
+
+            public void SteerCarriedWeapon(
+                float eyeX, float eyeY, float eyeZ,
+                float forwardX, float forwardY, float forwardZ,
+                bool aimHeld)
+                => Steers.Add((new Vector3(eyeX, eyeY, eyeZ), new Vector3(forwardX, forwardY, forwardZ), aimHeld));
+
+            /// <summary>What the carried weapon answers when a trigger is offered: an unlocked
+            /// Javelin keeps it.</summary>
+            internal bool WithholdsTrigger;
+
+            /// <summary>Every direction a trigger was offered along.</summary>
+            internal readonly System.Collections.Generic.List<Vector3> OfferedTriggers =
+                new System.Collections.Generic.List<Vector3>();
+
+            public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
+            {
+                OfferedTriggers.Add(new Vector3(forwardX, forwardY, forwardZ));
+                return WithholdsTrigger;
+            }
+
+            /// <summary>How many times the authority's weapon state was mirrored in.</summary>
+            internal int Mirrors;
+
+            /// <summary>The last triple the mirror was handed, so a test can grade it.</summary>
+            internal (int AmmoInClip, bool Unholstered, float Elapsed) LastMirror;
+
+            public void MirrorAuthorityWeaponState(
+                int ammoInClip, bool unholstered, float elapsedSinceLastShot)
+            {
+                Mirrors++;
+                LastMirror = (ammoInClip, unholstered, elapsedSinceLastShot);
+            }
+
+            public bool FireMountedWeapon() => false;
+
+            public bool DeclareMountedWeapon() => false;
+
+            public void GetVelocity(out float x, out float y, out float z)
+            {
+                x = Velocity.x;
+                y = Velocity.y;
+                z = Velocity.z;
             }
         }
 
@@ -142,6 +239,197 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(NetServerActor.DefaultSpawnHealth, actor.Health,
                 "a destroyed gameplay actor was still being dereferenced");
             Assert.IsTrue(actor.IsAlive);
+        }
+
+        /// <summary>
+        /// A held switch bit reaches the seam ONCE, and releasing it re-arms the next press.
+        /// </summary>
+        /// <remarks>
+        /// C_INPUT repeats each frame seven times for redundancy, so "call the seam on every
+        /// arrival" would flip a ToggleableItem in and out at tick rate. This is the test that
+        /// would go red if the edge were removed.
+        /// </remarks>
+        [Test]
+        public void AHeldWeaponSwitchReachesTheSeamOnceAndAReleaseReArmsIt()
+        {
+            var fake = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(fake);
+
+            Assert.IsTrue(actor.ApplyWeaponSwitchIntent(2), "first press should reach the seam");
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(2), "a held bit must not repeat");
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(2));
+
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(-1), "release selects nothing");
+            Assert.IsTrue(actor.ApplyWeaponSwitchIntent(2), "the same slot again after a release");
+
+            CollectionAssert.AreEqual(new[] { 2, 2 }, fake.SwitchedSlots);
+        }
+
+        /// <summary>A frame that selects nothing never reaches the seam.</summary>
+        [Test]
+        public void AFrameThatSelectsNothingNeverReachesTheSeam()
+        {
+            var fake = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(fake);
+
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(-1));
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(-1));
+
+            CollectionAssert.IsEmpty(fake.SwitchedSlots);
+        }
+
+        // ------------------------------------------------ X-42: the engine's trigger
+
+        [Test]
+        public void FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection()
+        {
+            // Ledger X-42. Offline the path is controller.Fire() -> activeWeapon.Fire(...), and
+            // on a server a networked body's controller is the SUSPENDED bot brain -- so nothing
+            // ever reached the weapon and a thrown grenade was resolved as a hitscan bullet that
+            // never detonated. This seam is the netcode making that call itself.
+            //
+            // The DIRECTION is asserted, not just the count: ServerCombatAuthority.AimDirection
+            // negates pitch, and its own remark says an inverted sign produces shots mirrored
+            // vertically that still hit at short range -- which is where a thrown grenade lands.
+            var gameplay = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsTrue(actor.FireCarriedWeapon(1.5f, 9f, -2.5f, 0.25f, -0.5f, 0.75f));
+
+            Assert.AreEqual(1, gameplay.FiredDirections.Count);
+            Assert.AreEqual(new Vector3(0.25f, -0.5f, 0.75f), gameplay.FiredDirections[0]);
+
+            // The ORIGIN travels with it, and separately. Read off the weapon it used to be a rig
+            // the server is not standing in; the authority's own answer is the only one that is
+            // the same point on every body prefab, so the two must not be able to swap places.
+            Assert.AreEqual(1, gameplay.FiredOrigins.Count);
+            Assert.AreEqual(new Vector3(1.5f, 9f, -2.5f), gameplay.FiredOrigins[0]);
+        }
+
+        // ------------------------------------------------ The Javelin: aim and a kept trigger
+
+        [Test]
+        public void SteeringTheCarriedWeaponReachesTheGameplaySeamWithEyeForwardAndAim()
+        {
+            // The Javelin's lock-on reads where its user LOOKS between shots, and on a server that
+            // is nowhere unless the netcode says so: the transform it samples is destroyed on every
+            // body that is not the local player (2026-09-27, every online Javelin pull threw). The
+            // three facts travel separately so an eye cannot pose as a direction.
+            var gameplay = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(gameplay);
+
+            actor.SteerCarriedWeapon(1f, 2f, 3f, 0f, -0.5f, 0.75f, aimHeld: true);
+
+            Assert.AreEqual(1, gameplay.Steers.Count);
+            Assert.AreEqual(new Vector3(1f, 2f, 3f), gameplay.Steers[0].Eye);
+            Assert.AreEqual(new Vector3(0f, -0.5f, 0.75f), gameplay.Steers[0].Forward);
+            Assert.IsTrue(gameplay.Steers[0].Aim);
+        }
+
+        [Test]
+        public void AWeaponThatKeepsTheTriggerIsReportedAsKeepingIt()
+        {
+            // True is the answer that keeps the round out of the combat authority. If this seam
+            // swallowed it, an unlocked Javelin pull would be spent as a shot again.
+            var gameplay = new FakeGameplayActor { WithholdsTrigger = true };
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsTrue(actor.TryWithholdCarriedTrigger(0f, 0f, 1f));
+            Assert.AreEqual(new Vector3(0f, 0f, 1f), gameplay.OfferedTriggers[0]);
+        }
+
+        [Test]
+        public void AnOrdinaryTriggerIsNotKept()
+        {
+            var gameplay = new FakeGameplayActor { WithholdsTrigger = false };
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsFalse(actor.TryWithholdCarriedTrigger(0f, 0f, 1f));
+        }
+
+        [Test]
+        public void FiringTheCarriedWeaponOfABodyHoldingNothingReportsFalse()
+        {
+            // Distinguished from "fired and nothing happened" on purpose: the server has just
+            // spent a round on a weapon the body does not have, which means the session and the
+            // body disagree about the loadout. A silent zero would present as a grenade count
+            // going down and an explosion that never happens -- the row itself.
+            var gameplay = new FakeGameplayActor { HoldsAWeapon = false };
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsFalse(actor.FireCarriedWeapon(0f, 0f, 0f, 0f, 0f, 1f));
+            Assert.AreEqual(0, gameplay.FiredDirections.Count);
+        }
+
+        [Test]
+        public void ReleasingAThrowableReachesTheGameplaySeamWithOriginAndDirection()
+        {
+            var gameplay = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsTrue(actor.ReleaseCarriedThrowable(2f, 3f, 4f, -1f, 0.25f, 0.5f));
+            Assert.AreEqual(new Vector3(2f, 3f, 4f), gameplay.FiredOrigins[0]);
+            Assert.AreEqual(new Vector3(-1f, 0.25f, 0.5f), gameplay.FiredDirections[0]);
+        }
+
+        [Test]
+        public void CaptureUsesGameplayVelocityForBotsWithoutANetMovementAgent()
+        {
+            var gameplay = new FakeGameplayActor { Velocity = new Vector3(4f, 0f, -1.25f) };
+            NetServerActor actor = CreateActor(gameplay);
+
+            var entry = actor.Capture();
+            var velocity = Ironfront.Net.Replication.SnapshotBuilder.UnpackVelocity(in entry);
+
+            float expectedX = Ironfront.Net.Protocol.Quantize.UnpackVel(
+                Ironfront.Net.Protocol.Quantize.PackVel(4f));
+            Assert.AreEqual(expectedX, velocity.X, 0.001f);
+            Assert.AreEqual(0f, velocity.Y, 0.1f);
+            float expectedZ = Ironfront.Net.Protocol.Quantize.UnpackVel(
+                Ironfront.Net.Protocol.Quantize.PackVel(-1.25f));
+            Assert.AreEqual(expectedZ, velocity.Z, 0.001f);
+            Assert.IsTrue((entry.StateFlags & Ironfront.Net.Protocol.ActorStateFlags.IsSprinting) != 0,
+                "a moving AI actor must not arrive as an idle default-pose proxy");
+        }
+
+        /// <summary>
+        /// Reporting a drowning is not dying of it. Measured 2026-09-27 on Island: a drowned
+        /// player's body stayed alive, kept sinking, and <c>TryRespawn</c> refused every deploy
+        /// its player sent until the wire floor killed it about 95 s later.
+        /// </summary>
+        [Test]
+        public void ADrownedActorIsDeadNotMerelyReportedDead()
+        {
+            NetContext.SetRole(NetRole.Server);
+            try
+            {
+                var gameplay = new FakeGameplayActor { IsDead = false, IsSubmerged = true };
+                NetServerActor actor = CreateActor(gameplay);
+                Assert.IsTrue(actor.IsAlive, "Setup did not start from a living actor.");
+
+                // Time does not advance in an EditMode test, so the clock cannot be waited out and
+                // a back-dated observation reads as "never observed". Charge the drowning clock
+                // past its limit directly; written back in case the clock is a struct.
+                const System.Reflection.BindingFlags Private =
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                System.Reflection.FieldInfo clockField = typeof(NetServerActor).GetField("_drowning", Private);
+                object clock = clockField.GetValue(actor);
+                clock.GetType().GetField("_submergedSeconds", Private).SetValue(clock, 60f);
+                clockField.SetValue(actor, clock);
+
+                actor.ObserveDrowning();
+
+                Assert.IsFalse(
+                    actor.IsAlive,
+                    "The actor drowned and was reported dead, but is still alive: its body keeps "
+                    + "sinking and every respawn its player requests is refused.");
+                Assert.IsTrue(gameplay.IsDead, "The gameplay actor was not marked dead.");
+                Assert.AreEqual(0f, gameplay.Health, "A drowned actor kept its health.");
+            }
+            finally
+            {
+                NetContext.Clear();
+            }
         }
     }
 }

@@ -62,6 +62,76 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("Damage(Time.fixedDeltaTime * 30f)", source);
         }
 
+        /// <summary>
+        /// A piloted helicopter resting on the ground with no collective keeps its weight.
+        /// </summary>
+        /// <remarks>
+        /// The original's hover assist cancels all but 0.5 m/s^2 of gravity from the moment a
+        /// pilot sits down, so on "Low Friction" skids an idle pilot slid across the pad at up to
+        /// 5.5 m/s, tripped and rolled over, and then burned at 30 HP/s upside down (lane-B
+        /// bug7-after-01, 2026-09-27). Owner ruling the same day: planted until it lifts.
+        /// </remarks>
+        [Fact]
+        public void AHelicopterRestingOnTheGroundKeepsItsWeight()
+        {
+            string source = ReadScript("Helicopter.cs");
+
+            string fixedUpdate = MethodBody(source, "Helicopter.cs", "protected override void FixedUpdate()");
+            AssertAbsent(fixedUpdate, "Physics.gravity.y - 0.5f", "Helicopter.FixedUpdate",
+                "the hover assist goes through HoverAssist, which knows whether the skids are resting");
+            Assert.Equal(2, Regex.Matches(fixedUpdate, @"\+ HoverAssist\(y\)").Count);
+
+            int read = fixedUpdate.IndexOf("restingOnGround = groundContact;", StringComparison.Ordinal);
+            int clear = fixedUpdate.IndexOf("groundContact = false;", StringComparison.Ordinal);
+            int force = fixedUpdate.IndexOf("HoverAssist(y)", StringComparison.Ordinal);
+            Assert.True(read >= 0 && clear > read && force > clear,
+                "Helicopter.FixedUpdate must read and clear the ground contact before applying lift.");
+
+            string assist = MethodBody(source, "Helicopter.cs", "private float HoverAssist(float collective)");
+            Assert.Contains("restingOnGround && collective <= 0f", assist);
+
+            // Vehicle's private OnCollisionEnter is the ram check; a same-named message here would
+            // hide it rather than add to it.
+            Assert.Contains("private void OnCollisionStay(Collision collision)", source);
+            AssertAbsent(source, "void OnCollisionEnter(", "Helicopter", "it would hide Vehicle.OnCollisionEnter");
+        }
+
+        /// <summary>
+        /// A person flying gets the flight assist; a bot, a burning helicopter and skids resting
+        /// on the ground fly the original's model.
+        /// </summary>
+        /// <remarks>
+        /// The 2026-09-28 playtest report: the helicopter tilts on its own, is hard to aim and
+        /// falls out of the sky from over-banking and diving. The behaviour is pinned by
+        /// <c>HelicopterFlightAssistTests</c>; this pins who receives it. A bot is excluded because
+        /// <c>AiActorController.HelicopterInput</c> is tuned on the unassisted model, and a player's
+        /// server body is the AI prefab, so <c>aiControlled</c> alone would exclude every
+        /// networked pilot on the server while their own client kept assisting -- two different
+        /// helicopters, reconciled by correction every snapshot.
+        /// </remarks>
+        [Fact]
+        public void OnlyAPersonFlyingGetsTheFlightAssist()
+        {
+            string source = ReadScript("Helicopter.cs");
+            string fixedUpdate = MethodBody(source, "Helicopter.cs", "protected override void FixedUpdate()");
+
+            Assert.Single(Regex.Matches(fixedUpdate, @"FlightAssist\(command\)"));
+            Assert.Contains(
+                "rigidbody.AddRelativeTorque(vector2 + FlightAssist(command), ForceMode.VelocityChange);",
+                fixedUpdate);
+            Assert.Contains(
+                "rigidbody.AddRelativeTorque(randomBurningTorque + 0.5f * vector2, ForceMode.VelocityChange);",
+                fixedUpdate);
+
+            string assist = MethodBody(source, "Helicopter.cs", "private Vector3 FlightAssist(Vector4 command)");
+            Assert.Contains("pilot.IsSteeredByAPerson()", assist);
+            Assert.Contains("!restingOnGround", assist);
+            Assert.Contains("? rotorSpeed : 0f", assist);
+
+            string actor = MethodBody(ReadScript("Actor.cs"), "Actor.cs", "public bool IsSteeredByAPerson()");
+            Assert.Contains("IsServerClaimedBody()", actor);
+        }
+
         // ------------------------------------------------------------------ Task 3: turrets
 
         [Theory]
@@ -413,7 +483,7 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData("ExplodingProjectile.cs", "if (impactParticles != null)", "impact particles, played on explode and stopped on the invoke")]
         [InlineData("ExplodingProjectile.cs", "if (audioSource != null)", "explosion audio")]
         [InlineData("GrenadeProjectile.cs", "if (burst != null)", "grenade burst particles")]
-        [InlineData("GrenadeProjectile.cs", "if (component != null)", "grenade audio")]
+        [InlineData("GrenadeProjectile.cs", "if (report != null)", "grenade audio")]
         public void HeadlessDereferencesAreGuarded(string file, string guard, string site)
         {
             // Stripped. Several of these guards are DOCUMENTED by a comment naming the guarded
@@ -496,6 +566,43 @@ namespace Ironfront.Net.Replication.Tests
                 AssertAbsent(body, "Dictionary<", name, "no allocation on the hot path");
                 AssertAbsent(body, ".ToArray()", name, "no allocation on the hot path");
             }
+        }
+
+        /// <summary>
+        /// A wreck's blast damages nothing. Owner ruling 2026-09-27: the original's
+        /// <c>Vehicle.Explode</c> only throws the wreck and plays its effects.
+        /// </summary>
+        [Fact]
+        public void AWreckBlastDamagesNothing()
+        {
+            string explode = MethodBody(
+                ReadScript("Vehicle.cs"), "Vehicle.cs", "protected virtual void Explode()");
+
+            AssertAbsent(explode, "ActorManager.Explode", "Vehicle.Explode",
+                "the owner ruled on 2026-09-27 that a wreck damages nothing, exactly like the "
+                + "original; ledger C-10's 300-damage wreck blast turned every abandoned vehicle "
+                + "into a chain of explosions on the Island playtest");
+        }
+
+        /// <summary>
+        /// A dead vehicle stays on the wire, flagged Dead, until its wreck is destroyed, so every
+        /// client draws the server's wreck.
+        /// </summary>
+        [Fact]
+        public void ADeadVehicleStaysReplicatedUntilItsWreckIsDestroyed()
+        {
+            string died = MethodBody(
+                ReadScript("VehicleSpawner.cs"), "VehicleSpawner.cs",
+                "public void VehicleDied(Vehicle vehicle)");
+
+            AssertAbsent(died, "ReportDespawned", "VehicleSpawner.VehicleDied",
+                "despawning at the moment of death left the server holding an unreplicated solid "
+                + "wreck for 15 s that live vehicles and bots hit and nobody could see, while every "
+                + "client threw a private copy of its own");
+            Assert.Contains("DespawnWhenDestroyed", died, StringComparison.Ordinal);
+
+            string onDestroy = MethodBody(ReadScript("Vehicle.cs"), "Vehicle.cs", "private void OnDestroy()");
+            Assert.Contains("NetVehicleLifecycle.ReportDespawned", onDestroy, StringComparison.Ordinal);
         }
 
         // ------------------------------------------------------------------ helpers

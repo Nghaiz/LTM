@@ -1,7 +1,9 @@
+using Ironfront.Net.Protocol;
+
 namespace Ironfront.Net.Replication.Server
 {
     /// <summary>
-    /// Handles an accepted C_SPAWN_REQUEST (0x23). phase-05 task 3.
+    /// Handles an accepted C_SPAWN_REQUEST (0x23). phase-05 task 3, body added V8 (ledger X-11).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -19,7 +21,12 @@ namespace Ironfront.Net.Replication.Server
     /// </remarks>
     public interface ISpawnRequestHandler
     {
-        /// <summary>The session asked to respawn. Grant it, or drop it, per the gate.</summary>
-        void OnSpawnRequested(ClientSession session);
+        /// <summary>
+        /// The session asked to deploy or respawn, carrying its chosen loadout and spawn point.
+        /// Grant it, or drop it, per the gate — except for a connection's very first request,
+        /// which an implementer must grant unconditionally: nothing has died yet for a body
+        /// that has never lived, so the ordinary gate would refuse it forever.
+        /// </summary>
+        void OnSpawnRequested(ClientSession session, in SpawnRequestMessage message);
     }
 }

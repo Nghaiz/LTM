@@ -78,6 +78,71 @@ try {
         & "$PSScriptRoot/check-duplicate-assemblies.ps1"
     }
 
+    # THE ARTIFACT UNITY ACTUALLY LOADS. Six .NET projects reach Unity as prebuilt DLLs committed
+    # under Assets/Plugins; Unity never compiles their sources. PR #281 fixed the vehicle-health
+    # decode and did not refresh the closure, so the suite was green, the source was right, and
+    # every vehicle in the game kept smoking -- the committed DLL decoded full health as 0.3922
+    # against the rebuilt DLL's 1.0000. Every other step in this file reads source or a fresh
+    # build; this is the only one that asks whether the shipped binary agrees with either.
+    #
+    # Commit timestamps, not bytes: Roslyn embeds a fresh MVID per compilation, so two builds of
+    # identical source are never byte-equal and a gate written that way is red always, which is
+    # the same as no gate. The same script is the ci.yml `plugin closure` job, which BLOCKS -- it
+    # spent its whole life as a warning inside a continue-on-error job and was duly ignored.
+    Invoke-Step "3g. Unity plugin DLLs match their sources" {
+        & "$PSScriptRoot/check-plugin-dll-freshness.ps1"
+    }
+
+    # phase-3-harness.md acceptance criterion 4, and the ack half debt-closure added to it.
+    #
+    # WIRED HERE BELATEDLY. The gate shipped with #150 and nothing ever invoked it — not ci.ps1,
+    # not ci.yml, not a doc. It was PRESENT and never RUN, which is the failure mode that reads
+    # as coverage right up until somebody checks. Grep for its name across the repo before this
+    # commit and the only hit is the file itself.
+    #
+    # Reads sources and a csproj, so it costs well under a second and needs no Unity.
+    Invoke-Step "3d. Harness owns no decoder and no ack policy" {
+        & "$PSScriptRoot/check-harness-no-decoder.ps1"
+    }
+
+    # Ledger row E-11. Reads `using` lines under Assets/Scripts/, so it costs well under a second
+    # and needs no Unity -- which matters here, because the thing it guards is invisible to
+    # `dotnet build`: Ironfront.Net.Unity.Shared has zero references, so the solution builds green
+    # no matter what Assets/ does to its own layering.
+    #
+    # Wired in the SAME commit that added the gate, deliberately. 3d above is the standing
+    # reminder of what happens otherwise.
+    Invoke-Step "3e. Assembly-CSharp does not reach into the server assembly" {
+        & "$PSScriptRoot/check-net-layering.ps1"
+    }
+
+    # Net/Diagnostics stays out of player builds. Invisible to everything above for the mirror
+    # of 3e's reason: `dotnet build` compiles four Net/Diagnostics files with the define ABSENT,
+    # so it only ever exercises the INCLUDED configuration and can never notice a broken strip.
+    Invoke-Step "3f. Net/Diagnostics compiles out of a shipping player" {
+        & "$PSScriptRoot/check-diagnostics-exclusion.ps1"
+    }
+
+    # P27. Guards the port-back track's one-way risk: a line the ORIGINAL Ravenfield build has,
+    # that we still had yesterday, and that an edit has just dropped. `dotnet build` cannot see
+    # it -- deleting a statement leaves valid code -- and no test covers most of Assembly-CSharp.
+    #
+    # BE CLEAR ABOUT WHAT THIS IS NOT. It reads tmp/recovered/, which is gitignored, so it runs
+    # on a machine that has extracted the recovered tree and SKIPS everywhere else, including in
+    # ci.yml. That makes it a local aid for whoever is working this track, not a fleet gate, and
+    # a green from a machine without the tree means only that the tree is absent. It is wired
+    # here rather than left unwired because an unrun --check is decoration (see 3d), and skipped
+    # LOUDLY rather than silently for the same reason.
+    if (Test-Path "$repoRoot/tmp/recovered/src/Assembly-CSharp") {
+        Invoke-Step "3h. No line lost against the recovered original" {
+            python "$PSScriptRoot/classify_recovered_diff.py" --check
+        }
+    }
+    else {
+        Write-Host "=== 3h. No line lost against the recovered original === SKIPPED " `
+            "(tmp/recovered/ absent — run tools/extract_recovered.py to enable)" -ForegroundColor Yellow
+    }
+
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
     # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
     # not add to $failures and make this script exit 1, or people will stop running it.

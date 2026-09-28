@@ -38,10 +38,12 @@ namespace Ironfront.Net.Unity
 
         /// <summary>The simulation timestep. Client prediction and the server MUST use this.</summary>
         /// <remarks>
-        /// Not <c>Time.fixedDeltaTime</c>. The project's fixed timestep is 0.02 (50 Hz) while
+        /// Not <c>Time.fixedDeltaTime</c>. The project's fixed timestep is 60 Hz while
         /// <see cref="ProtocolConstants.SIM_TICK_RATE"/> is 30 — feeding the project's value in
-        /// here makes the client integrate gravity 50 times a second against the server's 30,
-        /// and prediction disagrees with authority on every airborne tick.
+        /// here makes the client integrate gravity 60 times a second against the server's 30,
+        /// and prediction disagrees with authority on every airborne tick. The rate the physics
+        /// step happens to be is not the point: it is a DIFFERENT clock, and issue #123 unifying
+        /// it across peers does not make it this one.
         /// </remarks>
         public const float FixedDeltaTime = 1f / ProtocolConstants.SIM_TICK_RATE;
 
@@ -61,31 +63,149 @@ namespace Ironfront.Net.Unity
 
         /// <summary>
         /// Builds movement intent from live Unity input, matching what
-        /// <c>FirstPersonController.GetInput</c> reads.
+        /// <c>FirstPersonController.GetInput</c> reads. <b>Movement only</b> — no combat bits.
         /// </summary>
         /// <remarks>
-        /// Used by the client to build the frame it both predicts with and sends. Sampling the
-        /// same axes the original reads is what keeps the shadow comparison honest.
+        /// Used by the shadow comparison, which grades displacement and nothing else. The
+        /// client's send path uses the <see cref="IInputSource"/> overload below; a sender that
+        /// called this one would put a permanently-zero Fire bit on the wire, which is debt
+        /// row X-3 restated.
         /// </remarks>
         public static MoveInput FromUnityInput(float yawDegrees)
-            => new MoveInput(
+            => FromUnityInput(yawDegrees, InputButtons.None);
+
+        /// <summary>
+        /// Movement from live Unity input; fire, aim and reload from <paramref name="combat"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Two sources on purpose, because the two halves have different owners.</b> Walking,
+        /// jumping, sprint and crouch never pass through <c>FpsActorController</c> at all — they
+        /// are read by <c>FirstPersonController</c> under <c>Assets/Plugins/</c>
+        /// (docs/codebase-map.md § 4), which is why they are sampled directly here and why
+        /// sampling the same axes is what keeps the shadow comparison honest. Fire, aim and
+        /// reload DO pass through the controller, and <c>LocalInputSource.Buttons</c> is their
+        /// one transcription — including the <c>LoadoutUi.IsOpen()</c> terms that are part of
+        /// each button's meaning. Re-reading <c>Input.GetButton("Fire1")</c> here would be a
+        /// second transcription of that expression, drifting from the first with nothing
+        /// watching, and <c>InputShadowCompare</c> only guards the original.
+        /// </para>
+        /// <para>
+        /// <b>An <see cref="InputButtons"/> mask rather than the <c>IInputSource</c> that
+        /// produced it.</b> This file is in the <c>Ironfront.Net.Unity.Shared</c> assembly,
+        /// which declares no references and is what the SERVER assembly builds on; the input
+        /// seam lives in Assembly-CSharp, one layer up. Taking the interface here would be a
+        /// layering inversion the compiler refuses, so the caller resolves it and passes the
+        /// finished mask down. <see cref="InputButtons"/> is the protocol's own type and is
+        /// already reachable from every layer.
+        /// </para>
+        /// </remarks>
+        public static MoveInput FromUnityInput(float yawDegrees, InputButtons combat)
+            => FromUnityInput(
+                yawDegrees, combat, Input.GetButton("Crouch"), Input.GetButton("Sprint"));
+
+        /// <summary>
+        /// As above, with the crouch STATE supplied by the caller.
+        /// </summary>
+        /// <param name="crouching">
+        /// Whether the actor <b>is</b> crouching this tick — <c>FpsActorController.Crouch()</c>,
+        /// never the Crouch button. See the remarks.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>Crouch is the one axis here whose state and whose button are different
+        /// questions.</b> With the toggle-crouch option on, <c>FpsActorController.Crouch()</c>
+        /// returns a flag latched by the button's down-edge, so a player taps once, releases, and
+        /// stays crouched. <c>Input.GetButton("Crouch")</c> then reports "standing" for the whole
+        /// of that crouch, and it reached two readers at once.
+        /// </para>
+        /// <para>
+        /// <c>Actor.Update</c> takes the crouch from <c>controller.Crouch()</c> and calls
+        /// <c>StartCrouch()</c>, so the client's own capsule really is 0.5 m tall — while
+        /// <c>NetMovementAgent.ApplyStanceHeight</c> derives the height it wants from
+        /// <c>MoveState.IsCrouching</c>, which this flag feeds, and writes 1.8 back on the same
+        /// tick. Two writers held one <c>CharacterController.height</c> and disagreed every tick.
+        /// </para>
+        /// <para>
+        /// And the flag went on the wire, so the server stood the body up: the player crouched
+        /// behind cover on their own screen and was shot over it on the server's.
+        /// </para>
+        /// <para>
+        /// <b>Jump, sprint and the movement axes are still sampled raw, and that is not an
+        /// oversight.</b> None of the three has a latched form, and the axes never pass through
+        /// <c>LocalInputSource</c> at all — see the text-field remark below, which is about
+        /// exactly that.
+        /// </para>
+        /// </remarks>
+        public static MoveInput FromUnityInput(
+            float yawDegrees, InputButtons combat, bool crouching)
+            => FromUnityInput(yawDegrees, combat, crouching, Input.GetButton("Sprint"));
+
+        /// <summary>
+        /// As above, with the sprint STATE supplied by the caller.
+        /// </summary>
+        /// <param name="sprinting">
+        /// Whether this body <b>is</b> sprinting — <c>FpsActorController.IsSprinting()</c>, never
+        /// the Sprint button.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>The same state-versus-button distinction as the crouch overload, and on this axis it
+        /// decides whether a shot happens at all.</b> <c>IsSprinting()</c> is
+        /// <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading() &amp;&amp; Sprint() &amp;&amp; !IsSeated()</c>,
+        /// and the trigger rule on BOTH sides of the wire refuses a sprinting body's trigger. So a
+        /// raw key read here said "sprinting" to the server while the game itself said "aiming,
+        /// therefore able to fire": the game spent the round and spawned the projectile, both
+        /// authorities refused the shot, and the next snapshot wrote the round back. The magazine
+        /// fell by one and rose by one and never emptied.
+        /// </para>
+        /// <para>
+        /// <b><see cref="MovementCore.SpeedFor"/> keeps its own copy of the composite and that is
+        /// deliberate.</b> It is a shared rule with its own tests and its own callers, and its
+        /// contract is "the sprint flag means the body is sprinting" — which is now true of this
+        /// bit as well, so the two agree rather than merely happen to.
+        /// </para>
+        /// </remarks>
+        public static MoveInput FromUnityInput(
+            float yawDegrees, InputButtons combat, bool crouching, bool sprinting)
+            => LocalTextEntry.Composing
+                // Neutral while a text field owns the keyboard. This sampler reads the walk,
+                // jump, sprint and crouch axes DIRECTLY -- they never pass through
+                // LocalInputSource, so suppressing them there does not reach here, and this is
+                // the path that actually moved the player while a chat line was open. Yaw is
+                // kept: it comes from the camera, not from a key.
+                //
+                // Sending neutral input is not a divergence risk. It is indistinguishable to the
+                // server from a player holding nothing, which is exactly what a player typing a
+                // message is doing.
+                ? new MoveInput(
+                    0f, 0f, yawDegrees,
+                    false, false, false,
+                    false, false, false, false,
+                    InputFrame.SlotOf(InputButtons.None))
+                : new MoveInput(
                 Input.GetAxis("Horizontal"),
                 Input.GetAxis("Vertical"),
                 yawDegrees,
                 Input.GetButton("Jump"),
-                Input.GetButton("Sprint"),
-                Input.GetButton("Crouch"));
+                sprinting,
+                crouching,
+                (combat & InputButtons.Fire) != 0,
+                (combat & InputButtons.Aim) != 0,
+                (combat & InputButtons.Reload) != 0,
+                (combat & InputButtons.Use) != 0,
+                InputFrame.SlotOf(combat));
+
 
         /// <summary>Quantizes movement intent into the frame that goes on the wire.</summary>
+        /// <remarks>
+        /// The mask comes from <see cref="MoveInput.ToButtons"/> rather than from a local chain
+        /// of <c>if</c>s. There used to be two such chains — one here, one private to
+        /// <c>ClientPredictionStage</c> — and only this one ever learned about a new bit.
+        /// </remarks>
         public static InputFrame ToFrame(in MoveInput input, float pitchDegrees, InputButtons extraButtons)
-        {
-            InputButtons buttons = extraButtons;
-            if (input.Jump)   buttons |= InputButtons.Jump;
-            if (input.Sprint) buttons |= InputButtons.Sprint;
-            if (input.Crouch) buttons |= InputButtons.Crouch;
-
-            return InputFrame.FromFloats(
-                input.MoveX, input.MoveZ, input.YawDegrees, pitchDegrees, buttons);
-        }
+            => InputFrame.FromFloats(
+                input.MoveX, input.MoveZ, input.YawDegrees, pitchDegrees,
+                extraButtons | input.ToButtons());
     }
 }

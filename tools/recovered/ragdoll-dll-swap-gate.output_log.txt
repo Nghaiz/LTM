@@ -1,0 +1,81 @@
+Initialize engine version: 5.4.0f3 (a6d8d714de6f)
+GfxDevice: creating device client; threaded=1
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.0]
+    Renderer: NVIDIA GeForce RTX 4060 Laptop GPU (ID=0x28e0)
+    Vendor:   NVIDIA
+    VRAM:     3072 MB
+Begin MonoManager ReloadAssembly
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\UnityEngine.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\UnityEngine.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Assembly-CSharp-firstpass.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Assembly-CSharp-firstpass.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Assembly-CSharp.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Assembly-CSharp.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\UnityEngine.UI.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\UnityEngine.UI.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\UnityEngine.Networking.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\UnityEngine.Networking.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Pathfinding.ClipperLib.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Pathfinding.ClipperLib.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Pathfinding.Ionic.Zip.Reduced.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Pathfinding.Ionic.Zip.Reduced.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Pathfinding.JsonFx.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Pathfinding.JsonFx.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Pathfinding.Poly2Tri.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\Pathfinding.Poly2Tri.dll into Unity Child Domain
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\EasyRoads3D.dll (this message is harmless)
+Loading D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\EasyRoads3D.dll into Unity Child Domain
+- Completed reload, in  0.678 seconds
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\System.Core.dll (this message is harmless)
+Platform assembly: D:\Coding\LTM\tmp\rf-gate\Ravenfield_Data\Managed\System.dll (this message is harmless)
+desktop: 2560x1600 240Hz; virtual: 2560x1600 at 0,0
+<RI> Initializing input.
+<RI> Input initialized.
+<RI> Initialized touch support.
+UnloadTime: 0.696800 ms
+Unloading 6 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 3.072800 ms
+
+Unloading 22 unused Assets to reduce memory usage. Loaded Objects now: 4448.
+Total: 1.667600 ms (FindLiveObjects: 0.093500 ms CreateObjectMapping: 0.108800 ms MarkObjects: 1.244700 ms  DeleteObjects: 0.220000 ms)
+
+Setting up 8 worker threads for Enlighten.
+  Thread -> id: bcd0 -> priority: 1 
+  Thread -> id: 1d68 -> priority: 1 
+  Thread -> id: 26bc -> priority: 1 
+  Thread -> id: aefc -> priority: 1 
+  Thread -> id: b798 -> priority: 1 
+  Thread -> id: 6c0 -> priority: 1 
+  Thread -> id: be3c -> priority: 1 
+  Thread -> id: 2b88 -> priority: 1 
+steam://url/CommunityFilePage/854107887
+ 
+(Filename: C:/buildslave/unity/build/artifacts/generated/common/runtime/UnityEngineDebugBindings.gen.cpp Line: 42)
+
+http://steamcommunity.com/sharedfiles/filedetails/?id=854107887
+ 
+(Filename: C:/buildslave/unity/build/artifacts/generated/common/runtime/UnityEngineDebugBindings.gen.cpp Line: 42)
+
+Greenlight activated? True
+ 
+(Filename: C:/buildslave/unity/build/artifacts/generated/common/runtime/UnityEngineDebugBindings.gen.cpp Line: 42)
+
+Unloading 6 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 2.114100 ms
+
+Unloading 39 unused Assets to reduce memory usage. Loaded Objects now: 22785.
+Total: 11.227400 ms (FindLiveObjects: 0.623300 ms CreateObjectMapping: 0.360400 ms MarkObjects: 9.088500 ms  DeleteObjects: 1.153900 ms)
+
+Look rotation viewing vector is zero
+ 
+(Filename:  Line: 82)
+
+Look rotation viewing vector is zero
+ 
+(Filename:  Line: 82)
+
+Look rotation viewing vector is zero
+ 
+(Filename:  Line: 82)
+

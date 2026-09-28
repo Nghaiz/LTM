@@ -10,12 +10,45 @@ namespace Ironfront.Net.Transport
     public sealed class ReliabilityLayer
     {
         private const int SentBufferSize = 1024;
+
         /// <summary>
-        /// Retransmissions before a reliable packet is given up on. Public because giving up
-        /// is not a private detail — it ends the connection (see
-        /// <see cref="HasAbandonedReliable"/>), so a test has to be able to reach the ceiling.
+        /// Retransmissions before a reliable packet is given up on, as a BACKSTOP against a
+        /// pathologically small RTO. The real budget is <see cref="AbandonAfterMs"/>; this
+        /// only bounds the attempt count so a broken RTT estimate cannot produce an unbounded
+        /// resend storm. Public because giving up is not a private detail — it ends the
+        /// connection (see <see cref="HasAbandonedReliable"/>), so a test has to reach it.
         /// </summary>
-        public const int MaxResends = 10;
+        /// <remarks>
+        /// <b>This was 10, and 10 was the lane-B blocker.</b> With no RTT sample the RTO sits
+        /// at <see cref="MinRtoMs"/>, so ten fixed-interval attempts gave the peer 30 × 10 =
+        /// <b>300 ms</b> to answer the opening spawn burst — measured from the send, not from
+        /// any evidence the peer was gone, and <b>33× tighter than the connection's own
+        /// liveness rule</b> (<see cref="ProtocolConstants.TIMEOUT_MS"/> = 10 s). A Unity
+        /// client's first frame after a join instantiates everything the burst just told it
+        /// about and routinely runs into the hundreds of milliseconds; three on one machine
+        /// run longer. Every such client was dropped with <c>TransportError</c> on a loopback
+        /// socket that lost nothing, and the failure presented as "snapshots flow, reliable
+        /// delivery is dead" because unreliable packets carry no deadline and simply waited in
+        /// the socket buffer. Reproduced by
+        /// <c>JoinBurstReliabilityTests.AClientThatCannotPollForSixHundredMillisecondsIsNotDropped</c>.
+        /// </remarks>
+        public const int MaxResends = 32;
+
+        /// <summary>
+        /// Wall-clock budget for delivering one reliable packet, from its first send.
+        /// </summary>
+        /// <remarks>
+        /// A wall-clock deadline rather than an attempt budget keeps its meaning independent of
+        /// the RTO. It is intentionally longer than the no-traffic timeout: a Unity client can
+        /// remain connected while synchronously loading a scene and be unable to drain the
+        /// reliable catch-up burst. The liveness rule still removes a genuinely silent peer;
+        /// this longer delivery deadline gives a live loading peer time to acknowledge ordered
+        /// data without changing that liveness rule.
+        /// </remarks>
+        // The manual 2026-09-09 run took 10.94 s to load client 2 and abandoned its opening
+        // reliable burst at 10.34 s. Three liveness windows cover that bounded scene load.
+        public const double AbandonAfterMs = ProtocolConstants.TIMEOUT_MS * 3.0;
+
         private const float MinRtoMs = 30f;
         private const float MaxRtoMs = 1000f;
 
@@ -24,11 +57,15 @@ namespace Ironfront.Net.Transport
             public bool InUse;
             public ushort Sequence;
             public double SentAtMs;
+            /// <summary>First transmission, never updated by a resend — the budget's origin.</summary>
+            public double FirstSentAtMs;
             public bool Acked;
             public bool IsReliable;
             public byte[]? Data;
             public int Length;
             public int ResendCount;
+            /// <summary>Guards a relocated record against being resent twice in one pass.</summary>
+            public uint UpdatePass;
         }
 
         private readonly SentPacket[] _sent = new SentPacket[SentBufferSize];
@@ -38,6 +75,7 @@ namespace Ironfront.Net.Transport
         private uint _receivedBitfield;
         private bool _hasReceived;
         private int _unackedReliableCount;
+        private uint _updatePass;
 
         public ReliabilityLayer(BufferPool? pool = null)
         {
@@ -135,6 +173,7 @@ namespace Ironfront.Net.Transport
                 InUse = true,
                 Sequence = sequence,
                 SentAtMs = nowMs,
+                FirstSentAtMs = nowMs,
                 Acked = false,
                 IsReliable = reliable,
                 Data = copy,
@@ -185,13 +224,18 @@ namespace Ironfront.Net.Transport
                 _hasReceived && AckBitfieldEnabled ? _receivedBitfield : 0u);
 
         /// <summary>Applies the peer's cumulative ack and ack bitfield.</summary>
-        public void ProcessIncomingAck(ushort ack, uint bitfield, double nowMs)
+        /// <param name="sampleRtt">
+        /// False when <paramref name="nowMs"/> is not a trustworthy arrival time for this ack:
+        /// the packets are still acked and released, but none of them feeds the RTT estimate.
+        /// See <c>Connection.MaxRttSamplePollGapMs</c> for when that is.
+        /// </param>
+        public void ProcessIncomingAck(ushort ack, uint bitfield, double nowMs, bool sampleRtt = true)
         {
-            AckPacket(ack, nowMs);
+            AckPacket(ack, nowMs, sampleRtt);
             for (int bit = 0; bit < ProtocolConstants.ACK_BITFIELD_BITS; bit++)
             {
                 if ((bitfield & (1u << bit)) != 0)
-                    AckPacket((ushort)(ack - 1 - bit), nowMs);
+                    AckPacket((ushort)(ack - 1 - bit), nowMs, sampleRtt);
             }
         }
 
@@ -199,17 +243,69 @@ namespace Ironfront.Net.Transport
         /// Retransmits timed-out reliable packets. The callback is synchronous and must not
         /// retain the supplied buffer; it remains pooled and is reclaimed when this call ends.
         /// </summary>
-        public void Update(double nowMs, Action<byte[], int> resend)
+        /// <param name="resend">
+        /// Receives the stored datagram, its length, and <b>the fresh sequence this
+        /// retransmission must carry</b>. The caller is obliged to rewrite the header before
+        /// putting the bytes on the wire — see <see cref="Connection"/>'s <c>Resend</c>.
+        /// </param>
+        /// <remarks>
+        /// <b>Every retransmission gets a new sequence, and that is X-32's fix.</b> The ack
+        /// bitfield is addressed by <i>distance behind the receiver's newest sequence</i> and
+        /// holds exactly <see cref="ProtocolConstants.ACK_BITFIELD_BITS"/> of them, so a
+        /// retransmission that reused its original sequence could only be acknowledged while
+        /// that sequence was still inside the window. At the ~50 packets/s a loaded client
+        /// sends, the window is worth about 0.64 s — less than the second retransmission's
+        /// backoff on a 100 ms link. Past it the copy still ARRIVED and the receiver simply had
+        /// nowhere to say so, so the sender spent its whole <see cref="AbandonAfterMs"/> budget
+        /// on a packet the peer already held, latched <see cref="HasAbandonedReliable"/>, and
+        /// <c>Connection.Update</c> ended the connection with <c>TransportError</c>. That is
+        /// every one of the eight clients lost under <c>--sim typical</c>, against 8 of 8 held
+        /// on a clean wire where nothing is ever retransmitted.
+        /// <para>
+        /// protocol-spec.md § 2.2's claim that "an ack is only lost if 33 consecutive packets
+        /// are lost" is true only of packets carrying a fresh sequence. This restores that
+        /// premise rather than changing it: the wire format is untouched, and a receiver sees
+        /// an ordinary new packet whose duplicate payload the channel layer already discards on
+        /// <c>channelSequence</c>.
+        /// </para>
+        /// <para>
+        /// <b>Cost, stated:</b> a late ack naming the ORIGINAL sequence is ignored, because the
+        /// record now lives at the new one. The packet is then retransmitted once more and
+        /// acked on that copy — one extra datagram in a race the old code could not win at all.
+        /// </para>
+        /// </remarks>
+        public void Update(double nowMs, Action<byte[], int, ushort> resend)
         {
             if (resend == null) throw new ArgumentNullException(nameof(resend));
 
             float rto = RetransmissionTimeoutMs;
+            _updatePass++;
             for (int i = 0; i < _sent.Length; i++)
             {
                 ref SentPacket packet = ref _sent[i];
                 if (!packet.InUse || packet.Acked || !packet.IsReliable || packet.Data == null)
                     continue;
-                if (nowMs - packet.SentAtMs < rto) continue;
+
+                // A record relocated to a higher slot earlier in this pass would otherwise be
+                // visited a second time and resent twice on one tick.
+                if (packet.UpdatePass == _updatePass) continue;
+
+                // Exponential backoff, not a fixed interval. A fixed floor interval put ten
+                // copies of the same packet on the wire inside a third of a second — which is
+                // both the give-up bug above AND a bandwidth one, since a peer that is merely
+                // busy gets flooded at exactly the moment it has least capacity to answer.
+                if (nowMs - packet.SentAtMs < BackoffMs(rto, packet.ResendCount)) continue;
+
+                double elapsedMs = nowMs - packet.FirstSentAtMs;
+                if (elapsedMs >= AbandonAfterMs || packet.ResendCount >= MaxResends)
+                {
+                    NetLog.Warn(
+                        $"reliable sequence {packet.Sequence} abandoned after "
+                        + $"{packet.ResendCount} resends over {elapsedMs:F0} ms");
+                    HasAbandonedReliable = true;
+                    ReleaseSlot(ref packet);
+                    continue;
+                }
 
                 if (packet.ResendCount == 0)
                 {
@@ -217,18 +313,47 @@ namespace Ironfront.Net.Transport
                     ReliablePacketsRetried++;
                 }
                 packet.ResendCount++;
-                if (packet.ResendCount > MaxResends)
-                {
-                    NetLog.Warn($"reliable sequence {packet.Sequence} abandoned after {MaxResends} resends");
-                    HasAbandonedReliable = true;
-                    ReleaseSlot(ref packet);
-                    continue;
-                }
-
-                resend(packet.Data, packet.Length);
-                ReliablePacketsResent++;
                 packet.SentAtMs = nowMs;
+                packet.UpdatePass = _updatePass;
+
+                byte[] data = packet.Data;
+                int length = packet.Length;
+                ushort sequence = Relocate(ref packet, i);
+
+                resend(data, length, sequence);
+                ReliablePacketsResent++;
             }
+        }
+
+        /// <summary>
+        /// Moves a due record onto a fresh sequence and returns that sequence. The record keeps
+        /// its buffer, its <see cref="SentPacket.FirstSentAtMs"/> origin and its resend count —
+        /// only where it can be acknowledged changes.
+        /// </summary>
+        private ushort Relocate(ref SentPacket packet, int fromIndex)
+        {
+            ushort sequence = NextSequence();
+            int toIndex = sequence % SentBufferSize;
+            packet.Sequence = sequence;
+            if (toIndex == fromIndex) return sequence;
+
+            SentPacket moved = packet;
+
+            // Vacate the source WITHOUT ReleaseSlot: the packet is still pending, so its
+            // buffer must not go back to the pool and the unacked count must not drop.
+            packet.InUse = false;
+            packet.Acked = true;
+            packet.Data = null;
+
+            ref SentPacket destination = ref _sent[toIndex];
+            if (destination.InUse && destination.IsReliable && !destination.Acked)
+            {
+                NetLog.Warn($"reliable sequence slot collision at {sequence} during resend");
+                HasAbandonedReliable = true;
+            }
+            ReleaseSlot(ref destination);
+            destination = moved;
+            return sequence;
         }
 
         public void Clear()
@@ -243,14 +368,31 @@ namespace Ironfront.Net.Transport
             PacketsMissingEstimated = 0;
         }
 
-        private void AckPacket(ushort sequence, double nowMs)
+        /// <summary>
+        /// Interval before retransmission <paramref name="resendCount"/> + 1: the RTO doubled
+        /// once per prior attempt, capped at <see cref="MaxRtoMs"/>.
+        /// </summary>
+        /// <remarks>
+        /// Capped at the shift as well as at the value: <c>1 &lt;&lt; 32</c> is undefined-ish in
+        /// C# (the shift count is masked to 5 bits, so it wraps to <c>1 &lt;&lt; 0</c> = 1) and
+        /// would silently collapse the backoff back to a single RTO at attempt 32 — the exact
+        /// class of arithmetic that produced this bug in the first place.
+        /// </remarks>
+        private static double BackoffMs(float rto, int resendCount)
+        {
+            if (resendCount >= 16) return MaxRtoMs;
+            double scaled = rto * (1 << resendCount);
+            return scaled > MaxRtoMs ? MaxRtoMs : scaled;
+        }
+
+        private void AckPacket(ushort sequence, double nowMs, bool sampleRtt)
         {
             int index = sequence % SentBufferSize;
             ref SentPacket packet = ref _sent[index];
             if (!packet.InUse || packet.Sequence != sequence || packet.Acked) return;
 
             packet.Acked = true;
-            if (packet.ResendCount == 0)
+            if (sampleRtt && packet.ResendCount == 0)
                 UpdateRtt(nowMs - packet.SentAtMs);
             ReleaseSlot(ref packet);
         }

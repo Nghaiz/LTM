@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -40,16 +40,26 @@ namespace Ironfront.Net.Replication.Tests
             // why the server must not read it does not fail the check that says so.
             const string OptionsRead = "OptionsUi.GetOptions(";
 
-            foreach (string file in ScriptsUnder("Net", "Server"))
+            // SCOPE WIDENED FROM Net/Server TO ALL OF Net/ BY PHASE C2, and the widening is the
+            // point rather than tidying. LocalInputSource used to be the one file under Net/
+            // that read OptionsUi directly, so the scan had to stop at Net/Server to leave it
+            // alone. C2 moved that read behind ILocalInputEnvironment, so Net/ now contains zero
+            // reads and the gate can say so -- a strictly stronger claim that still contains
+            // the V5-D9 one. For Net/Input it is also structurally guaranteed: that folder is
+            // its own assembly and cannot name OptionsUi at all (check-net-layering RULE 5b).
+            // If this ever fails for a file under Net/Input, the asmdef is gone.
+            foreach (string file in ScriptsUnder("Net"))
             {
                 Assert.False(
                     File.ReadAllText(file).Contains(OptionsRead, StringComparison.Ordinal),
-                    $"{Path.GetFileName(file)} reads OptionsUi on a server-role path. "
-                    + "Client-local options must be applied by the sender (V5-D9).");
+                    $"{Path.GetFileName(file)} reads OptionsUi from under Net/. "
+                    + "Client-local options must be applied by the sender (V5-D9), and since C2 "
+                    + "they reach the sender through ILocalInputEnvironment rather than the UI "
+                    + "class.");
             }
 
-            // The one file that legitimately reads them is LocalInputSource, and it is never
-            // installed at server role.
+            // The one path that legitimately reads them is LocalInputSource, through the
+            // binding, and it is never installed at server role.
             string controller = ReadScript("Assembly-CSharp", "FpsActorController.cs");
 
             Assert.Matches(
@@ -67,13 +77,34 @@ namespace Ironfront.Net.Replication.Tests
             string local = ReadScript("Net", "Input", "LocalInputSource.cs");
             string controller = ReadScript("Assembly-CSharp", "FpsActorController.cs");
 
-            // Moved, not deleted: the sensitivity product and all four invert flags now live in
+            // Moved, not deleted: the sensitivity product and all four invert flags still live in
             // the one place UnityEngine.Input is allowed to be read.
-            Assert.Contains("helicopterSensitivity", local, StringComparison.Ordinal);
-            Assert.Contains("heliInvertPitch", local, StringComparison.Ordinal);
-            Assert.Contains("heliInvertYaw", local, StringComparison.Ordinal);
-            Assert.Contains("heliInvertRoll", local, StringComparison.Ordinal);
-            Assert.Contains("heliInvertThrottle", local, StringComparison.Ordinal);
+            //
+            // THE SPELLINGS CHANGED IN C2 AND THE INVARIANT DID NOT. These used to be
+            // OptionsUi.Options field names (helicopterSensitivity, heliInvertPitch, ...) read
+            // directly. Net/Input is now its own assembly and cannot name OptionsUi, so the same
+            // five values arrive through HelicopterControlOptions and are spelled accordingly.
+            // What this test pins is WHERE the scaling happens, not how the fields are cased --
+            // so the names were updated rather than the assertions dropped.
+            Assert.Contains("HelicopterSensitivity", local, StringComparison.Ordinal);
+            Assert.Contains("InvertPitch", local, StringComparison.Ordinal);
+            Assert.Contains("InvertYaw", local, StringComparison.Ordinal);
+            Assert.Contains("InvertRoll", local, StringComparison.Ordinal);
+            Assert.Contains("InvertThrottle", local, StringComparison.Ordinal);
+
+            // "Moved, not deleted" now spans two files, so pin the far end too: the legacy field
+            // names must still be read by SOMETHING, or the seam is dropping them on the floor
+            // and every assertion above passes on a helicopter that no longer inverts.
+            string binding = ReadScript("NetBindings", "LocalInputEnvironmentBinding.cs");
+
+            Assert.Contains("helicopterSensitivity", binding, StringComparison.Ordinal);
+            Assert.Contains("heliInvertPitch", binding, StringComparison.Ordinal);
+            Assert.Contains("heliInvertYaw", binding, StringComparison.Ordinal);
+            Assert.Contains("heliInvertRoll", binding, StringComparison.Ordinal);
+            Assert.Contains("heliInvertThrottle", binding, StringComparison.Ordinal);
+
+            // And the sender must not have kept a back channel to the UI class.
+            Assert.DoesNotContain("OptionsUi", local, StringComparison.Ordinal);
 
             // HelicopterInput() is component order and nothing else now. The raw Input.GetAxis
             // branch it used to carry was the accepted debt V5-D8 closes.
@@ -240,6 +271,167 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Matches(
                 new Regex(@"if\s*\(\s*!\s*_configured\s*\)\s*ApplyConfiguration"), stage);
+        }
+
+        // ------------------ X-46: a networked driver's input reaches a player-slot body
+
+        [Theory]
+        [InlineData("public override Vector2 CarInput()", "CarAxesFor")]
+        [InlineData("public override Vector2 BoatInput()", "CarAxesFor")]
+        [InlineData("public override Vector4 HelicopterInput()", "HelicopterAxesFor")]
+        public void ASuspendedControllerReturnsTheNetworkRelayRatherThanTheBotsOpinion(
+            string signature, string accessor)
+        {
+            // Ledger X-46. Every vehicle PULLS through `Driver().controller.<Kind>Input()`, and a
+            // networked player's server-side body carries an AiActorController because
+            // IronfrontNetBindings.CreatePlayerBody instantiates the bot prefab. So these three
+            // overrides ARE the driver seam for every real networked driver -- and before this
+            // fix they answered with a bot's pathfinding, or with nothing. Measured: 1,285
+            // accepted C_VEHICLE_INPUT messages against a hull that never moved
+            // (artifacts/lane-a/r5/r5-combat-05).
+            string body = MethodBody(
+                ReadScript("Assembly-CSharp", "AiActorController.cs"),
+                "AiActorController.cs", signature);
+
+            // FIRST, and that ordering is load-bearing: a suspended controller has no path
+            // either, so a `hasPath` return placed above this one would answer zero before the
+            // relay was ever consulted -- a symptom indistinguishable from the defect.
+            Assert.Matches(
+                new Regex(
+                    @"\A\{\s*if\s*\(\s*!\s*base\.enabled\s*\)\s*\{\s*"
+                    + @"return\s+NetVehicleAxisRelay\." + accessor + @"\(\s*this\s*\)\s*;"),
+                body);
+
+            // And it is the ONLY reach for the relay in this method, so an ENABLED controller --
+            // a genuine bot -- cannot be steered by the network. O-D2.
+            Assert.Single(Regex.Matches(body, @"NetVehicleAxisRelay\."));
+        }
+
+        [Fact]
+        public void TheDriverInputSinkNoLongerReturnsNullForABodyWithNoFpsController()
+        {
+            // The remark this replaced predicted its own defect in writing -- "a networked PLAYER
+            // reaching a driver seat without one means that vehicle will not respond to them at
+            // all" -- and then that case turned out to be EVERY networked player, because a
+            // player-slot body is the bot prefab. Nothing noticed until R2 gave the shipped
+            // client a seat sender and R5 gave lane A one.
+            string body = MethodBody(
+                ReadScript("NetBindings", "NetDriverInputSink.cs"),
+                "NetDriverInputSink.cs", "internal static IDriverInputSink Attach(GameObject gameObject)");
+
+            // The controller path stays FIRST: on a listen server or in the Editor the driver
+            // really does have one, and its IInputSource seam is what remembers the keyboard
+            // source the player walks with.
+            Assert.Matches(
+                new Regex(
+                    @"FpsActorController\s+controller\s*=[\s\S]{0,120}?"
+                    + @"if\s*\(\s*controller\s*!=\s*null\s*\)\s*return\s+new\s+NetDriverInputSink"),
+                body);
+
+            // ... and the fallback exists rather than being a null the caller has to interpret.
+            Assert.Contains("NetVehicleAxisRelay.Install(gameObject)", body, StringComparison.Ordinal);
+
+            // The one surviving null is a destroyed body, which is the only thing
+            // ServerVehicleInputBridge.UnreachableControllers should still count.
+            Assert.Matches(
+                new Regex(@"if\s*\(\s*gameObject\s*==\s*null\s*\)\s*return\s+null\s*;"), body);
+        }
+
+        [Fact]
+        public void TheRelayIsNotAControllerAndNotAnInputSource()
+        {
+            // O-D1, and it is the same hazard AiControlledIsUnchangedForANetworkedDriver guards
+            // one folder over: the relay lives in NetBindings/, which that test's Net/ scan does
+            // not reach, so the constraint is re-asserted where the file actually is. A second
+            // ActorController on the body would make GetComponent<ActorController>()
+            // order-dependent AND flip Actor.aiControlled, which is frozen in Awake from an exact
+            // type comparison and then read by UI, LOD and weapon culling.
+            string relay = ReadScript("NetBindings", "NetVehicleAxisRelay.cs");
+
+            Assert.DoesNotMatch(
+                new Regex(@":\s*(ActorController|FpsActorController|AiActorController)"), relay);
+            Assert.DoesNotContain("SetInputSource", relay, StringComparison.Ordinal);
+            Assert.Contains(": MonoBehaviour", relay, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// A destroyed vehicle's proxy dies from the snapshot that first flags it Dead and stays
+        /// snapshot-driven; the despawn that follows 15 s later only removes it.
+        /// </summary>
+        /// <remarks>
+        /// Before 2026-09-27 the despawn arrived at the moment of death and the proxy was handed
+        /// back to PhysX, so each client threw its own wreck with its own random impulse and
+        /// kinematic live vehicles shoved it around, while the server's real wreck stayed
+        /// invisible. Killing it a second time on the despawn is PR #325's Tank.Die throw.
+        /// </remarks>
+        [Fact]
+        public void ADeadProxyDiesFromItsSnapshotAndTheDespawnOnlyRemovesIt()
+        {
+            string apply = MethodBody(
+                ReadScript("Net", "Client", "NetClientVehicle.cs"), "NetClientVehicle.cs",
+                "private void ApplyAuthoritativeState(in VehiclePose pose)");
+            Assert.Contains("VehicleStateFlags.Dead", apply, StringComparison.Ordinal);
+            Assert.Contains("_vehicle.Die()", apply, StringComparison.Ordinal);
+
+            string despawn = MethodBody(
+                ReadScript("Net", "Client", "RemoteVehicleRegistry.cs"), "RemoteVehicleRegistry.cs",
+                "private void OnVehicleDespawn(VehicleDespawnMessage message)");
+            int diedAlready = despawn.IndexOf("DiedFromSnapshot", StringComparison.Ordinal);
+            int killAgain = despawn.IndexOf("Body.Die()", StringComparison.Ordinal);
+            Assert.True(
+                diedAlready >= 0 && killAgain > diedAlready,
+                "OnVehicleDespawn must remove a proxy that already died from its Dead snapshot "
+                + "BEFORE the legacy branch that hands the body to PhysX and kills it again.");
+        }
+
+        /// <summary>
+        /// A body entering a seat on the server leaves the physics world in the same step that
+        /// welds it into the hull.
+        /// </summary>
+        /// <remarks>
+        /// ServerPlayer.Tick also disables the capsule, but only on an owed 30 Hz tick against
+        /// 60 Hz physics, so about every other entry PhysX stepped once with a live capsule on a
+        /// kinematic Rigidbody inside the vehicle. Measured on lane-A bug2-before-01: 14,160 and
+        /// 16,905 N·s contacts between each tank and the body seated in it at 0.2 m/s, and the
+        /// same kick on quads, jeeps and boats.
+        /// </remarks>
+        /// <summary>
+        /// A minimap marker whose subject is behind the minimap camera is hidden, not drawn.
+        /// </summary>
+        /// <remarks>
+        /// A perspective projection of a point behind the camera (a helicopter above it) comes back
+        /// MIRRORED into the frame, so the RectMask2D that clips off-map icons cannot catch it: the
+        /// icon would sit inside the map at a place the vehicle is not. MinimapMarker compiles into
+        /// Assembly-CSharp (ledger E-11b), so this is pinned on its source.
+        /// </remarks>
+        [Fact]
+        public void AMinimapMarkerBehindTheMinimapCameraIsHidden()
+        {
+            string lateUpdate = MethodBody(
+                ReadScript("Assembly-CSharp", "MinimapMarker.cs"), "MinimapMarker.cs",
+                "private void LateUpdate()");
+
+            int behind = lateUpdate.IndexOf("viewport.z <= 0f", StringComparison.Ordinal);
+            int shown = lateUpdate.IndexOf("SetVisible(true)", StringComparison.Ordinal);
+            Assert.True(
+                behind >= 0 && shown > behind,
+                "MinimapMarker.LateUpdate must hide a subject behind the minimap camera before "
+                + "it ever shows the icon.");
+        }
+
+        [Fact]
+        public void SeatEntryTakesTheCapsuleOutInTheSameStep()
+        {
+            string apply = MethodBody(
+                ReadScript("Net", "Server", "ServerSeatBridge.cs"), "ServerSeatBridge.cs",
+                "private bool Apply(in SeatDecision decision)");
+
+            int enter = apply.IndexOf("TryEnterSeat", StringComparison.Ordinal);
+            int capsuleOff = apply.IndexOf("SetSeated(true)", StringComparison.Ordinal);
+            Assert.True(
+                enter >= 0 && capsuleOff > enter,
+                "ServerSeatBridge.Apply must switch the seated body's capsule off right after a "
+                + "successful TryEnterSeat, not leave it to the next owed ServerPlayer tick.");
         }
 
         // ------------------------------------------------------------------ helpers

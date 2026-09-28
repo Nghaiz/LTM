@@ -2,7 +2,7 @@ using System;
 using Ironfront.Net.Unity;
 using UnityEngine;
 
-public class Projectile : MonoBehaviour
+public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectileBody
 {
 	[Serializable]
 	public class Configuration
@@ -189,9 +189,19 @@ public class Projectile : MonoBehaviour
 			}
 			collider.enabled = true;
 		}
-		if (Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer))
+		// A collider on a hitbox layer with NO Hitbox is geometry, not a body part. The stock rig
+		// puts a Hitbox on every bone, so this read could not miss offline -- but a client's
+		// REMOTE corpse is built by RemoteRagdoll at runtime on the Ragdoll layer (10), with
+		// colliders and nothing to damage behind them. Read as a Hitbox, every round that struck
+		// a remote body lying on the ground threw a NullReferenceException here (both playtest
+		// clients, 2026-09-27) and died inside its own Update, never reaching the impulse and the
+		// Destroy below. Falling through is the answer: the round stops, and the impulse knocks
+		// the limb it struck.
+		Hitbox component = Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer)
+			? hitInfo.collider.GetComponent<Hitbox>()
+			: null;
+		if (component != null)
 		{
-			Hitbox component = hitInfo.collider.GetComponent<Hitbox>();
 			if (component.parent == source)
 			{
 				base.transform.position = hitInfo.point + velocity.normalized * 0.2f;
@@ -200,7 +210,12 @@ public class Projectile : MonoBehaviour
 			// accumulator. Two peers with different frame times accumulate different distances,
 			// so a client-computed number is a different number -- and a modified client's is
 			// whatever it likes. A networked client's projectile is a thing you watch.
-			else if (!NetContext.IsClient && component.ProjectileHit(this, hitInfo.point)
+			// debt-closure phase 2 task 2e: NetProjectileAuthority.EngineAppliesProjectileDamage
+			// subsumes the !NetContext.IsClient this line carried -- a client already applied no
+			// damage here, and now a SERVER running the library stepper does not either. Without
+			// it, flipping AuthoritativeFlight would apply this hit twice (ledger C-1).
+			else if (Ironfront.Net.Unity.Server.NetProjectileAuthority.EngineAppliesProjectileDamage
+				&& component.ProjectileHit(this, hitInfo.point)
 				&& !source.aiControlled)
 			{
 				// V7 task 3: offline only. On a server the hitmarker travels to the shooter as
@@ -210,6 +225,18 @@ public class Projectile : MonoBehaviour
 				{
 					IngameUi.Hit();
 				}
+			}
+		}
+		// debt-closure phase 2 task 2f (ledger C-11): a shot fuel drum goes off. Behind the same
+		// ownership question as the hitbox damage above -- a client neither decides that a prop
+		// was destroyed nor applies the resulting blast; the server does, and announces it as
+		// S_EXPLOSION with ExplosionKind.Environment.
+		if (Ironfront.Net.Unity.Server.NetProjectileAuthority.EngineAppliesProjectileDamage)
+		{
+			ExplosiveProp prop = hitInfo.collider.gameObject.GetComponentInParent<ExplosiveProp>();
+			if (prop != null)
+			{
+				prop.Damage(Damage());
 			}
 		}
 		Rigidbody attachedRigidbody = hitInfo.collider.attachedRigidbody;

@@ -127,7 +127,13 @@ namespace Ironfront.Client.Flow.Tests
             Assert.False(await h.Session.LoginAsync("tester", "hunter2"));
 
             Assert.Equal(GameFlowState.LoginScreen, h.Flow.State);
-            Assert.Equal("Too many attempts. Wait a few seconds and try again.", h.Session.LastError);
+            // "Up to a minute", not "a few seconds": the login budget's window is sixty seconds,
+            // and a player who waited the few seconds they were promised failed again and read
+            // the identical sentence. "From this network" because the budget is per source
+            // address, so two people in one house share it.
+            Assert.Equal(
+                "Too many login attempts from this network. Wait up to a minute and try again.",
+                h.Session.LastError);
         }
 
         [Fact]
@@ -237,6 +243,82 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Contains("did not name a game server", h.Session.LastError);
         }
 
+        // --------------------------------------------------------- the joined map
+
+        [Fact]
+        public async Task JoiningARoomRemembersTheMapItIsPlayedOn()
+        {
+            // P8 task 3.2. JOIN answers with an address, a port and a ticket -- everything needed
+            // to REACH the server and nothing needed to RENDER what it is simulating. The id is
+            // on the browser's own row, so it is taken from there rather than added to the wire.
+            var h = new Harness();
+            h.Master.NextRooms = new[]
+            {
+                new RoomInfo { RoomId = 1, Name = "one", MapId = 2, Players = 0, MaxPlayers = 16 },
+                new RoomInfo { RoomId = 2, Name = "two", MapId = 1, Players = 0, MaxPlayers = 16 },
+            };
+
+            await h.AtRoomBrowserAsync();
+            Assert.True(await h.Session.JoinRoomAsync(2, null));
+
+            Assert.Equal((ushort)1, h.Session.JoinedMapId);
+        }
+
+        [Fact]
+        public async Task ARoomTheBrowserNeverListedLeavesTheMapUnnamed()
+        {
+            // 0 is "nobody said", not a map. The client falls back rather than loading a world
+            // the server is not simulating -- every symptom of which reads as a replication
+            // fault: bodies with no ground under them, a capture point nobody can reach.
+            var h = new Harness();
+            h.Master.NextRooms = new[]
+            {
+                new RoomInfo { RoomId = 1, Name = "one", MapId = 2, Players = 0, MaxPlayers = 16 },
+            };
+
+            await h.AtRoomBrowserAsync();
+            Assert.True(await h.Session.JoinRoomAsync(77, null));
+
+            Assert.Equal((ushort)0, h.Session.JoinedMapId);
+        }
+
+        [Fact]
+        public async Task AFailedJoinDoesNotLeaveAMapIdPointingAtARoomWeAreNotIn()
+        {
+            var h = new Harness();
+            h.Master.NextRooms = new[]
+            {
+                new RoomInfo { RoomId = 1, Name = "one", MapId = 2, Players = 0, MaxPlayers = 16 },
+            };
+
+            await h.AtRoomBrowserAsync();
+            h.Master.NextJoin = new JoinResult { Ok = false, ErrorCode = (int)ErrorCode.RoomFull };
+
+            Assert.False(await h.Session.JoinRoomAsync(1, null));
+
+            Assert.Equal((ushort)0, h.Session.JoinedMapId);
+        }
+
+        [Fact]
+        public async Task ADirectDialClearsTheMapOfTheRoomItCameAfter()
+        {
+            // A direct connect never passes through a room, so carrying the previous join's map
+            // forward would load the last room's world against an unrelated server.
+            var h = new Harness();
+            h.Master.NextRooms = new[]
+            {
+                new RoomInfo { RoomId = 1, Name = "one", MapId = 2, Players = 0, MaxPlayers = 16 },
+            };
+
+            await h.AtRoomBrowserAsync();
+            await h.Session.JoinRoomAsync(1, null);
+            Assert.NotEqual((ushort)0, h.Session.JoinedMapId);
+
+            h.Session.ConnectDirect("198.51.100.4", 27015);
+
+            Assert.Equal((ushort)0, h.Session.JoinedMapId);
+        }
+
         // --------------------------------------------------------- the junction
 
         [Fact]
@@ -297,6 +379,53 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Equal(GameFlowState.RoomLobby, h.Flow.State);
             Assert.Contains("InvalidTicket", h.Session.LastError);
             Assert.False(h.Session.Inbound.IsHolding);
+        }
+
+        [Fact]
+        public async Task AFullSIDEDoesNotReadLikeAFullSERVER()
+        {
+            // P13 criterion 6, the rendering half. "The server is full" has no remedy;
+            // "your side is full" has one the player can act on — switch sides. Rendering
+            // them as the same sentence throws away the only actionable half, which is the
+            // entire reason ConnectDenyReason.TeamFull and DisconnectReason.TeamFull exist
+            // rather than reusing code 1.
+            Harness teamFull = await new Harness().AtRoomLobbyAsync();
+            teamFull.Session.EnterMatch();
+            teamFull.Game.Drop(DisconnectReason.TeamFull);
+
+            Harness serverFull = await new Harness().AtRoomLobbyAsync();
+            serverFull.Session.EnterMatch();
+            serverFull.Game.Drop(DisconnectReason.ServerFull);
+
+            Assert.Contains("TeamFull", teamFull.Session.LastError);
+            Assert.Contains("ServerFull", serverFull.Session.LastError);
+            Assert.NotEqual(serverFull.Session.LastError, teamFull.Session.LastError);
+
+            // Both still land the player somewhere they can act, rather than in a frozen
+            // world nobody is updating.
+            Assert.Equal(GameFlowState.RoomLobby, teamFull.Flow.State);
+            Assert.Equal(GameFlowState.RoomLobby, serverFull.Flow.State);
+        }
+
+        [Fact]
+        public async Task AnUnknownRefusalSaysNothingItCannotKnow()
+        {
+            // P13 criterion 7. A build that predates a deny code must degrade to a GENERIC
+            // refusal — not to silence, and not to a WRONG reason. Connection.MapDeniedReason
+            // used to send every unrecognised code to InvalidTicket, so a player whose side
+            // was full was told their ticket was invalid and went off to re-log in.
+            //
+            // DisconnectReason.Refused is what an unknown code becomes now. This asserts the
+            // client renders it as its own sentence rather than borrowing another code's.
+            Harness refused = await new Harness().AtRoomLobbyAsync();
+            refused.Session.EnterMatch();
+            refused.Game.Drop(DisconnectReason.Refused);
+
+            Assert.Contains("Refused", refused.Session.LastError);
+            Assert.DoesNotContain("InvalidTicket", refused.Session.LastError);
+            Assert.DoesNotContain("ServerFull", refused.Session.LastError);
+            Assert.DoesNotContain("TeamFull", refused.Session.LastError);
+            Assert.Equal(GameFlowState.RoomLobby, refused.Flow.State);
         }
 
         [Fact]
@@ -382,6 +511,29 @@ namespace Ironfront.Client.Flow.Tests
 
             Assert.Equal(GameFlowState.Lobby, h.Flow.State);
             Assert.Contains("Disconnected from the game server", h.Session.LastError);
+        }
+
+        [Fact]
+        public async Task ADropWhileTheMapLoadsIsReportedOnceTheMapIsUp()
+        {
+            // The map loads asynchronously since 2026-09-27, so the link can drop between the
+            // accept and the scene being up. Reporting it there found the flow in ConnectingGame,
+            // which has no way back to the lobby, and the map then came up on a dead socket.
+            Harness h = await new Harness().AtRoomLobbyAsync();
+            h.Session.EnterMatch();
+            h.Game.Accept();
+            Assert.True(h.Session.HoldIfLoading(new byte[] { 1 }));
+
+            h.Game.Drop(DisconnectReason.Timeout);
+
+            Assert.Equal(GameFlowState.ConnectingGame, h.Flow.State);
+
+            int replayed = h.Session.OnSceneReady();
+
+            Assert.Equal(0, replayed);
+            Assert.Empty(h.Routed);
+            Assert.Equal(GameFlowState.Lobby, h.Flow.State);
+            Assert.Contains("Disconnected from the game server (Timeout)", h.Session.LastError);
         }
 
         [Fact]

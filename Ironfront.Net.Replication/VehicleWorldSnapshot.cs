@@ -16,7 +16,7 @@ namespace Ironfront.Net.Replication
     /// floats here would compile, run, produce correct output, and save no bandwidth at all.
     /// </para>
     /// <para>
-    /// Sized to <see cref="ProtocolConstants.MAX_VEHICLES"/> and never resized. At 16 entries
+    /// Sized to <see cref="ProtocolConstants.MAX_VEHICLES"/> and never resized. At that many entries
     /// this is a fraction of the actor buffer, so a server holding 33 of them per client
     /// (32 baselines plus the live one) allocates them once at startup.
     /// </para>
@@ -55,7 +55,8 @@ namespace Ironfront.Net.Replication
             return true;
         }
 
-        /// <summary>Finds a vehicle by id. A linear scan over at most 16 contiguous structs.</summary>
+        /// <summary>Finds a vehicle by id. A linear scan over contiguous structs, capped at
+        /// <see cref="ProtocolConstants.MAX_VEHICLES"/>.</summary>
         public bool TryFind(ushort vehicleId, out VehicleSnapshotEntry entry)
         {
             for (int i = 0; i < VehicleCount; i++)

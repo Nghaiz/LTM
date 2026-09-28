@@ -27,7 +27,7 @@ namespace Ironfront.Net.Replication.Vehicles
     /// </para>
     /// <para>
     /// <b>Arrays indexed by id, no allocation after construction.</b> One <c>ushort</c> claimant
-    /// and one <c>float</c> deadline per (vehicle, seat) slot — 16 x 8 of each.
+    /// and one <c>float</c> deadline per (vehicle, seat) slot — <c>MAX_VEHICLES</c> x 8 of each.
     /// </para>
     /// </remarks>
     public sealed class BotSeatClaims

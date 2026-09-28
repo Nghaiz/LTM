@@ -253,14 +253,15 @@ namespace Ironfront.Net.Replication.Tests
         public void AMatchStateMessageAppliesEveryField()
         {
             var model = new MatchStateModel();
-            var message = new MatchStateMessage(MatchPhase.Warmup, 300, 250, 45, 12);
+            var message = new MatchStateMessage(MatchPhase.Warmup, 300, 250, 45, 12, 500);
 
             model.Apply(in message, nowSeconds: 100f);
 
             Assert.True(model.HasState);
             Assert.Equal(MatchPhase.Warmup, model.Current.Phase);
-            Assert.Equal(300, model.Current.Tickets0);
-            Assert.Equal(250, model.Current.Tickets1);
+            Assert.Equal(300, model.Current.Score0);
+            Assert.Equal(250, model.Current.Score1);
+            Assert.Equal(500, model.Current.VictoryPoints);
             Assert.Equal(45, model.Current.PhaseSecondsRemaining);
             Assert.Equal(12, model.Current.HumanPlayerCount);
         }
@@ -272,7 +273,7 @@ namespace Ironfront.Net.Replication.Tests
             // A HUD that renders the field unconditionally shows "0:00" for the whole round and
             // tells every player it is already over.
             var model = new MatchStateModel();
-            model.Apply(new MatchStateMessage(MatchPhase.Playing, 300, 300, 0, 8), nowSeconds: 0f);
+            model.Apply(new MatchStateMessage(MatchPhase.Playing, 300, 300, 0, 8, 500), nowSeconds: 0f);
 
             Assert.False(model.HasTimer);
             Assert.Equal(0f, model.SecondsRemaining(5f));
@@ -284,7 +285,7 @@ namespace Ironfront.Net.Replication.Tests
             // The message arrives at most once a second. A timer that only moves when a packet
             // lands reads as a stutter, not as a clock.
             var model = new MatchStateModel();
-            model.Apply(new MatchStateMessage(MatchPhase.Warmup, 0, 0, 30, 2), nowSeconds: 10f);
+            model.Apply(new MatchStateMessage(MatchPhase.Warmup, 0, 0, 30, 2, 200), nowSeconds: 10f);
 
             Assert.True(model.HasTimer);
             Assert.Equal(30f, model.SecondsRemaining(10f), 3);
@@ -300,26 +301,26 @@ namespace Ironfront.Net.Replication.Tests
             // Unknown must not render as good: before anything arrives, this is stale.
             Assert.True(model.IsStale(0f));
 
-            model.Apply(new MatchStateMessage(MatchPhase.Warmup, 1, 1, 10, 1), nowSeconds: 0f);
+            model.Apply(new MatchStateMessage(MatchPhase.Warmup, 1, 1, 10, 1, 200), nowSeconds: 0f);
             Assert.False(model.IsStale(1f));
             Assert.True(model.IsStale(MatchStateModel.DefaultStaleAfterSeconds));
 
             // And the number it still reports is the last real one, not a zero.
-            Assert.Equal(1, model.Current.Tickets0);
+            Assert.Equal(1, model.Current.Score0);
         }
 
         [Fact]
         public void ATieResolvesToTeamIdNone()
         {
             var model = new MatchStateModel();
-            model.Apply(new MatchStateMessage(MatchPhase.Ended, 120, 120, 0, 6), nowSeconds: 0f);
+            model.Apply(new MatchStateMessage(MatchPhase.Ended, 120, 120, 0, 6, 200), nowSeconds: 0f);
 
             // 255, not 2 — chosen so a client switching on 0/1 falls through rather than
             // rendering "nobody" as a third team.
             Assert.Equal(TeamId.None, model.WinningTeam);
             Assert.Equal(255, TeamId.None);
 
-            model.Apply(new MatchStateMessage(MatchPhase.Ended, 120, 10, 0, 6), nowSeconds: 1f);
+            model.Apply(new MatchStateMessage(MatchPhase.Ended, 120, 10, 0, 6, 100), nowSeconds: 1f);
             Assert.Equal(TeamId.Team0, model.WinningTeam);
         }
 
@@ -327,7 +328,7 @@ namespace Ironfront.Net.Replication.Tests
         public void AnUndecidedMatchHasNoWinner()
         {
             var model = new MatchStateModel();
-            model.Apply(new MatchStateMessage(MatchPhase.Playing, 300, 10, 0, 6), nowSeconds: 0f);
+            model.Apply(new MatchStateMessage(MatchPhase.Playing, 300, 10, 0, 6, 100), nowSeconds: 0f);
 
             Assert.Equal(TeamId.None, model.WinningTeam);
         }
@@ -472,7 +473,7 @@ namespace Ironfront.Net.Replication.Tests
 
             DeathMessage death = Death(1, 2, 10f);
             HitConfirmMessage hit = Hit(3, killed: false, headshot: true);
-            var state = new MatchStateMessage(MatchPhase.Playing, 100, 100, 0, 4);
+            var state = new MatchStateMessage(MatchPhase.Playing, 100, 100, 0, 4, 200);
             var point = new CapturePointMessage(1, 25, CaptureFlags.None);
             ExplosionMessage boom = Explosion(source: 5);
 

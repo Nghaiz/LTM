@@ -58,6 +58,26 @@ namespace Ironfront.Net.Unity.Client
         private bool _ownsTransport;
         private bool _loggedFirstSnapshot;
 
+        /// <summary>
+        /// Tells the server which snapshot tick this client holds in full, so the delta encoder
+        /// has a baseline to measure against.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>It lives here rather than on the player prefab.</b> Snapshots start arriving
+        /// before this client owns an actor, and <c>DeltaEncoder</c> keeps only 32 ticks of
+        /// history — an ack that waits for a player prefab to exist names a baseline the server
+        /// has already dropped. The bootstrap owns the router and the transport for the whole
+        /// connection, which is exactly the lifetime an ack needs.
+        /// </para>
+        /// <para>
+        /// The decision and the byte layout are <see cref="BaselineAckPolicy"/>'s, where
+        /// <c>dotnet test</c> can reach them; this class supplies the subscription and the
+        /// transport call and nothing else.
+        /// </para>
+        /// </remarks>
+        public BaselineAckPolicy BaselineAck { get; } = new BaselineAckPolicy();
+
         /// <summary>Decodes and dispatches everything the server sends.</summary>
         public ClientMessageRouter Router { get; } = new ClientMessageRouter();
 
@@ -118,6 +138,46 @@ namespace Ironfront.Net.Unity.Client
 
         private void Awake()
         {
+            // Defect 2 of the lane-B report: until this call the transport's warnings went to a
+            // null delegate in every shipped build. Installed FIRST, so anything the rest of this
+            // Awake logs is already reaching somewhere.
+            NetLogUnitySink.Install();
+
+            // A dedicated server loads the same map scene every client does, and that scene
+            // carries this component -- so without this guard the server dials ITSELF over
+            // loopback and joins its own match as a player: a real body at a real spawn point,
+            // one of sixteen slots gone, one connection gone, and the congestion controller
+            // reacting to its own traffic. `architecture.md` AD-1 forbids a host/listen-server
+            // mode; this is where that stops being only a written decision.
+            //
+            // It returns BEFORE the role is claimed and before `Current` is published, because
+            // both are wrong on a server: the role line below would race NetServerBootstrap's
+            // mirror of it and could settle a dedicated process as a Client, and every reader of
+            // `Current` is a client-side diagnostic.
+            //
+            // NOT `NetContext.IsServer` -- that IS the race, settled by whichever bootstrap's
+            // Awake runs first since each defers to the other, so gating on it would make an
+            // Editor Play session's behaviour depend on component order.
+            // `NetContext.IsDedicatedServer` has exactly one setter, which knows because the
+            // process was launched headless to host a map.
+            if (NetContext.IsDedicatedServer)
+            {
+                // Left ENABLED rather than switched off. `enabled = false` assigned inside Awake
+                // does not survive the activation pass that called it (measured: the assertion
+                // for it was the only red in this fixture's first run), so a line claiming to
+                // disable the component would be a line that lies. It costs nothing to leave on:
+                // `Update` is `_transport?.Poll()` and `_transport` stays null.
+                Debug.Log("[net] dedicated server: no local client will be dialled (AD-1).");
+                return;
+            }
+
+            // Placed AFTER the dedicated-server guard on purpose: a server prints a richer line
+            // of its own from ServerBuildStamp, and printing here too would give the same process
+            // two build lines that a reader has to reconcile. A client can only report on the
+            // assemblies it can see, which is the Shared one — the Server assembly is not
+            // referenced from here and is not what a client's own staleness would live in.
+            Debug.Log($"[net] build {BuildStamp.Describe()} (client, shared assembly)");
+
             ResolveConfiguration();
 
             // Not claimed on a machine already running the server. A loopback test puts both in
@@ -127,12 +187,26 @@ namespace Ironfront.Net.Unity.Client
 
             Current = this;
 
+            // RuntimeInitializeOnLoadMethod ordering is only guaranteed between load TYPES,
+            // not between methods that both use BeforeSceneLoad.  NetClientBindings.ResetOnLoad
+            // clears the delegate at SubsystemRegistration, and player builds have demonstrated
+            // that the attributed installer is not a sufficient lifetime guarantee: snapshots
+            // carried team 1 while the local body remained at UNKNOWN_TEAM for the whole match.
+            // Re-install after Current is published, at the one production point that owns the
+            // client lifetime.  This is idempotent and deliberately happens before any presenter
+            // or dynamically-added combat driver can ask which side the player is on.
+            NetClientPresenterGuard.InstallGateResolvers();
+
             // The server marks exactly one spawn as local for this connection. Keep that
             // identity at the bootstrap so interpolation can skip it and prediction can
             // reconcile the actor the player actually owns.
             Router.OnSpawnActor += OnSpawnActor;
+            Router.OnSnapshotApplied += OnSnapshotApplied;
 
             EnsureVehicleStage();
+            EnsureSeatRequester();
+            EnsureLocalCombatDriver();
+            EnsureChatSender();
 
             if (_connectOnStart) Connect();
         }
@@ -140,6 +214,7 @@ namespace Ironfront.Net.Unity.Client
         private void OnDestroy()
         {
             Router.OnSpawnActor -= OnSpawnActor;
+            Router.OnSnapshotApplied -= OnSnapshotApplied;
             if (ReferenceEquals(Current, this)) Current = null;
             Disconnect();
         }
@@ -150,10 +225,22 @@ namespace Ironfront.Net.Unity.Client
             if (_transport != null) return;
             if (Config == null) ResolveConfiguration();   // Connect() is public and may precede Awake.
 
+            // An offer from the shell scene, which dialled this server with the master's signed
+            // ticket before loading the map. Checked AFTER ExternalTransport so a test or a
+            // loopback rig that assigned one explicitly still wins.
+            bool adopted = false;
+            ConnectResult adoptedResult = default;
+
             if (ExternalTransport != null)
             {
                 _transport = ExternalTransport;
                 _ownsTransport = false;
+            }
+            else if (MatchTransportHandoff.TryTake(out ITransportClient handed, out adoptedResult))
+            {
+                _transport = handed;
+                _ownsTransport = false;
+                adopted = true;
             }
             else
             {
@@ -165,18 +252,113 @@ namespace Ironfront.Net.Unity.Client
             _transport.OnConnected += OnConnected;
             _transport.OnDisconnected += OnDisconnected;
 
-            // A placeholder ticket, not a fabricated one: 64 zero bytes carry no more authority
-            // than nothing at all, and a server with validation on rejects them on the HMAC like
-            // any other unsigned ticket. That decision still belongs on the server.
-            //
-            // It cannot be ReadOnlySpan<byte>.Empty, which is what this line used to pass.
+            if (!adopted)
+            {
+                _transport.Connect(Config.Host, Config.Port, BuildJoinTicket());
+                return;
+            }
+
+            // Already connected, and the accept happened before this component existed. Replaying
+            // the callback by hand is what settles ConnectionId, NetContext.CurrentTick and the
+            // prediction clock's seed -- dialling again would be a second JOIN against a server
+            // that has already seated this player, and the server answers that with
+            // AlreadyConnected.
+            OnConnected(adoptedResult);
+        }
+
+        /// <summary>
+        /// Builds the ticket this client presents: signed when a shared secret is reachable,
+        /// the 64-byte placeholder when one is not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is not the production join path.</b> A player who came through the master
+        /// server arrives holding a ticket the master signed, carried in <c>PendingJoin</c>, and
+        /// <c>MasterSession</c> dials with that one. This method covers the case with no master
+        /// in it at all — an Editor session against its own server, a scripted two- or
+        /// three-client run, a QA build pointed at a staging server whose secret the operator
+        /// already has.
+        /// </para>
+        /// <para>
+        /// <b>Why it had to exist.</b> This line used to hand over
+        /// <c>PendingJoin.CreateUnsignedTicket()</c> unconditionally — 64 zero bytes — on the
+        /// argument that admitting them was the server's decision to make. It is, and the server
+        /// decides no: <c>JoinTicket.Verify</c> returns <c>BadSignature</c> from exactly one
+        /// branch, the HMAC compare, so a zero ticket can produce nothing else once a secret is
+        /// configured. The consequence was that a Unity client could never join a server with a
+        /// secret set, and the log blamed a signature rather than the absence of one. Issue #151.
+        /// </para>
+        /// <para>
+        /// <b>The unsigned path is kept, not replaced.</b> With no secret reachable there is
+        /// nothing to sign with, and a development server running
+        /// <c>IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS=1</c> admits the placeholder. Minting
+        /// only when a secret is present is what keeps every existing no-secret flow behaving
+        /// exactly as it did.
+        /// </para>
+        /// <para>
+        /// <b><see cref="GameClientConfig.PlayerId"/> must differ per client.</b> The server
+        /// enforces one session per player once a secret is configured, so several instances on
+        /// the default have every join after the first rejected — and the rejection is reported
+        /// as a bare <c>InvalidTicket</c>, which reads as a full server. The same argument is
+        /// already written down one project over, in <c>JoinTicketSource.Mint</c>.
+        /// </para>
+        /// </remarks>
+        private byte[] BuildJoinTicket()
+        {
+            string secret = Environment.GetEnvironmentVariable(EnvRegistry.SharedSecret.Name);
+
+            // Not a fabricated ticket: 64 zero bytes carry no more authority than nothing at all.
+            // It cannot be ReadOnlySpan<byte>.Empty, which is what this used to pass.
             // Connection.BeginConnect rejects any ticket that is not exactly JOIN_TICKET_SIZE
             // bytes and throws before a packet is sent, so an empty one never reached the
-            // _acceptUnsignedTickets switch it was written to defer to -- it threw
-            // ArgumentException out of Awake instead. The loopback path has no such check, which
-            // is why this survived: every test that exercised this method used a loopback
-            // transport, and the UDP path had never been dialled.
-            _transport.Connect(Config.Host, Config.Port, PendingJoin.CreateUnsignedTicket());
+            // accept-unsigned switch it was written to defer to -- it threw ArgumentException out
+            // of Awake instead. The loopback path has no such check, which is why that survived:
+            // every test that exercised this method used a loopback transport.
+            if (string.IsNullOrEmpty(secret)) return PendingJoin.CreateUnsignedTicket();
+
+            // Checked before Issue, because Issue answers a bad team with the same -1 it uses
+            // for a short buffer and an empty secret -- and the throw below would then blame a
+            // byte count for what is a one-character typo in an environment variable.
+            if (Config.Team > JoinTicket.MaxTeam)
+            {
+                throw new InvalidOperationException(
+                    $"[net] {EnvRegistry.ClientTeam.Name}={Config.Team} is not a team. Legal "
+                    + "values are 0 and 1; TeamId.None is not one a joining player can hold.");
+            }
+
+            var ticket = new byte[ProtocolConstants.JOIN_TICKET_SIZE];
+
+            int written = JoinTicket.Issue(
+                ticket,
+                playerId: Config.PlayerId,
+                // serverId 0 means "signature and expiry only", which is the correct standalone
+                // behaviour and matches what NetServerBootstrap's validator is constructed with.
+                serverId: 0,
+                roomId: 0,
+                expiresAtUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + JoinTicket.ValidityMs,
+                // Only ever reaches the wire on this standalone path. A real join carries the
+                // side the MASTER's lobby balanced, signed into the ticket it issued.
+                team: Config.Team,
+                displayName: Config.DisplayName,
+                sharedSecret: System.Text.Encoding.UTF8.GetBytes(secret));
+
+            if (written != ProtocolConstants.JOIN_TICKET_SIZE)
+            {
+                // Falling back to the placeholder here would turn a mint failure into the exact
+                // BadSignature this method exists to remove, one layer further from its cause.
+                throw new InvalidOperationException(
+                    $"[net] JoinTicket.Issue wrote {written} bytes, expected "
+                    + $"{ProtocolConstants.JOIN_TICKET_SIZE}. The client cannot present a ticket.");
+            }
+
+            if (Config.Verbose)
+            {
+                Debug.Log(
+                    $"[net] join ticket signed for player {Config.PlayerId} "
+                    + $"as '{Config.DisplayName}' on team {Config.Team}");
+            }
+
+            return ticket;
         }
 
         /// <summary>
@@ -223,6 +405,57 @@ namespace Ironfront.Net.Unity.Client
 
             Router.Reset();
             Reconciler.Reset();
+
+            // The server resets its encoder on the same event. Keeping the old session's tick
+            // would make every early ack of the next connection look stale and be suppressed,
+            // and the symptom is full snapshots forever with nothing in any log.
+            BaselineAck.Reset();
+        }
+
+        /// <summary>
+        /// Acknowledges the tick just applied, so the next snapshot can be a delta.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The decoder's tick, not the event's.</b> <c>lastProcessedInputTick</c> is the
+        /// server's opinion of this client's INPUT clock and has nothing to do with which
+        /// snapshot state is held; acking with it would name a tick from an unrelated sequence.
+        /// <c>DeltaDecoder.AckTick</c> is the state actually decoded, and it reports 0 until a
+        /// snapshot has landed.
+        /// </para>
+        /// <para>
+        /// Vehicle snapshots deliberately do NOT trigger a second ack. One ack moves both
+        /// encoders on the server (<c>ServerMessageRouter</c> routes it into
+        /// <c>Encoder</c> and <c>VehicleEncoder</c> together) because both streams ride the same
+        /// channel-1 datagram at the same server tick.
+        /// </para>
+        /// </remarks>
+        private void OnSnapshotApplied(uint serverTick, uint lastProcessedInputTick)
+        {
+            // Apply identity-bearing state at the same boundary that made it authoritative.
+            // The old per-frame presenter poll proved too indirect in a real player build: the
+            // recorder could read snapshot team 1 for the whole match while Actor.team stayed
+            // UNKNOWN_TEAM.  Besides rendering both sides blue, that made a locally-spawned
+            // projectile calculate enemy team as 1 - (-1) = 2.  Do this before the ACK so every
+            // later presenter/gameplay update observes the body and snapshot in agreement.
+            ApplyLocalActorTeamFromSnapshot();
+
+            if (!BaselineAck.TryBuildAck(Router.Decoder.AckTick, out ReadOnlySpan<byte> payload))
+                return;
+
+            Send(BaselineAckPolicy.Channel, payload, reliable: true);
+        }
+
+        private void ApplyLocalActorTeamFromSnapshot()
+        {
+            if (LocalActorId == LocalActorIdentity.UnassignedActorId) return;
+            if (!Router.Decoder.Current.TryFind(LocalActorId, out ActorSnapshotEntry entry)) return;
+            if (entry.Team == TeamId.None) return;
+
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (!rig.Exists || rig.Team == entry.Team) return;
+
+            rig.SetTeam(entry.Team);
         }
 
         /// <summary>Sends one payload to the server.</summary>
@@ -233,7 +466,16 @@ namespace Ironfront.Net.Unity.Client
         }
 
         // Early in the frame, before the prediction and interpolation stages read what arrived.
-        private void Update() => _transport?.Poll();
+        //
+        // The render clock is brought to this frame first so that every snapshot polled below is
+        // measured against the render time of the frame it arrived in. The readers call AdvanceTo
+        // with the same time, which does nothing twice, so their order against this does not
+        // matter.
+        private void Update()
+        {
+            Router.Clock.AdvanceTo(Time.unscaledTimeAsDouble);
+            _transport?.Poll();
+        }
 
         private void OnMessage(ReadOnlyMemory<byte> payload)
         {
@@ -273,6 +515,87 @@ namespace Ironfront.Net.Unity.Client
             if (stage == null) stage = gameObject.AddComponent<ClientVehicleStage>();
 
             if (Config != null) stage.ApplyConfiguration(Config.PredictLocalVehicle);
+        }
+
+        /// <summary>
+        /// Makes sure the local player has a combat driver. debt-closure phase 2 task 2b.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Added in code for exactly <see cref="EnsureVehicleStage"/>'s reason, and with a
+        /// sharper version of its symptom: without a driver the local player dies, keeps input,
+        /// is shown nothing, and can never respawn — a fault that reads as the server refusing
+        /// respawns rather than as a missing component. It needs no serialized reference either;
+        /// it reads the actor id off this bootstrap and the respawn constant off the protocol.
+        /// </para>
+        /// <para>
+        /// This is also what makes the component WIRED rather than merely present. Phase 2 owns
+        /// no scenes or prefabs (those are Phase 1's), so authoring it onto the NetClient object
+        /// was not available — and a driver in no scene would have closed ledger C-2 on paper
+        /// while a dead player still stood there holding a live controller.
+        /// </para>
+        /// <para>
+        /// An authored instance wins, so Phase 1 or a later scene pass can place it explicitly
+        /// and this call becomes a no-op rather than a duplicate.
+        /// </para>
+        /// </remarks>
+        private void EnsureLocalCombatDriver()
+        {
+            if (GetComponent<NetClientLocalCombatDriver>() == null)
+                gameObject.AddComponent<NetClientLocalCombatDriver>();
+        }
+
+        /// <summary>
+        /// Makes sure this client can ask for a seat. verdict-closure R2, ledger X-30.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Added in code for <see cref="EnsureVehicleStage"/>'s reason, and it must run AFTER it:
+        /// <c>ClientSeatRequester</c> declares <c>[RequireComponent(typeof(RemoteVehicleRegistry))]</c>
+        /// and reads <c>ClientVehicleStage</c> for the seat it currently occupies, both of which
+        /// that call has just guaranteed.
+        /// </para>
+        /// <para>
+        /// <b>This is what makes the sender WIRED rather than merely present.</b>
+        /// <c>ClientWiringGate</c>'s G10 grades whether a <c>ClientMessageType</c> has a
+        /// production sender in the shipped client's sources — it reads files, so a component
+        /// that existed and was authored onto no scene would retire the X-30 exemption on paper
+        /// while every player still stood outside the vehicle. An <c>AddComponent</c> here has no
+        /// scene to be missing from.
+        /// </para>
+        /// <para>
+        /// An authored instance wins, so a later scene pass can place it explicitly and this
+        /// becomes a no-op rather than a duplicate.
+        /// </para>
+        /// </remarks>
+        private void EnsureSeatRequester()
+        {
+            if (GetComponent<ClientSeatRequester>() == null)
+                gameObject.AddComponent<ClientSeatRequester>();
+        }
+
+        /// <summary>
+        /// Makes sure this client can talk, and can hear. Phase P6 task 3.3, ledger X-8.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Added in code for <see cref="EnsureSeatRequester"/>'s reason, and it is what makes
+        /// BOTH halves wired rather than merely present. <c>ClientWiringGate</c> grades two
+        /// directions here at once: G10 wants a production sender for
+        /// <c>ClientMessageType.Chat</c>, and G1 wants a production subscriber for
+        /// <c>ClientMessageRouter.OnChat</c>. Both are satisfied by files, so a component
+        /// authored onto no scene would retire the X-8 exemption on paper while every player
+        /// still typed into nothing.
+        /// </para>
+        /// <para>
+        /// An authored instance wins, so a later scene pass can place it explicitly and this
+        /// becomes a no-op rather than a duplicate.
+        /// </para>
+        /// </remarks>
+        private void EnsureChatSender()
+        {
+            if (GetComponent<ClientChatSender>() == null)
+                gameObject.AddComponent<ClientChatSender>();
         }
 
         private void OnSpawnActor(SpawnActorMessage message)

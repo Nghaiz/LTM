@@ -1,7 +1,7 @@
 using Ironfront.Net.Unity;
 using UnityEngine;
 
-public class GrenadeProjectile : Projectile
+public partial class GrenadeProjectile : Projectile
 {
 	private const int LAYER_MASK = 4097;
 
@@ -117,17 +117,28 @@ public class GrenadeProjectile : Projectile
 		// draw immediately and its confirmation is swallowed, which is V10-D13's existing
 		// prediction and the reason ExplosionSuppressor exists.
 		bool drawsOwnBlast = !NetContext.IsClient
-			|| Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(source);
+			|| Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(source);
 
 		if (drawsOwnBlast)
 		{
 			// V1 task 3. See ExplodingProjectile.Explode for why the two extra arguments exist.
 			// ActorManager.Explode applies no damage on a client -- that guard is V1's, and it
 			// is what makes this call safe to reach from the local prediction path.
-			if (ActorManager.Explode(
+			// debt-closure phase 2 task 2e. See ExplodingProjectile.Explode for why this asks
+			// LibraryOwnsProjectileDamage rather than !EngineAppliesProjectileDamage -- the same
+			// call carries the corpse impulse and the local player's predicted blast (V10 D13),
+			// neither of which the cutover removes (ledger C-1).
+			// `source != null` before `source.aiControlled`: a cosmetic grenade spawned by
+			// NetClientProjectilePresenter carries no shooter (V7-D3), and this conjunct is the
+			// only read of the field that is not already null-safe -- ActorManager.Explode takes
+			// the same possibly-null reference and handles it. The hitmarker is the thing being
+			// gated, and a shot nobody local fired has nobody local to mark for. Ordering it
+			// after Explode keeps the blast, which is the half a client is here to draw.
+			if (!Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
+				&& ActorManager.Explode(
 					base.transform.position, explosionConfiguration, source,
 					Ironfront.Net.Protocol.ExplosionKind.Grenade)
-				&& !source.aiControlled && NetContext.IsOffline)
+				&& source != null && !source.aiControlled && NetContext.IsOffline)
 			{
 				// V7 task 3: the hitmarker is server-driven on a network, arriving as
 				// S_HIT_CONFIRM to the thrower alone.
@@ -143,12 +154,30 @@ public class GrenadeProjectile : Projectile
 			renderer.enabled = false;
 		}
 
-		if (!drawsOwnBlast || !ProjectileCleanupPolicy.PlaysCosmetics)
+		// The report is not a blast visual, and it must not ride the visual gate. A grenade this
+		// client did not throw carries no `source`, so drawsOwnBlast is false and the blast is
+		// drawn instead by NetClientExplosionPresenter from S_EXPLOSION -- which knows the
+		// authoritative centre but has no audio of its own. Gating the sound with the blast left
+		// every client deaf to every grenade it did not throw itself. Played here, on the cosmetic
+		// instance, it is positional and lands with the blast.
+		bool playsCosmetics = ProjectileCleanupPolicy.PlaysCosmetics;
+		if (playsCosmetics)
 		{
-			// Nothing of this grenade is going to be looked at: either the server is running it
-			// or the authoritative blast is being drawn elsewhere. Go now rather than in ten
-			// seconds -- V7 task 8.
-			Invoke(nameof(Cleanup), 0f);
+			AudioSource report = GetComponent<AudioSource>();
+			if (report != null)
+			{
+				report.pitch = CosmeticRandom.Range(0.9f, 1.1f);
+				report.Play();
+			}
+		}
+
+		if (!drawsOwnBlast || !playsCosmetics)
+		{
+			// Nothing of this grenade is going to be LOOKED at: either the server is running it or
+			// the authoritative blast is being drawn elsewhere. What is left is the report, so the
+			// hold is the authored one rather than zero -- Invoke(Cleanup, 0f) destroys the object
+			// on the next frame and would cut the sound off before it is heard. V7 task 8.
+			Invoke(nameof(Cleanup), playsCosmetics ? ProjectileCleanupPolicy.HoldSeconds(CLEANUP_TIME) : 0f);
 			return;
 		}
 
@@ -171,12 +200,6 @@ public class GrenadeProjectile : Projectile
 		if (burst != null)
 		{
 			burst.Play(true);
-		}
-		AudioSource component = GetComponent<AudioSource>();
-		if (component != null)
-		{
-			component.pitch = CosmeticRandom.Range(0.9f, 1.1f);
-			component.Play();
 		}
 		Invoke(nameof(Cleanup), ProjectileCleanupPolicy.HoldSeconds(CLEANUP_TIME));
 	}

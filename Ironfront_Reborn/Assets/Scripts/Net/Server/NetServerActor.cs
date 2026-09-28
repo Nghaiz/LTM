@@ -1,7 +1,8 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
+using System;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server
@@ -41,6 +42,10 @@ namespace Ironfront.Net.Unity.Server
         [Tooltip("Fallback for an actor with no Actor component. A real actor reports the "
                + "network id of whatever it is currently holding.")]
         [SerializeField] private byte _weaponId;
+
+        // Not serialized: this is per-life runtime state, and an authored value would mean a
+        // freshly spawned body arrives already believing it requested a slot.
+        private int _lastRequestedWeaponSlot = -1;
 
         [SerializeField] private byte _ammoInClip;
 
@@ -134,11 +139,217 @@ namespace Ironfront.Net.Unity.Server
             set => _weaponId = value;
         }
 
+        /// <summary>
+        /// Applies one frame's weapon selection, edged. <paramref name="slot"/> is 0..4, or
+        /// negative for "this frame selects nothing".
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The edge lives here because the intent is a HELD bit and the action is not.</b>
+        /// <c>InputButtons.SwitchWeapon0..4</c> ride <c>C_INPUT</c>, which repeats each frame
+        /// seven times for redundancy, so a slot holding a <c>ToggleableItem</c> would flip in
+        /// and out at tick rate if every arrival called through. Storing the last requested slot
+        /// on the actor also means it dies with the actor -- no per-connection table to leak.
+        /// </para>
+        /// <para>
+        /// <b>Releasing resets it</b>, so pressing the same slot twice in a row works: a frame
+        /// with no switch bit set writes -1 and re-arms the next press.
+        /// </para>
+        /// <para>
+        /// Returns whether the seam was actually called. A false does NOT mean the switch was
+        /// refused -- <c>Actor.SwitchWeapon</c> makes that decision on the far side and says
+        /// nothing back.
+        /// </para>
+        /// </remarks>
+        /// <summary>
+        /// Arms the body from its loadout. Returns false when there is no gameplay actor behind
+        /// this replicated object -- a prop, or a bare test rig.
+        /// </summary>
+        /// <summary>
+        /// Ensures this body has a <see cref="NetMovementAgent"/>, adding one if the prefab does
+        /// not carry it. Returns the agent.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Ledger row X-15.</b> <c>Movement</c> is resolved once in <c>Awake</c>, and the AI
+        /// character prefab a claimed player body is built from does not carry the component --
+        /// it is authored on <c>Prefab/Player Fps Actor.prefab</c> and nowhere else. So
+        /// <c>Movement</c> was null for every networked player, <c>ServerPlayer.Tick</c> took its
+        /// DETACHED branch, and the session's <c>MoveState</c> integrated gravity with no
+        /// collision -- free-falling forever while the transform stood still at the spawn.
+        /// Measured: shot origins at <c>y = -353</c> descending to <c>-448</c> with the nearest
+        /// target 649 → 704 m away, against a snapshot that reported the same actor at
+        /// <c>y = 8.59</c>.
+        /// </para>
+        /// <para>
+        /// <b>Called explicitly rather than resolved lazily.</b> A lazy <c>Movement</c> would
+        /// <c>GetComponent</c> on every read for every prop that legitimately has no agent, in
+        /// the tick loop. An explicit call from the one place that builds a player body costs
+        /// nothing and says who is responsible.
+        /// </para>
+        /// <para>
+        /// <b>Not called for bots.</b> They are driven by <c>AiActorController</c> through the
+        /// game's own movement, and giving them a server-authoritative agent would be a second
+        /// driver on one body.
+        /// </para>
+        /// </remarks>
+        public NetMovementAgent AttachMovementAgent()
+        {
+            if (Movement != null) return Movement;
+
+            Movement = GetComponent<NetMovementAgent>();
+            if (Movement == null) Movement = gameObject.AddComponent<NetMovementAgent>();
+
+            return Movement;
+        }
+        public bool EquipLoadout()
+        {
+            IGameplayActorSource source = Source;
+            if (source == null) return false;
+
+            source.EquipLoadout();
+            return true;
+        }
+
+        /// <summary>
+        /// Pulls the trigger on the weapon this body is holding. Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// Called by <c>ServerCombatBridge</c> only for a <c>WeaponDelivery.Projectile</c> weapon
+        /// whose trigger pull the server has ALREADY accepted. A hitscan weapon never reaches
+        /// here: its shot is resolved in the engine-free authority, which is decision D2 and the
+        /// reason every combat rule is graded by <c>dotnet test</c> rather than by two people
+        /// playing at once.
+        /// </remarks>
+        /// <returns>False when nothing is bound, or the body is holding nothing.</returns>
+        public bool FireCarriedWeapon(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            IGameplayActorSource source = Source;
+            if (source == null) return false;
+
+            return source.FireCarriedWeapon(
+                originX, originY, originZ, directionX, directionY, directionZ);
+        }
+
+        /// <summary>Releases an authority-approved delayed throwable.</summary>
+        public bool ReleaseCarriedThrowable(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.ReleaseCarriedThrowable(
+                originX, originY, originZ, directionX, directionY, directionZ);
+        }
+
+        /// <summary>Hands the carried weapon one accepted frame's aim. See the seam.</summary>
+        public void SteerCarriedWeapon(
+            float eyeX, float eyeY, float eyeZ,
+            float forwardX, float forwardY, float forwardZ,
+            bool aimHeld)
+        {
+            Source?.SteerCarriedWeapon(eyeX, eyeY, eyeZ, forwardX, forwardY, forwardZ, aimHeld);
+        }
+
+        /// <summary>
+        /// Whether the carried weapon kept this pulled trigger for itself. See the seam.
+        /// </summary>
+        public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.TryWithholdCarriedTrigger(forwardX, forwardY, forwardZ);
+        }
+
+        /// <summary>Writes the authority's weapon state into the engine weapon. See the seam.</summary>
+        public void MirrorAuthorityWeaponState(
+            int ammoInClip, bool unholstered, float elapsedSinceLastShot)
+        {
+            IGameplayActorSource source = Source;
+            if (source == null) return;
+
+            source.MirrorAuthorityWeaponState(ammoInClip, unholstered, elapsedSinceLastShot);
+        }
+
+        /// <summary>Re-announces the mounted weapon this body is manning. See the seam.</summary>
+        public bool DeclareMountedWeapon()
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.DeclareMountedWeapon();
+        }
+
+        /// <summary>Fires the mounted weapon this body is manning. See the seam.</summary>
+        public bool FireMountedWeapon()
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.FireMountedWeapon();
+        }
+        public bool ApplyWeaponSwitchIntent(int slot)
+        {
+            if (slot == _lastRequestedWeaponSlot) return false;
+
+            _lastRequestedWeaponSlot = slot;
+
+            if (slot < 0) return false;
+
+            IGameplayActorSource source = Source;
+            if (source == null)
+            {
+                LogSwitchIntent(slot, "no gameplay source");
+                return false;
+            }
+
+            source.SwitchWeapon(slot);
+            LogSwitchIntent(slot, "forwarded");
+            return true;
+        }
+
+        // Ledger X-31. The grenade never gets held, and every link of the chain reads correct in
+        // source: the programme asks for slot 2, InputButtonPacker sets SwitchWeapon2,
+        // InputFrame.WeaponSlot decodes 2, the slots are armed (`slot2[FRAG toggleable=False]`),
+        // and Actor.SwitchWeapon's guards all pass for a live body holding a non-toggleable
+        // weapon. Reading further is out of road -- what is missing is whether this edge is
+        // reached at all, and with what.
+        //
+        // Off unless asked for, matching IRONFRONT_LOG_SHOTS; observation only, per the
+        // phase-3d section 6 decision that permits gated diagnostic logging.
+        private static bool? _switchLogging;
+
+        private void LogSwitchIntent(int slot, string outcome)
+        {
+            _switchLogging ??= Environment.GetEnvironmentVariable("IRONFRONT_LOG_LOADOUT") == "1";
+            if (_switchLogging != true) return;
+
+            Debug.Log($"[switch] actor={ActorId} slot={slot} outcome={outcome} weaponId={WeaponId}");
+        }
+
         public byte AmmoInClip
         {
             get => _ammoInClip;
             set => _ammoInClip = value;
         }
+
+        /// <summary>
+        /// The reserve this actor's carried weapon reports, already encoded. Protocol 10.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Encoded rather than a count, because the two sentinels do not survive a count.</b>
+        /// <c>SpareAmmo</c> is the only codec for this field - a weapon with no reserve at all
+        /// and one that has spent its reserve are different facts that both look like zero, and
+        /// infinite is a third. Storing a plain number here would put the "which -1 is this?"
+        /// question back on this side of the seam.
+        /// </para>
+        /// <para>
+        /// <b>Defaults to no-resupply, not to zero.</b> A bot or a prop that nobody publishes a
+        /// weapon story for should report "this never refills" rather than "empty pouch", which
+        /// is the reading a player would act on.
+        /// </para>
+        /// </remarks>
+        public ushort SpareAmmoEncoded { get; set; } = SpareAmmo.NoResupplyEncoded;
+
+        /// <summary>Whether a server-accepted reload is running. Protocol 10.</summary>
+        public WeaponStateFlags WeaponStateFlags { get; set; } = Ironfront.Net.Protocol.WeaponStateFlags.None;
 
         /// <summary>
         /// Staggers the underlying gameplay actor. A no-op for a replicated object that has none
@@ -263,6 +474,7 @@ namespace Ironfront.Net.Unity.Server
             // One allocation per actor, at Awake, replacing a GetComponent<Actor>() that the
             // adapter now performs on the other side of the seam. Nothing here runs per tick.
             BindGameplaySource(NetServerBindings.ResolveActorSource(gameObject));
+            BindAiDriver(NetServerBindings.ResolveAiDriver(gameObject));
         }
 
         /// <summary>
@@ -278,18 +490,253 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         internal void BindGameplaySource(IGameplayActorSource source) => _actorSource = source;
 
+        /// <summary>
+        /// Attaches the bot brain this body is steered by while nobody has claimed it.
+        /// </summary>
+        /// <remarks>
+        /// Factored out of <c>Awake</c> for the reason <see cref="BindGameplaySource"/> is:
+        /// Unity does not run <c>Awake</c> on <c>AddComponent</c> outside play mode, so an
+        /// EditMode test that only added the component would exercise the no-driver branch and
+        /// pass while asserting nothing.
+        /// </remarks>
+        internal void BindAiDriver(IAiDriver driver) => _aiDriver = driver;
+
+        private IAiDriver _aiDriver;
+
         private void OnEnable() => ServerActorRegistry.Instance.Register(this);
 
         private void OnDisable() => ServerActorRegistry.Instance.Unregister(this);
 
+        /// <summary>
+        /// The colliders this body had disabled when it died, so a respawn re-enables exactly
+        /// those and not a collider something else had switched off for its own reasons.
+        /// </summary>
+        /// <remarks>
+        /// A list reused across lives rather than a fresh array per death: a body dies a few
+        /// times a minute and the rig does not change between them.
+        /// </remarks>
+        private readonly System.Collections.Generic.List<Collider> _disabledOnDeath =
+            new System.Collections.Generic.List<Collider>();
+
+        /// <summary>
+        /// <see cref="IsAlive"/> as of the previous observation, so the death and respawn edges
+        /// can be detected rather than assumed.
+        /// </summary>
+        /// <remarks>
+        /// <b>An edge and not the setter, because the setter is not the only writer.</b>
+        /// <see cref="IsAlive"/> passes through to <c>Actor.dead</c>, and the ordinary way an
+        /// actor dies is <c>Actor.Damage</c> writing that flag directly — so a corpse cleanup
+        /// hung off this component's setter would never run for a real death, only for the
+        /// server-initiated ones. Observing the flag once per snapshot tick catches every
+        /// writer, including ones this assembly cannot see.
+        /// </remarks>
+        private bool _wasAliveLastObservation = true;
+
+        /// <summary>Whether this body's pad-blocking colliders are currently switched off.</summary>
+        public bool CorpseCollidersDisabled { get; private set; }
+
+        /// <summary>
+        /// Runs the death and respawn edges of protocol-10 handoff § 7: colliders out of the
+        /// way on the way down, back on the way up.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Idempotent, and that is the whole requirement.</b> It compares against the previous
+        /// observation, so being called every tick of a five-minute death does the collider work
+        /// once — and being called twice on the tick of the death does it once too.
+        /// </para>
+        /// <para>
+        /// <b>Internal and driven from <see cref="Capture"/></b>, which already runs once per
+        /// snapshot tick per REGISTERED actor and already reads <see cref="IsAlive"/>. A second
+        /// per-actor sweep somewhere else would be a second place to remember.
+        /// </para>
+        /// <para>
+        /// <b>What this rests on is <c>ServerActorRegistry.CaptureInto</c> being unfiltered, and
+        /// it used to claim something weaker and wrong.</b> The argument here read "an actor that
+        /// is not captured is not replicated — so there is no body this misses that anybody can
+        /// see", which is about VISIBILITY. A pad block is PHYSICS: an invisible corpse stops an
+        /// <c>OverlapSphere</c> exactly as well as a visible one, so "nobody can see it" would
+        /// not have made a missed body harmless. The claim that does hold is narrower and
+        /// checkable — <c>CaptureInto</c> walks every registered, active actor with no interest
+        /// or LOD test, and <c>ServerTickLoop.BuildAndSendSnapshots</c> calls it BEFORE any
+        /// per-viewer view is built and without consulting the player count, so a bot outside
+        /// everyone's interest radius, a bot the LOD gate is skipping, and a bot on a server
+        /// with no humans connected at all are captured identically.
+        /// </para>
+        /// <para>
+        /// That invariant is load-bearing rather than incidental, so it is pinned by
+        /// <c>PadBlockerDiagnosticTests</c>: adding an interest filter to that loop for snapshot
+        /// bandwidth would silently stop corpse cleanup for culled bodies, and the only symptom
+        /// would be a vehicle pad that quietly stopped working.
+        /// </para>
+        /// </remarks>
+        /// <summary>Per-submersion drowning state for this actor. X-90.</summary>
+        private readonly DrowningClock _drowning = new DrowningClock();
+
+        /// <summary>
+        /// <c>Time.time</c> at the previous drowning observation; negative before the first.
+        /// </summary>
+        private float _lastDrowningObservationAt = -1f;
+
+        /// <summary>
+        /// Drowns an actor whose head has been under water past the limit. X-90.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Driven from <see cref="Capture"/> for the reason <see cref="ObserveLifeEdge"/>
+        /// is</b>: that method already runs once per snapshot tick per REGISTERED actor, with no
+        /// interest or LOD filter, so a bot nobody can see drowns exactly as a watched player
+        /// does. A second per-actor sweep elsewhere would be a second place to remember.
+        /// </para>
+        /// <para>
+        /// <b>Elapsed time is measured, not assumed.</b> <c>Capture</c> carries no delta and is
+        /// driven from the netcode's own accumulator rather than the frame loop, so reading
+        /// <c>Time.deltaTime</c> here would be correct only by coincidence -- the mistake
+        /// <c>VehicleBurnClock</c>'s remark already records for the burn countdown. Measuring
+        /// <c>Time.time</c> between observations is right at any calling rate.
+        /// </para>
+        /// <para>
+        /// <b>A dead actor resets rather than accumulates.</b> Otherwise a corpse settling under
+        /// water would arm the clock, and the respawn that follows would arrive already drowning.
+        /// </para>
+        /// <para>
+        /// <b>The attacker is null on purpose.</b> <c>ServerCombatEvents.ReportDeath</c> reserves
+        /// null for a real environmental death, which is what this is: the killfeed says the
+        /// world, and <c>MatchScoreTally</c> credits nobody.
+        /// </para>
+        /// </remarks>
+        internal void ObserveDrowning()
+        {
+            if (!NetContext.IsServer) return;
+
+            float now = Time.time;
+            float elapsed = _lastDrowningObservationAt < 0f ? 0f : now - _lastDrowningObservationAt;
+            _lastDrowningObservationAt = now;
+
+            IGameplayActorSource source = Source;
+            if (source == null || !source.Exists) return;
+
+            if (!IsAlive)
+            {
+                _drowning.Reset();
+                return;
+            }
+
+            if (!_drowning.Tick(source.IsSubmerged, elapsed)) return;
+
+            Debug.Log($"[net] actor {_actorId} ({(IsClaimed ? "player" : "bot")}) drowned after "
+                      + $"{_drowning.Limit:0.#}s under water: {source.DescribeSubmersion()}");
+
+            // The body dies HERE, the way every other server kill does it (ServerActorDamageSink,
+            // ServerPlayer.KillForFallingOutOfTheWorld): reporting a death is not dying. Until
+            // 2026-09-27 this only reported, so a drowned body stayed alive -- it kept sinking,
+            // TryRespawn refused every deploy the dead player sent because the body was "alive",
+            // and the player only came back when the wire floor killed it ~95 s later.
+            Health = 0f;
+            IsAlive = false;
+
+            ServerCombatEvents.ReportDeath(this, Vector3.zero, attacker: null, CauseOfDeath.Drown);
+        }
+
+        internal void ObserveLifeEdge()
+        {
+            bool alive = IsAlive;
+            if (alive == _wasAliveLastObservation) return;
+
+            _wasAliveLastObservation = alive;
+
+            if (alive) RestoreCorpseColliders();
+            else DisableCorpseColliders();
+        }
+
+        /// <summary>
+        /// Switches off every collider on a layer a vehicle pad refuses to spawn into.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Filtered by layer rather than by name or by component type.</b> Island's report
+        /// names one offender, <c>Bone_002</c>, and naming bones would fix that map and no other;
+        /// what actually decides the outcome is the layer, because that is what
+        /// <c>VehicleSpawner</c>'s <c>OverlapSphere</c> mask tests. See
+        /// <see cref="CorpseColliderLedger.SpawnBlockMask"/> for why the mask is restated in the
+        /// library rather than read from the spawner.
+        /// </para>
+        /// <para>
+        /// <b>A collider already disabled is not recorded</b>, so the respawn does not enable
+        /// something that was off before the death — a ragdoll rig whose colliders are switched
+        /// on only while it is limp is exactly that case, and re-enabling its bones on a living
+        /// body would put a second set of hitboxes inside the player.
+        /// </para>
+        /// <para>
+        /// The lookup includes inactive children: a ragdoll rig is commonly parked deactivated,
+        /// and <c>OverlapSphere</c> ignores those anyway — but a rig activated BY the death, one
+        /// frame before this runs, is found either way.
+        /// </para>
+        /// </remarks>
+        private void DisableCorpseColliders()
+        {
+            _disabledOnDeath.Clear();
+
+            Collider[] colliders = GetComponentsInChildren<Collider>(includeInactive: true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Collider collider = colliders[i];
+                if (collider == null) continue;
+                if (!collider.enabled) continue;
+                if (!CorpseColliderLedger.BlocksVehicleSpawn(collider.gameObject.layer)) continue;
+
+                collider.enabled = false;
+                _disabledOnDeath.Add(collider);
+            }
+
+            CorpseCollidersDisabled = true;
+            ServerTickLoop.Current?.Corpses.NoteCollidersDisabled(ActorId);
+        }
+
+        /// <summary>Puts back exactly what <see cref="DisableCorpseColliders"/> took away.</summary>
+        private void RestoreCorpseColliders()
+        {
+            for (int i = 0; i < _disabledOnDeath.Count; i++)
+            {
+                Collider collider = _disabledOnDeath[i];
+                // Destroyed between the death and the respawn -- a ragdoll rig torn down and
+                // rebuilt is the ordinary case, not an error.
+                if (collider == null) continue;
+                collider.enabled = true;
+            }
+
+            _disabledOnDeath.Clear();
+            CorpseCollidersDisabled = false;
+            ServerTickLoop.Current?.NoteRespawned(ActorId);
+        }
+
         /// <summary>Quantizes this actor's current state into a snapshot entry.</summary>
         public ActorSnapshotEntry Capture()
         {
+            // The life edge is read here because this method already runs once per snapshot tick
+            // per REGISTERED actor -- not per replicated one -- and already reads IsAlive.
+            // See ObserveLifeEdge for why that distinction is the whole guarantee.
+            ObserveLifeEdge();
+            ObserveDrowning();
+
             Vec3 position = Movement != null
                 ? Movement.State.Position
                 : MovementSimulation.ToCore(transform.position);
 
-            Vec3 velocity = Movement != null ? Movement.State.Velocity : Vec3.Zero;
+            Vec3 velocity;
+            if (Movement != null)
+            {
+                velocity = Movement.State.Velocity;
+            }
+            else if (Source != null)
+            {
+                Source.GetVelocity(out float vx, out float vy, out float vz);
+                velocity = new Vec3(vx, vy, vz);
+            }
+            else
+            {
+                velocity = Vec3.Zero;
+            }
 
             // Through the properties, not the backing fields: both are pass-throughs to the
             // gameplay actor now, and reading _weaponId here is how the weapon id stayed 0 in
@@ -324,7 +771,9 @@ namespace Ironfront.Net.Unity.Server
                 _ammoInClip,
                 _team,
                 vehicleId,
-                seatIndex);
+                seatIndex,
+                SpareAmmoEncoded,
+                WeaponStateFlags);
         }
 
         /// <summary>Packs the gameplay booleans the snapshot carries as one byte.</summary>
@@ -333,17 +782,50 @@ namespace Ironfront.Net.Unity.Server
             ActorStateFlags flags = ActorStateFlags.None;
 
             if (IsAlive) flags |= ActorStateFlags.IsAlive;
+
+            // The producer the bit never had. IsRagdoll was declared, decoded, unit-tested and
+            // set by NOBODY, so it was false in every snapshot ever sent -- and
+            // RemoteActorView.ApplyRagdoll is edge-triggered on it, which made its
+            // RestoreFromRagdoll() teardown unreachable code. A respawned actor kept the limp rig
+            // the client had already switched on through a different door, so bodies stood up
+            // alive and stayed lying down.
+            //
+            // Death is the trigger because it is the only one available and the only one meant:
+            // IGameplayActorSource exposes IsDead and no separate ragdoll signal, the enum's own
+            // remark says "Dead; the client enables its own ragdoll", and ActorStateFlags is 8/8
+            // full so a dedicated bit could not be added without widening the wire.
+            //
+            // Pinned by NetServerActorRagdollFlagTests, which was RED before this line. Its two
+            // assertions are load-bearing in opposite directions: forcing the bit unconditionally
+            // does not make them both pass, it flips which one fails.
+            else flags |= ActorStateFlags.IsRagdoll;
+
             if (IsAiming) flags |= ActorStateFlags.IsAiming;
 
+            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                    _actorId, out _, out _))
+                flags |= ActorStateFlags.IsSeated;
+
+            Vec3 velocity = Vec3.Zero;
             if (Movement != null)
             {
-                if (Movement.State.IsCrouching) flags |= ActorStateFlags.IsCrouching;
+                velocity = Movement.State.Velocity;
+            }
+            else if (Source != null)
+            {
+                Source.GetVelocity(out float vx, out float vy, out float vz);
+                velocity = new Vec3(vx, vy, vz);
+            }
+
+            if (Movement != null || Source != null)
+            {
+                if (Movement != null && Movement.State.IsCrouching)
+                    flags |= ActorStateFlags.IsCrouching;
 
                 // Sprinting is derived rather than stored: the simulation has no sprint flag on
                 // its state, only a speed, and reporting "moving faster than a walk" is what the
                 // client actually animates from.
-                float horizontal = Movement.State.Velocity.X * Movement.State.Velocity.X
-                                 + Movement.State.Velocity.Z * Movement.State.Velocity.Z;
+                float horizontal = velocity.X * velocity.X + velocity.Z * velocity.Z;
 
                 float walk = MovementSimulation.WalkSpeed;
                 if (horizontal > walk * walk * 1.05f) flags |= ActorStateFlags.IsSprinting;
@@ -370,15 +852,129 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public HitboxSet CaptureHitboxes()
         {
-            Vec3 feet = Movement != null
-                ? Movement.State.Position
-                : MovementSimulation.ToCore(transform.position);
+            Vec3 feet;
+            if (Movement != null)
+            {
+                MoveState state = Movement.State;
+                float halfCapsule = MovementCore.HeightFor(state.IsCrouching) * 0.5f;
+                feet = new Vec3(
+                    state.Position.X,
+                    state.Position.Y - halfCapsule,
+                    state.Position.Z);
+            }
+            else
+            {
+                // The original AI actor uses a feet/root pivot (Actor.SpawnAt writes the ground
+                // position directly), unlike the network player CharacterController above.
+                feet = MovementSimulation.ToCore(transform.position);
+            }
 
             return HitboxSet.Humanoid(in feet);
         }
 
-        internal void Claim() => IsClaimed = true;
+        /// <summary>
+        /// Opens this body to joining connections. Phase-3A; used by
+        /// <see cref="ServerPlayerSlotPool"/> on the bodies it creates.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A method rather than a setter on <see cref="AvailableForPlayers"/>, and internal
+        /// rather than public, because there is exactly one legitimate caller. The flag is
+        /// otherwise authored on the prefab, and a public setter is an invitation for gameplay
+        /// code to open a slot mid-match on a body that is already being driven by something
+        /// else — which is the state <c>NetVerificationHarness.OpenSecondSlot</c> produced by
+        /// reflecting the private field, and the reason that method is gone.
+        /// </para>
+        /// <para>
+        /// There is deliberately no matching "close". A body whose claim was released goes back
+        /// to the pool as a claimable slot; a body that should never be claimable says so on its
+        /// prefab.
+        /// </para>
+        /// </remarks>
+        internal void MarkAvailableForPlayers()
+        {
+            _availableForPlayers = true;
 
-        internal void Release() => IsClaimed = false;
+            // P12 D-4. A player slot's bot brain is parked FROM CREATION, not from the claim.
+            //
+            // ServerPlayerSlotPool.Fill builds Config.MaxConnections of these at Start and every
+            // one was a live AI character until somebody claimed it. At MaxConnections 16 with
+            // two humans that is fourteen extra AI-driven, shootable, SCORING bodies standing on
+            // top of the map's authored 20/20 -- split 7/7 by the pool's own `i % 2` -- so a 1v1
+            // was really a 21v21. Worse than merely surplus: X-18 holds an unclaimed slot out of
+            // both the announce and the snapshot, so those fourteen were invisible to every
+            // client while still shooting at it.
+            //
+            // This is the cheaper half of D-4. Sizing the pool to the room's MaxPlayers instead
+            // of the fixed MaxConnections needs a real room and lands in P14; parking the brain
+            // needs neither and is available now.
+            //
+            // IAiDriver.Suspend is the existing seam and the existing mechanism -- the same one
+            // Claim uses -- deliberately rather than a second suspension concept.
+            SetAiDriverSuspended(true);
+        }
+
+        /// <summary>
+        /// Parks or unparks the bot brain, doing nothing when it is already in that state.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Transition-tracked, because the callers now overlap.</b> A pool body is marked
+        /// available and then claimed, and both want it suspended;
+        /// <c>AiActorController.enabled</c> is not a free write to repeat, and — more to the
+        /// point — collapsing the repeat is what keeps <see cref="Claim"/> and
+        /// <see cref="Release"/> emitting exactly one driver call each, which is the count
+        /// <c>ServerPlayerSlotPoolTests</c> already pins.
+        /// </para>
+        /// <para>
+        /// <b><see cref="Release"/> still resumes, and that is deliberate.</b> The invariant is
+        /// "a body that has been handed to a connection is not bot-driven", not "a player slot is
+        /// never bot-driven" — <c>IAiDriver.Resume</c>'s own remark gives the reason: a slot is
+        /// reused across a match, and without the resume every disconnect would leave one more
+        /// inert mannequin standing in the map. What P12 changes is only the state a slot starts
+        /// in, which nothing set before.
+        /// </para>
+        /// </remarks>
+        private void SetAiDriverSuspended(bool suspended)
+        {
+            if (_aiDriver == null || !_aiDriver.Exists) return;
+            if (suspended == _aiDriverSuspended) return;
+
+            _aiDriverSuspended = suspended;
+
+            if (suspended) _aiDriver.Suspend();
+            else _aiDriver.Resume();
+        }
+
+        /// <summary>Whether <see cref="SetAiDriverSuspended"/> has the brain parked.</summary>
+        private bool _aiDriverSuspended;
+
+        /// <summary>
+        /// Hands this body to a connection, and stops the bot brain steering it.
+        /// </summary>
+        /// <remarks>
+        /// The suspend is here rather than at the call site because there is more than one call
+        /// site and only one of them is obvious. Server movement for a claimed body runs through
+        /// <c>ServerPlayer</c> and <c>NetMovementAgent</c>; an <c>AiActorController</c> still
+        /// running is a second writer to the same <c>CharacterController</c>, and the client is
+        /// predicting against only one of the two.
+        /// </remarks>
+        internal void Claim()
+        {
+            IsClaimed = true;
+
+            // Already parked when this body came from the slot pool (P12 D-4), so on that path
+            // this is a no-op. Still called, because Claim's contract is "the bot brain is not
+            // steering after this returns" and that must not depend on who built the body.
+            SetAiDriverSuspended(true);
+        }
+
+        /// <summary>Takes the body back and returns it to the bot brain.</summary>
+        internal void Release()
+        {
+            IsClaimed = false;
+
+            SetAiDriverSuspended(false);
+        }
     }
 }

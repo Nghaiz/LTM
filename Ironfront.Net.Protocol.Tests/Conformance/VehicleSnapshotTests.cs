@@ -67,21 +67,24 @@ namespace Ironfront.Net.Protocol.Tests
         }
 
         [Fact]
-        public void TheWorstCaseBodyIsFourHundredAndEightyNineAndFitsOneDatagram()
+        public void TheWorstCaseBodyIsSevenHundredAndTwentyNineAndFitsOneDatagram()
         {
-            Assert.Equal(16, ProtocolConstants.MAX_VEHICLES);
-            Assert.Equal(489, VehicleSnapshotMessage.MaxBodySize);
+            Assert.Equal(24, ProtocolConstants.MAX_VEHICLES);
+
+            // 24 * 30 + 9. The cap went 16 -> 24 in v10 and nothing else about the entry
+            // moved, so the whole 240-byte rise is eight more vehicles.
+            Assert.Equal(729, VehicleSnapshotMessage.MaxBodySize);
 
             // The co-residency claim, as arithmetic rather than as prose: the bounded vehicle
             // body leaves this much of the snapshot budget for the elastic actor body.
             const int snapshotBudget = 1178;   // ServerPayloadWriter.MaxSnapshotBodySize
-            Assert.Equal(689, snapshotBudget - VehicleSnapshotMessage.MaxBodySize);
+            Assert.Equal(449, snapshotBudget - VehicleSnapshotMessage.MaxBodySize);
             Assert.True(VehicleSnapshotMessage.MaxBodySize
                         < ProtocolConstants.MAX_CHANNEL_PAYLOAD);
         }
 
         [Fact]
-        public void SixteenFullEntriesEncodeToExactlyMaxBodySize()
+        public void TwentyFourFullEntriesEncodeToExactlyMaxBodySize()
         {
             var entries = new VehicleSnapshotEntry[ProtocolConstants.MAX_VEHICLES];
             for (int i = 0; i < entries.Length; i++)

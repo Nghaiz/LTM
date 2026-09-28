@@ -57,24 +57,47 @@ namespace Ironfront.Net.Unity.Client
     public sealed class SnapshotHoldingQueue
     {
         /// <summary>
-        /// Payloads held before the oldest is dropped.
+        /// Payloads held before the queue first has to grow.
         /// </summary>
         /// <remarks>
         /// A 5-second scene load at the 20 Hz snapshot rate is ~100 payloads, plus the events
         /// beside them. 256 clears that with room to spare, at 256 x 1184 B = ~300 KB of
-        /// buffers in the worst case — paid once, and only while a scene is loading.
+        /// buffers — paid once, and only while a scene is loading.
         /// </remarks>
         public const int DefaultCapacity = 256;
 
-        private readonly byte[][] _payloads;
-        private readonly int[] _lengths;
+        /// <summary>
+        /// Payloads held before the oldest is dropped.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The queue grows up to here rather than dropping at <see cref="DefaultCapacity"/>,
+        /// because a drop can lose a reliable event.</b> The transport has already acked what it
+        /// delivered, so a spawn or a match-state message dropped from the front of this queue
+        /// is gone for good: the server never resends it.
+        /// </para>
+        /// <para>
+        /// The socket is serviced during the load (<c>ClientFlowBootstrap</c> loads the map
+        /// asynchronously for exactly that reason), so this fills at the live rate. The first
+        /// load from a freshly installed build measured 21 s on 2026-09-27, about 420 snapshots
+        /// plus events. 4096 covers well over three minutes at the snapshot rate, which is ~5 MB
+        /// at the payload ceiling. A load longer than that has already failed as an experience.
+        /// </para>
+        /// </remarks>
+        public const int DefaultMaxCapacity = 4096;
+
+        private readonly int _maxCapacity;
+        private byte[][] _payloads;
+        private int[] _lengths;
         private int _head;
         private int _count;
 
-        public SnapshotHoldingQueue(int capacity = DefaultCapacity)
+        public SnapshotHoldingQueue(int capacity = DefaultCapacity, int maxCapacity = DefaultMaxCapacity)
         {
             if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
+            if (maxCapacity < capacity) throw new ArgumentOutOfRangeException(nameof(maxCapacity));
 
+            _maxCapacity = maxCapacity;
             _payloads = new byte[capacity][];
             _lengths = new int[capacity];
         }
@@ -85,20 +108,22 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Payloads waiting to be replayed.</summary>
         public int Count => _count;
 
-        /// <summary>Payloads this queue can hold at once.</summary>
+        /// <summary>Payloads this queue can hold right now, before it next grows.</summary>
         public int Capacity => _payloads.Length;
+
+        /// <summary>The most this queue will grow to. Past this the oldest is dropped.</summary>
+        public int MaxCapacity => _maxCapacity;
 
         /// <summary>Payloads held across every cycle. Diagnostic.</summary>
         public long TotalHeld { get; private set; }
 
         /// <summary>
-        /// Payloads dropped because the queue was full.
+        /// Payloads dropped because the queue was full at <see cref="MaxCapacity"/>.
         /// </summary>
         /// <remarks>
         /// Non-zero means the delta chain has a hole in it and the decoder will say so with
-        /// <c>UnknownBaselines</c> — which is the signal to ack the newest tick actually held
-        /// and let the server fall back to a full snapshot. It is recoverable, but it should
-        /// never happen: a scene load long enough to overflow this is its own problem.
+        /// <c>UnknownBaselines</c>, and a reliable event may have gone with it. It should never
+        /// happen: a scene load long enough to reach the ceiling is its own problem.
         /// </remarks>
         public long DroppedForOverflow { get; private set; }
 
@@ -121,10 +146,12 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!IsHolding) return false;
 
+            if (_count == _payloads.Length) Grow();
+
             if (_count == _payloads.Length)
             {
-                // Drop the oldest. The chain is broken either way once the queue is full, and
-                // keeping the newest at least leaves the client close to the live world.
+                // At the ceiling: drop the oldest. The chain is broken either way once the queue
+                // is full, and keeping the newest at least leaves the client close to the live world.
                 _head = (_head + 1) % _payloads.Length;
                 _count--;
                 DroppedForOverflow++;
@@ -187,6 +214,34 @@ namespace Ironfront.Net.Unity.Client
         {
             TotalHeld = 0;
             DroppedForOverflow = 0;
+        }
+
+        /// <summary>
+        /// Doubles the ring, up to <see cref="MaxCapacity"/>, keeping arrival order.
+        /// </summary>
+        /// <remarks>
+        /// The held payloads are laid out from index 0 in the new arrays, so the head resets.
+        /// Their buffers move over rather than being copied: each one is still the only copy.
+        /// </remarks>
+        private void Grow()
+        {
+            int size = _payloads.Length;
+            if (size >= _maxCapacity) return;
+
+            int grown = (int)Math.Min((long)size * 2, _maxCapacity);
+            var payloads = new byte[grown][];
+            var lengths = new int[grown];
+
+            for (int i = 0; i < _count; i++)
+            {
+                int slot = (_head + i) % size;
+                payloads[i] = _payloads[slot];
+                lengths[i] = _lengths[slot];
+            }
+
+            _payloads = payloads;
+            _lengths = lengths;
+            _head = 0;
         }
     }
 }

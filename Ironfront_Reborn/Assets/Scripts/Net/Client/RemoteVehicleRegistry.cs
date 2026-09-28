@@ -56,11 +56,6 @@ namespace Ironfront.Net.Unity.Client
         private readonly Dictionary<GameObject, ushort> _byGameObject =
             new Dictionary<GameObject, ushort>(ProtocolConstants.MAX_VEHICLES);
 
-        private readonly Dictionary<byte, GameObject> _prefabsByNetworkId =
-            new Dictionary<byte, GameObject>(8);
-
-        private bool _scannedPrefabs;
-
         /// <summary>Vehicles currently replicated.</summary>
         public int LiveCount => _liveIds.Count;
 
@@ -76,7 +71,15 @@ namespace Ironfront.Net.Unity.Client
         public long UnknownPrefabSpawns { get; private set; }
 
         /// <summary>The ids currently live, for the per-frame stage. Do not mutate.</summary>
-        internal List<ushort> LiveIds => _liveIds;
+        /// <remarks>
+        /// <b>Public since phase C4c, and typed read-only with it.</b> Sealing this folder put the
+        /// lane-B recorder outside the assembly, and it iterates these to write its per-vehicle
+        /// array. The list itself was already documented "do not mutate"; exporting it as
+        /// <see cref="IReadOnlyList{T}"/> makes that the type rather than a request, which is
+        /// strictly better than the <c>internal List</c> it replaces — the per-frame stage inside
+        /// this assembly only ever indexed it.
+        /// </remarks>
+        public IReadOnlyList<ushort> LiveIds => _liveIds;
 
         /// <summary>Resolves an id to the vehicle drawing it. A miss is normal — see below.</summary>
         /// <remarks>
@@ -95,6 +98,55 @@ namespace Ironfront.Net.Unity.Client
         /// seats needs the id to name itself in <c>C_VEHICLE_INPUT</c>, and cannot see into this
         /// assembly to get it any other way.
         /// </remarks>
+        /// <summary>
+        /// A replicated vehicle's pose and correction mode, for an observer outside this
+        /// assembly. Phase C4c.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This exists so <c>NetClientVehicle</c> does not have to be public.</b> The lane-B
+        /// checkpoint recorder reached <c>TryFind</c> and then <c>vehicle.Body.Transform</c> —
+        /// two internals — to write three numbers and a mode string into its JSON. Sealing this
+        /// folder made that reach illegal, and the two obvious answers were both worse than this
+        /// one: widening <c>NetClientVehicle</c> to public exports a collaborator of the vehicle
+        /// stage as API, and <c>InternalsVisibleTo("Assembly-CSharp")</c> opens every internal in
+        /// the assembly to all four hundred legacy files, which is the opposite of a seam.
+        /// </para>
+        /// <para>
+        /// So the seam is shaped to the need instead: the recorder wanted a pose snapshot, and a
+        /// pose snapshot is what it gets. Nothing here hands back an object the caller could
+        /// then drive.
+        /// </para>
+        /// </remarks>
+        /// <summary>The kind a replicated vehicle was announced as, for the same observers as <see cref="TryGetPose"/>.</summary>
+        public bool TryGetKind(ushort vehicleId, out VehicleKind kind)
+        {
+            kind = default;
+            if (!_live.TryGetValue(vehicleId, out NetClientVehicle vehicle) || vehicle == null) return false;
+
+            kind = vehicle.Kind;
+            return true;
+        }
+
+        public bool TryGetPose(
+            ushort vehicleId, out Vector3 position, out float yawDegrees, out string mode)
+        {
+            position   = Vector3.zero;
+            yawDegrees = 0f;
+            mode       = null;
+
+            if (!_live.TryGetValue(vehicleId, out NetClientVehicle vehicle)) return false;
+            if (vehicle == null || !vehicle.Exists) return false;
+
+            Transform t = vehicle.Body.Transform;
+
+            position   = t.position;
+            yawDegrees = t.eulerAngles.y;
+            mode       = vehicle.Mode.ToString();
+
+            return true;
+        }
+
         public ushort NetworkIdOf(GameObject vehicle)
             => vehicle != null && _byGameObject.TryGetValue(vehicle, out ushort id) ? id : (ushort)0;
 
@@ -106,7 +158,12 @@ namespace Ironfront.Net.Unity.Client
         /// snapshot would swing every remote turret to due north for one frame on spawn, which
         /// reads as a network glitch rather than as "no data yet".
         /// </remarks>
-        internal bool TryGetTurretPose(ushort vehicleId, out float yawDegrees, out float pitchDegrees)
+        /// <remarks>
+        /// Public since phase C4c, for the lane-B recorder, which now sits outside this assembly.
+        /// It is a pose read that hands back two floats and no object, so it widens nothing the
+        /// way exporting <c>NetClientVehicle</c> would have — see <see cref="TryGetPose"/>.
+        /// </remarks>
+        public bool TryGetTurretPose(ushort vehicleId, out float yawDegrees, out float pitchDegrees)
         {
             yawDegrees   = 0f;
             pitchDegrees = 0f;
@@ -116,6 +173,25 @@ namespace Ironfront.Net.Unity.Client
 
             yawDegrees   = vehicle.TurretYaw;
             pitchDegrees = vehicle.TurretPitch;
+            return true;
+        }
+
+        /// <summary>
+        /// Reads the last server-owned health and state flags without exposing the internal
+        /// vehicle record. Diagnostics uses this to distinguish real replicated damage from a
+        /// cosmetic particle that merely happens to be near a vehicle.
+        /// </summary>
+        public bool TryGetAuthoritativeState(
+            ushort vehicleId, out float health, out VehicleStateFlags flags)
+        {
+            health = 0f;
+            flags = VehicleStateFlags.None;
+
+            if (!_live.TryGetValue(vehicleId, out NetClientVehicle vehicle)) return false;
+            if (vehicle == null || !vehicle.Exists || !vehicle.HasPose) return false;
+
+            health = vehicle.AuthoritativeHealth;
+            flags = vehicle.AuthoritativeFlags;
             return true;
         }
 
@@ -148,8 +224,11 @@ namespace Ironfront.Net.Unity.Client
         {
             for (int i = 0; i < _liveIds.Count; i++)
             {
-                if (_live.TryGetValue(_liveIds[i], out NetClientVehicle v) && v.Exists)
-                    Destroy(v.Vehicle.gameObject);
+                if (!_live.TryGetValue(_liveIds[i], out NetClientVehicle v) || !v.Exists) continue;
+
+                // P3 task 3.4. Before the Destroy, per the keyed-by-transform ordering.
+                NetClientBindings.Minimap?.RemoveMarker(v.Body.Transform);
+                Destroy(v.Body.GameObject);
             }
 
             _live.Clear();
@@ -182,7 +261,7 @@ namespace Ironfront.Net.Unity.Client
 
             GameObject spawned = Instantiate(prefab, position, new Quaternion(qx, qy, qz, qw));
 
-            Vehicle vehicle = spawned.GetComponent<Vehicle>();
+            IGameplayVehicleBody vehicle = NetClientBindings.ResolveVehicleBody(spawned);
             if (vehicle == null)
             {
                 // Cannot happen through ResolvePrefab, which only admits prefabs carrying one.
@@ -193,11 +272,19 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            var bound = new NetClientVehicle(message.VehicleId, message.Kind, vehicle);
+            var bound = new NetClientVehicle(
+                message.VehicleId, message.Kind, vehicle, message.SeatCount);
 
             _live[message.VehicleId] = bound;
             _liveIds.Add(message.VehicleId);
             _byGameObject[spawned] = message.VehicleId;
+
+            // P3 task 3.4. A vehicle has no team -- ownership is whoever is sitting in it this
+            // second, which the client learns from seat state and not from the spawn -- so it
+            // draws in ColorScheme's neutral rather than in a team colour that would be a
+            // guess. The subject is the body transform for the same reason the actor markers
+            // use theirs: MinimapMarker reads position off it every LateUpdate.
+            NetClientBindings.Minimap?.SetBodyMarker(vehicle.Transform, -1);
         }
 
         private void OnVehicleDespawn(VehicleDespawnMessage message)
@@ -210,64 +297,57 @@ namespace Ironfront.Net.Unity.Client
             _live.Remove(message.VehicleId);
             _liveIds.Remove(message.VehicleId);
 
+            // P3 task 3.4, and for the same reason as _byGameObject below: dropped BEFORE the
+            // destruction, because MinimapUi.markers is keyed by the transform and a destroyed
+            // transform is not a usable dictionary key on Unity's Mono runtime.
+            if (vehicle.Exists) NetClientBindings.Minimap?.RemoveMarker(vehicle.Body.Transform);
+
             // Dropped BEFORE the GameObject is destroyed. A destroyed object is not a usable
             // dictionary key on Unity's Mono runtime, so a stale entry here would be one nothing
             // could ever remove -- ServerVehicleRegistry.Unregister scans for exactly that reason.
-            if (vehicle.Exists) _byGameObject.Remove(vehicle.Vehicle.gameObject);
+            if (vehicle.Exists) _byGameObject.Remove(vehicle.Body.GameObject);
 
             if (!vehicle.Exists) return;
 
             // Destroyed rather than Die()'d for a WorldReset: Die plays the explosion, which is
             // right for a vehicle that was shot and wrong for one the round simply ended around.
-            if (message.Reason == VehicleDespawnReason.Destroyed)
+            // The wreck already died from a snapshot flagged Dead and has been drawn from the
+            // server's own wreck since; this despawn is that wreck being cleaned up on the server.
+            if (vehicle.DiedFromSnapshot)
             {
-                // Give the body back to PhysX first, so the wreck falls apart instead of hanging
-                // in the air kinematic.
-                vehicle.Vehicle.SetNetworkDriven(false);
-                vehicle.Vehicle.Die();
+                Destroy(vehicle.Body.GameObject);
                 return;
             }
 
-            Destroy(vehicle.Vehicle.gameObject);
+            if (message.Reason == VehicleDespawnReason.Destroyed)
+            {
+                // A server that despawns at the moment of death (before 2026-09-27) never sends a
+                // Dead snapshot. Give the body back to PhysX first, so the wreck falls apart
+                // instead of hanging in the air kinematic.
+                vehicle.Body.SetNetworkDriven(false);
+                vehicle.Body.Die();
+                return;
+            }
+
+            Destroy(vehicle.Body.GameObject);
         }
 
         /// <summary>
-        /// Finds the prefab for a <c>networkTypeId</c>, scanning the scene's spawners once.
+        /// Finds the prefab for a <c>networkTypeId</c>, through the scene directory.
         /// </summary>
         /// <remarks>
-        /// Scanned lazily rather than in <c>Awake</c>: the map scene may finish loading after
-        /// this component does, and a directory built too early would be empty for the whole
-        /// match with nothing to say why. Re-scanned only while a lookup misses, so the steady
-        /// state is a dictionary hit.
+        /// <b>The scan moved across the seam in phase C4b</b>, not because it was in the wrong
+        /// place but because performing it meant naming <c>VehicleSpawner</c> and
+        /// <c>Vehicle</c> — both <c>Assembly-CSharp</c> types this folder is being sealed away
+        /// from. Its lazy-and-re-scan-while-missing behaviour went with it intact; see
+        /// <c>IVehiclePrefabDirectory</c>.
         /// </remarks>
         private GameObject ResolvePrefab(byte networkTypeId)
         {
-            if (_prefabsByNetworkId.TryGetValue(networkTypeId, out GameObject cached)) return cached;
+            IVehiclePrefabDirectory directory = NetClientBindings.VehiclePrefabs;
+            if (directory == null) return null;
 
-            if (_scannedPrefabs && _prefabsByNetworkId.Count > 0) return null;
-
-            ScanPrefabs();
-
-            return _prefabsByNetworkId.TryGetValue(networkTypeId, out GameObject found) ? found : null;
-        }
-
-        private void ScanPrefabs()
-        {
-            _scannedPrefabs = true;
-
-            VehicleSpawner[] spawners = FindObjectsByType<VehicleSpawner>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
-
-            for (int i = 0; i < spawners.Length; i++)
-            {
-                GameObject prefab = spawners[i] != null ? spawners[i].prefab : null;
-                if (prefab == null) continue;
-
-                Vehicle vehicle = prefab.GetComponent<Vehicle>();
-                if (vehicle == null || vehicle.NetworkId == 0) continue;
-
-                _prefabsByNetworkId[vehicle.NetworkId] = prefab;
-            }
+            return directory.TryGetPrefab(networkTypeId, out GameObject prefab) ? prefab : null;
         }
     }
 }

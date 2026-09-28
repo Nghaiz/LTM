@@ -1,0 +1,8 @@
+{
+  "name": "throwable-observer-a",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 180, "respawn": true },
+    { "seconds": 22.0, "aimAtPlayer": "DRIVER" },
+    { "checkpoint": "settled", "seconds": 0.2, "aimAtPlayer": "DRIVER" }
+  ]
+}

@@ -27,12 +27,38 @@ namespace Ironfront.Net.Unity.Client
     /// <b>Only the local player's own blast is predicted.</b> Suppression keys on
     /// <c>SourceActorId</c> matching this client's actor, so predicting somebody else's
     /// explosion would draw it locally AND fail to suppress the confirmation — one blast, two
-    /// flashes. Gating on <see cref="NetClientPresenterGuard.IsLocalActor(Actor)"/> makes that
+    /// flashes. Gating on <see cref="NetClientPresenterGuard.IsLocalActor(IGameplayActorPresence)"/> makes that
     /// unreachable rather than unlikely.
     /// </para>
     /// </remarks>
     public static class ClientCombatEvents
     {
+        /// <summary>
+        /// Hands <see cref="PredictExplosion"/> to <c>NetClientBindings</c>, so
+        /// <c>ActorManager</c> can still reach it. Phase C5b.
+        /// </summary>
+        /// <remarks>
+        /// <c>ActorManager.Damage</c> called this by its full name,
+        /// <c>Ironfront.Net.Unity.Client.ClientCombatEvents.PredictExplosion(…)</c>, and C5b sealed
+        /// that assembly. The call site now goes through <c>NetClientBindings.PredictExplosion</c>
+        /// in <c>Ironfront.Net.Unity.Shared</c> and arrives back here.
+        /// <para>
+        /// <b>Registered unconditionally, including on a dedicated server</b>, for the reason
+        /// <c>IronfrontNetBindings.Install</c> gives about every other seam: the method's own first
+        /// line is a <c>NetContext.IsClient</c> test, so registering on a headless process costs
+        /// one delegate and changes no behaviour. A role test here would be a second copy of a
+        /// decision <c>NetContext</c> already owns.
+        /// </para>
+        /// <para>
+        /// <c>BeforeSceneLoad</c>, after <c>NetClientBindings.ResetOnLoad</c> at
+        /// <c>SubsystemRegistration</c> — the other order would clear this registration
+        /// immediately after making it.
+        /// </para>
+        /// </remarks>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void Install()
+            => NetClientBindings.ExplosionPredictor = PredictExplosion;
+
         /// <summary>
         /// Draws this client's own explosion now and arms the suppression that will swallow the
         /// server's confirmation of it.
@@ -43,13 +69,18 @@ namespace Ironfront.Net.Unity.Client
         /// with no explosion presenter still gets the server's <c>S_EXPLOSION</c> and simply
         /// draws nothing early, which is the pre-V10 behaviour rather than a failure.
         /// </remarks>
-        /// <param name="source">Whoever set it off, for the local-player test.</param>
+        /// <param name="source">
+        /// Whoever set it off, for the local-player test. Declared as the seam rather than as
+        /// <c>Actor</c>, which this assembly may no longer name — the legacy caller passes its
+        /// own component and the conversion is implicit, so <c>ActorManager.Explode</c> is
+        /// unchanged (phase C4a).
+        /// </param>
         /// <param name="radiusMetres">
         /// The radius the damage selection used — the same value the server puts on the wire,
         /// so the predicted effect and the confirmed one are the same size (V1 D4).
         /// </param>
         public static void PredictExplosion(
-            Actor source, Vector3 centre, float radiusMetres, ExplosionKind kind)
+            IGameplayActorPresence source, Vector3 centre, float radiusMetres, ExplosionKind kind)
         {
             if (!NetContext.IsClient) return;
             if (!NetClientPresenterGuard.IsLocalActor(source)) return;

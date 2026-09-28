@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using Xunit;
 
 namespace Ironfront.Net.Protocol.Tests
@@ -150,6 +151,7 @@ namespace Ironfront.Net.Protocol.Tests
         [InlineData(ConnectDenyReason.Banned, "04")]
         [InlineData(ConnectDenyReason.ServerShuttingDown, "05")]
         [InlineData(ConnectDenyReason.AlreadyConnected, "06")]
+        [InlineData(ConnectDenyReason.TeamFull, "07")]
         public void ConnectDenied_EveryReasonCode_RoundTrips(
             ConnectDenyReason reason, string expectedHex)
         {
@@ -160,6 +162,82 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.True(ConnectDeniedPayload.TryParse(
                 Hex.FromHex(expectedHex), out ConnectDeniedPayload parsed));
             Assert.Equal(reason, parsed.Reason);
+        }
+
+        // -------------------------------------------------------- joinTicket (§ 12, 64 bytes)
+
+        /// <summary>
+        /// playerId 4242, serverId 7, roomId 99, expiry 1_800_000_060_000, team 1,
+        /// name "Nghaiz", signed with <see cref="TicketSecret"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Freeze-gate condition 2 for PROTOCOL_VERSION 6.</b> The ticket changed shape —
+        /// a <c>u8 team</c> at offset 16 and <c>displayName</c> 16 → 15 — and until this
+        /// existed nothing pinned its bytes: the round-trip tests would pass unchanged if the
+        /// team byte moved to offset 17 and the name to 16, because both halves of the
+        /// round trip would move together. A hex sample is the only test that cannot.
+        /// </para>
+        /// <para>
+        /// The 32 signature bytes are pinned too, so this also fails if the HMAC ever covers a
+        /// different span than the first 32 payload bytes.
+        /// </para>
+        /// <para>
+        /// <b>Not captured from this implementation's output</b>, per this file's contract.
+        /// The 32 payload bytes were laid out by hand from § 12's table; the 32 signature
+        /// bytes came from an independent HMAC-SHA256 over exactly those bytes, computed
+        /// outside this solution. A sample copied from the code under test proves only that
+        /// the code agrees with itself.
+        /// </para>
+        /// </remarks>
+        private const string JoinTicketHex =
+            "92 10 00 00 07 00 63 00 60 3A 5D 18 A3 01 00 00 01 4E 67 68 61 69 7A 00 00 00 00 00 00 00 00 00 23 14 0F 7F E9 0B 2F 7D 93 97 96 09 1C D5 D7 94 64 2F AE 6E 25 6F F6 F7 B2 4A 44 1D 4F C9 97 3B";
+
+        private static readonly byte[] TicketSecret =
+            Encoding.UTF8.GetBytes("test-shared-secret-not-for-production");
+
+        [Fact]
+        public void JoinTicket_IssuesTheExpectedSixtyFourBytes()
+        {
+            var ticket = new byte[JoinTicket.Size];
+
+            Assert.Equal(JoinTicket.Size, JoinTicket.Issue(
+                ticket,
+                playerId: 4242,
+                serverId: 7,
+                roomId: 99,
+                expiresAtUnixMs: 1_800_000_060_000L,
+                team: 1,
+                displayName: "Nghaiz",
+                sharedSecret: TicketSecret));
+
+            Assert.Equal(JoinTicketHex, Hex.ToHex(ticket));
+
+            // And the byte at offset 16 is the team, read left-to-right in declaration order:
+            // 8 bytes of expiry end at 15, so 17 is where the name starts.
+            Assert.Equal(1, ticket[16]);
+            Assert.Equal((byte)'N', ticket[17]);
+        }
+
+        [Fact]
+        public void JoinTicket_TheSampleVerifiesAndReadsBack()
+        {
+            byte[] ticket = Hex.FromHex(JoinTicketHex);
+
+            Assert.Equal(
+                TicketVerifyResult.Valid,
+                JoinTicket.Verify(ticket, TicketSecret, 1_800_000_000_000L));
+
+            Assert.True(JoinTicket.TryReadFields(
+                ticket, out uint playerId, out ushort serverId, out ushort roomId,
+                out long expiresAt, out byte team, out string displayName));
+
+            Assert.Equal(4242u, playerId);
+            Assert.Equal(7, serverId);
+            Assert.Equal(99, roomId);
+            Assert.Equal(1_800_000_060_000L, expiresAt);
+            Assert.Equal(1, team);
+            Assert.Equal("Nghaiz", displayName);
         }
 
         // ---------------------------------------------------------- S_HIT_CONFIRM 0x43
@@ -279,6 +357,69 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(0x4E, (byte)ServerMessageType.VehicleDespawn);
             Assert.Equal(0x4F, (byte)ServerMessageType.ProjectileSpawn);
             Assert.Equal(0x50, (byte)ServerMessageType.SeatChange);
+        }
+
+        // -------------------------------------------------------- S_MATCH_STATE 0x45 (v5)
+
+        // Written out from the layout, not captured from the implementation. Little-endian
+        // throughout, and in declaration order:
+        //   phase                 u8   02  = MatchPhase.Playing
+        //   score0                u16  8A 00 = 138        ASCENDING (was a descending ticket
+        //   score1                u16  2C 00 = 44          count before v5 -- same two byte
+        //                                                  positions, inverted meaning)
+        //   phaseSecondsRemaining u16  00 00 = 0          Playing has no clock
+        //   humanPlayerCount      u8   0C  = 12
+        //   victoryPoints         u16  C8 00 = 200        NEW in v5, appended -> Size 8 -> 10
+        private const string MatchStateHex = "02 8A 00 2C 00 00 00 0C C8 00";
+
+        [Fact]
+        public void MatchState_Serializes_ToTheExpectedBytes()
+        {
+            var message = new MatchStateMessage(
+                MatchPhase.Playing, score0: 138, score1: 44,
+                phaseSecondsRemaining: 0, humanPlayerCount: 12, victoryPoints: 200);
+
+            Span<byte> buffer = stackalloc byte[MatchStateMessage.Size];
+            Assert.Equal(MatchStateMessage.Size, message.Write(buffer));
+            Assert.Equal(MatchStateHex, Hex.ToHex(buffer));
+        }
+
+        [Fact]
+        public void MatchState_Parses_FromTheExpectedBytes()
+        {
+            byte[] bytes = Hex.FromHex(MatchStateHex);
+
+            Assert.True(MatchStateMessage.TryParse(bytes, out MatchStateMessage message));
+            Assert.Equal(MatchPhase.Playing, message.Phase);
+            Assert.Equal(138, message.Score0);
+            Assert.Equal(44, message.Score1);
+            Assert.Equal(0, message.PhaseSecondsRemaining);
+            Assert.Equal(12, message.HumanPlayerCount);
+            Assert.Equal(200, message.VictoryPoints);
+        }
+
+        [Fact]
+        public void MatchState_IsTenBytes()
+            => Assert.Equal(10, MatchStateMessage.Size);
+
+        /// <summary>
+        /// The half of the v5 bump that a size check cannot see. A v4 sender packed its two
+        /// bytes at the same offsets, so these ten bytes parse cleanly -- and mean the opposite
+        /// thing. That is why the version was bumped for the meaning as well as for the size:
+        /// the failure this pins is silent, and a mismatched PROTOCOL_VERSION turns it into
+        /// CONNECT_DENIED code 2 instead.
+        /// </summary>
+        [Fact]
+        public void MatchState_TenBytesFromAV4SenderWouldDecodeBackwards()
+        {
+            // A v4 server one second into a round: tickets 199 / 200, DESCENDING. Read as v5
+            // those same bytes say team 1 is a point ahead on an ascending score, when in truth
+            // team 1 had just lost somebody.
+            byte[] v4Bytes = Hex.FromHex("02 C7 00 C8 00 00 00 0C C8 00");
+
+            Assert.True(MatchStateMessage.TryParse(v4Bytes, out MatchStateMessage message));
+            Assert.Equal(199, message.Score0);
+            Assert.Equal(200, message.Score1);
         }
 
         [Fact]
@@ -628,7 +769,7 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(VehicleField.None, parsed[1].ChangeMask);
         }
 
-        // ------------------------------------- S_SNAPSHOT with SeatInfo, 23-byte entry
+        // ------------------------------------- S_SNAPSHOT with SeatInfo, 26-byte entry
         //
         //   header  u32 serverTick 100 -> 64 00 00 00
         //           u32 lastInput   99 -> 63 00 00 00
@@ -641,15 +782,20 @@ namespace Ironfront.Net.Protocol.Tests
         //           vel    i8  x3  1 / -1 / 0      -> 01 FF 00
         //           flags  u8      IsAlive|IsSeated = 0x81 -> 81
         //           health u8      100             -> 64
-        //           weapon u8+u8   1 / 30          -> 01 1E
+        //           weapon u8+u8+u16+u8
+        //                          id 1 / clip 30 / reserve 0x0123 / flags Reloading
+        //                                          -> 01 1E · 23 01 · 01
         //           team   u8      0               -> 00
         //           seat   u16+u8  vehicleId 7 / seatIndex 2 -> 07 00 · 02
+        //
+        // The reserve is written 23 01 and not 01 23: it is little-endian like every other
+        // multi-byte GSP field, and the two bytes differ so a byte-swap cannot hide here.
         private const string SeatedActorSnapshotHex =
             "64 00 00 00 63 00 00 00 00 00 00 00 01 "
-            + "05 00 FF 00 01 00 02 00 03 00 80 0A 01 FF 00 81 64 01 1E 00 07 00 02";
+            + "05 00 FF 00 01 00 02 00 03 00 80 0A 01 FF 00 81 64 01 1E 23 01 01 00 07 00 02";
 
         [Fact]
-        public void SeatedActorEntry_Serializes_ToTwentyThreeBytes()
+        public void SeatedActorEntry_Serializes_ToTwentySixBytes()
         {
             var entry = new ActorSnapshotEntry
             {
@@ -661,17 +807,18 @@ namespace Ironfront.Net.Protocol.Tests
                 StateFlags = ActorStateFlags.IsAlive | ActorStateFlags.IsSeated,
                 Health = 100,
                 WeaponId = 1, AmmoInClip = 30,
+                SpareAmmoEncoded = 0x0123, WeaponStateFlags = WeaponStateFlags.Reloading,
                 Team = 0,
                 VehicleId = 7, SeatIndex = 2,
             };
 
-            Assert.Equal(23, SnapshotMessage.EntrySize(SnapshotField.Full));
+            Assert.Equal(26, SnapshotMessage.EntrySize(SnapshotField.Full));
 
             var header = new SnapshotHeader(100, 99, 0, 1);
             Span<byte> buffer = stackalloc byte[64];
             int written = SnapshotMessage.Write(buffer, in header, new[] { entry });
 
-            Assert.Equal(SnapshotHeader.Size + 23, written);
+            Assert.Equal(SnapshotHeader.Size + 26, written);
             Assert.Equal(SeatedActorSnapshotHex, Hex.ToHex(buffer.Slice(0, written)));
         }
 
@@ -691,6 +838,15 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(7, parsed[0].VehicleId);
             Assert.Equal(2, parsed[0].SeatIndex);
             Assert.True((parsed[0].StateFlags & ActorStateFlags.IsSeated) != 0);
+
+            // The widened weapon field, read back from the same hand-written bytes. The
+            // seat fields landing correctly above already says the entry was the right
+            // width; these say the three new bytes carry what the spec says they carry.
+            Assert.Equal(1, parsed[0].WeaponId);
+            Assert.Equal(30, parsed[0].AmmoInClip);
+            Assert.Equal(0x0123, parsed[0].SpareAmmoEncoded);
+            Assert.Equal(SpareAmmo.Finite(291), SpareAmmo.Decode(parsed[0].SpareAmmoEncoded));
+            Assert.Equal(WeaponStateFlags.Reloading, parsed[0].WeaponStateFlags);
         }
 
         // ---------------------------------------------------- S_PLAYER_LIST 0x4B (12 B)
@@ -719,6 +875,102 @@ namespace Ironfront.Net.Protocol.Tests
 
             Assert.Equal(12, written);
             Assert.Equal(PlayerListHex, Hex.ToHex(buffer.AsSpan(0, written)));
+        }
+
+        // ------------------------------------------------- S_PLAYER_SCORES 0x51 (13 B)
+        //   u8 count 2
+        //   row 1  u8 actorId 5 · u16 kills 3 · u16 deaths 1 · u8 team 0
+        //             -> 05 03 00 01 00 00
+        //   row 2  u8 actorId 9 · u16 kills 0 · u16 deaths 4 · u8 team 1
+        //             -> 09 00 00 04 00 01
+        //
+        // The two u16s are little-endian, like every other multi-byte field in GSP (§ 0), which
+        // is what the 03 00 rather than 00 03 in row 1 is pinning.
+        private const string PlayerScoresHex =
+            "02 05 03 00 01 00 00 09 00 00 04 00 01";
+
+        [Fact]
+        public void PlayerScores_Serializes_ToTheExpectedBytes()
+        {
+            var entries = new[]
+            {
+                new PlayerScoreEntry { ActorId = 5, Kills = 3, Deaths = 1, Team = TeamId.Team0 },
+                new PlayerScoreEntry { ActorId = 9, Kills = 0, Deaths = 4, Team = TeamId.Team1 },
+            };
+
+            var buffer = new byte[PlayerScoresMessage.MaxBodySize];
+            int written = PlayerScoresMessage.Write(buffer, entries);
+
+            Assert.Equal(13, written);
+            Assert.Equal(PlayerScoresMessage.SizeFor(entries.Length), written);
+            Assert.Equal(PlayerScoresHex, Hex.ToHex(buffer.AsSpan(0, written)));
+        }
+
+        [Fact]
+        public void PlayerScores_Parses_FromTheExpectedBytes()
+        {
+            byte[] bytes = Hex.FromHex(PlayerScoresHex);
+            var parsed = new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
+            Assert.True(PlayerScoresMessage.TryParse(bytes, parsed, out int count));
+
+            Assert.Equal(2, count);
+
+            Assert.Equal(5, parsed[0].ActorId);
+            Assert.Equal(3, parsed[0].Kills);
+            Assert.Equal(1, parsed[0].Deaths);
+            Assert.Equal(TeamId.Team0, parsed[0].Team);
+
+            Assert.Equal(9, parsed[1].ActorId);
+            Assert.Equal(0, parsed[1].Kills);
+            Assert.Equal(4, parsed[1].Deaths);
+            Assert.Equal(TeamId.Team1, parsed[1].Team);
+        }
+
+        /// <summary>
+        /// A truncated body is refused rather than read past its end.
+        /// </summary>
+        /// <remarks>
+        /// The header promises two rows and only one follows. Without this the parser would be
+        /// pinned only on well-formed input, which is the half that never arrives from a broken
+        /// sender.
+        /// </remarks>
+        [Fact]
+        public void PlayerScores_Refuses_ABodyShorterThanItsCount()
+        {
+            byte[] bytes = Hex.FromHex(PlayerScoresHex);
+            var parsed = new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
+            Assert.False(PlayerScoresMessage.TryParse(
+                bytes.AsSpan(0, bytes.Length - 1), parsed, out int count));
+
+            Assert.Equal(0, count);
+        }
+
+        /// <summary>
+        /// The whole table fits one un-fragmented channel-2 payload, at every player count.
+        /// </summary>
+        /// <remarks>
+        /// This is P18 § 1.2's arithmetic as an assertion rather than as a table in a document.
+        /// It is the check that would have gone red on the design this phase rejected — putting
+        /// the same two counters on <c>S_PLAYER_LIST</c>, whose worst case already leaves 28
+        /// bytes — and it is derived from the constants so that raising MAX_ACTORS re-runs the
+        /// sum rather than leaving a stale 385 behind.
+        /// </remarks>
+        [Fact]
+        public void PlayerScores_WorstCase_FitsOneUnfragmentedPayload()
+        {
+            Assert.Equal(
+                PlayerScoresMessage.HeaderSize
+                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize,
+                PlayerScoresMessage.MaxBodySize);
+
+            Assert.True(
+                PlayerScoresMessage.MaxBodySize <= ProtocolConstants.MAX_CHANNEL_PAYLOAD,
+                $"S_PLAYER_SCORES worst case is {PlayerScoresMessage.MaxBodySize} B against a "
+                + $"{ProtocolConstants.MAX_CHANNEL_PAYLOAD} B budget. Widening a row costs "
+                + $"{ProtocolConstants.MAX_ACTORS} B per byte — see P18 § 1.2 for why the "
+                + "un-fragmented guarantee is worth more than the field.");
         }
 
         [Fact]

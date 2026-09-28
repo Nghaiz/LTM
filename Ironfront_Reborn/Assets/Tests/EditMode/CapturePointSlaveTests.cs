@@ -56,6 +56,13 @@ namespace Ironfront.Net.Unity.Server.Tests
             public CapturePointDefinition GetDefinition(int index)
                 => new CapturePointDefinition(Vector3.zero, 10f, 0.2f, $"point-{index}");
 
+            /// <summary>
+            /// Neutral. This fake exercises the SLAVE (client) side, which never adopts an
+            /// opening owner — that is the host's Start path (X-53). Returning a team here
+            /// would assert something this fixture does not test.
+            /// </summary>
+            public int GetOwner(int index) => -1;
+
             public void ApplyAuthoritativeOwner(int index, int spawnPointOwner, float control, bool contested)
             {
                 Owners[index] = spawnPointOwner;

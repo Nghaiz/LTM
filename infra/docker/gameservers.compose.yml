@@ -1,0 +1,66 @@
+# infra/docker/gameservers.compose.yml -- the two Linux game servers (Dustbowl, Island) as
+# containers on the Azure VM ironfront-game (20.205.152.66, Standard_B2as_v2, Singapore),
+# registered with the fly master. Deploy with tools/deploy-gameservers-azure.ps1, which ships the
+# image, writes the VM's .env beside this file and runs compose there. Nothing runs locally.
+#
+# Build the image from the Unity Linux server artifact first:
+#   docker build -f infra/docker/gameserver.Dockerfile -t ironfront-game-server:<rev> build/server
+#
+# PORTS. The VM's network security group admits UDP 27015/27016 only, so those are the defaults;
+# IRONFRONT_GS_DUSTBOWL_PORT / IRONFRONT_GS_ISLAND_PORT override them. The advertised address is
+# what the master hands players to dial.
+#
+# History: these ran in the VMware DLP VM (starved it), then on the owner's Docker Desktop, until
+# 2026-09-28 -- plans/reports/2026-09-28-azure-gameserver-host.md.
+
+x-gameserver: &gameserver
+  image: ${IRONFRONT_GAMESERVER_IMAGE:-ironfront-game-server:8d33ed0}
+  restart: unless-stopped
+  # Unity sizes its job pool to the machine; NetServerBootstrap.CapJobWorkers caps a headless
+  # server to 2, and the flag says so for images built before that cap.
+  command: ["-job-worker-count", "2"]
+  environment: &gameserver-env
+    IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET (pass --env-file .env)}
+    IRONFRONT_MASTER_HOST: kien-master-2026.fly.dev
+    # 443 with TLS: fly's shared IPv4 routes only 80/443, selecting the app by SNI.
+    IRONFRONT_MASTER_PORT: "443"
+    IRONFRONT_GAMESERVER_MASTER_TLS: "1"
+    IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST: kien-master-2026.fly.dev
+    # What the master hands players as the address to dial: the VM's public address.
+    IRONFRONT_GAMESERVER_PUBLIC_IP: ${IRONFRONT_GAMESERVER_PUBLIC_IP_ADVERTISED:-20.205.152.66}
+    IRONFRONT_GAMESERVER_TRANSPORT: udp
+    IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "0"
+    IRONFRONT_GAMESERVER_MAX_PLAYERS: "16"
+    IRONFRONT_GAMESERVER_MAX_CONNECTIONS: "16"
+    IRONFRONT_LOG_LEVEL: Info
+    IRONFRONT_STRUCTURED_LOG: "1"
+    # One "[frames] fps=.. ticks/s=.." line per window: the only in-process evidence that a
+    # server is keeping its 30 Hz tick, which is what starved on the VM.
+    IRONFRONT_LOG_FRAMES: "1"
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "3" }
+
+services:
+  game-server-dustbowl:
+    <<: *gameserver
+    container_name: ironfront-gs-dustbowl
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_SCENE: Dustbowl
+      IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_DUSTBOWL_PORT:-27015}"
+      # Required: the master refuses a registration with no map ids. Dustbowl is 1, Island is 2.
+      IRONFRONT_GAMESERVER_MAP_IDS: "1"
+    ports:
+      - "${IRONFRONT_GS_DUSTBOWL_PORT:-27015}:${IRONFRONT_GS_DUSTBOWL_PORT:-27015}/udp"
+
+  game-server-island:
+    <<: *gameserver
+    container_name: ironfront-gs-island
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_SCENE: Island
+      IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_ISLAND_PORT:-27016}"
+      IRONFRONT_GAMESERVER_MAP_IDS: "2"
+    ports:
+      - "${IRONFRONT_GS_ISLAND_PORT:-27016}:${IRONFRONT_GS_ISLAND_PORT:-27016}/udp"

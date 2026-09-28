@@ -1,5 +1,5 @@
 # tools/new-env.ps1 — creates the .env this checkout needs.
-# (plans/00-shared/conventions.md section 7).
+# (docs/code-conventions.md section 7).
 #
 # .env is gitignored and always will be: it carries IRONFRONT_SHARED_SECRET, and a key that
 # reached a git history is not a key any more. So every clone starts without one, and the

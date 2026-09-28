@@ -6,6 +6,7 @@ using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Ironfront.Net.Unity.Server
 {
@@ -42,14 +43,38 @@ namespace Ironfront.Net.Unity.Server
         [Tooltip("Radius used only when the point itself leaves captureRange unset (0).")]
         [SerializeField] private float _captureRadius = 15f;
 
+        // 0.2 -> 0.06 on 2026-09-20, matching CapturePoint.captureSpeed's default: control moved
+        // per body of lead per one-second step, the original's CAPTURE_RATE_PER_PERSON (0.05).
+        // At 0.06 one attacker takes 17 steps to bring an enemy flag down and capture it; a
+        // neutral point changes hands on the first step, with its flag at the bottom. Both
+        // shipped scenes' authored values moved with it -- a default alone governs nothing on a
+        // map that serializes its own.
         [Tooltip("Capture speed used only when the point itself leaves CaptureSpeed unset (0).")]
-        [SerializeField] private float _captureSpeed = 0.2f;
+        [SerializeField] private float _captureSpeed = 0.06f;
 
         [Header("Rules")]
         [SerializeField] private int _minPlayersToStart = 2;
         [SerializeField] private float _warmupSeconds = 20f;
         [SerializeField] private float _postMatchSeconds = 20f;
-        [SerializeField] private int _startTickets = 200;
+        // Renamed from _startTickets by P11 -- the number never changed (200) but the verb did:
+        // it was the ticket pool each side spent DOWN, and is now the ascending margin one side
+        // must lead by, which is what GameManager.victoryPoints has always meant offline.
+        // FormerlySerializedAs keeps Dustbowl's authored 200 rather than silently reverting the
+        // scene to the field default.
+        [FormerlySerializedAs("_startTickets")]
+        [SerializeField] private int _victoryPoints = 200;
+
+        [Tooltip("Seconds after a round opens before losing every spawn point can end it.")]
+        [SerializeField] private float _eliminationGraceSeconds = 1f;
+
+        [Tooltip(
+            "Seconds a team's held-spawn-point count must sit at zero, CONTINUOUSLY, before "
+            + "elimination fires. X-85: a single sampled tick at the capture-ownership threshold "
+            + "is not a wipe-out, it is a flag mid-flip -- one attacker crosses it in well under "
+            + "a second at a typical map's capture speed. MatchRules' own library default is 0 "
+            + "(instant) so a bare MatchRules keeps every pre-existing engine-free test passing "
+            + "unchanged; THIS is the one place that opts a live server into the protection.")]
+        [SerializeField] private float _eliminationDwellSeconds = 5f;
 
         private ServerTickLoop _loop;
         private MatchStateMachine _match;
@@ -65,6 +90,17 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
+        /// <summary>Seconds between <c>[net] match score</c> lines while a round is Playing.</summary>
+        /// <remarks>
+        /// Nothing on the server said what the score was, so a round that stopped scoring (bot
+        /// deaths swallowed by the death gate, fixed alongside this) ran for weeks looking
+        /// healthy: every phase line printed 0 / 0 because the reset had already run. Thirty
+        /// seconds is two lines a minute per server -- enough to read a round's pace off the log.
+        /// </remarks>
+        private const float ScoreLogSeconds = 30f;
+
+        private float _sinceScoreLog;
+
         /// <summary>The authoritative match. Null until <c>Awake</c>.</summary>
         public MatchStateMachine Match => _match;
 
@@ -74,16 +110,39 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Raised when the world must be torn down. The spawner subscribes.</summary>
         public event System.Action WorldResetRequested;
 
+        /// <summary>
+        /// Raised AFTER the reset has run, carrying the audit it produced.
+        /// </summary>
+        /// <remarks>
+        /// <b>Why a second event, when <see cref="WorldResetRequested"/> already exists.</b> That
+        /// one fires BEFORE the teardown — it is what tells the spawners to despawn — so a
+        /// measurement taken on it reports the state the reset was about to clear. This one fires
+        /// after, on the same snapshot the log line below is written from, so a recorder and a
+        /// reader cannot reach different verdicts about the same reset.
+        /// <para>
+        /// <b>And why the sink cannot just watch the phase.</b> <c>MatchPhase.Resetting</c> lasts
+        /// one tick and is left inside the same <c>MatchStateMachine.Tick</c> call that performs
+        /// the reset, at this component's execution order of 100. Anything sampling the phase
+        /// later in the frame — <c>HeadlessLoadBootstrap</c> is at 300 — sees either
+        /// <c>WaitingForPlayers</c> or a PRE-reset <c>Resetting</c>, and on a catch-up frame that
+        /// steps no tick it sees neither. Measured on <c>p7-load-move</c>: the server logged three
+        /// resets and a phase-sampled recorder found one, with the wrong state attached to it.
+        /// </para>
+        /// </remarks>
+        public event System.Action<ServerStateSnapshot> MatchResetCompleted;
+
         private void Awake()
         {
             _loop = GetComponent<ServerTickLoop>();
 
             var rules = new MatchRules
             {
-                MinPlayersToStart = _minPlayersToStart,
-                WarmupSeconds     = _warmupSeconds,
-                PostMatchSeconds  = _postMatchSeconds,
-                StartTickets      = _startTickets,
+                MinPlayersToStart      = _minPlayersToStart,
+                WarmupSeconds          = _warmupSeconds,
+                PostMatchSeconds       = _postMatchSeconds,
+                VictoryPoints          = _victoryPoints,
+                EliminationGraceSeconds = _eliminationGraceSeconds,
+                EliminationDwellSeconds = _eliminationDwellSeconds,
             };
 
             _actorIds = new ActorIdPool(
@@ -99,6 +158,8 @@ namespace Ironfront.Net.Unity.Server
             _match = new MatchStateMachine(rules, points);
             _match.PhaseChanged   += OnPhaseChanged;
             _match.ResetRequested += OnResetRequested;
+            _match.BothTeamsEliminated += OnBothTeamsEliminated;
+            _match.SpawnPointCensusDanger += OnSpawnPointCensusDanger;
 
             if (_points != null && points.Length > 0)
                 _slave = new CapturePointSlave(_points, points.Length);
@@ -111,11 +172,103 @@ namespace Ironfront.Net.Unity.Server
             _loop.BindMatchController(this);
         }
 
+        /// <summary>
+        /// Adopts the map's opening capture-point ownership, once every scene component has
+        /// settled it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Start, not Awake, and the execution order is why.</b> This component runs at 100,
+        /// so its <c>Start</c> is after <c>CapturePoint.Start</c> (order 0) — and
+        /// <c>CapturePoint.Start</c> is what decides the opening ownership, because it applies
+        /// <c>reverseMode</c> (teams swapped) and <c>assaultMode</c> (neutral points handed to
+        /// team 1). Adopting in <c>Awake</c>, where the states are built, would read the
+        /// pre-swap authored value and start a reversed match with the bases exchanged on the
+        /// server only. <c>CapturePoint.Start</c>'s own remark already promised this adoption;
+        /// nothing performed it (X-53).
+        /// </para>
+        /// <para>
+        /// Nothing has ticked yet: <c>FixedUpdate</c> is guaranteed to follow <c>Start</c>, so
+        /// no round has begun against neutral state.
+        /// </para>
+        /// </remarks>
+        /// <summary>
+        /// Said out loud, once, when no team holds a spawn point. Silent, this is an end/reset
+        /// loop that looks from a client like the world dissolving underfoot (X-53).
+        /// </summary>
+        private void OnBothTeamsEliminated()
+        {
+            Debug.LogError(
+                "[net] elimination fired against BOTH teams: neither holds a spawn point, so "
+                + "every round ends in a draw about a second after it starts and resets forever. "
+                + "Either the map authors no opening owner, or the host is not adopting it -- "
+                + "look for '[net] opening ownership adopted' above.");
+        }
+
+        /// <summary>
+        /// Logs the exact census <see cref="MatchStateMachine.ApplyElimination"/> is deciding
+        /// on, the instant either team's held-spawn-point count crosses to or from zero. Before
+        /// this event existed the score could jump 0 to 200 between two broadcasts with nothing
+        /// recorded to explain why -- a full investigation instead of a five-minute read of this
+        /// line (X-85).
+        /// </summary>
+        private void OnSpawnPointCensusDanger(int team0, int team1)
+            => Debug.Log($"[net] spawn-point census: team0={team0} team1={team1} "
+                         + $"(needs {_eliminationDwellSeconds:F1}s continuously at zero before "
+                         + "elimination fires)");
+
+        private void Start()
+        {
+            if (_match == null || _points == null) return;
+
+            int count = _match.CapturePoints.Count;
+            int adopted = 0;
+
+            for (int i = 0; i < count && i < _points.Count; i++)
+            {
+                // -1 fully team 0, +1 fully team 1, 0 neutral -- the axis CapturePointState
+                // uses. The scene's own spelling is 0 / 1 / -1, which is a different axis and
+                // is converted here rather than at either end.
+                int owner = _points.GetOwner(i);
+                float opening = owner == TeamId.Team0 ? -1f : owner == TeamId.Team1 ? 1f : 0f;
+
+                _match.AdoptOpeningOwner(i, opening);
+                if (owner == TeamId.Team0 || owner == TeamId.Team1) adopted++;
+
+                // P3 task 3.1. The count below says how many points start owned; it does not
+                // say WHICH, nor what float each one adopted -- and the flag's pole height is
+                // that float's magnitude. Recording it per point is what lets a run be graded
+                // against the wire rather than against either side's source.
+                Debug.Log($"[net] opening point {i}: scene owner {owner} -> Owner {opening:F2} "
+                          + $"(control {(opening < 0f ? -opening : opening):F2})");
+            }
+
+            // Counted and stated rather than assumed. A map that hands NEITHER team a base
+            // makes both spawn-point counts zero, which ApplyElimination reads as a double
+            // wipe-out one second into Playing -- the loop X-53 was. If that is ever true again
+            // it should be one log line, not a four-hour investigation.
+            if (adopted == 0)
+            {
+                Debug.LogError(
+                    $"[net] no capture point in this scene is authored to either team, so "
+                    + "neither starts with a base and the round will end in a draw about a "
+                    + "second after it begins. Author an opening owner on at least one point "
+                    + "per team (Dustbowl gives team 0 Oasis and team 1 Fortress).");
+            }
+            else
+            {
+                Debug.Log($"[net] opening ownership adopted: {adopted} of {count} "
+                          + "capture point(s) start owned.");
+            }
+        }
+
         private void OnDestroy()
         {
             if (_match == null) return;
             _match.PhaseChanged   -= OnPhaseChanged;
             _match.ResetRequested -= OnResetRequested;
+            _match.BothTeamsEliminated -= OnBothTeamsEliminated;
+            _match.SpawnPointCensusDanger -= OnSpawnPointCensusDanger;
         }
 
         private void FixedUpdate()
@@ -127,6 +280,7 @@ namespace Ironfront.Net.Unity.Server
 
             var presence = new ReadOnlySpan<ActorPresence>(_presence, 0, _presenceCount);
             _match.Tick(Time.fixedDeltaTime, _loop.PlayerCount, presence);
+            LogScoreWhilePlaying(Time.fixedDeltaTime);
 
             // AFTER the tick and BEFORE the broadcasts, so the value written onto
             // SpawnPoint.owner and the value put on the wire are the same one -- and so a
@@ -180,7 +334,7 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         private CapturePointState[] BuildCapturePoints()
         {
-            _points = NetServerBindings.CapturePoints;
+            _points = NetSceneBindings.CapturePoints;
 
             if (_points == null)
             {
@@ -236,6 +390,34 @@ namespace Ironfront.Net.Unity.Server
             }
 
             return states;
+        }
+
+        /// <summary>
+        /// Prints the score, the flags each side holds (the kill multiplier) and how many deaths
+        /// reached the match, every <see cref="ScoreLogSeconds"/> of a Playing round.
+        /// </summary>
+        /// <remarks>
+        /// The dropped-repeat count is the death gate's own counter. It is expected to be small
+        /// -- two damage paths can report one death -- and a number that climbs with the deaths
+        /// is the signature of real deaths being thrown away, which is what it read for bots.
+        /// </remarks>
+        private void LogScoreWhilePlaying(float deltaSeconds)
+        {
+            if (_match.Phase != MatchPhase.Playing)
+            {
+                _sinceScoreLog = 0f;
+                return;
+            }
+
+            _sinceScoreLog += deltaSeconds;
+            if (_sinceScoreLog < ScoreLogSeconds) return;
+            _sinceScoreLog = 0f;
+
+            Debug.Log($"[net] match score {_match.Score0} / {_match.Score1} "
+                      + $"(win by {_match.VictoryPoints}), flags "
+                      + $"{_match.OwnedPointCount(TeamId.Team0)} / {_match.OwnedPointCount(TeamId.Team1)}, "
+                      + $"deaths {_loop.Scores.DeathsRecorded}, repeat death reports dropped "
+                      + $"{_loop.RespawnGate.DuplicateDeathsSuppressed}");
         }
 
         /// <summary>The <c>id -> name</c> order, for the D7 fallback's one log line.</summary>
@@ -343,7 +525,7 @@ namespace Ironfront.Net.Unity.Server
 
         private void OnPhaseChanged(MatchPhase phase)
             => Debug.Log($"[net] match phase -> {phase} "
-                         + $"({_match.Tickets0} / {_match.Tickets1} tickets)");
+                         + $"({_match.Score0} / {_match.Score1}, win by {_match.VictoryPoints})");
 
         private void OnResetRequested()
         {
@@ -363,10 +545,18 @@ namespace Ironfront.Net.Unity.Server
             _loop.ResetForNewMatch();
 
             ServerStateSnapshot state = _loop.AuditState();
+            MatchResetCompleted?.Invoke(state);
 
             // IsCleanOfActorState, not IsClean: ResetForNewMatch deliberately keeps its sessions
             // because a reset is not a disconnect, so IsClean's Sessions == 0 could never hold
             // here and this line fired on every round transition with anyone connected.
+            //
+            // That split fixed the sessions term and left the SAME failure one field over:
+            // ActorIdsInUse was compared against 0 while the reset was deliberately told to
+            // retain Dustbowl's 41 scene-resident bots, so this ERROR fired at every round
+            // transition anyway -- and hid a real projectile-id leak behind it for the life of
+            // the process. The predicate now compares against the retained count and the
+            // rendered snapshot names every failing term. X-73, X-74.
             if (state.IsCleanOfActorState) return;
 
             // Phase-03 trap 1. Logged rather than asserted: the leak this catches shows up on

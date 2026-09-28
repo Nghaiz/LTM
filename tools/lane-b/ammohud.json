@@ -1,0 +1,20 @@
+{
+  "name": "ammohud-idle",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 180,
+      "respawn": true
+    },
+    {
+      "checkpoint": "deployed",
+      "seconds": 2.0,
+      "yawDegrees": 180
+    },
+    {
+      "checkpoint": "settled",
+      "seconds": 10.0,
+      "yawDegrees": 180
+    }
+  ]
+}

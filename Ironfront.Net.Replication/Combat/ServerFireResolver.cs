@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
@@ -32,6 +32,17 @@ namespace Ironfront.Net.Replication.Combat
         /// Any non-zero value. Seeded rather than time-based so a failing hit-rate measurement
         /// can be replayed exactly; AD-3 means nothing depends on the client agreeing.
         /// </param>
+        /// <summary>
+        /// The compensator this resolver shoots through, for diagnostics only.
+        /// </summary>
+        /// <remarks>
+        /// Exposed so a shot log can print <c>ShotsOccluded</c> and <c>PresentFallbacks</c>
+        /// beside the shot they belong to. A ray can be proven by slab test to enter a hitbox
+        /// and still resolve as a miss -- occlusion and a rewound pose are the two ways -- and
+        /// without these counters those are indistinguishable from a bad aim. X-19.
+        /// </remarks>
+        public LagCompensator LagCompensator => _lagCompensator;
+
         public ServerFireResolver(LagCompensator lagCompensator, uint seed = 0x9E3779B9)
         {
             _lagCompensator = lagCompensator ?? throw new ArgumentNullException(nameof(lagCompensator));
@@ -153,6 +164,53 @@ namespace Ironfront.Net.Replication.Combat
 
                 hits[hitCount++] = hit;
             }
+
+            return FireRejection.None;
+        }
+
+        /// <summary>
+        /// Resolves one trigger pull on a weapon that LAUNCHES rather than sweeps. Ledger
+        /// <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The same authority, minus the sweep.</b> It runs
+        /// <see cref="CheckCanFire"/> — alive, unholstered, not reloading, off cooldown, has
+        /// ammo — then stamps the cooldown and spends the round. Sharing that method rather than
+        /// restating its five rules is the point: two copies of "what a legal trigger pull is"
+        /// would drift, and the one that drifted would be the one nobody was testing.
+        /// <c>MountedWeaponAuthority</c> keeps its own <c>CheckCanFire</c> beside its shot for
+        /// exactly this reason.
+        /// </para>
+        /// <para>
+        /// <b>What happens after acceptance is the ENGINE's</b>, reached through
+        /// <c>IGameplayActorSource.FireCarriedWeapon</c>: a throwable schedules its release on a
+        /// tick (V7-D7) and a launcher spawns its projectile, and both announce themselves as
+        /// <c>S_PROJECTILE_SPAWN</c>. Nothing about the flight belongs here.
+        /// </para>
+        /// <para>
+        /// <b><see cref="ShotsFired"/> counts these too.</b> A launch is a shot: leaving it out
+        /// would make the fire-rate signal blind on exactly the weapons whose cooldown is
+        /// longest and whose abuse is most visible.
+        /// </para>
+        /// </remarks>
+        /// <returns><see cref="FireRejection.None"/> when the launch was accepted.</returns>
+        public FireRejection ResolveLaunch(
+            ref WeaponRuntimeState state,
+            in WeaponConfig config,
+            bool shooterIsAlive,
+            float nowSeconds)
+        {
+            FireRejection rejection = CheckCanFire(in state, in config, shooterIsAlive, nowSeconds);
+            if (rejection != FireRejection.None)
+            {
+                if (rejection == FireRejection.OnCooldown) FireRateViolations++;
+                return rejection;
+            }
+
+            state.LastFiredTime = nowSeconds;
+            state.AmmoInClip--;
+            ShotsFired++;
 
             return FireRejection.None;
         }

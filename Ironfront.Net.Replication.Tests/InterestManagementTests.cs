@@ -30,8 +30,9 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData(10f, InterestLevel.Near)]
         [InlineData(59f, InterestLevel.Near)]
         [InlineData(61f, InterestLevel.Mid)]
-        [InlineData(149f, InterestLevel.Mid)]
-        [InlineData(151f, InterestLevel.Far)]
+        [InlineData(99f, InterestLevel.Mid)]
+        [InlineData(101f, InterestLevel.Far)]
+        [InlineData(149f, InterestLevel.Far)]
         [InlineData(299f, InterestLevel.Far)]
         [InlineData(499f, InterestLevel.Far)]
         public void DistanceBandsMatchTheArchitectureTable(float distance, InterestLevel expected)
@@ -138,17 +139,32 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void ATeammateAtTwoHundredFiftyMetresIsHeldAtMid()
+        public void ATeammateInsideTheFloorIsHeldAtMidAndAnEnemyIsNot()
         {
             // The minimap and command map show teammates wherever they are, so a teammate
             // updating at 4 Hz would visibly crawl between positions.
+            //
+            // 150 m rather than 250: the floor is bounded by FarRadius, which moved 300 -> 200
+            // for B-16, so 250 m is now OUTSIDE it and the assertion would have been testing
+            // the absence of the floor rather than its presence.
             var manager = new InterestManager();
             ActorSnapshotEntry viewer = Actor(1, Vec3.Zero, TeamA);
-            ActorSnapshotEntry mate = Actor(2, new Vec3(250f, 0f, 0f), TeamA);
-            ActorSnapshotEntry enemy = Actor(3, new Vec3(250f, 0f, 0f), TeamB);
+            ActorSnapshotEntry mate = Actor(2, new Vec3(150f, 0f, 0f), TeamA);
+            ActorSnapshotEntry enemy = Actor(3, new Vec3(150f, 0f, 0f), TeamB);
 
             Assert.Equal(InterestLevel.Mid, manager.Evaluate(in viewer, in mate));
             Assert.Equal(InterestLevel.Far, manager.Evaluate(in viewer, in enemy));
+        }
+
+        /// <summary>The floor stops at <see cref="InterestManager.FarRadius"/>, not at the cull.</summary>
+        [Fact]
+        public void ATeammateBeyondTheFloorGetsNoLift()
+        {
+            var manager = new InterestManager();
+            ActorSnapshotEntry viewer = Actor(1, Vec3.Zero, TeamA);
+            ActorSnapshotEntry mate = Actor(2, new Vec3(250f, 0f, 0f), TeamA);
+
+            Assert.Equal(InterestLevel.Far, manager.Evaluate(in viewer, in mate));
         }
 
         // ------------------------------------------------------------------ send rates

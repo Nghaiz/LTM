@@ -37,6 +37,22 @@ namespace Ironfront.Net.Unity
         private readonly Transform _lookTransform;
         private readonly Func<bool> _aiming;
 
+        /// <summary>
+        /// The sprint bit from the three raw keys, or null to send the raw sprint key alone.
+        /// </summary>
+        /// <remarks>
+        /// <b>It takes the keys rather than fetching them, and that is not a style choice.</b> The
+        /// gate this supplies is <c>FpsActorController.IsSprinting()</c>, which is written in terms
+        /// of <c>Crouch()</c> and <c>Aiming()</c> — and those read back through
+        /// <see cref="Buttons"/>. A no-argument delegate therefore closed a cycle:
+        /// <c>Buttons</c> asked for the sprint bit, the gate asked whether the player was crouching,
+        /// and answering that asked <c>Buttons</c> for the crouch bit, which recomputed the sprint
+        /// bit. The stack overflow it produced was on the first frame after a map loaded.
+        /// </remarks>
+        private readonly Func<bool, bool, bool, bool> _sprinting;
+
+        private readonly Func<int> _weaponSlotIntent;
+
         /// <param name="lookTransform">
         /// The transform whose rotation IS the player's aim — the first-person camera or its
         /// parent. Null is tolerated: <see cref="Yaw"/> and <see cref="Pitch"/> then report 0,
@@ -49,17 +65,56 @@ namespace Ironfront.Net.Unity
         /// bool, so the read stays live like every other member here; null means never aiming,
         /// which is what a source with no controller behind it should report.
         /// </param>
-        public LocalInputSource(Transform lookTransform, Func<bool> aiming = null)
+        /// <param name="weaponSlotIntent">
+        /// The weapon slot the player is asking for, or -1. Also the controller's — the wheel,
+        /// the number keys and a latch this class cannot see.
+        /// </param>
+        /// <param name="sprinting">
+        /// Whether this body IS sprinting, which is a different question from whether the Sprint
+        /// key is down. <c>FpsActorController.IsSprinting()</c> is
+        /// <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading() &amp;&amp; inputSource.Sprint()
+        /// &amp;&amp; !IsSeated()</c>, and the trigger rule on BOTH sides of the wire is built on the
+        /// answer: a sprinting body's weapon is holstered and its trigger is refused.
+        /// <para>
+        /// <b>Sending the raw key made the client and the game disagree about one action.</b>
+        /// Holding Sprint while aiming is not sprinting — the game fires, spends the round and
+        /// spawns the projectile — but the raw bit said "sprinting", so the client's prediction
+        /// and the server both refused the shot, and the next snapshot wrote the unspent round
+        /// back into the clip. The count fell by one and rose by one and the magazine never
+        /// emptied, and the server took no shot at all: a gun that looks like it works and
+        /// cannot kill anything.
+        /// </para>
+        /// <para>
+        /// Null keeps the raw read, which is what this class did before the parameter existed
+        /// and what a source with no controller behind it can still answer.
+        /// </para>
+        /// </param>
+        public LocalInputSource(
+            Transform lookTransform, Func<bool> aiming = null, Func<int> weaponSlotIntent = null,
+            Func<bool, bool, bool, bool> sprinting = null)
         {
             _lookTransform = lookTransform;
             _aiming = aiming;
+            _weaponSlotIntent = weaponSlotIntent;
+            _sprinting = sprinting;
         }
 
-        public float MoveX => Input.GetAxis("Horizontal");
+        /// <summary>
+        /// Whether a text field owns the keyboard this frame, in which case every keyboard-driven
+        /// read below reports neutral.
+        /// </summary>
+        /// <remarks>
+        /// Mouse look is deliberately NOT suppressed: <see cref="LookDeltaX"/> and
+        /// <see cref="LookDeltaY"/> are not keys, so typing cannot produce them, and freezing the
+        /// camera while a chat line is open is a separate design decision this does not make.
+        /// </remarks>
+        private static bool Typing => LocalTextEntry.Composing;
 
-        public float MoveZ => Input.GetAxis("Vertical");
+        public float MoveX => Typing ? 0f : Input.GetAxis("Horizontal");
 
-        public float Lean => Input.GetAxis("Lean");
+        public float MoveZ => Typing ? 0f : Input.GetAxis("Vertical");
+
+        public float Lean => Typing ? 0f : Input.GetAxis("Lean");
 
         public float LookDeltaX => Input.GetAxis("Mouse X");
 
@@ -84,8 +139,10 @@ namespace Ironfront.Net.Unity
 
         /// <summary>
         /// The button bitfield. Each expression here is a transcription of the line it replaced
-        /// in <c>FpsActorController</c> — including the <c>LoadoutUi.IsOpen()</c> terms, which
-        /// are part of the button's meaning and not a caller's concern.
+        /// in <c>FpsActorController</c> — including the loadout-screen terms, which are part of
+        /// the button's meaning and not a caller's concern. Those now come from
+        /// <see cref="ILocalInputEnvironment.LoadoutScreenOpen"/> rather than from the UI class
+        /// directly, which is a change of route and not of meaning (C2).
         /// </summary>
         /// <remarks>
         /// <c>InputShadowCompare</c> re-evaluates those original expressions beside these and
@@ -96,16 +153,32 @@ namespace Ironfront.Net.Unity
         {
             get
             {
-                bool loadoutOpen = LoadoutUi.IsOpen();
+                bool loadoutOpen = NetInputBindings.Environment.LoadoutScreenOpen;
+
+                // Every button, not just the three the loadout screen suppresses. Reload, jump,
+                // crouch, sprint and use are all keys a player types -- R, space, C, shift, E --
+                // so a chat line that left them live would reload and jump its way through a
+                // sentence.
+                if (Typing) return InputButtonPacker.Pack(
+                    fire: false, aim: false, reload: false,
+                    jump: false, crouch: false, sprint: false, use: false);
+
+                // The three keys the sprint gate is written in terms of, computed HERE and handed
+                // over, so the gate never has to ask this property for them. See _sprinting's
+                // remark for what asking cost.
+                bool aimKey = Input.GetButton("Fire2") || Input.GetMouseButton(1);
+                bool crouchKey = Input.GetButton("Crouch");
+                bool sprintKey = Input.GetButton("Sprint");
 
                 return InputButtonPacker.Pack(
                     fire:   (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen,
-                    aim:    (Input.GetButton("Fire2") || Input.GetMouseButton(1)) && !loadoutOpen,
+                    aim:    aimKey && !loadoutOpen,
                     reload: Input.GetButton("Reload") && !loadoutOpen,
                     jump:   Input.GetButton("Jump"),
-                    crouch: Input.GetButton("Crouch"),
-                    sprint: Input.GetButton("Sprint"),
-                    use:    Input.GetButton("Use"));
+                    crouch: crouchKey,
+                    sprint: _sprinting != null ? _sprinting(crouchKey, aimKey, sprintKey) : sprintKey,
+                    use:    Input.GetButton("Use"),
+                    weaponSlot: _weaponSlotIntent != null ? _weaponSlotIntent() : -1);
             }
         }
 
@@ -122,6 +195,28 @@ namespace Ironfront.Net.Unity
         public float HeliPitch => HelicopterControls.Pitch;
 
         /// <summary>
+        /// Always false: the keyboard path still lives in <c>NetClientLocalCombatDriver</c>,
+        /// which owns the serialized key and reads it directly.
+        /// </summary>
+        /// <remarks>
+        /// Moving that read here would be the right home for it -- every other keyboard read
+        /// in the client is in this class -- but it is a rebind change, and rebinding is not
+        /// what check 13 is blocked on. Left as named debt rather than half-done.
+        /// </remarks>
+        public bool RespawnPressed => false;
+
+        /// <summary>
+        /// Always false: the keyboard path lives in <c>ClientSeatRequester</c>, which owns the
+        /// serialized key and reads it directly.
+        /// </summary>
+        /// <remarks>
+        /// The same shape and the same debt as <see cref="RespawnPressed"/> above, and named
+        /// again rather than left implicit — moving both reads here is the right end state and
+        /// is a rebind change, which is not what ledger X-30 was blocked on.
+        /// </remarks>
+        public bool SeatTogglePressed => false;
+
+        /// <summary>
         /// The four helicopter controls, scaled and inverted per this user's options (V5-D9).
         /// </summary>
         /// <remarks>
@@ -134,7 +229,8 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// <para>
         /// <b>The scaling happens here, on the sender, and that is the decision.</b>
-        /// <c>OptionsUi.GetOptions()</c> is a client-local setting the server does not have —
+        /// <see cref="ILocalInputEnvironment.HelicopterOptions"/> is a client-local setting the
+        /// server does not have —
         /// reaching it at server role is an authority hole and a headless
         /// <c>NullReferenceException</c> at once. So a finished control vector crosses the wire
         /// and the server treats it as opaque, bounded by <c>Vehicle.Clamp4</c> exactly as it
@@ -152,15 +248,15 @@ namespace Ironfront.Net.Unity
         {
             get
             {
-                OptionsUi.Options options = OptionsUi.GetOptions();
-                float sensitivity = options.mouseSensitivity * options.helicopterSensitivity;
+                HelicopterControlOptions options = NetInputBindings.Environment.HelicopterOptions;
+                float sensitivity = options.MouseSensitivity * options.HelicopterSensitivity;
 
-                if (options.helicopterType == OptionsUi.Options.HELICOPTER_TYPE_CUSTOM)
+                if (options.Style == HelicopterControlStyle.Custom)
                 {
-                    float stickPitch = Input.GetAxis("Helicopter Pitch") * (options.heliInvertPitch ? -1f : 1f);
-                    float stickYaw = Input.GetAxis("Helicopter Yaw") * (options.heliInvertYaw ? -1f : 1f);
-                    float stickRoll = Input.GetAxis("Helicopter Roll") * (options.heliInvertRoll ? -1f : 1f);
-                    float stickCollective = Input.GetAxis("Helicopter Throttle") * (options.heliInvertThrottle ? -1f : 1f);
+                    float stickPitch = Input.GetAxis("Helicopter Pitch") * (options.InvertPitch ? -1f : 1f);
+                    float stickYaw = Input.GetAxis("Helicopter Yaw") * (options.InvertYaw ? -1f : 1f);
+                    float stickRoll = Input.GetAxis("Helicopter Roll") * (options.InvertRoll ? -1f : 1f);
+                    float stickCollective = Input.GetAxis("Helicopter Throttle") * (options.InvertThrottle ? -1f : 1f);
 
                     return new HelicopterAxes(
                         stickYaw * 30f * sensitivity,
@@ -175,7 +271,7 @@ namespace Ironfront.Net.Unity
                 float mouseX = sensitivity * LookDeltaX;
                 float mouseY = sensitivity * LookDeltaY;
 
-                if (!options.heliInvertPitch) mouseY = -mouseY;
+                if (!options.InvertPitch) mouseY = -mouseY;
 
                 if (_aiming != null && _aiming())
                 {
@@ -183,7 +279,7 @@ namespace Ironfront.Net.Unity
                     mouseY = 0f;
                 }
 
-                if (options.helicopterType == OptionsUi.Options.HELICOPTER_TYPE_BATTLEFIELD)
+                if (options.Style == HelicopterControlStyle.Battlefield)
                     return new HelicopterAxes(MoveX, MoveZ, mouseX * 20f, mouseY * 30f);
 
                 return new HelicopterAxes(mouseX * 30f, MoveZ, MoveX * 20f, mouseY * 30f);

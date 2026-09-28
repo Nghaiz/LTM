@@ -83,8 +83,8 @@ namespace Ironfront.Net.Replication.Tests
         [Theory]
         [InlineData(59.9f, InterestLevel.Near)]
         [InlineData(60.1f, InterestLevel.Mid)]
-        [InlineData(149.9f, InterestLevel.Mid)]
-        [InlineData(150.1f, InterestLevel.Far)]
+        [InlineData(99.9f, InterestLevel.Mid)]
+        [InlineData(100.1f, InterestLevel.Far)]
         [InlineData(499.9f, InterestLevel.Far)]
         public void VehicleBandEdgesMatchTheActorBands(float distance, InterestLevel expected)
         {

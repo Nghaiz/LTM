@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
@@ -14,7 +15,7 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b><see cref="IsLocalActor(Actor)"/> replaces <c>!aiControlled</c>, everywhere V10 gates
+    /// <b><see cref="IsLocalActor(IGameplayActorPresence)"/> replaces <c>!aiControlled</c>, everywhere V10 gates
     /// a client-only singleton.</b> That flag means "is this a bot" and coincided with "is this
     /// the local player" only while the local player was the only non-AI actor in the process.
     /// The moment a remote human has an <c>Actor</c>, the coincidence ends: a remote player
@@ -36,10 +37,30 @@ namespace Ironfront.Net.Unity.Client
     /// </remarks>
     public static class NetClientPresenterGuard
     {
-        // Warnings that must fire once and then stay quiet. A presenter whose bootstrap was
-        // missing would otherwise log every frame, and a log that repeats 60 times a second is
-        // read as noise and filtered out — which is the same as not logging at all.
-        private static readonly HashSet<string> _warned = new HashSet<string>();
+        // PHASE C5b: the once-only warning set, the local-actor predicate and the reset moved to
+        // NetPresenterGate in Ironfront.Net.Unity.Shared, and the members below FORWARD to it.
+        //
+        // They forward rather than being deleted because this assembly's own 37 call sites are
+        // correct as written, and re-spelling them would have made a layering phase into a
+        // presenter rewrite. There is still exactly one implementation of each: the set lives
+        // once, over there, so a legacy WarnOnce and a presenter WarnOnce share one dedup key
+        // space exactly as they did when both halves were in this file.
+        //
+        // What could NOT move is below the forwarders: TryResolveClient hands back a
+        // NetClientBootstrap, and TryResolveLocalTeam reads client.Router.Decoder.Current.
+
+        /// <summary>
+        /// Hands <see cref="TryResolveLocalTeam"/> to the shared gate, which cannot compute it.
+        /// </summary>
+        /// <remarks>
+        /// <c>BeforeSceneLoad</c>, so no presenter's <c>Awake</c> can ask for a team before the
+        /// resolver is in place — and after <c>NetClientBindings.ResetOnLoad</c>, which runs at
+        /// <c>SubsystemRegistration</c> and would otherwise clear this registration right after
+        /// it was made.
+        /// </remarks>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        internal static void InstallGateResolvers()
+            => NetClientBindings.LocalTeam = TryResolveLocalTeam;
 
         /// <summary>
         /// Whether client-side presentation should run. False offline and false on a server, so
@@ -72,16 +93,17 @@ namespace Ironfront.Net.Unity.Client
         /// Whether this actor is the local player — the predicate that replaces
         /// <c>!aiControlled</c> on every per-actor path that touches a client-only singleton.
         /// </summary>
-        public static bool IsLocalActor(Actor actor)
-        {
-            if (actor == null) return false;
-
-            FpsActorController local = FpsActorController.instance;
-            bool isLocalPlayerRig = local != null && ReferenceEquals(local.actor, actor);
-
-            return LocalActorIdentity.IsLocalActor(
-                NetContext.IsOffline, actor.aiControlled, isLocalPlayerRig);
-        }
+        /// <remarks>
+        /// <para>
+        /// <b>The parameter is the seam, and the null test with it.</b> <c>actor == null</c> here
+        /// is a plain reference comparison — the interface has none of <c>UnityEngine.Object</c>'s
+        /// overloaded equality — so a destroyed body arrives non-null and is rejected by
+        /// <c>Exists</c> on the far side instead. Both spellings answer false for a corpse; only
+        /// this one keeps answering it from an assembly that cannot name <c>Actor</c>.
+        /// </para>
+        /// </remarks>
+        public static bool IsLocalActor(IGameplayActorPresence actor)
+            => NetPresenterGate.IsLocalActor(actor);
 
         /// <summary>This client's own actor id, if the server has assigned one yet.</summary>
         public static bool TryResolveLocalActorId(out ushort id)
@@ -121,6 +143,42 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>
+        /// Any actor's team, read from the replicated snapshot entry for that actor. P17 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The generalisation of <see cref="TryResolveLocalTeam"/>, not a second path to the
+        /// same answer.</b> That method is this one applied to
+        /// <see cref="TryResolveLocalActorId"/>, and it is deliberately NOT rewritten to call
+        /// this: it reaches the LOCAL team, which <c>NetPresenterGate</c> publishes to
+        /// <c>Assembly-CSharp</c> through a registered resolver, and collapsing the two would put
+        /// a per-actor question behind a seam whose whole contract is "this client's own side".
+        /// </para>
+        /// <para>
+        /// <b>False is a normal outcome.</b> The killfeed names two actors per line and either
+        /// can be outside this client's interest radius, in which case the snapshot never carried
+        /// them. The caller draws that neutrally; it must not fall back to team 0, which is the
+        /// V10 D17 bug one element over.
+        /// </para>
+        /// </remarks>
+        public static bool TryResolveActorTeam(ushort actorId, out byte team)
+        {
+            team = TeamId.None;
+
+            if (actorId == LocalActorIdentity.UnassignedActorId) return false;
+
+            NetClientBootstrap client = NetClientBootstrap.Current;
+            if (client == null) return false;
+
+            WorldSnapshot snapshot = client.Router.Decoder.Current;
+            if (snapshot == null) return false;
+            if (!snapshot.TryFind(actorId, out ActorSnapshotEntry entry)) return false;
+
+            team = entry.Team;
+            return true;
+        }
+
+        /// <summary>
         /// Resolves the client bootstrap, logging once at warning when it is missing.
         /// </summary>
         /// <remarks>
@@ -135,27 +193,55 @@ namespace Ironfront.Net.Unity.Client
             if (client != null) return true;
 
             WarnOnce(
-                "no-bootstrap:" + presenterName,
+                NetPresenterGate.NoBootstrapPrefix + presenterName,
                 $"[net] {presenterName} found no NetClientBootstrap in Awake. It will never "
                 + "subscribe, so nothing it presents will appear. Put it on the client "
                 + "bootstrap object, or after it in execution order.");
             return false;
         }
 
-        /// <summary>Logs a warning the first time this key is seen, and never again.</summary>
-        public static void WarnOnce(string key, string message)
-        {
-            if (!_warned.Add(key)) return;
-            Debug.LogWarning(message);
-        }
+        /// <summary>
+        /// The prefix every no-bootstrap key carries. <b>E12's whole pass condition is the
+        /// emptiness of this set.</b>
+        /// </summary>
+        /// <remarks>
+        /// A named constant rather than a literal in two places, because
+        /// <see cref="PresentersThatFoundNoBootstrap"/> filtering on a prefix that
+        /// <see cref="TryResolveClient"/> no longer writes would report a permanent, cheerful
+        /// zero — a check that cannot fail.
+        /// </remarks>
 
         /// <summary>
-        /// Clears the once-only warning set. Called at subsystem registration for the same
-        /// reason <c>NetContext.ResetOnLoad</c> exists: with domain reload disabled, statics
-        /// survive into the next Play session, and a warning already "spent" in the previous run
-        /// would stay silent in the one where it matters.
+        /// The presenters that found no bootstrap in <c>Awake</c> this session, by name. Empty
+        /// is the healthy answer.
         /// </summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetOnLoad() => _warned.Clear();
+        /// <remarks>
+        /// <para>
+        /// <b>This is check 6 (E12), and it needs no programme.</b> E12's pass condition, as
+        /// V10 § 7 states it, is <i>"no presenter logs its null-bootstrap warning on a normal
+        /// client start"</i> — a property of an ordinary start, not of a provoked situation. So
+        /// every lane-B run ever taken has already exercised the case; what no artifact carried
+        /// was the outcome. Reading it here turns E12 from ungradeable into graded on a run that
+        /// was going to happen anyway.
+        /// </para>
+        /// <para>
+        /// <b>Read from the same set the warning writes to, deliberately.</b> A separate counter
+        /// incremented beside <c>Debug.LogWarning</c> would be a second transcription that can
+        /// drift silently — and a diagnostic that disagrees with the log it is supposed to
+        /// summarise is worse than none, because the artifact is what gets quoted.
+        /// </para>
+        /// <para>
+        /// <b>Cleared by <c>NetPresenterGate</c> with the rest of the set</b>, so a warning
+        /// spent in a previous Play session cannot leak into this one's verdict — which with
+        /// domain reload disabled is not hypothetical.
+        /// </para>
+        /// </remarks>
+        public static IEnumerable<string> PresentersThatFoundNoBootstrap
+            => NetPresenterGate.PresentersThatFoundNoBootstrap;
+
+        /// <summary>Logs a warning the first time this key is seen, and never again.</summary>
+        public static void WarnOnce(string key, string message)
+            => NetPresenterGate.WarnOnce(key, message);
+
     }
 }

@@ -85,6 +85,7 @@ namespace Ironfront.MasterServer.Net
         private readonly TimeProvider _clock;
 
         private long _lastActivityMs;
+        private long _lastFrameAtMs;
         private int _disposed;
 
         internal ClientConnection(
@@ -111,6 +112,7 @@ namespace Ironfront.MasterServer.Net
             _serverCertificate = serverCertificate;
             ConnectedAtMs      = clock.NowMs();
             _lastActivityMs    = ConnectedAtMs;
+            _lastFrameAtMs     = ConnectedAtMs;
         }
 
         /// <summary>Monotonically increasing per host. Used in log lines.</summary>
@@ -228,6 +230,36 @@ namespace Ironfront.MasterServer.Net
         /// have held it indefinitely.
         /// </remarks>
         public long ConnectedAtMs { get; }
+
+        /// <summary>
+        /// Milliseconds on <see cref="TcpListenerHostOptions.Clock"/> at the last COMPLETE,
+        /// well-formed frame. Starts at <see cref="ConnectedAtMs"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The clock the unauthenticated deadline should have been measuring all along.</b>
+        /// <see cref="LastActivityMs"/> is reset by any byte, which is a clock the attacker
+        /// controls; <see cref="ConnectedAtMs"/> never moves at all, which is a deadline the
+        /// PLAYER cannot survive — <c>REGISTER</c> does not authenticate a connection (by
+        /// design: a successful register returns to the login form rather than logging in), so
+        /// the create-account screen ran on a fuse that started at accept and could not be
+        /// reset by anything the player did. Four fields is comfortably more than thirty
+        /// seconds of typing.
+        /// </para>
+        /// <para>
+        /// <b>A complete frame is the thing a Slowloris cannot fake.</b> The attack is a peer
+        /// that stays busy enough to look alive while never finishing anything, so a dribble of
+        /// bytes that never closes a frame leaves this untouched and dies on the same deadline
+        /// as total silence. A real client is the opposite: <c>MasterClient</c> has sent
+        /// <c>HEARTBEAT</c> every 15 s since the socket opened, authenticated or not, so a
+        /// player reading the form keeps this moving without doing anything.
+        /// </para>
+        /// <para>
+        /// The slot is still bounded — see <see cref="TcpListenerHostOptions.UnauthenticatedCeiling"/>,
+        /// which caps how long well-formed frames can hold an unauthenticated connection.
+        /// </para>
+        /// </remarks>
+        public long LastFrameAtMs => _lastFrameAtMs;
 
         /// <summary>How many complete frames this connection has produced.</summary>
         public int FramesReceived { get; private set; }
@@ -432,6 +464,12 @@ namespace Ironfront.MasterServer.Net
                 }
 
                 FramesReceived++;
+
+                // Stamped HERE, after the reader has produced a whole frame, and deliberately
+                // not beside the byte stamp above: the difference between the two is the whole
+                // Slowloris distinction. See LastFrameAtMs.
+                _lastFrameAtMs = _clock.NowMs();
+
                 _onFrame(this, msgType, body);
             }
         }

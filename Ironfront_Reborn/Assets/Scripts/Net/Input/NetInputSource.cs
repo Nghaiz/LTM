@@ -140,5 +140,15 @@ namespace Ironfront.Net.Unity
 
         /// <summary>See <see cref="HeliYaw"/>.</summary>
         public float HeliPitch => _heli.Pitch;
+
+        /// <summary>Always false. A remote input frame carries no respawn intent -- respawn is
+        /// its own reliable message, and the server is the one that receives it.</summary>
+        public bool RespawnPressed => false;
+
+        /// <summary>
+        /// Always false. A remote actor's seat changes arrive as <c>S_SEAT_CHANGE</c>, already
+        /// decided; there is no intent left for this source to raise.
+        /// </summary>
+        public bool SeatTogglePressed => false;
     }
 }

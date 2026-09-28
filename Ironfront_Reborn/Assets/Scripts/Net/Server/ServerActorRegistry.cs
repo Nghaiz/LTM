@@ -43,6 +43,37 @@ namespace Ironfront.Net.Unity.Server
         public int Count => _actors.Count;
 
         /// <summary>
+        /// How many registered bodies a joining connection could be given, claimed or not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The number <c>NetServerBootstrap</c> reports at startup, so what it prints is what
+        /// <see cref="TryClaimPlayerSlot"/> will actually find. It used to print
+        /// <c>Config.MaxConnections</c> — 16 — while exactly one body in the whole project had
+        /// <c>_availableForPlayers</c> set, so the server advertised sixteen slots, admitted
+        /// one, and refused connection two with <c>ServerFull</c>. Two numbers, nothing
+        /// comparing them (phase-3A § 2).
+        /// </para>
+        /// <para>
+        /// Counted rather than cached. A cached total is a third number that can disagree with
+        /// the other two, which is the defect this property exists to close.
+        /// </para>
+        /// </remarks>
+        public int ClaimableCount
+        {
+            get
+            {
+                int claimable = 0;
+                for (int i = 0; i < _actors.Count; i++)
+                {
+                    if (_actors[i] != null && _actors[i].AvailableForPlayers) claimable++;
+                }
+
+                return claimable;
+            }
+        }
+
+        /// <summary>
         /// Adds an actor, assigning an id when it does not have one.
         /// </summary>
         /// <remarks>
@@ -118,8 +149,33 @@ namespace Ironfront.Net.Unity.Server
             return false;
         }
 
-        /// <summary>Hands an unclaimed player slot to a joining connection.</summary>
-        public bool TryClaimPlayerSlot(out NetServerActor actor)
+        /// <summary>
+        /// Hands an unclaimed player slot ON <paramref name="team"/> to a joining connection.
+        /// Returns false when that side has none free, even if the other side does.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The team argument is the whole point.</b> This used to be a first-fit walk that
+        /// took the lowest free index, so the side a player landed on was whatever parity that
+        /// index happened to have — the lobby balanced teams and the answer never arrived.
+        /// </para>
+        /// <para>
+        /// <b>It also fixes the strand, and that is why it is one change and not two.</b>
+        /// <c>Release()</c> frees a body at its own index and a first-fit refill takes the
+        /// lowest, so occupancy is a prefix only until somebody in the MIDDLE leaves. Three
+        /// joiners take slots {0,1,2} = teams {0,1,0}; the slot-1 player disconnects; the live
+        /// set is {0,2} — two players, both on team 0, nobody on team 1, and nothing corrected
+        /// it. Keying the walk on team makes the next joiner take slot 1 back.
+        /// </para>
+        /// <para>
+        /// <b>A side can be full while the server is not.</b> The pool alternates teams as it
+        /// fills, so 16 connections is 8 bodies a side and the ninth joiner on one side is
+        /// refused with a half-empty server. That is the intended behaviour of a team-keyed
+        /// claim, and it is why the caller must answer with <c>DisconnectReason.TeamFull</c>
+        /// rather than <c>ServerFull</c>: one of those has a remedy the player can act on.
+        /// </para>
+        /// </remarks>
+        public bool TryClaimPlayerSlot(byte team, out NetServerActor actor)
         {
             for (int i = 0; i < _actors.Count; i++)
             {
@@ -127,12 +183,32 @@ namespace Ironfront.Net.Unity.Server
                 if (candidate == null || !candidate.AvailableForPlayers || candidate.IsClaimed)
                     continue;
 
+                if (candidate.Team != team) continue;
+
                 candidate.Claim();
                 actor = candidate;
                 return true;
             }
 
             actor = null;
+            return false;
+        }
+
+        /// <summary>
+        /// True when SOME side still has a free body — used to tell "your side is full" apart
+        /// from "the server is full" without a second walk in the caller.
+        /// </summary>
+        public bool HasFreePlayerSlotOnAnyTeam()
+        {
+            for (int i = 0; i < _actors.Count; i++)
+            {
+                NetServerActor candidate = _actors[i];
+                if (candidate == null || !candidate.AvailableForPlayers || candidate.IsClaimed)
+                    continue;
+
+                return true;
+            }
+
             return false;
         }
 

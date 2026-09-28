@@ -48,20 +48,42 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <summary>
-        /// Installs a sink on this GameObject's controller, or returns null when it has none.
+        /// Installs a sink on this GameObject: the <c>IInputSource</c> seam when the body has an
+        /// <c>FpsActorController</c>, and a <see cref="NetVehicleAxisRelay"/> when it does not.
+        /// Ledger <b>X-46</b>.
         /// </summary>
         /// <remarks>
-        /// Null is a real answer, not a failure: a bot has an <c>AiActorController</c> and drives
-        /// itself, and the server counts a null as an unreachable controller only because a
-        /// networked PLAYER reaching a driver seat without one means that vehicle will not
-        /// respond to them at all.
+        /// <para>
+        /// <b>Null used to be the answer for every real networked driver, and that was the
+        /// defect.</b> The remark this replaces said null meant "a bot drives itself", and
+        /// predicted the other case in writing — <i>"a networked PLAYER reaching a driver seat
+        /// without one means that vehicle will not respond to them at all"</i>. That case was not
+        /// exotic: <c>IronfrontNetBindings.CreatePlayerBody</c> instantiates
+        /// <c>ActorManager.actorPrefab</c>, the bot character, so a player-slot body has an
+        /// <c>AiActorController</c> and NEVER an <c>FpsActorController</c>. Every networked driver
+        /// took the null branch. It went unseen only because nothing could ask for a seat until
+        /// R2 gave the shipped client a sender and R5 gave lane A one.
+        /// </para>
+        /// <para>
+        /// <b>The controller path stays first, and is not merely legacy.</b> On a listen server or
+        /// in the Editor the driver really does have an <c>FpsActorController</c>, and replacing
+        /// its input source is the right answer there — it is also what remembers the keyboard
+        /// source the player walks with, which the relay has no equivalent of.
+        /// </para>
+        /// <para>
+        /// <b>Still null for a null GameObject only.</b> That is a destroyed body, which is the
+        /// one case <c>ServerVehicleInputBridge.UnreachableControllers</c> should still count.
+        /// </para>
         /// </remarks>
         internal static IDriverInputSink Attach(GameObject gameObject)
         {
             if (gameObject == null) return null;
 
             FpsActorController controller = gameObject.GetComponent<FpsActorController>();
-            return controller != null ? new NetDriverInputSink(controller) : null;
+            if (controller != null) return new NetDriverInputSink(controller);
+
+            NetVehicleAxisRelay relay = NetVehicleAxisRelay.Install(gameObject);
+            return relay != null ? new NetRelayDriverInputSink(relay) : null;
         }
 
         /// <inheritdoc />

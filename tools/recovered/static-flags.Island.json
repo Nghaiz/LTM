@@ -1,0 +1,4170 @@
+{
+  "provenance": {
+    "generatedBy": "tools/extract_recovered.py",
+    "recoveredBuild": "tmp/recovered",
+    "engineOriginal": "Unity 5.4.0f3",
+    "note": "Regenerate with `python tools/extract_recovered.py`. Do not hand-edit."
+  },
+  "scene": "Island",
+  "count": 345,
+  "matchKeySurvey": {
+    "fileId": {
+      "unique": 1,
+      "ambiguous": 0,
+      "unmatched": 344
+    },
+    "name": {
+      "unique": 155,
+      "ambiguous": 190,
+      "unmatched": 0
+    },
+    "nameAndLocalPosition": {
+      "unique": 341,
+      "ambiguous": 0,
+      "unmatched": 4
+    },
+    "positionPrecision": 2
+  },
+  "entries": [
+    {
+      "name": "ConcreteBase",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/ConcreteBase",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1904
+    },
+    {
+      "name": "ConcreteBase (1)",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/ConcreteBase (1)",
+      "localPos": [
+        -0.0,
+        -6.0,
+        -0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1357
+    },
+    {
+      "name": "ConcreteBase (2)",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/ConcreteBase (2)",
+      "localPos": [
+        6.0,
+        -6.0,
+        2.89
+      ],
+      "flags": 4294967295,
+      "fileId": 1948
+    },
+    {
+      "name": "ConcreteBase (3)",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/ConcreteBase (3)",
+      "localPos": [
+        6.0,
+        0.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1673
+    },
+    {
+      "name": "Sandbags (4)",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/Sandbags (4)",
+      "localPos": [
+        0.026084185,
+        -8.497749,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1733
+    },
+    {
+      "name": "Sandbags (5)",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/Sandbags (5)",
+      "localPos": [
+        -2.5004354,
+        -6.0670238,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 722
+    },
+    {
+      "name": "Sandbags (6)",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/Sandbags (6)",
+      "localPos": [
+        0.15298772,
+        -8.420311,
+        3.980001
+      ],
+      "flags": 4294967295,
+      "fileId": 1211
+    },
+    {
+      "name": "Staircase",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/Staircase",
+      "localPos": [
+        8.83,
+        -4.829,
+        3.98
+      ],
+      "flags": 4294967295,
+      "fileId": 1156
+    },
+    {
+      "name": "WoodenPlatform",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/WoodenPlatform",
+      "localPos": [
+        0.0,
+        -6.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2555
+    },
+    {
+      "name": "WoodenPlatform (1)",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/WoodenPlatform (1)",
+      "localPos": [
+        6.0,
+        -6.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1189
+    },
+    {
+      "name": "WoodenWall",
+      "parentPath": "Beach Structure",
+      "path": "Beach Structure/WoodenWall",
+      "localPos": [
+        6.0,
+        -8.5,
+        4.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2625
+    },
+    {
+      "name": "Dirt Barrier",
+      "parentPath": "",
+      "path": "Dirt Barrier",
+      "localPos": [
+        320.99,
+        70.19,
+        467.03
+      ],
+      "flags": 4294967295,
+      "fileId": 154
+    },
+    {
+      "name": "Dirt Barrier (1)",
+      "parentPath": "",
+      "path": "Dirt Barrier (1)",
+      "localPos": [
+        324.79,
+        69.88,
+        479.5
+      ],
+      "flags": 4294967295,
+      "fileId": 220
+    },
+    {
+      "name": "Dirt Barrier (10)",
+      "parentPath": "",
+      "path": "Dirt Barrier (10)",
+      "localPos": [
+        211.85,
+        19.52,
+        559.94
+      ],
+      "flags": 4294967295,
+      "fileId": 850
+    },
+    {
+      "name": "Dirt Barrier (11)",
+      "parentPath": "",
+      "path": "Dirt Barrier (11)",
+      "localPos": [
+        208.18,
+        18.42,
+        562.15
+      ],
+      "flags": 4294967295,
+      "fileId": 1456
+    },
+    {
+      "name": "Dirt Barrier (12)",
+      "parentPath": "",
+      "path": "Dirt Barrier (12)",
+      "localPos": [
+        160.0,
+        33.0,
+        396.07
+      ],
+      "flags": 4294967295,
+      "fileId": 2316
+    },
+    {
+      "name": "Dirt Barrier (2)",
+      "parentPath": "",
+      "path": "Dirt Barrier (2)",
+      "localPos": [
+        326.57,
+        70.24,
+        482.21
+      ],
+      "flags": 4294967295,
+      "fileId": 200
+    },
+    {
+      "name": "Dirt Barrier (3)",
+      "parentPath": "",
+      "path": "Dirt Barrier (3)",
+      "localPos": [
+        320.78,
+        70.54,
+        463.9
+      ],
+      "flags": 4294967295,
+      "fileId": 2266
+    },
+    {
+      "name": "Dirt Barrier (4)",
+      "parentPath": "",
+      "path": "Dirt Barrier (4)",
+      "localPos": [
+        183.53,
+        22.83797,
+        523.97
+      ],
+      "flags": 4294967295,
+      "fileId": 1522
+    },
+    {
+      "name": "Dirt Barrier (5)",
+      "parentPath": "",
+      "path": "Dirt Barrier (5)",
+      "localPos": [
+        180.48,
+        22.91,
+        526.58
+      ],
+      "flags": 4294967295,
+      "fileId": 2037
+    },
+    {
+      "name": "Dirt Barrier (6)",
+      "parentPath": "",
+      "path": "Dirt Barrier (6)",
+      "localPos": [
+        167.83,
+        25.11,
+        542.37
+      ],
+      "flags": 4294967295,
+      "fileId": 2384
+    },
+    {
+      "name": "Dirt Barrier (7)",
+      "parentPath": "",
+      "path": "Dirt Barrier (7)",
+      "localPos": [
+        224.33,
+        22.97,
+        543.7
+      ],
+      "flags": 4294967295,
+      "fileId": 2565
+    },
+    {
+      "name": "Dirt Barrier (8)",
+      "parentPath": "",
+      "path": "Dirt Barrier (8)",
+      "localPos": [
+        222.55,
+        23.01,
+        547.24
+      ],
+      "flags": 4294967295,
+      "fileId": 1023
+    },
+    {
+      "name": "Dirt Barrier (9)",
+      "parentPath": "",
+      "path": "Dirt Barrier (9)",
+      "localPos": [
+        220.85,
+        22.62,
+        550.77
+      ],
+      "flags": 4294967295,
+      "fileId": 650
+    },
+    {
+      "name": "Fence",
+      "parentPath": "",
+      "path": "Fence",
+      "localPos": [
+        377.5,
+        20.19,
+        250.36
+      ],
+      "flags": 4294967295,
+      "fileId": 707
+    },
+    {
+      "name": "Sandbags",
+      "parentPath": "",
+      "path": "Sandbags",
+      "localPos": [
+        321.6,
+        70.0,
+        470.86
+      ],
+      "flags": 4294967295,
+      "fileId": 1410
+    },
+    {
+      "name": "Sandbags (1)",
+      "parentPath": "",
+      "path": "Sandbags (1)",
+      "localPos": [
+        323.41,
+        69.98,
+        476.1
+      ],
+      "flags": 4294967295,
+      "fileId": 427
+    },
+    {
+      "name": "Sandbags (2)",
+      "parentPath": "",
+      "path": "Sandbags (2)",
+      "localPos": [
+        176.64,
+        23.71,
+        528.94
+      ],
+      "flags": 4294967295,
+      "fileId": 1526
+    },
+    {
+      "name": "Sandbags (3)",
+      "parentPath": "",
+      "path": "Sandbags (3)",
+      "localPos": [
+        172.1,
+        24.55,
+        531.89
+      ],
+      "flags": 4294967295,
+      "fileId": 1100
+    },
+    {
+      "name": "ConcreteBase (7)",
+      "parentPath": "Static Props/Cliff Outpost",
+      "path": "Static Props/Cliff Outpost/ConcreteBase (7)",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2450
+    },
+    {
+      "name": "ConcreteBase (8)",
+      "parentPath": "Static Props/Cliff Outpost",
+      "path": "Static Props/Cliff Outpost/ConcreteBase (8)",
+      "localPos": [
+        -6.003555,
+        -0.0012106895,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 480
+    },
+    {
+      "name": "WoodenPlatform",
+      "parentPath": "Static Props/Cliff Outpost",
+      "path": "Static Props/Cliff Outpost/WoodenPlatform",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2169
+    },
+    {
+      "name": "WoodenPlatform (1)",
+      "parentPath": "Static Props/Cliff Outpost",
+      "path": "Static Props/Cliff Outpost/WoodenPlatform (1)",
+      "localPos": [
+        -6.0,
+        -0.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2293
+    },
+    {
+      "name": "ConcreteBase",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase",
+      "localPos": [
+        -5.91,
+        2.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2021
+    },
+    {
+      "name": "ConcreteBase (1)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (1)",
+      "localPos": [
+        0.09,
+        2.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 976
+    },
+    {
+      "name": "ConcreteBase (10)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (10)",
+      "localPos": [
+        6.0,
+        -13.0,
+        -17.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1723
+    },
+    {
+      "name": "ConcreteBase (11)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (11)",
+      "localPos": [
+        0.0,
+        -13.0,
+        -17.0
+      ],
+      "flags": 4294967295,
+      "fileId": 668
+    },
+    {
+      "name": "ConcreteBase (13)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (13)",
+      "localPos": [
+        -8.0,
+        -13.0,
+        -12.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1543
+    },
+    {
+      "name": "ConcreteBase (14)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (14)",
+      "localPos": [
+        5.0,
+        -15.0,
+        -23.0
+      ],
+      "flags": 4294967295,
+      "fileId": 276
+    },
+    {
+      "name": "ConcreteBase (15)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (15)",
+      "localPos": [
+        -1.0,
+        -15.0,
+        -23.0
+      ],
+      "flags": 4294967295,
+      "fileId": 820
+    },
+    {
+      "name": "ConcreteBase (16)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (16)",
+      "localPos": [
+        -10.4,
+        -15.0,
+        -23.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2616
+    },
+    {
+      "name": "ConcreteBase (17)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (17)",
+      "localPos": [
+        -5.0,
+        -15.05,
+        -18.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1641
+    },
+    {
+      "name": "ConcreteBase (18)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (18)",
+      "localPos": [
+        -10.4,
+        -15.0,
+        -17.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1205
+    },
+    {
+      "name": "ConcreteBase (19)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (19)",
+      "localPos": [
+        11.0,
+        -15.0,
+        -23.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2499
+    },
+    {
+      "name": "ConcreteBase (2)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (2)",
+      "localPos": [
+        -2.0,
+        -2.05,
+        -6.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2392
+    },
+    {
+      "name": "ConcreteBase (3)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (3)",
+      "localPos": [
+        -6.98,
+        -2.0,
+        -3.0
+      ],
+      "flags": 4294967295,
+      "fileId": 567
+    },
+    {
+      "name": "ConcreteBase (4)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (4)",
+      "localPos": [
+        -2.0,
+        -9.0,
+        -12.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1625
+    },
+    {
+      "name": "ConcreteBase (5)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (5)",
+      "localPos": [
+        -8.0,
+        -7.0,
+        -12.0
+      ],
+      "flags": 4294967295,
+      "fileId": 675
+    },
+    {
+      "name": "ConcreteBase (6)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (6)",
+      "localPos": [
+        -6.0,
+        -5.0,
+        -6.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2566
+    },
+    {
+      "name": "ConcreteBase (7)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (7)",
+      "localPos": [
+        4.0,
+        -9.0,
+        -13.25
+      ],
+      "flags": 4294967295,
+      "fileId": 1552
+    },
+    {
+      "name": "ConcreteBase (8)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (8)",
+      "localPos": [
+        6.09,
+        2.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 464
+    },
+    {
+      "name": "ConcreteBase (9)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/ConcreteBase (9)",
+      "localPos": [
+        4.0,
+        -2.05,
+        -6.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2650
+    },
+    {
+      "name": "Stairs",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/Stairs",
+      "localPos": [
+        3.0,
+        2.0,
+        -4.4
+      ],
+      "flags": 4294967295,
+      "fileId": 1201
+    },
+    {
+      "name": "Stairs (1)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/Stairs (1)",
+      "localPos": [
+        -6.7,
+        -2.0,
+        -6.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2286
+    },
+    {
+      "name": "Stairs (2)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/Stairs (2)",
+      "localPos": [
+        -5.0,
+        -5.0,
+        -13.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2486
+    },
+    {
+      "name": "Stairs (3)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/Stairs (3)",
+      "localPos": [
+        5.0,
+        -9.0,
+        -16.25
+      ],
+      "flags": 4294967295,
+      "fileId": 1663
+    },
+    {
+      "name": "Stairs (4)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/Stairs (4)",
+      "localPos": [
+        -5.7,
+        -15.05,
+        -21.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2147
+    },
+    {
+      "name": "Stairs (5)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/Stairs (5)",
+      "localPos": [
+        1.0,
+        -12.0,
+        -20.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2596
+    },
+    {
+      "name": "Stairs (6)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/Stairs (6)",
+      "localPos": [
+        -3.0,
+        -13.0,
+        -17.0
+      ],
+      "flags": 4294967295,
+      "fileId": 597
+    },
+    {
+      "name": "WoodenPlatform",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/WoodenPlatform",
+      "localPos": [
+        6.0,
+        -2.0,
+        -6.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1591
+    },
+    {
+      "name": "WoodenPlatform (1)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/WoodenPlatform (1)",
+      "localPos": [
+        -8.0,
+        -9.0,
+        -12.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1566
+    },
+    {
+      "name": "WoodenPlatform (2)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/WoodenPlatform (2)",
+      "localPos": [
+        6.0,
+        -16.0,
+        -23.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1105
+    },
+    {
+      "name": "WoodenPlatform (3)",
+      "parentPath": "Static Props/Cliffside Stairs",
+      "path": "Static Props/Cliffside Stairs/WoodenPlatform (3)",
+      "localPos": [
+        0.0,
+        -16.0,
+        -23.0
+      ],
+      "flags": 4294967295,
+      "fileId": 293
+    },
+    {
+      "name": "ConcreteBase",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase",
+      "localPos": [
+        139.02,
+        24.53,
+        334.66
+      ],
+      "flags": 4294967295,
+      "fileId": 258
+    },
+    {
+      "name": "ConcreteBase",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase",
+      "localPos": [
+        382.84,
+        27.39,
+        279.12
+      ],
+      "flags": 4294967295,
+      "fileId": 975
+    },
+    {
+      "name": "ConcreteBase",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase",
+      "localPos": [
+        223.08,
+        66.95,
+        400.4
+      ],
+      "flags": 4294967295,
+      "fileId": 2635
+    },
+    {
+      "name": "ConcreteBase (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (1)",
+      "localPos": [
+        133.02,
+        22.53,
+        334.66
+      ],
+      "flags": 4294967295,
+      "fileId": 1648
+    },
+    {
+      "name": "ConcreteBase (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (1)",
+      "localPos": [
+        225.83,
+        66.88,
+        396.82
+      ],
+      "flags": 4294967295,
+      "fileId": 2086
+    },
+    {
+      "name": "ConcreteBase (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (10)",
+      "localPos": [
+        376.84,
+        29.2,
+        279.12
+      ],
+      "flags": 4294967295,
+      "fileId": 816
+    },
+    {
+      "name": "ConcreteBase (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (11)",
+      "localPos": [
+        370.84,
+        29.2,
+        279.12
+      ],
+      "flags": 4294967295,
+      "fileId": 2100
+    },
+    {
+      "name": "ConcreteBase (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (12)",
+      "localPos": [
+        382.7,
+        24.64,
+        273.87
+      ],
+      "flags": 4294967295,
+      "fileId": 2107
+    },
+    {
+      "name": "ConcreteBase (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (2)",
+      "localPos": [
+        230.31,
+        66.95,
+        395.95
+      ],
+      "flags": 4294967295,
+      "fileId": 1019
+    },
+    {
+      "name": "ConcreteBase (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (2)",
+      "localPos": [
+        127.02,
+        20.53,
+        334.66
+      ],
+      "flags": 4294967295,
+      "fileId": 2191
+    },
+    {
+      "name": "ConcreteBase (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (3)",
+      "localPos": [
+        127.02,
+        20.53,
+        340.66
+      ],
+      "flags": 4294967295,
+      "fileId": 493
+    },
+    {
+      "name": "ConcreteBase (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (3)",
+      "localPos": [
+        228.92,
+        66.95,
+        401.79
+      ],
+      "flags": 4294967295,
+      "fileId": 1532
+    },
+    {
+      "name": "ConcreteBase (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (4)",
+      "localPos": [
+        286.71,
+        47.08,
+        333.56
+      ],
+      "flags": 4294967295,
+      "fileId": 1981
+    },
+    {
+      "name": "ConcreteBase (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (5)",
+      "localPos": [
+        298.74,
+        48.23,
+        330.7
+      ],
+      "flags": 4294967295,
+      "fileId": 2334
+    },
+    {
+      "name": "ConcreteBase (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (6)",
+      "localPos": [
+        306.97,
+        48.07,
+        309.56
+      ],
+      "flags": 4294967295,
+      "fileId": 934
+    },
+    {
+      "name": "ConcreteBase (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (7)",
+      "localPos": [
+        417.15,
+        49.77,
+        433.23
+      ],
+      "flags": 4294967295,
+      "fileId": 1705
+    },
+    {
+      "name": "ConcreteBase (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (8)",
+      "localPos": [
+        418.13,
+        49.74,
+        440.05
+      ],
+      "flags": 4294967295,
+      "fileId": 2102
+    },
+    {
+      "name": "ConcreteBase (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/ConcreteBase (9)",
+      "localPos": [
+        369.56,
+        68.66,
+        414.8
+      ],
+      "flags": 4294967295,
+      "fileId": 2522
+    },
+    {
+      "name": "Dirt Barrier",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier",
+      "localPos": [
+        366.18,
+        26.66,
+        277.09
+      ],
+      "flags": 4294967295,
+      "fileId": 80
+    },
+    {
+      "name": "Dirt Barrier",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier",
+      "localPos": [
+        396.36,
+        21.63,
+        281.71
+      ],
+      "flags": 4294967295,
+      "fileId": 1654
+    },
+    {
+      "name": "Dirt Barrier (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (1)",
+      "localPos": [
+        366.28,
+        28.64,
+        280.52
+      ],
+      "flags": 4294967295,
+      "fileId": 1254
+    },
+    {
+      "name": "Dirt Barrier (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (1)",
+      "localPos": [
+        410.6,
+        21.68,
+        280.04
+      ],
+      "flags": 4294967295,
+      "fileId": 1706
+    },
+    {
+      "name": "Dirt Barrier (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (10)",
+      "localPos": [
+        360.14,
+        70.47,
+        453.49
+      ],
+      "flags": 4294967295,
+      "fileId": 1277
+    },
+    {
+      "name": "Dirt Barrier (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (11)",
+      "localPos": [
+        346.52,
+        71.47,
+        451.57
+      ],
+      "flags": 4294967295,
+      "fileId": 869
+    },
+    {
+      "name": "Dirt Barrier (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (12)",
+      "localPos": [
+        344.07,
+        71.53,
+        448.97
+      ],
+      "flags": 4294967295,
+      "fileId": 612
+    },
+    {
+      "name": "Dirt Barrier (13)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (13)",
+      "localPos": [
+        341.18,
+        71.66,
+        450.59
+      ],
+      "flags": 4294967295,
+      "fileId": 1435
+    },
+    {
+      "name": "Dirt Barrier (14)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (14)",
+      "localPos": [
+        176.47,
+        43.05,
+        388.4
+      ],
+      "flags": 4294967295,
+      "fileId": 1114
+    },
+    {
+      "name": "Dirt Barrier (15)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (15)",
+      "localPos": [
+        177.15,
+        43.18,
+        384.84
+      ],
+      "flags": 4294967295,
+      "fileId": 1051
+    },
+    {
+      "name": "Dirt Barrier (16)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (16)",
+      "localPos": [
+        178.03,
+        43.46,
+        381.51
+      ],
+      "flags": 4294967295,
+      "fileId": 2427
+    },
+    {
+      "name": "Dirt Barrier (17)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (17)",
+      "localPos": [
+        175.57,
+        42.3,
+        392.48
+      ],
+      "flags": 4294967295,
+      "fileId": 1812
+    },
+    {
+      "name": "Dirt Barrier (18)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (18)",
+      "localPos": [
+        221.78,
+        66.95,
+        401.73
+      ],
+      "flags": 4294967295,
+      "fileId": 1365
+    },
+    {
+      "name": "Dirt Barrier (19)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (19)",
+      "localPos": [
+        341.06735,
+        85.68347,
+        398.5903
+      ],
+      "flags": 4294967295,
+      "fileId": 736
+    },
+    {
+      "name": "Dirt Barrier (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (2)",
+      "localPos": [
+        367.74,
+        28.79,
+        283.7
+      ],
+      "flags": 4294967295,
+      "fileId": 674
+    },
+    {
+      "name": "Dirt Barrier (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (2)",
+      "localPos": [
+        413.49,
+        22.0,
+        278.2
+      ],
+      "flags": 4294967295,
+      "fileId": 2479
+    },
+    {
+      "name": "Dirt Barrier (20)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (20)",
+      "localPos": [
+        337.71,
+        86.57,
+        397.9
+      ],
+      "flags": 4294967295,
+      "fileId": 1421
+    },
+    {
+      "name": "Dirt Barrier (21)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (21)",
+      "localPos": [
+        309.15,
+        76.56,
+        375.47
+      ],
+      "flags": 4294967295,
+      "fileId": 1688
+    },
+    {
+      "name": "Dirt Barrier (22)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (22)",
+      "localPos": [
+        307.21,
+        75.81,
+        372.59
+      ],
+      "flags": 4294967295,
+      "fileId": 2208
+    },
+    {
+      "name": "Dirt Barrier (23)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (23)",
+      "localPos": [
+        264.78,
+        41.57,
+        525.47
+      ],
+      "flags": 4294967295,
+      "fileId": 1562
+    },
+    {
+      "name": "Dirt Barrier (24)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (24)",
+      "localPos": [
+        264.77,
+        39.95,
+        529.32
+      ],
+      "flags": 4294967295,
+      "fileId": 2261
+    },
+    {
+      "name": "Dirt Barrier (25)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (25)",
+      "localPos": [
+        245.71,
+        46.78086,
+        321.98
+      ],
+      "flags": 4294967295,
+      "fileId": 1037
+    },
+    {
+      "name": "Dirt Barrier (26)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (26)",
+      "localPos": [
+        247.11,
+        46.78086,
+        324.81
+      ],
+      "flags": 4294967295,
+      "fileId": 123
+    },
+    {
+      "name": "Dirt Barrier (27)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (27)",
+      "localPos": [
+        419.73,
+        32.63,
+        345.50262
+      ],
+      "flags": 4294967295,
+      "fileId": 1825
+    },
+    {
+      "name": "Dirt Barrier (28)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (28)",
+      "localPos": [
+        416.2,
+        31.38,
+        345.50262
+      ],
+      "flags": 4294967295,
+      "fileId": 598
+    },
+    {
+      "name": "Dirt Barrier (29)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (29)",
+      "localPos": [
+        282.48495,
+        28.91,
+        249.11465
+      ],
+      "flags": 4294967295,
+      "fileId": 1325
+    },
+    {
+      "name": "Dirt Barrier (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (3)",
+      "localPos": [
+        420.16,
+        20.88,
+        277.01
+      ],
+      "flags": 4294967295,
+      "fileId": 1517
+    },
+    {
+      "name": "Dirt Barrier (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (3)",
+      "localPos": [
+        370.49,
+        27.85,
+        283.78
+      ],
+      "flags": 4294967295,
+      "fileId": 2473
+    },
+    {
+      "name": "Dirt Barrier (30)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (30)",
+      "localPos": [
+        281.02,
+        28.21,
+        251.91
+      ],
+      "flags": 4294967295,
+      "fileId": 709
+    },
+    {
+      "name": "Dirt Barrier (31)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (31)",
+      "localPos": [
+        413.55,
+        20.04,
+        258.33
+      ],
+      "flags": 4294967295,
+      "fileId": 1680
+    },
+    {
+      "name": "Dirt Barrier (32)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (32)",
+      "localPos": [
+        412.81,
+        19.93,
+        255.3
+      ],
+      "flags": 4294967295,
+      "fileId": 2009
+    },
+    {
+      "name": "Dirt Barrier (33)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (33)",
+      "localPos": [
+        412.58,
+        19.95,
+        252.17
+      ],
+      "flags": 4294967295,
+      "fileId": 753
+    },
+    {
+      "name": "Dirt Barrier (34)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (34)",
+      "localPos": [
+        385.22,
+        19.45,
+        248.51
+      ],
+      "flags": 4294967295,
+      "fileId": 290
+    },
+    {
+      "name": "Dirt Barrier (35)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (35)",
+      "localPos": [
+        382.21,
+        19.63,
+        249.52
+      ],
+      "flags": 4294967295,
+      "fileId": 999
+    },
+    {
+      "name": "Dirt Barrier (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (4)",
+      "localPos": [
+        383.55,
+        29.44,
+        280.43
+      ],
+      "flags": 4294967295,
+      "fileId": 162
+    },
+    {
+      "name": "Dirt Barrier (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (4)",
+      "localPos": [
+        422.89,
+        20.16,
+        275.96
+      ],
+      "flags": 4294967295,
+      "fileId": 1270
+    },
+    {
+      "name": "Dirt Barrier (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (5)",
+      "localPos": [
+        394.0,
+        21.53,
+        279.95
+      ],
+      "flags": 4294967295,
+      "fileId": 402
+    },
+    {
+      "name": "Dirt Barrier (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (5)",
+      "localPos": [
+        363.36,
+        73.6,
+        481.23
+      ],
+      "flags": 4294967295,
+      "fileId": 1972
+    },
+    {
+      "name": "Dirt Barrier (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (6)",
+      "localPos": [
+        364.24,
+        73.67,
+        478.3
+      ],
+      "flags": 4294967295,
+      "fileId": 809
+    },
+    {
+      "name": "Dirt Barrier (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (6)",
+      "localPos": [
+        390.71,
+        21.11,
+        280.08
+      ],
+      "flags": 4294967295,
+      "fileId": 2188
+    },
+    {
+      "name": "Dirt Barrier (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (7)",
+      "localPos": [
+        364.77,
+        73.39,
+        475.24
+      ],
+      "flags": 4294967295,
+      "fileId": 1358
+    },
+    {
+      "name": "Dirt Barrier (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (8)",
+      "localPos": [
+        387.44,
+        21.33,
+        280.07
+      ],
+      "flags": 4294967295,
+      "fileId": 700
+    },
+    {
+      "name": "Dirt Barrier (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (8)",
+      "localPos": [
+        365.31,
+        70.24,
+        457.65
+      ],
+      "flags": 4294967295,
+      "fileId": 791
+    },
+    {
+      "name": "Dirt Barrier (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (9)",
+      "localPos": [
+        363.01,
+        70.27,
+        455.24
+      ],
+      "flags": 4294967295,
+      "fileId": 1395
+    },
+    {
+      "name": "Dirt Barrier (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Dirt Barrier (9)",
+      "localPos": [
+        381.27,
+        20.5,
+        269.12
+      ],
+      "flags": 4294967295,
+      "fileId": 1571
+    },
+    {
+      "name": "Fence",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence",
+      "localPos": [
+        224.86,
+        46.44,
+        332.68
+      ],
+      "flags": 4294967295,
+      "fileId": 116
+    },
+    {
+      "name": "Fence",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence",
+      "localPos": [
+        333.48,
+        87.71,
+        396.76544
+      ],
+      "flags": 4294967295,
+      "fileId": 601
+    },
+    {
+      "name": "Fence (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (1)",
+      "localPos": [
+        224.12,
+        46.63,
+        327.26
+      ],
+      "flags": 4294967295,
+      "fileId": 1891
+    },
+    {
+      "name": "Fence (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (10)",
+      "localPos": [
+        285.43,
+        45.63,
+        302.31
+      ],
+      "flags": 4294967295,
+      "fileId": 1988
+    },
+    {
+      "name": "Fence (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (11)",
+      "localPos": [
+        284.04,
+        45.77,
+        290.32
+      ],
+      "flags": 4294967295,
+      "fileId": 2121
+    },
+    {
+      "name": "Fence (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (12)",
+      "localPos": [
+        285.1,
+        45.7,
+        296.18
+      ],
+      "flags": 4294967295,
+      "fileId": 981
+    },
+    {
+      "name": "Fence (13)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (13)",
+      "localPos": [
+        258.48,
+        46.18,
+        315.77
+      ],
+      "flags": 4294967295,
+      "fileId": 2370
+    },
+    {
+      "name": "Fence (14)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (14)",
+      "localPos": [
+        146.33,
+        25.67,
+        332.87
+      ],
+      "flags": 4294967295,
+      "fileId": 1761
+    },
+    {
+      "name": "Fence (15)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (15)",
+      "localPos": [
+        147.18,
+        25.61,
+        338.79
+      ],
+      "flags": 4294967295,
+      "fileId": 1402
+    },
+    {
+      "name": "Fence (16)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (16)",
+      "localPos": [
+        256.22495,
+        64.979996,
+        361.9176
+      ],
+      "flags": 4294967295,
+      "fileId": 832
+    },
+    {
+      "name": "Fence (17)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (17)",
+      "localPos": [
+        244.87,
+        52.05,
+        356.2
+      ],
+      "flags": 4294967295,
+      "fileId": 559
+    },
+    {
+      "name": "Fence (18)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (18)",
+      "localPos": [
+        257.9,
+        52.0,
+        344.9
+      ],
+      "flags": 4294967295,
+      "fileId": 96
+    },
+    {
+      "name": "Fence (19)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (19)",
+      "localPos": [
+        248.32,
+        65.03,
+        367.68
+      ],
+      "flags": 4294967295,
+      "fileId": 1937
+    },
+    {
+      "name": "Fence (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (2)",
+      "localPos": [
+        224.33,
+        46.99,
+        321.71
+      ],
+      "flags": 4294967295,
+      "fileId": 2089
+    },
+    {
+      "name": "Fence (20)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (20)",
+      "localPos": [
+        382.67,
+        59.27,
+        421.96
+      ],
+      "flags": 4294967295,
+      "fileId": 1312
+    },
+    {
+      "name": "Fence (21)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (21)",
+      "localPos": [
+        389.7,
+        57.0,
+        423.2
+      ],
+      "flags": 4294967295,
+      "fileId": 443
+    },
+    {
+      "name": "Fence (22)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (22)",
+      "localPos": [
+        376.34,
+        63.15069,
+        412.34
+      ],
+      "flags": 4294967295,
+      "fileId": 1089
+    },
+    {
+      "name": "Fence (24)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (24)",
+      "localPos": [
+        378.45,
+        62.16,
+        418.05
+      ],
+      "flags": 4294967295,
+      "fileId": 2225
+    },
+    {
+      "name": "Fence (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (3)",
+      "localPos": [
+        230.16,
+        46.15334,
+        346.38
+      ],
+      "flags": 4294967295,
+      "fileId": 1359
+    },
+    {
+      "name": "Fence (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (4)",
+      "localPos": [
+        232.01,
+        46.75,
+        350.82
+      ],
+      "flags": 4294967295,
+      "fileId": 459
+    },
+    {
+      "name": "Fence (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (5)",
+      "localPos": [
+        234.58,
+        48.46,
+        356.06
+      ],
+      "flags": 4294967295,
+      "fileId": 2307
+    },
+    {
+      "name": "Fence (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (7)",
+      "localPos": [
+        275.8,
+        45.94,
+        315.22
+      ],
+      "flags": 4294967295,
+      "fileId": 2025
+    },
+    {
+      "name": "Fence (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (8)",
+      "localPos": [
+        281.1,
+        45.81,
+        312.45
+      ],
+      "flags": 4294967295,
+      "fileId": 685
+    },
+    {
+      "name": "Fence (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Fence (9)",
+      "localPos": [
+        147.8,
+        26.05,
+        327.19
+      ],
+      "flags": 4294967295,
+      "fileId": 915
+    },
+    {
+      "name": "ConcreteBase (7)",
+      "parentPath": "Static Props/Outpost Sentry",
+      "path": "Static Props/Outpost Sentry/ConcreteBase (7)",
+      "localPos": [
+        0.08999634,
+        2.9099998,
+        6.080017
+      ],
+      "flags": 4294967295,
+      "fileId": 1536
+    },
+    {
+      "name": "ConcreteBase (8)",
+      "parentPath": "Static Props/Outpost Sentry",
+      "path": "Static Props/Outpost Sentry/ConcreteBase (8)",
+      "localPos": [
+        0.08999634,
+        2.9099998,
+        0.05001831
+      ],
+      "flags": 4294967295,
+      "fileId": 2366
+    },
+    {
+      "name": "Sandbags",
+      "parentPath": "Static Props/Outpost Sentry",
+      "path": "Static Props/Outpost Sentry/Sandbags",
+      "localPos": [
+        -0.6267771,
+        3.93,
+        7.3501844
+      ],
+      "flags": 4294967295,
+      "fileId": 1036
+    },
+    {
+      "name": "Staircase",
+      "parentPath": "Static Props/Outpost Sentry",
+      "path": "Static Props/Outpost Sentry/Staircase",
+      "localPos": [
+        3.0,
+        4.0,
+        -1.0
+      ],
+      "flags": 4294967295,
+      "fileId": 923
+    },
+    {
+      "name": "WoodenPlatformExtended",
+      "parentPath": "Static Props/Outpost Sentry",
+      "path": "Static Props/Outpost Sentry/WoodenPlatformExtended",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1133
+    },
+    {
+      "name": "WoodenPlatformExtended (1)",
+      "parentPath": "Static Props/Outpost Sentry",
+      "path": "Static Props/Outpost Sentry/WoodenPlatformExtended (1)",
+      "localPos": [
+        0.0,
+        0.0,
+        6.0
+      ],
+      "flags": 4294967295,
+      "fileId": 539
+    },
+    {
+      "name": "RockPlanar1 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White",
+      "localPos": [
+        332.73,
+        50.92,
+        363.69
+      ],
+      "flags": 4294967295,
+      "fileId": 1951
+    },
+    {
+      "name": "RockPlanar1 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White",
+      "localPos": [
+        323.22,
+        81.64,
+        395.17
+      ],
+      "flags": 4294967295,
+      "fileId": 2060
+    },
+    {
+      "name": "RockPlanar1 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White",
+      "localPos": [
+        155.89,
+        32.35,
+        375.9
+      ],
+      "flags": 4294967295,
+      "fileId": 2449
+    },
+    {
+      "name": "RockPlanar1 White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (1)",
+      "localPos": [
+        424.65,
+        24.91,
+        311.87
+      ],
+      "flags": 4294967295,
+      "fileId": 1538
+    },
+    {
+      "name": "RockPlanar1 White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (1)",
+      "localPos": [
+        171.93,
+        33.36,
+        344.81
+      ],
+      "flags": 4294967295,
+      "fileId": 2609
+    },
+    {
+      "name": "RockPlanar1 White (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (2)",
+      "localPos": [
+        227.27,
+        56.24,
+        386.07
+      ],
+      "flags": 4294967295,
+      "fileId": 429
+    },
+    {
+      "name": "RockPlanar1 White (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (2)",
+      "localPos": [
+        365.43,
+        50.01,
+        372.14
+      ],
+      "flags": 4294967295,
+      "fileId": 1242
+    },
+    {
+      "name": "RockPlanar1 White (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (3)",
+      "localPos": [
+        141.05,
+        29.67,
+        309.52
+      ],
+      "flags": 4294967295,
+      "fileId": 2079
+    },
+    {
+      "name": "RockPlanar1 White (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (4)",
+      "localPos": [
+        430.08,
+        35.48,
+        437.8
+      ],
+      "flags": 4294967295,
+      "fileId": 945
+    },
+    {
+      "name": "RockPlanar1 White (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (5)",
+      "localPos": [
+        375.99,
+        62.081615,
+        457.96
+      ],
+      "flags": 4294967295,
+      "fileId": 250
+    },
+    {
+      "name": "RockPlanar1 White (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (6)",
+      "localPos": [
+        335.37,
+        46.96,
+        327.18726
+      ],
+      "flags": 4294967295,
+      "fileId": 2658
+    },
+    {
+      "name": "RockPlanar1 White (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (7)",
+      "localPos": [
+        219.96,
+        35.92,
+        309.07
+      ],
+      "flags": 4294967295,
+      "fileId": 2391
+    },
+    {
+      "name": "RockPlanar1 White (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar1 White (8)",
+      "localPos": [
+        294.17,
+        79.07,
+        420.62
+      ],
+      "flags": 4294967295,
+      "fileId": 1949
+    },
+    {
+      "name": "RockPlanar2 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White",
+      "localPos": [
+        387.85,
+        51.74,
+        403.88
+      ],
+      "flags": 4294967295,
+      "fileId": 2164
+    },
+    {
+      "name": "RockPlanar2 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White",
+      "localPos": [
+        331.07,
+        43.96,
+        349.55
+      ],
+      "flags": 4294967295,
+      "fileId": 2603
+    },
+    {
+      "name": "RockPlanar2 White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (1)",
+      "localPos": [
+        312.18866,
+        45.274292,
+        337.08557
+      ],
+      "flags": 4294967295,
+      "fileId": 2104
+    },
+    {
+      "name": "RockPlanar2 White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (1)",
+      "localPos": [
+        430.71,
+        40.16,
+        407.13
+      ],
+      "flags": 4294967295,
+      "fileId": 2569
+    },
+    {
+      "name": "RockPlanar2 White (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (10)",
+      "localPos": [
+        395.63,
+        49.38,
+        424.81
+      ],
+      "flags": 4294967295,
+      "fileId": 289
+    },
+    {
+      "name": "RockPlanar2 White (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (11)",
+      "localPos": [
+        464.67,
+        36.55,
+        320.43
+      ],
+      "flags": 4294967295,
+      "fileId": 2175
+    },
+    {
+      "name": "RockPlanar2 White (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (12)",
+      "localPos": [
+        393.8,
+        61.322964,
+        477.29
+      ],
+      "flags": 4294967295,
+      "fileId": 781
+    },
+    {
+      "name": "RockPlanar2 White (13)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (13)",
+      "localPos": [
+        352.69,
+        50.95,
+        332.72
+      ],
+      "flags": 4294967295,
+      "fileId": 1524
+    },
+    {
+      "name": "RockPlanar2 White (14)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (14)",
+      "localPos": [
+        254.83,
+        45.11,
+        306.69
+      ],
+      "flags": 4294967295,
+      "fileId": 1328
+    },
+    {
+      "name": "RockPlanar2 White (15)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (15)",
+      "localPos": [
+        298.08,
+        75.57,
+        429.24
+      ],
+      "flags": 4294967295,
+      "fileId": 704
+    },
+    {
+      "name": "RockPlanar2 White (16)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (16)",
+      "localPos": [
+        159.51,
+        44.27,
+        295.55
+      ],
+      "flags": 4294967295,
+      "fileId": 430
+    },
+    {
+      "name": "RockPlanar2 White (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (2)",
+      "localPos": [
+        321.05,
+        74.11,
+        382.6
+      ],
+      "flags": 4294967295,
+      "fileId": 1078
+    },
+    {
+      "name": "RockPlanar2 White (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (3)",
+      "localPos": [
+        358.71,
+        29.76,
+        279.77
+      ],
+      "flags": 4294967295,
+      "fileId": 2374
+    },
+    {
+      "name": "RockPlanar2 White (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (4)",
+      "localPos": [
+        429.18,
+        27.800472,
+        308.46
+      ],
+      "flags": 4294967295,
+      "fileId": 1498
+    },
+    {
+      "name": "RockPlanar2 White (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (5)",
+      "localPos": [
+        216.65,
+        49.07,
+        375.16
+      ],
+      "flags": 4294967295,
+      "fileId": 2216
+    },
+    {
+      "name": "RockPlanar2 White (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (6)",
+      "localPos": [
+        152.63,
+        30.52,
+        405.83
+      ],
+      "flags": 4294967295,
+      "fileId": 2209
+    },
+    {
+      "name": "RockPlanar2 White (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (7)",
+      "localPos": [
+        168.3,
+        40.31,
+        421.68
+      ],
+      "flags": 4294967295,
+      "fileId": 534
+    },
+    {
+      "name": "RockPlanar2 White (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (8)",
+      "localPos": [
+        365.55658,
+        37.712982,
+        322.82764
+      ],
+      "flags": 4294967295,
+      "fileId": 447
+    },
+    {
+      "name": "RockPlanar2 White (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar2 White (9)",
+      "localPos": [
+        400.5,
+        31.27,
+        357.61
+      ],
+      "flags": 4294967295,
+      "fileId": 2163
+    },
+    {
+      "name": "RockPlanar3 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White",
+      "localPos": [
+        323.44,
+        45.01,
+        344.68
+      ],
+      "flags": 4294967295,
+      "fileId": 1052
+    },
+    {
+      "name": "RockPlanar3 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White",
+      "localPos": [
+        266.27,
+        46.63,
+        334.63
+      ],
+      "flags": 4294967295,
+      "fileId": 1490
+    },
+    {
+      "name": "RockPlanar3 White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (1)",
+      "localPos": [
+        354.27,
+        38.08,
+        306.63
+      ],
+      "flags": 4294967295,
+      "fileId": 566
+    },
+    {
+      "name": "RockPlanar3 White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (1)",
+      "localPos": [
+        341.48,
+        73.03,
+        442.6
+      ],
+      "flags": 4294967295,
+      "fileId": 1120
+    },
+    {
+      "name": "RockPlanar3 White (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (10)",
+      "localPos": [
+        423.73,
+        34.32,
+        347.95
+      ],
+      "flags": 4294967295,
+      "fileId": 2342
+    },
+    {
+      "name": "RockPlanar3 White (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (11)",
+      "localPos": [
+        195.87883,
+        26.21,
+        503.7333
+      ],
+      "flags": 4294967295,
+      "fileId": 417
+    },
+    {
+      "name": "RockPlanar3 White (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (12)",
+      "localPos": [
+        268.64,
+        47.091087,
+        298.52
+      ],
+      "flags": 4294967295,
+      "fileId": 241
+    },
+    {
+      "name": "RockPlanar3 White (13)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (13)",
+      "localPos": [
+        236.65,
+        50.75,
+        357.85
+      ],
+      "flags": 4294967295,
+      "fileId": 588
+    },
+    {
+      "name": "RockPlanar3 White (14)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (14)",
+      "localPos": [
+        244.65,
+        48.39,
+        313.68
+      ],
+      "flags": 4294967295,
+      "fileId": 2221
+    },
+    {
+      "name": "RockPlanar3 White (15)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (15)",
+      "localPos": [
+        168.41,
+        37.27,
+        383.01
+      ],
+      "flags": 4294967295,
+      "fileId": 712
+    },
+    {
+      "name": "RockPlanar3 White (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (2)",
+      "localPos": [
+        373.41,
+        63.24,
+        398.95822
+      ],
+      "flags": 4294967295,
+      "fileId": 935
+    },
+    {
+      "name": "RockPlanar3 White (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (2)",
+      "localPos": [
+        434.58,
+        34.92,
+        388.89
+      ],
+      "flags": 4294967295,
+      "fileId": 1754
+    },
+    {
+      "name": "RockPlanar3 White (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (3)",
+      "localPos": [
+        217.8,
+        46.56,
+        370.64
+      ],
+      "flags": 4294967295,
+      "fileId": 191
+    },
+    {
+      "name": "RockPlanar3 White (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (3)",
+      "localPos": [
+        378.0,
+        59.28,
+        401.79
+      ],
+      "flags": 4294967295,
+      "fileId": 2369
+    },
+    {
+      "name": "RockPlanar3 White (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (4)",
+      "localPos": [
+        145.53,
+        26.77,
+        409.63348
+      ],
+      "flags": 4294967295,
+      "fileId": 2176
+    },
+    {
+      "name": "RockPlanar3 White (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (4)",
+      "localPos": [
+        181.28,
+        39.32,
+        344.51
+      ],
+      "flags": 4294967295,
+      "fileId": 2397
+    },
+    {
+      "name": "RockPlanar3 White (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (5)",
+      "localPos": [
+        149.39,
+        26.72,
+        360.08
+      ],
+      "flags": 4294967295,
+      "fileId": 840
+    },
+    {
+      "name": "RockPlanar3 White (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (6)",
+      "localPos": [
+        188.7009,
+        39.076504,
+        312.33923
+      ],
+      "flags": 4294967295,
+      "fileId": 246
+    },
+    {
+      "name": "RockPlanar3 White (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (7)",
+      "localPos": [
+        387.35,
+        32.02,
+        336.61
+      ],
+      "flags": 4294967295,
+      "fileId": 1715
+    },
+    {
+      "name": "RockPlanar3 White (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (8)",
+      "localPos": [
+        384.66,
+        58.5,
+        466.09
+      ],
+      "flags": 4294967295,
+      "fileId": 2189
+    },
+    {
+      "name": "RockPlanar3 White (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar3 White (9)",
+      "localPos": [
+        391.11,
+        62.81,
+        478.93
+      ],
+      "flags": 4294967295,
+      "fileId": 748
+    },
+    {
+      "name": "RockPlanar4 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White",
+      "localPos": [
+        159.72,
+        32.91,
+        367.72
+      ],
+      "flags": 4294967295,
+      "fileId": 783
+    },
+    {
+      "name": "RockPlanar4 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White",
+      "localPos": [
+        158.48235,
+        34.404854,
+        406.302
+      ],
+      "flags": 4294967295,
+      "fileId": 1823
+    },
+    {
+      "name": "RockPlanar4 White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White",
+      "localPos": [
+        292.76,
+        72.4,
+        359.81
+      ],
+      "flags": 4294967295,
+      "fileId": 2112
+    },
+    {
+      "name": "RockPlanar4 White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (1)",
+      "localPos": [
+        426.2,
+        24.81,
+        305.18
+      ],
+      "flags": 4294967295,
+      "fileId": 607
+    },
+    {
+      "name": "RockPlanar4 White (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (10)",
+      "localPos": [
+        375.09,
+        65.03,
+        446.11
+      ],
+      "flags": 4294967295,
+      "fileId": 1583
+    },
+    {
+      "name": "RockPlanar4 White (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (11)",
+      "localPos": [
+        409.41086,
+        52.26615,
+        480.3384
+      ],
+      "flags": 4294967295,
+      "fileId": 2174
+    },
+    {
+      "name": "RockPlanar4 White (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (12)",
+      "localPos": [
+        346.35532,
+        49.59,
+        369.23
+      ],
+      "flags": 4294967295,
+      "fileId": 1443
+    },
+    {
+      "name": "RockPlanar4 White (13)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (13)",
+      "localPos": [
+        295.2465,
+        73.98,
+        435.53
+      ],
+      "flags": 4294967295,
+      "fileId": 1875
+    },
+    {
+      "name": "RockPlanar4 White (14)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (14)",
+      "localPos": [
+        327.32816,
+        83.132675,
+        426.83704
+      ],
+      "flags": 4294967295,
+      "fileId": 765
+    },
+    {
+      "name": "RockPlanar4 White (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (2)",
+      "localPos": [
+        420.8035,
+        29.36858,
+        325.8761
+      ],
+      "flags": 4294967295,
+      "fileId": 517
+    },
+    {
+      "name": "RockPlanar4 White (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (3)",
+      "localPos": [
+        170.85,
+        39.23,
+        380.542
+      ],
+      "flags": 4294967295,
+      "fileId": 2130
+    },
+    {
+      "name": "RockPlanar4 White (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (4)",
+      "localPos": [
+        182.19,
+        35.43,
+        332.97
+      ],
+      "flags": 4294967295,
+      "fileId": 828
+    },
+    {
+      "name": "RockPlanar4 White (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (5)",
+      "localPos": [
+        377.44678,
+        35.75,
+        329.93787
+      ],
+      "flags": 4294967295,
+      "fileId": 1422
+    },
+    {
+      "name": "RockPlanar4 White (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (6)",
+      "localPos": [
+        407.01,
+        43.14,
+        390.61
+      ],
+      "flags": 4294967295,
+      "fileId": 2413
+    },
+    {
+      "name": "RockPlanar4 White (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (7)",
+      "localPos": [
+        399.99,
+        49.68,
+        428.14
+      ],
+      "flags": 4294967295,
+      "fileId": 1176
+    },
+    {
+      "name": "RockPlanar4 White (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (8)",
+      "localPos": [
+        433.48,
+        27.35,
+        460.92
+      ],
+      "flags": 4294967295,
+      "fileId": 376
+    },
+    {
+      "name": "RockPlanar4 White (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanar4 White (9)",
+      "localPos": [
+        327.52,
+        49.785393,
+        304.97
+      ],
+      "flags": 4294967295,
+      "fileId": 2383
+    },
+    {
+      "name": "RockPlanarSmall1",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanarSmall1",
+      "localPos": [
+        425.6,
+        40.22,
+        398.24
+      ],
+      "flags": 4294967295,
+      "fileId": 188
+    },
+    {
+      "name": "RockPlanarSmall1",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanarSmall1",
+      "localPos": [
+        295.73,
+        74.47,
+        430.21
+      ],
+      "flags": 4294967295,
+      "fileId": 773
+    },
+    {
+      "name": "RockPlanarSmall1 (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanarSmall1 (1)",
+      "localPos": [
+        172.35,
+        34.81,
+        333.73
+      ],
+      "flags": 4294967295,
+      "fileId": 1689
+    },
+    {
+      "name": "RockPlanarSmall1 (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RockPlanarSmall1 (2)",
+      "localPos": [
+        346.01,
+        72.5,
+        460.58
+      ],
+      "flags": 4294967295,
+      "fileId": 1213
+    },
+    {
+      "name": "Rubble",
+      "parentPath": "Static Props",
+      "path": "Static Props/Rubble",
+      "localPos": [
+        293.12,
+        74.936,
+        428.41
+      ],
+      "flags": 4294967295,
+      "fileId": 2359
+    },
+    {
+      "name": "Rubble (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Rubble (1)",
+      "localPos": [
+        296.11,
+        74.87,
+        428.41
+      ],
+      "flags": 4294967295,
+      "fileId": 215
+    },
+    {
+      "name": "Rubble (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Rubble (2)",
+      "localPos": [
+        292.90826,
+        71.47,
+        441.98
+      ],
+      "flags": 4294967295,
+      "fileId": 487
+    },
+    {
+      "name": "RubblePile White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White",
+      "localPos": [
+        419.86,
+        26.29,
+        321.7376
+      ],
+      "flags": 4294967295,
+      "fileId": 1578
+    },
+    {
+      "name": "RubblePile White",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White",
+      "localPos": [
+        429.95,
+        37.66,
+        397.99
+      ],
+      "flags": 4294967295,
+      "fileId": 2096
+    },
+    {
+      "name": "RubblePile White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (1)",
+      "localPos": [
+        149.33,
+        28.25,
+        416.58228
+      ],
+      "flags": 4294967295,
+      "fileId": 384
+    },
+    {
+      "name": "RubblePile White (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (1)",
+      "localPos": [
+        380.08,
+        57.43,
+        401.11
+      ],
+      "flags": 4294967295,
+      "fileId": 1792
+    },
+    {
+      "name": "RubblePile White (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (10)",
+      "localPos": [
+        224.83,
+        44.51,
+        311.67
+      ],
+      "flags": 4294967295,
+      "fileId": 1564
+    },
+    {
+      "name": "RubblePile White (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (11)",
+      "localPos": [
+        341.94754,
+        77.73,
+        425.74
+      ],
+      "flags": 4294967295,
+      "fileId": 1709
+    },
+    {
+      "name": "RubblePile White (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (2)",
+      "localPos": [
+        182.35,
+        41.82,
+        354.17
+      ],
+      "flags": 4294967295,
+      "fileId": 632
+    },
+    {
+      "name": "RubblePile White (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (3)",
+      "localPos": [
+        174.58,
+        38.86,
+        357.28
+      ],
+      "flags": 4294967295,
+      "fileId": 1594
+    },
+    {
+      "name": "RubblePile White (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (4)",
+      "localPos": [
+        159.71,
+        33.96,
+        311.5
+      ],
+      "flags": 4294967295,
+      "fileId": 1612
+    },
+    {
+      "name": "RubblePile White (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (5)",
+      "localPos": [
+        169.03,
+        36.03,
+        446.19672
+      ],
+      "flags": 4294967295,
+      "fileId": 481
+    },
+    {
+      "name": "RubblePile White (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (6)",
+      "localPos": [
+        373.04465,
+        67.84815,
+        462.33823
+      ],
+      "flags": 4294967295,
+      "fileId": 2506
+    },
+    {
+      "name": "RubblePile White (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (7)",
+      "localPos": [
+        378.65,
+        64.22,
+        473.24
+      ],
+      "flags": 4294967295,
+      "fileId": 677
+    },
+    {
+      "name": "RubblePile White (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (8)",
+      "localPos": [
+        413.57,
+        49.38,
+        458.5485
+      ],
+      "flags": 4294967295,
+      "fileId": 2024
+    },
+    {
+      "name": "RubblePile White (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/RubblePile White (9)",
+      "localPos": [
+        379.84,
+        60.45,
+        410.0072
+      ],
+      "flags": 4294967295,
+      "fileId": 1136
+    },
+    {
+      "name": "Sandbags",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags",
+      "localPos": [
+        182.13,
+        43.39,
+        363.42
+      ],
+      "flags": 4294967295,
+      "fileId": 564
+    },
+    {
+      "name": "Sandbags",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags",
+      "localPos": [
+        374.125,
+        29.2,
+        281.598
+      ],
+      "flags": 4294967295,
+      "fileId": 1726
+    },
+    {
+      "name": "Sandbags (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (1)",
+      "localPos": [
+        183.16,
+        43.43,
+        370.52
+      ],
+      "flags": 4294967295,
+      "fileId": 226
+    },
+    {
+      "name": "Sandbags (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (1)",
+      "localPos": [
+        385.43,
+        29.2,
+        278.72
+      ],
+      "flags": 4294967295,
+      "fileId": 2358
+    },
+    {
+      "name": "Sandbags (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (10)",
+      "localPos": [
+        263.93,
+        55.01,
+        345.37
+      ],
+      "flags": 4294967295,
+      "fileId": 823
+    },
+    {
+      "name": "Sandbags (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (11)",
+      "localPos": [
+        245.28,
+        51.96,
+        346.97
+      ],
+      "flags": 4294967295,
+      "fileId": 2344
+    },
+    {
+      "name": "Sandbags (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (12)",
+      "localPos": [
+        264.0,
+        51.93,
+        345.25
+      ],
+      "flags": 4294967295,
+      "fileId": 1627
+    },
+    {
+      "name": "Sandbags (13)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (13)",
+      "localPos": [
+        248.25,
+        51.98,
+        345.2
+      ],
+      "flags": 4294967295,
+      "fileId": 2534
+    },
+    {
+      "name": "Sandbags (14)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (14)",
+      "localPos": [
+        250.21,
+        62.01,
+        356.32
+      ],
+      "flags": 4294967295,
+      "fileId": 2644
+    },
+    {
+      "name": "Sandbags (15)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (15)",
+      "localPos": [
+        247.69,
+        62.01,
+        359.11
+      ],
+      "flags": 4294967295,
+      "fileId": 1329
+    },
+    {
+      "name": "Sandbags (16)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (16)",
+      "localPos": [
+        389.44,
+        61.01,
+        424.66
+      ],
+      "flags": 4294967295,
+      "fileId": 550
+    },
+    {
+      "name": "Sandbags (17)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (17)",
+      "localPos": [
+        394.47,
+        61.06,
+        425.74
+      ],
+      "flags": 4294967295,
+      "fileId": 470
+    },
+    {
+      "name": "Sandbags (18)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (18)",
+      "localPos": [
+        395.47,
+        56.98,
+        425.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1976
+    },
+    {
+      "name": "Sandbags (19)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (19)",
+      "localPos": [
+        397.14,
+        57.046,
+        428.14
+      ],
+      "flags": 4294967295,
+      "fileId": 1092
+    },
+    {
+      "name": "Sandbags (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (2)",
+      "localPos": [
+        379.48,
+        29.2,
+        281.35
+      ],
+      "flags": 4294967295,
+      "fileId": 1530
+    },
+    {
+      "name": "Sandbags (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (2)",
+      "localPos": [
+        307.1,
+        48.98,
+        311.75
+      ],
+      "flags": 4294967295,
+      "fileId": 1846
+    },
+    {
+      "name": "Sandbags (20)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (20)",
+      "localPos": [
+        370.85,
+        65.04,
+        440.78
+      ],
+      "flags": 4294967295,
+      "fileId": 485
+    },
+    {
+      "name": "Sandbags (21)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (21)",
+      "localPos": [
+        416.51,
+        49.74,
+        430.41
+      ],
+      "flags": 4294967295,
+      "fileId": 1772
+    },
+    {
+      "name": "Sandbags (22)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (22)",
+      "localPos": [
+        245.25,
+        51.96,
+        351.36
+      ],
+      "flags": 4294967295,
+      "fileId": 146
+    },
+    {
+      "name": "Sandbags (23)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (23)",
+      "localPos": [
+        141.38,
+        29.53,
+        333.96
+      ],
+      "flags": 4294967295,
+      "fileId": 1059
+    },
+    {
+      "name": "Sandbags (24)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (24)",
+      "localPos": [
+        420.14,
+        49.74,
+        433.2
+      ],
+      "flags": 4294967295,
+      "fileId": 1962
+    },
+    {
+      "name": "Sandbags (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (3)",
+      "localPos": [
+        226.68,
+        66.85,
+        393.49
+      ],
+      "flags": 4294967295,
+      "fileId": 2360
+    },
+    {
+      "name": "Sandbags (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (3)",
+      "localPos": [
+        277.58,
+        45.388393,
+        306.13
+      ],
+      "flags": 4294967295,
+      "fileId": 2550
+    },
+    {
+      "name": "Sandbags (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (4)",
+      "localPos": [
+        222.69,
+        66.85,
+        395.8
+      ],
+      "flags": 4294967295,
+      "fileId": 666
+    },
+    {
+      "name": "Sandbags (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (4)",
+      "localPos": [
+        261.44,
+        46.22,
+        319.12
+      ],
+      "flags": 4294967295,
+      "fileId": 858
+    },
+    {
+      "name": "Sandbags (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (5)",
+      "localPos": [
+        156.65,
+        44.316,
+        298.77
+      ],
+      "flags": 4294967295,
+      "fileId": 560
+    },
+    {
+      "name": "Sandbags (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (5)",
+      "localPos": [
+        221.02,
+        66.85,
+        399.2
+      ],
+      "flags": 4294967295,
+      "fileId": 1713
+    },
+    {
+      "name": "Sandbags (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (6)",
+      "localPos": [
+        225.22,
+        66.85,
+        403.48
+      ],
+      "flags": 4294967295,
+      "fileId": 1817
+    },
+    {
+      "name": "Sandbags (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (6)",
+      "localPos": [
+        139.99,
+        29.53,
+        336.94
+      ],
+      "flags": 4294967295,
+      "fileId": 1941
+    },
+    {
+      "name": "Sandbags (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (7)",
+      "localPos": [
+        230.97,
+        66.85,
+        393.23
+      ],
+      "flags": 4294967295,
+      "fileId": 1613
+    },
+    {
+      "name": "Sandbags (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (7)",
+      "localPos": [
+        135.39,
+        26.55,
+        340.98
+      ],
+      "flags": 4294967295,
+      "fileId": 1740
+    },
+    {
+      "name": "Sandbags (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (8)",
+      "localPos": [
+        257.61,
+        54.93,
+        345.35
+      ],
+      "flags": 4294967295,
+      "fileId": 924
+    },
+    {
+      "name": "Sandbags (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Sandbags (9)",
+      "localPos": [
+        255.43,
+        54.93,
+        348.26
+      ],
+      "flags": 4294967295,
+      "fileId": 2233
+    },
+    {
+      "name": "Staircase",
+      "parentPath": "Static Props",
+      "path": "Static Props/Staircase",
+      "localPos": [
+        292.71,
+        50.81,
+        336.0
+      ],
+      "flags": 4294967295,
+      "fileId": 342
+    },
+    {
+      "name": "Staircase",
+      "parentPath": "Static Props",
+      "path": "Static Props/Staircase",
+      "localPos": [
+        313.53,
+        52.66576,
+        311.86
+      ],
+      "flags": 4294967295,
+      "fileId": 499
+    },
+    {
+      "name": "Staircase",
+      "parentPath": "Static Props",
+      "path": "Static Props/Staircase",
+      "localPos": [
+        285.981,
+        48.16,
+        330.47
+      ],
+      "flags": 4294967295,
+      "fileId": 636
+    },
+    {
+      "name": "Staircase",
+      "parentPath": "Static Props",
+      "path": "Static Props/Staircase",
+      "localPos": [
+        307.27,
+        49.0,
+        306.41
+      ],
+      "flags": 4294967295,
+      "fileId": 1747
+    },
+    {
+      "name": "Staircase",
+      "parentPath": "Static Props",
+      "path": "Static Props/Staircase",
+      "localPos": [
+        300.73,
+        52.66576,
+        336.7
+      ],
+      "flags": 4294967295,
+      "fileId": 2368
+    },
+    {
+      "name": "Staircase (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Staircase (2)",
+      "localPos": [
+        379.94,
+        27.61,
+        274.7
+      ],
+      "flags": 4294967295,
+      "fileId": 2127
+    },
+    {
+      "name": "Staircase (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Staircase (3)",
+      "localPos": [
+        383.93,
+        29.13,
+        276.17
+      ],
+      "flags": 4294967295,
+      "fileId": 2136
+    },
+    {
+      "name": "Tank Trap",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap",
+      "localPos": [
+        175.81,
+        24.38,
+        517.51
+      ],
+      "flags": 4294967295,
+      "fileId": 87
+    },
+    {
+      "name": "Tank Trap",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap",
+      "localPos": [
+        227.3406,
+        56.89,
+        434.5604
+      ],
+      "flags": 4294967295,
+      "fileId": 1182
+    },
+    {
+      "name": "Tank Trap",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap",
+      "localPos": [
+        419.83,
+        20.57,
+        265.87
+      ],
+      "flags": 4294967295,
+      "fileId": 1253
+    },
+    {
+      "name": "Tank Trap (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (1)",
+      "localPos": [
+        242.50572,
+        62.55,
+        440.33105
+      ],
+      "flags": 4294967295,
+      "fileId": 1601
+    },
+    {
+      "name": "Tank Trap (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (1)",
+      "localPos": [
+        169.25,
+        25.5,
+        521.1
+      ],
+      "flags": 4294967295,
+      "fileId": 1618
+    },
+    {
+      "name": "Tank Trap (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (10)",
+      "localPos": [
+        120.35,
+        20.98,
+        316.94
+      ],
+      "flags": 4294967295,
+      "fileId": 1047
+    },
+    {
+      "name": "Tank Trap (10)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (10)",
+      "localPos": [
+        216.86,
+        27.86,
+        264.77072
+      ],
+      "flags": 4294967295,
+      "fileId": 1139
+    },
+    {
+      "name": "Tank Trap (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (11)",
+      "localPos": [
+        250.47,
+        24.0,
+        570.72
+      ],
+      "flags": 4294967295,
+      "fileId": 771
+    },
+    {
+      "name": "Tank Trap (11)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (11)",
+      "localPos": [
+        297.54895,
+        31.51,
+        253.58037
+      ],
+      "flags": 4294967295,
+      "fileId": 1643
+    },
+    {
+      "name": "Tank Trap (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (12)",
+      "localPos": [
+        299.9833,
+        46.46,
+        305.80566
+      ],
+      "flags": 4294967295,
+      "fileId": 1738
+    },
+    {
+      "name": "Tank Trap (12)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (12)",
+      "localPos": [
+        247.57,
+        24.61,
+        586.9
+      ],
+      "flags": 4294967295,
+      "fileId": 2518
+    },
+    {
+      "name": "Tank Trap (13)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (13)",
+      "localPos": [
+        378.12314,
+        36.22,
+        343.07367
+      ],
+      "flags": 4294967295,
+      "fileId": 1602
+    },
+    {
+      "name": "Tank Trap (13)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (13)",
+      "localPos": [
+        207.51,
+        50.66,
+        465.57
+      ],
+      "flags": 4294967295,
+      "fileId": 1944
+    },
+    {
+      "name": "Tank Trap (14)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (14)",
+      "localPos": [
+        391.04483,
+        27.98,
+        302.0664
+      ],
+      "flags": 4294967295,
+      "fileId": 141
+    },
+    {
+      "name": "Tank Trap (14)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (14)",
+      "localPos": [
+        179.04,
+        38.04,
+        311.94
+      ],
+      "flags": 4294967295,
+      "fileId": 2151
+    },
+    {
+      "name": "Tank Trap (15)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (15)",
+      "localPos": [
+        381.035,
+        31.55,
+        305.63406
+      ],
+      "flags": 4294967295,
+      "fileId": 224
+    },
+    {
+      "name": "Tank Trap (15)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (15)",
+      "localPos": [
+        156.2,
+        36.2,
+        260.0
+      ],
+      "flags": 4294967295,
+      "fileId": 1665
+    },
+    {
+      "name": "Tank Trap (16)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (16)",
+      "localPos": [
+        454.02924,
+        45.27,
+        327.57526
+      ],
+      "flags": 4294967295,
+      "fileId": 1493
+    },
+    {
+      "name": "Tank Trap (16)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (16)",
+      "localPos": [
+        197.67,
+        44.68,
+        353.35
+      ],
+      "flags": 4294967295,
+      "fileId": 1796
+    },
+    {
+      "name": "Tank Trap (17)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (17)",
+      "localPos": [
+        170.36,
+        44.58,
+        412.34
+      ],
+      "flags": 4294967295,
+      "fileId": 249
+    },
+    {
+      "name": "Tank Trap (17)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (17)",
+      "localPos": [
+        352.1959,
+        70.79,
+        435.4523
+      ],
+      "flags": 4294967295,
+      "fileId": 1174
+    },
+    {
+      "name": "Tank Trap (18)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (18)",
+      "localPos": [
+        204.72,
+        45.7,
+        436.64
+      ],
+      "flags": 4294967295,
+      "fileId": 926
+    },
+    {
+      "name": "Tank Trap (19)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (19)",
+      "localPos": [
+        237.34,
+        48.15,
+        344.67
+      ],
+      "flags": 4294967295,
+      "fileId": 1806
+    },
+    {
+      "name": "Tank Trap (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (2)",
+      "localPos": [
+        233.59344,
+        57.54,
+        474.78644
+      ],
+      "flags": 4294967295,
+      "fileId": 929
+    },
+    {
+      "name": "Tank Trap (2)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (2)",
+      "localPos": [
+        114.07,
+        21.51,
+        411.95
+      ],
+      "flags": 4294967295,
+      "fileId": 2543
+    },
+    {
+      "name": "Tank Trap (20)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (20)",
+      "localPos": [
+        416.21,
+        23.87,
+        285.62
+      ],
+      "flags": 4294967295,
+      "fileId": 501
+    },
+    {
+      "name": "Tank Trap (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (3)",
+      "localPos": [
+        201.02,
+        45.06,
+        428.65
+      ],
+      "flags": 4294967295,
+      "fileId": 788
+    },
+    {
+      "name": "Tank Trap (3)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (3)",
+      "localPos": [
+        123.86,
+        27.28,
+        426.86
+      ],
+      "flags": 4294967295,
+      "fileId": 1911
+    },
+    {
+      "name": "Tank Trap (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (4)",
+      "localPos": [
+        127.54,
+        26.83,
+        422.71
+      ],
+      "flags": 4294967295,
+      "fileId": 620
+    },
+    {
+      "name": "Tank Trap (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (4)",
+      "localPos": [
+        228.98117,
+        55.87,
+        445.8402
+      ],
+      "flags": 4294967295,
+      "fileId": 1693
+    },
+    {
+      "name": "Tank Trap (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (5)",
+      "localPos": [
+        242.04185,
+        62.91,
+        465.2478
+      ],
+      "flags": 4294967295,
+      "fileId": 209
+    },
+    {
+      "name": "Tank Trap (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (5)",
+      "localPos": [
+        114.73,
+        21.67,
+        394.64
+      ],
+      "flags": 4294967295,
+      "fileId": 2288
+    },
+    {
+      "name": "Tank Trap (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (6)",
+      "localPos": [
+        130.42,
+        26.64,
+        401.56
+      ],
+      "flags": 4294967295,
+      "fileId": 245
+    },
+    {
+      "name": "Tank Trap (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (6)",
+      "localPos": [
+        278.52194,
+        70.22,
+        455.63
+      ],
+      "flags": 4294967295,
+      "fileId": 696
+    },
+    {
+      "name": "Tank Trap (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (7)",
+      "localPos": [
+        162.63,
+        35.02,
+        471.45
+      ],
+      "flags": 4294967295,
+      "fileId": 814
+    },
+    {
+      "name": "Tank Trap (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (7)",
+      "localPos": [
+        126.18,
+        25.28,
+        353.94
+      ],
+      "flags": 4294967295,
+      "fileId": 1692
+    },
+    {
+      "name": "Tank Trap (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (8)",
+      "localPos": [
+        113.74,
+        20.12,
+        345.5
+      ],
+      "flags": 4294967295,
+      "fileId": 1481
+    },
+    {
+      "name": "Tank Trap (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (8)",
+      "localPos": [
+        188.7792,
+        37.74,
+        291.96716
+      ],
+      "flags": 4294967295,
+      "fileId": 2557
+    },
+    {
+      "name": "Tank Trap (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (9)",
+      "localPos": [
+        112.39,
+        19.53,
+        330.75
+      ],
+      "flags": 4294967295,
+      "fileId": 1230
+    },
+    {
+      "name": "Tank Trap (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Tank Trap (9)",
+      "localPos": [
+        192.34,
+        32.05,
+        269.9875
+      ],
+      "flags": 4294967295,
+      "fileId": 1836
+    },
+    {
+      "name": "Vehicle Spawner (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/Vehicle Spawner (6)",
+      "localPos": [
+        132.65,
+        25.47,
+        355.72
+      ],
+      "flags": 4294967295,
+      "fileId": 660
+    },
+    {
+      "name": "Wall Entrance",
+      "parentPath": "Static Props",
+      "path": "Static Props/Wall Entrance",
+      "localPos": [
+        304.83,
+        44.68,
+        335.31
+      ],
+      "flags": 4294967295,
+      "fileId": 230
+    },
+    {
+      "name": "Water",
+      "parentPath": "Static Props",
+      "path": "Static Props/Water",
+      "localPos": [
+        261.1,
+        18.0,
+        358.1
+      ],
+      "flags": 4294967295,
+      "fileId": 1219
+    },
+    {
+      "name": "WoodenPlatform",
+      "parentPath": "Static Props",
+      "path": "Static Props/WoodenPlatform",
+      "localPos": [
+        382.83,
+        25.19,
+        279.13
+      ],
+      "flags": 4294967295,
+      "fileId": 917
+    },
+    {
+      "name": "WoodenPlatformExtended",
+      "parentPath": "Static Props",
+      "path": "Static Props/WoodenPlatformExtended",
+      "localPos": [
+        382.89127,
+        23.71,
+        273.77
+      ],
+      "flags": 4294967295,
+      "fileId": 1472
+    },
+    {
+      "name": "WoodenPlatformExtended (4)",
+      "parentPath": "Static Props",
+      "path": "Static Props/WoodenPlatformExtended (4)",
+      "localPos": [
+        139.02748,
+        25.55,
+        334.6002
+      ],
+      "flags": 4294967295,
+      "fileId": 1567
+    },
+    {
+      "name": "WoodenPlatformExtended (5)",
+      "parentPath": "Static Props",
+      "path": "Static Props/WoodenPlatformExtended (5)",
+      "localPos": [
+        133.03,
+        22.55,
+        334.6002
+      ],
+      "flags": 4294967295,
+      "fileId": 2230
+    },
+    {
+      "name": "WoodenPlatformExtended (6)",
+      "parentPath": "Static Props",
+      "path": "Static Props/WoodenPlatformExtended (6)",
+      "localPos": [
+        133.03,
+        22.55,
+        340.6
+      ],
+      "flags": 4294967295,
+      "fileId": 661
+    },
+    {
+      "name": "WoodenPlatformExtended (7)",
+      "parentPath": "Static Props",
+      "path": "Static Props/WoodenPlatformExtended (7)",
+      "localPos": [
+        127.03,
+        22.55,
+        340.6
+      ],
+      "flags": 4294967295,
+      "fileId": 1345
+    },
+    {
+      "name": "WoodenPlatformExtended (8)",
+      "parentPath": "Static Props",
+      "path": "Static Props/WoodenPlatformExtended (8)",
+      "localPos": [
+        127.03,
+        22.55,
+        334.6002
+      ],
+      "flags": 4294967295,
+      "fileId": 899
+    },
+    {
+      "name": "WoodenPlatformExtended (9)",
+      "parentPath": "Static Props",
+      "path": "Static Props/WoodenPlatformExtended (9)",
+      "localPos": [
+        417.19,
+        51.83,
+        433.72
+      ],
+      "flags": 4294967295,
+      "fileId": 469
+    },
+    {
+      "name": "farmhouse",
+      "parentPath": "Static Props",
+      "path": "Static Props/farmhouse",
+      "localPos": [
+        312.55,
+        71.58,
+        444.18
+      ],
+      "flags": 4294967295,
+      "fileId": 1784
+    },
+    {
+      "name": "Staircase",
+      "parentPath": "Static Props/farmhouse",
+      "path": "Static Props/farmhouse/Staircase",
+      "localPos": [
+        -4.5,
+        0.6,
+        3.6
+      ],
+      "flags": 4294967295,
+      "fileId": 1568
+    },
+    {
+      "name": "Staircase (1)",
+      "parentPath": "Static Props/farmhouse",
+      "path": "Static Props/farmhouse/Staircase (1)",
+      "localPos": [
+        0.0,
+        10.0,
+        -0.03
+      ],
+      "flags": 4294967295,
+      "fileId": 1360
+    },
+    {
+      "name": "tractor",
+      "parentPath": "Static Props",
+      "path": "Static Props/tractor",
+      "localPos": [
+        363.25,
+        71.85,
+        465.53
+      ],
+      "flags": 4294967295,
+      "fileId": 2595
+    },
+    {
+      "name": "tractor (1)",
+      "parentPath": "Static Props",
+      "path": "Static Props/tractor (1)",
+      "localPos": [
+        313.41,
+        71.58,
+        442.35
+      ],
+      "flags": 4294967295,
+      "fileId": 113
+    },
+    {
+      "name": "Blades",
+      "parentPath": "Static Props/windmill",
+      "path": "Static Props/windmill/Blades",
+      "localPos": [
+        0.0,
+        13.0,
+        -2.7543654
+      ],
+      "flags": 4294967295,
+      "fileId": 190
+    },
+    {
+      "name": "Windmill",
+      "parentPath": "Static Props/windmill",
+      "path": "Static Props/windmill/Windmill",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "flags": 4294967295,
+      "fileId": 2240
+    }
+  ]
+}

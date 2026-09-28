@@ -1,0 +1,25 @@
+{
+  "name": "profile",
+  "steps": [
+    { "note": "Frame-time capture for one rendered client (run-lane-b.ps1 -Set profile -ClientCount 1). Deploys, walks the map toward the fight, looks around, fires, and asks to respawn every half minute so a death by a bot or by water comes back. No checkpoint until the end: a checkpoint takes a screenshot, and a screenshot is a hitch of its own.", "seconds": 6.0, "respawn": true },
+    { "seconds": 20.0, "moveZ": 1.0, "sprint": true, "yawDegrees": 0 },
+    { "seconds": 10.0, "yawRateDegreesPerSecond": 36 },
+    { "seconds": 4.0, "fire": true, "yawDegrees": 90, "pitchDegrees": 5 },
+    { "seconds": 4.0, "respawn": true, "yawDegrees": 90 },
+    { "seconds": 25.0, "moveZ": 1.0, "sprint": true, "yawDegrees": 90 },
+    { "seconds": 4.0, "fire": true, "yawDegrees": 90 },
+    { "seconds": 4.0, "respawn": true, "yawDegrees": 90 },
+    { "seconds": 25.0, "moveZ": 1.0, "sprint": true, "yawDegrees": 180 },
+    { "seconds": 10.0, "yawRateDegreesPerSecond": 36, "yawDegrees": 180 },
+    { "seconds": 4.0, "respawn": true, "yawDegrees": 180 },
+    { "seconds": 25.0, "moveZ": 1.0, "sprint": true, "yawDegrees": 270 },
+    { "seconds": 4.0, "fire": true, "yawDegrees": 270 },
+    { "seconds": 4.0, "respawn": true, "yawDegrees": 270 },
+    { "seconds": 30.0, "moveZ": 1.0, "yawDegrees": 0 },
+    { "seconds": 4.0, "respawn": true },
+    { "seconds": 30.0, "moveZ": 1.0, "sprint": true, "yawDegrees": 45 },
+    { "seconds": 4.0, "respawn": true, "yawDegrees": 45 },
+    { "seconds": 20.0, "yawRateDegreesPerSecond": 18, "yawDegrees": 45 },
+    { "checkpoint": "end", "seconds": 2.0 }
+  ]
+}

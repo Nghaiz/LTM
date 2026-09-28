@@ -50,7 +50,11 @@ try {
         }
 
         Write-Host "Building $lib ($Configuration)..."
-        dotnet build $project -c $Configuration --nologo
+        # Unity only consumes the netstandard2.1 target. Building the outer multi-target
+        # project can terminate after restore without executing either inner build on some
+        # Windows/MSBuild hosts, yielding exit code 1 with the misleading "0 Error(s)" output.
+        # Pin the same target here that the publish closure below already pins.
+        dotnet build $project -c $Configuration -f netstandard2.1 --nologo
         if ($LASTEXITCODE -ne 0) { throw "dotnet build failed for $lib" }
 
         $dll = Join-Path $repoRoot "$lib/bin/$Configuration/netstandard2.1/$lib.dll"
@@ -153,7 +157,7 @@ try {
     Write-Host "Copied $($libs.Count) library DLL(s) + $($copiedDeps.Count) dependency/dependencies into $plugin"
 
     foreach ($s in $skipped) {
-        Write-Host "  skipped $s — Unity's netstandard2.1 profile provides it. Re-run with -IncludeBclFacades if Unity reports the types as missing rather than as duplicated."
+        Write-Host "  skipped $s - Unity netstandard2.1 profile provides it. Re-run with -IncludeBclFacades if Unity reports the types as missing rather than as duplicated."
     }
 }
 finally {

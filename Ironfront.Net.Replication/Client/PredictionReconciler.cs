@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
@@ -53,6 +53,28 @@ namespace Ironfront.Net.Replication.Client
     /// <see cref="PositionToleranceMetres"/>.
     /// </para>
     /// <para>
+    /// <b>The replay integrates the motion itself, and there is no collision system in here.</b>
+    /// <see cref="MovementCore.Step"/> returns a motion delta and deliberately does not write
+    /// <see cref="MoveState.Position"/>, because on both the server and an ordinary predicted
+    /// tick the caller pushes that delta through the collision system and writes back where the
+    /// actor really ended up. A replay cannot: it is re-simulating N ticks in one frame from a
+    /// position the body is not standing at, so there is nothing to sweep a capsule through.
+    /// It therefore adds the delta directly — which is exactly what the server's own collision
+    /// would produce in open space, and an over-estimate anywhere the client has not been told
+    /// about geometry yet.
+    /// </para>
+    /// <para>
+    /// <b>The vertical channel is where that shows, and what absorbs it is named.</b> While
+    /// grounded, <see cref="MovementCore.Step"/> asks for <see cref="MovementCore.StickToGroundForce"/>
+    /// downwards every tick — a force whose whole purpose is to be refused by the floor — so an
+    /// N-input replay asks to descend N x 0.333 m. The client does not act on that directly: a
+    /// <see cref="ReconcileResult.Corrected"/> result is applied through
+    /// <c>NetMovementAgent.ApplyCorrectedState</c>, whose non-resync path MOVES the body with
+    /// <c>CharacterMove</c> and writes back the position collision granted, so a grounded body
+    /// does not sink. <c>PredictionReplayTests</c> pins the number so a reader who meets it in a
+    /// log knows it is expected and knows what cancels it.
+    /// </para>
+    /// <para>
     /// <b>Zero allocation after construction.</b> The ring is a struct array sized once.
     /// </para>
     /// </remarks>
@@ -86,14 +108,65 @@ namespace Ironfront.Net.Replication.Client
         /// </summary>
         public const int Capacity = ProtocolConstants.SIM_TICK_RATE;
 
+        /// <summary>
+        /// Above this error, authority is adopted with NO replay and the caller is told to
+        /// <see cref="ReconcileResult.Resynchronised"/> — which the Unity side turns into a
+        /// teleport rather than a swept move.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Without a bound, a large error can never converge.</b> A
+        /// <see cref="ReconcileResult.Corrected"/> result is applied by
+        /// <c>NetMovementAgent.ApplyCorrectedState(hardSnap: false)</c>, which is a
+        /// <c>CharacterController.Move</c> — a SWEPT motion that collision stops at the first
+        /// thing in the way. Sweeping a several-hundred-metre delta therefore does not move the
+        /// body to authority; it wedges it against geometry, the same error is computed again on
+        /// the very next snapshot, and the body is shoved every tick for as long as the
+        /// disagreement lasts. That is the juddering an unplaced body shows.
+        /// </para>
+        /// <para>
+        /// <b>This is not hypothetical, and the distance is not small.</b> The player prefab is
+        /// parked near <c>(0, 1000, 0)</c> until the server places it (the same authored spot
+        /// <c>ServerTickLoop</c>'s announce guard names for X-17), so a client whose body has not
+        /// been placed yet sits ~975 m from authority — three orders of magnitude past anything
+        /// a replay can fix.
+        /// </para>
+        /// <para>
+        /// <b>Why this value.</b> The replay can only cover <see cref="Capacity"/> ticks, one
+        /// second at <see cref="ProtocolConstants.SIM_TICK_RATE"/>. The worst divergence that
+        /// second can legitimately hold is both simulations running flat out in OPPOSITE
+        /// directions — <c>2 x <see cref="MovementCore.RunSpeed"/></c>, 13 m — and the factor of
+        /// two on top covers the vertical axis, where a jump and a fall diverge faster than a
+        /// run. Anything beyond that is not a mispredict the ring can replay away, so replaying
+        /// it is the wrong operation regardless of what caused it.
+        /// </para>
+        /// </remarks>
+        public const float ResyncDistanceMetres = 4f * MovementCore.RunSpeed;
+
         private readonly MoveInput[] _inputs = new MoveInput[Capacity];
         private readonly uint[] _ticks = new uint[Capacity];
+
+        // Ledger X-41. The position this client predicted itself to be at AFTER each recorded
+        // tick's input was applied. Without it, Reconcile could only compare the client's
+        // CURRENT position against an authoritative state for a tick `lag` in the past -- so a
+        // client predicting perfectly was compared against a position it had legitimately left,
+        // and every snapshot past 0.25 m of lag reported Corrected.
+        private readonly Vec3[] _positions = new Vec3[Capacity];
 
         private long _count;
         private uint _lastAckedTick;
         private bool _hasAcked;
 
         /// <summary>Corrections applied. The number to quote for "how often prediction missed".</summary>
+        /// <remarks>
+        /// <b>True since X-41 closed, and NOT true of any artifact recorded before it.</b> This
+        /// counter used to move on lag rather than on error: the comparison was against the
+        /// client's current position, so once <c>lag x speed</c> passed
+        /// <see cref="PositionToleranceMetres"/> — 2.1 ticks at a walk, 1.2 at a sprint — every
+        /// snapshot reported <see cref="ReconcileResult.Corrected"/> while the replay moved the
+        /// client by nothing at all. A <c>corrections: N</c> from an older run is a lag
+        /// measurement and is not comparable with one from a newer one.
+        /// </remarks>
         public long CorrectionCount { get; private set; }
 
         /// <summary>Times the acknowledged tick fell outside the buffer.</summary>
@@ -118,18 +191,36 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
-        /// Records an input the client has just predicted, so it can be replayed if needed.
+        /// Records an input the client has just predicted, so it can be replayed if needed, and
+        /// where that input left it.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Call this every tick you step prediction, with the tick that input belongs to —
         /// recording after stepping, or with the wrong tick, silently shifts every replay by one
         /// frame and shows up as a correction that never converges.
+        /// </para>
+        /// <para>
+        /// <b><paramref name="predictedPosition"/> is REQUIRED rather than defaulted, and that is
+        /// ledger X-41 rather than API taste.</b> A default would let a caller that forgot it
+        /// keep the old comparison — current position against a past authoritative state — with
+        /// nothing anywhere reporting the difference. That is precisely the failure this row is
+        /// about, reintroduced by the fix for it.
+        /// </para>
+        /// <para>
+        /// <b>The position AFTER this tick's input, not before.</b>
+        /// <c>NetPredictionClock</c> raises <c>OnTickSimulated</c> after <c>_agent.Tick(...)</c>,
+        /// so the caller has exactly that value in hand and no new ordering is introduced.
+        /// Recording the pre-step position would offset every comparison by one tick's motion —
+        /// which at a sprint is most of the tolerance.
+        /// </para>
         /// </remarks>
-        public void Record(uint tick, in MoveInput input)
+        public void Record(uint tick, in MoveInput input, in Vec3 predictedPosition)
         {
             int slot = (int)(_count % Capacity);
             _ticks[slot] = tick;
             _inputs[slot] = input;
+            _positions[slot] = predictedPosition;
             _count++;
         }
 
@@ -153,14 +244,70 @@ namespace Ironfront.Net.Replication.Client
             // corrected at all, which is worse than being corrected wrongly because nothing
             // reports it.
             if (_hasAcked && !SequenceMath.IsNewer32(lastProcessedInputTick, _lastAckedTick))
-                return ReconcileResult.Stale;
+            {
+                // A repeated acknowledgement says nothing NEW about the ticks this client sent.
+                // It says nothing about where the SERVER has put the body either -- and the
+                // server moves a body for reasons that have no input behind them at all: the
+                // spawn placement, a respawn, EnforceWireVolume's teleport. None of those
+                // advance lastProcessedInputTick, so screening on the acknowledgement ALONE made
+                // every one of them invisible for as long as it stood still -- and input travels
+                // unreliable on ChannelId.InputSequenced, so standing still is not exotic.
+                //
+                // The body then keeps the parked position GameManager.StartGame instantiates the
+                // player prefab at -- (0, 1000, 0), the spot X-17 names -- because
+                // EnterDeployedView deliberately leaves the position to the server, which makes
+                // THIS the only path that can place it. It free-falls from there into the corner
+                // of the map while the server's copy stands correctly at the base.
+                //
+                // The test below is the one ResyncDistanceMetres was written for -- read its
+                // remark, which describes this exact ~975 m case. It was simply unreachable
+                // behind the early return.
+                //
+                // Position only, and only past ResyncDistanceMetres: inside that radius a stale
+                // acknowledgement really does mean "nothing to do", and adopting authority there
+                // would throw away legitimate unacknowledged motion. _lastAckedTick is left
+                // where it is, because this tick is NOT newer -- claiming it would let the next
+                // genuinely new acknowledgement be misread as stale.
+                if (!BeyondResyncDistance(predicted.Position, authoritative.Position))
+                    return ReconcileResult.Stale;
+
+                predicted = authoritative;
+                ResyncCount++;
+                return ReconcileResult.Resynchronised;
+            }
 
             _lastAckedTick = lastProcessedInputTick;
             _hasAcked = true;
 
-            if (WithinTolerance(predicted.Position, authoritative.Position))
+            // Ledger X-41. Compared at the ACKNOWLEDGED tick, not against where the client is
+            // standing now. `authoritative` is the server's answer for the tick it names, and
+            // the client left that position `lag` ticks ago on purpose -- so comparing the two
+            // measured how far behind the server was, and reported it as a mispredict. Measured:
+            // 16 of 16 snapshots Corrected on a client that mispredicted nothing, with the
+            // replay then moving it by nothing at all.
+            //
+            // A tick that has fallen out of the ring falls back to the current position, which
+            // is the pre-X-41 comparison and the only one still available. That is the
+            // resynchronise neighbourhood, and the fallback is an approximation rather than a
+            // second opinion.
+            Vec3 predictedThen = TryGetRecordedPosition(lastProcessedInputTick, out Vec3 recorded)
+                ? recorded
+                : predicted.Position;
+
+            if (WithinTolerance(predictedThen, authoritative.Position))
             {
                 return ReconcileResult.Agreed;
+            }
+
+            // BEFORE the replay path, not after it: past ResyncDistanceMetres the replay is not
+            // merely unnecessary, it is the wrong operation -- see that constant's remark. The
+            // caller applies this result as a teleport, which is the only thing that moves a body
+            // the width of the map.
+            if (BeyondResyncDistance(predictedThen, authoritative.Position))
+            {
+                predicted = authoritative;
+                ResyncCount++;
+                return ReconcileResult.Resynchronised;
             }
 
             if (!TryFindSlotAfter(lastProcessedInputTick, out long firstUnacked))
@@ -177,12 +324,66 @@ namespace Ironfront.Net.Replication.Client
             for (long i = firstUnacked; i < _count; i++)
             {
                 int slot = (int)(i % Capacity);
-                MovementCore.Step(ref predicted, in _inputs[slot], dt);
+
+                // The RETURN VALUE, written back. Ledger row X-21: this line used to call Step
+                // and discard it, and `MovementCore.Step` deliberately does not write
+                // MoveState.Position -- "only the collision system knows where the actor really
+                // ended up, so the caller writes it back after moving". So the replay advanced
+                // velocity and stance and never the position, and every correction landed the
+                // client on the server's STALE position with the unacknowledged motion thrown
+                // away. Measured: `corrections: 2208` in a 136 s run that never converged, with
+                // pendingInputs pinned at Capacity.
+                predicted.Position += MovementCore.Step(ref predicted, in _inputs[slot], dt);
                 ReplayedInputCount++;
             }
 
             CorrectionCount++;
             return ReconcileResult.Corrected;
+        }
+
+        /// <summary>
+        /// The position this client predicted for <paramref name="tick"/>, if it is still held.
+        /// Ledger <b>X-41</b>.
+        /// </summary>
+        /// <remarks>
+        /// A linear scan of at most <see cref="Capacity"/> entries, once per snapshot rather than
+        /// once per tick — 30 reads a second against a ring the same walk already searches in
+        /// <see cref="TryFindSlotAfter"/>. Indexing arithmetic off the tick would be O(1) and
+        /// would also have to reproduce the wrap rules <c>SequenceMath</c> owns, in a second
+        /// place, for a saving nothing has asked for.
+        /// </remarks>
+        private bool TryGetRecordedPosition(uint tick, out Vec3 position)
+        {
+            position = default;
+            if (_count == 0) return false;
+
+            long oldest = Math.Max(0, _count - Capacity);
+
+            for (long i = oldest; i < _count; i++)
+            {
+                int slot = (int)(i % Capacity);
+                if (_ticks[slot] != tick) continue;
+
+                position = _positions[slot];
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether the two positions are further apart than a replay could ever close. See
+        /// <see cref="ResyncDistanceMetres"/>.
+        /// </summary>
+        private static bool BeyondResyncDistance(in Vec3 a, in Vec3 b)
+        {
+            float dx = a.X - b.X;
+            float dy = a.Y - b.Y;
+            float dz = a.Z - b.Z;
+
+            // Squared, for the same reason WithinTolerance is: this runs once per snapshot.
+            return dx * dx + dy * dy + dz * dz
+                   > ResyncDistanceMetres * ResyncDistanceMetres;
         }
 
         private static bool WithinTolerance(in Vec3 a, in Vec3 b)

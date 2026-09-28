@@ -319,7 +319,7 @@ on `Actor` that forward to a controller that forwards to a `CharacterController`
 
 Rather than six edits to a 1188-line file A owns, the checklist asks for **one new component**
 that owns the seam. See
-[`plans/replication/integration-checklist.md`](../plans/replication/integration-checklist.md).
+`plans/replication/integration-checklist.md` (deleted 2026-08-29 — `git show 68acdd9:plans/replication/integration-checklist.md`).
 
 ---
 

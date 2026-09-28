@@ -16,9 +16,11 @@ namespace Ironfront.Net.Replication.Tests
     /// <c>ThrowableWeapon</c>) and are unreachable from a <c>netstandard</c> test — there is no
     /// Unity here. What IS gradable is the shared arithmetic those files were changed to match,
     /// and that is what this fixture pins: the integrator's new form, the accumulator's
-    /// preserved form, and the release delay being a single shared constant rather than a
-    /// per-role guess. A test claiming more than that would be the kind of green that proves
-    /// nothing.
+    /// preserved form, and the release delay converting to a role-independent tick count. A test
+    /// claiming more than that would be the kind of green that proves nothing — which is what
+    /// the release-delay assertion WAS until phase 6 task 6.1 (ledger D-1): it compared one
+    /// constant against itself. Whether an authored delay matches its own throw clip is an asset
+    /// fact, and it is graded by gate rule A9, not here.
     /// </para>
     /// <para>
     /// <b>A blanket "unchanged" test would be a lie and a blanket "changed" test would hide a
@@ -66,17 +68,33 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(delta.Magnitude, advanced, 6);
             Assert.NotEqual(delta.Magnitude * 2f, advanced, 6);
 
-            // ---- RECORDED CHANGE 3: the throw release is one authored constant that both roles
-            // schedule from, rather than an Animator event on one side and nothing on the other.
-            // The constant lives on Weapon.Configuration in Assembly-CSharp; what is gradable
-            // here is that a delay expressed in seconds converts to the SAME tick count from
-            // either side, which is the property that makes one constant sufficient.
-            const float releaseDelaySeconds = 0.6f;
-            uint fromServer = TicksFor(releaseDelaySeconds);
-            uint fromClient = TicksFor(releaseDelaySeconds);
+            // ---- RECORDED CHANGE 3: the throw release is an authored PER-WEAPON delay both
+            // roles schedule from, rather than an Animator event on one side and nothing on the
+            // other. Two properties are gradable here and the pair is the point.
+            //
+            // This assertion used to read `TicksFor(0.6f) == TicksFor(0.6f)`, feeding one
+            // constant to both sides of its own comparison — true whatever the clips said, and
+            // green for the whole of the time D-1 was open. The clips are three times apart
+            // (frag_throw.anim:2249 raises SpawnThrowable at 1.2381772 s, Ammobox Throw.anim:1430
+            // at 0.4142947 s, both Throw states at m_Speed 1.3), so no single constant was ever
+            // right for both.
+            //
+            // Drift between an authored value and its own clip is NOT graded here — an asset
+            // fact needs an asset reader, and that is gate rule A9
+            // (AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip). What this pins is the
+            // arithmetic A9 cannot see: the seconds->ticks conversion is role-independent, and
+            // the two weapons genuinely land on different ticks.
+            const float fragReleaseSeconds     = 0.952444f;    // frag.prefab, spearhead.prefab
+            const float ammoboxReleaseSeconds  = 0.3186882f;   // ammobox.prefab, medipack.prefab
 
-            Assert.Equal(fromServer, fromClient);
-            Assert.Equal(18u, fromServer);   // 0.6 s at 30 Hz
+            Assert.Equal(TicksFor(fragReleaseSeconds),    TicksFor(fragReleaseSeconds));
+            Assert.Equal(TicksFor(ammoboxReleaseSeconds), TicksFor(ammoboxReleaseSeconds));
+
+            Assert.Equal(29u, TicksFor(fragReleaseSeconds));      // 0.952444 s at 30 Hz
+            Assert.Equal(10u, TicksFor(ammoboxReleaseSeconds));   // 0.3186882 s at 30 Hz
+
+            // The clause the old assertion could not express: one constant cannot serve both.
+            Assert.NotEqual(TicksFor(fragReleaseSeconds), TicksFor(ammoboxReleaseSeconds));
         }
 
         /// <summary>

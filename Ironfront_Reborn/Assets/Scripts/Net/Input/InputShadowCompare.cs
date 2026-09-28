@@ -34,8 +34,8 @@ namespace Ironfront.Net.Unity
     /// the controller, or the input source. It reads and it logs.
     /// </para>
     /// </remarks>
-    // Late, so that anything FpsActorController.Update does to LoadoutUi this frame has already
-    // happened and both sides of the comparison see the same UI state.
+    // Late, so that anything the actor controller's Update does to the loadout screen this frame
+    // has already happened and both sides of the comparison see the same UI state.
     [DefaultExecutionOrder(1000)]
     [DisallowMultipleComponent]
     public sealed class InputShadowCompare : MonoBehaviour
@@ -128,20 +128,30 @@ namespace Ironfront.Net.Unity
             // The right-hand side of each pair is the expression that stood in
             // FpsActorController before the refactor, transcribed verbatim. Where it stops being
             // verbatim, this harness stops being evidence.
-            bool loadoutOpen = LoadoutUi.IsOpen();
+            // Through the binding, as LocalInputSource reads it. Calling the legacy UI directly
+            // would make this harness compare the seam against itself minus the seam, and the
+            // one thing it must not do is disagree with the production path for a reason that
+            // is the harness's own.
+            bool loadoutOpen = NetInputBindings.Environment.LoadoutScreenOpen;
+
+            // On both sides, for the same reason loadoutOpen is on both sides: it is a
+            // suppression term shared by the production path, not part of the transcription
+            // being checked. Present here only so the harness keeps comparing the seam against
+            // the legacy expression rather than against the suppression.
+            bool typing = LocalTextEntry.Composing;
 
             CompareBool(0, _source.Fire(),
-                (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen);
+                (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen && !typing);
             CompareBool(1, _source.Aim(),
-                (Input.GetButton("Fire2") || Input.GetMouseButton(1)) && !loadoutOpen);
+                (Input.GetButton("Fire2") || Input.GetMouseButton(1)) && !loadoutOpen && !typing);
             CompareBool(2, _source.Reload(),
-                Input.GetButton("Reload") && !loadoutOpen);
-            CompareBool(3, _source.Crouch(), Input.GetButton("Crouch"));
-            CompareBool(4, _source.Sprint(), Input.GetButton("Sprint"));
+                Input.GetButton("Reload") && !loadoutOpen && !typing);
+            CompareBool(3, _source.Crouch(), Input.GetButton("Crouch") && !typing);
+            CompareBool(4, _source.Sprint(), Input.GetButton("Sprint") && !typing);
 
-            CompareAxis(5, _source.MoveX, Input.GetAxis("Horizontal"));
-            CompareAxis(6, _source.MoveZ, Input.GetAxis("Vertical"));
-            CompareAxis(7, _source.Lean, Input.GetAxis("Lean"));
+            CompareAxis(5, _source.MoveX, typing ? 0f : Input.GetAxis("Horizontal"));
+            CompareAxis(6, _source.MoveZ, typing ? 0f : Input.GetAxis("Vertical"));
+            CompareAxis(7, _source.Lean, typing ? 0f : Input.GetAxis("Lean"));
             CompareAxis(8, _source.LookDeltaX, Input.GetAxis("Mouse X"));
             CompareAxis(9, _source.LookDeltaY, Input.GetAxis("Mouse Y"));
         }

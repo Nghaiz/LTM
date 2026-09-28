@@ -156,8 +156,9 @@ namespace Ironfront.Net.Replication.Tests
 
         /// <summary>
         /// The eliminated side must be reported as the LOSER. <c>MatchStateMessage.WinningTeam</c>
-        /// is derived from the two ticket counts, so a team wiped off the map while holding 180
-        /// tickets would otherwise be broadcast as the winner of the round it just lost.
+        /// is derived from the two scores against the victory margin, so a team wiped off the map
+        /// while merely level on points would otherwise be broadcast as an undecided round it had
+        /// in fact just lost.
         /// </summary>
         [Fact]
         public void TheEliminatedTeamIsTheOneThatLoses()
@@ -175,8 +176,13 @@ namespace Ironfront.Net.Replication.Tests
             machine.Tick(Tick, 1, ReadOnlySpan<ActorPresence>.Empty);
 
             Assert.Equal(TeamId.Team1, winner);
-            Assert.Equal(0, machine.Tickets0);
-            Assert.True(machine.Tickets1 > 0, "team 1 lost tickets it never spent");
+
+            // Elimination is expressed by MOVING THE SCORE, so the survivor is exactly the
+            // victory margin clear -- which is what makes the broadcast scoreboard legible and
+            // what keeps WinningTeam honest without a second end path. The loser's own score is
+            // never touched: it did not spend anything by being wiped out.
+            Assert.Equal(0, machine.Score0);
+            Assert.Equal(machine.VictoryPoints, machine.Score1);
         }
 
         [Fact]
@@ -298,10 +304,19 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(VehicleSpawnPhase.GaveUp, scheduler.Phase);
             Assert.Equal(4, scheduler.BlockedRetries);
 
-            // And it never spawns afterwards, even once the pad clears -- it is disarmed, not
-            // merely waiting.
+            // Exhaustion silences the one-second retry storm, but it must not permanently lose
+            // the replacement. A bot or player can move the blocking vehicle later without
+            // producing another lifecycle event.
+            int recoveredSpawns = 0;
             for (int i = 0; i < 600; i++)
-                Assert.False(scheduler.Tick(Tick, Clear).ShouldSpawn);
+            {
+                if (!scheduler.Tick(Tick, Clear).ShouldSpawn) continue;
+                recoveredSpawns++;
+                scheduler.ReportSpawned();
+            }
+
+            Assert.Equal(1, recoveredSpawns);
+            Assert.Equal(VehicleSpawnPhase.Spawned, scheduler.Phase);
         }
 
         [Fact]
@@ -551,14 +566,40 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(guardAt >= 0, "CapturePoint.SetOwner touches the renderer with no null guard, and it now runs on the server.");
             Assert.True(guardAt < useAt, "CapturePoint.SetOwner's null guard does not enclose its renderer write.");
 
-            // IngameUi is dereferenced with no guard at all; it must stay off the server's path,
-            // which means inside the offline-only arithmetic and nowhere else.
+            // IngameUi must never be dereferenced unguarded on the server's path. Containment in
+            // the offline-only UpdateOwner USED to be the whole rule, and it was a proxy for the
+            // real property rather than the property itself -- which is why it also forbade the
+            // correct thing. The capture indicator has to run in every role (it is driven by the
+            // LOCAL player's distance, and a networked client has no other path to it), so the
+            // rule is now the property: guarded, or inside the offline-only arithmetic.
             (int start, int end) update = MethodSpan(source, "CapturePoint.cs", "private void UpdateOwner()");
+            (int start, int end) indicator =
+                MethodSpan(source, "CapturePoint.cs", "private void UpdateFlagIndicator()");
+
             MatchCollection uses = Regex.Matches(source, @"IngameUi\.instance");
             foreach (System.Text.RegularExpressions.Match use in uses)
-                Assert.True(Within(use.Index, update),
-                    $"CapturePoint.cs dereferences IngameUi.instance at offset {use.Index}, outside the offline-only "
-                    + "UpdateOwner. A headless server has no IngameUi and does not null-check it.");
+                Assert.True(Within(use.Index, update) || Within(use.Index, indicator),
+                    $"CapturePoint.cs dereferences IngameUi.instance at offset {use.Index}, outside both the "
+                    + "offline-only UpdateOwner and the null-guarded UpdateFlagIndicator. A headless server has "
+                    + "no IngameUi.");
+
+            // ...and inside UpdateFlagIndicator the guard must ENCLOSE the uses, the same shape
+            // SetOwner's renderer guard is held to above. Without this half the method could
+            // deref first and null-check afterwards and still satisfy the containment test.
+            string indicatorBody = source.Substring(indicator.start, indicator.end - indicator.start);
+            int uiGuardAt = indicatorBody.IndexOf("IngameUi.instance == null", StringComparison.Ordinal);
+            int uiUseAt = indicatorBody.IndexOf("IngameUi.instance.", StringComparison.Ordinal);
+
+            Assert.True(uiGuardAt >= 0,
+                "CapturePoint.UpdateFlagIndicator touches IngameUi with no null guard, and it runs in every role.");
+            Assert.True(uiUseAt < 0 || uiGuardAt < uiUseAt,
+                "CapturePoint.UpdateFlagIndicator's null guard does not enclose its IngameUi uses.");
+
+            // The other singleton on that path. A dedicated server has no local player either.
+            Assert.Contains("FpsActorController.instance", indicatorBody);
+            Assert.True(
+                indicatorBody.Contains("local != null") || indicatorBody.Contains("local == null"),
+                "CapturePoint.UpdateFlagIndicator does not null-check FpsActorController.instance.");
         }
 
         // ------------------------------------------------------------------ shape: VehicleSpawner

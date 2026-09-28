@@ -55,6 +55,22 @@ namespace Ironfront.Net.Transport
         /// <remarks>See <see cref="Connection.PeriodicKeepAlivesSent"/> for why this is public.</remarks>
         public long PeriodicKeepAlivesSent => _connection?.PeriodicKeepAlivesSent ?? 0;
 
+        /// <summary>Datagrams this client discarded, by reason.</summary>
+        /// <remarks>See <see cref="Connection.DroppedReservedFlags"/> for why these exist.</remarks>
+        public long DroppedReservedFlags => _connection?.DroppedReservedFlags ?? 0;
+
+        /// <inheritdoc cref="Connection.DroppedNotConnected"/>
+        public long DroppedNotConnected => _connection?.DroppedNotConnected ?? 0;
+
+        /// <inheritdoc cref="Connection.DroppedWrongConnectionId"/>
+        public long DroppedWrongConnectionId => _connection?.DroppedWrongConnectionId ?? 0;
+
+        /// <inheritdoc cref="Connection.ReliablePacketsReceived"/>
+        public long ReliablePacketsReceived => _connection?.ReliablePacketsReceived ?? 0;
+
+        /// <inheritdoc cref="Connection.AckKeepAlivesSent"/>
+        public long AckKeepAlivesSent => _connection?.AckKeepAlivesSent ?? 0;
+
         public event Action<ReadOnlyMemory<byte>>? OnMessage;
 
         public event Action<ConnectResult>? OnConnected;

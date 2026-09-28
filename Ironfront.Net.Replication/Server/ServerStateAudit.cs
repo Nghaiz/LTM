@@ -20,6 +20,18 @@ namespace Ironfront.Net.Replication.Server
         public readonly int SpawnAckPairs;
         public readonly int Sessions;
 
+        /// <summary>
+        /// How many actor ids the last <see cref="ServerStateAudit.ResetForNewMatch"/> was told
+        /// to keep, and so how many <see cref="ActorIdsInUse"/> may legitimately report.
+        /// </summary>
+        /// <remarks>
+        /// Zero for a lobby-driven teardown, where the whole world goes away. Non-zero on the
+        /// shipping Dustbowl map, whose 41 scene-resident bots outlive the round -- which is
+        /// why <see cref="IsCleanOfActorState"/> compares against this rather than against 0.
+        /// See X-74.
+        /// </remarks>
+        public readonly int RetainedActorIds;
+
         /// <summary>Vehicle ids held by a live vehicle. V4, design § 8 criterion 13.</summary>
         public readonly int VehicleIdsInUse;
 
@@ -63,8 +75,10 @@ namespace Ironfront.Net.Replication.Server
             int vehicleIdsInUse = 0, int vehicleIdsQuarantined = 0,
             int vehicleInterestPairs = 0, int vehiclesRegistered = 0,
             int mountedWeaponsTracked = 0, int turretsTracked = 0,
-            int projectileIdsInUse = 0)
+            int projectileIdsInUse = 0, int retainedActorIds = 0)
         {
+            RetainedActorIds = retainedActorIds;
+
             MountedWeaponsTracked = mountedWeaponsTracked;
             TurretsTracked        = turretsTracked;
             ProjectileIdsInUse    = projectileIdsInUse;
@@ -108,12 +122,7 @@ namespace Ironfront.Net.Replication.Server
         /// <see cref="IsClean"/> remains the right question at shutdown, when the sessions
         /// really should all be gone.
         /// </remarks>
-        public bool IsCleanOfActorState =>
-            ActorIdsInUse == 0
-            && HitboxHistoryActors == 0
-            && InterestPairs == 0
-            && SpawnAckPairs == 0
-            && IsCleanOfVehicleState;
+        public bool IsCleanOfActorState => UncleanTerms.Length == 0;
 
         /// <summary>
         /// The vehicle half of the same question. V4, design § 8 criterion 13.
@@ -134,6 +143,46 @@ namespace Ironfront.Net.Replication.Server
             && TurretsTracked == 0
             && ProjectileIdsInUse == 0;
 
+        /// <summary>
+        /// Every term of <see cref="IsCleanOfActorState"/> that is failing, named with its
+        /// value. Empty when the snapshot is clean.
+        /// </summary>
+        /// <remarks>
+        /// <b>Why this exists, and why the predicate is now derived from it.</b> The predicate
+        /// used to be a short-circuiting <c>&amp;&amp;</c> chain: it answered one bool and named
+        /// nothing, so when its first term became permanently false (X-74 -- retained actor ids
+        /// on the shipping map) every later term's answer stopped reaching anybody's eyes. The
+        /// projectile-id leak (X-73) sat behind it undetected for the life of the process, in a
+        /// term this class had already been given. A predicate that reports which of its terms
+        /// failed cannot hide a second defect behind a first, and deriving the bool from the
+        /// list means the two can never disagree.
+        /// </remarks>
+        public string UncleanTerms
+        {
+            get
+            {
+                var sb = new StringBuilder();
+                Term(sb, ActorIdsInUse != RetainedActorIds, "actorIdsInUse", ActorIdsInUse);
+                Term(sb, HitboxHistoryActors != 0, "hitboxHistoryActors", HitboxHistoryActors);
+                Term(sb, InterestPairs != 0, "interestPairs", InterestPairs);
+                Term(sb, SpawnAckPairs != 0, "spawnAckPairs", SpawnAckPairs);
+                Term(sb, VehicleIdsInUse != 0, "vehicleIdsInUse", VehicleIdsInUse);
+                Term(sb, VehicleInterestPairs != 0, "vehicleInterestPairs", VehicleInterestPairs);
+                Term(sb, VehiclesRegistered != 0, "vehiclesRegistered", VehiclesRegistered);
+                Term(sb, MountedWeaponsTracked != 0, "mountedWeaponsTracked", MountedWeaponsTracked);
+                Term(sb, TurretsTracked != 0, "turretsTracked", TurretsTracked);
+                Term(sb, ProjectileIdsInUse != 0, "projectileIdsInUse", ProjectileIdsInUse);
+                return sb.ToString();
+            }
+        }
+
+        private static void Term(StringBuilder sb, bool failing, string name, int value)
+        {
+            if (!failing) return;
+            if (sb.Length > 0) sb.Append(' ');
+            sb.Append(name).Append('=').Append(value);
+        }
+
         public override string ToString()
         {
             var sb = new StringBuilder();
@@ -150,7 +199,14 @@ namespace Ironfront.Net.Replication.Server
               .Append(" vehicleInterestPairs=").Append(VehicleInterestPairs)
               .Append(" | mountedWeapons=").Append(MountedWeaponsTracked)
               .Append(" turrets=").Append(TurretsTracked)
-              .Append(" | projectileIds=").Append(ProjectileIdsInUse);
+              .Append(" | projectileIds=").Append(ProjectileIdsInUse)
+              .Append(" retainedActorIds=").Append(RetainedActorIds);
+
+            // The terms, not just the verdict. MatchController logs this string and nothing
+            // else, so a failing term this line omits reaches no reader -- which is how X-73
+            // stayed invisible behind X-74 for the life of the process.
+            string unclean = UncleanTerms;
+            if (unclean.Length > 0) sb.Append(" | unclean: ").Append(unclean);
             return sb.ToString();
         }
     }
@@ -181,6 +237,11 @@ namespace Ironfront.Net.Replication.Server
         private readonly InterestManager _interest;
         private readonly SpawnAckTracker _spawnAcks;
         private readonly Func<int> _sessionCount;
+
+        // How many ids the last reset was told to keep. Read straight back off the pool rather
+        // than counted from the caller's enumerable, so out-of-range ids the pool ignores are
+        // ignored here too and the two can never disagree. X-74.
+        private int _retainedActorIds;
 
         // Optional, because the audit predates vehicles by five phases and the phase-03 load
         // tests construct it with four arguments. A null one reports zeros, which reads as
@@ -240,7 +301,8 @@ namespace Ironfront.Net.Replication.Server
                 _vehicles?.LiveCount ?? 0,
                 _mountedWeapons?.TrackedCount ?? 0,
                 _turrets?.TrackedCount ?? 0,
-                _projectileIds?.InUseCount ?? 0);
+                _projectileIds?.InUseCount ?? 0,
+                _retainedActorIds);
 
         /// <summary>
         /// Empties every per-actor and per-pair table. The host still has to despawn the actors
@@ -262,6 +324,12 @@ namespace Ironfront.Net.Replication.Server
             _spawnAcks.Clear();
             _ids.ResetAll(retainedActorIds);
 
+            // Recorded so the audit can tell "41 bots the reset was told to keep" from "41 ids
+            // nobody released". Before X-74 it could not, so its ERROR fired at every round
+            // transition on the shipping map and the one line that would have announced a real
+            // leak had been crying wolf since the day the retained-id path was added.
+            _retainedActorIds = _ids.InUseCount;
+
             // Vehicles have no "retained" case. Actors survive a round on the shipping Dustbowl
             // map — 41 bots persist across the match cycle — but every vehicle is destroyed at
             // the boundary and the client tears its whole vehicle table down with the match
@@ -276,6 +344,13 @@ namespace Ironfront.Net.Replication.Server
             // from that check, and a cleanup spread across five MonoBehaviour call sites will.
             _mountedWeapons?.Reset();
             _turrets?.Reset();
+
+            // X-73. A projectile in flight when the round ended kept its id for the life of the
+            // process, because this pool was the one table the reset did not clear -- while the
+            // audit had been asking about it in IsCleanOfVehicleState the whole time. Nothing
+            // is retained: a projectile does not outlive the world it was fired into, and the
+            // client tears its projectile table down with the match phase.
+            _projectileIds?.Reset();
         }
     }
 }

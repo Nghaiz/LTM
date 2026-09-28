@@ -28,15 +28,35 @@ namespace Ironfront.Net.Unity
         /// Packs the gameplay buttons a controller can observe.
         /// </summary>
         /// <remarks>
-        /// Grenade, prone, lean and weapon-switch bits are deliberately absent: nothing in
+        /// Grenade, prone and lean bits are deliberately absent: nothing in
         /// <c>FpsActorController</c> produces them today. Prone does not exist in the game at
-        /// all (docs/codebase-map.md § 2), weapon switching is an edge-triggered key rather than
-        /// a held button, and lean travels as the continuous
+        /// all (docs/codebase-map.md § 2), and lean travels as the continuous
         /// <see cref="IInputSource.Lean"/> axis locally. Packing a bit that no reader sets is
         /// how a protocol field quietly becomes permanently zero.
+        /// <para>
+        /// <b>Weapon switch moved out of that list on 2026-08-21</b>, and only because both
+        /// halves landed together: the overload below produces the slot bits and
+        /// <c>ServerCombatBridge</c> consumes them. The human keyboard/wheel path supplies an
+        /// absolute slot through <c>LocalInputSource</c>, keeping the immediate local switch
+        /// while also informing the authoritative server.
+        /// </para>
         /// </remarks>
         public static ushort Pack(
             bool fire, bool aim, bool reload, bool jump, bool crouch, bool sprint, bool use)
+            => Pack(fire, aim, reload, jump, crouch, sprint, use, weaponSlot: -1);
+
+        /// <summary>
+        /// As above, plus a weapon selection. <paramref name="weaponSlot"/> is 0..4; anything
+        /// else selects nothing.
+        /// </summary>
+        /// <remarks>
+        /// Out of range is silently "no selection" rather than an exception: this is called once
+        /// per input frame from a hot path, and a scripted programme with a typo'd slot should
+        /// produce a run that visibly does not switch, not one that dies at frame 1.
+        /// </remarks>
+        public static ushort Pack(
+            bool fire, bool aim, bool reload, bool jump, bool crouch, bool sprint, bool use,
+            int weaponSlot)
         {
             InputButtons b = InputButtons.None;
 
@@ -47,6 +67,11 @@ namespace Ironfront.Net.Unity
             if (crouch) b |= InputButtons.Crouch;
             if (sprint) b |= InputButtons.Sprint;
             if (use)    b |= InputButtons.Use;
+
+            // The mapping is InputFrame.SlotBit's, not a copy of it. MoveInput.ToButtons is the
+            // other producer of these five bits and lives in an assembly this one cannot see;
+            // duplicating the wire-bit transcription is exactly how X-31 happened.
+            b |= InputFrame.SlotBit(weaponSlot);
 
             return (ushort)b;
         }

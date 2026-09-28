@@ -1,0 +1,318 @@
+# Ironfront Reborn — the one plan
+
+- **Created:** 2026-08-29, replacing eight track plans and nine phase directories.
+- **Owner:** one person. Every role split, hand-off, sync point and "who is blocked by whom"
+  column from the four-developer period has been deleted; what those documents *asserted* about
+  the software is carried below.
+- **Branch base:** `develop`. Every PR bases on `develop`; `main` is the release line.
+- **Gate:** `tools/ci.ps1` — `dotnet test` (8 projects), `SpecChecker`, `ClientWiringGate`,
+  `check-net-layering.ps1`, `check-diagnostics-exclusion.ps1`, `check-harness-no-decoder.ps1`,
+  `python tools/recount_debt_ledger.py --check`.
+
+---
+
+## 1. Where the project actually is
+
+**The netcode is built and green.** `dotnet test` reports 8 of 8 projects, **2,103 tests**,
+0 failed (re-measured 2026-08-31 by P10; 2,042 at P7, 1,982 when this line was written). `SpecChecker` matches 90 protocol constants. `ClientWiringGate` reports 15/15 router
+events subscribed, 13/13 writers called, 9/9 authoring checks clean, and names its three
+remaining gaps out loud rather than passing quietly.
+
+**The game is not playable to a standard anyone would defend.** That is not a contradiction: every
+gate above measures *wiring*, and each one says so in its own output — *"No types were resolved —
+this says something subscribes, not that it renders correctly."* Nothing in CI has ever looked at
+the screen. The four defects a player hits in the first minute (§ 3) were all invisible to a
+green build, and that is the single most important fact on this page.
+
+**Fourteen ledger rows are open**, and **three are live defects** — down from twenty-four and
+four, by P10 *(file deleted -- `git show 509c70d:plans/reports/2026-08-31-p10-debt-sweep.md`)* on 2026-08-31.
+
+**Nine rows closed, and two pairs turned out to be one defect each.** **X-69** (an NRE storm P7
+reproduced at 10,126 occurrences in one 600 s run) and **X-71** (the server walking a claimed
+player body 518 m while its owner sent no input) are a single missing `base.enabled` guard on
+`AiActorController.Velocity`: `IAiDriver.Suspend` disables the bot brain when a connection claims
+a body, and Unity's `enabled` gates the engine's own callbacks and nothing else — which is why
+six sibling overrides already carried the check explicitly. And **X-73** (projectile ids
+surviving a world reset) was hiding behind **X-74** exactly as X-74's row predicted: the audit
+predicate was a short-circuiting `&&` chain whose permanently-false first term meant no later
+term's answer ever reached anybody. Both are closed, and the 30-minute soak confirms them on the
+shipping map — **zero `NullReferenceException` and zero `match reset left state behind` in
+1,809 s**. **X-76** and **X-77** closed with them.
+
+**Three rows had a diagnosis that was wrong, and all three stay open.** **X-70's is falsified** —
+the prefabs it called unauthored have carried ids since the commit that introduced the field, so
+the refusal was always the id pool, and P7 re-confirmed the row without re-reading the claim.
+**X-64's lead is ruled out** — its "duplicate proxy" is on all three clients and is the spawner's
+replacement; the real anomaly is 9 m of divergence *before anyone drove*, caused by a kinematic
+handover that was recorded without happening. **X-67's cause is unproven** — three distinct
+failures all rendered as one refusal, so the evidence cannot distinguish it from three others.
+Each is fixed or improved and each needs a run to close. **A row that is wrong is worse than a
+row that is open**, and that is this sweep's finding rather than the count.
+
+**What that leaves:** **X-66** (the harness's straight-line walk), **X-28** and **X-37**, and
+**X-75**, whose named lead was X-71 and which has not recurred since. The B group is unchanged and
+still needs lane B re-run.
+[`debt-ledger.md`](debt-ledger.md) is the source of truth; this file does not restate it.
+
+**Eight of those verification rows were last graded against blockers that have since closed.**
+X-30, X-32, X-44 and X-48 all closed between 2026-08-27 and 2026-08-28. Nobody has re-run lane B
+since. This is the fourth time on this project a carried-forward sentence has outlived its
+measurement, and it is why P4 exists.
+
+---
+
+## 2. Milestones — the acceptance criteria, and who grades them
+
+Carried verbatim from `plans/00-shared/README.md`, which was deleted with the rest of the
+four-developer material. **The bolded clauses exist in no other file**; they were folded into that
+README on 2026-08-26 precisely because deleting a phase spec had nearly deleted them, and deleting
+that README without carrying them would have completed the loss.
+
+| Milestone | Acceptance criteria | Status | Graded by |
+|---|---|---|---|
+| **M0** Foundation | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all projects | **4 / 4** | done |
+| **M1** Connection | **2 clients see each other moving smoothly** at 100 ms RTT + 5 % loss | **ungraded — the 2026-08-30 FAIL is WITHDRAWN** | check 7 → **B-7**; the grade rested on `p4-vehicle-02`, whose observer had fallen 580 m under the map before the first vehicle checkpoint and was therefore outside `InterestManager.CullRadius` (500 m), so the vehicle it saw diverge was simply not being sent to it. P20 re-ran check 7's condition three times and could not get a driver into a seat, so this is open rather than answered |
+| **M2** Combat | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | **3 / 3** | checks 1, 13 → **B-1** (P4 § 4.1), **B-2** (P5 § 3.3 — `p5-separation-02` samples a dead body at `alive false / hp 0 / canRespawn true`, with input suppressed on 255 of 255 dead frames) |
+| **M3** Full match | Login → lobby → room → capture point → win/lose → back to lobby, 16 players · **the flow runs with no manual file editing** · **a wrong password gives a clear error** · **disconnecting mid-match returns to the lobby with a message** | **wired, ungraded** | P8 *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* found the flow **had never been wired into Unity at all** — `MasterSession` was constructed only in a test project, `LobbyShellOverlay.Bind` had no caller under `Assets/`, and no client code loaded a scene, so `Menu.unity` drew *"Lobby shell: unbound"* and stopped. `ClientFlowBootstrap` closes it and the ten interventions are enumerated in [`../docs/m3-flow-manual-interventions.md`](../docs/m3-flow-manual-interventions.md); **both are now closed** by P10 *(file deleted -- `git show 509c70d:plans/reports/2026-08-31-p10-debt-sweep.md`)* — X-77 wired the room-state consumer, and `RoomLobby -> RoomBrowser` was added to the table and to its transcribed diagram together. It stays ungraded because the clause asks for **someone who did not build it** to run it, and nothing else now stands in that person's way |
+| **M4** Polish | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | **load test DONE · soak MET · 0-P0 re-gradeable · tables partial · video OWED** | P7 *(file deleted -- `git show 509c70d:plans/phases/phase-p7-v9-integration.md`)* ran 16 clients four times and graded all thirteen V9 criteria (the P7 report *(file deleted -- `git show 509c70d:plans/reports/2026-08-30-p7-v9-integration.md`)*). P8 *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* defined **P0 in writing before grading it** ([`../docs/p0-definition.md`](../docs/p0-definition.md)) and grades the clause **FAILING on X-69**; both tables now hold a figure or a stated reason in every cell ([`../docs/capstone-measurement-tables.md`](../docs/capstone-measurement-tables.md)), with **5 of 11 measurable cells owed** and one row blocked on the VPS that has never existed. **The 30-minute soak has now been RUN and is MET** (P10 *(file deleted -- `git show 509c70d:plans/reports/2026-08-31-p10-debt-sweep.md`)*): `p10-soak-02`, 1,809 s, no crash, working set 369 -> 390 MB inside the band, and **zero `NullReferenceException`** against P7's 10,126 -- so the **0-P0 clause is re-gradeable**, X-69 having been its only failing row. **The first attempt was VOID and the runner graded it anyway** -- a stale server held UDP 27015, so it sampled a process that never started and reported three verdicts about it; `run-soak.ps1` now refuses that, mutation-tested. The demo video is the same 30 minutes and is still owed |
+
+**M1's failure was withdrawn on 2026-09-02, and this paragraph is what it used to say.** The
+sentence below read "M1 is a measured failure … with a located cause (**X-64**, one observer's copy
+of a hull freezes 303 m behind)". That measurement came from a client that had fallen out of the
+world: `observer-b`'s `authoritativeY` in `p4-vehicle-02` reads 8.77 at `spawned` and **-571.49 at
+`at-vehicle`**, the checkpoint the 9 m disagreement was read from. Past the 500 m cull radius the
+vehicle is not replicated to it at all, which is why the copy froze with `stalled 0` and
+`baselineMiss 0` — nothing stalled, nothing was sent. **Read M1 as ungraded**, and see the ledger's
+2026-09-02 recount before re-grading it.
+
+**M2 is met and M1 WAS recorded as a measured failure — and P4 and P5 are why.** M2's
+last unmet clause was health/death/respawn, ungradeable because no checkpoint had ever sampled a
+dead body; P5 *(file deleted -- `git show 509c70d:plans/phases/phase-p5-harness-gaps.md`)* § 3.3 samples one. **M1 is ☐ here only because
+this table has no FAIL cell**: P4 § 4.4 measured it failing, with a located cause (**X-64**, one
+observer's copy of a hull freezes 303 m behind while its own snapshot counters keep advancing) —
+read the row as "measured, and failing", not as "not yet tried".
+
+---
+
+## 3. What a player hits in the first minute
+
+Four defects, reported by playing the game on 2026-08-29 and then located in source. None is on
+the debt ledger, because the ledger was built from documents and gates and these are visible only
+on screen.
+
+| Symptom | Located at | Phase |
+|---|---|---|
+| Bodies slide; legs never move | `RemoteActorView.cs:258-265` sets six animator bools and a pitch float, and never `movement x` / `movement y` — the two parameters `Actor.cs:706-707` drives the local body with | P2 *(file deleted -- `git show 509c70d:plans/phases/phase-p2-locomotion.md`)* |
+| ~~Flags do not render — only the pole~~ **CLOSED 2026-08-30** | **Not `CapturePoint.cs:294` as filed.** Every `HQ Flag` on Dustbowl referenced mesh guid `195886543318f6a41bd0575b175957e7` and material guid `2aaff793b776d0b45b232fc08ea42a5f`, and **no asset in the project carries either** — Unity loads a dangling guid as null, so the renderer had no mesh and no material. `QualitySettings` defaults to 5, so `Awake` selected exactly that object on every client. The ownership path was measured on the wire and is correct | P3 *(file deleted -- `git show 509c70d:plans/phases/phase-p3-flag-and-minimap.md`)* — gated by `CapturePointFlagsCanDraw`, observed RED (11 findings) before the authoring |
+| No friendly / enemy / self icons on the minimap — **path shipped 2026-08-30, picture still owed** | `MinimapUi.AddActorBlip` has exactly one caller — `ActorManager.cs:58`, in `Register` — and remote networked bodies deliberately never register (ledger **A-2**). Icons now go through the new `IMinimapMarkers` seam, keyed by `Transform`; it ran 41–42 times per client on a real run with no warning. **No screenshot proves it**: `MinimapUi.Update` reads `Input.GetKey(KeyCode.M)`, which no lane-B client can produce (**X-61**) | P3 *(file deleted -- `git show 509c70d:plans/phases/phase-p3-flag-and-minimap.md`)* → **X-61** to P5 *(file deleted -- `git show 509c70d:plans/phases/phase-p5-harness-gaps.md`)* |
+| ~~Exceptions beyond counting in the log~~ **CLOSED 2026-08-29** | **X-59** (`ActorGameplaySource.IsDead` wrote the flag and left the alive register, so a respawn double-added) and **X-60** (`PushAntiStuckEvent` dereferenced `squad.squadVehicle`, **not** a null squad as filed) | P1 *(file deleted -- `git show 509c70d:plans/phases/phase-p1-exception-storm.md`)* — a 151 s lane-A run now reports **0** exceptions of any type, against 39 before |
+
+---
+
+## 4. Phases
+
+**How to run the thing, since P21 (2026-09-03).** `pwsh tools/build-player.ps1` builds the
+Windows player and stops; `pwsh tools/playtest-local.ps1 -Clients 4` stands up a master, a game
+server and four playable windows on one machine. Before P21 there was no build-only door and no
+local master, so a human playtest needed the sandbox VM and a full lane-B run — which is a large
+part of why M3 has stayed ungraded while its code has been wired since P8.
+
+
+Ordered so that each one makes the next measurable. P1–P3 are what make the game watchable; P4
+cannot produce an honest verdict until they land, because a run whose log is 60 exceptions deep
+and whose bodies do not animate cannot be graded by eye.
+
+| # | Phase | Closes | Size |
+|---|---|---|---|
+| **P1** | Exception storm *(file deleted -- `git show 509c70d:plans/phases/phase-p1-exception-storm.md`)* | X-59, X-60 | S |
+| **P2** | Remote locomotion *(file deleted -- `git show 509c70d:plans/phases/phase-p2-locomotion.md`)* | the sliding bodies | M |
+| **P3** | Flag and minimap *(file deleted -- `git show 509c70d:plans/phases/phase-p3-flag-and-minimap.md`)* | the pole, the missing icons | M |
+| **P4** | Lane-B re-grade *(file deleted -- `git show 509c70d:plans/phases/phase-p4-lane-b-regrade.md`)* | B-1, B-2, B-7, B-8, B-9, B-10, B-13, B-15 — and M1, M2 with them | L |
+| **P5** | Harness gaps *(file deleted -- `git show 509c70d:plans/phases/phase-p5-harness-gaps.md`)* | X-28, X-29, X-37 | M |
+| **P6** | Scoreboard and chat *(file deleted -- `git show 509c70d:plans/phases/phase-p6-scoreboard-and-chat.md`)* | A13, the Chat opcode | M |
+| **P7** | V9 integration *(file deleted -- `git show 509c70d:plans/phases/phase-p7-v9-integration.md`)* | **DONE 2026-08-30** — B-17 re-graded and closed at 16; **B-16 re-opened, 22% over budget**; the soak ran 8 rounds and found **X-73** | L |
+| **P8** | Capstone deliverables *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* | **DONE 2026-08-30** — the client flow wired (it never had been), P0 defined and graded, both tables filled, the soak harness built. Filed **X-76**, **X-77** | L |
+| **P9** | Deployment and single-owner cleanup *(file deleted -- `git show 509c70d:plans/phases/phase-p9-deployment-and-cleanup.md`)* | **DONE 2026-09-01** — 6 of 7 criteria MET 2026-08-31; criterion 5 now **3 of 4** (SS 4.8): the login -> join -> UDP walk and the alert drill are gated scripts, only the 72-hour chart stays deferred. The walk found **three defects that made M2 criterion 14 unverifiable**, chief among them a registered game server being reaped as unauthenticated 30 s after connecting | S |
+| **P10** | The P1-P8 debt sweep *(file deleted -- `git show 509c70d:plans/reports/2026-08-31-p10-debt-sweep.md`)* | **DONE 2026-08-31** — nine ledger rows closed (open **24 -> 14**), **three re-diagnosed and still open**, the M4 soak run and MET. Filed no new rows | L |
+| **P11** | The win condition the netcode never had *(file deleted -- `git show 509c70d:plans/phases/phase-p11-win-condition.md`)* | the networked match's divergence from the game's own rule; `PROTOCOL_VERSION` 4 -> 5 | L |
+| **P12** | Which side am I on *(file deleted -- `git show 509c70d:plans/phases/phase-p12-which-side-am-i-on.md`)* | F5, F3, F6, and half of the surplus-AI row | M |
+| **P13** | The team the lobby chose *(file deleted -- `git show 509c70d:plans/phases/phase-p13-team-into-the-match.md`)* | F2 on the wire; the lopsided-strand defect (server audit #2) | M |
+| **P14** | The room that never starts the match *(file deleted -- `git show 509c70d:plans/phases/phase-p14-room-starts-the-match.md`)* | `Ready`, `Starting`, `GsMatchStarted`, the hand-typed `roomId`, the debug button | M |
+| **P15** | The menu with no way in *(file deleted -- `git show 509c70d:plans/phases/phase-p15-the-menu-with-no-way-in.md`)* | F1 — the CRITICAL one; login, register, Practice demoted | L |
+| **P16** | The room you can see *(file deleted -- `git show 509c70d:plans/phases/phase-p16-the-room-you-can-see.md`)* | the room browser, create-room, the lobby room, choosing a side | L |
+| **P17** | The readout a player fights with *(file deleted -- `git show 509c70d:plans/phases/phase-p17-in-match-readout.md`)* | F8, and half of F7 — team readout, deploy screen, the killfeed onto the HUD | M |
+| **P18** | The scoreboard, with real numbers on it *(file deleted -- `git show 509c70d:plans/phases/phase-p18-scoreboard.md`)* | the rest of F7 — `S_PLAYER_SCORES` (0x51) and the Tab scoreboard | L |
+| **P19** | Island, made playable *(file deleted -- `git show 509c70d:plans/phases/phase-p19-island.md`)* | F4 — sixteen missing scripts on the map the owner ranks first | L |
+| **P20** | The P11-P19 debt sweep | **DONE 2026-09-02** — four rows re-diagnosed against the wrong cause; `plans/phases/` and `plans/reports/` deleted | L |
+| **P21** | [Four windows you can actually play in](phases/phase-p21-local-playtest.md) | the build-only door, the local master, and `play-lan.ps1`'s deleted menu — **and with them M3's grader** | M |
+| **P22** | [Cứu bản chuẩn khôi phục vào repo](phases/phase-p22-recovered-ground-truth.md) | 191 MB ground truth nằm trong `tmp/` (gitignore) — trích ra trước khi mất | S |
+| **P23** | [Trả lại cờ static, và gộp asset trùng](phases/phase-p23-static-batching.md) | **DONE 2026-09-20** — đặt lại 1 379 cờ (1 036/1 096 Dustbowl, 343/345 Island). Nhưng **tiền đề sai**: 1 092 renderer Dustbowl và 343 của Island **đã batch sẵn** từ 5 combined mesh mà bản gốc nướng vào, nên cờ không đổi một draw call nào. Material trùng hoá ra **không trùng** (khác shader). Xem [report](reports/2026-09-20-p23-static-flags-restored.md) | M |
+| **P24** | [A\* pathfinding: điều tra nguồn frame-hitch](phases/phase-p24-astar-hitch.md) | **DONE 2026-09-20 — kết quả âm tính**: A\* tốn **0,17 % (Dustbowl) / 0,16 % (Island)** thời gian main thread với đủ 32 bot, `AstarPath.Update` trung vị **10 µs**; client **không hề** xin đường (`SpawnWave` thoát sớm khi `IsClient`, `Remote Actor Proxy` không mang `Seeker`). 367 dòng lệch phân loại: **0** (a), **10** (b — `heightmapWidth` → `heightmapResolution`, trong code scan không bao giờ chạy), **0** (c), **357** (d — hai decompiler in cùng một IL). `ProceduralGridMover` **không asset nào tham chiếu**. Xem [report](reports/2026-09-20-p24-astar-hitch.md) | S |
+| **P25** | [Ragdoll: hiệu chỉnh joint drive cho PhysX 4](phases/phase-p25-ragdoll-drive.md) | `JointDriveMode.Position` — API Unity 5.5 xoá, cảm giác điều khiển đi qua đúng dòng đó; đo bằng DLL thay vào bản ship | L |
+| **P26** | [Shader đúng, và phần hình học Dustbowl bị mất](phases/phase-p26-visual-fidelity.md) | **DONE 2026-09-21 — hai tiền đề sai**: `fileID 45` **không phải dummy**, nó là `Standard (Specular setup)` thật (sai shader, không phải placeholder); dummy thật là `Assets/Shader/Shader.shader` (`//DummyShaderTextExporter`, chỉ albedo) với **40 material khác**, và vì nó khai báo `Shader "Standard"` nên `Shader.Find` mà §6.1 kê toa **trả về chính cái stub** — chạy đúng kế hoạch là đẩy 66 material **vào** stub rồi báo thành công. Sửa **113** material (71 + 40 + `Flag`/`DamageVignette`), đổi tên stub thành `Recovered/StandardStub`. Cổng §5 **đạt**: 0/8 mesh mất — `road` và 5 `surface` mang `m_Mesh: 0` **ngay ở bản gốc**. Dựng lại **144** object (MeshRenderer 2 173 → **2 307**, đúng số §7.4) nhưng chỉ **16** active và **7** thật sự render → khôi phục **cấu trúc**, không phải hình ảnh. Trả **6** Cloth, bù **4** cờ static. Còn ~41 material sai shader **ngoài scope**. Xem [report](reports/2026-09-21-p26-visual-fidelity.md) | L |
+| **P27** | [98 file lệch: cái nào cố ý, cái nào là mất mát](phases/phase-p27-logic-triage.md) | phân loại (a) netcode / (b) migration / (c) mất mát / (d) vô nghĩa | L+ |
+
+**P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point
+and X-29's missing measurements will show up in the artifacts as they always have, and fixing them
+before a run means fixing them against a guess.
+
+---
+
+## 4.1 The player-facing multiplayer surface was never scoped — not descoped
+
+Two findings from 2026-09-01, and neither is on the ledger's 42 pre-existing rows. All of them
+were searched for "team select", "choose team", "lobby ui", "main menu": **zero hits**. That is
+not an oversight in the ledger; the ledger is built from documents and gates, and both of these
+are visible only on a screen.
+
+**One — a player cannot reach multiplayer.** Build order is Splash -> Menu -> Island -> Dustbowl.
+The Menu scene's Canvas is the original single-player menu and touches the network stack nowhere;
+the multiplayer shell is authored in the same scene, draws from `OnGUI()` behind **Shift+F2**, and
+has **zero Button `onClick` targets**. Its own header says it is *"not a replacement for the
+Canvas UI ... looking finished would only invite someone to ship it."* So the player's experience
+and the code are each correct and they are two different programs.
+
+**Two — the netcode's win condition diverged from the game's own rule.** `MatchScoreboard`
+implements the rule the game has: score **ascends** on kills, each point multiplied by the scoring
+team's flag count, and a team wins by leading `VictoryPoints`. `MatchStateMachine` instead
+**descends** 200 tickets, charges the **victim's own side**, bleeds by flag differential, and ends
+at zero. `MatchStateMessage.WinningTeam` then picks `Tickets0 > Tickets1`, which is meaningless
+under a margin rule. Nothing was broken *within* either implementation, which is exactly why 2,103
+green tests and 90 matched protocol constants had nothing to say about it — **a divergence between
+two correct things is invisible to any gate that checks one of them.**
+
+**Three defects that make the two teams unreadable are the same shape**: the local client always
+believes it is team 0 (`Player Fps Actor.prefab:757`), the score labels are overwritten by offline
+data on every capture flip, and the networked minimap shows every enemy where the offline blip
+filtered to friendlies. All three are green in `ClientWiringGate`, which retires on **subscription**
+and says so at `GateRunner.cs:72-75`.
+
+**Friendly fire is intended and is NOT a defect.** The 2026-09-01 brainstorm and the server audit
+both ranked an ungated `ServerActorDamageSink.ApplyDamage` as the top finding. The owner cancelled
+it: `ApplyDamage` ignoring `attackerId` is correct behaviour. The penalty for a team-kill is
+economic — under the margin rule the kill credits the **enemy** a point, because `Actor.cs:905`
+scores on the victim's team — and that is stiffer and more legible than a blocked shot. Recorded
+in [`00-shared/team-multiplayer-contracts.md`](00-shared/team-multiplayer-contracts.md) SS 1.4 so
+nobody re-files it.
+
+**P11-P19 are cooked ONE AT A TIME, in separate sessions.** Each phase file is self-contained by
+construction: goal, file-ownership globs, steps, acceptance, risks. Anything two phases must agree
+on lives in [`00-shared/team-multiplayer-contracts.md`](00-shared/team-multiplayer-contracts.md)
+and is linked, never copied. The order is fixed by the owner: **D (P11, P12) -> A (P13) -> B (P14)
+-> C (P15, P16, P17, P18) -> E (P19)**.
+
+**The scoreboard is its own phase because the owner ruled the numbers ship.** Per-player kills and
+deaths were going to be deferred behind a names-only roster; that was overridden on 2026-09-01.
+Two measurements then forced the split rather than a bigger P17: the server **already** counts them
+(`MatchScoreTally.KillsOf`/`DeathsOf`, live at `ServerTickLoop.cs:1207`), and they **cannot** be
+added to `S_PLAYER_LIST` — that entry is 18 B, `1 + 64 x 18 = 1153` against a `MAX_CHANNEL_PAYLOAD`
+of **1181**, so even one extra byte per entry overflows the un-fragmented guarantee § 4.11 relies
+on. So it needs a new opcode, a spec section, a hex sample and a changelog row: a protocol phase,
+not a UI task. P18 *(file deleted -- `git show 509c70d:plans/phases/phase-p18-scoreboard.md`)* § 1 carries the arithmetic.
+
+
+---
+
+## 4.2 Track port-back: bản Ravenfield khôi phục
+
+Chủ dự án tự reverse-engineer bản build Ravenfield Beta 5 gốc thành một project Unity 5.4.0f3 gần
+như nguyên vẹn — 408 file `Assembly-CSharp`, **5 631/5 631 method khớp ở mức IL metadata**, 0 asset
+reference gãy. Dự án này vốn phát triển từ một bản decompiled khác đã bị nâng lên Unity 2017.3, và
+đối chiếu hai bên ngày 2026-09-20 giải thích được cả giật lag lẫn một phần lỗi logic.
+
+**Bản khôi phục là chuẩn đối chiếu, không phải đích đến.** Ironfront giữ Unity 6 và netcode của
+mình; P22–P27 port ngược từng hạng mục, mỗi phase một PR vào `develop`.
+
+Đã kiểm chứng trực tiếp trên `Ironfront_Reborn/`, không lấy từ tài liệu:
+
+| Hạng mục | Bản gốc | Ironfront_Reborn |
+|---|---|---|
+| Cờ static — Dustbowl / Island | 1 096 / 345 | **0 / 1** |
+| `GameObject` / `MeshRenderer` — Dustbowl | 5 587 / 2 307 | 5 465 / 2 173 |
+| Material trỏ shader dummy `fileID: 45` | — | **71 / 255** |
+| Shader file | 46 | 21 |
+| File `.cs` chung giống hệt | — | **224 / 322** |
+| `m_Script` GUID gãy | 0 | **0** |
+| Component rụng trên object khớp chắc | — | **8** (6×`Cloth`, 2×`GUILayer`) |
+
+Hai kết quả âm tính đáng giá: **không có script mất và không có component rụng đáng kể**, nên lỗi
+logic không nằm ở đó — đừng đào. Và **render pipeline là Built-in**, nên static batching vẫn có tác
+dụng thật trên Unity 6; tiền đề của P23 đã được kiểm chứng.
+
+Bốn dữ kiện kỹ thuật mà mọi phase trong track phải biết, đầy đủ ở
+[P22](phases/phase-p22-recovered-ground-truth.md):
+
+1. **`fileID` vô dụng để khớp object** — 0/1 096 object static Dustbowl khớp được. Khoá dùng được
+   là `(m_Name, m_LocalPosition)` cộng `parentPath`.
+2. **Hai scene dùng hai cú pháp YAML `m_Component` khác nhau**, và parser viết cho một bên **im
+   lặng trả rỗng** trên bên kia.
+3. **Fixed timestep 50 Hz → 60 Hz là thay đổi cố ý** (issue #123, `PhysicsRate.cs`) — không hoàn
+   tác, nhưng nó là biến thứ hai khi hiệu chỉnh ragdoll.
+4. **`tmp/` nằm trong `.gitignore`**, nên P22 chạy trước mọi phase khác.
+
+Brainstorm đầy đủ: [`reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md).
+
+**Bốn quyết định của chủ dự án, 2026-09-20 — đã chốt, không hỏi lại:**
+
+1. Bản khôi phục là **chuẩn đối chiếu**, không rebase. Ironfront giữ Unity 6 + netcode.
+2. **86 file MapMagic: không khôi phục.** 0 scene tham chiếu; terrain đã bán ra `TerrainData`.
+3. **Không có ngưỡng perf cứng.** P23 báo số; chủ dự án phán từ bảng số + lần chơi thử. Không thêm
+   gate perf vào `ci.ps1`.
+4. **Không Plane, không artifact ngoài.** Dự án nội bộ cá nhân; kế hoạch chỉ sống trong `plans/`.
+5. **Không cài Unity 5.4.0f3.** P25 đo ragdoll bằng cách thay `Assembly-CSharp.dll` recompile vào
+   một bản sao `Ravenfield.exe` — build Mono nên DLL thay được, và như thế đo được chính game
+   gốc thay vì một bản tái dựng trong Editor.
+
+
+## 5. Standing rules
+
+These outlived the documents that carried them, and each one was learned by being broken.
+
+1. **A green gate is not a played game.** Every gate in `ci.ps1` prints its own scope limit. Read
+   it. `green-that-proves-nothing.md` is the rule; § 1 above is this project's instance of it.
+2. **No phase may patch a game defect inside the harness.** A harness that works around a defect
+   grades itself. Inherited as **V-D7** from the lane-B rules.
+3. **A ledger row's status records the run that produced it.** When its named blocker closes, the
+   row is stale until re-run — it does not update itself. Three drifts on record.
+4. **Every fix ships a detector observed RED first.** A detector that has never failed is
+   decoration, and this project has proved that three times by mutation.
+5. **Rebuild and commit the plugin DLLs in the same PR as any `Ironfront.Net.*` source change.**
+   `Assets/Plugins/Ironfront.Net.*.dll` are build artifacts that live in git; Unity reads them, not
+   the source. `tools/build-libs.ps1`.
+6. **A screen is graded on a screenshot.** Every phase from P11 on carries at least one acceptance
+   criterion observable on screen or in a captured artifact — a screenshot, a lane-B record, a
+   two-client run. **A green suite is not evidence for player-facing work.** This is rule 1 with a
+   deliverable attached, and it exists because § 1's `ClientWiringGate` was green throughout the
+   period in which there was no way into multiplayer at all.
+7. **Every "this does not exist" states the paths it searched.** A negative result is a claim about
+   a search, not about the tree. The three 2026-09-01 reports carry verified scope lines; reuse
+   them rather than re-deriving, and when a report and the source disagree, measure — **X-78** and
+   the two refuted claims in P19 *(file deleted -- `git show 509c70d:plans/phases/phase-p19-island.md`)* § 1.2 are what happens when nobody
+   does.
+8. **Name what comes out.** Anything added to core scope names what leaves in exchange. Core scope
+   is infantry, one map, Conquest, bots, health/death/respawn, prediction + lag compensation, the
+   TCP master server, and the scoreboard. Vehicles were originally *out* and grew in through
+   V4–V6; nothing else grows in without an exchange.
+
+---
+
+## 6. What is deliberately not here
+
+- **`plans/00-shared/protocol-spec.md` stays where it is.** `tools/SpecChecker/Program.cs:32`
+  opens that exact path at runtime. It is a build input, not a document.
+- **The nine finished tracks are deleted, not archived.** `git show 68acdd9:plans/…` recovers any
+  of them. A directory of executed instructions reads to the next person as work outstanding —
+  which is what produced 228 files and the ledger drift this plan exists to end.
+- **`plans/phases/` and `plans/reports/` were deleted on 2026-09-02 by P20**, on the same
+  reasoning and by the same convention: 55 files, every one of them an executed instruction or a
+  finished write-up. `git show 509c70d:plans/phases/...` and
+  `git show 509c70d:plans/reports/...` recover any of them, and the 136 references that
+  pointed into those trees — 101 markdown links and 35 backticked paths across this file, the
+  ledger, the shared contracts and five `docs/` pages — were rewritten to exactly that form
+  rather than left dangling. Every rewritten reference was checked by running the command.
+  The workflow-gate artifacts under `plans/reports/harness/` went with them; that gate no-ops
+  when no artifact directory resolves, and it had been reporting against a stale P19 pointer.
+- **The four-developer coordination material is gone for good**: role plans, dependency maps,
+  sync points, per-track ownership tables, hand-off documents. Its technical content moved to
+  [`docs/architecture.md`](../docs/architecture.md) and
+  [`docs/code-conventions.md`](../docs/code-conventions.md).

@@ -20,7 +20,8 @@ namespace Ironfront.Net.Replication.Tests
             var ticket = new byte[JoinTicket.Size];
             JoinTicket.Issue(
                 ticket, playerId, serverId, roomId: 1,
-                expiresAt ?? Now + JoinTicket.ValidityMs, "player", secret ?? Secret);
+                expiresAt ?? Now + JoinTicket.ValidityMs, team: 0, displayName: "player",
+                sharedSecret: secret ?? Secret);
             return ticket;
         }
 

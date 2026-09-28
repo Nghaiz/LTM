@@ -106,6 +106,25 @@ CREATE INDEX IF NOT EXISTS idx_results_player ON match_results(player_id);");
             cmd.Parameters.AddWithValue("$max", maxFailures); cmd.Parameters.AddWithValue("$until", lockedUntil); cmd.Parameters.AddWithValue("$id", playerId); cmd.ExecuteNonQuery();
         }
 
+        /// <summary>
+        /// Sets or clears an account's ban flag.
+        /// </summary>
+        /// <remarks>
+        /// <b>Nothing in the shipped master calls this yet, and that is stated rather than
+        /// hidden.</b> The <c>is_banned</c> column has existed since the schema was written and
+        /// <c>AuthService.Login</c> has always branched on it, but there is no operator surface
+        /// that sets it — a ban is applied by editing the database by hand. This method exists so
+        /// the refusal path is reachable from a test at all; adding the admin endpoint that would
+        /// call it is a separate piece of work, and pretending otherwise by leaving the column
+        /// unwritable would only make the gap harder to find.
+        /// </remarks>
+        public void SetBanned(int playerId, bool banned)
+        {
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "UPDATE accounts SET is_banned = $banned WHERE player_id = $id";
+            cmd.Parameters.AddWithValue("$banned", banned ? 1 : 0); cmd.Parameters.AddWithValue("$id", playerId); cmd.ExecuteNonQuery();
+        }
+
         public void InsertMatchResult(int roomId, int playerId, int kills, int deaths, int score, long endedAt)
         {
             using SqliteCommand cmd = _connection.CreateCommand();

@@ -1,0 +1,745 @@
+# tools/run-lane-b.ps1 -- the phase-3D lane-B runner: one headless server, three rendered
+# scripted clients, one artifact per checkpoint, non-zero on any failure.
+#
+# WHAT IT DOES. Launches the SAME Windows player four times. One process gets
+# IRONFRONT_LANEB_ROLE=server and -batchmode -nographics; three get role=client, a distinct
+# player id, a distinct display name, and their own recorded input programme. LaneBHarness
+# inside each process strips the half of the Dustbowl scene that process is not (the map ships
+# an active NetServer AND an active NetClient, so every process that loads it is otherwise a
+# listen server), runs the programme, captures at each checkpoint, and quits with a code.
+#
+# WHY THREE. phase-3-harness.md section 2 check 7 reads "two clients see the same vehicle in the
+# same place WHILE A THIRD DRIVES IT". Ten of the eleven lane-B checks read two of the three;
+# check 7 needs the third in the driver's seat. Sizing this for two and finding out later is the
+# avoidable version of that sentence.
+#
+# WHY EACH CLIENT GETS ITS OWN PLAYER ID. The server enforces one session per player once a
+# shared secret is configured, so instances sharing an id have every join after the first
+# rejected -- reported to the client as a bare InvalidTicket, which reads as a full server and is
+# not one. Unset now derives an id from the process id, so the collision is no longer automatic;
+# a run that has to be replayable against fixed identities sets it anyway, and this does.
+#
+# WHY THE SERVER IS A WINDOWS PLAYER HERE. The product's server is the Linux dedicated build and
+# stays so. This runner is scaffolding on the machine the work happens on, and that machine is
+# Windows. A verdict reached here describes the GAME, not the deployment target -- a Windows-Mono
+# headless server is not the Linux server byte for byte, and any check that turns on server-side
+# floating point or platform behaviour must be re-read on Linux before it is trusted.
+#
+# Usage:
+#   $env:UNITY_PATH = "C:\Program Files\Unity\Hub\Editor\6000.3.21f1\Editor\Unity.exe"
+#   pwsh tools/run-lane-b.ps1 -Build -Smoke
+#   pwsh tools/run-lane-b.ps1 -Set combat -OutputDirectory artifacts/lane-b/combat-01
+#   pwsh tools/run-lane-b.ps1 -Set vehicle -Sim typical -OutputDirectory artifacts/lane-b/vehicle-01
+#
+# PROGRAMME SETS. -Set names a family of recorded programmes under tools/lane-b/. Each client
+# takes <set>-<label>.json when that file exists and <set>.json when it does not, so the smoke
+# runs one programme on all three while a check set gives the shooter, the victim and the
+# witness a different one each.
+#
+# OUTPUT: <OutputDirectory>/ holds one -summary.json and one -checkpoints.jsonl per process,
+# a PNG per client checkpoint, the four process logs, and run.json with both seeds.
+
+[CmdletBinding()]
+param(
+    # Build the Windows player before running. Skip it when build/windows is already current.
+    [switch] $Build,
+
+    # The Unity Editor, for -Build only. Defaults to $env:UNITY_PATH, like tools/build-server.ps1.
+    [string] $UnityPath = $env:UNITY_PATH,
+
+    # Where the player lives (and lands, with -Build).
+    [string] $PlayerDirectory = "build/windows",
+
+    # 14 seconds of scripted input, no combat, no vehicle -- proves the three-client bring-up
+    # before any check runs. phase-3d-lane-b.md section 8 row 1 requires this first. Sugar for
+    # -Set smoke, and it wins if both are given.
+    [switch] $Smoke,
+
+    # Override the roster's per-client teams, in roster order: -ClientTeams 0,0,0 puts all
+    # three on team 0. Empty (the default) keeps the roster's own alternating 0,1,0.
+    #
+    # Since PROTOCOL_VERSION 6 the server claims a body BY TEAM, so "everyone on one side" is
+    # the only way to reach a TeamFull refusal -- P13 criterion 6 needs exactly that, and so
+    # will any check that wants a lopsided match. Length must equal the client count; a
+    # mismatch throws rather than silently applying to a prefix.
+    [int[]] $ClientTeams = @(),
+
+    # Cap the server's transport slots, which caps the pool and therefore the per-side
+    # capacity: the pool alternates as it fills, so N slots is N/2 bodies a side. 0 (the
+    # default) leaves the server's own configuration alone.
+    #
+    # MaxPlayers is set to the same number, because GameServerConfig refuses a MaxConnections
+    # below it -- the matchmaker would otherwise send more players than the transport accepts.
+    [int] $MaxConnections = 0,
+
+    # Which programme set to run. Each client looks for tools/lane-b/<set>-<label>.json and
+    # falls back to tools/lane-b/<set>.json when there is no per-label file -- which is how the
+    # smoke keeps running one programme on all three while a check set gives each client its
+    # own. A check set NEEDS that: check 1 has a shooter, a victim and a witness, and giving
+    # all three the shooter's programme would have three clients firing at each other and no
+    # observer left to grade the killfeed.
+    [string] $Set = "combat",
+
+    # Pin every player to one spawn slot, so a re-run is a repeat rather than a coin flip.
+    #
+    # Ledger X-22: four runs opened at 1,078 m, 940 m, ~940 m and adjacent, and checks 1, 2, 4
+    # and 13 all need the pair to actually meet -- so three runs in four could not tell a failed
+    # check from a run that never got close enough to try. Seeding does NOT fix this and already
+    # did not: -UnitySeed pins the draw SEQUENCE, while three clients join over a real socket at
+    # times nobody controls, so each run reaches MoveToSpawnPoint at a different point in it.
+    #
+    # -1 (the default) leaves selection alone. Any slot index narrows the server's directory to
+    # that one point, so every player spawns on it and the pair is adjacent every run. An index
+    # outside the scene's count logs an error and leaves the run UNPINNED rather than failing --
+    # see LaneBHarness.PinSpawnPointIfRequested.
+    #
+    # ONLY A SLOT THE TEAM OWNS IS ELIGIBLE (X-63), and the server refuses a pin that starves a
+    # team, so a bare "0" is refused. Dustbowl opens with team 0 on slot 3 and team 1 on slot 5:
+    # pass "3,5". Measured 2026-09-17 -- the older advice here that "any of the six is a valid
+    # pin" predates X-63.
+    # A STRING, not an int, since X-28. LaneBSpawnPin has always parsed a per-team form
+    # ("3,7" = team 0 on slot 3, team 1 on slot 7) and a rotation form ("3|4|5,7" = team 0
+    # cycles 3, 4, 5), and neither could ever be typed here because this parameter was [int] --
+    # so the only reachable pin was the one that puts every client on ONE point, which IS X-28.
+    # Empty leaves the draw alone, matching the old -1.
+    [string] $SpawnIndex = "",
+
+    # Which map to run on, by SCENE NAME. Every process reads it through
+    # IRONFRONT_LANEB_SCENE, and DedicatedServerSceneBootstrap loads it.
+    #
+    # This was hardcoded to "Dustbowl" until P19, which is why no lane-B run had ever exercised
+    # the other shipped map -- and why nobody noticed that Island carried no netcode at all. A
+    # harness that can only run one of two maps grades one of two maps, however green it is.
+    #
+    # Validated against MapCatalog rather than a list here: a typo would otherwise load nothing,
+    # every client would sit on Menu, and the run would produce an empty artifact that reads
+    # like a failed check rather than like a mistyped flag.
+    [string] $Scene = "Dustbowl",
+
+    # Pin the primary weapon every server-spawned body is armed with, by NAME.
+    #
+    # Ledger X-27: `AiActorController.GetLoadout` draws each slot with `Random.Range` over a
+    # private name array, and a networked player's server-side body goes through it. Three runs
+    # of the SAME programme with the spawn already pinned produced weapon 1, 1 and 15 -- 30
+    # shots against 14 -- so a flake rate across them is a rate across three different
+    # experiments. Seeding does not fix this and already did not, for the same reason it did
+    # not fix the spawn: the seed pins the draw SEQUENCE, and three clients join at times
+    # nobody controls.
+    #
+    # Empty (the default) leaves the draw alone, matching -SpawnIndex's -1. Names come from
+    # `AiActorController.primaryWeaponNames`: RK-44, 76 EAGLE, SL-DEFENDER, SIGNAL DMR,
+    # RECON LRR.
+    #
+    # The name IS validated now, on the client, against `WeaponManager.EntryNamed` -- an exact,
+    # case-sensitive match. A name nothing has fails the run with `loadout pin UNRESOLVED`
+    # rather than arming the default gun and reporting success, which is what the pin did for
+    # every run before 2026-09-14: five runs naming four different weapons all deployed
+    # `loadout 1/3/7/5/0`, because the pin governed only bodies the SERVER draws and a driver is
+    # armed from the ids its own client sends.
+    [string] $Weapon = "",
+
+    # Pin the FIRST GEAR slot the same way, by name. Check 4 (E10, "grenade detonates at the
+    # same place on both clients") needs a grenade in slot 2, and gear is drawn from the same
+    # random array the primary is (`AiActorController.gearNames`: BEU AW1, FRAG, SPEARHEAD,
+    # AMMO BAG, MEDIPACK -- so an unpinned run holds a grenade about 3 times in 10).
+    #
+    # No new wire bit is needed to throw it: `switchWeaponSlot` to slot 2 then `fire` is the
+    # whole of it. V7-D10 retired the dedicated ThrowGrenade bit rather than add a second route
+    # to firing that does not pass Weapon.CanFire().
+    [string] $Gear = "",
+
+    # NetworkSimulator preset applied to every process. "typical" is 50 ms one-way (100 ms RTT)
+    # with 5% loss, which is check 7's stated condition exactly.
+    [ValidateSet("off", "lan", "good", "typical", "bad", "awful")]
+    [string] $Sim = "off",
+
+    # The two seeds. Both are printed with the results, because a report naming one claims a
+    # reproducibility it does not have (phase-3d-lane-b.md section 4.4).
+    [int] $SimSeed = 12345,
+    [int] $UnitySeed = 20260821,
+
+    [string] $OutputDirectory = "artifacts/lane-b",
+
+    # Per-process budget. A client that has not finished its programme by then quits 2.
+    [int] $TimeoutSeconds = 300,
+
+    # How long to wait for "[lane-b] server ready" -- the SLOTS, not the port. A server whose
+    # transport is bound still refuses every join until FillPlayerSlots has run in Start, and
+    # racing that is phase-3d-lane-b.md section 8 row 6.
+    [int] $ServerReadySeconds = 120,
+
+    # On a host whose VMware NAT forwards UDP 27015/27016 into the game-server VM, vmnat already
+    # holds these ports: the server logs "UDP :27015 could not be bound" and this runner only
+    # reports "never logged ready". Pass -Port 27115 there.
+    [int] $Port = 27015,
+
+    # Signed tickets are the real path (issue #151): with a secret set the client mints and
+    # signs its own ticket and the server verifies it. Empty means unsigned, which exercises a
+    # path no shipped server should run.
+    [string] $SharedSecret = "lane-b-harness-secret",
+
+    # Turn on ServerCombatBridge's per-trigger-frame shot log (IRONFRONT_LOG_SHOTS=1) for the
+    # SERVER process.
+    #
+    # Ledger X-28's acceptance test is "the resolver's nearest target is the intended target in
+    # N of N runs", and the only artifact that answers it is that log line -- it prints the
+    # nearest OTHER target's torso beside the shot, which is how the 2026-08-25 measurement
+    # found the witness being resolved instead of the target in one run of three. That
+    # measurement was taken by setting the variable by hand, so it was reproducible only by
+    # somebody who knew to. A switch makes the run that grades X-28 a command rather than a
+    # recollection.
+    #
+    # OFF by default because the line prints on every trigger frame: a 30-round burst is 30
+    # lines per shooter, and every check that does not grade targeting pays for them.
+    [switch] $LogShots,
+
+    # Run only the first N of the roster (driver, observer-a, observer-b).
+    #
+    # A FRAME-TIME MEASUREMENT WANTS ONE RENDERED CLIENT. Three Unity players rendering on one
+    # machine contend for the same CPU and GPU, so a hitch measured under three is partly a
+    # hitch of the other two -- the 2026-09-27 playtest ran two clients beside the server and
+    # could not tell its own stutter from the neighbour's. Checks that need a witness keep 3.
+    [ValidateRange(1, 3)]
+    [int] $ClientCount = 3,
+
+    # IRONFRONT_LOG_FRAMES=1 for every process: one [frames] line per 5 s window in each log,
+    # and a [hitch] line naming the heaviest PlayerLoop systems of every frame over 50 ms.
+    #
+    # Not the Unity profiler: a -profiler-log-file capture of a 240 fps client is about 10 GB for
+    # four minutes (measured 2026-09-27), and only a batchmode Editor can read it back.
+    [switch] $LogFrames
+)
+
+$ErrorActionPreference = "Stop"
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$player   = Join-Path $repoRoot (Join-Path $PlayerDirectory "Ironfront.exe")
+$outDir   = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory }
+            else { Join-Path $repoRoot $OutputDirectory }
+$progDir  = Join-Path $repoRoot "tools/lane-b"
+
+# -Scene is checked against MapCatalog's own rows rather than a list kept here, so a map added
+# there becomes runnable with no edit to this script and a map removed stops being accepted.
+# Reading the source beats hardcoding the two names we have today; it is the same
+# data-driven-over-hardcoded rule the P19 authoring gate is built on.
+$catalog = Join-Path $repoRoot "Ironfront.Net.Configuration/MapCatalog.cs"
+if (Test-Path $catalog) {
+    $maps = [regex]::Matches(
+        (Get-Content $catalog -Raw),
+        'new MapEntry\(\s*\d+\s*,\s*"([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+
+    if ($maps.Count -eq 0) {
+        throw "could not read any map row out of $catalog. -Scene cannot be validated, and a " +
+              "run on a scene that does not load produces an empty artifact that reads like a " +
+              "failed check."
+    }
+    if ($maps -notcontains $Scene) {
+        throw "-Scene '$Scene' is not a map in MapCatalog. Valid: $($maps -join ', ')."
+    }
+}
+
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+# --------------------------------------------------------------------------------------
+# Build
+# --------------------------------------------------------------------------------------
+if ($Build) {
+    if (-not $UnityPath -or -not (Test-Path $UnityPath)) {
+        throw "UNITY_PATH is not set or does not exist. -Build needs the Editor; without it, " +
+              "build the player once from the menu (Ironfront > Build Windows Player) and " +
+              "re-run without -Build."
+    }
+
+    $buildOut = Join-Path $repoRoot $PlayerDirectory
+    $buildLog = Join-Path $outDir "build.log"
+    Write-Host "[lane-b] building the Windows player -> $buildOut (log: $buildLog)"
+
+    $buildArgs = @(
+        "-batchmode", "-quit", "-nographics",
+        "-projectPath", (Join-Path $repoRoot "Ironfront_Reborn"),
+        "-executeMethod", "Ironfront.EditorBuildWindowsHarness.BuildWindowsPlayer",
+        "-buildOutput", $buildOut,
+        "-logFile", $buildLog
+    )
+
+    # NOT $build: that is this script's own -Build switch parameter, and assigning a Process to
+    # it fails with a SwitchParameter conversion error AFTER the build has already run -- so the
+    # build succeeds and the script reports failure.
+    $buildProcess = Start-Process -FilePath $UnityPath -ArgumentList $buildArgs -PassThru -Wait -NoNewWindow
+    if ($buildProcess.ExitCode -ne 0) {
+        throw "the Windows player build exited $($buildProcess.ExitCode). See $buildLog."
+    }
+}
+
+if (-not (Test-Path $player)) {
+    throw "no player at $player. Run once with -Build, with the Unity Editor CLOSED. The " +
+          "Editor holds the project lock, and the menu item of the same name refuses in a " +
+          "live Editor for a second reason: stripping UNITY_MCP_READY queues a recompile and " +
+          "BuildPlayer will not start during one."
+}
+
+# --------------------------------------------------------------------------------------
+# The three clients
+#
+# Player ids are fixed and well above GameClientConfig.ReservedIdCeiling (1024), which is the
+# range the load harness numbers its synthetic clients from. Display names are distinct because
+# check 1 grades a killfeed line WITH A NAME, and three clients on one default produce a
+# killfeed nobody can read.
+# --------------------------------------------------------------------------------------
+if ($Smoke) { $Set = "smoke" }
+
+# TEAMS ARE EXPLICIT, and alternate the way a balanced lobby hands them out. Since
+# PROTOCOL_VERSION 6 the game server claims a body BY TEAM rather than by the first free slot,
+# so a roster that left every client on the default would put all three on team 0 -- a run in
+# which nobody has an opponent, and, once the pool's 8-a-side capacity is reached, a run that
+# refuses joins with a half-empty server. There is no master server in a lane-B run, so each
+# client mints its own ticket and this is where the side comes from.
+$clients = @(
+    @{ Label = "driver";     PlayerId = 5001; Name = "DRIVER"; Team = 0 }
+    @{ Label = "observer-a"; PlayerId = 5002; Name = "OBS-A";  Team = 1 }
+    @{ Label = "observer-b"; PlayerId = 5003; Name = "OBS-B";  Team = 0 }
+) | Select-Object -First $ClientCount
+$clients = @($clients)
+
+if ($ClientTeams.Count -gt 0) {
+    if ($ClientTeams.Count -ne $clients.Count) {
+        throw "-ClientTeams has $($ClientTeams.Count) entries and the roster has $($clients.Count). " +
+              "Give one per client, in roster order, or omit it."
+    }
+    for ($i = 0; $i -lt $clients.Count; $i++) {
+        if ($ClientTeams[$i] -lt 0 -or $ClientTeams[$i] -gt 1) {
+            throw "-ClientTeams[$i] is $($ClientTeams[$i]); legal teams are 0 and 1."
+        }
+        $clients[$i].Team = $ClientTeams[$i]
+    }
+}
+
+# Per-label first, shared second. The smoke has one programme for all three because it proves
+# bring-up rather than a check; a check set gives each client its own, because the roles are
+# not interchangeable.
+foreach ($c in $clients) {
+    $perLabel = "$Set-$($c.Label).json"
+    $shared   = "$Set.json"
+
+    if (Test-Path (Join-Path $progDir $perLabel))   { $c.Programme = $perLabel }
+    elseif (Test-Path (Join-Path $progDir $shared)) { $c.Programme = $shared }
+    else {
+        throw "no input programme for '$($c.Label)' in set '$Set': looked for " +
+              "$perLabel then $shared under $progDir"
+    }
+
+    $c.ProgrammePath = Join-Path $progDir $c.Programme
+}
+
+# --------------------------------------------------------------------------------------
+# Launch
+# --------------------------------------------------------------------------------------
+function Set-CommonEnvironment {
+    $env:IRONFRONT_LANEB_ARTIFACTS = $outDir
+    $env:IRONFRONT_LANEB_UNITY_SEED = "$UnitySeed"
+    $env:IRONFRONT_LANEB_TIMEOUT = "$TimeoutSeconds"
+    $env:IRONFRONT_LANEB_SCENE = $Scene
+    $env:IRONFRONT_SHARED_SECRET = $SharedSecret
+
+    # The roster, because the server does not know "OBS-A". It never parses the join ticket, so
+    # the only identity it holds is the transport's PlayerId, and ServerTickLoop.DisplayNameFor
+    # renders that as "#5002" -- deliberate, and documented on ServerPlayer.DisplayName: a real
+    # username needs a new opcode and acceptance criterion 2 forbids moving PROTOCOL_VERSION.
+    # A programme that says aimAtPlayer "OBS-A" therefore resolves nothing (combat-role01:
+    # namedPlayers 3, aim.resolved false, targetActorId 0). ScriptedTargetSolver falls back to
+    # this mapping. It lives HERE because this script already owns the name-to-id pairing; the
+    # alternative -- writing "#5002" into the three combat-*.json files -- couples every recorded
+    # programme to these magic ids and rots the day they change.
+    $env:IRONFRONT_LANEB_ROSTER = ($clients | ForEach-Object { "$($_.Name)=$($_.PlayerId)" }) -join ","
+
+
+    # Unrecognised or absent returns a DISABLED config by design, so "off" needs no special case.
+    $env:IRONFRONT_SIM = $Sim
+    $env:IRONFRONT_SIM_SEED = "$SimSeed"
+    $env:IRONFRONT_LOG_FRAMES = if ($LogFrames) { "1" } else { $null }
+}
+
+function Clear-ClientEnvironment {
+    foreach ($n in @("IRONFRONT_LANEB_ROLE", "IRONFRONT_LANEB_LABEL", "IRONFRONT_LANEB_PROGRAMME",
+                     "IRONFRONT_CLIENT_PLAYER_ID", "IRONFRONT_CLIENT_DISPLAY_NAME",
+                     "IRONFRONT_CLIENT_TEAM",
+                     "IRONFRONT_LANEB_SPAWN_INDEX", "IRONFRONT_LANEB_WEAPON", "IRONFRONT_LANEB_GEAR",
+                     "IRONFRONT_GAMESERVER_TRANSPORT", "IRONFRONT_GAMESERVER_UDP_PORT")) {
+        Remove-Item "env:$n" -ErrorAction SilentlyContinue
+    }
+}
+
+$processes = @()
+
+try {
+    Set-CommonEnvironment
+    Clear-ClientEnvironment
+
+    # ---- server ----
+    $serverLog = Join-Path $outDir "server.log"
+    $env:IRONFRONT_LANEB_ROLE = "server"
+    $env:IRONFRONT_LANEB_LABEL = "server"
+
+    # ServerCombatBridge is the one emitter and the clients never reach it, so this is
+    # server-only in EFFECT rather than in scope: $env: is the runner's own process
+    # environment and every later Start-Process inherits it, clients included. Harmless --
+    # a client that never calls LogShot prints nothing -- but the variable is not confined
+    # to the server process and a reader should not think it is.
+    if ($LogShots) { $env:IRONFRONT_LOG_SHOTS = "1" } else { $env:IRONFRONT_LOG_SHOTS = $null }
+    $env:IRONFRONT_GAMESERVER_TRANSPORT = "udp"
+    $env:IRONFRONT_GAMESERVER_UDP_PORT = "$Port"
+
+    # Both, not just MaxConnections: GameServerConfig throws when MaxConnections is below
+    # MaxPlayers, on the grounds that the matchmaker would send more players than the
+    # transport will accept.
+    if ($MaxConnections -gt 0) {
+        $env:IRONFRONT_GAMESERVER_MAX_CONNECTIONS = "$MaxConnections"
+        $env:IRONFRONT_GAMESERVER_MAX_PLAYERS = "$MaxConnections"
+        Write-Host "[lane-b] server capped to $MaxConnections slots ($([int]($MaxConnections / 2)) bodies a side)"
+    }
+    # Server only: the clients place nobody, so the variable would be inert on them and only
+    # make the three logs disagree about what the run was configured to do.
+    if ($SpawnIndex -ne "") { $env:IRONFRONT_LANEB_SPAWN_INDEX = "$SpawnIndex" }
+    if ($Weapon)            { $env:IRONFRONT_LANEB_WEAPON = $Weapon }
+    if ($Gear)              { $env:IRONFRONT_LANEB_GEAR = $Gear }
+
+    $spawnNote = if ($SpawnIndex -ne "") { "spawn=pinned:$SpawnIndex" } else { "spawn=sampled (X-22: this run is a coin flip)" }
+    $weaponNote = if ($Weapon) { "weapon=pinned:$Weapon" } else { "weapon=drawn (X-27: not comparable to another run)" }
+    if ($Gear) { $weaponNote += ", gear=pinned:$Gear" }
+    Write-Host "[lane-b] starting the server (port $Port, sim=$Sim/$SimSeed, $spawnNote, $weaponNote)"
+    $server = Start-Process -FilePath $player -PassThru -ArgumentList @(
+        "-batchmode", "-nographics", "-logFile", $serverLog)
+    $processes += @{ Label = "server"; Process = $server }
+
+    # Wait for the SLOTS, not the port. See -ServerReadySeconds.
+    $deadline = (Get-Date).AddSeconds($ServerReadySeconds)
+    $ready = $false
+    while ((Get-Date) -lt $deadline) {
+        if ($server.HasExited) {
+            throw "the server exited $($server.ExitCode) before it was ready. See $serverLog."
+        }
+        if ((Test-Path $serverLog) -and
+            (Select-String -Path $serverLog -Pattern '\[lane-b\] server ready' -Quiet -ErrorAction SilentlyContinue)) {
+            $ready = $true
+            break
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    if (-not $ready) {
+        throw "the server never logged '[lane-b] server ready' within ${ServerReadySeconds}s. See $serverLog."
+    }
+
+    $readyLine = (Select-String -Path $serverLog -Pattern '\[lane-b\] server ready.*').Matches[0].Value
+    Write-Host "[lane-b] $readyLine"
+
+    # ---- clients ----
+    foreach ($c in $clients) {
+        Clear-ClientEnvironment
+        $env:IRONFRONT_LANEB_ROLE = "client"
+        $env:IRONFRONT_LANEB_LABEL = $c.Label
+        $env:IRONFRONT_LANEB_PROGRAMME = $c.ProgrammePath
+        $env:IRONFRONT_CLIENT_PLAYER_ID = "$($c.PlayerId)"
+        $env:IRONFRONT_CLIENT_DISPLAY_NAME = $c.Name
+        $env:IRONFRONT_CLIENT_TEAM = "$($c.Team)"
+        $env:IRONFRONT_CLIENT_HOST = "127.0.0.1"
+        $env:IRONFRONT_CLIENT_PORT = "$Port"
+
+        # RE-SET, because Clear-ClientEnvironment two lines up removes them. This is half of why
+        # -Weapon pinned nothing: the names were set once before the server started and wiped
+        # before every client launched, so no client process ever saw them -- and the pin that
+        # arms a scripted driver is a CLIENT-side pin (X-27). The other half is that the
+        # server-side PinnedLoadoutDirectory only governs bodies the server draws for itself;
+        # see LaneBHarness.PinLoadoutIfRequested.
+        if ($Weapon) { $env:IRONFRONT_LANEB_WEAPON = $Weapon }
+        if ($Gear)   { $env:IRONFRONT_LANEB_GEAR = $Gear }
+
+        # A client process must be CONFIGURED not to open a server socket, not merely left
+        # unset. LaneBHarness strips the scene's NetServer, but the strip runs in sceneLoaded
+        # and the transport is bound in Awake -- so by the time anything can be stripped the
+        # socket is already open. Leaving this unset is what the first three-client run did:
+        # every process loads the repo-root .env from its working directory, .env says
+        # IRONFRONT_GAMESERVER_TRANSPORT=udp, and all three clients bound 27015 behind the real
+        # server, took a SocketException, and lost their own connection to TransportError a
+        # second after joining. Stating loopback here beats whatever .env says, because DotEnv
+        # skips a variable that is already set in the process.
+        $env:IRONFRONT_GAMESERVER_TRANSPORT = "loopback"
+
+        # Belt and braces, and a distinct one each: if some future path binds anyway, three
+        # clients must not collide with the server OR with each other. Loopback opens no
+        # socket, so this number is never used on the intended path.
+        $env:IRONFRONT_GAMESERVER_UDP_PORT = "$($Port + 100 + $clients.IndexOf($c))"
+
+        $log = Join-Path $outDir "$($c.Label).log"
+        Write-Host "[lane-b] starting client '$($c.Label)' id=$($c.PlayerId) name=$($c.Name) prog=$($c.Programme)"
+
+        $p = Start-Process -FilePath $player -PassThru -ArgumentList @(
+            "-screen-width", "960", "-screen-height", "540", "-screen-fullscreen", "0",
+            "-logFile", $log)
+
+        $processes += @{ Label = $c.Label; Process = $p }
+
+        # Staggered: three Unity players opening a window and loading the same scene at once on
+        # one machine is a disk and GPU stampede, and the join order stops being reproducible.
+        Start-Sleep -Seconds 3
+    }
+
+    # ---- wait ----
+    $clientProcs = $processes | Where-Object { $_.Label -ne "server" }
+    $waitDeadline = (Get-Date).AddSeconds($TimeoutSeconds + 120)
+
+    while ((Get-Date) -lt $waitDeadline) {
+        if (($clientProcs | Where-Object { -not $_.Process.HasExited }).Count -eq 0) { break }
+        Start-Sleep -Seconds 2
+    }
+}
+finally {
+    Clear-ClientEnvironment
+
+    foreach ($entry in $processes) {
+        if (-not $entry.Process.HasExited) {
+            Write-Host "[lane-b] stopping '$($entry.Label)' (pid $($entry.Process.Id))"
+            Stop-Process -Id $entry.Process.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# --------------------------------------------------------------------------------------
+# Grade
+#
+# From the per-process summary files, not from the logs. A runner that graded a log would make
+# the verdict a regex over prose that nothing keeps stable.
+# --------------------------------------------------------------------------------------
+$failures = @()
+$rows = @()
+
+foreach ($c in $clients) {
+    $summaryPath = Join-Path $outDir "$($c.Label)-summary.json"
+    if (-not (Test-Path $summaryPath)) {
+        $failures += "$($c.Label): wrote no summary (see $($c.Label).log)"
+        $rows += [pscustomobject]@{ Client = $c.Label; Exit = "-"; Checkpoints = 0; Reason = "no summary" }
+        continue
+    }
+
+    $summary = Get-Content $summaryPath -Raw | ConvertFrom-Json
+    $rows += [pscustomobject]@{
+        Client      = $c.Label
+        Exit        = $summary.exitCode
+        Checkpoints = $summary.checkpoints
+        Reason      = $summary.reason
+    }
+
+    if ($summary.exitCode -ne 0) { $failures += "$($c.Label): exit $($summary.exitCode) -- $($summary.reason)" }
+    elseif ($summary.checkpoints -lt 1) { $failures += "$($c.Label): exit 0 but captured no checkpoint" }
+
+    # A DISCONNECTED CLIENT STILL RUNS ITS SCRIPT, and every gate above says it passed. It
+    # advances the cursor, captures every checkpoint, exits 0 with "programme complete", and
+    # draws both seeds from the right place -- while its body falls through an empty world.
+    # artifacts/lane-b/combat-02 reported "passed": true with zero failures on a run where all
+    # three clients had been dropped with TransportError seconds after joining. Exit code,
+    # checkpoint count and seeds are all structurally incapable of noticing; this is the only
+    # row here that can, and a lane-B verdict read off a run without it is worthless.
+    if ($summary.PSObject.Properties.Name -notcontains 'lostConnection') {
+        $failures += "$($c.Label): the summary carries no lostConnection field -- this player " +
+                     "predates the link check, so nothing in this run can tell a connected " +
+                     "client from a disconnected one. Rebuild with -Build."
+    }
+    elseif ($summary.lostConnection) {
+        $failures += "$($c.Label): lost its link during the programme (final conn " +
+                     "$($summary.finalConnectionId), actor $($summary.finalActorId)). " +
+                     "Every number it recorded after that is about an unconnected client."
+    }
+    elseif (-not $summary.connectedAtFinish) {
+        $failures += "$($c.Label): was not connected when the programme ended."
+    }
+
+    # A WITNESS THAT WAS UNDERWATER AND A WITNESS THAT SAW NOTHING RENDER IDENTICALLY. X-88.
+    #
+    # Several programmes walk an observer out of the engagement under sprint and then hold --
+    # separation-observer-a.json ran moveZ 1.0 with sprint for twenty-two seconds. A walk that
+    # ends in water still exits 0, still captures every checkpoint, still draws from the right
+    # seeds, and still reports no killfeed line. That last part is exactly the finding these
+    # checks are written to make, so the failure arrives disguised as the result.
+    #
+    # Same shape as lostConnection above, and graded the same way: from the summary, latched
+    # rather than sampled, because a body that waded through and back out reads clean at finish
+    # while everything it recorded in between is about a body that was not watching.
+    if ($summary.PSObject.Properties.Name -notcontains 'wasInWater') {
+        $failures += "$($c.Label): the summary carries no wasInWater field -- this player " +
+                     "predates the witness check, so nothing in this run can tell an observer " +
+                     "that saw nothing from one that was underwater. Rebuild with -Build."
+    }
+    elseif ($summary.wasInWater) {
+        $failures += "$($c.Label): its body entered water during the programme. Anything this " +
+                     "client did or did not witness after that is about a body that was not " +
+                     "in a position to witness it -- shorten the walk in its scenario rather " +
+                     "than reading this run's verdict."
+    }
+
+    # The seed this runner PRINTS must be the seed the process actually DREW from. They are
+    # two different numbers the moment anything mistypes the parse, and the first run of this
+    # harness proved it: LaneBHarness read the seed through a float, float32 stops representing
+    # consecutive integers above 16,777,216, and 20260821 silently became 20260820. The run
+    # reported a seed that would not reproduce it, which is worse than reporting none -- it
+    # looks reproducible. This is the only check that can tell the difference.
+    if ($summary.unitySeed -ne $UnitySeed) {
+        $failures += "$($c.Label): drew from unity seed $($summary.unitySeed) but the run says $UnitySeed"
+    }
+    if ($summary.simSeed -ne $SimSeed) {
+        $failures += "$($c.Label): drew from simulator seed $($summary.simSeed) but the run says $SimSeed"
+    }
+    if ($summary.playerId -ne $c.PlayerId) {
+        $failures += "$($c.Label): joined as player $($summary.playerId), not $($c.PlayerId)"
+    }
+}
+
+# THE SERVER'S OWN COMPLAINT IS PART OF THE VERDICT. X-75.
+#
+# Every row above reads a per-process summary, and no summary has a field for "a body left the
+# world". So p5-e11-03 recorded "passed": true with "failures": [] while its server log said
+# `actor 43 at (2093.31,-1024.67,1150.45) -- outside +/-3072 m` -- a live player 1,036 m under
+# the terrain, whose four seat requests were then refused as "too far" and read by a human as a
+# seat-reach defect (X-67, filed against the wrong cause on the strength of that green).
+#
+# Graded from the log, against the standing rule that the verdict comes from summaries, because
+# the alternative is adding a field to every process summary for a condition the SERVER is the
+# only witness to. The marker is a fixed prefix the server emits, not prose.
+# A PROGRAMME THAT NEVER DID ITS OWN JOB IS NOT A PASS.
+#
+# p20-vehicle-01 and -02 both reported "passed": true with drivenVehicleId 0 on every checkpoint
+# of every client: nobody ever got into a vehicle. Every existing row was structurally incapable
+# of noticing -- exit 0, six checkpoints captured, seeds right, link held. So a "vehicle" run
+# that never seated a driver graded exactly like one that did, which is the same shape of green
+# as the [bounds] blindness below and the disconnected-client blindness above it.
+#
+# Keyed off the checkpoint names the programme itself declares, so a set that never mentions
+# driving is not asked to prove any.
+$wantsDriving = $false
+$sawDriving   = $false
+foreach ($c in $clients) {
+    $cpPath = Join-Path $outDir "$($c.Label)-checkpoints.jsonl"
+    if (-not (Test-Path $cpPath)) { continue }
+
+    foreach ($line in (Get-Content $cpPath)) {
+        if (-not $line.Trim()) { continue }
+        $cp = $line | ConvertFrom-Json
+        if ($cp.checkpoint -match '^(driving|driven)$') { $wantsDriving = $true }
+        if ($cp.drivenVehicleId -and $cp.drivenVehicleId -ne 0) { $sawDriving = $true }
+    }
+}
+if ($wantsDriving -and -not $sawDriving) {
+    $failures += "programme: a checkpoint named 'driving'/'driven' was captured, but no client " +
+                 "ever reported a non-zero drivenVehicleId -- nobody got into a vehicle, so " +
+                 "every vehicle figure in this run describes bodies nobody was driving. Check " +
+                 "how far the driver spawned from a pad: an unpinned run is a coin flip (X-22), " +
+                 "and 'approach' walks in a straight line (X-66)."
+}
+
+# THREE DIFFERENT THINGS share the [bounds] prefix and only one of them is a run failure.
+# Matching the bare prefix would fail 14 of the 100 recorded runs for a STATIC config warning
+# that names no entity at all -- a gate that cries wolf on nearly every run is a gate that gets
+# ignored, which is how this fault survived in the first place.
+$serverLogPath = Join-Path $outDir "server.log"
+if (Test-Path $serverLogPath) {
+    # An ENTITY left the world. This is the failure.
+    $escaped = @(Select-String -Path $serverLogPath -Pattern '\[bounds\].*: (actor|vehicle) \d+')
+    if ($escaped.Count -gt 0) {
+        $failures += "server: a replicated entity left the wire's +/-3072 m position range and " +
+                     "was CLAMPED onto the boundary, so every client rendered it somewhere it " +
+                     "is not and any distance measured from it is a distance to the clamp " +
+                     "(X-75). $($escaped.Count) line(s); first: $($escaped[0].Line.Trim())"
+    }
+
+    # The authored volume reaching past the wire range is a MAP CONFIG finding, not an event:
+    # it fires identically on a run where nothing went wrong. Surfaced, never graded.
+    $volume = @(Select-String -Path $serverLogPath -Pattern 'authored LevelBounds volume')
+    if ($volume.Count -gt 0) {
+        Write-Host ("[lane-b] note: this map's authored LevelBounds volume reaches past the " +
+                    "wire's position range, so bodies out there desync permanently. Not " +
+                    "graded -- it is true of the map before the run starts.") -ForegroundColor Yellow
+    }
+} else {
+    $failures += "server: no server.log at $serverLogPath, so the out-of-world check could " +
+                 "not run. Absence of the file is not absence of the fault."
+}
+
+# THE PIN HAS TO PROVE IT TOOK. Every run before 2026-09-14 that passed -Weapon reported a
+# pinned loadout in server.log and deployed `loadout 1/3/7/5/0` regardless, because the pin
+# governed bots and a driver is armed from the ids its own client sends. Two greps, because the
+# two failures look nothing alike:
+#
+#   UNRESOLVED -- the name reached the client and matched no weapon (EntryNamed is exact, case
+#   and spacing included). The slot kept the loadout screen's draw.
+#
+#   NEITHER marker -- the pin never ran at all: the variable did not arrive, or the client never
+#   armed a body. This is the silent shape the whole row is about, so absence is graded rather
+#   than assumed benign.
+$loadoutPinResolved = $null
+if ($Weapon -or $Gear) {
+    $loadoutPinResolved = $true
+    foreach ($c in $clients) {
+        $clientLog = Join-Path $outDir "$($c.Label).log"
+        if (-not (Test-Path $clientLog)) {
+            $loadoutPinResolved = $false
+            $failures += "loadout pin: no log at $clientLog, so whether '$($c.Label)' ever " +
+                         "armed the pinned loadout cannot be told. Absence of the file is not " +
+                         "absence of the fault."
+            continue
+        }
+
+        $unresolved = @(Select-String -Path $clientLog -Pattern 'loadout pin UNRESOLVED' -SimpleMatch)
+        $applied = @(Select-String -Path $clientLog -Pattern 'loadout pin applied' -SimpleMatch)
+
+        if ($unresolved.Count -gt 0) {
+            $loadoutPinResolved = $false
+            $failures += "loadout pin: '$($c.Label)' could not resolve a pinned weapon name, so " +
+                         "it deployed holding the loadout screen's own draw and this run is not " +
+                         "the experiment it was asked for (X-27). " +
+                         "$($unresolved[0].Line.Trim())"
+        }
+        elseif ($applied.Count -eq 0) {
+            $loadoutPinResolved = $false
+            $failures += "loadout pin: -Weapon/-Gear was passed but '$($c.Label)' logged neither " +
+                         "'loadout pin applied' nor 'loadout pin UNRESOLVED', so the pin never " +
+                         "ran -- the client never saw IRONFRONT_LANEB_WEAPON, or never armed a " +
+                         "body. Every weapon figure in this run is a figure for whatever the " +
+                         "loadout screen last selected (X-27)."
+        }
+    }
+}
+
+Write-Host ""
+Write-Host "[lane-b] seeds -- UnityEngine.Random=$UnitySeed  NetworkSimulator=$Sim/$SimSeed"
+Write-Host "[lane-b] artifacts -> $outDir"
+$rows | Format-Table -AutoSize | Out-String | Write-Host
+
+$run = [ordered]@{
+    unitySeed      = $UnitySeed
+    simulatorPreset= $Sim
+    simulatorSeed  = $SimSeed
+    port           = $Port
+    set            = $Set
+    smoke          = [bool]$Smoke
+    spawnIndex     = $SpawnIndex
+    pinnedWeapon   = $(if ($Weapon) { $Weapon } else { $null })
+    pinnedGear     = $(if ($Gear) { $Gear } else { $null })
+
+    # What was ASKED for is two lines up; this is whether it TOOK. Null when nothing was pinned,
+    # so a reader cannot mistake "not requested" for "requested and confirmed" -- the distinction
+    # the two fields above could not carry, and the reason five runs were compared to each other
+    # while holding the same default weapon.
+    pinnedLoadoutResolved = $loadoutPinResolved
+    clients        = $clients | ForEach-Object { @{ label = $_.Label; playerId = $_.PlayerId; displayName = $_.Name; team = $_.Team; programme = $_.Programme } }
+    failures       = $failures
+    passed         = ($failures.Count -eq 0)
+}
+$run | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $outDir "run.json")
+
+if ($failures.Count -gt 0) {
+    Write-Host "[lane-b] FAILED:" -ForegroundColor Red
+    $failures | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+    exit 1
+}
+
+Write-Host "[lane-b] all $($clients.Count) clients completed their programme." -ForegroundColor Green
+exit 0

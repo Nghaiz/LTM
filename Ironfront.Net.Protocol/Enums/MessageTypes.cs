@@ -60,7 +60,7 @@ namespace Ironfront.Net.Protocol
         WeaponFire    = 0x49,
         /// <summary>An explosion at a position, for effects and screen shake. Channel 2.</summary>
         Explosion     = 0x4A,
-        /// <summary>Player list and scores, for the scoreboard. Channel 2.</summary>
+        /// <summary>actorId to display-name table. Channel 2. The scores are 0x51 (§ 4.13).</summary>
         PlayerList    = 0x4B,
         /// <summary>Vehicle entity stream. Channel 1, alongside <see cref="Snapshot"/>.</summary>
         VehicleSnapshot = 0x4C,
@@ -72,6 +72,17 @@ namespace Ironfront.Net.Protocol
         ProjectileSpawn = 0x4F,
         /// <summary>Authoritative seat enter/leave, including a rejection. Channel 2.</summary>
         SeatChange      = 0x50,
+        /// <summary>
+        /// Per-player kills and deaths, for the scoreboard. Channel 2. protocol-spec.md § 4.13.
+        /// </summary>
+        /// <remarks>
+        /// <b>Its own opcode rather than two more fields on <see cref="PlayerList"/></b> (P18
+        /// § 1.2). 0x4B's worst case leaves 28 bytes inside <c>MAX_CHANNEL_PAYLOAD</c>, and the
+        /// smallest useful widening costs 64 — so a scoreboard bolted onto the name table would
+        /// fragment exactly on the full server it is most wanted on. The two also move at
+        /// different rates: names on join and on change, these on every death.
+        /// </remarks>
+        PlayerScores    = 0x51,
     }
 
     /// <summary>
@@ -95,6 +106,27 @@ namespace Ironfront.Net.Protocol
         RoomLeaveRequest  = 0x0016,
         RoomStatePush     = 0x0017,
         RoomReadyRequest  = 0x0018,
+
+        /// <summary>
+        /// The client asks to move to the other side. Body <c>{ "team": 0|1 }</c>. P16 3.5.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Its own opcode rather than a field on <see cref="RoomReadyRequest"/></b> (owner
+        /// decision, 2026-09-02). Ready and team are independent facts about a member, and
+        /// carrying the team on the ready body means neither can move without asserting the
+        /// other — a player switching sides would have to re-send a ready value they did not
+        /// change, and a nullable sentinel to avoid that is the field admitting it wanted to be
+        /// a message. 0x0019 was free at the end of the room range.
+        /// </para>
+        /// <para>
+        /// <b>Not a <c>PROTOCOL_VERSION</c> bump.</b> That constant governs the binary UDP game
+        /// protocol; MSP bodies are UTF-8 JSON (protocol-spec.md § 11) and an unknown opcode is
+        /// answered with an <see cref="ErrorPush"/> rather than a desync, so an older master and
+        /// a newer client still talk.
+        /// </para>
+        /// </remarks>
+        RoomTeamRequest   = 0x0019,
 
         ChatSend = 0x0020,
         ChatPush = 0x0021,

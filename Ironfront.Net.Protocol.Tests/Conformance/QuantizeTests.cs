@@ -23,8 +23,11 @@ namespace Ironfront.Net.Protocol.Tests
         [Fact]
         public void Constants_MatchSpec()
         {
-            Assert.Equal(-2048f, Quantize.POS_MIN);
-            Assert.Equal(2048f, Quantize.POS_MAX);
+            // X-53 moved the window and deliberately did NOT widen it: -1024 .. 3072 is the
+            // same 4096 m, so the 6.25 cm resolution below is unchanged. Widening to +/-4096
+            // would have halved it for every actor on every map.
+            Assert.Equal(-1024f, Quantize.POS_MIN);
+            Assert.Equal(3072f, Quantize.POS_MAX);
             Assert.Equal(4096f, Quantize.POS_RANGE);
             Assert.Equal(65536f / 360f, Quantize.YAW_SCALE);
             Assert.Equal(16384f / 90f, Quantize.PITCH_SCALE);
@@ -35,9 +38,15 @@ namespace Ironfront.Net.Protocol.Tests
         [Fact]
         public void PackPos_AtTheBoundaries_MatchesSpec()
         {
-            Assert.Equal(0, Quantize.PackPos(0f));
-            Assert.Equal(-32768, Quantize.PackPos(-2048f));
-            Assert.Equal(32767, Quantize.PackPos(2048f));
+            // The boundaries, expressed against the constants rather than against the numbers
+            // they happened to hold: this fixture asserted PackPos(0) == 0, which was a property
+            // of the window being CENTRED on the origin and not of the packing at all. It went
+            // red on X-53 for a change that broke nothing.
+            Assert.Equal(-32768, Quantize.PackPos(Quantize.POS_MIN));
+            Assert.Equal(32767, Quantize.PackPos(Quantize.POS_MAX));
+
+            // The window's own midpoint is the code midpoint, wherever the window sits.
+            Assert.Equal(0, Quantize.PackPos((Quantize.POS_MIN + Quantize.POS_MAX) / 2f));
         }
 
         /// <summary>
@@ -72,20 +81,29 @@ namespace Ironfront.Net.Protocol.Tests
         [Fact]
         public void PackPos_100m_FollowsTheNormativeFormula_NotTheSpecTable()
         {
-            Assert.Equal(1599, Quantize.PackPos(100f));
+            // 100 m measured from the window's floor, so this still exercises the formula
+            // rather than the window's placement (X-53).
+            float hundredIn = Quantize.POS_MIN + 100f;
+
+            // t = 100 / 4096 = 0.02441, x 65535 = 1599.98, - 32768 -> -31168 after the cast.
+            // The spec's illustrative table would round the 1599.98 up; the normative formula
+            // truncates. That discrepancy is the point of this fixture and survives the move.
+            Assert.Equal(-31168, Quantize.PackPos(hundredIn));
 
             // Whichever of the two the team lands on, the position is correct to within
             // the tolerance that matters.
-            Assert.True(Math.Abs(Quantize.UnpackPos(1599) - 100f) < PositionTolerance);
-            Assert.True(Math.Abs(Quantize.UnpackPos(1600) - 100f) < PositionTolerance);
+            Assert.True(Math.Abs(Quantize.UnpackPos(-31168) - hundredIn) < PositionTolerance);
+            Assert.True(Math.Abs(Quantize.UnpackPos(-31167) - hundredIn) < PositionTolerance);
         }
 
         [Fact]
         public void UnpackPos_AtTheBoundaries_MatchesSpec()
         {
-            Assert.True(Math.Abs(Quantize.UnpackPos(0) - 0f) < PositionTolerance);
-            Assert.Equal(-2048f, Quantize.UnpackPos(-32768));
-            Assert.True(Math.Abs(Quantize.UnpackPos(32767) - 2048f) < PositionTolerance);
+            float midpoint = (Quantize.POS_MIN + Quantize.POS_MAX) / 2f;
+
+            Assert.True(Math.Abs(Quantize.UnpackPos(0) - midpoint) < PositionTolerance);
+            Assert.Equal(Quantize.POS_MIN, Quantize.UnpackPos(-32768));
+            Assert.True(Math.Abs(Quantize.UnpackPos(32767) - Quantize.POS_MAX) < PositionTolerance);
         }
 
         [Fact]

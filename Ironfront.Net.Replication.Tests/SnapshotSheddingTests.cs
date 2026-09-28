@@ -141,8 +141,9 @@ namespace Ironfront.Net.Replication.Tests
             var session = new ClientSession(connectionId: 1, actorId: Viewer);
             var view = new WorldSnapshot();
 
-            // 40 close (Near), 40 distant (Far). Only 50 fit now that MaxEntrySize is 23, so
-            // 31 must go — and every one of them has to come out of the distant group.
+            // 40 close (Near), 40 distant (Far), plus the viewer. Only 44 fit now that
+            // MaxEntrySize is 26, so 37 must go — and every one of them has to come out of
+            // the distant group.
             var world = new WorldSnapshot { ServerTick = 1 };
             world.Add(Actor(Viewer, Vec3.Zero));
 
@@ -167,11 +168,21 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void AFortyEightActorWorldShedsNothing()
+        public void AFortyEightActorWorldNowShedsDownToTheV10Ceiling()
         {
-            // The phase-05 risk table's threshold, as an assertion. Shedding turns an overflow
-            // from a loud dropped snapshot into a quiet degraded one, so a bandwidth regression
-            // could otherwise hide behind "it always sends something".
+            // This used to assert that 48 actors shed nothing — the phase-05 risk table's
+            // threshold. v10's 5-byte weapon field moved the ceiling under it, and that is a
+            // real bandwidth consequence rather than a number to re-pin: the budget admits
+            //   (1178 - 13) / 26 = 44.8 -> 44
+            // where at the 23-byte entry it admitted 50. A 48-actor world is now four actors
+            // over, so shedding is load-bearing at a population the game actually reaches.
+            //
+            // Derived from the constants on purpose. Shedding turns an overflow from a loud
+            // dropped snapshot into a quiet degraded one, so a further regression must move
+            // this arithmetic rather than hide behind "it always sends something".
+            int ceiling = (Budget - SnapshotHeader.Size) / InterestManager.MaxEntrySize;
+            Assert.Equal(44, ceiling);
+
             var interest = new InterestManager();
             var session = new ClientSession(connectionId: 1, actorId: Viewer);
             var view = new WorldSnapshot();
@@ -179,8 +190,8 @@ namespace Ironfront.Net.Replication.Tests
             interest.BeginSnapshot();
             interest.BuildView(session, World(48), 1u, view, null, Budget);
 
-            Assert.Equal(0, interest.LastViewShedCount);
-            Assert.Equal(48, view.ActorCount);
+            Assert.Equal(ceiling, view.ActorCount);
+            Assert.Equal(48 - ceiling, interest.LastViewShedCount);
         }
 
         [Fact]

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace Ironfront.Net.Configuration
 {
@@ -24,6 +24,47 @@ namespace Ironfront.Net.Configuration
         /// <summary>Log the first snapshot and every connection state change.</summary>
         public bool Verbose { get; set; } = true;
 
+        /// <summary>The master server this client logs in against.</summary>
+        /// <remarks>
+        /// <b>It is configuration for the same reason <see cref="Host"/> is.</b> Until P8 the
+        /// master endpoint existed only as a serialized field on the lobby shell, so pointing a
+        /// build at a different master meant opening the Menu scene in the Editor and typing --
+        /// a manual file edit in the middle of the M3 flow, which is the clause P8 grades. A
+        /// player typing the address into the shell's own field still wins; this is the default
+        /// that field starts from.
+        /// </remarks>
+        public string MasterHost { get; set; } = "127.0.0.1";
+
+        /// <summary>
+        /// The port every client-side default starts from. Equal to the master's own default
+        /// by construction, and asserted so in <c>EnvRegistryTests</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>It exists because the number was written out five times and drifted.</b> The
+        /// client defaults said 27020 while the master bound 27000, so a build with no
+        /// override dialled a closed port -- and the two shipped scenes disagreed with each
+        /// other, Dustbowl on 27000 and Menu on 27020. A default repeated per call site is a
+        /// default that will differ per call site; this is the one place it is written.
+        /// </remarks>
+        public const int DefaultMasterPort = 27000;
+
+        /// <summary>The master server's TCP port.</summary>
+        public int MasterPort { get; set; } = DefaultMasterPort;
+
+        /// <summary>Whether the client dials the master over TLS.</summary>
+        /// <remarks>
+        /// The mirror of <c>GameServerConfig.MasterTlsEnabled</c>, and separate from it because
+        /// the two links can differ: game servers may reach the master privately in plaintext
+        /// while clients reach the same master through a public name that terminates TLS.
+        /// </remarks>
+        public bool MasterTlsEnabled { get; set; }
+
+        /// <summary>Certificate name for the master TLS link. Empty uses <see cref="MasterHost"/>.</summary>
+        public string MasterTlsTargetHost { get; set; } = string.Empty;
+
+        /// <summary>Optional SHA-256 pin for a self-signed master certificate.</summary>
+        public string MasterTlsPinnedFingerprintSha256 { get; set; } = string.Empty;
+
         /// <summary>
         /// Whether the client predicts the vehicle it is driving. V5-D6.
         /// </summary>
@@ -36,6 +77,90 @@ namespace Ironfront.Net.Configuration
         /// behind.
         /// </remarks>
         public bool PredictLocalVehicle { get; set; } = true;
+
+        /// <summary>
+        /// The playerId this client's self-minted join ticket claims. Never 0.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Distinct per client, or the second one is turned away.</b> The server's validator
+        /// enforces one session per player once a shared secret is configured, so instances
+        /// sharing an id have every join after the first rejected — and the rejection is
+        /// reported as a bare <c>InvalidTicket</c>, which reads as a capacity limit and is not
+        /// one. It is only consulted on the path where the client mints its own ticket; a
+        /// master-issued ticket carries its own id and this is ignored.
+        /// </para>
+        /// <para>
+        /// <b>The default is derived from the process id, because a constant collides by
+        /// construction.</b> It used to be 1. <c>JoinTicketSource.Mint</c> numbers the load
+        /// harness's synthetic clients from <c>clientIndex + 1</c>, so the very first one also
+        /// claimed 1 — and the first two-client run against a real server lost a client to
+        /// <c>AlreadyConnected</c> for exactly that reason. Lane B runs three rendered clients,
+        /// all of which would have claimed 1 together.
+        /// </para>
+        /// <para>
+        /// Offset past <see cref="ReservedIdCeiling"/> so a derived id can never land inside the
+        /// harness's range however small the process id is, and forced non-zero because 0 is the
+        /// one value the one-session-per-player claim cannot represent. The trade is
+        /// reproducibility: the id differs between runs. That is acceptable because the id is
+        /// not an input to anything simulated, and because the client logs the id it minted with
+        /// — set <c>IRONFRONT_CLIENT_PLAYER_ID</c> explicitly whenever a run needs to be
+        /// replayed against the same identities.
+        /// </para>
+        /// </remarks>
+        public uint PlayerId { get; set; } = DeriveDefaultPlayerId();
+
+        /// <summary>
+        /// Ids at or below this are left to schedulers that number from a small index — today,
+        /// the load harness's <c>clientIndex + 1</c>.
+        /// </summary>
+        /// <remarks>
+        /// 1024 rather than 64 (the harness's current client ceiling): the point is a margin
+        /// nobody has to re-check when that ceiling moves, and the id space is 32 bits.
+        /// </remarks>
+        public const uint ReservedIdCeiling = 1024;
+
+        /// <summary>
+        /// The side this client's SELF-MINTED join ticket claims, on the runs with no master
+        /// server in them. 0 or 1.
+        /// </summary>
+        /// <remarks>
+        /// <b>Never consulted in a real join.</b> The master server's lobby balances teams and
+        /// signs the answer into the ticket it issues; this value only reaches the wire on the
+        /// standalone path, where the client mints its own ticket because there is no master to
+        /// ask. It exists so a scripted run can put clients on opposite sides — leaving every
+        /// instance on the default produces a run in which nobody has an opponent, and the
+        /// server, claiming bodies by team, would hand them all one side and refuse the ninth.
+        /// </remarks>
+        public byte Team { get; set; }
+
+        private static uint DeriveDefaultPlayerId()
+        {
+            // Process id, not a random draw: two clients started a second apart get different
+            // ids, and the same process reports the same id for its whole life -- so a
+            // reconnect within one session does not silently become a different player.
+            //
+            // Process.GetCurrentProcess().Id rather than Environment.ProcessId, which needs
+            // .NET 5 and this assembly is netstandard2.1 because Unity consumes it as a
+            // prebuilt DLL out of Assets/Plugins.
+            uint pid;
+            using (var current = System.Diagnostics.Process.GetCurrentProcess())
+            {
+                pid = unchecked((uint)current.Id);
+            }
+
+            return ReservedIdCeiling + 1 + (pid % (uint.MaxValue - ReservedIdCeiling - 1));
+        }
+
+        /// <summary>
+        /// The name that self-minted ticket carries, truncated to 16 UTF-8 bytes.
+        /// </summary>
+        /// <remarks>
+        /// This is where a killfeed line gets its name, which is why it is configuration rather
+        /// than a constant: the two-client combat check grades a killfeed line <i>with a name</i>,
+        /// and two clients on the same default produce a killfeed nobody can read.
+        /// </remarks>
+        public string DisplayName { get; set; } = "player";
 
         /// <summary>Overlays the process environment onto this instance and returns it.</summary>
         public GameClientConfig ApplyEnvironment()
@@ -52,8 +177,39 @@ namespace Ironfront.Net.Configuration
             Port    = EnvParse.Port(EnvRegistry.ClientPort.Read(read), Port, EnvRegistry.ClientPort.Name);
             Verbose = EnvParse.Flag(EnvRegistry.ClientVerbose.Read(read), Verbose);
 
+            string masterHost = EnvParse.Trimmed(EnvRegistry.ClientMasterHost.Read(read));
+            if (masterHost.Length > 0) MasterHost = masterHost;
+
+            MasterPort = EnvParse.Port(
+                EnvRegistry.ClientMasterPort.Read(read), MasterPort, EnvRegistry.ClientMasterPort.Name);
+
+            MasterTlsEnabled = EnvParse.Flag(
+                EnvRegistry.ClientMasterTls.Read(read), MasterTlsEnabled);
+
+            string masterTlsTargetHost = EnvParse.Trimmed(
+                EnvRegistry.ClientMasterTlsTargetHost.Read(read));
+            if (masterTlsTargetHost.Length > 0) MasterTlsTargetHost = masterTlsTargetHost;
+
+            string masterTlsPin = EnvParse.Trimmed(
+                EnvRegistry.ClientMasterTlsPinnedFingerprint.Read(read));
+            if (masterTlsPin.Length > 0) MasterTlsPinnedFingerprintSha256 = masterTlsPin;
+
             PredictLocalVehicle = EnvParse.Flag(
                 EnvRegistry.ClientPredictLocalVehicle.Read(read), PredictLocalVehicle);
+
+            // PositiveInt, not NonNegativeInt: 0 is the one value the server's one-session-per-
+            // player claim cannot represent, so it is rejected here rather than becoming a join
+            // failure three layers away.
+            PlayerId = (uint)EnvParse.PositiveInt(
+                EnvRegistry.ClientPlayerId.Read(read), (int)PlayerId, EnvRegistry.ClientPlayerId.Name);
+
+            string displayName = EnvParse.Trimmed(EnvRegistry.ClientDisplayName.Read(read));
+            if (displayName.Length > 0) DisplayName = displayName;
+
+            // Range-checked at the mint site, not here. JoinTicket.MaxTeam is the authority on
+            // what a legal team is, and this project deliberately references NOTHING -- adding
+            // a reference to Protocol to re-state a bound would trade the leaf for a duplicate.
+            Team = EnvParse.Byte(EnvRegistry.ClientTeam.Read(read), Team, EnvRegistry.ClientTeam.Name);
 
             return this;
         }

@@ -3,7 +3,7 @@
 
   Single-owner project. This template is not a gate someone else enforces; it is the record you
   will read in six weeks when you cannot remember whether a thing was verified or assumed.
-  Every box maps to a rule in plans/00-shared/conventions.md.
+  Every box maps to a rule in docs/code-conventions.md.
 
   Delete a section that genuinely does not apply. Do not delete an unchecked box because it is
   inconvenient — an unchecked box is the most useful thing in the file.

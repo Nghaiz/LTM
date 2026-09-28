@@ -152,5 +152,23 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Removes an actor from whichever seat of this vehicle it is in.</summary>
         /// <returns>False when it was not in one.</returns>
         bool TryLeaveSeat(GameObject actor);
+
+        /// <summary>The world-space bounds enclosing every collider of this vehicle.</summary>
+        /// <remarks>Default-implemented as "unknown" so fakes predating it keep compiling.</remarks>
+        bool TryGetBounds(out Bounds bounds)
+        {
+            bounds = default;
+            return false;
+        }
+
+        /// <summary>
+        /// Sets whether <paramref name="collider"/> passes through every collider of this vehicle.
+        /// </summary>
+        /// <remarks>
+        /// For the capsule of a player who has just climbed out: see
+        /// <c>ServerPlayer.TickExitGrace</c>. Default-implemented as a no-op so fakes predating it
+        /// keep compiling.
+        /// </remarks>
+        void SetCollisionIgnored(Collider collider, bool ignored) { }
     }
 }

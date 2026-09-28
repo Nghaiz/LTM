@@ -63,6 +63,9 @@ namespace Ironfront.Net.Protocol
         // SnapshotField.Weapon
         public byte WeaponId;
         public byte AmmoInClip;
+        /// <summary>Reserve rounds, packed by <see cref="SpareAmmo"/>. Decode before reading.</summary>
+        public ushort SpareAmmoEncoded;
+        public WeaponStateFlags WeaponStateFlags;
 
         // SnapshotField.Team
         public byte Team;
@@ -79,16 +82,18 @@ namespace Ironfront.Net.Protocol
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Per-actor cost: 20 bytes when every v1 field is present
-    /// (<see cref="SnapshotField.FullNoSeat"/>), ~12 for a typical position+rotation
-    /// delta, 3 for an actor that has not moved. At 48 actors averaging 12 bytes that is
-    /// ~600 B per snapshot, ~12 KB/s at 20 Hz — and ~5-7 KB/s once interest management
-    /// trims the set to the ~20 actors a client can actually see.
+    /// Per-actor cost: 23 bytes when every on-foot field is present
+    /// (<see cref="SnapshotField.FullNoSeat"/>, 20 before v10 widened the weapon field),
+    /// ~12 for a typical position+rotation delta, 3 for an actor that has not moved. At 48
+    /// actors averaging 12 bytes that is ~600 B per snapshot, ~12 KB/s at 20 Hz — and
+    /// ~5-7 KB/s once interest management trims the set to the ~20 actors a client can
+    /// actually see. The three extra bytes are charged only to actors whose weapon state
+    /// actually moved, which is a minority of entries in a steady-state delta.
     /// </para>
     /// <para>
-    /// A full 64-actor snapshot is 1293 bytes, over the 1184-byte payload limit, so it
-    /// fragments. That is the expected case on join, not an error — see
-    /// <see cref="Fragmenter"/>.
+    /// A full 64-actor snapshot is 1485 bytes unseated (1677 fully seated), over the
+    /// 1184-byte payload limit, so it fragments. That is the expected case on join, not an
+    /// error — see <see cref="Fragmenter"/>.
     /// </para>
     /// </remarks>
     public static class SnapshotMessage
@@ -105,7 +110,7 @@ namespace Ironfront.Net.Protocol
             if ((mask & SnapshotField.Velocity)   != 0) size += 3;
             if ((mask & SnapshotField.StateFlags) != 0) size += 1;
             if ((mask & SnapshotField.Health)     != 0) size += 1;
-            if ((mask & SnapshotField.Weapon)     != 0) size += 2;
+            if ((mask & SnapshotField.Weapon)     != 0) size += 5;
             if ((mask & SnapshotField.Team)       != 0) size += 1;
             if ((mask & SnapshotField.SeatInfo)   != 0) size += 3;
             return size;
@@ -159,7 +164,10 @@ namespace Ironfront.Net.Protocol
                 if ((mask & SnapshotField.Health)     != 0) w.WriteU8(e.Health);
                 if ((mask & SnapshotField.Weapon)     != 0)
                 {
-                    w.WriteU8(e.WeaponId); w.WriteU8(e.AmmoInClip);
+                    w.WriteU8(e.WeaponId);
+                    w.WriteU8(e.AmmoInClip);
+                    w.WriteU16(e.SpareAmmoEncoded);
+                    w.WriteU8((byte)e.WeaponStateFlags);
                 }
                 if ((mask & SnapshotField.Team)     != 0) w.WriteU8(e.Team);
                 if ((mask & SnapshotField.SeatInfo) != 0)
@@ -218,7 +226,10 @@ namespace Ironfront.Net.Protocol
                 if ((mask & SnapshotField.Health)     != 0) e.Health = r.ReadU8();
                 if ((mask & SnapshotField.Weapon)     != 0)
                 {
-                    e.WeaponId = r.ReadU8(); e.AmmoInClip = r.ReadU8();
+                    e.WeaponId         = r.ReadU8();
+                    e.AmmoInClip       = r.ReadU8();
+                    e.SpareAmmoEncoded = r.ReadU16();
+                    e.WeaponStateFlags = (WeaponStateFlags)r.ReadU8();
                 }
                 if ((mask & SnapshotField.Team)     != 0) e.Team = r.ReadU8();
                 if ((mask & SnapshotField.SeatInfo) != 0)
