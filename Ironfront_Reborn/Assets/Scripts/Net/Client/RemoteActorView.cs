@@ -488,6 +488,25 @@ namespace Ironfront.Net.Unity.Client
             ApplyRagdoll(_state.IsRagdoll);
         }
 
+        /// <summary>
+        /// Keeps a body lying as a runtime ragdoll with the server: it floats while in water, and a
+        /// LIVE one -- knocked over, or swimming -- follows <paramref name="pelvis"/>, where the
+        /// server's own ragdoll has its pelvis. Called by the registry after <see cref="Apply"/>.
+        /// </summary>
+        /// <remarks>
+        /// Until 2026-09-28 a knocked-over or swimming bot arrived alive and not ragdolled, so it was
+        /// drawn standing where it fell. The snapshot now says both (IsAlive with IsRagdoll), and
+        /// carries the pelvis while the body lies (<c>NetServerActor.BotPosition</c>). A corpse is
+        /// not steered: corpses are never synced, and the server keeps sending where it fell.
+        /// </remarks>
+        public void SteerRagdoll(Vector3 pelvis)
+        {
+            if (_ragdoll == null || !_ragdoll.IsActive) return;
+
+            _ragdoll.SetFloating(_state.IsInWater);
+            if (_state.IsAlive) _ragdoll.Steer(pelvis);
+        }
+
         /// <summary>Extra drops thrown when a hit kills, on top of the damage's own.</summary>
         public const int DeathBloodDrops = 4;
 

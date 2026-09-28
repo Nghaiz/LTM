@@ -123,11 +123,80 @@ namespace Ironfront.Net.Unity.Client
             if (target != null && impulse.sqrMagnitude > 0f) target.AddForce(impulse, ForceMode.Impulse);
         }
 
+        /// <summary>Seconds the pelvis takes to close on where the server's ragdoll has it.</summary>
+        private const float SteerSeconds = 0.25f;
+
+        /// <summary>No faster than this toward the target, so one bad sample cannot launch the body.</summary>
+        private const float MaxSteerSpeed = 20f;
+
+        /// <summary>
+        /// A gap wider than this is a fling the client never saw -- the server's ragdoll was thrown by
+        /// a blast, this one merely collapsed -- so the whole body moves by it at once.
+        /// </summary>
+        private const float SnapMetres = 4f;
+
+        /// <summary>Linear damping while floating: a body in water drifts, it does not swing.</summary>
+        private const float WaterDamping = 2f;
+
+        private bool _floating;
+
+        /// <summary>
+        /// Keeps a LIVE ragdoll with the server's: the pelvis is driven toward
+        /// <paramref name="pelvis"/>, where the server's own ragdoll has it, and the limbs follow on
+        /// their joints. For a body knocked over or swimming, never for a corpse (corpses are the
+        /// client's own).
+        /// </summary>
+        /// <remarks>
+        /// A velocity, set each frame, rather than a force: it survives however many physics steps
+        /// fall between two frames, which a force applied from Update does not.
+        /// </remarks>
+        public void Steer(Vector3 pelvis)
+        {
+            if (!IsActive) return;
+
+            Rigidbody hips = _bodies[0];
+            if (hips == null) return;
+
+            Vector3 gap = pelvis - hips.position;
+            if (gap.sqrMagnitude > SnapMetres * SnapMetres)
+            {
+                // Every body by the same offset, so the joints keep the shape they have.
+                for (int i = 0; i < _bodies.Length; i++)
+                {
+                    if (_bodies[i] == null) continue;
+                    _bodies[i].position += gap;
+                    _bodies[i].linearVelocity = Vector3.zero;
+                }
+
+                return;
+            }
+
+            hips.linearVelocity = Vector3.ClampMagnitude(gap / SteerSeconds, MaxSteerSpeed);
+        }
+
+        /// <summary>
+        /// Floats the body -- no gravity, and damped -- while it is in water, as the original game's
+        /// buoyant ragdoll floats; sinks it again when it is not.
+        /// </summary>
+        public void SetFloating(bool floating)
+        {
+            if (!IsActive || floating == _floating) return;
+            _floating = floating;
+
+            for (int i = 0; i < _bodies.Length; i++)
+            {
+                if (_bodies[i] == null) continue;
+                _bodies[i].useGravity = !floating;
+                _bodies[i].linearDamping = floating ? WaterDamping : 0f;
+            }
+        }
+
         /// <summary>Tears the bodies down and gives the skeleton back to the animator.</summary>
         public void Restore()
         {
             if (!IsActive) return;
             IsActive = false;
+            _floating = false;
 
             // Joints before bodies: a joint whose connected body is destroyed first logs a PhysX
             // error for the frame in between.

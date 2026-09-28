@@ -113,6 +113,78 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.AreEqual(bonesLayer, animator.GetBoneTransform(HumanBodyBones.Hips).gameObject.layer);
         }
 
+        /// <summary>
+        /// A LIVE ragdoll -- a bot knocked over or swimming -- follows the pelvis the server's
+        /// ragdoll has, rather than lying where the client's collapsed.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 audit: such a bot was drawn standing where it fell while
+        /// its real body lay metres away. Mutated to never steer, the pelvis stays at the fall.
+        /// </remarks>
+        [Test]
+        public void ALiveRagdollFollowsTheServersPelvis()
+        {
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            floor.transform.localScale = new Vector3(10f, 1f, 10f);
+            SceneManager.MoveGameObjectToScene(floor, _scene);
+
+            Animator animator = SpawnProxy(Vector3.zero);
+            RemoteRagdoll ragdoll = RemoteRagdoll.TryCreate(animator);
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips);
+
+            var target = new Vector3(2.5f, 0.2f, 1.5f);
+            PhysicsScene physics = _scene.GetPhysicsScene();
+            for (float t = 0f; t < 3f; t += StepSeconds)
+            {
+                ragdoll.Steer(target);
+                physics.Simulate(StepSeconds);
+            }
+
+            float miss = Vector3.Distance(hips.position, target);
+            Assert.Less(miss, 0.35f,
+                $"the pelvis is {miss:F2} m from where the server's ragdoll has it ({hips.position:F2})");
+        }
+
+        [Test]
+        public void AFlingTheClientNeverSawMovesTheWholeBodyAtOnce()
+        {
+            Animator animator = SpawnProxy(Vector3.zero);
+            RemoteRagdoll ragdoll = RemoteRagdoll.TryCreate(animator);
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+            ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips);
+
+            float spine = Vector3.Distance(hips.position, head.position);
+            var target = hips.position + new Vector3(12f, 0f, -9f);
+
+            ragdoll.Steer(target);
+            _scene.GetPhysicsScene().Simulate(StepSeconds);
+
+            Assert.Less(Vector3.Distance(hips.position, target), 0.2f, "the body did not move with the fling");
+            Assert.AreEqual(spine, Vector3.Distance(hips.position, head.position), 0.1f,
+                "the move tore the body apart instead of carrying it");
+        }
+
+        [Test]
+        public void ABodyInWaterFloatsAndOneOutOfItFalls()
+        {
+            Animator animator = SpawnProxy(new Vector3(0f, 5f, 0f));
+            RemoteRagdoll ragdoll = RemoteRagdoll.TryCreate(animator);
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips);
+            PhysicsScene physics = _scene.GetPhysicsScene();
+
+            float before = hips.position.y;
+            ragdoll.SetFloating(true);
+            for (float t = 0f; t < 1f; t += StepSeconds) physics.Simulate(StepSeconds);
+            Assert.AreEqual(before, hips.position.y, 0.25f, "a body in water sank or rose");
+
+            ragdoll.SetFloating(false);
+            for (float t = 0f; t < 1f; t += StepSeconds) physics.Simulate(StepSeconds);
+            Assert.Less(hips.position.y, before - 2f, "a body out of water kept floating");
+        }
+
         private Animator SpawnProxy(Vector3 position)
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProxyPath);
