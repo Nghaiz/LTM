@@ -222,7 +222,7 @@ namespace Ironfront.Net.Unity.Client
         {
             if (_occupiedVehicleId == 0) return;
 
-            LeaveLocalSeat(message.VictimActorId, "the local actor died in it");
+            LeaveLocalSeat(message.VictimActorId, "the local actor died in it", asCorpse: true);
         }
 
         /// <summary>
@@ -268,14 +268,20 @@ namespace Ironfront.Net.Unity.Client
 
             LeaveLocalSeat(_client.LocalActorId, (entry.StateFlags & ActorStateFlags.IsSeated) != 0
                 ? $"the server has the body in vehicle {entry.VehicleId} seat {entry.SeatIndex}"
-                : "the server has the body on foot");
+                : "the server has the body on foot",
+                asCorpse: (entry.StateFlags & ActorStateFlags.IsAlive) == 0);
         }
 
         /// <summary>
         /// Takes the local body out of its seat and drops every piece of seat state this stage
         /// keeps: occupancy, the local turret aim, and prediction of a vehicle it was driving.
         /// </summary>
-        private void LeaveLocalSeat(ushort actorId, string reason)
+        /// <param name="asCorpse">
+        /// The body leaves because it died: it draws no weapon (bug 1 of the 2026-09-28 playtest).
+        /// Either order with <c>LocalPlayerRigBinding.FellBody</c>, which leaves the same way,
+        /// then shows the same death.
+        /// </param>
+        private void LeaveLocalSeat(ushort actorId, string reason, bool asCorpse)
         {
             if (!NetClientPresenterGuard.IsLocalActor(actorId)) return;
 
@@ -284,7 +290,8 @@ namespace Ironfront.Net.Unity.Client
 
             // Read through NetClientBindings rather than the held _localController, because
             // Release() below nulls that field.
-            NetClientBindings.LocalPlayer.LeaveSeat();
+            if (asCorpse) NetClientBindings.LocalPlayer.LeaveSeatAsCorpse();
+            else NetClientBindings.LocalPlayer.LeaveSeat();
 
             _occupiedVehicleId = 0;
             _occupiedSeatIndex = 0;

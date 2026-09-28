@@ -274,7 +274,10 @@ namespace Ironfront.Net.Replication.Tests
             string actor = ReadUnitySource(
                 "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs");
 
-            string body = MethodBody(actor, "public void LeaveSeat()");
+            // The overload that does the work. The parameterless LeaveSeat() only forwards to it
+            // since a seated death stopped drawing a weapon (bug 1 of the 2026-09-28 playtest,
+            // SeatedDeathTests).
+            string body = MethodBody(actor, "public void LeaveSeat(bool drawWeapon)");
 
             int cleared = body.IndexOf("seat = null;", StringComparison.Ordinal);
             int callback = body.IndexOf("OccupantLeft();", StringComparison.Ordinal);

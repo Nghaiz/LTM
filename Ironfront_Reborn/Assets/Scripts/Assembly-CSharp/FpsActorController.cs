@@ -575,6 +575,32 @@ public class FpsActorController : ActorController
 		FirstPersonCamera();
 	}
 
+	/// <summary>
+	/// The death camera for a body the server killed: third person, kept on the corpse until the
+	/// next return to first person.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Playtest 2026-09-28, bug 1. <see cref="Die"/> places the third-person camera behind the body
+	/// once, with the sweep that keeps it out of terrain and vehicle hulls; a networked death never
+	/// ran it, and marks the actor dead in the same call, so <see cref="UpdateThirdPersonCamera"/>
+	/// never moved the camera either. On foot that went unnoticed -- the camera's rest pose is
+	/// already behind the body. A pilot killed with his helicopter is set down at the seat's exit,
+	/// often in the air, and the corpse fell out of a camera left hanging there.
+	/// </para>
+	/// <para>
+	/// Following rather than placing once is what <c>NetClientLocalCombatDriver</c> documents for
+	/// the death camera ("the body falls and the camera follows it"), and it keeps a corpse that
+	/// falls fifty metres in frame.
+	/// </para>
+	/// </remarks>
+	public void FollowCorpse()
+	{
+		followingCorpse = true;
+		ThirdPersonCamera();
+		UpdateThirdPersonCamera(true);
+	}
+
 	public override void Die()
 	{
 		// Cleared here so the deploy screen can come back for the next life. This is the one
@@ -720,6 +746,9 @@ public class FpsActorController : ActorController
 	/// </summary>
 	private bool deployedView;
 
+	// Set by FollowCorpse, cleared by every return to first person. See FollowCorpse.
+	private bool followingCorpse;
+
 	/// <summary>
 	/// The presentation half of <see cref="SpawnAt"/>, with no write to the body's transform.
 	/// Ledger <b>X-48</b>.
@@ -859,6 +888,7 @@ public class FpsActorController : ActorController
 
 	private void FirstPersonCamera()
 	{
+		followingCorpse = false;
 		fpCamera.enabled = true;
 		tpCamera.enabled = false;
 		Renderer[] array = thirdpersonRenderers;
@@ -1147,7 +1177,7 @@ public class FpsActorController : ActorController
 	{
 		if (tpCamera.enabled)
 		{
-			UpdateThirdPersonCamera();
+			UpdateThirdPersonCamera(followingCorpse);
 		}
 	}
 
