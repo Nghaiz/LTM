@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 02c05e5c87f45a348994ac0a9bb33e7c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 259547
+  packageName: ForestLake
+  packageVersion: 1.5
+  assetPath: Assets/ForestLake/Materials/MI_WoodSign_A.mat
+  uploadId: 925456
