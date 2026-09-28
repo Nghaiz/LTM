@@ -40,7 +40,7 @@ param(
     [ValidateRange(1, 8)]
     [int] $Clients = 4,
 
-    [ValidateSet("Dustbowl", "Island")]
+    [ValidateSet("Dustbowl", "Island", "ForestLake")]
     [string] $Scene = "Dustbowl",
 
     # The shipped defaults, unlike run-e2e.ps1's deliberately-wrong ports. A human types the
@@ -311,11 +311,25 @@ try {
         Remove-Item ("Env:" + $stale) -ErrorAction SilentlyContinue
     }
 
-    $otherScene = if ($Scene -eq "Island") { "Dustbowl" } else { "Island" }
-    $serverSpecs = @(
-        @{ Scene = $Scene;      MapId = if ($Scene -eq "Island") { 2 } else { 1 }; Port = $UdpPort;     Log = $serverLog },
-        @{ Scene = $otherScene; MapId = if ($otherScene -eq "Island") { 2 } else { 1 }; Port = $UdpPort + 1; Log = Join-Path $outDir ("game-server-" + $otherScene + ".log") }
+    # Every shipped map, with the ids Ironfront.Net.Configuration/MapCatalog.cs gives them. -Scene
+    # only decides which one takes the first port and the log named above.
+    $shippedMaps = @(
+        @{ Scene = "Dustbowl";   MapId = 1 },
+        @{ Scene = "Island";     MapId = 2 },
+        @{ Scene = "ForestLake"; MapId = 3 }
     )
+    $orderedMaps = @($shippedMaps | Where-Object { $_.Scene -eq $Scene }) +
+                   @($shippedMaps | Where-Object { $_.Scene -ne $Scene })
+    $serverSpecs = @()
+    for ($i = 0; $i -lt $orderedMaps.Count; $i++) {
+        $map = $orderedMaps[$i]
+        $serverSpecs += @{
+            Scene = $map.Scene
+            MapId = $map.MapId
+            Port  = $UdpPort + $i
+            Log   = if ($i -eq 0) { $serverLog } else { Join-Path $outDir ("game-server-" + $map.Scene + ".log") }
+        }
+    }
     $servers = @()
 
     foreach ($spec in $serverSpecs) {
@@ -349,18 +363,19 @@ try {
     while ((Get-Date) -lt $deadline) {
         $exited = $servers | Where-Object { $_.HasExited } | Select-Object -First 1
         if ($null -ne $exited) {
-            throw "a game server exited $($exited.ExitCode) before both maps registered. See $outDir."
+            throw "a game server exited $($exited.ExitCode) before every map registered. See $outDir."
         }
         $metrics = Read-Metrics -Port $MetricsPort
-        if ($metrics -and $metrics -match $IronfrontHealthyPattern -and [int]$Matches[1] -ge 2) {
-            Write-Host "[playtest] the master reports $($Matches[1]) healthy game servers (Dustbowl + Island)"
+        if ($metrics -and $metrics -match $IronfrontHealthyPattern -and [int]$Matches[1] -ge $serverSpecs.Count) {
+            Write-Host ("[playtest] the master reports $($Matches[1]) healthy game servers (" +
+                        (($serverSpecs | ForEach-Object { $_.Scene }) -join " + ") + ")")
             $healthy = $true
             break
         }
         Start-Sleep -Milliseconds 750
     }
     if (-not $healthy) {
-        throw ("both map servers did not become healthy at the master within ${ServerReadySec}s. " +
+        throw ("the map servers did not all become healthy at the master within ${ServerReadySec}s. " +
                "Look for '[net] master link: registered as server' in $outDir -- " +
                "'staying standalone' there means it never tried or was refused.")
     }
@@ -429,10 +444,10 @@ try {
         Write-Host "  enforces one session per id and a reused one is refused as InvalidTicket,"
         Write-Host "  which reads as a full server and is not one."
         Write-Host "  This host is advertising $AdvertiseIp for the match itself, so that address"
-        Write-Host "  has to be routable from their machine, and UDP $UdpPort/$($UdpPort + 1) has to"
+        Write-Host "  has to be routable from their machine, and UDP $UdpPort-$($UdpPort + $serverSpecs.Count - 1) has to"
         Write-Host "  reach this process."
     }
-    Write-Host "  3. Room browser -> choose the Dustbowl or Island room -> pick a side -> Ready."
+    Write-Host "  3. Room browser -> create or choose a room (Dustbowl, Island or Forest Lake) -> pick a side -> Ready."
     Write-Host "  4. When every player is ready the match starts and the map loads."
     Write-Host "     Tab shows the scoreboard; alt-tab between windows to play the other side."
     Write-Host ""
