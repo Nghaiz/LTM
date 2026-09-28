@@ -24,7 +24,14 @@ public class IngameMenuUi : MonoBehaviour
 		// Pausing never wrote fixedDeltaTime; Unity issues no fixed step at timeScale 0, and
 		// a zero step would be handed to every `rate * Time.fixedDeltaTime` in the project.
 		// PhysicsRate preserves that asymmetry rather than tidying it away.
-		PhysicsRate.SetTimeScale(0f);
+		//
+		// Offline only. A networked match does not stop because one player opened a menu: the
+		// server and every other player carry on, and a time scale of zero here froze this
+		// client's physics, animation and effects under them while the snapshots kept arriving.
+		if (Ironfront.Net.Unity.NetContext.IsOffline)
+		{
+			PhysicsRate.SetTimeScale(0f);
+		}
 		instance.mixer.SetFloat("pitch", Time.timeScale);
 	}
 
