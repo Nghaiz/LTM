@@ -131,22 +131,33 @@ namespace Ironfront.Net.Unity.Server.Tests
                 Animator animator = Pose(character, seated, crouched, moving, movementX, movementY, sprinting);
                 Collider head = HitboxCollider(character, "Bone_004");
 
+                // Two conditions, per frame. The centre inside the box, and the head's whole height
+                // inside its height -- chin to crown, less a 4 cm allowance for the bounds of a
+                // tilted head box. Height is where a pose moves the head decisively (0.01-0.02 m
+                // of sway in every pose); sideways the stride's own sway exceeds any box the size
+                // of a head, and the server cannot know which frame a client draws. The centre
+                // alone let a running head drop its chin below a standing box and still pass.
                 const int frames = 60;
+                const float allowance = 0.04f;
                 int inside = 0;
                 string worst = "";
                 for (int i = 0; i < frames; i++)
                 {
                     animator.Update(1f / 30f);
                     Physics.SyncTransforms();
-                    Vector3 c = head.bounds.center;
+                    Bounds drawn = head.bounds;
+                    Vector3 c = drawn.center;
                     var centre = new Vec3(c.x, c.y, c.z);
-                    if (Contains(in server, in centre)) inside++;
-                    else worst = c.ToString("F2");
+                    bool held = Contains(in server, in centre)
+                        && drawn.min.y + allowance >= server.Min.Y
+                        && drawn.max.y - allowance <= server.Max.Y;
+                    if (held) inside++;
+                    else worst = $"{drawn.min.ToString("F2")}..{drawn.max.ToString("F2")}";
                 }
 
                 Assert.GreaterOrEqual(inside, frames * 95 / 100,
-                    $"{pose}: the drawn head's centre left the server's {serverPose} head box in "
-                    + $"{frames - inside} of {frames} frames (e.g. at {worst}; box {Describe(in server)}). "
+                    $"{pose}: the drawn head left the server's {serverPose} head box in "
+                    + $"{frames - inside} of {frames} frames (e.g. {worst}; box {Describe(in server)}). "
                     + "A headshot there scores as a body hit or a miss.");
             }
             finally

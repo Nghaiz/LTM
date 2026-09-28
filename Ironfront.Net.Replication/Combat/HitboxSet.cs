@@ -220,8 +220,9 @@ namespace Ironfront.Net.Replication.Combat
                 HumanoidHeadWidth * 0.5f, HumanoidHeadHeight * 0.5f, HumanoidHeadWidth * 0.5f,
                 0f, HumanoidTorsoBottomHeight, -0.03f, HumanoidBodyWidth * 0.5f, HumanoidBodyDepth * 0.5f),
 
-            // Moving (walk or run, any direction): head 1.38..1.43, leading the travel.
-            new Shape(0f, 1.40f, 0f, 0.26f, 0.24f, 0.26f,
+            // Moving (walk or run, any direction): head centred at 1.38..1.43, leading the travel;
+            // chin to crown it spans 1.11..1.66 across the stride, so the box is 1.13..1.65.
+            new Shape(0f, 1.39f, 0f, 0.26f, 0.26f, 0.26f,
                 HumanoidMovingHeadLead, HumanoidTorsoBottomHeight, -0.05f, 0.35f, 0.30f),
 
             // Sprinting: head 1.32, 0.21 m forward and 0.10 m right, over the rifle.

@@ -180,7 +180,7 @@ namespace Ironfront.Net.Replication.Tests
 
         [Theory]
         [InlineData(HumanoidPose.Standing, 0f, 1.52f, 0f)]
-        [InlineData(HumanoidPose.Moving, 0f, 1.40f, 0f)]
+        [InlineData(HumanoidPose.Moving, 0f, 1.39f, 0f)]
         [InlineData(HumanoidPose.Sprinting, 0.10f, 1.32f, 0.21f)]
         [InlineData(HumanoidPose.Crouched, 0.13f, 1.11f, 0.13f)]
         [InlineData(HumanoidPose.CrouchMoving, 0.07f, 1.28f, 0.13f)]
