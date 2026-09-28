@@ -54,11 +54,27 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>The shell scene this returns to. Must be in EditorBuildSettings.</summary>
         public const string MenuScene = "Menu";
 
+        /// <summary>The public master every released build dials when nothing overrides it.</summary>
+        /// <remarks>
+        /// <b>A released build carries no <c>.env</c> and no launcher</b>, so whatever is
+        /// serialized here is the whole of what a player who double-clicks the exe gets. It used
+        /// to be <c>127.0.0.1:27000</c> plaintext, which only reached a master on the player's
+        /// own machine, and local hosting no longer exists. Port 443 because the fly app's shared
+        /// IPv4 routes 80/443 only (see <c>infra/fly/master.toml</c>); TLS because fly
+        /// terminates it there. The host is not a secret: it is the address every player's
+        /// client has to reach. <c>docs/releasing.md</c> says what to do when it changes.
+        /// </remarks>
+        public const string PublicMasterHost = "kien-master-2026.fly.dev";
+
+        /// <inheritdoc cref="PublicMasterHost"/>
+        public const int PublicMasterPort = 443;
+
         [Header("Master server")]
-        [Tooltip("Defaults, overridable with IRONFRONT_CLIENT_MASTER_HOST and " +
-                 "IRONFRONT_CLIENT_MASTER_PORT, and by the player typing in the shell.")]
-        [SerializeField] private string _masterHost = "127.0.0.1";
-        [SerializeField] private int _masterPort = GameClientConfig.DefaultMasterPort;
+        [Tooltip("Defaults, overridable with IRONFRONT_CLIENT_MASTER_HOST, " +
+                 "IRONFRONT_CLIENT_MASTER_PORT and IRONFRONT_CLIENT_MASTER_TLS.")]
+        [SerializeField] private string _masterHost = PublicMasterHost;
+        [SerializeField] private int _masterPort = PublicMasterPort;
+        [SerializeField] private bool _masterTls = true;
 
         [Header("Diagnostics")]
         [SerializeField] private bool _verbose = true;
@@ -350,6 +366,7 @@ namespace Ironfront.Net.Unity.Client
             {
                 MasterHost = _masterHost,
                 MasterPort = _masterPort,
+                MasterTlsEnabled = _masterTls,
                 Verbose = _verbose,
             };
 

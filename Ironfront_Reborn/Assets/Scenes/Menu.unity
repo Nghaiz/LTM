@@ -159219,8 +159219,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6404976c56fe427ab5f2ee9d38f89abd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Ironfront.Net.Unity.Client::Ironfront.Net.Unity.Client.ClientFlowBootstrap
-  _masterHost: 127.0.0.1
-  _masterPort: 27000
+  _masterHost: kien-master-2026.fly.dev
+  _masterPort: 443
+  _masterTls: 1
   _verbose: 1
 --- !u!1 &1082895991
 GameObject:

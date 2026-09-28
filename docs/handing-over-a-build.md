@@ -40,7 +40,7 @@ The Editor must be closed — the project lock, and a queued recompile the build
 wait on for ever.
 
 ```powershell
-pwsh .claude/scripts/unity-editor.ps1 -Stop     # if one is open
+pwsh .claude/scripts/unity-editor.ps1 close      # if one is open
 pwsh tools/build-player.ps1                      # ~10 minutes, silent until it ends
 ```
 
