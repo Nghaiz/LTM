@@ -162,20 +162,47 @@ namespace Ironfront.Net.Protocol
         /// Metres from an actor's feet to its eyes while standing. The hitscan origin.
         /// </summary>
         /// <remarks>
-        /// Derived from <c>MovementCore.StandHeight</c> (1.8 m) at the ~0.89 of full height a
-        /// humanoid's eyes sit at. It cannot reference that constant directly — this assembly
-        /// is below the replication library and must stay that way — so the derivation is
-        /// recorded here instead of implied.
+        /// <para>
+        /// <b>Where the shooter's own camera is</b>, because a shot leaves along the crosshair
+        /// and the crosshair is that camera's centre: <c>Player Fps Actor.prefab</c> puts the FP
+        /// camera 0.63 m above the capsule centre, and a standing capsule's centre is half of
+        /// <c>MovementCore.StandHeight</c> (1.8 m) up — so 0.90 + 0.63.
+        /// </para>
+        /// <para>
+        /// It used to be 1.6, a ratio of the body height rather than a measurement, which put
+        /// every shot 7 cm above the crosshair. Playtest 2026-09-28, bug 5;
+        /// <c>HitboxGeometryTests</c> (EditMode) reads the camera out of the prefab and fails
+        /// when the two drift apart. This assembly is below the replication library and cannot
+        /// name <c>MovementCore</c>, so the derivation is written here instead.
+        /// </para>
         /// </remarks>
-        public const float  EYE_HEIGHT = 1.6f;
+        public const float  EYE_HEIGHT = 1.53f;
 
         /// <summary>Metres from feet to eyes while crouched or prone.</summary>
         /// <remarks>
-        /// The same 0.89 ratio applied to <c>MovementCore.CrouchHeight</c> (0.5 m). Low, and
-        /// deliberately so: a crouched shooter firing from standing eye height is the bug this
-        /// constant exists to stop, and it only shows up as "shots that should have cleared a
-        /// wall did not".
+        /// <para>
+        /// The same camera over a crouched capsule: <c>MovementCore.CrouchHeight</c> (0.5 m)
+        /// puts the centre 0.25 m up, and the camera stays 0.63 m above it — 0.88 m. Crouching
+        /// in this game shrinks the capsule and leaves the camera's offset alone
+        /// (<c>FpsActorController.StartCrouch</c>).
+        /// </para>
+        /// <para>
+        /// It used to be 0.45, 0.89 of the crouched capsule's height, which fired every crouched
+        /// shot 43 cm below the crosshair: aimed at a head it struck the chest, aimed at the
+        /// chest it struck the ground in front of the target.
+        /// </para>
         /// </remarks>
-        public const float  EYE_HEIGHT_CROUCHED = 0.45f;
+        public const float  EYE_HEIGHT_CROUCHED = 0.88f;
+
+        /// <summary>
+        /// How far a full lean moves the eye to the side, in metres. The lean's shot origin.
+        /// </summary>
+        /// <remarks>
+        /// <c>PlayerFpParent.LateUpdate</c> moves the FP camera <c>0.4 * lean</c> along its own
+        /// right vector, stopping short of a wall a 0.3 m sphere would touch. The server offsets
+        /// a leaning shot the same way (<c>ServerCombatAuthority.ShotOrigin</c>) — without it
+        /// every shot taken while leaning left from 40 cm to the side of the crosshair.
+        /// </remarks>
+        public const float  LEAN_EYE_OFFSET = 0.4f;
     }
 }

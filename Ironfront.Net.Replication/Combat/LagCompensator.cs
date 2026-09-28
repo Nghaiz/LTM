@@ -66,12 +66,19 @@ namespace Ironfront.Net.Replication.Combat
         /// closer the pair got.
         /// </para>
         /// <para>
+        /// <b>The shooter's actor id is the fifth, for the same reason at the other end</b>
+        /// (playtest 2026-09-28, bug 5). The origin sits inside the shooter's own rig, and a
+        /// shot fired down a slope passes out through that body's own box on its way — so the
+        /// shooter's body was cover for their own shots, exactly as the victim's was for the
+        /// shot that hit it before X-26.
+        /// </para>
+        /// <para>
         /// Whose colliders those are is a question only the engine can answer, so this seam
-        /// carries the id and the Unity implementation decides. Nothing engine-free needs to
+        /// carries the ids and the Unity implementation decides. Nothing engine-free needs to
         /// know what a collider is, which is the whole point of the seam.
         /// </para>
         /// </remarks>
-        public Func<Vec3, Vec3, float, ushort, bool>? Occlusion { get; set; }
+        public Func<Vec3, Vec3, float, ushort, ushort, bool>? Occlusion { get; set; }
 
         /// <summary>Shots resolved. Denominator for the hit-rate experiment.</summary>
         public long ShotsResolved { get; private set; }
@@ -249,7 +256,7 @@ namespace Ironfront.Net.Replication.Combat
             // Walls last: an occluded shot is a miss, and asking the engine about geometry is
             // the most expensive thing here, so it runs once for the winner rather than once
             // per candidate box.
-            if (Occlusion != null && Occlusion(origin, point, bestDistance, bestActor))
+            if (Occlusion != null && Occlusion(origin, point, bestDistance, bestActor, shooterActorId))
             {
                 ShotsOccluded++;
                 return HitResult.Miss(targetTick);

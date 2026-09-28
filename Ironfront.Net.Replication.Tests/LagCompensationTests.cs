@@ -161,7 +161,7 @@ namespace Ironfront.Net.Replication.Tests
             HitResult before = world.Fire(rttMs: 150f, currentTick: 100);
             Assert.True(before.Hit);
 
-            world.Compensator.Occlusion = (_, _, _, _) => throw new InvalidOperationException("boom");
+            world.Compensator.Occlusion = (_, _, _, _, _) => throw new InvalidOperationException("boom");
             Assert.Throws<InvalidOperationException>(() => world.Fire(rttMs: 150f, currentTick: 100));
 
             world.Compensator.Occlusion = null;
@@ -286,7 +286,7 @@ namespace Ironfront.Net.Replication.Tests
             // with a line-of-sight check". This is that check's seam.
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _, _) => true,
+                Occlusion = (_, _, _, _, _) => true,
             };
 
             HitResult hit = compensator.ResolveHitscan(
@@ -304,7 +304,7 @@ namespace Ironfront.Net.Replication.Tests
             int calls = 0;
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _, _) => { calls++; return false; },
+                Occlusion = (_, _, _, _, _) => { calls++; return false; },
             };
 
             var targets = new[]
@@ -338,7 +338,7 @@ namespace Ironfront.Net.Replication.Tests
 
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _, victim) => { seen = victim; calls++; return false; },
+                Occlusion = (_, _, _, victim, _) => { seen = victim; calls++; return false; },
             };
 
             HitResult hit = compensator.ResolveHitscan(
@@ -362,12 +362,12 @@ namespace Ironfront.Net.Replication.Tests
             var victimIsNotCover = new LagCompensator(new HitboxHistory())
             {
                 // The endpoint is inside the victim, so the first collider met belongs to them.
-                Occlusion = (_, _, _, victim) => victim != Target,
+                Occlusion = (_, _, _, victim, _) => victim != Target,
             };
 
             var blocksEverything = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _, _) => true,
+                Occlusion = (_, _, _, _, _) => true,
             };
 
             var targets = new[]

@@ -853,10 +853,12 @@ namespace Ironfront.Net.Unity.Server
         public HitboxSet CaptureHitboxes()
         {
             Vec3 feet;
+            bool crouching = false;
             if (Movement != null)
             {
                 MoveState state = Movement.State;
-                float halfCapsule = MovementCore.HeightFor(state.IsCrouching) * 0.5f;
+                crouching = state.IsCrouching;
+                float halfCapsule = MovementCore.HeightFor(crouching) * 0.5f;
                 feet = new Vec3(
                     state.Position.X,
                     state.Position.Y - halfCapsule,
@@ -869,7 +871,14 @@ namespace Ironfront.Net.Unity.Server
                 feet = MovementSimulation.ToCore(transform.position);
             }
 
-            return HitboxSet.Humanoid(in feet);
+            // Turned the way every client draws this body, and crouched exactly when the
+            // snapshot says so -- the heading Capture sends, and the IsCrouching flag it sets
+            // only for a body with a Movement agent. Boxes that turned or crouched when the
+            // drawn body did not would be as wrong as ones that never did (playtest 2026-09-28,
+            // bug 5).
+            float yaw = float.IsNaN(YawDegrees) ? transform.eulerAngles.y : YawDegrees;
+
+            return HitboxSet.Humanoid(in feet, yaw, crouching);
         }
 
         /// <summary>
