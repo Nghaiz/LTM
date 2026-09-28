@@ -409,6 +409,35 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A seated body is drawn in its seat's own pose, and the seat is the one the snapshot names.
+        /// </summary>
+        /// <remarks>
+        /// Leftover from the 2026-09-28 audit: <c>Actor.EnterSeat</c> writes <c>seated type</c> from
+        /// <c>Seat.animation</c> offline, and nothing wrote it for a remote body, so the quad bike's
+        /// driver was drawn sitting on a chair. The registry owns the vehicle lookup; the view
+        /// writes what it is given, inside <c>Apply</c>, and only for a seated body.
+        /// </remarks>
+        [Fact]
+        public void ASeatedBodyIsDrawnInTheSeatsOwnPose()
+        {
+            string view = ViewSource();
+            string apply = MethodBody(view, "public void Apply(in ActorSnapshotEntry entry)");
+
+            Assert.Contains("Animator.StringToHash(\"seated type\")", view);
+            Assert.Matches(@"_hashSeatedType,\s*_state\.IsSeated\s*\?\s*_seatAnimation\s*:\s*0", apply);
+
+            string registryPath = Path.Combine(
+                UnityAssets(), "Scripts", "Net", "Client", "RemoteActorRegistry.cs");
+            string registry = File.ReadAllText(registryPath);
+
+            // Resolved from the vehicle the snapshot names, before the view applies the entry.
+            Assert.Matches(
+                @"view\.SetSeatAnimation\(SeatAnimationOf\(in sample\.State\)\);\s*view\.Apply\(in sample\.State\);",
+                registry);
+            Assert.Contains("GetSeatAnimation(state.SeatIndex)", registry);
+        }
+
+        /// <summary>
         /// <c>_writtenParameters</c> says exactly what the view writes -- no more, no less.
         /// </summary>
         /// <remarks>

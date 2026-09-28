@@ -73,6 +73,12 @@
         bool IsCrouching => false;
 
         /// <summary>
+        /// The <c>seated type</c> of the seat this actor sits in -- 0 the chair, 1 astride the quad
+        /// bike -- or 0 when it is not seated. What <c>Actor.EnterSeat</c> gives the animator.
+        /// </summary>
+        int SeatAnimation => 0;
+
+        /// <summary>
         /// One line of what the body's water state is made of: where its feet are, how deep the
         /// crown <see cref="IsSubmerged"/> reads and the shipped swim sample sit, whether it has
         /// fallen over into a ragdoll, and which seat it is in. For the drowning log.

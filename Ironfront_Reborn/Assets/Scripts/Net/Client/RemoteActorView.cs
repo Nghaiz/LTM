@@ -150,16 +150,24 @@ namespace Ironfront.Net.Unity.Client
         private static readonly int _hashSwim        = Animator.StringToHash("swim");
         private static readonly int _hashSwimForward = Animator.StringToHash("swim forward");
 
+        // Which seated pose: 0 the chair, 1 astride the quad bike. Actor.EnterSeat writes it from
+        // Seat.animation offline; a remote body is seated from the snapshot, and nothing wrote it,
+        // so the quad bike's driver was drawn sitting on a chair.
+        private static readonly int _hashSeatedType  = Animator.StringToHash("seated type");
+
         /// <summary>Every parameter name this component writes, for the once-only audit.</summary>
         private static readonly string[] _writtenParameters =
         {
             "crouched", "sprinting", "dead", "ragdolled",
             "seated", "moving", "movement x", "movement y",
-            "swim", "swim forward",
+            "swim", "swim forward", "seated type",
         };
 
         private RemoteActorVisualState _state;
         private bool _hasState;
+
+        // The seated type of the seat the latest snapshot names; see SetSeatAnimation.
+        private int _seatAnimation;
 
         // Locomotion, phase-P2. The smoothing is stateful by nature -- RemoteLocomotionSolver is
         // pure and takes last frame's value back -- and the sample pair is the displacement
@@ -407,7 +415,16 @@ namespace Ironfront.Net.Unity.Client
             _animator.SetBool(_hashMoving,  false);
             _animator.SetFloat(_hashMovementX, 0f);
             _animator.SetFloat(_hashMovementY, 0f);
+            _seatAnimation = 0;
+            _animator.SetInteger(_hashSeatedType, 0);
         }
+
+        /// <summary>
+        /// The seated pose of the seat this body's next <see cref="Apply"/> names: 0 the chair,
+        /// 1 astride. Resolved by <c>RemoteActorRegistry</c>, which owns the vehicle lookup; the
+        /// snapshot carries only the vehicle id and seat index.
+        /// </summary>
+        public void SetSeatAnimation(int seatAnimation) => _seatAnimation = seatAnimation;
 
         /// <summary>
         /// Applies one snapshot entry: stance, aim, sprint, weapon, team and the ragdoll state.
@@ -454,6 +471,7 @@ namespace Ironfront.Net.Unity.Client
                 _animator.SetBool(_hashDead,    !_state.IsAlive);
                 _animator.SetBool(_hashRagdoll, _state.IsRagdoll);
                 _animator.SetBool(_hashSeated,  _state.IsSeated);
+                _animator.SetInteger(_hashSeatedType, _state.IsSeated ? _seatAnimation : 0);
 
                 _animator.SetBool(_hashMoving,     _locomotion.IsMoving);
                 _animator.SetFloat(_hashMovementX, _locomotion.MovementX);

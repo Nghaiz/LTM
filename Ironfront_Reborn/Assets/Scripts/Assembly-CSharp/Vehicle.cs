@@ -96,6 +96,22 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		return seat != null ? seat.transform.position : Vector3.positiveInfinity;
 	}
 
+	/// <summary>
+	/// The animator's "seated type" for an occupant of <paramref name="seatIndex"/>: the seat's
+	/// SitAnimation (0 chair, 1 quad), or 0 for a seat this vehicle does not have.
+	/// </summary>
+	/// <remarks>
+	/// EnterSeat sets this parameter offline; a remote body is drawn from the snapshot's seat
+	/// instead, and nothing read it for one, so the quad bike's driver sat on a chair.
+	/// </remarks>
+	public int GetSeatAnimation(int seatIndex)
+	{
+		if (seats == null || seatIndex < 0 || seatIndex >= seats.Length) return 0;
+
+		Seat seat = seats[seatIndex];
+		return seat != null ? (int)seat.animation : 0;
+	}
+
 	public float maxHealth = 1000f;
 
 	public float crashDamageSpeedThrehshold = 2f;

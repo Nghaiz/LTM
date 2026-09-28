@@ -172,6 +172,7 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData(HumanoidPose.Crouched, 1.35f)]
         [InlineData(HumanoidPose.CrouchMoving, 1.55f)]
         [InlineData(HumanoidPose.Seated, 1.70f)]
+        [InlineData(HumanoidPose.SeatedQuad, 1.75f)]
         public void EveryPoseCoversTheBodyWithoutASeam(HumanoidPose pose, float minimumHeight)
         {
             AssertContiguous(HitboxSet.Humanoid(Vec3.Zero, 0f, pose, 0f, 0f), 1f, minimumHeight);
@@ -185,6 +186,7 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData(HumanoidPose.Crouched, 0.13f, 1.11f, 0.13f)]
         [InlineData(HumanoidPose.CrouchMoving, 0.07f, 1.28f, 0.13f)]
         [InlineData(HumanoidPose.Seated, 0.01f, 0.95f, 0.155f)]
+        [InlineData(HumanoidPose.SeatedQuad, 0.014f, 0.914f, 0.434f)]
         public void AShotAtWhereTheHeadIsDrawnIsAHeadshotInEveryPose(
             HumanoidPose pose, float right, float height, float forward)
         {
@@ -235,6 +237,34 @@ namespace Ironfront.Net.Replication.Tests
             bool seated, bool crouching, float speed, bool sprinting, HumanoidPose expected)
         {
             Assert.Equal(expected, HitboxSet.PoseFor(seated, crouching, speed, sprinting));
+        }
+
+        [Theory]
+        [InlineData(true, true, false, HumanoidPose.SeatedQuad)]
+        [InlineData(true, false, false, HumanoidPose.Seated)]
+        [InlineData(true, true, true, HumanoidPose.SeatedQuad)]
+        [InlineData(false, true, false, HumanoidPose.Standing)]
+        public void AstrideIsTheSeatsPoseAndOnlyASeatsPose(
+            bool seated, bool astride, bool crouching, HumanoidPose expected)
+        {
+            // The animator reads `seated type` only in the seated state, as the seat decides it.
+            Assert.Equal(expected, HitboxSet.PoseFor(seated, astride, crouching, 0f, false));
+        }
+
+        [Fact]
+        public void TheChairsBoxesMissTheQuadRidersDrawnHead()
+        {
+            // Leftover from the 2026-09-28 audit: the quad bike's driver was boxed -- and drawn --
+            // in the chair pose. Astride, the head is drawn 0.28 m further forward. From the side
+            // (target turned 90 degrees, so "forward" runs across the shot) a shot at that head
+            // through the chair's boxes is not a headshot; through the astride boxes it is.
+            HitResult throughTheChair = PoseShot(HumanoidPose.Seated, targetYaw: 90f,
+                right: 0.014f, height: 0.914f, forward: 0.434f);
+
+            Assert.False(throughTheChair.Hit && throughTheChair.HitboxType == HitboxType.Head,
+                "precondition: the chair's head box reaches the quad rider's drawn head");
+            Assert.Equal(HitboxType.Head, PoseShot(HumanoidPose.SeatedQuad, targetYaw: 90f,
+                right: 0.014f, height: 0.914f, forward: 0.434f).HitboxType);
         }
 
         [Fact]
