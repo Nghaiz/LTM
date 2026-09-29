@@ -2298,21 +2298,16 @@ namespace Ironfront.Net.Unity.Server
         /// second count assembled here would be a second answer to a question that has one.
         /// </para>
         /// <para>
-        /// <b>Every registered actor gets a row, bots included</b> (P18 § 3.3, and the default it
-        /// records). The team score moves on every death regardless of who died, so a scoreboard
-        /// that omitted the bots could not be reconciled with the number above it — criterion 7
-        /// is that arithmetic. It also means a live player who has not killed anybody appears as
-        /// a 0/0 row rather than vanishing, which is what a player looking for their own name
-        /// expects.
+        /// <b>Every actor in the match gets a row, bots included</b> (P18 § 3.3, and the default
+        /// it records). The team score moves on every death regardless of who died, so a
+        /// scoreboard that omitted the bots could not be reconciled with the number above it —
+        /// criterion 7 is that arithmetic. It also means a live player who has not killed anybody
+        /// appears as a 0/0 row rather than vanishing, which is what a player looking for their
+        /// own name expects. Which actors are in the match is <see cref="FillScoreRows"/>'s call.
         /// </para>
         /// <para>
         /// <b>Actors, not <c>_players</c>.</b> The player list is human connections; the tally
         /// counts whoever died. Iterating the registry is what makes those two agree.
-        /// </para>
-        /// <para>
-        /// The counters are clamped to <c>ushort</c> rather than wrapped. A match that somehow
-        /// passes 65535 kills renders a stuck maximum, which reads as an anomaly; a wrapped
-        /// counter renders as a small plausible number, which does not.
         /// </para>
         /// </remarks>
         private void EmitPlayerScores()
@@ -2321,32 +2316,8 @@ namespace Ironfront.Net.Unity.Server
 
             if (Transport == null) return;
 
-            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
-
-            int count = 0;
-            for (int i = 0; i < actors.Count && count < _playerScoreEntries.Length; i++)
-            {
-                NetServerActor actor = actors[i];
-                if (actor == null) continue;
-
-                ushort actorId = actor.ActorId;
-
-                // Skipped rather than truncated, for EmitPlayerList's reason: a truncated id
-                // credits the WRONG player, which is worse than crediting none.
-                if (actorId > byte.MaxValue) continue;
-
-                _playerScoreEntries[count].ActorId = (byte)actorId;
-                _playerScoreEntries[count].Kills   = ClampToU16(_scoreTally.KillsOf(actorId));
-                _playerScoreEntries[count].Deaths  = ClampToU16(_scoreTally.DeathsOf(actorId));
-
-                // The side, from the actor the server owns rather than from the snapshot the
-                // client will receive. The snapshot carries a team too, but InterestManager sheds
-                // actors under a per-snapshot ceiling, so a client holds one only for the actors
-                // it currently sees -- and a scoreboard has to place every row. See
-                // PlayerScoreEntry.Team for why that is not a second source of truth.
-                _playerScoreEntries[count].Team    = actor.Team;
-                count++;
-            }
+            int count = FillScoreRows(
+                ServerActorRegistry.Instance.Actors, _scoreTally, _playerScoreEntries);
 
             int written = ServerEventWriter.WritePlayerScores(
                 _eventPayload,
@@ -2364,6 +2335,57 @@ namespace Ironfront.Net.Unity.Server
             BroadcastReliable(
                 new ReadOnlySpan<byte>(_eventPayload, 0, written),
                 (byte)ServerEventWriter.ReliableChannel);
+        }
+
+        /// <summary>
+        /// Writes one S_PLAYER_SCORES row per actor in the match into <paramref name="rows"/>
+        /// and returns how many it wrote.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An unclaimed player slot is not in the match</b>, by <see cref="IsAnnounceable"/>,
+        /// the rule that already keeps it out of every spawn announce (X-18).
+        /// <c>ServerPlayerSlotPool</c> parks sixteen bodies at startup, and every one of them
+        /// is registered, so before this rule the board listed each as a 0/0 player named
+        /// "actor 3" -- live on 2026-09-29, fourteen of them beside two humans, and the header
+        /// counted 28 players in a match that had 14. A body joins the table when it is claimed
+        /// and leaves it when it is released; both paths already mark the scores dirty.
+        /// </para>
+        /// <para>
+        /// The counters are clamped to <c>ushort</c> rather than wrapped. A match that somehow
+        /// passes 65535 kills renders a stuck maximum, which reads as an anomaly; a wrapped
+        /// counter renders as a small plausible number, which does not.
+        /// </para>
+        /// </remarks>
+        internal static int FillScoreRows(
+            IReadOnlyList<NetServerActor> actors, MatchScoreTally tally, PlayerScoreEntry[] rows)
+        {
+            int count = 0;
+            for (int i = 0; i < actors.Count && count < rows.Length; i++)
+            {
+                NetServerActor actor = actors[i];
+                if (!IsAnnounceable(actor)) continue;
+
+                ushort actorId = actor.ActorId;
+
+                // Skipped rather than truncated, for EmitPlayerList's reason: a truncated id
+                // credits the WRONG player, which is worse than crediting none.
+                if (actorId > byte.MaxValue) continue;
+
+                rows[count].ActorId = (byte)actorId;
+                rows[count].Kills   = ClampToU16(tally.KillsOf(actorId));
+                rows[count].Deaths  = ClampToU16(tally.DeathsOf(actorId));
+
+                // The side, from the actor the server owns rather than from the snapshot the
+                // client will receive. The snapshot carries a team too, but InterestManager sheds
+                // actors under a per-snapshot ceiling, so a client holds one only for the actors
+                // it currently sees -- and a scoreboard has to place every row. See
+                // PlayerScoreEntry.Team for why that is not a second source of truth.
+                rows[count].Team    = actor.Team;
+                count++;
+            }
+
+            return count;
         }
 
         /// <summary>A tally count as the wire's <c>u16</c>, saturating rather than wrapping.</summary>
