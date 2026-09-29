@@ -78,6 +78,9 @@ namespace Ironfront.Net.Unity.Server
 
         private ServerTickLoop _loop;
         private MatchStateMachine _match;
+
+        // The reader the bot commander plays to the score through (MatchScoreFeed, phase P28).
+        private Func<int, int> _scoreOf;
         private ActorIdPool _actorIds;
         private ICapturePointDirectory _points;
         private CapturePointSlave _slave;
@@ -156,6 +159,8 @@ namespace Ironfront.Net.Unity.Server
             CapturePointState[] points = BuildCapturePoints();
 
             _match = new MatchStateMachine(rules, points);
+            _scoreOf = team => team == 0 ? _match.Score0 : _match.Score1;
+            MatchScoreFeed.Install(_scoreOf);
             _match.PhaseChanged   += OnPhaseChanged;
             _match.ResetRequested += OnResetRequested;
             _match.BothTeamsEliminated += OnBothTeamsEliminated;
@@ -264,6 +269,7 @@ namespace Ironfront.Net.Unity.Server
 
         private void OnDestroy()
         {
+            if (_scoreOf != null) MatchScoreFeed.Clear(_scoreOf);
             if (_match == null) return;
             _match.PhaseChanged   -= OnPhaseChanged;
             _match.ResetRequested -= OnResetRequested;

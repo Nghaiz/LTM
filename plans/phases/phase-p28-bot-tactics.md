@@ -50,11 +50,30 @@ And, it being 2026, a trained model rather than only hand-set numbers.
    tank is crewed by part of a squad when it has fewer seats than the squad (the original wanted a
    seat for every member, so a squad of four never took one), and a tank with an enemy in its sights
    inside 80 m stops and fires from there instead of driving into the defenders.
-4. **A trained profile.** An abstract conquest simulator runs the same `TeamPlanner` code against the
-   original "attack the nearest" policy on generated maps; an evolution strategy tunes
-   `TacticsProfile`'s weights for win rate and margin; the result ships as the default profile, with
-   the training report under `plans/reports/`. Honest scope: this trains the strategic weights on an
-   abstract model of the mode, it is not a neural network driving the bots frame by frame.
+4. **A trained profile (`Ironfront.Tools.TacticsTrainer`).** An abstract conquest simulator
+   (`ConquestSim`: the real maps' flags and links, the game's capture arithmetic, scoring and both
+   endings, the 10 s spawn waves, the original squads' own targeting) runs the server's own
+   `TeamPlanner` against the original squads; a (mu/mu_w, lambda) evolution strategy tunes
+   `TacticsProfile` over 320 rounds per candidate (both real maps four times, 24 generated maps,
+   4 to 50 bots a side, each side in turn); the result is chosen on a separate 320 validation rounds
+   and reported on a third 320. Report: `plans/reports/2026-09-30-p28-tactics-training.md`. Honest
+   scope: strategic weights in an abstract model, not a neural network driving the bots.
+
+   **What training found, in order.** (a) The hand-set commander of part 1 lost to the original
+   squads 21 to 171: it held a third fewer flags, because it spread bots over garrisons and flanks
+   and never knew its own flag was being taken while nobody stood near it. (b) Weight tuning alone
+   could not close that: two structural fixes came first -- a flag with an enemy on it counts as
+   threatened whether or not a bot of the side is near (every player's map shows it contested), and
+   attackers are paired with the nearest objective still short of its share instead of in list
+   order. `AttackDivertRange` joined the profile so the original's "take the flag you are passing"
+   reflex could be kept at a trained reach. (c) The trained profile beats the hand-set one 167 to 30
+   (+0.54) and is roughly level with the original squads (69 to 88, -0.08); it did not clearly beat
+   them, and the report says so. It learned to go for many flags at once, keep nobody back until a
+   flag is threatened, and flank only in big battles (38 bots a side or more).
+   `TacticsTrainingTests` holds both numbers (at least +0.40 over the hand-set, no worse than -0.15
+   against the original), replay from the seed, and a fair simulator (original against itself is
+   exactly even). The server now also plays to the real score: `MatchScoreFeed` carries the
+   networked match's score to `BotCommander`, which had read the offline scoreboard's zeros.
 
 ## Constraints
 
@@ -74,5 +93,6 @@ And, it being 2026, a trained model rather than only hand-set numbers.
 2. Edit-mode physics tests for the cover search (a rock between threat and bot counts, open ground
    does not) and a smoke match with no new exceptions.
 3. Unit tests for the vehicle choice; tank standoff observed in a match.
-4. Tuner run reproducible from a seed; the tuned profile beats the baseline in the simulator by a
-   stated margin; the report records the numbers.
+4. Tuner run reproducible from a seed; the tuned profile beats the hand-set profile in the
+   simulator by a stated margin and keeps level with the original squads; the report records the
+   numbers.

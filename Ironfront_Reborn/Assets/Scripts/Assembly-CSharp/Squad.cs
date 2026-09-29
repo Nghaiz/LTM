@@ -346,8 +346,10 @@ public class Squad
 
 	/// <summary>
 	/// Whether the squad may break off for <paramref name="spawnPoint"/>, the flag nearest its
-	/// leader, the way the original always did. With no order, yes. An attack takes a flag it is
-	/// standing on, a defence only its own flag, and a flank nothing until it has turned in.
+	/// leader, the way the original always did. With no order, yes. An attack takes one within
+	/// <see cref="TacticsProfile.AttackDivertRange"/> of its capture range -- the original's reflex,
+	/// kept within a reach part 4 trained -- a defence only its own flag, and a flank nothing until
+	/// it has turned in.
 	/// </summary>
 	public bool MayDivertTo(SpawnPoint spawnPoint)
 	{
@@ -360,7 +362,7 @@ public class Squad
 		case SquadRole.Attack:
 		{
 			AiActorController leader = Leader();
-			return leader != null && Vector3.Distance(leader.actor.Position(), spawnPoint.transform.position) < spawnPoint.GotoRadius() + 10f;
+			return leader != null && Vector3.Distance(leader.actor.Position(), spawnPoint.transform.position) < spawnPoint.GotoRadius() + BotCommander.Profile.AttackDivertRange;
 		}
 		case SquadRole.Flank:
 			return false;

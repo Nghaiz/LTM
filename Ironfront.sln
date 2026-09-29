@@ -53,6 +53,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Net.LoadHarness.T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Tools.E2E", "Ironfront.Tools.E2E\Ironfront.Tools.E2E.csproj", "{F7526D09-9C1F-44D5-B73C-664F1AF3F8C1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Tools.TacticsTrainer", "Ironfront.Tools.TacticsTrainer\Ironfront.Tools.TacticsTrainer.csproj", "{D215CB45-70B0-44E7-8B96-CFF58FE108AD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -158,6 +160,10 @@ Global
 		{F7526D09-9C1F-44D5-B73C-664F1AF3F8C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F7526D09-9C1F-44D5-B73C-664F1AF3F8C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F7526D09-9C1F-44D5-B73C-664F1AF3F8C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D215CB45-70B0-44E7-8B96-CFF58FE108AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D215CB45-70B0-44E7-8B96-CFF58FE108AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D215CB45-70B0-44E7-8B96-CFF58FE108AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D215CB45-70B0-44E7-8B96-CFF58FE108AD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AE7B02F1-9E5D-4909-A41F-783E7D15A48D} = {F7309333-0ADC-4CFA-9FCF-9097CA15D087}

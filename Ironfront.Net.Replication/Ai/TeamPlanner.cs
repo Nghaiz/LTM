@@ -380,36 +380,62 @@ namespace Ironfront.Net.Replication.Ai
             for (int f = 0; f < flagCount; f++)
                 _desired[f] = _chosen[f] ? (free + already) * (1f + flags[f].EnemiesInContact) / weights : 0f;
 
+            // Nearest pairs first: of every free squad and every objective still short of its share,
+            // the closest pair is joined, then the next closest. The squads nearest an objective take
+            // it, and nobody walks the length of the map past one it could have taken on the way.
+            // (Assigning in list order, as this first did, sent whichever squad came first to the
+            // flag most short -- often the far one; part 4's simulator measured the cost.)
+            while (true)
+            {
+                int bestSquad = -1;
+                int bestFlag = -1;
+                float bestDistance = float.PositiveInfinity;
+                for (int i = 0; i < squadCount; i++)
+                {
+                    if (_assigned[i]) continue;
+                    for (int f = 0; f < flagCount; f++)
+                    {
+                        if (!_chosen[f] || _desired[f] - _attackBots[f] <= ShareTolerance) continue;
+                        float distance = Vec3.Distance(squads[i].Position, flags[f].Position);
+                        if (distance >= bestDistance) continue;
+                        bestSquad = i;
+                        bestFlag = f;
+                        bestDistance = distance;
+                    }
+                }
+                if (bestSquad < 0) break;
+                Attack(bestSquad, bestFlag, squads, orders);
+            }
+
+            // Every share met and squads left over: each goes for the chosen flag nearest it.
             for (int i = 0; i < squadCount; i++)
             {
                 if (_assigned[i]) continue;
-
-                int best = -1;
-                float bestShort = float.NegativeInfinity;
-                float bestDistance = float.PositiveInfinity;
-
+                int nearest = -1;
+                float nearestDistance = float.PositiveInfinity;
                 for (int f = 0; f < flagCount; f++)
                 {
                     if (!_chosen[f]) continue;
-
-                    float shortBy = _desired[f] - _attackBots[f];
                     float distance = Vec3.Distance(squads[i].Position, flags[f].Position);
-                    bool better = shortBy > bestShort + 0.5f
-                                  || (Math.Abs(shortBy - bestShort) <= 0.5f && distance < bestDistance);
-                    if (!better) continue;
-
-                    best = f;
-                    bestShort = shortBy;
-                    bestDistance = distance;
+                    if (distance < nearestDistance)
+                    {
+                        nearest = f;
+                        nearestDistance = distance;
+                    }
                 }
-
-                if (best < 0) continue;
-
-                orders[i].Role = SquadRole.Attack;
-                orders[i].Flag = best;
-                _assigned[i] = true;
-                _attackBots[best] += squads[i].Size;
+                if (nearest >= 0) Attack(i, nearest, squads, orders);
             }
+        }
+
+        /// <summary>An objective counts as short of its share while it lacks more than this many bots.</summary>
+        private const float ShareTolerance = 0.25f;
+
+        private void Attack(int squad, int flag, ReadOnlySpan<SquadInfo> squads, Span<SquadOrder> orders)
+        {
+            orders[squad].Role = SquadRole.Attack;
+            orders[squad].Flag = flag;
+            _assigned[squad] = true;
+            _attackBots[flag] += squads[squad].Size;
         }
 
         /// <summary>

@@ -126,7 +126,7 @@ namespace Ironfront.Net.Replication.Tests
         public void AHandfulOfBots_GoesForOneFlagTogether_AndKeepsNobodyAtHome()
         {
             Map map = Line(out _, out _, out int b, out _, out _);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             SquadOrder[] orders = Plan(planner, Blue, map, new[] { Squad(1, 0f, 20f, 2), Squad(2, 5f, 20f, 2) });
 
@@ -140,7 +140,7 @@ namespace Ironfront.Net.Replication.Tests
         public void ALargerSide_PursuesMoreFlagsAtOnce()
         {
             Map map = TwoLanes(out _, out _, out int c, out int d, out _);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             var squads = new SquadInfo[6];
             for (int i = 0; i < squads.Length; i++) squads[i] = Squad(i + 1, 0f, 30f, 4);
@@ -157,7 +157,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             Map map = TwoLanes(out int a, out _, out _, out _, out _);
             map.Threat(a, 3);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             var squads = new SquadInfo[5];
             for (int i = 0; i < squads.Length; i++) squads[i] = Squad(i + 1, -150f, 140f + i, 4);
@@ -175,7 +175,7 @@ namespace Ironfront.Net.Replication.Tests
             Map map = TwoLanes(out int a, out int b, out _, out _, out _);
             map.Threat(a, 20);
             map.Threat(b, 20);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             var squads = new SquadInfo[10];
             for (int i = 0; i < squads.Length; i++) squads[i] = Squad(i + 1, 0f, 150f, 4);
@@ -184,7 +184,7 @@ namespace Ironfront.Net.Replication.Tests
 
             int bots = 40;
             int cap = (int)Math.Ceiling(bots * Math.Max(
-                TacticsProfile.Default().MaxDefendShareBalanced, TacticsProfile.Default().MaxDefendShareAggressive));
+                new TacticsProfile().MaxDefendShareBalanced, new TacticsProfile().MaxDefendShareAggressive));
             Assert.InRange(planner.LastDefenders, 1, cap + 4);   // the last squad sent may overshoot by its own size
             Assert.Contains(orders, o => o.Role == SquadRole.Attack || o.Role == SquadRole.Flank);
         }
@@ -194,7 +194,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             Map map = TwoLanes(out int a, out _, out _, out _, out _);
             map.Threat(a, 5);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             var squads = new[] { Squad(1, -150f, 150f, 4, vehicle: true), Squad(2, 0f, 0f, 4), Squad(3, 0f, 0f, 4) };
             SquadOrder[] orders = Plan(planner, Blue, map, squads);
@@ -205,7 +205,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void EvenOnFlags_TheSideIsBalanced_BehindAggressive_AheadOnBothDefensive()
         {
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             Map even = TwoLanes(out _, out _, out int c, out _, out _);
             Plan(planner, Red, even, new[] { Squad(1, 0f, 650f) });
@@ -226,7 +226,7 @@ namespace Ironfront.Net.Replication.Tests
         public void BehindOnPoints_TheSideIsAggressive()
         {
             Map map = Line(out _, out _, out _, out _, out _);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
             Plan(planner, Blue, map, new[] { Squad(1, 0f, 50f) }, score: 10, enemyScore: 100);
             Assert.Equal(TeamPosture.Aggressive, planner.LastPosture);
         }
@@ -235,7 +235,7 @@ namespace Ironfront.Net.Replication.Tests
         public void ASquadKeepsItsTarget_UntilItFallsOrSomethingClearlyBetterAppears()
         {
             Map map = TwoLanes(out _, out _, out int c, out int d, out _);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             // One small squad: one objective. It is already on its way to C; D is about as good.
             SquadOrder[] orders = Plan(planner, Blue, map, new[] { Squad(1, 0f, 200f, 4, SquadRole.Attack, c) });
@@ -268,8 +268,8 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(flank.HasWaypoint);
 
             // Off the line the attack comes along, by the profile's offset, and short of the flag.
-            Assert.InRange(Math.Abs(flank.Waypoint.X), TacticsProfile.Default().FlankOffset - 1f,
-                           TacticsProfile.Default().FlankOffset + 1f);
+            Assert.InRange(Math.Abs(flank.Waypoint.X), new TacticsProfile().FlankOffset - 1f,
+                           new TacticsProfile().FlankOffset + 1f);
             Assert.True(flank.Waypoint.Z < 300f);
 
             Assert.Contains(orders, o => o.Role == SquadRole.Attack && o.Flag == b);
@@ -298,7 +298,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void AFlankGoesRoundTheSideTheSquadAlreadyStandsOn()
         {
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
             var target = new Vec3(0f, 0f, 300f);
             var centre = new Vec3(0f, 0f, 100f);
 
@@ -313,7 +313,7 @@ namespace Ironfront.Net.Replication.Tests
         public void TooSmallASide_NeverSplitsToFlank()
         {
             Map map = Line(out _, out _, out _, out _, out _);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             SquadOrder[] orders = Plan(planner, Blue, map, new[] { Squad(1, 0f, 160f, 2), Squad(2, 0f, 150f, 2) });
             Assert.DoesNotContain(orders, o => o.Role == SquadRole.Flank);
@@ -329,7 +329,7 @@ namespace Ironfront.Net.Replication.Tests
             map.Link(hq0, a);
             map.Link(a, b);
 
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
             SquadOrder[] orders = Plan(planner, Blue, map, new[] { Squad(1, 0f, 450f) });
 
             Assert.Equal(SquadRole.Attack, orders[0].Role);
@@ -346,7 +346,7 @@ namespace Ironfront.Net.Replication.Tests
             map.Link(hq0, a);
             map.Link(a, hq1);
 
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
             SquadOrder[] orders = Plan(planner, Blue, map, new[] { Squad(1, 0f, 20f), Squad(2, 0f, 30f) });
 
             Assert.All(orders, o => Assert.Equal(SquadRole.Defend, o.Role));
@@ -358,7 +358,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             Map map = Line(out _, out int a, out _, out _, out _);
             map.Threat(a, 4);
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
 
             var squads = new SquadInfo[4];
             for (int i = 0; i < squads.Length; i++) squads[i] = Squad(i + 1, 0f, 150f, 3);
@@ -370,12 +370,34 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(defence.Waypoint.Z > 150f, "the threat lies up the line, at B");
         }
 
+        /// <summary>
+        /// Part 4's simulator found the first assignment sending squads the length of the map: it
+        /// handed out objectives in list order, so the first squad went to whichever flag was most
+        /// short even with another objective at its feet.
+        /// </summary>
+        [Fact]
+        public void EachSquad_TakesTheObjectiveAtItsFeet_NotTheOneAcrossTheMap()
+        {
+            Map map = TwoLanes(out _, out _, out int c, out int d, out _);
+            map.Threat(c, 2);    // C wants more of the side than D does
+            var planner = new TeamPlanner(new TacticsProfile { BotsPerObjective = 4f, MinBotsToDefend = 100, MinBotsToFlank = 100 });
+
+            SquadOrder[] orders = Plan(planner, Blue, map, new[]
+            {
+                Squad(1, 150f, 300f),    // at D's feet, listed first
+                Squad(2, -150f, 300f),   // at C's feet
+            });
+
+            Assert.Equal((SquadRole.Attack, d), (orders[0].Role, orders[0].Flag));
+            Assert.Equal((SquadRole.Attack, c), (orders[1].Role, orders[1].Flag));
+        }
+
         [Fact]
         public void AnEmptySide_GetsNoOrders()
         {
             Map map = Line(out _, out _, out _, out _, out _);
             (FlagInfo[] flags, int[] adjacency) = map.Build();
-            var planner = new TeamPlanner(TacticsProfile.Default());
+            var planner = new TeamPlanner(new TacticsProfile());
             Assert.Equal(0, planner.Plan(Blue, flags, adjacency, ReadOnlySpan<SquadInfo>.Empty, 0, 0, Span<SquadOrder>.Empty));
         }
     }
