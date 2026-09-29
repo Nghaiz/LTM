@@ -178,9 +178,7 @@ namespace Ironfront.Net.Unity.Client
             double renderTick = _client.Router.Clock.AdvanceTo(Time.unscaledTimeAsDouble);
 
             byte localTeam = ResolveLocalTeam();
-            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
-            bool hasLocalBody = rig != null && rig.Exists;
-            Vector3 localPosition = hasLocalBody ? rig.Position : Vector3.zero;
+            bool hasLocalBody = TryLocalPosition(out Vector3 localPosition);
 
             foreach (KeyValuePair<ushort, Transform> pair in _live)
             {
@@ -293,11 +291,10 @@ namespace Ironfront.Net.Unity.Client
             // Ledger A-2 is not touched: nothing here registers a proxy with ActorManager, so
             // ActorManager.Player still resolves to the local body. That is the whole reason
             // this goes through MinimapUi.SetMarker (Transform-keyed) and not AddActorBlip.
-            ILocalPlayerRig spawnRig = NetClientBindings.LocalPlayer;
-            bool spawnHasLocal = spawnRig != null && spawnRig.Exists;
+            bool spawnHasLocal = TryLocalPosition(out Vector3 spawnLocalPosition);
             ApplyMinimapMarker(
                 t, message.Team, isAlive: true, isHuman: !message.IsBot, seatedIn: null,
-                ResolveLocalTeam(), spawnHasLocal, spawnHasLocal ? spawnRig.Position : Vector3.zero);
+                ResolveLocalTeam(), spawnHasLocal, spawnLocalPosition);
 
             RemoteActorView view = t.GetComponent<RemoteActorView>();
             if (view != null)
@@ -392,6 +389,25 @@ namespace Ironfront.Net.Unity.Client
             if (!isAlive || team == TeamId.None || localTeam == TeamId.None) return false;
             if (team == localTeam) return true;
             return sqrDistance <= EnemyRevealRadius * EnemyRevealRadius;
+        }
+
+        /// <summary>This client's own body, where the latest snapshot puts it.</summary>
+        /// <remarks>
+        /// From the snapshot rather than the local rig: this registry only ever handles OTHER
+        /// actors, and the client-wiring gate's G4 rule keeps per-actor code away from the rig
+        /// seam, whose writes would land on this player's own HUD. A reading at 20 Hz is plenty for
+        /// a 60 m radius.
+        /// </remarks>
+        private bool TryLocalPosition(out Vector3 position)
+        {
+            position = Vector3.zero;
+            ushort local = _client != null ? _client.LocalActorId : (ushort)0;
+            if (local == 0 || !_client.Router.Decoder.Current.TryFind(local, out ActorSnapshotEntry entry))
+                return false;
+
+            position = new Vector3(
+                Quantize.UnpackPos(entry.PosX), Quantize.UnpackPos(entry.PosY), Quantize.UnpackPos(entry.PosZ));
+            return true;
         }
 
         /// <summary>The vehicle a snapshot seats this body in, or null on foot or when it is not drawn here.</summary>
