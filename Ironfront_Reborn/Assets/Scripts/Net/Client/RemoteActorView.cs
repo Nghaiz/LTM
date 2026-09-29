@@ -134,21 +134,16 @@ namespace Ironfront.Net.Unity.Client
         private static readonly int _hashMovementX = Animator.StringToHash("movement x");
         private static readonly int _hashMovementY = Animator.StringToHash("movement y");
 
-        // Water, and these two cost nothing to add because the bit is ALREADY on the wire.
-        // ActorStateFlags.IsInWater has been decoded into RemoteActorVisualState.IsInWater since
-        // the flags byte was defined, and nothing read it -- so a networked body in a river kept
-        // its walking pose and appeared to march along the bottom, which is exactly what it was
-        // doing. `swim forward` is the stroke rather than the float, so it needs the same
-        // movement the locomotion solver already computes; there is no third state on the
-        // controller between them.
+        // Water: `swim` and `swim forward` cost nothing to add because the bit is ALREADY on the
+        // wire (ActorStateFlags.IsInWater). They live on the controller's Ragdoll Layer, which
+        // plays nothing at weight 0 -- so a networked swimmer marched along the bottom in its
+        // walking pose -- and SwimPresentation now raises that layer for the swim (2026-09-29).
         //
         // The remaining gap is NOT free and is deliberately not attempted here: `falling`,
         // `onBack`, `lean`, `hurt` and `hurt x` have no bit and no field on the wire, and
         // neither ActorStateFlags nor SnapshotField has a spare -- both bytes are full. Adding
         // them means widening a field the way v10 widened Weapon, which is a protocol change
         // and its own phase.
-        private static readonly int _hashSwim        = Animator.StringToHash("swim");
-        private static readonly int _hashSwimForward = Animator.StringToHash("swim forward");
 
         // Which seated pose: 0 the chair, 1 astride the quad bike. Actor.EnterSeat writes it from
         // Seat.animation offline; a remote body is seated from the snapshot, and nothing wrote it,
@@ -193,6 +188,12 @@ namespace Ironfront.Net.Unity.Client
         // The body's own ground speed at the last solve, handed to a corpse as its momentum.
         private Vector3 _planarVelocity;
 
+        // Whether this body's gun is put away because it swims (StowWeaponForSwim).
+        private bool _weaponStowed;
+
+        // The head bone, which a swimmer is placed by. Null when the animator is not a humanoid.
+        private Transform _head;
+
         // 1 while the body stands still, 0 while it moves, eased between: how much of the idle
         // pose's sole lift the registry takes off (SoleLift).
         private float _idleWeight = 1f;
@@ -206,6 +207,14 @@ namespace Ironfront.Net.Unity.Client
         /// and the registry must stop writing its transform.
         /// </summary>
         public bool IsRagdollPosed => _ragdoll != null && _ragdoll.IsActive;
+
+        /// <summary>
+        /// How far the head bone stands over this body's root in the pose last drawn: what a swimmer
+        /// is placed by (<see cref="SwimPresentation.RootHeight"/>).
+        /// </summary>
+        internal float HeadAboveRoot => _head != null
+            ? _head.position.y - transform.position.y
+            : SwimPresentation.IdleHeadAboveRoot;
 
         /// <summary>The body's animator, which a corpse copies the skeleton and pose from.</summary>
         internal Animator BodyAnimator => _animator;
@@ -325,6 +334,7 @@ namespace Ironfront.Net.Unity.Client
             ReportUnknownParameters();
 
             _teamRenderer = GetComponentInChildren<SkinnedMeshRenderer>(true);
+            if (_animator != null && _animator.isHuman) _head = _animator.GetBoneTransform(HumanBodyBones.Head);
             CreateFallbackMuzzleFlash();
             _presentation = NetClientBindings.ResolveRemoteActorPresentation(gameObject);
 
@@ -451,6 +461,8 @@ namespace Ironfront.Net.Unity.Client
             _corpseThisLife = false;
             _planarVelocity = Vector3.zero;
             _idleWeight = 1f;
+            if (_weaponStowed && !_hiddenForDeath) _presentation?.SetWeaponShown(true);
+            _weaponStowed = false;
 
             ActorId          = actorId;
             _state           = default;
@@ -482,6 +494,7 @@ namespace Ironfront.Net.Unity.Client
             _animator.SetFloat(_hashMovementY, 0f);
             _seatAnimation = 0;
             _animator.SetInteger(_hashSeatedType, 0);
+            SwimPresentation.Apply(_animator, swimming: false, moving: false);
         }
 
         /// <summary>
@@ -528,6 +541,7 @@ namespace Ironfront.Net.Unity.Client
                 _hiddenForDeath = false;
                 _corpseThisLife = false;
                 _presentation?.SetVisible(true);
+                if (_weaponStowed) _presentation?.SetWeaponShown(false);
             }
 
             // A death the snapshot reports before S_DEATH -- the event is reliable, the snapshot
@@ -566,15 +580,37 @@ namespace Ironfront.Net.Unity.Client
                 _animator.SetFloat(_hashMovementY, _locomotion.MovementY);
 
                 // Read from the wire, not guessed from the body's height against a water plane:
-                // the server owns whether an actor is in water (it is the same bit the drowning
-                // clock runs off), and a client re-deciding it locally would put two answers on
-                // one question for the sake of an animation.
-                _animator.SetBool(_hashSwim,        _state.IsInWater);
-                _animator.SetBool(_hashSwimForward, _state.IsInWater && _locomotion.IsMoving);
+                // the server owns whether an actor is in water (the same test its breath drains
+                // on), and a client re-deciding it locally would put two answers on one question
+                // for the sake of an animation. After `ragdolled` above, which it overrides for a
+                // swimmer: the swim states sit behind it on the Ragdoll Layer.
+                SwimPresentation.Apply(_animator, IsSwimming, _locomotion.IsMoving, ragdolledOtherwise: _state.IsRagdoll);
             }
 
-            ApplyRagdoll(_state.IsRagdoll);
+            // A swimmer is drawn swimming, not lying: a bot swims on the server as a buoyant ragdoll,
+            // and the original's swim animation at the surface is what that looks like here.
+            ApplyRagdoll(_state.IsRagdoll && !IsSwimming);
+            StowWeaponForSwim(IsSwimming);
         }
+
+        /// <summary>
+        /// Puts this body's gun away while it swims and brings it back on land, as the original
+        /// does in water (<c>Actor.UpdateSwimWeapon</c> does it for the local player).
+        /// </summary>
+        private void StowWeaponForSwim(bool swimming)
+        {
+            if (swimming == _weaponStowed) return;
+            _weaponStowed = swimming;
+
+            // A body hidden for its death shows nothing, gun included, and SetVisible brings both back.
+            if (!_hiddenForDeath) _presentation?.SetWeaponShown(!swimming);
+        }
+
+        /// <summary>
+        /// Whether this body is swimming: alive, in water and not in a seat. Drawn in the original's
+        /// swim animation at the surface (<see cref="SwimPresentation"/>), a bot included.
+        /// </summary>
+        public bool IsSwimming => _hasState && SwimPresentation.Swims(_state.IsAlive, _state.IsInWater, _state.IsSeated);
 
         /// <summary>
         /// Keeps a body lying as a runtime ragdoll with the server: it floats while in water, and a
@@ -794,6 +830,7 @@ namespace Ironfront.Net.Unity.Client
                             : transform)
                     : null;
                 if (_hiddenForDeath) _presentation?.SetVisible(false);
+                else if (_weaponStowed) _presentation?.SetWeaponShown(false);
                 return;
             }
 

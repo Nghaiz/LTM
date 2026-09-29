@@ -689,68 +689,106 @@ namespace Ironfront.Net.Unity.Server
         /// would be a vehicle pad that quietly stopped working.
         /// </para>
         /// </remarks>
-        /// <summary>Per-submersion drowning state for this actor. X-90.</summary>
-        private readonly DrowningClock _drowning = new DrowningClock();
+        /// <summary>How much breath this actor has left in water. Owner ruling 2026-09-29.</summary>
+        private readonly BreathClock _breath = new BreathClock();
 
         /// <summary>
-        /// <c>Time.time</c> at the previous drowning observation; negative before the first.
+        /// <c>Time.time</c> at the previous breath observation; negative before the first.
         /// </summary>
-        private float _lastDrowningObservationAt = -1f;
+        private float _lastBreathObservationAt = -1f;
 
         /// <summary>
-        /// Drowns an actor whose head has been under water past the limit. X-90.
+        /// Whether this actor is in water, by the test its own movement uses.
+        /// </summary>
+        /// <remarks>
+        /// <b>A player's is its capsule's; a bot's is the game's own.</b> A player swims by
+        /// <c>MovementCore</c>, whose test is the capsule centre plus half a metre under the surface,
+        /// and its client runs the same test to swim and to draw its breath -- so the server asks it
+        /// too, rather than <c>Actor.inWater</c>, which samples the posed spine and would disagree with
+        /// the swim at the waterline. A bot swims the original's way, by ragdoll, and
+        /// <c>Actor.inWater</c> is that swim's own test.
+        /// </remarks>
+        internal bool InWater => Movement != null
+            ? MovementCore.IsInWater(Movement.State.Position.Y)
+            : Source != null && Source.IsInWater;
+
+        /// <summary>
+        /// Drains this actor's breath while it is in water and hurts it once the breath is gone.
         /// </summary>
         /// <remarks>
         /// <para>
+        /// <b>Replaces the X-90 drowning clock</b> (owner ruling 2026-09-29): eight seconds with the
+        /// head under no longer kills. Players and bots swim, and the breath -- which drains at the
+        /// surface too, so nobody can sit in open water -- is what limits them. See
+        /// <see cref="BreathClock"/> for the numbers.
+        /// </para>
+        /// <para>
         /// <b>Driven from <see cref="Capture"/> for the reason <see cref="ObserveLifeEdge"/>
         /// is</b>: that method already runs once per snapshot tick per REGISTERED actor, with no
-        /// interest or LOD filter, so a bot nobody can see drowns exactly as a watched player
-        /// does. A second per-actor sweep elsewhere would be a second place to remember.
+        /// interest or LOD filter, so a bot nobody can see runs out of breath exactly as a watched
+        /// player does. A second per-actor sweep elsewhere would be a second place to remember.
         /// </para>
         /// <para>
         /// <b>Elapsed time is measured, not assumed.</b> <c>Capture</c> carries no delta and is
         /// driven from the netcode's own accumulator rather than the frame loop, so reading
         /// <c>Time.deltaTime</c> here would be correct only by coincidence -- the mistake
-        /// <c>VehicleBurnClock</c>'s remark already records for the burn countdown. Measuring
-        /// <c>Time.time</c> between observations is right at any calling rate.
-        /// </para>
-        /// <para>
-        /// <b>A dead actor resets rather than accumulates.</b> Otherwise a corpse settling under
-        /// water would arm the clock, and the respawn that follows would arrive already drowning.
-        /// </para>
-        /// <para>
-        /// <b>The attacker is null on purpose.</b> <c>ServerCombatEvents.ReportDeath</c> reserves
-        /// null for a real environmental death, which is what this is: the killfeed says the
-        /// world, and <c>MatchScoreTally</c> credits nobody.
+        /// <c>VehicleBurnClock</c>'s remark already records for the burn countdown.
         /// </para>
         /// </remarks>
-        internal void ObserveDrowning()
+        internal void ObserveBreath()
         {
             if (!NetContext.IsServer) return;
 
             float now = Time.time;
-            float elapsed = _lastDrowningObservationAt < 0f ? 0f : now - _lastDrowningObservationAt;
-            _lastDrowningObservationAt = now;
+            float elapsed = _lastBreathObservationAt < 0f ? 0f : now - _lastBreathObservationAt;
+            _lastBreathObservationAt = now;
 
             IGameplayActorSource source = Source;
             if (source == null || !source.Exists) return;
 
+            ApplyBreath(InWater, elapsed);
+        }
+
+        /// <summary>
+        /// Advances the breath by <paramref name="elapsed"/> seconds in or out of water, deals the
+        /// damage an empty breath costs, and kills the actor when its health runs out.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A dead actor breathes fully.</b> Otherwise a corpse settling in water would drain the
+        /// breath, and the respawn that follows would arrive already drowning.
+        /// </para>
+        /// <para>
+        /// <b>The body dies here, the way every other server kill does it</b>
+        /// (<c>ServerActorDamageSink</c>, <c>ServerPlayer.KillForFallingOutOfTheWorld</c>):
+        /// reporting a death is not dying. The attacker is null on purpose --
+        /// <c>ServerCombatEvents.ReportDeath</c> reserves null for a real environmental death, so the
+        /// killfeed says the world and <c>MatchScoreTally</c> credits nobody.
+        /// </para>
+        /// </remarks>
+        internal void ApplyBreath(bool inWater, float elapsed)
+        {
             if (!IsAlive)
             {
-                _drowning.Reset();
+                _breath.Reset();
                 return;
             }
 
-            if (!_drowning.Tick(source.IsSubmerged, elapsed)) return;
+            float damage = _breath.Tick(inWater, elapsed);
+            if (damage <= 0f) return;
 
-            Debug.Log($"[net] actor {_actorId} ({(IsClaimed ? "player" : "bot")}) drowned after "
-                      + $"{_drowning.Limit:0.#}s under water: {source.DescribeSubmersion()}");
+            float health = Health - damage;
+            if (health > 0f)
+            {
+                Health = health;
+                return;
+            }
 
-            // The body dies HERE, the way every other server kill does it (ServerActorDamageSink,
-            // ServerPlayer.KillForFallingOutOfTheWorld): reporting a death is not dying. Until
-            // 2026-09-27 this only reported, so a drowned body stayed alive -- it kept sinking,
-            // TryRespawn refused every deploy the dead player sent because the body was "alive",
-            // and the player only came back when the wire floor killed it ~95 s later.
+            IGameplayActorSource source = Source;
+            Debug.Log($"[net] actor {_actorId} ({(IsClaimed ? "player" : "bot")}) drowned: out of breath "
+                      + $"after {BreathClock.CapacitySeconds:0}s in water"
+                      + (source != null ? ": " + source.DescribeSubmersion() : "."));
+
             Health = 0f;
             IsAlive = false;
 
@@ -836,7 +874,7 @@ namespace Ironfront.Net.Unity.Server
             // per REGISTERED actor -- not per replicated one -- and already reads IsAlive.
             // See ObserveLifeEdge for why that distinction is the whole guarantee.
             ObserveLifeEdge();
-            ObserveDrowning();
+            ObserveBreath();
 
             Vec3 position = Movement != null
                 ? Movement.State.Position
@@ -914,7 +952,7 @@ namespace Ironfront.Net.Unity.Server
             if (IsAlive && Source != null && Source.IsRagdolledAlive) flags |= ActorStateFlags.IsRagdoll;
 
             // The bit has been decoded, and drawn, since the flags byte was defined; nothing set it.
-            if (Source != null && Source.IsInWater) flags |= ActorStateFlags.IsInWater;
+            if (InWater) flags |= ActorStateFlags.IsInWater;
 
             if (IsAiming) flags |= ActorStateFlags.IsAiming;
 

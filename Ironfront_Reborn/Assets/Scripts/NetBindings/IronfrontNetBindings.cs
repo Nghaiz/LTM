@@ -142,6 +142,13 @@ namespace Ironfront.Net.Unity.Bindings
                 else _weapon.Hide();
             }
 
+            public void SetWeaponShown(bool shown)
+            {
+                if (_weapon == null) return;
+                if (shown) _weapon.Show();
+                else _weapon.Hide();
+            }
+
             public IGameplayWeapon EquipWeapon(byte networkId, Transform weaponParent)
             {
                 if (_weaponId == networkId && _weapon != null) return _weapon;
@@ -639,23 +646,6 @@ namespace Ironfront.Net.Unity.Bindings
         private const float HeadCrownMetres = 0.2f;
 
         /// <inheritdoc/>
-        /// <remarks>
-        /// <para>
-        /// <b>The crown of the head, not <c>Actor.inWater</c>.</b> <c>inWater</c> samples the spine
-        /// plus half a metre, and it means "deep enough that the shipped body swims", not "the head
-        /// is under": a bot floating on its back as a ragdoll keeps that point under the surface
-        /// with its head in the air. Measured 2026-09-27 on lane-B: a floating bot drowned with
-        /// <c>sampleDepth=0.29m headDepth=0.00m</c>, and one Island match drowned the same bot three
-        /// times running. The drowning rule is the owner's own, and what it names is the head.
-        /// </para>
-        /// <para>
-        /// A ragdoll's head is its physical bone, since that is what floats; a standing body's is the
-        /// animated one. A rig with no Head bone falls back to the shipped sample.
-        /// </para>
-        /// </remarks>
-        public bool IsSubmerged => WaterLevel.InWater(CrownPosition());
-
-        /// <inheritdoc/>
         public bool IsInEnclosedSeat => _actor != null && _actor.IsSeated() && _actor.seat.enclosed;
 
         /// <inheritdoc/>
@@ -732,8 +722,8 @@ namespace Ironfront.Net.Unity.Bindings
         {
             if (_actor == null) return "no body";
 
-            // The shipped swim sample (Actor.inWater's spine + 0.5 m) beside the crown this rule
-            // actually reads, so a line can show a swimmer whose sample is under and whose head is not.
+            // The shipped swim sample (Actor.inWater's spine + 0.5 m) beside the crown, so a line
+            // can show a swimmer whose sample is under and whose head is not.
             Vector3 crown = CrownPosition();
             Vector3 sample = _actor.CenterPosition() + Vector3.up * 0.5f;
             Vector3 feet = _actor.transform.position;

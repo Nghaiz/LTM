@@ -218,12 +218,23 @@ namespace Ironfront.Net.Unity.Client
                         bool crouching = (sample.State.StateFlags & ActorStateFlags.IsCrouching) != 0;
                         y -= MovementCore.HeightFor(crouching) * 0.5f;
                     }
+                    Quaternion facing = Quaternion.Euler(0f, sample.YawDegrees, 0f);
+                    if (Swims(in sample.State) && !float.IsNegativeInfinity(MovementCore.WaterHeight))
+                    {
+                        // At the surface, by its head: a player's capsule and a bot's buoyant
+                        // ragdoll both float there, and the pose last drawn says how far under the
+                        // head the root has to be (SwimPresentation.RootHeight).
+                        y = SwimPresentation.RootHeight(
+                            MovementCore.WaterHeight,
+                            lying != null ? lying.HeadAboveRoot : SwimPresentation.IdleHeadAboveRoot);
+                        if ((sample.State.StateFlags & ActorStateFlags.IsRagdoll) != 0 && lying != null)
+                            facing = SwimmingHeading(pair.Value.rotation, lying.PlanarVelocity, Time.deltaTime);
+                    }
                     // On the ground, with the soles on it rather than the origin: the idle pose
                     // stands its feet above the body's origin (RemoteActorView.SoleLift).
-                    if (StandsOnGround(in sample.State, human) && TryGroundUnder(p.X, y, p.Z, out float ground))
+                    else if (StandsOnGround(in sample.State, human) && TryGroundUnder(p.X, y, p.Z, out float ground))
                         y = ground - (lying != null ? lying.SoleLift : RemoteActorView.IdleSoleLiftMetres);
-                    pair.Value.SetPositionAndRotation(
-                        new Vector3(p.X, y, p.Z), Quaternion.Euler(0f, sample.YawDegrees, 0f));
+                    pair.Value.SetPositionAndRotation(new Vector3(p.X, y, p.Z), facing);
                 }
 
                 // Everything past position and yaw -- pitch, stance, aim, ragdoll, weapon, team
@@ -255,6 +266,32 @@ namespace Ironfront.Net.Unity.Client
                     pair.Value, view.Team, view.IsAlive, IsHuman(pair.Key), seatedIn != null,
                     localTeam, hasLocalBody, localPosition);
             }
+        }
+
+        /// <summary>
+        /// Whether a body in <paramref name="state"/> is swimming: alive, in water, not seated.
+        /// </summary>
+        internal static bool Swims(in ActorSnapshotEntry state)
+        {
+            ActorStateFlags flags = state.StateFlags;
+            return SwimPresentation.Swims(
+                (flags & ActorStateFlags.IsAlive) != 0,
+                (flags & ActorStateFlags.IsInWater) != 0,
+                (flags & ActorStateFlags.IsSeated) != 0);
+        }
+
+        /// <summary>How fast a swimming bot turns to face where it is going, degrees per second.</summary>
+        internal const float SwimTurnDegreesPerSecond = 240f;
+
+        /// <summary>
+        /// A ragdoll-swimming bot's heading: toward where it is moving. The server's yaw for a body
+        /// lying as a ragdoll is the one it had when it fell, so a bot drawn by it swims sideways.
+        /// </summary>
+        internal static Quaternion SwimmingHeading(Quaternion current, Vector3 planarVelocity, float deltaSeconds)
+        {
+            if (planarVelocity.sqrMagnitude < 0.09f) return current;
+            Quaternion toward = Quaternion.LookRotation(new Vector3(planarVelocity.x, 0f, planarVelocity.z), Vector3.up);
+            return Quaternion.RotateTowards(current, toward, SwimTurnDegreesPerSecond * deltaSeconds);
         }
 
         /// <summary>How far above a body's feet the ground under it is looked for.</summary>
