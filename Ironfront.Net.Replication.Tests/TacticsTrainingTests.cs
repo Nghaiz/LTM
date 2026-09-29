@@ -38,12 +38,16 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal((a.Winner, a.Score0, a.Score1, a.Seconds), (b.Winner, b.Score0, b.Score1, b.Seconds));
         }
 
+        /// <summary>A handful of rounds, for the claims that hold on any set: CI plays these, not thousands.</summary>
+        private static List<MatchSpec> Few(ulong seed)
+            => Evaluation.Rounds(TrainingPlan.RealMaps(), new[] { 8, 16 }, 1, seed);
+
         [Fact]
         public void TheOriginalAgainstItself_IsExactlyEven()
         {
             // Every round is played once from each side on the same seed, so a map's lopsided start
             // cancels; with the same policy on both sides the two halves must mirror exactly.
-            EvaluationScore mirror = Evaluation.Score(TrainingPlan.TestRounds(Seed), () => new OriginalPolicy(), () => new OriginalPolicy());
+            EvaluationScore mirror = Evaluation.Score(Few(Seed), () => new OriginalPolicy(), () => new OriginalPolicy());
             Assert.Equal(0f, mirror.MeanMargin, 6);
             Assert.Equal(mirror.Wins, mirror.Losses);
         }
@@ -51,8 +55,9 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void ATrainingRunReplaysFromItsSeed()
         {
-            TrainingRun first = ProfileTrainer.Train(new TacticsProfile(), Seed, generations: 2, population: 4);
-            TrainingRun second = ProfileTrainer.Train(new TacticsProfile(), Seed, generations: 2, population: 4);
+            var sets = new TrainingSets(Few(Seed), Few(Seed + 1), Few(Seed + 2));
+            TrainingRun first = ProfileTrainer.Train(new TacticsProfile(), Seed, 2, 4, sets);
+            TrainingRun second = ProfileTrainer.Train(new TacticsProfile(), Seed, 2, 4, sets);
 
             Assert.Equal(ProfileVector.From(first.Trained), ProfileVector.From(second.Trained));
             Assert.Equal(first.TrainedTrainFitness, second.TrainedTrainFitness);

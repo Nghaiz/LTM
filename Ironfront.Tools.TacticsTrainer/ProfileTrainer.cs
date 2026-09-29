@@ -59,10 +59,17 @@ namespace Ironfront.Tools.TacticsTrainer
         public const float SigmaDecay = 0.97f;
 
         public static TrainingRun Train(TacticsProfile start, ulong seed, int generations, int population, Action<string>? log = null)
+            => Train(start, seed, generations, population, TrainingSets.For(seed), log);
+
+        /// <summary>
+        /// A run on the given rounds: the report's run uses <see cref="TrainingSets.For"/>; a test
+        /// that only asks whether a run replays passes a handful, so CI does not play thousands.
+        /// </summary>
+        public static TrainingRun Train(TacticsProfile start, ulong seed, int generations, int population, TrainingSets sets, Action<string>? log = null)
         {
             if (population < 2 || population % 2 != 0) throw new ArgumentException("population must be even and at least 2", nameof(population));
 
-            List<MatchSpec> train = TrainingPlan.TrainRounds(seed);
+            List<MatchSpec> train = sets.Train;
             var rng = SimRandom.For(seed, 0xE5);
             int n = ProfileVector.Length;
             int parents = population / 2;
@@ -129,7 +136,7 @@ namespace Ironfront.Tools.TacticsTrainer
             // the best ever seen and the recombined mean are judged afresh on the validation rounds.
             finalists.Add(best);
             finalists.Add(mean);
-            List<MatchSpec> validation = TrainingPlan.ValidationRounds(seed);
+            List<MatchSpec> validation = sets.Validation;
             float[] chosen = best;
             float chosenValidation = float.NegativeInfinity;
             foreach (float[] finalist in finalists)
@@ -145,7 +152,7 @@ namespace Ironfront.Tools.TacticsTrainer
                 $"validation: {finalists.Count} finalists, chosen scores {chosenValidation:+0.000;-0.000}"));
 
             TacticsProfile trained = ProfileVector.To(chosen);
-            List<MatchSpec> test = TrainingPlan.TestRounds(seed);
+            List<MatchSpec> test = sets.Test;
             var run = new TrainingRun
             {
                 Seed = seed,

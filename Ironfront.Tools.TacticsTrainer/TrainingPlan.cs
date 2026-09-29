@@ -13,6 +13,25 @@ namespace Ironfront.Tools.TacticsTrainer
     /// -0.20 on its training rounds and +0.09 on its test rounds: too few rounds, and the tuner
     /// learned the maps it was shown.
     /// </remarks>
+    /// <summary>The three sets of rounds a run uses: to search on, to choose on, to report on.</summary>
+    public sealed class TrainingSets
+    {
+        public TrainingSets(List<MatchSpec> train, List<MatchSpec> validation, List<MatchSpec> test)
+        {
+            Train = train;
+            Validation = validation;
+            Test = test;
+        }
+
+        public List<MatchSpec> Train { get; }
+        public List<MatchSpec> Validation { get; }
+        public List<MatchSpec> Test { get; }
+
+        /// <summary>The report's sets: <see cref="TrainingPlan"/>'s 320 rounds each, under <paramref name="seed"/>.</summary>
+        public static TrainingSets For(ulong seed)
+            => new TrainingSets(TrainingPlan.TrainRounds(seed), TrainingPlan.ValidationRounds(seed), TrainingPlan.TestRounds(seed));
+    }
+
     public static class TrainingPlan
     {
         /// <summary>
