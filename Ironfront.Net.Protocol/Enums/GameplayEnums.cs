@@ -311,6 +311,25 @@ namespace Ironfront.Net.Protocol
     }
 
     /// <summary>
+    /// Who may hear an in-match chat line: the <c>u8 channel</c> in <c>C_CHAT</c> and
+    /// <c>S_CHAT</c>. protocol-spec.md section 4.12; new in v12 (owner request 2026-09-29).
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="MspChatChannel"/>: that is the master server's lobby chat, a different
+    /// protocol with its own channels. A value this enum does not define is refused as malformed
+    /// by <see cref="ChatTextMessage"/> rather than read as <see cref="All"/>, so a later channel
+    /// can never reach an older peer as a broadcast.
+    /// </remarks>
+    public enum ChatChannel : byte
+    {
+        /// <summary>Everybody in the match, both sides.</summary>
+        All  = 0,
+
+        /// <summary>The speaker's own side only. The server enforces it; the client only asks.</summary>
+        Team = 1,
+    }
+
+    /// <summary>
     /// Shared error codes returned by MSP responses. protocol-spec.md section 13.
     /// </summary>
     public enum ErrorCode : ushort

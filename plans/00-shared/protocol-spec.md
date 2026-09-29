@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront: Reborn
 
-**Version: 11.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 11`
+**Version: 12.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 12`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 11;
+    public const byte   PROTOCOL_VERSION  = 12;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -1063,14 +1063,29 @@ route first and the sender second, in that order.
 
 ```
 C_CHAT (client → server), channel 2
+u8   channel              ChatChannel: 0 = All, 1 = Team            (v12)
 u8   textLength           1..120 bytes
 utf8 text                 textLength bytes, not NUL-terminated
 
 S_CHAT (server → client), channel 2
 u8   actorId              who said it
+u8   channel              ChatChannel, as the speaker asked          (v12)
 u8   textLength           1..120 bytes
 utf8 text                 textLength bytes, not NUL-terminated
 ```
+
+**The channel says who may hear the line (v12, team chat).** The client *asks* for a channel; the
+server decides the audience with `ChatAudience`, from the teams it gave the speaker's actor and each
+listener's — so a client can reach its own side and never anybody else's. `All` goes to every
+connection. `Team` goes to the speaker and to connections whose actor is on the speaker's side, and
+to nobody else when the speaker has no side yet. The filter is per recipient on the server: a team
+line is never sent to an enemy's machine to be hidden there, because a line that arrives has leaked
+whether or not the client draws it. `S_CHAT` repeats the channel so a receiver can mark a team line
+as one.
+
+**An unknown channel is malformed, in both directions and in both writers** — never read as `All`.
+A decoder that widened an unknown channel to everyone would be the one place a team line could leak,
+so a channel added later reaches an older peer as a refusal, not as a broadcast.
 
 **The client never states who it is.** `C_CHAT` carries no `actorId` and must not: the server
 already knows which session the datagram arrived on, and a self-declared id is a client asserting it
@@ -1089,7 +1104,7 @@ or enlarges a line, control characters that split it, bidi overrides that re-ord
 it. The server cleans what it receives before re-broadcasting; the client cleans again on arrival,
 because a client cannot verify the game server.
 
-**120 bytes, refused rather than truncated.** Worst case `2 + 120 = 122 B`, so a chat line can never
+**120 bytes, refused rather than truncated.** Worst case `3 + 120 = 123 B`, so a chat line can never
 be the message that fragments. A sender clips at 60 *characters*, where a boundary can be found
 without splitting a multi-byte code point; a line that still exceeds 120 bytes after that — 60
 characters of Vietnamese will — is dropped and counted, not cut.
@@ -1688,6 +1703,7 @@ Added at v3.0.0:
 | **11.0.0** | 2026-09-25 | the replication track | **A reserved weapon-state bit gains delayed-release semantics.** `weaponStateFlags` bit 1 is now `PendingRelease`: one throwable use has been accepted and reserved but has not reached its authored release tick. The five-byte weapon field is unchanged in width, but snapshots now distinguish a genuinely ready `1/N` state from a `1/N` object already committed to an in-progress throw. | **Yes** — the byte width is unchanged, but an unchanged bit pattern gains mandatory gameplay meaning. A v10 client ignores bit 1 and can predict a second use from the same held object while a v11 server is awaiting release; peers must refuse the mismatch. | (this change) |
 | **11.0.2** | 2026-09-28 | the master-server track | **A room's bot count reaches its game server.** New MSP opcode `GS_ROOM_ASSIGNED` (0x0107, M→G, § 11) carrying `{serverId, roomId, mapId, botsPerTeam}`, sent with every ticket the master issues; `ROOM_CREATE_REQ.botCount` is now defined as bots **per team** (owner ruling 2026-09-28) and bounded by the new `MAX_BOTS_PER_TEAM` = 16, with `DEFAULT_BOTS_PER_TEAM` = 16 for an empty field and for matchmaking (§ 1). Until now the field was validated, sent and stored, and read by no game server: every match released the prefab's 16 per team, so a room created with 0 bots got 32 | **No** — nothing on the UDP wire moved. MSP bodies are JSON and this is a new frame on the master ↔ game-server link, which a game server that predates it ignores (it keeps its prefab roster); the precedent is `RoomTeamRequest` (0x0019), which § 11 records the same way | (this change) |
 | **11.0.3** | 2026-09-28 | the replication track | **A living body can lie as a ragdoll, and the water bit has a producer.** `stateFlags` bit 6 (IsRagdoll) is now also set **with IsAlive** for a bot knocked over or swimming — the original game swims a body as a buoyant active ragdoll — and while it is set the entry's position is the server ragdoll's pelvis, because the actor's transform stays where it fell. Bit 5 (IsInWater) is set from `Actor.inWater`; it was decoded and drawn from the start and never produced. Hitscan boxes for such a body come from its physical ragdoll (§ 4.3) | **No** — no byte moved, and the combination IsAlive + IsRagdoll decodes on every shipped client: `RemoteActorVisualState` already carries both, `CanPlayCosmetics` already goes false on it, and `RemoteActorView` already turns the ragdoll on at the rising edge and back off at the falling one. A client older than this change therefore draws the knocked-over bot as a limp ragdoll that neither follows the server nor floats, and restores it when the bot gets up — a degraded picture, never a wrong game state — which is the § 15 test for leaving `PROTOCOL_VERSION` alone | (this change) |
+| **12.0.0** | 2026-09-29 | the client track | **Team chat.** `C_CHAT` and `S_CHAT` gain a `u8 channel` (`ChatChannel`: `All` = 0, `Team` = 1) ahead of `textLength` (§ 4.12); worst-case bodies grow by one byte, to 122 and 123 B. The server sends a `Team` line only to the speaker and to connections whose actor is on the speaker's side (`ChatAudience`), filtered per recipient so an enemy's machine never receives it. An unknown channel is malformed in both directions rather than read as `All`. Owner request 2026-09-29: *Shift+Enter opens team chat, and enemies must never see it* | **Yes** — the channel sits where a v11 decoder expects `textLength`: a v11 client would read a team line's `1` as a one-byte line and drop the rest, and a v11 server would take every v12 line's channel for its length. The peers must refuse the mismatch (`CONNECT_DENIED` code 2, and the master's 1004 at login), not guess | (this change) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with
