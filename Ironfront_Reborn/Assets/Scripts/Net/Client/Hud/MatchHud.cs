@@ -96,6 +96,10 @@ namespace Ironfront.Net.Unity.Client.Hud
                  + "handed; this component reads the palette and passes the colours on.")]
         [SerializeField] private ScoreboardView _scoreboard;
 
+        [Tooltip("What the open board hides: the killfeed and the team readout, which would "
+                 + "otherwise show through its backdrop and crowd its header.")]
+        [SerializeField] private CanvasGroup[] _hiddenUnderScoreboard = new CanvasGroup[2];
+
         /// <summary>Set by the Deploy control, cleared by the read. See the seam's remark.</summary>
         private bool _deployPressed;
 
@@ -114,13 +118,17 @@ namespace Ironfront.Net.Unity.Client.Hud
         private int _pendingReceived;
 
         /// <summary>
-        /// Scratch for <see cref="ReconcileKillfeed"/>: which rows a push kept. Sized in
-        /// <see cref="Awake"/> from the rows actually authored, which the gate holds at
-        /// <see cref="KillfeedRows"/> but a stale prefab might not.
+        /// Scratch for <see cref="ReconcileKillfeed"/>, one entry per row: the kill it shows, what
+        /// it costs to reuse, and whether a push kept it. Sized in <see cref="Awake"/> from the
+        /// rows actually authored, which the gate holds at <see cref="KillfeedRows"/> but a stale
+        /// prefab might not.
         /// </summary>
+        private long[] _rowSequences = System.Array.Empty<long>();
+        private float[] _rowCosts = System.Array.Empty<float>();
         private bool[] _rowKept = System.Array.Empty<bool>();
 
-        /// <summary>Scratch for <see cref="ReconcileKillfeed"/>: the row each line is drawn in.</summary>
+        /// <summary>Scratch for <see cref="ReconcileKillfeed"/>, one entry per line.</summary>
+        private readonly long[] _lineSequences = new long[KillfeedRows];
         private readonly int[] _lineRow = new int[KillfeedRows];
 
         /// <summary>Whether the board is up, so a repeated call costs nothing.</summary>
@@ -159,7 +167,10 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         private void Awake()
         {
-            _rowKept = new bool[_killfeedRows != null ? _killfeedRows.Length : 0];
+            int rows = _killfeedRows != null ? _killfeedRows.Length : 0;
+            _rowSequences = new long[rows];
+            _rowCosts = new float[rows];
+            _rowKept = new bool[rows];
 
             if (!NetClientPresenterGuard.IsPresentable)
             {
@@ -296,56 +307,30 @@ namespace Ironfront.Net.Unity.Client.Hud
         }
 
         /// <summary>
-        /// Matches a finished push to rows: a kill still on screen keeps its row, a new kill takes
-        /// a free one, and a row whose kill left the push fades out.
+        /// Matches a finished push to rows and draws it: a kill still on screen keeps its row, a
+        /// new kill takes a free one, and a row whose kill left the push fades out. The rules are
+        /// <see cref="Ironfront.Net.Replication.Client.KillfeedRowAssignment"/>'s, tested there.
         /// </summary>
-        /// <remarks>
-        /// A new kill prefers a free row, then the faintest row already fading, then -- when the
-        /// feed was full -- the row of the kill the model just pushed out, which is leaving anyway.
-        /// That last case cuts the oldest line instead of fading it, which is what a full feed
-        /// should do: the new kill is the news.
-        /// </remarks>
         private void ReconcileKillfeed()
         {
             int count = _pendingCount;
             _pendingCount = -1;
 
-            System.Array.Clear(_rowKept, 0, _rowKept.Length);
-
-            for (int line = 0; line < count; line++)
+            for (int row = 0; row < _killfeedRows.Length; row++)
             {
-                _lineRow[line] = -1;
-                if (!_pendingHas[line]) continue;
-
-                long sequence = _pendingLines[line].Sequence;
-                for (int row = 0; row < _killfeedRows.Length; row++)
-                {
-                    KillfeedRowView view = _killfeedRows[row];
-                    if (_rowKept[row] || view == null || view.IsFree || view.Sequence != sequence) continue;
-
-                    _rowKept[row] = true;
-                    _lineRow[line] = row;
-                    break;
-                }
+                KillfeedRowView view = _killfeedRows[row];
+                _rowSequences[row] = view != null ? view.Sequence : -1;
+                _rowCosts[row] = view != null ? ReuseCost(view) : float.MaxValue;
             }
 
             for (int line = 0; line < count; line++)
-            {
-                if (!_pendingHas[line] || _lineRow[line] >= 0) continue;
+                _lineSequences[line] = _pendingHas[line] ? _pendingLines[line].Sequence : 0;
 
-                int best = -1;
-                for (int row = 0; row < _killfeedRows.Length; row++)
-                {
-                    if (_rowKept[row] || _killfeedRows[row] == null) continue;
-                    if (best < 0 || Claimability(_killfeedRows[row]) < Claimability(_killfeedRows[best]))
-                        best = row;
-                }
-
-                if (best < 0) continue;
-
-                _rowKept[best] = true;
-                _lineRow[line] = best;
-            }
+            Ironfront.Net.Replication.Client.KillfeedRowAssignment.Assign(
+                _rowSequences, _rowCosts,
+                new System.ReadOnlySpan<long>(_lineSequences, 0, count),
+                new System.Span<int>(_lineRow, 0, count),
+                _rowKept);
 
             for (int line = 0; line < count; line++)
             {
@@ -363,8 +348,11 @@ namespace Ironfront.Net.Unity.Client.Hud
             _pendingReceived = 0;
         }
 
-        /// <summary>Lower is better to reuse: free, then fading, then still showing a kill.</summary>
-        private static float Claimability(KillfeedRowView row)
+        /// <summary>
+        /// What a row costs to hand to a new kill: a free row nothing, a fading one its opacity,
+        /// one still showing a kill the most -- that kill is the one the model just pushed out.
+        /// </summary>
+        private static float ReuseCost(KillfeedRowView row)
         {
             if (row.IsFree) return 0f;
             if (row.IsLeaving) return 1f + row.Opacity;
@@ -434,6 +422,11 @@ namespace Ironfront.Net.Unity.Client.Hud
             _scoreboard.SetVisible(visible);
             if (visible)
                 _scoreboard.SetPalette(TeamColour(TeamId.Team0), TeamColour(TeamId.Team1));
+
+            if (_hiddenUnderScoreboard == null) return;
+
+            for (int i = 0; i < _hiddenUnderScoreboard.Length; i++)
+                if (_hiddenUnderScoreboard[i] != null) _hiddenUnderScoreboard[i].alpha = visible ? 0f : 1f;
         }
 
         /// <inheritdoc/>

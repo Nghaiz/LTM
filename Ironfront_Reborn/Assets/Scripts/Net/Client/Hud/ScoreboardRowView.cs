@@ -52,8 +52,19 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// <summary>Whether the template was authored whole. A clone of a broken one is not used.</summary>
         public bool IsComplete { get; private set; }
 
-        private void Awake()
+        private bool _initialized;
+
+        private void Awake() => Initialize();
+
+        /// <summary>
+        /// Resolves the row's parts. <c>Awake</c> calls it, and so does the column right after
+        /// cloning a row, because edit mode -- the capture tool -- runs no <c>Awake</c>.
+        /// </summary>
+        public void Initialize()
         {
+            if (_initialized) return;
+            _initialized = true;
+
             _rect = (RectTransform)transform;
             _group = GetComponent<CanvasGroup>();
 
@@ -112,7 +123,7 @@ namespace Ironfront.Net.Unity.Client.Hud
             _kills.fontSize = fontSize;
             _deaths.fontSize = fontSize;
             _ratio.fontSize = small + 1;
-            _botText.fontSize = Mathf.Max(9, fontSize - 7);
+            _botText.fontSize = Mathf.Max(10, fontSize - 5);
 
             float mark = Mathf.Min(height - 8f, 18f);
             ((RectTransform)_star.transform).sizeDelta = new Vector2(mark, mark);

@@ -140,6 +140,11 @@ namespace Ironfront.Net.Unity.EditorTools
                 Assign(so, "_deployTimerText", timer);
                 Assign(so, "_deployButton", deployButton);
                 Assign(so, "_scoreboard", scoreboard);
+                AssignArray(so, "_hiddenUnderScoreboard", new Object[]
+                {
+                    killfeed[0].transform.parent.GetComponent<CanvasGroup>(),
+                    team.transform.parent.GetComponent<CanvasGroup>(),
+                });
                 so.ApplyModifiedPropertiesWithoutUndo();
 
                 // The authored state is what a reader of the prefab sees, and what the offline
@@ -182,7 +187,8 @@ namespace Ironfront.Net.Unity.EditorTools
         {
             // Backdrop, the same way BuildDeployScreen and BuildScoreboard back their own text —
             // a bare Text over the killfeed and minimap underneath it was unreadable at a glance.
-            var panel = new GameObject("Team Readout", typeof(RectTransform), typeof(Image));
+            var panel = new GameObject(
+                "Team Readout", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
             panel.transform.SetParent(root.transform, worldPositionStays: false);
 
             RectTransform panelRect = panel.GetComponent<RectTransform>();
@@ -230,7 +236,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Font medium = LoadFont(RobotoMediumPath);
             Sprite rounded = RoundedSprite();
 
-            var feed = new GameObject("Killfeed", typeof(RectTransform));
+            var feed = new GameObject("Killfeed", typeof(RectTransform), typeof(CanvasGroup));
             feed.transform.SetParent(root.transform, worldPositionStays: false);
 
             RectTransform feedRect = feed.GetComponent<RectTransform>();
@@ -885,7 +891,7 @@ namespace Ironfront.Net.Unity.EditorTools
         private static Outline Glow(Text score)
         {
             var glow = score.gameObject.AddComponent<Outline>();
-            glow.effectDistance = new Vector2(2.4f, -2.4f);
+            glow.effectDistance = new Vector2(1.6f, -1.6f);
             glow.useGraphicAlpha = true;
             glow.enabled = false;
             return glow;

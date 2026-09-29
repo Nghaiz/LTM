@@ -214,8 +214,9 @@ namespace Ironfront.Net.Unity.Client.Hud
             bool stagger = _staggerNext;
             _staggerNext = false;
 
-            _team0.End(Scored, stagger);
-            _team1.End(Scored, stagger);
+            int sizingRows = Mathf.Max(_team0.PendingCount, _team1.PendingCount);
+            _team0.End(Scored, stagger, sizingRows);
+            _team1.End(Scored, stagger, sizingRows);
 
             System.Array.Copy(_nextKills, _lastKills, _lastKills.Length);
             System.Array.Copy(_nextSeen, _lastSeen, _lastSeen.Length);
@@ -228,11 +229,16 @@ namespace Ironfront.Net.Unity.Client.Hud
         private ScoreboardTeamView Column(int team)
             => team == TeamId.Team0 ? _team0 : team == TeamId.Team1 ? _team1 : null;
 
-        private void Update()
+        private void Update() => Tick(Time.unscaledDeltaTime);
+
+        /// <summary>
+        /// Advances every motion on the board by <paramref name="delta"/> seconds. Driven by
+        /// <c>Update</c>; public so an edit-mode capture can settle the board without play mode.
+        /// </summary>
+        public void Tick(float delta)
         {
             if (!_complete) return;
 
-            float delta = Time.unscaledDeltaTime;
             _time += delta;
 
             _open = _visible
@@ -274,8 +280,8 @@ namespace Ironfront.Net.Unity.Client.Hud
         {
             float wave = 0.5f + 0.5f * Mathf.Sin(_time * Mathf.PI * 2f * BreathHertz);
 
-            SetGlow(_score0Glow, _team0Colour, _leader == TeamId.Team0 ? 0.25f + 0.35f * wave : 0f);
-            SetGlow(_score1Glow, _team1Colour, _leader == TeamId.Team1 ? 0.25f + 0.35f * wave : 0f);
+            SetGlow(_score0Glow, _team0Colour, _leader == TeamId.Team0 ? 0.16f + 0.26f * wave : 0f);
+            SetGlow(_score1Glow, _team1Colour, _leader == TeamId.Team1 ? 0.16f + 0.26f * wave : 0f);
 
             if (_clockUrgent) _clock.color = Color.Lerp(HudStyle.Ink, HudStyle.Blood, wave);
         }

@@ -93,6 +93,9 @@ namespace Ironfront.Tools.ClientWiringGate
                          "the feed renders fewer lines than KillfeedModel holds, so the oldest "
                          + "kill on screen is silently not the oldest kill — and criterion 6 is "
                          + "graded on a screenshot of exactly those lines"),
+                        ("_hiddenUnderScoreboard", 2,
+                         "the killfeed and the team readout stay up under the open board, show "
+                         + "through its backdrop and crowd its clock"),
                     },
                     ("_teamReadoutText",
                      "the local team is resolved every frame and written nowhere, so a player "

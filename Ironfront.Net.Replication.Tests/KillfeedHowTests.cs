@@ -345,6 +345,74 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(1, feed.TotalKills);
         }
 
+        // ------------------------------------------------------------------ rows follow kills
+
+        private static (int[] LineRows, bool[] Kept) Assign(long[] rows, float[] costs, long[] lines)
+        {
+            var lineRows = new int[lines.Length];
+            var kept = new bool[rows.Length];
+            KillfeedRowAssignment.Assign(rows, costs, lines, lineRows, kept);
+            return (lineRows, kept);
+        }
+
+        [Fact]
+        public void AKillOnScreen_KeepsItsRow_AsANewerOneArrives()
+        {
+            (int[] lineRows, bool[] kept) = Assign(
+                rows: new long[] { 0, 1, 0 }, costs: new[] { 0f, 3f, 0f }, lines: new long[] { 2, 1 });
+
+            Assert.Equal(1, lineRows[1]);   // kill 1 stays in row 1
+            Assert.Equal(0, lineRows[0]);   // kill 2 takes the first free row
+            Assert.Equal(new[] { true, true, false }, kept);
+        }
+
+        /// <summary>
+        /// The newest line arrives first. Matched line by line it would take the row of a kill
+        /// that is still on screen, and that kill would jump rows and play its arrival again.
+        /// </summary>
+        [Fact]
+        public void TheNewestKill_NeverTakesTheRowOfAKillStillOnScreen()
+        {
+            (int[] lineRows, bool[] kept) = Assign(
+                rows: new long[] { 2, 1 }, costs: new[] { 3f, 3f }, lines: new long[] { 3, 2 });
+
+            Assert.Equal(0, lineRows[1]);   // kill 2 keeps row 0
+            Assert.Equal(1, lineRows[0]);   // kill 3 takes the row kill 1 left
+            Assert.Equal(new[] { true, true }, kept);
+        }
+
+        [Fact]
+        public void ANewKill_PrefersAFreeRow_ThenTheFaintestFadingOne()
+        {
+            (int[] lineRows, _) = Assign(
+                rows: new long[] { 9, 8, 0 }, costs: new[] { 1.8f, 1.2f, 0f }, lines: new long[] { 10 });
+            Assert.Equal(2, lineRows[0]);
+
+            (lineRows, _) = Assign(
+                rows: new long[] { 9, 8 }, costs: new[] { 1.8f, 1.2f }, lines: new long[] { 10 });
+            Assert.Equal(1, lineRows[0]);
+        }
+
+        [Fact]
+        public void ARowWhoseKillLeftThePush_IsNotKept_AndSoLeaves()
+        {
+            (_, bool[] kept) = Assign(
+                rows: new long[] { 4, 3, 2 }, costs: new[] { 3f, 3f, 3f }, lines: new long[] { 4, 3 });
+
+            Assert.Equal(new[] { true, true, false }, kept);
+        }
+
+        [Fact]
+        public void LinesBeyondTheRows_GoUnshown_AndAnUnusableRowIsNeverUsed()
+        {
+            (int[] lineRows, bool[] kept) = Assign(
+                rows: new long[] { 0, -1 }, costs: new[] { 0f, float.MaxValue }, lines: new long[] { 5, 4 });
+
+            Assert.Equal(0, lineRows[0]);
+            Assert.Equal(-1, lineRows[1]);
+            Assert.False(kept[1]);
+        }
+
         [Fact]
         public void AnEntryFromTheWire_CarriesTheTail()
         {

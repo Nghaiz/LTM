@@ -16,15 +16,15 @@ namespace Ironfront.Net.Unity.Client.Hud
     /// </para>
     /// <para>
     /// <b>Rows fit the column.</b> A usual side is sixteen bots and a few players, and a full one
-    /// is <see cref="MatchHud.ScoreboardRowsPerTeam"/>; rows are as tall as the column allows,
-    /// between <see cref="MinRowHeight"/> and <see cref="MaxRowHeight"/>, and the text follows the
-    /// row. The old board ran thirty-two rows straight off the screen before it learned this.
+    /// is <see cref="MatchHud.ScoreboardRowsPerTeam"/>; rows are as tall as the column allows, up
+    /// to <see cref="MaxRowHeight"/>, and the text follows the row. There is deliberately no
+    /// floor: the first capture of a full board had one, and it pushed rows 31 and 32 through the
+    /// rules line -- the same fault the old board had, one clamp further down.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
     public sealed class ScoreboardTeamView : MonoBehaviour
     {
-        public const float MinRowHeight = 16f;
         public const float MaxRowHeight = 30f;
 
         /// <summary>A short column still lays out as if it held this many, so a row is not huge.</summary>
@@ -101,20 +101,25 @@ namespace Ironfront.Net.Unity.Client.Hud
             _pending[_pendingCount++] = row;
         }
 
+        /// <summary>Rows queued since <see cref="Begin"/>.</summary>
+        public int PendingCount => _pendingCount;
+
         /// <summary>
         /// Lays the queued rows out. <paramref name="scored"/> says which actors just gained a
         /// kill; <paramref name="stagger"/> plays the rows in one after another, for an opening.
+        /// <paramref name="sizingRows"/> is the longer column's count, so both sides share one
+        /// row height and read across as a table.
         /// </summary>
-        public void End(System.Func<ushort, bool> scored, bool stagger)
+        public void End(System.Func<ushort, bool> scored, bool stagger, int sizingRows)
         {
             if (!_complete) return;
 
             EnsureRows(_pendingCount);
 
             float area = _rows.rect.height;
-            int sizingRows = Mathf.Max(_pendingCount, MinRowsForSizing);
-            float pitch = Mathf.Clamp(area / sizingRows, MinRowHeight + RowGap, MaxRowHeight + RowGap);
-            float height = pitch - RowGap;
+            sizingRows = Mathf.Max(Mathf.Max(sizingRows, _pendingCount), MinRowsForSizing);
+            float pitch = Mathf.Min(area / sizingRows, MaxRowHeight + RowGap);
+            float height = pitch - (pitch >= 20f ? RowGap : 1f);
             int fontSize = Mathf.Clamp(Mathf.RoundToInt(height * 0.64f), 11, 19);
 
             // The top of a column earns the star only by having scored: 0 kills leads nobody.
@@ -161,15 +166,16 @@ namespace Ironfront.Net.Unity.Client.Hud
                 ScoreboardRowView clone = Instantiate(_rowTemplate, _rows);
                 clone.name = "Row " + (_rowViews.Count + 1);
 
-                // Awake runs on activation; a clone of a half-authored template has already said so.
-                clone.gameObject.SetActive(true);
+                // Explicitly rather than by activation: a clone of an inactive template is
+                // inactive, and edit mode runs no Awake at all. A half-authored template has
+                // already said so in its own log line.
+                clone.Initialize();
                 if (!clone.IsComplete)
                 {
-                    Destroy(clone.gameObject);
+                    DestroyImmediate(clone.gameObject);
                     return;
                 }
 
-                clone.gameObject.SetActive(false);
                 _rowViews.Add(clone);
             }
         }
