@@ -3,8 +3,8 @@ using UnityEngine;
 namespace Ironfront.Net.Unity.Client.Hud
 {
     /// <summary>
-    /// The readout's small graphics, drawn once in code: a crosshair, a star, a flag, a fade, a
-    /// vignette and a glowing rule. Feature 2, 2026-09-29.
+    /// The readout's small graphics, drawn once in code: a crosshair, a star, a flag, a diamond, a
+    /// fade, a vignette and a glowing rule. Features 1 and 2, 2026-09-29.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -26,6 +26,7 @@ namespace Ironfront.Net.Unity.Client.Hud
         private static Sprite _fade;
         private static Sprite _vignette;
         private static Sprite _rule;
+        private static Sprite _diamond;
 
         /// <summary>A ring, a centre dot and four ticks: the headshot mark.</summary>
         public static Sprite Crosshair()
@@ -139,6 +140,21 @@ namespace Ironfront.Net.Unity.Client.Hud
             const int width = 256;
             _rule = Draw("Hud Rule", width, 2, (x, y) => Mathf.Sin(Mathf.PI * x / (width - 1)));
             return _rule;
+        }
+
+        /// <summary>A diamond: the mark before a person's name, which a bot's plate does not carry.</summary>
+        public static Sprite Diamond()
+        {
+            if (_diamond != null) return _diamond;
+
+            const int size = 32;
+            float centre = (size - 1) * 0.5f;
+
+            // |dx| + |dy| <= r is a square turned 45 degrees; the soft band is its edge.
+            _diamond = Draw("Hud Diamond", size, size,
+                (x, y) => Coverage(13f - (Mathf.Abs(x - centre) + Mathf.Abs(y - centre))));
+
+            return _diamond;
         }
 
         private static float Coverage(float signedDistance) => Mathf.Clamp01(signedDistance + 0.5f);

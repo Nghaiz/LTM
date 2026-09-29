@@ -126,6 +126,8 @@ namespace Ironfront.Net.Unity.EditorTools
 
                 MatchHud hud = root.AddComponent<MatchHud>();
 
+                // First, so everything else on this Canvas draws over the plates.
+                NameplateLayer nameplates = BuildNameplates(root, log);
                 Text team = BuildTeamReadout(root, log);
                 KillfeedRowView[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
@@ -140,10 +142,12 @@ namespace Ironfront.Net.Unity.EditorTools
                 Assign(so, "_deployTimerText", timer);
                 Assign(so, "_deployButton", deployButton);
                 Assign(so, "_scoreboard", scoreboard);
+                Assign(so, "_nameplates", nameplates);
                 AssignArray(so, "_hiddenUnderScoreboard", new Object[]
                 {
                     killfeed[0].transform.parent.GetComponent<CanvasGroup>(),
                     team.transform.parent.GetComponent<CanvasGroup>(),
+                    nameplates.GetComponent<CanvasGroup>(),
                 });
                 so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -434,6 +438,130 @@ namespace Ironfront.Net.Unity.EditorTools
                     "Unity's built-in UI/Skin/UISprite.psd did not load; the killfeed's rounded "
                     + "backings need it.");
             return sprite;
+        }
+
+        /// <summary>
+        /// Feature 1 (playtest 2026-09-28) — the name plates: a full-screen layer and the one
+        /// plate it clones per actor.
+        /// </summary>
+        /// <remarks>
+        /// The plate's pivot is its bottom centre, the point the presenter places over a head:
+        /// the bar sits on that point and the name above it, as the owner asked. Authored hidden;
+        /// a plate appears when the presenter sets one.
+        /// </remarks>
+        private static NameplateLayer BuildNameplates(GameObject root, StringBuilder log)
+        {
+            Font bold = LoadFont(RobotoBoldPath);
+            Sprite rounded = RoundedSprite();
+
+            var layer = new GameObject("Nameplates", typeof(RectTransform), typeof(CanvasGroup));
+            layer.transform.SetParent(root.transform, worldPositionStays: false);
+            Stretch(layer.GetComponent<RectTransform>());
+
+            var group = layer.GetComponent<CanvasGroup>();
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            var plate = new GameObject("Nameplate Template", typeof(RectTransform), typeof(CanvasGroup));
+            plate.transform.SetParent(layer.transform, worldPositionStays: false);
+            RectTransform plateRect = plate.GetComponent<RectTransform>();
+            Place(plateRect, Middle, new Vector2(0.5f, 0f), Vector2.zero, new Vector2(280f, 60f));
+
+            var plateGroup = plate.GetComponent<CanvasGroup>();
+            plateGroup.interactable = false;
+            plateGroup.blocksRaycasts = false;
+
+            // The name row, centred on the bar and just above it.
+            var label = new GameObject(
+                "Label", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+            label.transform.SetParent(plate.transform, worldPositionStays: false);
+            Place(label.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(0f, NameplateView.TrackHeight + 3f), new Vector2(0f, 30f));
+
+            var labelLayout = label.GetComponent<HorizontalLayoutGroup>();
+            labelLayout.childAlignment = TextAnchor.MiddleCenter;
+            labelLayout.spacing = 6f;
+            labelLayout.childControlWidth = true;
+            labelLayout.childControlHeight = true;
+            labelLayout.childForceExpandWidth = false;
+            labelLayout.childForceExpandHeight = false;
+
+            var labelFit = label.GetComponent<ContentSizeFitter>();
+            labelFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            labelFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            Image marker = Block(label, "Marker", new Vector2(14f, 14f));
+            marker.color = Ink;
+
+            Text name = BoardText(label, "Name", bold, 24, Ink, TextAnchor.MiddleCenter);
+            var outline = name.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.45f);
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            var bot = new GameObject("Bot", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
+            bot.transform.SetParent(label.transform, worldPositionStays: false);
+
+            var botBacking = bot.GetComponent<Image>();
+            botBacking.sprite = rounded;
+            botBacking.type = Image.Type.Sliced;
+            botBacking.color = new Color(0f, 0f, 0f, 0.55f);
+            botBacking.raycastTarget = false;
+
+            var botLayout = bot.GetComponent<HorizontalLayoutGroup>();
+            botLayout.padding = new RectOffset(5, 5, 1, 1);
+            botLayout.childAlignment = TextAnchor.MiddleCenter;
+            botLayout.childControlWidth = true;
+            botLayout.childControlHeight = true;
+            botLayout.childForceExpandWidth = false;
+            botLayout.childForceExpandHeight = false;
+
+            Text botText = BoardText(bot, "Text", bold, 11, HudStyle.ChipInk, TextAnchor.MiddleCenter, shadowed: false);
+            botText.text = "BOT";
+
+            // The bar: a dark track, the white trail of the last hit, and the fill.
+            Image track = Picture(plate, "Track", new Color(0f, 0f, 0f, 0.62f), rounded);
+            Place(track, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero,
+                new Vector2(NameplateView.TrackWidth, NameplateView.TrackHeight));
+            var trackEdge = track.gameObject.AddComponent<Outline>();
+            trackEdge.effectColor = new Color(0f, 0f, 0f, 0.5f);
+            trackEdge.effectDistance = new Vector2(1f, -1f);
+
+            Image trail = BarPart(track, "Trail", rounded);
+            Image fill = BarPart(track, "Fill", rounded);
+            fill.color = Ink;
+
+            NameplateView view = plate.AddComponent<NameplateView>();
+            var viewSo = new SerializedObject(view);
+            Assign(viewSo, "_marker", marker);
+            Assign(viewSo, "_name", name);
+            Assign(viewSo, "_bot", bot);
+            Assign(viewSo, "_track", track.rectTransform);
+            Assign(viewSo, "_trail", trail);
+            Assign(viewSo, "_fill", fill);
+            viewSo.ApplyModifiedPropertiesWithoutUndo();
+            plate.SetActive(false);
+
+            NameplateLayer layerView = layer.AddComponent<NameplateLayer>();
+            var layerSo = new SerializedObject(layerView);
+            Assign(layerSo, "_template", view);
+            layerSo.ApplyModifiedPropertiesWithoutUndo();
+
+            log.AppendLine("name plates: a full-screen layer under the readout and one template plate.");
+            return layerView;
+        }
+
+        /// <summary>A left-anchored strip inside a bar's track, its width set at runtime.</summary>
+        private static Image BarPart(Image track, string name, Sprite rounded)
+        {
+            Image part = Picture(track.gameObject, name, Color.white, rounded);
+            RectTransform rect = part.rectTransform;
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.anchoredPosition = new Vector2(NameplateView.TrackInset, 0f);
+            rect.sizeDelta = new Vector2(NameplateView.TrackWidth - 2f * NameplateView.TrackInset,
+                -2f * NameplateView.TrackInset);
+            return part;
         }
 
         /// <summary>3.2 — the deploy screen.</summary>

@@ -123,6 +123,9 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         public PlayerScoreTable Scores => _scores;
 
+        /// <summary>Which actors are bots, from their spawns. The name plates read it.</summary>
+        public BotRoster Bots => _bots;
+
         /// <summary>The newest confirmed hit and how long it stays up.</summary>
         public HitmarkerModel Hitmarker => _hitmarker;
 
@@ -147,6 +150,12 @@ namespace Ironfront.Net.Unity.Client
             // only its header goes quiet.
             _objectives = GetComponent<NetClientObjectivePresenter>();
             if (_objectives == null) _objectives = FindObjectOfType<NetClientObjectivePresenter>();
+
+            // Feature 1: the name plates read this presenter's name tables and the registry, so
+            // they ride on the same object rather than asking every map scene for a component.
+            NameplatePresenter nameplates = GetComponent<NameplatePresenter>();
+            if (nameplates == null) nameplates = gameObject.AddComponent<NameplatePresenter>();
+            nameplates.Bind(this, _registry);
 
             _mapName = gameObject.scene.name.ToUpperInvariant();
 

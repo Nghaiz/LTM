@@ -88,6 +88,9 @@ namespace Ironfront.Net.Unity.EditorTools
                 string killfeedSky = Render(camera, target, new Color(0.62f, 0.72f, 0.82f), "killfeed-sky.png");
                 string killfeedDark = Render(camera, target, new Color(0.1f, 0.12f, 0.1f), "killfeed-dark.png");
 
+                ShowNameplates(so);
+                string plates = Render(camera, target, new Color(0.45f, 0.5f, 0.42f), "nameplates.png");
+
                 ShowScoreboard(so, 20, 18);
                 string board = Render(camera, target, new Color(0.35f, 0.42f, 0.36f), "scoreboard.png");
 
@@ -95,7 +98,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 string full = Render(camera, target, new Color(0.35f, 0.42f, 0.36f), "scoreboard-full.png");
 
                 string rect = ((RectTransform)readout).rect.ToString();
-                return $"canvas {rect}; wrote {killfeedSky}, {killfeedDark}, {board}, {full}";
+                return $"canvas {rect}; wrote {killfeedSky}, {killfeedDark}, {plates}, {board}, {full}";
             }
             finally
             {
@@ -130,6 +133,44 @@ namespace Ironfront.Net.Unity.EditorTools
                 view.Show(in line, i, killer, victim);
 
                 for (int t = 0; t < 40; t++) view.Tick(0.05f);
+            }
+        }
+
+        /// <summary>
+        /// Five plates: a person just hit (the white trail), a bot, an enemy on low health (the
+        /// pulse), an enemy bot far off, and a teammate behind cover.
+        /// </summary>
+        private static void ShowNameplates(SerializedObject hud)
+        {
+            var layer = (NameplateLayer)hud.FindProperty("_nameplates").objectReferenceValue;
+            layer.gameObject.SetActive(true);
+            layer.Initialize();
+
+            Color blue = TeamInk(Blue);
+            Color red = TeamInk(Red);
+
+            var plates = new (ushort Id, float X, float Y, float Scale, float Opacity, string Name, byte Team, float Before, float After, bool Bot, Color Ink)[]
+            {
+                (1, 760f, 640f, 1f, 1f, "Minh", TeamId.Team0, 1f, 0.55f, false, blue),
+                (7, 1010f, 600f, 0.86f, 1f, "Bot 7", TeamId.Team0, 0.8f, 0.8f, true, blue),
+                (33, 1250f, 660f, 0.95f, 1f, "Hoang", TeamId.Team1, 0.2f, 0.2f, false, red),
+                (41, 1470f, 560f, 0.68f, 0.9f, "Bot 41", TeamId.Team1, 1f, 1f, true, red),
+                (2, 540f, 540f, 0.66f, 0.5f, "Lan", TeamId.Team0, 0.9f, 0.9f, false, blue),
+            };
+
+            // Twenty frames at the old health, then ten after the hit: the trail is still holding.
+            for (int frame = 0; frame < 30; frame++)
+            {
+                layer.Begin();
+
+                foreach (var p in plates)
+                {
+                    float health = frame < 20 ? p.Before : p.After;
+                    var plate = new Nameplate(p.Id, p.X, p.Y, p.Scale, p.Opacity, p.Name, p.Team, health, p.Bot, p.Team == TeamId.Team0);
+                    layer.Set(in plate, p.Ink, 0.02f);
+                }
+
+                layer.End();
             }
         }
 

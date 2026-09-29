@@ -157,6 +157,24 @@ namespace Ironfront.Net.Unity
         void EndScoreboard();
 
         /// <summary>
+        /// Starts a frame of name plates. Feature 1, 2026-09-29.
+        /// </summary>
+        /// <remarks>
+        /// <b>Every frame, and a plate not set this frame is taken down.</b> Plates follow heads
+        /// across the screen, so there is no change key worth keeping: the presenter sets each
+        /// plate it wants drawn between this and <see cref="EndNameplates"/>, keyed by actor, and
+        /// the HUD removes the rest -- so a body that dies, leaves sight or walks out of range
+        /// loses its plate without anyone having to say so.
+        /// </remarks>
+        void BeginNameplates();
+
+        /// <summary>One plate, for this frame.</summary>
+        void SetNameplate(in Nameplate plate);
+
+        /// <summary>Ends the frame: plates not set since <see cref="BeginNameplates"/> go.</summary>
+        void EndNameplates();
+
+        /// <summary>
         /// Whether the Deploy control was pressed since this was last asked, clearing the edge.
         /// </summary>
         /// <remarks>

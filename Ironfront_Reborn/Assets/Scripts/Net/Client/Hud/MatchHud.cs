@@ -96,9 +96,14 @@ namespace Ironfront.Net.Unity.Client.Hud
                  + "handed; this component reads the palette and passes the colours on.")]
         [SerializeField] private ScoreboardView _scoreboard;
 
-        [Tooltip("What the open board hides: the killfeed and the team readout, which would "
-                 + "otherwise show through its backdrop and crowd its header.")]
-        [SerializeField] private CanvasGroup[] _hiddenUnderScoreboard = new CanvasGroup[2];
+        [Tooltip("What the open board hides: the killfeed, the team readout and the name plates, "
+                 + "which would otherwise show through its backdrop and crowd its header.")]
+        [SerializeField] private CanvasGroup[] _hiddenUnderScoreboard = new CanvasGroup[3];
+
+        [Header("Name plates (feature 1)")]
+        [Tooltip("A name and health bar over every other player's head, beneath the rest of the "
+                 + "readout.")]
+        [SerializeField] private NameplateLayer _nameplates;
 
         /// <summary>Set by the Deploy control, cleared by the read. See the seam's remark.</summary>
         private bool _deployPressed;
@@ -461,6 +466,25 @@ namespace Ironfront.Net.Unity.Client.Hud
         public void EndScoreboard()
         {
             if (_scoreboard != null) _scoreboard.End();
+        }
+
+        /// <inheritdoc/>
+        public void BeginNameplates()
+        {
+            if (_nameplates != null) _nameplates.Begin();
+        }
+
+        /// <inheritdoc/>
+        public void SetNameplate(in Nameplate plate)
+        {
+            // The side's colour from the palette, as every other element here takes it.
+            if (_nameplates != null) _nameplates.Set(in plate, TextInk(plate.Team));
+        }
+
+        /// <inheritdoc/>
+        public void EndNameplates()
+        {
+            if (_nameplates != null) _nameplates.End();
         }
 
         /// <inheritdoc/>

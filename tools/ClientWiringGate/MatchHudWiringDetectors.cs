@@ -93,9 +93,9 @@ namespace Ironfront.Tools.ClientWiringGate
                          "the feed renders fewer lines than KillfeedModel holds, so the oldest "
                          + "kill on screen is silently not the oldest kill — and criterion 6 is "
                          + "graded on a screenshot of exactly those lines"),
-                        ("_hiddenUnderScoreboard", 2,
-                         "the killfeed and the team readout stay up under the open board, show "
-                         + "through its backdrop and crowd its clock"),
+                        ("_hiddenUnderScoreboard", 3,
+                         "the killfeed, the team readout or the name plates stay up under the "
+                         + "open board, show through its backdrop and crowd its clock"),
                     },
                     ("_teamReadoutText",
                      "the local team is resolved every frame and written nowhere, so a player "
@@ -115,7 +115,27 @@ namespace Ironfront.Tools.ClientWiringGate
                      + "into the match — criteria 3 and 4 become indistinguishable"),
                     ("_scoreboard",
                      "the Tab board has no view to open, so Tab shows nothing and P18 criteria "
-                     + "2, 3, 4 and 7 have no screen to be graded on")),
+                     + "2, 3, 4 and 7 have no screen to be graded on"),
+                    ("_nameplates",
+                     "no name or health bar is drawn over anybody's head — feature 1 does not "
+                     + "exist on screen")),
+
+                new MenuScreenWiringDetectors.Screen(
+                    Row, BuildCommand, Clause, Clause, Clause,
+                    "NameplateLayer", "Scripts/Net/Client/Hud/NameplateLayer.cs",
+                    Array.Empty<(string, int, string)>(),
+                    ("_template", "the layer has no plate to clone, so no head ever gets one")),
+
+                new MenuScreenWiringDetectors.Screen(
+                    Row, BuildCommand, Clause, Clause, Clause,
+                    "NameplateView", "Scripts/Net/Client/Hud/NameplateView.cs",
+                    Array.Empty<(string, int, string)>(),
+                    ("_marker", "a person's plate loses the mark that tells it from a bot's"),
+                    ("_name", "a plate names nobody"),
+                    ("_bot", "a bot's plate cannot be told from a person's"),
+                    ("_track", "the health bar has no track"),
+                    ("_trail", "a hit leaves no trail on the bar"),
+                    ("_fill", "the health bar shows no health")),
 
                 // Feature 2 (2026-09-29): the killfeed row and the scoreboard became views of
                 // their own, so their parts are graded here rather than left to a runtime log.
@@ -292,11 +312,8 @@ namespace Ironfront.Tools.ClientWiringGate
             // readout alone and pass on anything -- a green that could not go red.
             foreach ((string owner, string[] parts) in TeamPaintedParts)
             {
-                foreach (UnityObjectRef reference in Referenced(hud, owner))
+                foreach (UnityAssetDocument view in Follow(index, path, hud, owner.Split('.')))
                 {
-                    UnityAssetDocument? view = Resolve(index, path, reference);
-                    if (view == null) continue;
-
                     foreach (string part in parts)
                         CollectInks(index, path, view, part, inks, $"{owner}.{part}");
                 }
@@ -323,6 +340,7 @@ namespace Ironfront.Tools.ClientWiringGate
         {
             ("_killfeedRows", new[] { "_killer", "_victim" }),
             ("_scoreboard", new[] { "_score0", "_score1", "_team0Label", "_team1Label" }),
+            ("_nameplates._template", new[] { "_name" }),
         };
 
         /// <summary>Records the authored colour of every text one field names.</summary>
@@ -339,6 +357,28 @@ namespace Ironfront.Tools.ClientWiringGate
 
                 if (!inks.ContainsKey(ink)) inks.Add(ink, $"{label ?? field} ({reference.FileId})");
             }
+        }
+
+        /// <summary>
+        /// The documents a chain of fields leads to: <c>_nameplates._template</c> is the layer's
+        /// template plate, two references down from the HUD.
+        /// </summary>
+        private static IEnumerable<UnityAssetDocument> Follow(
+            UnityAssetIndex index, string path, UnityAssetDocument from, string[] fields)
+        {
+            IEnumerable<UnityAssetDocument> current = new[] { from };
+
+            foreach (string field in fields)
+            {
+                current = current
+                    .SelectMany(document => Referenced(document, field))
+                    .Select(reference => Resolve(index, path, reference))
+                    .Where(document => document != null)
+                    .Select(document => document!)
+                    .ToList();
+            }
+
+            return current;
         }
 
         /// <summary>
