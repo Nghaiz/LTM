@@ -175,6 +175,9 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly byte[] _eventPayload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
+        // Set once an S_DEATH fails to serialise, so the error is said once, not per death.
+        private bool _reportedUnwritableDeath;
+
         // Built once and kept across rebinds, so the id quarantine and the counters survive a
         // transport swap. It is the server's only vehicle-id authority; NetVehicleLifecycle
         // publishes it to the spawners scattered across the map.
@@ -1530,6 +1533,15 @@ namespace Ironfront.Net.Unity.Server
                 BroadcastReliable(
                     new ReadOnlySpan<byte>(_eventPayload, 0, written),
                     (byte)ServerEventWriter.ReliableChannel);
+            }
+            else if (!_reportedUnwritableDeath)
+            {
+                // Said out loud, once: the silent branch here is how every death after #386 went
+                // unsent for a day while the score, the Tab board and the logs all looked healthy.
+                _reportedUnwritableDeath = true;
+                Debug.LogError(
+                    $"[net] S_DEATH for actor {victimActorId} could not be written ({written}); "
+                    + "clients get no killfeed line and no ragdoll for any death until this is fixed.");
             }
 
             // The two scores either side of the award, so the killer can be credited with exactly

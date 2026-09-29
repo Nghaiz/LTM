@@ -726,6 +726,42 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(2, fire.Value.WeaponId);
         }
 
+        /// <summary>
+        /// The death the server actually sends -- both tails, weapon detail and range -- written by
+        /// the server's writer and routed by the client's router, whole.
+        /// </summary>
+        /// <remarks>
+        /// The test above writes a bare twelve-byte death, which is not what the server sends:
+        /// ServerTickLoop writes every death with both tails. When the range tail arrived (#386)
+        /// the writer's buffer still held only the detail tail, so every real death overflowed it,
+        /// the writer returned -1, and no S_DEATH left the server for a day -- no killfeed line and
+        /// no ragdoll on any client -- while this suite stayed green. A live two-client test found it.
+        /// </remarks>
+        [Fact]
+        public void ADeathWithBothTails_IsWrittenAndRoutedWhole()
+        {
+            var router = new ClientMessageRouter();
+            DeathMessage? death = null;
+            router.OnDeath += m => death = m;
+
+            Span<byte> buffer = stackalloc byte[256];
+            var sent = new DeathMessage(
+                7, 3, CauseOfDeath.Bullet, 10, 20, 30, (byte)HitboxType.Head,
+                weaponId: 4, vehicleType: 2, DeathDetail.KillerInVehicle, distanceMetres: 312);
+
+            int written = ServerEventWriter.WriteDeath(buffer, in sent);
+            Assert.True(written > 0, "the server's writer refused the death it sends for every kill");
+            Assert.Equal(1, router.Route(buffer.Slice(0, written)));
+            Assert.Equal(0, router.MalformedMessages);
+
+            Assert.True(death.HasValue);
+            Assert.True(death!.Value.HasDetail);
+            Assert.True(death.Value.HasRange);
+            Assert.Equal(312, death.Value.DistanceMetres);
+            Assert.Equal(4, death.Value.WeaponId);
+            Assert.Equal(DeathDetail.KillerInVehicle, death.Value.Detail);
+        }
+
         [Fact]
         public void ATruncatedCombatMessageIsCountedNotThrown()
         {
