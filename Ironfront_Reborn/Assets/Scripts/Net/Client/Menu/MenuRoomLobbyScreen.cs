@@ -212,7 +212,8 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (heading != null)
             {
-                heading.text = team == 0 ? "TEAM 1" : "TEAM 2";
+                heading.text = Ironfront.Net.Replication.Client.ScoreboardWording.TeamName(
+                    team == 0 ? Ironfront.Net.Protocol.TeamId.Team0 : Ironfront.Net.Protocol.TeamId.Team1);
                 heading.color = colour;
             }
 

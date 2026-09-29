@@ -514,9 +514,10 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// The name a side goes by on screen.
         /// </summary>
         /// <remarks>
-        /// The same vocabulary the room lobby uses -- team 0 is "TEAM 1" -- because a player who
-        /// picked a side on that screen and then reads a different word for it in the match has
-        /// been told about two things. P16 criterion 10 is graded on those exact strings.
+        /// The same vocabulary the room lobby uses -- team 0 is "BLUE TEAM", team 1 "RED TEAM", the
+        /// colours each side wears (owner ruling 2026-09-29) -- because a player who picked a side on
+        /// that screen and then reads a different word for it in the match has been told about two
+        /// things.
         /// </remarks>
         private static string TeamLabel(int team)
             => Ironfront.Net.Replication.Client.ScoreboardWording.TeamName((byte)team);

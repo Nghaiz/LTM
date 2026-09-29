@@ -190,6 +190,9 @@ namespace Ironfront.Net.Unity.Client
 
             // Feature 2: bots have no name on the wire, and the spawn is what says who they are.
             _client.Router.OnSpawnActor += _bots.Apply;
+
+            // And the despawn, so a new round's bots are numbered from 1 again ("Blue Team Bot 1").
+            _client.Router.OnDespawnActor += _bots.Apply;
         }
 
         private void OnDisable()
@@ -201,6 +204,7 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnPlayerList -= _names.Apply;
             _client.Router.OnPlayerScores -= _scores.Apply;
             _client.Router.OnSpawnActor -= _bots.Apply;
+            _client.Router.OnDespawnActor -= _bots.Apply;
             _names.Reset();
             _scores.Reset();
             _bots.Reset();
@@ -315,7 +319,9 @@ namespace Ironfront.Net.Unity.Client
                     wording.Sentence,
                     entry.Headshot,
                     localIsKiller: scored && hasLocal && entry.KillerActorId == localActorId,
-                    localIsVictim: hasLocal && entry.VictimActorId == localActorId);
+                    localIsVictim: hasLocal && entry.VictimActorId == localActorId,
+                    weaponId: wording.WeaponId,
+                    restAfterWeapon: wording.RestAfterWeapon);
 
                 hud.SetKillfeedLine(i, in line);
             }
@@ -509,7 +515,7 @@ namespace Ironfront.Net.Unity.Client
 
             var header = new ScoreboardMatch(
                 _mapName,
-                "CONQUEST  ·  " + ScoreboardWording.PlayersLine(_rosterPlayers, _rosterHumans),
+                ScoreboardWording.SummaryLine(_rosterPlayers, _rosterHumans),
                 state.Score0,
                 state.Score1,
                 ScoreboardWording.Lead(state.Score0, state.Score1, state.VictoryPoints),

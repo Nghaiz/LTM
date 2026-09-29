@@ -21,7 +21,8 @@ namespace Ironfront.Net.Unity
     {
         public KillfeedLine(
             long sequence, string killerName, int killerTeam, string victimName, int victimTeam,
-            string label, string sentence, bool headshot, bool localIsKiller, bool localIsVictim)
+            string label, string sentence, bool headshot, bool localIsKiller, bool localIsVictim,
+            byte weaponId = 0, string restAfterWeapon = "")
         {
             Sequence = sequence;
             KillerName = killerName ?? string.Empty;
@@ -33,6 +34,8 @@ namespace Ironfront.Net.Unity
             Headshot = headshot;
             LocalIsKiller = localIsKiller;
             LocalIsVictim = localIsVictim;
+            WeaponId = weaponId;
+            RestAfterWeapon = restAfterWeapon ?? string.Empty;
         }
 
         /// <summary>
@@ -66,5 +69,14 @@ namespace Ironfront.Net.Unity
         public bool LocalIsVictim { get; }
 
         public bool IsSentence => Sentence.Length > 0;
+
+        /// <summary>
+        /// The weapon <see cref="Label"/> names, whose picture a HUD may draw in place of its name;
+        /// 0 when the label names no weapon.
+        /// </summary>
+        public byte WeaponId { get; }
+
+        /// <summary>What <see cref="Label"/> says besides the weapon's name ("MELEE"); drawn beside the picture.</summary>
+        public string RestAfterWeapon { get; }
     }
 }

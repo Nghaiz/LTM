@@ -30,7 +30,7 @@ namespace Ironfront.Net.Unity.Client.Hud
     public sealed class KillfeedRowView : MonoBehaviour
     {
         /// <summary>A row's height at the 1920x1080 reference resolution.</summary>
-        public const float RowHeight = 36f;
+        public const float RowHeight = 40f;
 
         /// <summary>From one row's top to the next one's.</summary>
         public const float RowPitch = RowHeight + 6f;
@@ -50,6 +50,8 @@ namespace Ironfront.Net.Unity.Client.Hud
         [SerializeField] private Outline _edge;
         [SerializeField] private Image _accent;
         [SerializeField] private Text _killer;
+        [SerializeField] private Image _weapon;
+        [SerializeField] private LayoutElement _weaponSize;
         [SerializeField] private GameObject _how;
         [SerializeField] private Text _howText;
         [SerializeField] private Image _headshot;
@@ -82,6 +84,7 @@ namespace Ironfront.Net.Unity.Client.Hud
             _group = GetComponent<CanvasGroup>();
 
             if (_backing == null || _edge == null || _accent == null || _killer == null
+                || _weapon == null || _weaponSize == null
                 || _how == null || _howText == null || _headshot == null || _victim == null
                 || _sentence == null || _group == null)
             {
@@ -124,14 +127,26 @@ namespace Ironfront.Net.Unity.Client.Hud
             _leaveAge = -1f;
 
             bool sentence = line.IsSentence;
+
+            // The weapon's own picture stands in for its name when there is one, and the chip keeps
+            // only what the picture cannot say ("MELEE"); with no picture the chip says it all.
+            Sprite picture = !sentence && line.WeaponId != 0 && NetClientBindings.WeaponIcon != null
+                ? NetClientBindings.WeaponIcon(line.WeaponId)
+                : null;
+            string chip = picture != null ? line.RestAfterWeapon
+                : line.Label.Length > 0 ? line.Label : NoLabel;
+
             _killer.gameObject.SetActive(!sentence);
-            _how.SetActive(!sentence);
+            _weapon.gameObject.SetActive(picture != null);
+            _how.SetActive(!sentence && chip.Length > 0);
             _headshot.gameObject.SetActive(!sentence && line.Headshot);
             _sentence.gameObject.SetActive(sentence);
 
+            if (picture != null) FitWeapon(picture);
+
             _killer.text = line.KillerName;
             _killer.color = killerInk;
-            _howText.text = line.Label.Length > 0 ? line.Label : NoLabel;
+            _howText.text = chip;
             _victim.text = line.VictimName;
             _victim.color = victimInk;
             _sentence.text = line.Sentence;
@@ -148,6 +163,23 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             if (_flashSettled) _backing.color = _restBacking;
         }
+
+        /// <summary>Shows a weapon's picture at the row's icon height, as wide as its shape.</summary>
+        private void FitWeapon(Sprite picture)
+        {
+            _weapon.sprite = picture;
+
+            Rect shape = picture.rect;
+            float aspect = shape.height > 0f ? shape.width / shape.height : 1f;
+            float width = Mathf.Clamp(WeaponIconHeight * aspect, WeaponIconHeight, WeaponIconMaxWidth);
+
+            _weaponSize.minWidth = width;
+            _weaponSize.preferredWidth = width;
+        }
+
+        /// <summary>The weapon picture's height, and the widest a long rifle may draw.</summary>
+        public const float WeaponIconHeight = 30f;
+        private const float WeaponIconMaxWidth = 100f;
 
         /// <summary>Starts fading this row out. Its kill has left the model.</summary>
         public void Leave()

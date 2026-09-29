@@ -72,6 +72,9 @@ namespace Ironfront.Net.Unity.Bindings
             // may not name MinimapUi, which compiles into Assembly-CSharp.
             NetClientBindings.Minimap = new MinimapMarkerBinding();
 
+            // The killfeed's weapon pictures: the loadout screen's own sprites, by network id.
+            NetClientBindings.WeaponIcon = WeaponIconOf;
+
             // C4d. The lane-B recorder observes the scoreboard HUD, the offline scoreboard and
             // the scene's capture points, and may name none of them now that Net/Diagnostics is
             // an assembly. Registered unconditionally: the probe resolves its singletons per call
@@ -188,6 +191,10 @@ namespace Ironfront.Net.Unity.Bindings
 
             return controller != null ? new LegacyMovementProbeBinding(controller) : null;
         }
+
+        /// <summary>The silhouette the loadout screen draws for weapon <paramref name="networkId"/>, or null.</summary>
+        private static Sprite WeaponIconOf(byte networkId)
+            => WeaponManager.TryGetEntry(networkId, out WeaponManager.WeaponEntry entry) ? entry.image : null;
 
         /// <summary>
         /// The <c>GetComponent&lt;Vehicle&gt;()</c> the client assembly cannot do itself. Null

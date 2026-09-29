@@ -23,10 +23,12 @@ namespace Ironfront.Net.Replication.Client
     /// </remarks>
     public readonly struct KillfeedWording
     {
-        private KillfeedWording(string label, string sentence)
+        private KillfeedWording(string label, string sentence, byte weaponId = 0, string restAfterWeapon = "")
         {
             Label = label;
             Sentence = sentence;
+            WeaponId = weaponId;
+            RestAfterWeapon = restAfterWeapon;
         }
 
         /// <summary>The [how] between two names, in capitals; empty when nothing is known.</summary>
@@ -37,6 +39,24 @@ namespace Ironfront.Net.Replication.Client
 
         /// <summary>Whether this line is a sentence rather than a kill.</summary>
         public bool IsSentence => Sentence.Length > 0;
+
+        /// <summary>
+        /// The weapon <see cref="Label"/> begins with, when its picture can stand in for its name;
+        /// 0 when the label names no weapon (a vehicle, an explosion, nothing).
+        /// </summary>
+        /// <remarks>
+        /// The killfeed draws the weapon's own silhouette, the one the loadout screen shows, where it
+        /// has one: "Minh [rifle] Reyes" reads at a glance where "Minh RK-44 Reyes" has to be read.
+        /// <see cref="Label"/> stays the whole text, for a build or a weapon with no picture and for
+        /// the deploy screen's caption.
+        /// </remarks>
+        public byte WeaponId { get; }
+
+        /// <summary>
+        /// What <see cref="Label"/> says besides the weapon's name ("MELEE"), for a row that draws the
+        /// weapon as a picture; empty when the name was all it said.
+        /// </summary>
+        public string RestAfterWeapon { get; }
 
         /// <summary>The wording for one killfeed line.</summary>
         public static KillfeedWording For(in KillfeedEntry entry)
@@ -50,7 +70,7 @@ namespace Ironfront.Net.Replication.Client
             if (entry.Self)
                 return new KillfeedWording(string.Empty, SelfSentence(entry.Cause, vehicle, wentDown, Voice.Third));
 
-            return new KillfeedWording(KillLabel(in entry, vehicle, wentDown), string.Empty);
+            return KillWording(in entry, vehicle, wentDown);
         }
 
         /// <summary>
@@ -71,7 +91,7 @@ namespace Ironfront.Net.Replication.Client
 
             string caption = "Killed by " + killerName;
 
-            string label = KillLabel(in entry, vehicle, wentDown);
+            string label = KillWording(in entry, vehicle, wentDown).Label;
             if (label.Length > 0) caption += Separator + label;
             if (entry.Headshot) caption += Separator + "HEADSHOT";
 
@@ -81,24 +101,29 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Between the parts of one label or caption.</summary>
         private const string Separator = "  ·  ";
 
-        private static string KillLabel(in KillfeedEntry entry, string vehicle, bool wentDown)
+        private static KillfeedWording KillWording(in KillfeedEntry entry, string vehicle, bool wentDown)
         {
             // The victim's ride was destroyed under them: the vehicle is the story, whatever hit it.
-            if (wentDown) return vehicle.Length > 0 ? "DESTROYED " + vehicle : "DESTROYED VEHICLE";
+            if (wentDown) return Kill(vehicle.Length > 0 ? "DESTROYED " + vehicle : "DESTROYED VEHICLE");
 
             // The vehicle did the killing: its own gun, or driven into the victim.
             if ((entry.Detail & DeathDetail.KillerInVehicle) != 0 && vehicle.Length > 0)
-                return entry.Cause == CauseOfDeath.Vehicle ? vehicle + Separator + "ROADKILL" : vehicle;
+                return Kill(entry.Cause == CauseOfDeath.Vehicle ? vehicle + Separator + "ROADKILL" : vehicle);
 
             string weapon = WeaponIds.NameOf(entry.WeaponId).ToUpperInvariant();
 
             if ((entry.Detail & DeathDetail.Melee) != 0)
-                return weapon.Length > 0 ? weapon + Separator + "MELEE" : "MELEE";
+                return weapon.Length > 0
+                    ? new KillfeedWording(weapon + Separator + "MELEE", string.Empty, entry.WeaponId, "MELEE")
+                    : Kill("MELEE");
 
-            if (weapon.Length > 0) return weapon;
+            if (weapon.Length > 0) return new KillfeedWording(weapon, string.Empty, entry.WeaponId);
 
-            return entry.Cause == CauseOfDeath.Explosion ? "EXPLOSION" : string.Empty;
+            return Kill(entry.Cause == CauseOfDeath.Explosion ? "EXPLOSION" : string.Empty);
         }
+
+        /// <summary>A kill labelled by text alone: no weapon picture stands in for any of it.</summary>
+        private static KillfeedWording Kill(string label) => new KillfeedWording(label, string.Empty);
 
         private static string WorldSentence(CauseOfDeath cause, string vehicle, bool wentDown, in Voice voice)
         {
