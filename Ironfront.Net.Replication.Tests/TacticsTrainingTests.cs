@@ -9,10 +9,22 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
+    /// The simulator's tests run alone, after the rest: they are CPU-bound for seconds, and tests
+    /// that measure time or allocation beside them (ClientEventConsumptionTests' zero-allocation
+    /// loop) went red on a two-core runner while they ran.
+    /// </summary>
+    [CollectionDefinition(Name, DisableParallelization = true)]
+    public sealed class SimulatorCollection
+    {
+        public const string Name = "Tactics simulator";
+    }
+
+    /// <summary>
     /// The claims phase P28 part 4's report makes, held on every run: a training run replays from
     /// its seed, the simulator is fair to both sides, the tuner moves every weight the commander
     /// has, and the profile the game ships beats the original squads on rounds the tuner never saw.
     /// </summary>
+    [Collection(SimulatorCollection.Name)]
     public sealed class TacticsTrainingTests
     {
         private const ulong Seed = 2026093001UL;
