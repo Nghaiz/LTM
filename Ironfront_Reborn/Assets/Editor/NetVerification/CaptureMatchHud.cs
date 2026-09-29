@@ -172,8 +172,10 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         /// <summary>
-        /// Five plates: a person just hit (the white trail), a bot, an enemy on low health (the
-        /// pulse), an enemy bot far off, and a teammate behind cover.
+        /// Five plates, all people -- bots carry none since 2026-09-29 -- named with Vietnamese
+        /// marks, which the plate keeps as written: a teammate just hit who tops their side (the
+        /// white trail, the star), an enemy on low health (the pulse), an enemy at the wheel who
+        /// tops theirs, one far off in the water with a long name, and a teammate behind cover.
         /// </summary>
         private static void ShowNameplates(SerializedObject hud)
         {
@@ -184,14 +186,18 @@ namespace Ironfront.Net.Unity.EditorTools
             Color blue = TeamInk(Blue);
             Color red = TeamInk(Red);
 
-            var plates = new (ushort Id, float X, float Y, float Scale, float Opacity, string Name, byte Team, float Before, float After, bool Bot, Color Ink)[]
+            var plates = new (ushort Id, float X, float Y, float Scale, float Opacity, string Name, byte Team, float Before, float After, float Metres, byte Weapon, bool Seated, bool Water, bool Leader, Color Ink)[]
             {
-                (1, 760f, 640f, 1f, 1f, "Minh", TeamId.Team0, 1f, 0.55f, false, blue),
-                (7, 1010f, 600f, 0.86f, 1f, ActorNames.BotName(TeamId.Team0, 7), TeamId.Team0, 0.8f, 0.8f, true, blue),
-                (33, 1250f, 660f, 0.95f, 1f, "Hoang", TeamId.Team1, 0.2f, 0.2f, false, red),
-                (41, 1470f, 560f, 0.68f, 0.9f, ActorNames.BotName(TeamId.Team1, 8), TeamId.Team1, 1f, 1f, true, red),
-                (2, 540f, 540f, 0.66f, 0.5f, "Lan", TeamId.Team0, 0.9f, 0.9f, false, blue),
+                (1, 700f, 660f, 1f, 1f, "Minh", TeamId.Team0, 1f, 0.55f, 11f, WeaponIds.RK44, false, false, true, blue),
+                (33, 1260f, 700f, 0.95f, 1f, "Hoàng", TeamId.Team1, 0.2f, 0.2f, 18f, WeaponIds.RECON_LRR, false, false, false, red),
+                (34, 990f, 590f, 0.86f, 1f, "Tuấn", TeamId.Team1, 1f, 1f, 33f, WeaponIds.SIND7, true, false, true, red),
+                (35, 1520f, 540f, 0.66f, 0.9f, "Nguyễn Văn Khoa", TeamId.Team1, 0.7f, 0.7f, 63f, WeaponIds.SL_DEFENDER, false, true, false, red),
+                (2, 430f, 520f, 0.66f, 0.5f, "Lan", TeamId.Team0, 0.9f, 0.9f, 118f, WeaponIds.EAGLE_76, false, false, false, blue),
             };
+
+            // The plates draw the weapon in hand from the same loadout art the killfeed does.
+            System.Func<byte, Sprite> previousIcons = NetClientBindings.WeaponIcon;
+            NetClientBindings.WeaponIcon = WeaponIcons();
 
             // Twenty frames at the old health, then ten after the hit: the trail is still holding.
             for (int frame = 0; frame < 30; frame++)
@@ -201,12 +207,16 @@ namespace Ironfront.Net.Unity.EditorTools
                 foreach (var p in plates)
                 {
                     float health = frame < 20 ? p.Before : p.After;
-                    var plate = new Nameplate(p.Id, p.X, p.Y, p.Scale, p.Opacity, p.Name, p.Team, health, p.Bot, p.Team == TeamId.Team0);
+                    var plate = new Nameplate(
+                        p.Id, p.X, p.Y, p.Scale, p.Opacity, p.Name, p.Team, health, p.Team == TeamId.Team0,
+                        p.Metres, p.Weapon, p.Seated, p.Water, p.Leader);
                     layer.Set(in plate, p.Ink, 0.02f);
                 }
 
                 layer.End();
             }
+
+            NetClientBindings.WeaponIcon = previousIcons;
         }
 
         private static void ShowScoreboard(SerializedObject hud, int team0Players, int team1Players)

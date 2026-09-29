@@ -204,5 +204,44 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Equal(before + 2, table.Revision);
         }
+
+        /// <summary>
+        /// The board's order, the one the name plate's star reads too: kills, then fewer deaths,
+        /// then the lower id.
+        /// </summary>
+        [Fact]
+        public void RankIsKillsThenFewerDeathsThenTheLowerId()
+        {
+            var table = new PlayerScoreTable();
+            table.Apply(Buffer(
+                Row(5, 3, 1, TeamId.Team0), Row(6, 4, 9, TeamId.Team0),
+                Row(7, 3, 0, TeamId.Team0), Row(8, 3, 0, TeamId.Team0)), 4);
+
+            Assert.True(table.CompareRank(6, 5) < 0, "more kills ranks first, whatever the deaths");
+            Assert.True(table.CompareRank(7, 5) < 0, "on equal kills, fewer deaths ranks first");
+            Assert.True(table.CompareRank(7, 8) < 0, "on a full tie, the lower id ranks first");
+            Assert.Equal(0, table.CompareRank(5, 5));
+        }
+
+        /// <summary>
+        /// Each side's leader is the top of its own board, and a side where nobody has killed
+        /// yet has none: 0 kills leads nobody, as the board's star already says.
+        /// </summary>
+        [Fact]
+        public void EachSideHasItsOwnLeader_AndNoneBeforeAKill()
+        {
+            var table = new PlayerScoreTable();
+            table.Apply(Buffer(
+                Row(5, 3, 1, TeamId.Team0), Row(6, 4, 9, TeamId.Team0),
+                Row(9, 0, 2, TeamId.Team1), Row(10, 0, 0, TeamId.Team1)), 4);
+
+            Assert.Equal(6, table.LeaderOf(TeamId.Team0));
+            Assert.Equal(0, table.LeaderOf(TeamId.Team1));
+
+            table.Apply(Buffer(Row(9, 1, 2, TeamId.Team1)), 1);
+
+            Assert.Equal(9, table.LeaderOf(TeamId.Team1));
+            Assert.Equal(0, table.LeaderOf(TeamId.Team0));
+        }
     }
 }

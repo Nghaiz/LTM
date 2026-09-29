@@ -166,16 +166,7 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         /// <summary>Shows a weapon's picture at the row's icon height, as wide as its shape.</summary>
         private void FitWeapon(Sprite picture)
-        {
-            _weapon.sprite = picture;
-
-            Rect shape = picture.rect;
-            float aspect = shape.height > 0f ? shape.width / shape.height : 1f;
-            float width = Mathf.Clamp(WeaponIconHeight * aspect, WeaponIconHeight, WeaponIconMaxWidth);
-
-            _weaponSize.minWidth = width;
-            _weaponSize.preferredWidth = width;
-        }
+            => HudStyle.FitPicture(_weapon, _weaponSize, picture, WeaponIconHeight, WeaponIconMaxWidth);
 
         /// <summary>The weapon picture's height, and the widest a long rifle may draw.</summary>
         public const float WeaponIconHeight = 30f;
