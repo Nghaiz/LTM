@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Ironfront.Net.Replication.Ai;
 using UnityEngine;
 
 public class Squad
@@ -37,6 +38,29 @@ public class Squad
 	private bool hasSquadVehicle;
 
 	private int recentTakingFireEvents;
+
+	// ---- the team commander's order (phase P28, BotCommander) ----
+
+	/// <summary>What the commander has this squad doing; None leaves it to the original behaviour.</summary>
+	public SquadRole commandRole;
+
+	/// <summary>The flag the order names.</summary>
+	public SpawnPoint commandTarget;
+
+	/// <summary>The flag's index in the commander's list, -1 for none.</summary>
+	public int commandFlag = -1;
+
+	/// <summary>A flank's side approach, or the spot a defence digs in round.</summary>
+	public Vector3 commandPoint;
+
+	/// <summary>A flank has reached its side approach and turned in.</summary>
+	public bool commandReachedPoint = true;
+
+	/// <summary>Approaching quietly: nobody sprints until the waypoint.</summary>
+	public bool sneaking;
+
+	/// <summary>Whether the commander has given this squad a job.</summary>
+	public bool HasCommand => commandRole != SquadRole.None && commandTarget != null;
 
 	public Squad(List<AiActorController> members, float timeUntilReady)
 	{
@@ -142,6 +166,124 @@ public class Squad
 	public void ReissueAttackOrder()
 	{
 		AttackSpawnPoint(targetSpawnPoint);
+	}
+
+	/// <summary>
+	/// Takes the commander's order, and carries it out now when <paramref name="applyNow"/> --
+	/// otherwise at the leader's next order tick, so a squad under fire finishes the fight first.
+	/// </summary>
+	public void Command(SquadRole role, SpawnPoint target, int flag, Vector3 point, bool sneak, bool applyNow)
+	{
+		commandRole = target != null ? role : SquadRole.None;
+		commandTarget = target;
+		commandFlag = flag;
+		commandPoint = point;
+		commandReachedPoint = role != SquadRole.Flank;
+		sneaking = sneak && role == SquadRole.Flank;
+
+		if (applyNow && HasCommand)
+		{
+			FollowCommand();
+		}
+	}
+
+	/// <summary>
+	/// Does what the commander ordered: straight at the flag, dig in round it, or round the side
+	/// through the waypoint first. With no order it is the original "attack the nearest".
+	/// </summary>
+	public void FollowCommand()
+	{
+		if (!HasCommand)
+		{
+			NewAttackOrder();
+			return;
+		}
+
+		AiActorController leader = Leader();
+		int team = leader != null && leader.actor != null ? leader.actor.team : -1;
+
+		switch (commandRole)
+		{
+		case SquadRole.Defend:
+			if (HasVehicle())
+			{
+				AttackSpawnPoint(commandTarget);
+				return;
+			}
+			// Already dug in round the flag: hold, rather than get up and lie down again.
+			if (state == State.DigIn && leader != null && Vector3.Distance(leader.actor.Position(), commandPoint) < 20f)
+			{
+				return;
+			}
+			targetSpawnPoint = commandTarget;
+			MoveToAndDigIn(commandPoint);
+			return;
+		case SquadRole.Flank:
+			if (!commandReachedPoint)
+			{
+				targetSpawnPoint = commandTarget;
+				MoveTo(commandPoint);
+				return;
+			}
+			break;
+		}
+
+		// The flag has fallen to this side: hold it until the commander hands out the next one.
+		if (commandTarget.owner == team && commandTarget.IsSafe())
+		{
+			DigIn();
+			return;
+		}
+
+		AttackSpawnPoint(commandTarget);
+	}
+
+	/// <summary>
+	/// Called on the leader's order tick: a flanking squad that has reached its side approach
+	/// stops sneaking and turns in on the flag.
+	/// </summary>
+	public void UpdateCommandProgress()
+	{
+		if (commandRole != SquadRole.Flank || commandReachedPoint || !HasCommand)
+		{
+			return;
+		}
+		AiActorController leader = Leader();
+		if (leader == null || leader.actor == null)
+		{
+			return;
+		}
+		if (Vector3.Distance(leader.actor.Position(), commandPoint) < 12f)
+		{
+			commandReachedPoint = true;
+			sneaking = false;
+			AttackSpawnPoint(commandTarget);
+		}
+	}
+
+	/// <summary>
+	/// Whether the squad may break off for <paramref name="spawnPoint"/>, the flag nearest its
+	/// leader, the way the original always did. With no order, yes. An attack takes a flag it is
+	/// standing on, a defence only its own flag, and a flank nothing until it has turned in.
+	/// </summary>
+	public bool MayDivertTo(SpawnPoint spawnPoint)
+	{
+		if (!HasCommand || spawnPoint == commandTarget)
+		{
+			return true;
+		}
+		switch (commandRole)
+		{
+		case SquadRole.Attack:
+		{
+			AiActorController leader = Leader();
+			return leader != null && Vector3.Distance(leader.actor.Position(), spawnPoint.transform.position) < spawnPoint.GotoRadius() + 10f;
+		}
+		case SquadRole.Flank:
+			return false;
+		default:
+			return false;
+		}
 	}
 
 	public void AttackSpawnPoint(SpawnPoint spawnPoint)

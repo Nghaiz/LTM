@@ -781,6 +781,7 @@ public class AiActorController : ActorController
 			if (IsSquadLeader())
 			{
 				squad.Update();
+				squad.UpdateCommandProgress();
 				if (actor.IsSeated() && flying && helicopterNewOrderAction.Done())
 				{
 					squad.NewAttackOrder();
@@ -823,14 +824,17 @@ public class AiActorController : ActorController
 				}
 				else if (!squad.IsTakingFire())
 				{
+					// The team commander's order comes first (phase P28): a squad sent round the side
+					// or told to hold a flag does not break off for every flag it passes, the way
+					// the original's "take whatever is nearest" did.
 					SpawnPoint closestSpawnPoint = squad.ClosestSpawnPoint();
-					if ((!squad.HasTargetSpawnPoint() || squad.targetSpawnPoint != closestSpawnPoint) && squad.ShouldGotoSpawnPoint(closestSpawnPoint))
+					if ((!squad.HasTargetSpawnPoint() || squad.targetSpawnPoint != closestSpawnPoint) && squad.ShouldGotoSpawnPoint(closestSpawnPoint) && squad.MayDivertTo(closestSpawnPoint))
 					{
 						squad.AttackSpawnPoint(closestSpawnPoint);
 					}
 					else if (squad.HasTargetSpawnPoint() && squad.targetSpawnPoint == closestSpawnPoint && !squad.ShouldGotoSpawnPoint(closestSpawnPoint))
 					{
-						squad.NewAttackOrder();
+						squad.FollowCommand();
 					}
 					else if (!hasPath && !hasFlightTarget && squad.state != Squad.State.EnterVehicle)
 					{
@@ -859,7 +863,11 @@ public class AiActorController : ActorController
 						}
 						if (!enteringVehicle && !actor.IsPassenger())
 						{
-							if (!squad.HasTargetSpawnPoint() || !squad.ShouldGotoSpawnPoint(squad.targetSpawnPoint))
+							if (squad.HasCommand)
+							{
+								squad.FollowCommand();
+							}
+							else if (!squad.HasTargetSpawnPoint() || !squad.ShouldGotoSpawnPoint(squad.targetSpawnPoint))
 							{
 								squad.NewAttackOrder();
 							}
@@ -950,6 +958,11 @@ public class AiActorController : ActorController
 
 	private void StartSprint()
 	{
+		// A squad sneaking round the side walks (phase P28): a sprint is heard and seen.
+		if (squad != null && squad.sneaking)
+		{
+			return;
+		}
 		sprintAction.StartLifetime(UnityEngine.Random.Range(3f, 6f));
 		sprintCooldownAction.StartLifetime(UnityEngine.Random.Range(5f, 11f));
 	}
