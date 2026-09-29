@@ -603,34 +603,68 @@ namespace Ironfront.Net.Unity.Client
                     if (_names.NameOf(actorId) != null) humans++;
                 }
 
+                // The side's one order ranks everybody, bots and players together; the board then
+                // lists the players first and the bots after them (owner's report of 2026-09-30),
+                // each keeping the rank it earned in the whole side.
                 _scoreboardOrder.Sort(CompareScoreRows);
+                for (int i = 0; i < _scoreboardOrder.Count; i++) _scoreboardRanks[_scoreboardOrder[i]] = i + 1;
+                ushort leader = _scoreboardOrder.Count > 0 && _scores.KillsOf(_scoreboardOrder[0]) > 0
+                    ? _scoreboardOrder[0]
+                    : ushort.MaxValue;
 
                 _rosterPlayers += _scoreboardOrder.Count;
                 _rosterHumans += humans;
 
                 hud.BeginScoreboardColumn(team, _scoreboardOrder.Count, humans, totalKills, totalDeaths);
 
-                for (int i = 0; i < _scoreboardOrder.Count; i++)
+                for (int pass = 0; pass < 2; pass++)
                 {
-                    ushort actorId = _scoreboardOrder[i];
-                    int kills = _scores.KillsOf(actorId);
-                    int deaths = _scores.DeathsOf(actorId);
+                    bool wantHumans = pass == 0;
 
-                    var row = new ScoreboardRow(
-                        actorId,
-                        NameFor(actorId),
-                        kills,
-                        deaths,
-                        ScoreboardWording.Ratio(kills, deaths),
-                        isBot: _names.NameOf(actorId) == null && _bots.IsBot(actorId),
-                        isLocal: hasLocal && actorId == localActorId);
+                    for (int i = 0; i < _scoreboardOrder.Count; i++)
+                    {
+                        ushort actorId = _scoreboardOrder[i];
+                        if ((_names.NameOf(actorId) != null) != wantHumans) continue;
 
-                    hud.AddScoreboardRow(team, in row);
+                        hud.AddScoreboardRow(team, RowFor(actorId, hasLocal, localActorId, leader));
+                    }
                 }
             }
 
             hud.EndScoreboard();
         }
+
+        /// <summary>One actor's board row: the counts, the rank it earned, and the server's stats.</summary>
+        private ScoreboardRow RowFor(ushort actorId, bool hasLocal, ushort localActorId, ushort leader)
+        {
+            int kills = _scores.KillsOf(actorId);
+            int deaths = _scores.DeathsOf(actorId);
+            bool hasStats = _scores.HasStats(actorId);
+            PlayerStatusFlags status = _scores.StatusOf(actorId);
+
+            return new ScoreboardRow(
+                actorId,
+                NameFor(actorId),
+                kills,
+                deaths,
+                ScoreboardWording.Ratio(kills, deaths),
+                isBot: _names.NameOf(actorId) == null && _bots.IsBot(actorId),
+                isLocal: hasLocal && actorId == localActorId,
+                rank: _scoreboardRanks[actorId],
+                hasStats: hasStats,
+                isAlive: !hasStats || (status & PlayerStatusFlags.Alive) != 0,
+                isSeated: (status & PlayerStatusFlags.Seated) != 0,
+                headshots: _scores.HeadshotsOf(actorId),
+                streak: _scores.StreakOf(actorId),
+                bestStreak: _scores.BestStreakOf(actorId),
+                points: _scores.PointsOf(actorId),
+                pingMs: _scores.PingOf(actorId),
+                isLeader: actorId == leader,
+                ratioValue: deaths > 0 ? kills / (float)deaths : kills);
+        }
+
+        /// <summary>Each actor's place on its side by the board's one order, rewritten per push.</summary>
+        private readonly int[] _scoreboardRanks = new int[ProtocolConstants.MAX_ACTORS];
 
         /// <summary>
         /// States the match at the top of the board, when any of it has changed.

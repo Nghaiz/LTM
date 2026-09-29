@@ -43,8 +43,8 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal("Minh", NameplateRules.PlateNameOf(5, names));
             Assert.Equal("Hoang", NameplateRules.PlateNameOf(6, names));
 
-            // The bots have names everywhere else ("Blue Team Bot 1") and no plate here.
-            Assert.Equal("Blue Team Bot 1", ActorNames.Display(3, names, bots));
+            // The bots have names everywhere else (a callsign) and no plate here.
+            Assert.Equal(BotCallsigns.For(3), ActorNames.Display(3, names, bots));
             Assert.Null(NameplateRules.PlateNameOf(3, names));
             Assert.Null(NameplateRules.PlateNameOf(4, names));
         }

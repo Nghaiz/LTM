@@ -69,10 +69,19 @@ namespace Ironfront.Net.Unity
     }
 
     /// <summary>One player's row on the Tab scoreboard.</summary>
+    /// <remarks>
+    /// The owner's report of 2026-09-30 widened it: a rank, whether the player is alive or in a
+    /// vehicle, headshots, the current and best streak, the points their kills earned, and a
+    /// human's ping. Those come from the server's stats tail; a server from before it leaves
+    /// <see cref="HasStats"/> false and the board shows those columns as unknown.
+    /// </remarks>
     public readonly struct ScoreboardRow
     {
         public ScoreboardRow(
-            ushort actorId, string name, int kills, int deaths, string ratio, bool isBot, bool isLocal)
+            ushort actorId, string name, int kills, int deaths, string ratio, bool isBot, bool isLocal,
+            int rank = 0, bool hasStats = false, bool isAlive = true, bool isSeated = false,
+            int headshots = 0, int streak = 0, int bestStreak = 0, int points = 0, int pingMs = 0,
+            bool isLeader = false, float ratioValue = 0f)
         {
             ActorId = actorId;
             Name = name ?? string.Empty;
@@ -81,6 +90,17 @@ namespace Ironfront.Net.Unity
             Ratio = ratio ?? string.Empty;
             IsBot = isBot;
             IsLocal = isLocal;
+            Rank = rank;
+            HasStats = hasStats;
+            IsAlive = isAlive;
+            IsSeated = isSeated;
+            Headshots = headshots;
+            Streak = streak;
+            BestStreak = bestStreak;
+            Points = points;
+            PingMs = pingMs;
+            IsLeader = isLeader;
+            RatioValue = ratioValue;
         }
 
         /// <summary>Who the row is, so a row can light up when that player scores.</summary>
@@ -95,9 +115,40 @@ namespace Ironfront.Net.Unity
         /// <summary>Kills per death, already formatted.</summary>
         public string Ratio { get; }
 
+        /// <summary>Kills per death as a number, for the colour it is drawn in.</summary>
+        public float RatioValue { get; }
+
         public bool IsBot { get; }
 
         /// <summary>The viewing player.</summary>
         public bool IsLocal { get; }
+
+        /// <summary>Place on the side by the board's one order, from 1, bots and players together.</summary>
+        public int Rank { get; }
+
+        /// <summary>The server sent this player's stats; without them the columns below read unknown.</summary>
+        public bool HasStats { get; }
+
+        public bool IsAlive { get; }
+
+        /// <summary>In a vehicle seat.</summary>
+        public bool IsSeated { get; }
+
+        public int Headshots { get; }
+
+        /// <summary>Enemy kills since the player last died.</summary>
+        public int Streak { get; }
+
+        /// <summary>The longest streak this match.</summary>
+        public int BestStreak { get; }
+
+        /// <summary>The points this player's kills put on the side's score.</summary>
+        public int Points { get; }
+
+        /// <summary>A human's round trip in milliseconds; 0 for a bot or unknown.</summary>
+        public int PingMs { get; }
+
+        /// <summary>Tops the side with at least one kill: the star, as over their head.</summary>
+        public bool IsLeader { get; }
     }
 }

@@ -195,7 +195,8 @@ namespace Ironfront.Net.Replication.Server
             Span<byte> bodyScratch,
             ReadOnlySpan<PlayerScoreEntry> entries)
         {
-            int bodyLength = PlayerScoresMessage.Write(bodyScratch, entries);
+            // Always with the stats tail: a client from before it reads the rows and stops.
+            int bodyLength = PlayerScoresMessage.Write(bodyScratch, entries, includeStats: true);
             return bodyLength < 0
                 ? -1
                 : Frame(

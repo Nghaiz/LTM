@@ -1078,10 +1078,15 @@ namespace Ironfront.Net.Unity.EditorTools
             headsRect.sizeDelta = new Vector2(-2f * RowInset, 28f);
 
             ColumnHead(heads, "#", bold, TextAnchor.MiddleCenter, fromRight: false, RankX, RankWidth);
-            ColumnHead(heads, "PLAYER", bold, TextAnchor.MiddleLeft, fromRight: false, NameX, 300f);
+            ColumnHead(heads, "PLAYER", bold, TextAnchor.MiddleLeft, fromRight: false, NameX, 220f);
             ColumnHead(heads, "K", bold, TextAnchor.MiddleRight, fromRight: true, KillsX, NumberWidth);
             ColumnHead(heads, "D", bold, TextAnchor.MiddleRight, fromRight: true, DeathsX, NumberWidth);
             ColumnHead(heads, "K/D", bold, TextAnchor.MiddleRight, fromRight: true, RatioX, RatioWidth);
+            ColumnHead(heads, "HS", bold, TextAnchor.MiddleRight, fromRight: true, HeadshotsX, NumberWidth);
+            ColumnHead(heads, "STREAK", bold, TextAnchor.MiddleRight, fromRight: true, StreakX, StreakWidth);
+            ColumnHead(heads, "BEST", bold, TextAnchor.MiddleRight, fromRight: true, BestX, NumberWidth);
+            ColumnHead(heads, "SCORE", bold, TextAnchor.MiddleRight, fromRight: true, ScoreX, ScoreWidth);
+            ColumnHead(heads, "PING", bold, TextAnchor.MiddleRight, fromRight: true, PingX, PingWidth);
 
             Image rule = Picture(side, "Column Rule", new Color(1f, 1f, 1f, 0.12f));
             RectTransform ruleRect = rule.rectTransform;
@@ -1103,6 +1108,9 @@ namespace Ironfront.Net.Unity.EditorTools
             empty.text = "NO PLAYERS YET";
             Stretch(empty.rectTransform);
 
+            ScoreboardSectionView humansSection = BuildScoreboardSection(rows, "Players Heading", bold);
+            ScoreboardSectionView botsSection = BuildScoreboardSection(rows, "Bots Heading", bold);
+
             ScoreboardRowView template = BuildScoreboardRow(rows, bold, medium, rounded);
 
             ScoreboardTeamView view = side.AddComponent<ScoreboardTeamView>();
@@ -1118,12 +1126,61 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_rows", rowsRect);
             Assign(so, "_empty", empty);
             Assign(so, "_rowTemplate", template);
+            Assign(so, "_humansSection", humansSection);
+            Assign(so, "_botsSection", botsSection);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             return view;
         }
 
-        /// <summary>The one row a side's column clones: rank, star, name, K, D, K/D. A bot's name says it is one.</summary>
+        /// <summary>
+        /// The heading over one group of a side's rows: a mark, the words and a rule in the side's
+        /// colour, all written at runtime. Authored hidden.
+        /// </summary>
+        private static ScoreboardSectionView BuildScoreboardSection(GameObject rows, string name, Font bold)
+        {
+            var heading = new GameObject(name, typeof(RectTransform));
+            heading.transform.SetParent(rows.transform, worldPositionStays: false);
+
+            RectTransform rect = heading.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(0f, 24f);
+
+            Image icon = Picture(heading, "Icon", Ink);
+            icon.preserveAspect = true;
+            Place(icon, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(6f, 1f), new Vector2(16f, 16f));
+
+            Text label = BoardText(heading, "Label", bold, 14, Ink, TextAnchor.MiddleLeft, shadowed: false);
+            Place(label, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(28f, 1f), new Vector2(300f, 22f));
+
+            Image rule = Picture(heading, "Rule", new Color(1f, 1f, 1f, 0.3f));
+            RectTransform ruleRect = rule.rectTransform;
+            ruleRect.anchorMin = new Vector2(0f, 0f);
+            ruleRect.anchorMax = new Vector2(1f, 0f);
+            ruleRect.pivot = new Vector2(0.5f, 0f);
+            ruleRect.anchoredPosition = Vector2.zero;
+            ruleRect.sizeDelta = new Vector2(0f, 1f);
+
+            ScoreboardSectionView view = heading.AddComponent<ScoreboardSectionView>();
+
+            var so = new SerializedObject(view);
+            Assign(so, "_icon", icon);
+            Assign(so, "_label", label);
+            Assign(so, "_rule", rule);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            heading.SetActive(false);
+            return view;
+        }
+
+        /// <summary>
+        /// The one row a side's column clones: rank medal, player or bot mark, name with its star and
+        /// chips, status, K, D, K/D, headshots, streak, best, score and ping. Owner's report of
+        /// 2026-09-30: more columns, so the row is not wide and empty in the middle.
+        /// </summary>
         private static ScoreboardRowView BuildScoreboardRow(
             GameObject rows, Font bold, Font medium, Sprite rounded)
         {
@@ -1153,12 +1210,25 @@ namespace Ironfront.Net.Unity.EditorTools
             edge.effectDistance = new Vector2(1.5f, -1.5f);
             edge.enabled = false;
 
+            // A player's row carries its side's colour down its left edge.
+            Image accent = Picture(row, "Accent", Ink);
+            RectTransform accentRect = accent.rectTransform;
+            accentRect.anchorMin = new Vector2(0f, 0f);
+            accentRect.anchorMax = new Vector2(0f, 1f);
+            accentRect.pivot = new Vector2(0f, 0.5f);
+            accentRect.offsetMin = new Vector2(0f, 3f);
+            accentRect.offsetMax = new Vector2(4f, -3f);
+
+            Image medal = Picture(row, "Medal", HudStyle.Gold);
+            medal.preserveAspect = true;
+            Place(medal, new Vector2(0f, 0.5f), Middle, new Vector2(RankX + RankWidth * 0.5f, 0f), new Vector2(24f, 24f));
+
             Text rank = BoardText(row, "Rank", medium, 16, HudStyle.BoardFaint, TextAnchor.MiddleCenter, shadowed: false);
             Column(rank, fromRight: false, RankX, RankWidth);
 
-            Image star = Picture(row, "Star", HudStyle.Gold);
-            Place(star, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(StarX, 0f), new Vector2(18f, 18f));
-            star.preserveAspect = true;
+            Image kind = Picture(row, "Kind", Ink);
+            kind.preserveAspect = true;
+            Place(kind, new Vector2(0f, 0.5f), Middle, new Vector2(KindX, 0f), new Vector2(20f, 20f));
 
             var identity = new GameObject("Identity", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             identity.transform.SetParent(row.transform, worldPositionStays: false);
@@ -1166,11 +1236,11 @@ namespace Ironfront.Net.Unity.EditorTools
             identityRect.anchorMin = Vector2.zero;
             identityRect.anchorMax = Vector2.one;
             identityRect.offsetMin = new Vector2(NameX, 0f);
-            identityRect.offsetMax = new Vector2(-(KillsX + NumberWidth + 16f), 0f);
+            identityRect.offsetMax = new Vector2(-(StatusX + StatusWidth + 8f), 0f);
 
             var identityLayout = identity.GetComponent<HorizontalLayoutGroup>();
             identityLayout.childAlignment = TextAnchor.MiddleLeft;
-            identityLayout.spacing = 8f;
+            identityLayout.spacing = 7f;
             identityLayout.childControlWidth = true;
             identityLayout.childControlHeight = true;
             identityLayout.childForceExpandWidth = false;
@@ -1178,30 +1248,105 @@ namespace Ironfront.Net.Unity.EditorTools
 
             Text name = BoardText(identity, "Name", bold, 18, Ink, TextAnchor.MiddleLeft);
 
+            Image star = Block(identity, "Star", new Vector2(16f, 16f));
+            star.color = HudStyle.Gold;
+            star.preserveAspect = true;
+
+            GameObject youChip = Chip(identity, "You Chip", "YOU", bold, rounded, HudStyle.Gold, HudStyle.MedalInk);
+            GameObject botChip = Chip(identity, "Bot Chip", "BOT", bold, rounded, new Color(1f, 1f, 1f, 0.14f), HudStyle.BotInk);
+
+            Image status = Picture(row, "Status", HudStyle.AliveInk);
+            status.preserveAspect = true;
+            Place(status, new Vector2(1f, 0.5f), Middle, new Vector2(-(StatusX + StatusWidth * 0.5f), 0f), new Vector2(14f, 14f));
+
             Text kills = BoardText(row, "Kills", bold, 18, Ink, TextAnchor.MiddleRight);
             Column(kills, fromRight: true, KillsX, NumberWidth);
 
             Text deaths = BoardText(row, "Deaths", bold, 18, HudStyle.BoardMuted, TextAnchor.MiddleRight);
             Column(deaths, fromRight: true, DeathsX, NumberWidth);
 
-            Text ratio = BoardText(row, "Ratio", medium, 16, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
+            Text ratio = BoardText(row, "Ratio", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
             Column(ratio, fromRight: true, RatioX, RatioWidth);
+
+            Text headshots = BoardText(row, "Headshots", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
+            Column(headshots, fromRight: true, HeadshotsX, NumberWidth);
+
+            Image streakIcon = Picture(row, "Streak Icon", HudStyle.StreakInk);
+            streakIcon.preserveAspect = true;
+            Place(streakIcon, new Vector2(1f, 0.5f), Middle, new Vector2(-(StreakX + 36f), 0f), new Vector2(16f, 16f));
+
+            Text streak = BoardText(row, "Streak", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
+            Column(streak, fromRight: true, StreakX, 26f);
+
+            Text best = BoardText(row, "Best", bold, 16, HudStyle.BoardMuted, TextAnchor.MiddleRight, shadowed: false);
+            Column(best, fromRight: true, BestX, NumberWidth);
+
+            Text score = BoardText(row, "Score", bold, 18, Ink, TextAnchor.MiddleRight);
+            Column(score, fromRight: true, ScoreX, ScoreWidth);
+
+            Image pingIcon = Picture(row, "Ping Icon", HudStyle.AliveInk);
+            pingIcon.preserveAspect = true;
+            Place(pingIcon, new Vector2(1f, 0.5f), Middle, new Vector2(-(PingX + 52f), 0f), new Vector2(16f, 16f));
+
+            Text ping = BoardText(row, "Ping", bold, 15, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
+            Column(ping, fromRight: true, PingX, 40f);
 
             ScoreboardRowView view = row.AddComponent<ScoreboardRowView>();
 
             var so = new SerializedObject(view);
             Assign(so, "_backing", backing);
             Assign(so, "_edge", edge);
+            Assign(so, "_accent", accent);
+            Assign(so, "_medal", medal);
             Assign(so, "_rank", rank);
-            Assign(so, "_star", star);
+            Assign(so, "_kind", kind);
             Assign(so, "_name", name);
+            Assign(so, "_star", star);
+            Assign(so, "_youChip", youChip);
+            Assign(so, "_botChip", botChip);
+            Assign(so, "_status", status);
             Assign(so, "_kills", kills);
             Assign(so, "_deaths", deaths);
             Assign(so, "_ratio", ratio);
+            Assign(so, "_headshots", headshots);
+            Assign(so, "_streakIcon", streakIcon);
+            Assign(so, "_streak", streak);
+            Assign(so, "_best", best);
+            Assign(so, "_score", score);
+            Assign(so, "_pingIcon", pingIcon);
+            Assign(so, "_ping", ping);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             row.SetActive(false);
             return view;
+        }
+
+        /// <summary>A small rounded chip with a word on it, laid out beside a name: YOU, BOT.</summary>
+        private static GameObject Chip(
+            GameObject parent, string name, string word, Font bold, Sprite rounded, Color backing, Color ink)
+        {
+            var chip = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
+            chip.transform.SetParent(parent.transform, worldPositionStays: false);
+
+            var image = chip.GetComponent<Image>();
+            image.sprite = rounded;
+            image.type = Image.Type.Sliced;
+            image.color = backing;
+            image.raycastTarget = false;
+
+            var layout = chip.GetComponent<HorizontalLayoutGroup>();
+            layout.padding = new RectOffset(6, 6, 1, 1);
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            Text text = BoardText(chip, "Text", bold, 12, ink, TextAnchor.MiddleCenter, shadowed: false);
+            text.text = word;
+
+            chip.SetActive(false);
+            return chip;
         }
 
         // Nearly the whole 1920x1080 reference: the board is a full-screen read, and its rows are
@@ -1218,16 +1363,27 @@ namespace Ironfront.Net.Unity.EditorTools
         private const float BandHeight = 96f;
         private const float RowInset = 12f;
 
-        // Columns, from a row's left edge or (fromRight) its right edge.
-        private const float RankX = 0f;
-        private const float RankWidth = 40f;
-        private const float StarX = 44f;
+        // Columns, from a row's left edge or (fromRight) its right edge. The owner's report of
+        // 2026-09-30 filled the empty middle: status, HS, streak, best, score and ping.
+        private const float RankX = 6f;
+        private const float RankWidth = 30f;
+        private const float KindX = 52f;
         private const float NameX = 68f;
-        private const float KillsX = 190f;
-        private const float DeathsX = 110f;
-        private const float RatioX = 12f;
-        private const float NumberWidth = 60f;
-        private const float RatioWidth = 80f;
+        private const float PingX = 6f;
+        private const float PingWidth = 70f;
+        private const float ScoreX = 84f;
+        private const float ScoreWidth = 62f;
+        private const float BestX = 152f;
+        private const float StreakX = 204f;
+        private const float StreakWidth = 54f;
+        private const float HeadshotsX = 276f;
+        private const float RatioX = 324f;
+        private const float RatioWidth = 56f;
+        private const float DeathsX = 384f;
+        private const float KillsX = 432f;
+        private const float StatusX = 480f;
+        private const float StatusWidth = 28f;
+        private const float NumberWidth = 44f;
 
         private static readonly Vector2 TopLeft = new Vector2(0f, 1f);
         private static readonly Vector2 TopCentre = new Vector2(0.5f, 1f);

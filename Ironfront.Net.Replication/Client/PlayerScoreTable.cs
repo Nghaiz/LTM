@@ -64,6 +64,15 @@ namespace Ironfront.Net.Replication.Client
         /// </remarks>
         private readonly bool[] _present = new bool[ProtocolConstants.MAX_ACTORS];
 
+        // The stats tail (owner's report of 2026-09-30): whether it came, and what it said.
+        private readonly bool[] _hasStats = new bool[ProtocolConstants.MAX_ACTORS];
+        private readonly PlayerStatusFlags[] _status = new PlayerStatusFlags[ProtocolConstants.MAX_ACTORS];
+        private readonly byte[] _headshots = new byte[ProtocolConstants.MAX_ACTORS];
+        private readonly byte[] _streak = new byte[ProtocolConstants.MAX_ACTORS];
+        private readonly byte[] _bestStreak = new byte[ProtocolConstants.MAX_ACTORS];
+        private readonly ushort[] _points = new ushort[ProtocolConstants.MAX_ACTORS];
+        private readonly ushort[] _ping = new ushort[ProtocolConstants.MAX_ACTORS];
+
         /// <summary>How many rows the last broadcast carried. Zero before the first one.</summary>
         public int Count { get; private set; }
 
@@ -92,6 +101,7 @@ namespace Ironfront.Net.Replication.Client
             Array.Clear(_kills, 0, _kills.Length);
             Array.Clear(_deaths, 0, _deaths.Length);
             Array.Clear(_present, 0, _present.Length);
+            ClearStats();
 
             // TeamId.None, not 0. Array.Clear would leave every un-broadcast actor on team 0,
             // and a scoreboard reading that would silently file the whole absent half of the id
@@ -112,6 +122,16 @@ namespace Ironfront.Net.Replication.Client
                 _deaths[actorId]  = entries[i].Deaths;
                 _teams[actorId]   = entries[i].Team;
                 _present[actorId] = true;
+
+                if (!entries[i].HasStats) continue;
+
+                _hasStats[actorId]   = true;
+                _status[actorId]     = entries[i].Status;
+                _headshots[actorId]  = entries[i].Headshots;
+                _streak[actorId]     = entries[i].Streak;
+                _bestStreak[actorId] = entries[i].BestStreak;
+                _points[actorId]     = entries[i].Points;
+                _ping[actorId]       = entries[i].PingMs;
             }
 
             Count = count;
@@ -143,6 +163,42 @@ namespace Ironfront.Net.Replication.Client
         /// </remarks>
         public byte TeamOf(ushort actorId)
             => Has(actorId) ? _teams[actorId] : TeamId.None;
+
+        /// <summary>
+        /// Whether the server sent this actor's stats tail. False from a server that predates it,
+        /// and then every number below reads 0 -- a board shows those columns as unknown rather
+        /// than as zeroes.
+        /// </summary>
+        public bool HasStats(ushort actorId) => Has(actorId) && _hasStats[actorId];
+
+        /// <summary>Alive, and in a vehicle, as the server last said.</summary>
+        public PlayerStatusFlags StatusOf(ushort actorId)
+            => HasStats(actorId) ? _status[actorId] : PlayerStatusFlags.None;
+
+        public int HeadshotsOf(ushort actorId) => HasStats(actorId) ? _headshots[actorId] : 0;
+
+        /// <summary>Enemy kills since this actor last died.</summary>
+        public int StreakOf(ushort actorId) => HasStats(actorId) ? _streak[actorId] : 0;
+
+        /// <summary>The longest streak this actor has had this match.</summary>
+        public int BestStreakOf(ushort actorId) => HasStats(actorId) ? _bestStreak[actorId] : 0;
+
+        /// <summary>The points this actor's kills put on its side's score.</summary>
+        public int PointsOf(ushort actorId) => HasStats(actorId) ? _points[actorId] : 0;
+
+        /// <summary>A human's round trip in milliseconds; 0 for a bot or when the server did not say.</summary>
+        public int PingOf(ushort actorId) => HasStats(actorId) ? _ping[actorId] : 0;
+
+        private void ClearStats()
+        {
+            Array.Clear(_hasStats, 0, _hasStats.Length);
+            Array.Clear(_status, 0, _status.Length);
+            Array.Clear(_headshots, 0, _headshots.Length);
+            Array.Clear(_streak, 0, _streak.Length);
+            Array.Clear(_bestStreak, 0, _bestStreak.Length);
+            Array.Clear(_points, 0, _points.Length);
+            Array.Clear(_ping, 0, _ping.Length);
+        }
 
         /// <summary>
         /// The board's order: more kills first, then fewer deaths, then the lower actor id.
@@ -191,6 +247,7 @@ namespace Ironfront.Net.Replication.Client
             Array.Clear(_kills, 0, _kills.Length);
             Array.Clear(_deaths, 0, _deaths.Length);
             Array.Clear(_present, 0, _present.Length);
+            ClearStats();
             for (int i = 0; i < _teams.Length; i++) _teams[i] = TeamId.None;
             Count = 0;
             Revision++;

@@ -65,6 +65,50 @@ namespace Ironfront.Net.Unity.Server.Tests
             return ServerTickLoop.FillScoreRows(actors, tally, rows);
         }
 
+        /// <summary>
+        /// Every row carries the stats tail (owner's report of 2026-09-30): the tally's headshots,
+        /// streaks and points, whether the actor is alive, and a ping read from its session.
+        /// </summary>
+        [Test]
+        public void EveryRow_CarriesTheStatsTail()
+        {
+            NetServerActor bot = CreateBody("bot", 33, 1);
+            var tally = new MatchScoreTally();
+            tally.RecordDeath(40, 33);
+            tally.CreditKill(33, headshot: true, points: 3);
+
+            var rows = new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+            int count = ServerTickLoop.FillScoreRows(new[] { bot }, tally, rows, actorId => (ushort)(actorId == 33 ? 0 : 99));
+
+            Assert.AreEqual(1, count);
+            Assert.IsTrue(rows[0].HasStats);
+            Assert.AreEqual(1, rows[0].Headshots);
+            Assert.AreEqual(1, rows[0].Streak);
+            Assert.AreEqual(1, rows[0].BestStreak);
+            Assert.AreEqual(3, rows[0].Points);
+            Assert.AreEqual(0, rows[0].PingMs);
+            Assert.AreEqual(bot.IsAlive, (rows[0].Status & PlayerStatusFlags.Alive) != 0);
+        }
+
+        /// <summary>The row buffer is reused: a field left from another actor's row is a number on the wrong player.</summary>
+        [Test]
+        public void AReusedRowBuffer_CarriesNothingOver()
+        {
+            NetServerActor first = CreateBody("first", 33, 1);
+            NetServerActor second = CreateBody("second", 34, 1);
+            var tally = new MatchScoreTally();
+            tally.RecordDeath(40, 33);
+            tally.CreditKill(33, headshot: true, points: 5);
+
+            var rows = new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+            ServerTickLoop.FillScoreRows(new[] { first }, tally, rows);
+            ServerTickLoop.FillScoreRows(new[] { second }, tally, rows);
+
+            Assert.AreEqual(34, rows[0].ActorId);
+            Assert.AreEqual(0, rows[0].Headshots);
+            Assert.AreEqual(0, rows[0].Points);
+        }
+
         [Test]
         public void AParkedPlayerSlot_HasNoRow()
         {

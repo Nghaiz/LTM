@@ -1091,7 +1091,7 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>Whether the server's own occupancy record has this actor in a seat.</summary>
         /// <remarks>The same question <see cref="BuildStateFlags"/> answers for the IsSeated bit.</remarks>
-        private bool IsSeatedOnServer
+        internal bool IsSeatedOnServer
             => ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(_actorId, out _, out _);
 
         /// <summary>
