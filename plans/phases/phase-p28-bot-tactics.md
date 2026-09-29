@@ -44,8 +44,12 @@ And, it being 2026, a trained model rather than only hand-set numbers.
    beyond 35 m and side-steps when closer or shot at; targets ranked by threat (the enemy shooting
    at the bot, the enemy on the squad's flag) over the nearest 16; a sneaking squad holds its fire
    beyond 45 m until it is found. Numbers in `CombatRules`, rays in `CoverProbe`.
-3. **Vehicles with a purpose.** The commander hands vehicles to squads whose target is far; tanks hold
-   a firing distance instead of closing to point-blank.
+3. **Vehicles with a purpose (`VehicleRules`).** A squad takes a vehicle only for the job the
+   commander gave it: never while holding a flag or sneaking round the side, a car or helicopter only
+   for a trip of 150 m or more, and nothing that costs a walk longer than half the trip plus 25 m. A
+   tank is crewed by part of a squad when it has fewer seats than the squad (the original wanted a
+   seat for every member, so a squad of four never took one), and a tank with an enemy in its sights
+   inside 80 m stops and fires from there instead of driving into the defenders.
 4. **A trained profile.** An abstract conquest simulator runs the same `TeamPlanner` code against the
    original "attack the nearest" policy on generated maps; an evolution strategy tunes
    `TacticsProfile`'s weights for win rate and margin; the result ships as the default profile, with

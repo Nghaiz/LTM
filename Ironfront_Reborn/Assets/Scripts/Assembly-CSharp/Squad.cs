@@ -75,6 +75,61 @@ public class Squad
 	}
 
 	/// <summary>
+	/// Whether the squad takes <paramref name="vehicle"/> for the job it has (phase P28, part 3):
+	/// <see cref="VehicleRules.ShouldBoard"/> over the trip to its objective and the walk to the
+	/// vehicle. A squad with no objective keeps the original's "take what is near".
+	/// </summary>
+	public bool ShouldBoard(Vehicle vehicle)
+	{
+		AiActorController leader = Leader();
+		if (leader == null || vehicle == null)
+		{
+			return false;
+		}
+		Vector3 at = leader.actor.Position();
+		SpawnPoint objective = HasCommand ? commandTarget : targetSpawnPoint;
+		float objectiveDistance = objective != null ? Vector3.Distance(at, objective.transform.position) : float.PositiveInfinity;
+		float vehicleDistance = Vector3.Distance(at, vehicle.transform.position);
+		return VehicleRules.ShouldBoard(KindOf(vehicle), HasCommand ? commandRole : SquadRole.None, objectiveDistance, vehicleDistance);
+	}
+
+	/// <summary>What <paramref name="vehicle"/> is for, to a squad deciding whether to take it.</summary>
+	public static VehicleKind KindOf(Vehicle vehicle)
+	{
+		if (vehicle is Tank)
+		{
+			return VehicleKind.Armour;
+		}
+		if (vehicle is Helicopter)
+		{
+			return VehicleKind.Aircraft;
+		}
+		if (vehicle is Boat)
+		{
+			return VehicleKind.Boat;
+		}
+		return VehicleKind.Transport;
+	}
+
+	/// <summary>
+	/// Splits off up to <paramref name="count"/> members on foot, never the leader, as a new squad
+	/// -- a tank's crew (phase P28, part 3). Null when nobody can go.
+	/// </summary>
+	public Squad SplitCrew(int count)
+	{
+		var crew = new List<AiActorController>(count);
+		for (int i = members.Count - 1; i >= 0 && crew.Count < count; i--)
+		{
+			AiActorController member = members[i];
+			if (member != null && member != leader && !member.actor.IsSeated())
+			{
+				crew.Add(member);
+			}
+		}
+		return crew.Count > 0 ? SplitSquad(crew) : null;
+	}
+
+	/// <summary>
 	/// The bearing of the fire coming at the squad: the first member under fire's, else
 	/// <paramref name="fallback"/>.
 	/// </summary>

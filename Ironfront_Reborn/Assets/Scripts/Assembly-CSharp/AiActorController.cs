@@ -922,7 +922,9 @@ public class AiActorController : ActorController
 						}
 					}
 					Vector3 newPosition = actor.seat.vehicle.transform.position;
-					if (Vector3.Distance(newPosition, lastSampledVehiclePosition) > 0.4f)
+					// A tank holding its standoff is stopped on purpose, not stuck (phase P28).
+					bool holdingStandoff = vehicleType == typeof(Tank) && VehicleRules.HoldStandoff(VehicleKind.Armour, HasTarget(), targetDistance);
+					if (holdingStandoff || Vector3.Distance(newPosition, lastSampledVehiclePosition) > 0.4f)
 					{
 						lastSampledVehiclePosition = newPosition;
 						lastSampleTime = Time.time;
@@ -1142,6 +1144,12 @@ public class AiActorController : ActorController
 							List<Vehicle> nearbyVehicles = NearbyNonFullVehicles();
 							foreach (Vehicle vehicle in nearbyVehicles)
 							{
+								// Taken with a purpose (phase P28, part 3): not by a squad holding a flag or
+								// sneaking, not for a short walk, not at the cost of a long detour.
+								if (!squad.ShouldBoard(vehicle))
+								{
+									continue;
+								}
 								int emptySeats = vehicle.EmptySeats();
 								if (vehicle.claimedByPlayer)
 								{
@@ -1156,6 +1164,18 @@ public class AiActorController : ActorController
 									squad.EnterVehicle(vehicle);
 									enteringVehicle = true;
 									break;
+								}
+								// A tank is crewed by part of the squad instead of standing empty (phase P28):
+								// the original wanted a seat for every member, so a squad of four never took a
+								// tank with fewer. The rest carry on with the squad's order on foot.
+								if (emptySeats > 0 && !vehicle.claimedByPlayer && Squad.KindOf(vehicle) == VehicleKind.Armour)
+								{
+									Squad crew = squad.SplitCrew(emptySeats);
+									if (crew != null)
+									{
+										crew.EnterVehicle(vehicle);
+										break;
+									}
 								}
 							}
 						}
@@ -2174,6 +2194,12 @@ public class AiActorController : ActorController
 	{
 		Vehicle vehicle = actor.seat.vehicle;
 		float z = vehicle.LocalVelocity().z;
+		// A tank with an enemy in its sights inside the standoff stops and fires from there (phase
+		// P28, part 3); the original drove its path into point-blank range of every defender.
+		if (VehicleRules.HoldStandoff(VehicleKind.Armour, HasTarget(), targetDistance))
+		{
+			return new Vector2(0f, Mathf.Clamp(0f - z, -1f, 1f));
+		}
 		if (blockerAhead)
 		{
 			float num = Mathf.Sign(vehicle.transform.worldToLocalMatrix.MultiplyPoint(blockerPosition).x) * 0.3f;
