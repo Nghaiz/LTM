@@ -13,15 +13,23 @@ namespace Ironfront.Net.Unity.Client
     /// <b>Which heads.</b> Every remote body the registry draws that is alive and that
     /// <c>S_PLAYER_LIST</c> names -- a person, never a bot (<see cref="NameplateRules.PlateNameOf"/>):
     /// a plate over each of thirty bots was clutter that hid the few players worth finding. Then
-    /// as <see cref="NameplateRules"/> allows: teammates out to 150 m and dimmed behind cover,
-    /// enemies only in line of sight and within 70 m. The local player has no plate; the
+    /// only a body the viewer can see on their own screen, on either side, within the side's range
+    /// times the scope's zoom (<see cref="NameplateRules"/>). The local player has no plate; the
     /// registry does not hold its own body.
     /// </para>
     /// <para>
-    /// <b>Sight is the AI's.</b> Cover is a line from the camera to the plate against layer 0,
-    /// the mask <c>AiActorController.CanSeeActor</c> tests its own sight with, so a player sees an
-    /// enemy's plate exactly when a bot in their place could see that enemy. Each actor is
-    /// re-tested five times a second, staggered, rather than every frame.
+    /// <b>What "can see" means</b> (owner's report of 2026-09-30, which found a plate floating over
+    /// the wall its player hid behind). Lines from the camera to three points ON the body -- head,
+    /// chest, hips -- each one inside the view; the body is seen if any line reaches it without
+    /// passing terrain, rocks, walls, trees (all on layer 0) or a vehicle. The old test aimed one
+    /// line at the plate's anchor, half a metre over the head, which cleared the top of a wall the
+    /// whole body was hiding behind; and it let teammates through cover on purpose. A seated body
+    /// is tested against the world alone, or its own vehicle would hide every driver.
+    /// </para>
+    /// <para>
+    /// <b>Tested twenty times a second, staggered</b> (<see cref="NameplateSight"/>): a plate holds
+    /// through the gap between tests and fades within a quarter of a second of the body ducking
+    /// out of sight, so a player behind cover is never marked for long.
     /// </para>
     /// <para>
     /// <b>Last, and every frame.</b> Plates follow heads on screen, so they are placed after the
@@ -42,16 +50,20 @@ namespace Ironfront.Net.Unity.Client
     [DisallowMultipleComponent]
     public sealed class NameplatePresenter : MonoBehaviour
     {
-        /// <summary>Layer 0, the world: what <c>AiActorController.CanSeeActor</c> casts against.</summary>
-        private const int SightMask = 1 << 0;
+        /// <summary>Layer 0, the world: terrain, rocks, walls and trees on both maps.</summary>
+        private const int WorldMask = 1 << 0;
 
-        private const float SightRecheckSeconds = 0.2f;
+        /// <summary>Layer 12: a vehicle hides whoever stands behind it.</summary>
+        private const int VehicleMask = 1 << 12;
+
+        /// <summary>A body counts as in view this far past the edge of the screen, as a share of it.</summary>
+        private const float ViewMargin = 0.02f;
 
         private NetClientCombatPresenter _combat;
         private RemoteActorRegistry _registry;
 
-        private readonly bool[] _covered = new bool[ProtocolConstants.MAX_ACTORS];
-        private readonly float[] _nextSightCheck = new float[ProtocolConstants.MAX_ACTORS];
+        private readonly NameplateSight _sight = new NameplateSight();
+        private readonly float[] _heights = new float[3];
 
         /// <summary>Each side's top player, recomputed only when the scores change.</summary>
         private ushort _leader0;
@@ -95,6 +107,9 @@ namespace Ironfront.Net.Unity.Client
             Vector3 eye = camera.transform.position;
             float now = Time.time;
 
+            // A scope narrows the view and brings bodies nearer; the ranges widen to match.
+            float zoom = NameplateRules.ZoomFactor(camera.fieldOfView);
+
             PlayerScoreTable scores = _combat.Scores;
             if (scores.Revision != _scoresRevision)
             {
@@ -115,22 +130,31 @@ namespace Ironfront.Net.Unity.Client
                 RemoteActorVisualState state = view.State;
                 if (!state.IsAlive || state.IsRagdoll) continue;
 
-                Vector3 anchor = view.transform.position
+                Vector3 feet = view.transform.position;
+                Vector3 anchor = feet
                                  + Vector3.up * NameplateRules.AnchorHeight(
                                      state.IsCrouching, state.IsProne, state.IsSeated);
 
                 float distance = Vector3.Distance(eye, anchor);
                 bool teammate = hasTeam && state.Team == localTeam;
-                bool covered = IsCovered(actorId, eye, anchor, now);
 
-                float opacity = NameplateRules.Opacity(teammate, distance, covered);
+                if (_sight.IsDue(actorId, now))
+                {
+                    // Staggered by id, so fifteen bodies do not all cast on the same frame.
+                    bool seen = CanSee(
+                        camera, eye, feet, state.IsCrouching, state.IsProne, state.IsSeated, _heights);
+                    _sight.Report(actorId, seen, now, actorId * 0.0017f);
+                }
+
+                float presence = _sight.Presence(actorId, now);
+                float opacity = presence * NameplateRules.Opacity(teammate, distance, presence > 0f, zoom);
                 if (opacity <= 0f) continue;
 
                 Vector3 screen = camera.WorldToScreenPoint(anchor);
                 if (screen.z <= 0f) continue;
 
                 var plate = new Nameplate(
-                    actorId, screen.x, screen.y, NameplateRules.Scale(distance), opacity,
+                    actorId, screen.x, screen.y, NameplateRules.Scale(distance, zoom), opacity,
                     name, state.Team, NameplateRules.Health01(state.Health), teammate,
                     distance, state.WeaponId, state.IsSeated, state.IsInWater,
                     isLeader: actorId == _leader0 || actorId == _leader1);
@@ -139,15 +163,32 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
-        /// <summary>Whether cover stands between the camera and this plate, re-tested on a stagger.</summary>
-        private bool IsCovered(ushort actorId, Vector3 eye, Vector3 anchor, float now)
+        /// <summary>
+        /// Whether the viewer can see any of the body's head, chest or hips: a point inside the
+        /// view, with nothing solid on the line from the camera to it.
+        /// </summary>
+        /// <remarks>Static and internal so an edit-mode test can put a real wall in front of it.</remarks>
+        internal static bool CanSee(
+            Camera camera, Vector3 eye, Vector3 feet, bool crouching, bool prone, bool seated, float[] heights)
         {
-            if (now < _nextSightCheck[actorId]) return _covered[actorId];
+            int points = NameplateRules.SightHeights(crouching, prone, seated, heights);
 
-            // Staggered by id, so forty actors do not all cast on the same frame.
-            _nextSightCheck[actorId] = now + SightRecheckSeconds + actorId * 0.003f;
-            _covered[actorId] = Physics.Linecast(eye, anchor, SightMask, QueryTriggerInteraction.Ignore);
-            return _covered[actorId];
+            // A seated body's own vehicle wraps round it; testing it would hide every driver.
+            int mask = seated ? WorldMask : WorldMask | VehicleMask;
+
+            for (int i = 0; i < points; i++)
+            {
+                Vector3 point = feet + Vector3.up * heights[i];
+
+                Vector3 viewport = camera.WorldToViewportPoint(point);
+                if (viewport.z <= 0f) continue;
+                if (viewport.x < -ViewMargin || viewport.x > 1f + ViewMargin) continue;
+                if (viewport.y < -ViewMargin || viewport.y > 1f + ViewMargin) continue;
+
+                if (!Physics.Linecast(eye, point, mask, QueryTriggerInteraction.Ignore)) return true;
+            }
+
+            return false;
         }
     }
 }
