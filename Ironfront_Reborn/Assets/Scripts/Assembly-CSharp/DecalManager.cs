@@ -242,6 +242,11 @@ public class DecalManager : MonoBehaviour
 		vertexIndex[type] = (num + 4) % maxVerts;
 	}
 
+	/// <summary>Fresh blood, and the darker end a spray varies toward.</summary>
+	public static readonly Color BloodColor = new Color(0.55f, 0.02f, 0.02f);
+
+	public static readonly Color BloodColorDark = new Color(0.32f, 0.01f, 0.01f);
+
 	public static void CreateBloodDrop(Vector3 point, Vector3 baseVelocity, int team)
 	{
 		// Actor.Damage calls this ceil(damage / 10) times per hit, so on a server it is the
@@ -250,7 +255,11 @@ public class DecalManager : MonoBehaviour
 		{
 			return;
 		}
-		Color color = ColorScheme.TeamColor(team);
+		// Blood is blood-red whichever side bled it. The original tinted it the team's colour (blue
+		// blood on the blue team), a stylisation that read as "not blood" at all; the owner asked for
+		// the deaths to be as real as they can be (2026-09-29). A little variation per drop keeps a
+		// spray from looking like one flat colour.
+		Color color = Color.Lerp(BloodColor, BloodColorDark, UnityEngine.Random.value);
 		BloodParticle component = ((GameObject)UnityEngine.Object.Instantiate(instance.bloodDropPrefab, point, Quaternion.identity)).GetComponent<BloodParticle>();
 		component.transform.localScale.Scale(Vector3.one * UnityEngine.Random.Range(2f, 3f));
 		component.velocity = baseVelocity + (UnityEngine.Random.insideUnitSphere + Vector3.up) * 2f;

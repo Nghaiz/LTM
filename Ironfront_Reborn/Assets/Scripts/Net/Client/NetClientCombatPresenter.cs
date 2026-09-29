@@ -157,6 +157,10 @@ namespace Ironfront.Net.Unity.Client
             if (nameplates == null) nameplates = gameObject.AddComponent<NameplatePresenter>();
             nameplates.Bind(this, _registry);
 
+            // The bodies the deaths leave behind (owner report 2026-09-29), on the same object for
+            // the same reason: a death is this presenter's event.
+            if (GetComponent<RemoteCorpseDirector>() == null) gameObject.AddComponent<RemoteCorpseDirector>();
+
             _mapName = gameObject.scene.name.ToUpperInvariant();
 
             if (_registry == null)
@@ -678,7 +682,25 @@ namespace Ironfront.Net.Unity.Client
         {
             if (view == null) return;
 
-            if (view.TryFellBody(force, BoneFor(hitbox))) return;
+            // A corpse that outlives the respawn (RemoteCorpse). If a snapshot already reported the
+            // death and left one, this event only throws it.
+            HumanBodyBones bone = BoneFor(hitbox);
+            RemoteCorpseDirector corpses = RemoteCorpseDirector.Current;
+            if (corpses != null)
+            {
+                if (view.HasCorpseThisLife)
+                {
+                    corpses.Kick(view.ActorId, force, bone);
+                    return;
+                }
+                if (corpses.TrySpawn(view, force, bone))
+                {
+                    view.HandOverToCorpse();
+                    return;
+                }
+            }
+
+            if (view.TryFellBody(force, bone)) return;
 
             // Degraded, and loudly. A silent no-op here is indistinguishable from the bug this
             // whole phase exists to close.

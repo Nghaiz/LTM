@@ -182,6 +182,17 @@ namespace Ironfront.Net.Unity.Client
         private IRemoteActorPresentation _presentation;
         private bool _hiddenForDeath;
 
+        // When the body was hidden for its death, and whether a snapshot has said "dead" since:
+        // what tells a respawn from the interpolator still drawing the moment before the death.
+        private float _hiddenAt;
+        private bool _sawDeadSinceHide;
+
+        // This life's death has left a RemoteCorpse, so the proxy itself is hidden and not felled.
+        private bool _corpseThisLife;
+
+        // The body's own ground speed at the last solve, handed to a corpse as its momentum.
+        private Vector3 _planarVelocity;
+
         // E1: the runtime ragdoll for a proxy with no authored rig. Null when the animator is
         // not a humanoid that names every bone RemoteRagdoll needs.
         private RemoteRagdoll _ragdoll;
@@ -191,6 +202,29 @@ namespace Ironfront.Net.Unity.Client
         /// and the registry must stop writing its transform.
         /// </summary>
         public bool IsRagdollPosed => _ragdoll != null && _ragdoll.IsActive;
+
+        /// <summary>The body's animator, which a corpse copies the skeleton and pose from.</summary>
+        internal Animator BodyAnimator => _animator;
+
+        /// <summary>How fast, and which way, the body was moving over the ground.</summary>
+        internal Vector3 PlanarVelocity => _planarVelocity;
+
+        /// <summary>This life's death already left a corpse.</summary>
+        internal bool HasCorpseThisLife => _corpseThisLife;
+
+        /// <summary>
+        /// Records that this life's death left a <see cref="RemoteCorpse"/> and hides the proxy
+        /// until the respawn snapshot shows it again.
+        /// </summary>
+        internal void HandOverToCorpse()
+        {
+            _corpseThisLife = true;
+            // A body knocked over just before it died is lying as this proxy's own ragdoll. The
+            // corpse has copied that pose; left simulating, the hidden ragdoll would lie in the
+            // same place on the same layer and shove the corpse about.
+            _ragdoll?.Restore();
+            HideForDeathFallback();
+        }
 
         /// <summary>The network actor id this body is currently drawing.</summary>
         public ushort ActorId { get; private set; }
@@ -389,6 +423,8 @@ namespace Ironfront.Net.Unity.Client
         public void Bind(ushort actorId, byte team)
         {
             _ragdoll?.Restore();
+            _corpseThisLife = false;
+            _planarVelocity = Vector3.zero;
 
             ActorId          = actorId;
             _state           = default;
@@ -451,10 +487,33 @@ namespace Ironfront.Net.Unity.Client
             // A proxy without the original Actor/ragdoll rig is hidden on its death event. Spawn
             // announcements are lifetime announcements, not respawn announcements, so the same
             // proxy must become visible again when a later snapshot says the actor is alive.
-            if (_state.IsAlive && _hiddenForDeath)
+            //
+            // "Later" is the whole difficulty. S_DEATH is reliable and lands at once, while this
+            // entry is the interpolator's, drawn a moment in the past -- so for the next few
+            // frames it still says alive. Taken as a respawn, that stood the body back up beside
+            // its own corpse and, when the dead entry arrived, left a SECOND corpse (seen in the
+            // rig 2026-09-29: two corpses of one actor, 0.3 m apart). A respawn is an alive entry
+            // after a dead one, or one that comes too long after the death to be stale: the
+            // server holds every respawn back RESPAWN_SECONDS, and half of that is far more than
+            // any interpolation delay.
+            if (_hiddenForDeath && !_state.IsAlive) _sawDeadSinceHide = true;
+            if (_hiddenForDeath && IsRespawn(_state.IsAlive, _sawDeadSinceHide, Time.time - _hiddenAt))
             {
                 _hiddenForDeath = false;
+                _corpseThisLife = false;
                 _presentation?.SetVisible(true);
+            }
+
+            // A death the snapshot reports before S_DEATH -- the event is reliable, the snapshot
+            // not, and either can land first -- still leaves a corpse; the late S_DEATH then only
+            // throws it (NetClientCombatPresenter.FellBody).
+            if (hadState && previous.IsAlive && !_state.IsAlive && !_corpseThisLife)
+            {
+                RemoteCorpseDirector corpses = RemoteCorpseDirector.Current;
+                if (corpses != null && corpses.TrySpawn(this, Vector3.zero, HumanBodyBones.Hips))
+                {
+                    HandOverToCorpse();
+                }
             }
 
             ApplyWeapon(_state.WeaponId);
@@ -551,8 +610,24 @@ namespace Ironfront.Net.Unity.Client
         public void HideForDeathFallback()
         {
             _hiddenForDeath = true;
+            _hiddenAt = Time.time;
+            _sawDeadSinceHide = _hasState && !_state.IsAlive;
             _presentation?.SetVisible(false);
         }
+
+        /// <summary>
+        /// How long after a death an entry that still says "alive" is taken as the interpolator
+        /// catching up, not as a respawn: half the server's respawn delay.
+        /// </summary>
+        public const float StaleAliveSeconds = ProtocolConstants.RESPAWN_SECONDS * 0.5f;
+
+        /// <summary>
+        /// Whether an entry saying <paramref name="isAlive"/>, <paramref name="secondsSinceHide"/>
+        /// after the body was hidden for its death, is the actor back from a respawn rather than
+        /// the interpolator still drawing the moment before the death.
+        /// </summary>
+        internal static bool IsRespawn(bool isAlive, bool sawDeadSinceHide, float secondsSinceHide)
+            => isAlive && (sawDeadSinceHide || secondsSinceHide >= StaleAliveSeconds);
 
         /// <summary>
         /// Advances this body's locomotion parameters by one frame.
@@ -594,6 +669,7 @@ namespace Ironfront.Net.Unity.Client
 
             _locomotion = RemoteLocomotionSolver.Solve(
                 in _locomotion, in _state, in derived, t.eulerAngles.y, elapsed);
+            if (elapsed > 0f) _planarVelocity = new Vector3(derived.X, 0f, derived.Z);
         }
 
         /// <summary>
@@ -603,6 +679,14 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         private void ApplyRagdoll(bool shouldRagdoll)
         {
+            // The death left a corpse and the proxy is hidden: felling it too would build a second,
+            // invisible body under the first.
+            if (shouldRagdoll && _corpseThisLife && !_state.IsAlive)
+            {
+                _ragdollApplied = true;
+                return;
+            }
+
             if (shouldRagdoll == _ragdollApplied) return;
             _ragdollApplied = shouldRagdoll;
 
@@ -610,7 +694,19 @@ namespace Ironfront.Net.Unity.Client
             {
                 if (_ragdoll != null)
                 {
-                    if (shouldRagdoll) _ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips);
+                    if (shouldRagdoll)
+                    {
+                        // Knocked over alive (a blast, a hard landing): the server's ragdoll was
+                        // thrown and this one would only collapse on the spot, so it takes the push
+                        // of the blast that just went off beside it, and the steering does the rest.
+                        _ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips, _planarVelocity, 0f);
+                        RemoteCorpseDirector corpses = RemoteCorpseDirector.Current;
+                        if (corpses != null && corpses.TryRecentBlast(transform.position, out Vector3 centre, out float radius))
+                        {
+                            float reach = radius * RemoteCorpseDirector.BlastReachScale;
+                            _ragdoll.AddExplosionForce(RemoteCorpseDirector.BlastSpeedPerMetre * radius, centre, reach, 1f);
+                        }
+                    }
                     else _ragdoll.Restore();
                     return;
                 }
