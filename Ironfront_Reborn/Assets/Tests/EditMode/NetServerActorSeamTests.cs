@@ -24,7 +24,6 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool Exists { get; set; } = true;
             public float Health { get; set; } = 100f;
             public bool IsDead { get; set; }
-            public bool IsSubmerged { get; set; }
             public bool IsCrouching { get; set; }
             public int SeatAnimation { get; set; }
             public bool IsRagdolledAlive { get; set; }
@@ -540,38 +539,55 @@ namespace Ironfront.Net.Unity.Server.Tests
         }
 
         /// <summary>
-        /// Reporting a drowning is not dying of it. Measured 2026-09-27 on Island: a drowned
-        /// player's body stayed alive, kept sinking, and <c>TryRespawn</c> refused every deploy
-        /// its player sent until the wire floor killed it about 95 s later.
+        /// A body out of breath loses health in water, and dies of it -- dead, not merely reported
+        /// dead: measured 2026-09-27 on Island, a drowned player's body that was only reported
+        /// stayed alive and every deploy its player sent was refused (owner ruling 2026-09-29 for
+        /// the breath itself).
         /// </summary>
         [Test]
-        public void ADrownedActorIsDeadNotMerelyReportedDead()
+        public void ABodyOutOfBreathIsHurtAndThenDrowned()
         {
             NetContext.SetRole(NetRole.Server);
             try
             {
-                var gameplay = new FakeGameplayActor { IsDead = false, IsSubmerged = true };
+                var gameplay = new FakeGameplayActor { IsDead = false, IsInWater = true, Health = 100f };
                 NetServerActor actor = CreateActor(gameplay);
-                Assert.IsTrue(actor.IsAlive, "Setup did not start from a living actor.");
 
-                // Time does not advance in an EditMode test, so the clock cannot be waited out and
-                // a back-dated observation reads as "never observed". Charge the drowning clock
-                // past its limit directly; written back in case the clock is a struct.
-                const System.Reflection.BindingFlags Private =
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-                System.Reflection.FieldInfo clockField = typeof(NetServerActor).GetField("_drowning", Private);
-                object clock = clockField.GetValue(actor);
-                clock.GetType().GetField("_submergedSeconds", Private).SetValue(clock, 60f);
-                clockField.SetValue(actor, clock);
+                actor.ApplyBreath(inWater: true, elapsed: Ironfront.Net.Replication.Combat.BreathClock.CapacitySeconds);
+                Assert.AreEqual(100f, gameplay.Health, "a body with breath left was hurt");
 
-                actor.ObserveDrowning();
+                actor.ApplyBreath(inWater: true, elapsed: 1f);
+                Assert.AreEqual(100f - Ironfront.Net.Replication.Combat.BreathClock.DamagePerSecond, gameplay.Health, 1e-3f,
+                    "a body out of breath in water took no damage");
+                Assert.IsTrue(actor.IsAlive);
 
-                Assert.IsFalse(
-                    actor.IsAlive,
+                actor.ApplyBreath(inWater: true, elapsed: 10f);
+                Assert.IsFalse(actor.IsAlive,
                     "The actor drowned and was reported dead, but is still alive: its body keeps "
                     + "sinking and every respawn its player requests is refused.");
                 Assert.IsTrue(gameplay.IsDead, "The gameplay actor was not marked dead.");
                 Assert.AreEqual(0f, gameplay.Health, "A drowned actor kept its health.");
+            }
+            finally
+            {
+                NetContext.Clear();
+            }
+        }
+
+        [Test]
+        public void ABodyThatGetsOutOfTheWaterBreathesAgain()
+        {
+            NetContext.SetRole(NetRole.Server);
+            try
+            {
+                var gameplay = new FakeGameplayActor { IsDead = false, Health = 100f };
+                NetServerActor actor = CreateActor(gameplay);
+
+                actor.ApplyBreath(inWater: true, elapsed: Ironfront.Net.Replication.Combat.BreathClock.CapacitySeconds);
+                actor.ApplyBreath(inWater: false, elapsed: Ironfront.Net.Replication.Combat.BreathClock.RefillSeconds);
+                actor.ApplyBreath(inWater: true, elapsed: 5f);
+
+                Assert.AreEqual(100f, gameplay.Health, "a body that surfaced and caught its breath was still drowning");
             }
             finally
             {

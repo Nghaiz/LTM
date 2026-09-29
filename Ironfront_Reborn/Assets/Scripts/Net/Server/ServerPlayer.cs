@@ -298,6 +298,9 @@ namespace Ironfront.Net.Unity.Server
                 agent.RearmCollisionBypassWarning();
             }
 
+            // Before the seat is ridden: a seat that has gone under water throws its occupant out.
+            EjectFromSunkenSeat();
+
             // Seated: input is consumed and acknowledged, the capsule is out of the world, and
             // the session rides the seat. See InputAuthority.ConsumePendingInputSeated.
             if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(Session.ActorId, out ushort seatedIn, out _))
@@ -349,6 +352,7 @@ namespace Ironfront.Net.Unity.Server
             // Ground contact is Unity's answer, not the simulation's: the CharacterController
             // knows what it is standing on and MovementCore does not.
             Session.State.IsGrounded = agent.IsGrounded;
+            Session.State.IsBlockedSideways = agent.IsBlockedSideways;
 
             InputAuthority.ApplyPendingInput(Session, dt, _moveThroughCollision, this);
 
@@ -511,6 +515,42 @@ namespace Ironfront.Net.Unity.Server
 
             _exitVehicle = null;
             _exitCapsule = null;
+        }
+
+        /// <summary>
+        /// Throws the player out of a seat that has gone under water, to swim.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner report 2026-09-29</b>: a vehicle driven into deep water sank with its player
+        /// still sitting in it, and the view stayed at the steering wheel on the bottom until the
+        /// eight-second drowning clock killed him. The original throws every body out of a seat the
+        /// moment it is in water (<c>Actor.Update</c>: in water, <c>LeaveSeat</c>, then swim), and
+        /// bots still get that from the game itself; a player's body is parked there, so it is done
+        /// here, by the same test the player then swims by.
+        /// </para>
+        /// <para>
+        /// <b>Through the vehicle's own <c>TryLeaveSeat</c></b>, the path every seat exit takes:
+        /// <c>Vehicle.OccupantLeft</c> publishes the seat table, the snapshot then carries the
+        /// player on foot, and its client leaves the seat when it sees that
+        /// (<c>ClientVehicleStage.OnSnapshotApplied</c>). A boat's seats ride above its waterline,
+        /// so a floating boat never throws anybody out.
+        /// </para>
+        /// </remarks>
+        private void EjectFromSunkenSeat()
+        {
+            if (!ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(Session.ActorId, out ushort vehicleId, out _))
+                return;
+
+            Vector3 seat = Actor.transform.position;
+            if (!MovementCore.IsInWater(seat.y + MovementCore.HeightFor(crouching: false) * 0.5f)) return;
+            if (!ServerVehicleRegistry.Instance.TryFind(vehicleId, out IGameplayVehicleSource vehicle)) return;
+
+            if (vehicle.TryLeaveSeat(Actor.gameObject))
+            {
+                Debug.Log($"[net] actor {Session.ActorId} thrown out of vehicle {vehicleId}: its seat is "
+                          + $"under water at y {seat.y:F1} (surface {MovementCore.WaterHeight:F1}).");
+            }
         }
 
         /// <summary>

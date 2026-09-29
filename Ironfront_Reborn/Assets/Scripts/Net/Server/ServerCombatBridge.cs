@@ -159,7 +159,7 @@ namespace Ironfront.Net.Unity.Server
                 in resolved,
                 in session.State,
                 new ReadOnlySpan<HitscanTarget>(_targets, 0, _targetCount),
-                new ActorFireEligibility(actor.IsAlive, isDeployed: true),
+                new ActorFireEligibility(actor.IsAlive, isDeployed: true, isInWater: actor.InWater),
                 in ammo,
                 now,
                 SmoothedRttMs(session.ConnectionId),

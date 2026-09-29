@@ -285,6 +285,14 @@ namespace Ironfront.Tools.ClientWiringGate
             ("/ClientSeatRequester.cs", "TryReadLocalSeatIntent",
                 "reached only from Update(), a local-only per-frame path; the local player IS the "
                 + "subject of the read"),
+
+            // The breath bar, added with swimming (2026-09-29). One per client, added beside
+            // NetClientLocalCombatDriver and never per actor: its Update() asks whether THIS
+            // client's own body is in water to drain the bubbles, and there is no actor id in
+            // scope for an IsLocalActor guard to be about. Same instruction as the others: if a
+            // per-actor caller ever reaches it, delete this entry and guard the read.
+            ("/BreathHud.cs", "Update",
+                "one HUD per client; Update() reads this client's own body, the subject of the bar"),
         };
 
         /// <summary>
