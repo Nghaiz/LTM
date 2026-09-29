@@ -364,6 +364,76 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.False(DeathMessage.TryParse(body.AsSpan(0, length), out _));
         }
 
+        // The range tail (2026-09-30): the detail tail above, then u16 metres = 312 (0x0138),
+        // little-endian like every other u16 here.
+        private const string DeathWithRangeHex = DeathWithDetailHex + " 38 01";
+
+        [Fact]
+        public void DeathWithRange_RoundTripsThroughTheExpectedBytes()
+        {
+            var message = new DeathMessage(
+                10, 7, CauseOfDeath.Explosion, 1000, -1000, 0, 0,
+                WeaponIds.NONE, VehicleIds.TANK, DeathDetail.KillerInVehicle, distanceMetres: 312);
+
+            Span<byte> buffer = stackalloc byte[DeathMessage.SizeWithRange];
+            Assert.Equal(17, message.Write(buffer));
+            Assert.Equal(DeathWithRangeHex, Hex.ToHex(buffer));
+
+            Assert.True(DeathMessage.TryParse(Hex.FromHex(DeathWithRangeHex), out DeathMessage parsed));
+            Assert.True(parsed.HasDetail);
+            Assert.True(parsed.HasRange);
+            Assert.Equal(312, parsed.DistanceMetres);
+            Assert.Equal(VehicleIds.TANK, parsed.VehicleType);
+        }
+
+        /// <summary>
+        /// A 1.1 client reads fifteen bytes and stops, so the range tail is compatible only if those
+        /// fifteen are exactly the detail-tailed encoding of the same death.
+        /// </summary>
+        [Fact]
+        public void DeathWithRange_BeginsWithTheDetailTailedFifteenBytes()
+        {
+            var detailed = new DeathMessage(
+                10, 7, CauseOfDeath.Explosion, 1000, -1000, 0, 0,
+                WeaponIds.NONE, VehicleIds.TANK, DeathDetail.KillerInVehicle);
+            var ranged = new DeathMessage(
+                10, 7, CauseOfDeath.Explosion, 1000, -1000, 0, 0,
+                WeaponIds.NONE, VehicleIds.TANK, DeathDetail.KillerInVehicle, 312);
+
+            Span<byte> detailedBytes = stackalloc byte[DeathMessage.SizeWithDetail];
+            Span<byte> rangedBytes = stackalloc byte[DeathMessage.SizeWithRange];
+
+            Assert.Equal(DeathMessage.SizeWithDetail, detailed.Write(detailedBytes));
+            Assert.Equal(DeathMessage.SizeWithRange, ranged.Write(rangedBytes));
+            Assert.Equal(Hex.ToHex(detailedBytes), Hex.ToHex(rangedBytes.Slice(0, DeathMessage.SizeWithDetail)));
+        }
+
+        /// <summary>A detail-tailed death from a 1.1 server says nothing about range.</summary>
+        [Fact]
+        public void DeathWithDetailOnly_HasNoRange()
+        {
+            Assert.True(DeathMessage.TryParse(Hex.FromHex(DeathWithDetailHex), out DeathMessage parsed));
+            Assert.False(parsed.HasRange);
+            Assert.Equal(0, parsed.DistanceMetres);
+        }
+
+        /// <summary>Half a range tail is malformed, for the detail tail's reason.</summary>
+        [Fact]
+        public void Death_WithAPartialRangeTail_IsMalformed()
+        {
+            byte[] body = Hex.FromHex(DeathWithRangeHex);
+            Assert.False(DeathMessage.TryParse(body.AsSpan(0, DeathMessage.SizeWithDetail + 1), out _));
+        }
+
+        /// <summary>Bytes after the range tail belong to a later tail this build does not know: ignored.</summary>
+        [Fact]
+        public void Death_WithBytesAfterTheRangeTail_StillParses()
+        {
+            byte[] body = Hex.FromHex(DeathWithRangeHex + " AB CD EF");
+            Assert.True(DeathMessage.TryParse(body, out DeathMessage parsed));
+            Assert.Equal(312, parsed.DistanceMetres);
+        }
+
         // --------------------------------------------------------- S_WEAPON_FIRE 0x49
 
         private const string WeaponFireHex = "05 00 07 FF 7F 00 80 00 00";

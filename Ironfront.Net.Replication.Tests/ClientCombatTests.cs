@@ -622,32 +622,39 @@ namespace Ironfront.Net.Replication.Tests
 
         // --------------------------------------------------------- killfeed
 
+        /// <summary>
+        /// The feed used to push its oldest line out the moment a sixth arrived, so a burst of
+        /// deaths showed some for a single frame (owner's report of 2026-09-30). A full feed now
+        /// keeps what it shows and the rest wait their turn.
+        /// </summary>
         [Fact]
-        public void TheKillfeedIsNewestFirstAndDropsTheOldestWhenFull()
+        public void AFullKillfeedIsNewestFirstAndQueuesTheRestInsteadOfDroppingThem()
         {
             var feed = new KillfeedModel(capacity: 5);
             for (ushort i = 0; i < 7; i++)
                 feed.Push(new DeathMessage(i, (ushort)(100 + i), CauseOfDeath.Bullet, 0, 0, 0, 0), 1f);
 
             Assert.Equal(5, feed.Count);
+            Assert.Equal(2, feed.Waiting);
             Assert.Equal(7, feed.TotalKills);
-            Assert.Equal(6, feed[0].VictimActorId);      // newest
-            Assert.Equal(2, feed[4].VictimActorId);      // oldest still held
+            Assert.Equal(4, feed[0].VictimActorId);      // newest shown
+            Assert.Equal(0, feed[4].VictimActorId);      // oldest, still shown
         }
 
         [Fact]
         public void KillfeedLinesExpireOldestFirst()
         {
+            const float hold = KillfeedModel.DefaultHoldSeconds;
             var feed = new KillfeedModel();
             feed.Push(new DeathMessage(1, 2, CauseOfDeath.Bullet, 0, 0, 0, 0), 0f);
             feed.Push(new DeathMessage(3, 4, CauseOfDeath.Explosion, 0, 0, 0, 0), 4f);
 
-            feed.Prune(5.5f);   // the first is 5.5 s old, the second only 1.5 s
+            feed.Advance(hold + 0.5f);   // the first has been up past its hold, the second not
 
             Assert.Equal(1, feed.Count);
             Assert.Equal(3, feed[0].VictimActorId);
 
-            feed.Prune(9.5f);
+            feed.Advance(4f + hold + 0.5f);
             Assert.Equal(0, feed.Count);
         }
 

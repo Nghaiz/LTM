@@ -324,7 +324,13 @@ namespace Ironfront.Net.Replication.Tests
             feed.Push(Kill(Minh));
             Assert.Equal(first, feed[1].Sequence);
 
+            // The feed is full, so the third waits rather than pushing the first out; once the first
+            // has had its minimum on screen, the third takes its row's place.
             feed.Push(Kill(Minh));
+            Assert.Equal(first, feed[1].Sequence);
+            Assert.Equal(1, feed.Waiting);
+
+            feed.Advance(KillfeedModel.MinHoldSeconds);
             Assert.NotEqual(first, feed[0].Sequence);
             Assert.NotEqual(first, feed[1].Sequence);
         }

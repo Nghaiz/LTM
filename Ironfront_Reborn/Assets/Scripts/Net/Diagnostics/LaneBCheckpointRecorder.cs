@@ -817,10 +817,14 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Num("namedPlayers", names.Count); Comma();
 
                 _json.Append("\"killfeed\":[");
+                int written = 0;
                 for (int i = 0; i < feed.Count; i++)
                 {
-                    if (i > 0) _json.Append(',');
+                    // Deaths only: the feed also carries flags, joins and the round since the
+                    // owner's report of 2026-09-30, and this array has always meant kills.
                     KillfeedEntry e = feed[i];
+                    if (e.Kind != KillfeedKind.Death) continue;
+                    if (written++ > 0) _json.Append(',');
 
                     _json.Append('{');
                     Num("killerActorId", e.KillerActorId); Comma();

@@ -297,8 +297,8 @@ namespace Ironfront.Net.Unity.EditorTools
             edge.enabled = false;
 
             var layout = row.GetComponent<HorizontalLayoutGroup>();
-            layout.padding = new RectOffset(10, 16, 5, 5);
-            layout.spacing = 10f;
+            layout.padding = new RectOffset(10, 14, 5, 5);
+            layout.spacing = 9f;
             layout.childAlignment = TextAnchor.MiddleLeft;
             layout.childControlWidth = true;
             layout.childControlHeight = true;
@@ -310,9 +310,20 @@ namespace Ironfront.Net.Unity.EditorTools
             fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
             fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
 
-            Image accent = Block(row, "Accent", new Vector2(4f, 24f));
+            // The sweep of light across a new row, clipped to the row by a mask of its own so a
+            // badge popping larger than the row is not clipped with it. First, so it draws under
+            // the words.
+            Image sheen = SheenLayer(row);
+
+            Image accent = Block(row, "Accent", new Vector2(4f, 26f));
+
+            // A death nobody scored and a match event lead with a picture of what happened.
+            Image lead = Block(row, "Lead", new Vector2(26f, 26f));
+            lead.preserveAspect = true;
+            ShadowUnder(lead);
 
             Text killer = BoardText(row, "Killer", bold, 24, Ink);
+            Text verb = BoardText(row, "Verb", medium, 21, HudStyle.SentenceInk);
 
             // The weapon's own silhouette, from the loadout screen, drawn between the names when the
             // kill names a weapon that has one. KillfeedRowView sizes it to the picture's shape.
@@ -320,9 +331,14 @@ namespace Ironfront.Net.Unity.EditorTools
             weapon.color = Ink;
             weapon.preserveAspect = true;
             weapon.material = LoadMaterial(WeaponSilhouettePath);
-            var weaponShadow = weapon.gameObject.AddComponent<Shadow>();
-            weaponShadow.effectColor = new Color(0f, 0f, 0f, 0.7f);
-            weaponShadow.effectDistance = new Vector2(1f, -1f);
+            ShadowUnder(weapon);
+
+            // A drawn picture in the same place when no weapon picture says how: the tank, the
+            // blast. Not through the silhouette material, which would turn its clear parts white.
+            Image glyph = Block(row, "Glyph", new Vector2(44f, KillfeedRowView.GlyphHeight));
+            glyph.color = Ink;
+            glyph.preserveAspect = true;
+            ShadowUnder(glyph);
 
             var how = new GameObject(
                 "How", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
@@ -348,8 +364,19 @@ namespace Ironfront.Net.Unity.EditorTools
             headshot.color = HudStyle.HeadshotInk;
             headshot.preserveAspect = true;
 
+            Image longShot = Block(row, "Long Shot", new Vector2(20f, 20f));
+            longShot.color = HudStyle.LongShotInk;
+            longShot.preserveAspect = true;
+
+            Text distance = BoardText(row, "Distance", bold, 18, HudStyle.LongShotInk);
+
             Text victim = BoardText(row, "Victim", bold, 24, Ink);
             Text sentence = BoardText(row, "Sentence", medium, 21, HudStyle.SentenceInk);
+
+            GameObject badge = BuildBadge(row, bold, rounded, out Image badgeBacking, out Outline badgeGlow,
+                                          out Image badgeIcon, out Text badgeText);
+
+            Image timer = TimerBar(row);
 
             KillfeedRowView view = row.AddComponent<KillfeedRowView>();
 
@@ -357,18 +384,125 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_backing", backing);
             Assign(so, "_edge", edge);
             Assign(so, "_accent", accent);
+            Assign(so, "_lead", lead);
             Assign(so, "_killer", killer);
+            Assign(so, "_verb", verb);
             Assign(so, "_weapon", weapon);
             Assign(so, "_weaponSize", weapon.GetComponent<LayoutElement>());
+            Assign(so, "_glyph", glyph);
+            Assign(so, "_glyphSize", glyph.GetComponent<LayoutElement>());
             Assign(so, "_how", how);
             Assign(so, "_howText", howText);
             Assign(so, "_headshot", headshot);
+            Assign(so, "_longShot", longShot);
+            Assign(so, "_distance", distance);
             Assign(so, "_victim", victim);
             Assign(so, "_sentence", sentence);
+            Assign(so, "_badge", badge);
+            Assign(so, "_badgeBacking", badgeBacking);
+            Assign(so, "_badgeGlow", badgeGlow);
+            Assign(so, "_badgeIcon", badgeIcon);
+            Assign(so, "_badgeText", badgeText);
+            Assign(so, "_sheen", sheen);
+            Assign(so, "_timer", timer);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             row.SetActive(false);
             return view;
+        }
+
+        /// <summary>A soft drop shadow under a picture, so a white shape reads over a bright sky.</summary>
+        private static void ShadowUnder(Image image)
+        {
+            var shadow = image.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.7f);
+            shadow.effectDistance = new Vector2(1f, -1f);
+        }
+
+        /// <summary>
+        /// The badge at the end of a kill: a chip in its tone's colour with a picture and the words
+        /// ("TRIPLE KILL"), and a glow the row pulses. Its pivot is its centre, so it pops in place.
+        /// </summary>
+        private static GameObject BuildBadge(
+            GameObject row, Font bold, Sprite rounded,
+            out Image backing, out Outline glow, out Image icon, out Text text)
+        {
+            var badge = new GameObject(
+                "Badge", typeof(RectTransform), typeof(Image), typeof(Outline), typeof(HorizontalLayoutGroup));
+            badge.transform.SetParent(row.transform, worldPositionStays: false);
+            ((RectTransform)badge.transform).pivot = new Vector2(0.5f, 0.5f);
+
+            backing = badge.GetComponent<Image>();
+            backing.sprite = rounded;
+            backing.type = Image.Type.Sliced;
+            backing.color = HudStyle.Gold;
+            backing.raycastTarget = false;
+
+            glow = badge.GetComponent<Outline>();
+            glow.effectDistance = new Vector2(2.5f, -2.5f);
+            glow.useGraphicAlpha = false;
+            glow.effectColor = new Color(1f, 1f, 1f, 0f);
+
+            var layout = badge.GetComponent<HorizontalLayoutGroup>();
+            layout.padding = new RectOffset(7, 10, 3, 3);
+            layout.spacing = 5f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            icon = Block(badge, "Icon", new Vector2(18f, 18f));
+            icon.preserveAspect = true;
+            icon.color = HudStyle.BadgeInk;
+
+            text = BoardText(badge, "Text", bold, 16, HudStyle.BadgeInk);
+            return badge;
+        }
+
+        /// <summary>The band of light a new row sweeps, inside a mask stretched over the row.</summary>
+        private static Image SheenLayer(GameObject row)
+        {
+            var clip = new GameObject("Sheen Clip", typeof(RectTransform), typeof(RectMask2D), typeof(LayoutElement));
+            clip.transform.SetParent(row.transform, worldPositionStays: false);
+            clip.GetComponent<LayoutElement>().ignoreLayout = true;
+            Stretch(clip.GetComponent<RectTransform>());
+
+            var band = new GameObject("Sheen", typeof(RectTransform), typeof(Image));
+            band.transform.SetParent(clip.transform, worldPositionStays: false);
+
+            RectTransform rect = band.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.sizeDelta = new Vector2(120f, 0f);
+            rect.anchoredPosition = new Vector2(-120f, 0f);
+
+            var image = band.GetComponent<Image>();
+            image.color = new Color(1f, 1f, 1f, 0f);
+            image.raycastTarget = false;
+            band.SetActive(false);
+            return image;
+        }
+
+        /// <summary>The thin bar along the foot of a row that counts its time down.</summary>
+        private static Image TimerBar(GameObject row)
+        {
+            var bar = new GameObject("Timer", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+            bar.transform.SetParent(row.transform, worldPositionStays: false);
+            bar.GetComponent<LayoutElement>().ignoreLayout = true;
+
+            RectTransform rect = bar.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.offsetMin = new Vector2(8f, 2f);
+            rect.offsetMax = new Vector2(-8f, 4f);
+
+            var image = bar.GetComponent<Image>();
+            image.color = new Color(1f, 1f, 1f, 0.5f);
+            image.raycastTarget = false;
+            return image;
         }
 
         /// <summary>A text part of the killfeed or the scoreboard, in Roboto and shadowed.</summary>

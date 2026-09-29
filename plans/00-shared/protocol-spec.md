@@ -658,6 +658,8 @@ u8   vehicleType       VehicleIds; 0 when no vehicle was involved
 u8   detail            bit0 = killer in vehicle   (its own gun, or driven into the victim)
                        bit1 = went down with vehicle (the victim's ride was destroyed)
                        bit2 = melee
+--- range tail, 2026-09-30 onward (optional, only after the detail tail) ---
+u16  distanceMetres    whole metres from the killer to the victim; 0 = not said
 ```
 
 On receiving this the client: enables the ragdoll **locally**, plays audio, updates the killfeed.
@@ -669,6 +671,14 @@ with it; a 1.1 server always sends 15. It is compatible in both directions witho
 bytes and never reads further, and a 1.1 client takes a 12-byte body from a 1.0 server as "no
 detail". A body of 13 or 14 bytes is malformed — half a tail would name the wrong weapon. Unknown
 `detail` bits are ignored, so a later build can add one without a version change.
+
+**The range tail (2026-09-30, the owner's killfeed report).** Two more bytes after the detail
+tail, 17 in all, carrying how far the killing blow flew so the killfeed can mark a long shot. Same
+compatibility argument, one layer further out: a 1.0 client reads twelve bytes, a 1.1 client
+fifteen, and neither looks further, so no `PROTOCOL_VERSION` bump. A 16-byte body is malformed
+(half a range). Bytes after the range tail are a later tail and are ignored, the way a 1.0 client
+ignores the detail tail. The server measures the two bodies at the death edge; the world's deaths
+and suicides carry 0.
 
 The server decides the tail with `DeathAttribution` (Ironfront.Net.Replication): the crew of a
 destroyed vehicle is credited to whoever emptied it within 10 s, since every vehicle burns 4 s

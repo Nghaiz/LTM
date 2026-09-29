@@ -90,6 +90,9 @@ namespace Ironfront.Net.Protocol
         /// <summary>With the detail tail: u8 weapon + u8 vehicle + u8 detail.</summary>
         public const int SizeWithDetail = Size + 3;
 
+        /// <summary>With the range tail too: u16 metres from the killer to the victim.</summary>
+        public const int SizeWithRange = SizeWithDetail + 2;
+
         /// <summary>Sentinel killer id meaning "killed by the environment".</summary>
         public const ushort EnvironmentKiller = 0xFFFF;
 
@@ -112,6 +115,15 @@ namespace Ironfront.Net.Protocol
         /// <summary>Whether the tail was sent. A 1.0 server never sends it.</summary>
         public readonly bool HasDetail;
 
+        /// <summary>
+        /// Whole metres from the killer to the victim when the killing blow landed; 0 when the
+        /// server did not say (a 1.x server, the world, a suicide) or they stood in one metre.
+        /// </summary>
+        public readonly ushort DistanceMetres;
+
+        /// <summary>Whether the range tail was sent. It follows the detail tail and needs it.</summary>
+        public readonly bool HasRange;
+
         public DeathMessage(
             ushort victimActorId, ushort killerActorId, CauseOfDeath cause,
             short forceX, short forceY, short forceZ, byte hitboxHit)
@@ -125,14 +137,25 @@ namespace Ironfront.Net.Protocol
             short forceX, short forceY, short forceZ, byte hitboxHit,
             byte weaponId, byte vehicleType, DeathDetail detail)
             : this(victimActorId, killerActorId, cause, forceX, forceY, forceZ, hitboxHit,
-                   weaponId, vehicleType, detail, hasDetail: true)
+                   weaponId, vehicleType, detail, hasDetail: true, distanceMetres: 0, hasRange: false)
+        {
+        }
+
+        /// <summary>A death with both tails: the detail, then the range.</summary>
+        public DeathMessage(
+            ushort victimActorId, ushort killerActorId, CauseOfDeath cause,
+            short forceX, short forceY, short forceZ, byte hitboxHit,
+            byte weaponId, byte vehicleType, DeathDetail detail, ushort distanceMetres)
+            : this(victimActorId, killerActorId, cause, forceX, forceY, forceZ, hitboxHit,
+                   weaponId, vehicleType, detail, hasDetail: true, distanceMetres, hasRange: true)
         {
         }
 
         private DeathMessage(
             ushort victimActorId, ushort killerActorId, CauseOfDeath cause,
             short forceX, short forceY, short forceZ, byte hitboxHit,
-            byte weaponId, byte vehicleType, DeathDetail detail, bool hasDetail)
+            byte weaponId, byte vehicleType, DeathDetail detail, bool hasDetail,
+            ushort distanceMetres = 0, bool hasRange = false)
         {
             VictimActorId = victimActorId;
             KillerActorId = killerActorId;
@@ -145,6 +168,8 @@ namespace Ironfront.Net.Protocol
             VehicleType   = vehicleType;
             Detail        = detail;
             HasDetail     = hasDetail;
+            DistanceMetres = distanceMetres;
+            HasRange      = hasDetail && hasRange;
         }
 
         public bool KilledByEnvironment => KillerActorId == EnvironmentKiller;
@@ -165,6 +190,8 @@ namespace Ironfront.Net.Protocol
                 w.WriteU8(WeaponId);
                 w.WriteU8(VehicleType);
                 w.WriteU8((byte)Detail);
+
+                if (HasRange) w.WriteU16(DistanceMetres);
             }
 
             return w.Ok ? w.Position : -1;
@@ -194,9 +221,23 @@ namespace Ironfront.Net.Protocol
             byte detail  = r.ReadU8();
             if (!r.Ok) return false;
 
+            if (r.Remaining == 0)
+            {
+                message = new DeathMessage(
+                    victim, killer, (CauseOfDeath)cause, fx, fy, fz, hitbox,
+                    weapon, vehicle, (DeathDetail)detail);
+                return true;
+            }
+
+            // The range tail (2026-09-30). Half of it is malformed for the detail tail's reason;
+            // anything after it is a later tail this build does not know, and is left unread the
+            // way a 1.0 client leaves the detail tail.
+            ushort metres = r.ReadU16();
+            if (!r.Ok) return false;
+
             message = new DeathMessage(
                 victim, killer, (CauseOfDeath)cause, fx, fy, fz, hitbox,
-                weapon, vehicle, (DeathDetail)detail);
+                weapon, vehicle, (DeathDetail)detail, metres);
             return true;
         }
     }

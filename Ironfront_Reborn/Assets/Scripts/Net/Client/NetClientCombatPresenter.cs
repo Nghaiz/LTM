@@ -51,14 +51,38 @@ namespace Ironfront.Net.Unity.Client
         // has actually changed. -1 is "nothing pushed yet", which is also what a HUD arriving
         // late resets this to -- see PushKillfeed.
         private int _pushedCount = -1;
-        private long _pushedTotalKills = -1;
+        private long _pushedFeedRevision = -1;
         private int _pushedNameRevision = -1;
+        private int _pushedFeedBotRevision = -1;
+        private int _pushedFeedScoreRevision = -1;
         private int _pushedLocalActorId = -1;
 
         private readonly KillfeedModel _killfeed = new KillfeedModel();
         private readonly HitmarkerModel _hitmarker = new HitmarkerModel();
         private readonly PlayerNameTable _names = new PlayerNameTable();
         private readonly PlayerScoreTable _scores = new PlayerScoreTable();
+
+        /// <summary>What each kill earned, worked out from the deaths every client sees.</summary>
+        private readonly KillfeedAccoladeTracker _accolades = new KillfeedAccoladeTracker();
+
+        /// <summary>
+        /// The side each capture point was last reported held by, and whether it has been reported
+        /// at all: the feed's flag lines are the changes, never the state a client joins into.
+        /// </summary>
+        private readonly byte[] _pointOwners = new byte[byte.MaxValue + 1];
+        private readonly bool[] _pointSeen = new bool[byte.MaxValue + 1];
+
+        /// <summary>The names the roster held last time, for the feed's joined and left lines.</summary>
+        private readonly string[] _rosterNames = new string[ProtocolConstants.MAX_ACTORS];
+
+        /// <summary>The name a player who just left went by: the roster no longer has it.</summary>
+        private readonly string[] _departedNames = new string[ProtocolConstants.MAX_ACTORS];
+
+        private int _rosterRevision = -1;
+        private bool _rosterBaselined;
+
+        /// <summary>The round phase last seen, for the feed's round lines; -1 before the first.</summary>
+        private int _lastPhase = -1;
 
         [Tooltip("The key that opens and closes the scoreboard. P18 3.3; a toggle since 2026-09-29.")]
         [SerializeField] private KeyCode _scoreboardKey = KeyCode.Tab;
@@ -197,6 +221,11 @@ namespace Ironfront.Net.Unity.Client
 
             // And the despawn, so a new round's bots are numbered from 1 again ("Blue Team Bot 1").
             _client.Router.OnDespawnActor += _bots.Apply;
+
+            // The feed's flag lines (owner's report of 2026-09-30): which side took or lost which
+            // point. The objective presenter applies the same message to the scene; this only
+            // watches the owner change.
+            _client.Router.OnCapturePoint += OnCapturePointForFeed;
         }
 
         private void OnDisable()
@@ -209,9 +238,16 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnPlayerScores -= _scores.Apply;
             _client.Router.OnSpawnActor -= _bots.Apply;
             _client.Router.OnDespawnActor -= _bots.Apply;
+            _client.Router.OnCapturePoint -= OnCapturePointForFeed;
             _names.Reset();
             _scores.Reset();
             _bots.Reset();
+            _accolades.Reset();
+            System.Array.Clear(_pointSeen, 0, _pointSeen.Length);
+            System.Array.Clear(_rosterNames, 0, _rosterNames.Length);
+            _rosterRevision = -1;
+            _rosterBaselined = false;
+            _lastPhase = -1;
             _scoreboardOpen = false;
 
             // A presenter going away leaves no rows behind. Without this, disconnecting mid-match
@@ -228,9 +264,15 @@ namespace Ironfront.Net.Unity.Client
 
         private void Update()
         {
-            // KillfeedModel deliberately has no clock of its own, so expiry is the caller's to
-            // run. Once a frame, before anything reads it.
-            _killfeed.Prune(Time.time);
+            float now = Time.time;
+
+            // The match's other events first, so a round that ends on a kill reads in order.
+            ObserveRound(now);
+            ObserveRoster(now);
+
+            // KillfeedModel deliberately has no clock of its own, so expiry and release are the
+            // caller's to run. Once a frame, before anything reads it.
+            _killfeed.Advance(now);
 
             PushKillfeed();
             PushScoreboard();
@@ -289,17 +331,23 @@ namespace Ironfront.Net.Unity.Client
             bool hasLocal = NetClientPresenterGuard.TryResolveLocalActorId(out ushort localActorId);
             int localKey = hasLocal ? localActorId : -1;
 
+            // The feed's revision moves on every line that arrives, expires or is let in from the
+            // queue; the three tables' revisions re-word lines whose names or sides arrived late.
             if (count == _pushedCount
-                && _killfeed.TotalKills == _pushedTotalKills
+                && _killfeed.Revision == _pushedFeedRevision
                 && _names.Revision == _pushedNameRevision
+                && _bots.Revision == _pushedFeedBotRevision
+                && _scores.Revision == _pushedFeedScoreRevision
                 && localKey == _pushedLocalActorId)
             {
                 return;
             }
 
             _pushedCount = count;
-            _pushedTotalKills = _killfeed.TotalKills;
+            _pushedFeedRevision = _killfeed.Revision;
             _pushedNameRevision = _names.Revision;
+            _pushedFeedBotRevision = _bots.Revision;
+            _pushedFeedScoreRevision = _scores.Revision;
             _pushedLocalActorId = localKey;
 
             hud.SetKillfeedLineCount(count);
@@ -307,28 +355,129 @@ namespace Ironfront.Net.Unity.Client
             for (int i = 0; i < count; i++)
             {
                 KillfeedEntry entry = _killfeed[i];
-                KillfeedWording wording = KillfeedWording.For(in entry);
-
-                // A death nobody scored has no killer to name or colour: the sentence says what
-                // happened to the victim instead of "The world" killing them (feature 2).
-                bool scored = !wording.IsSentence;
-
-                var line = new KillfeedLine(
-                    entry.Sequence,
-                    scored ? NameFor(entry.KillerActorId) : string.Empty,
-                    scored ? TeamOf(entry.KillerActorId) : TeamId.None,
-                    NameFor(entry.VictimActorId),
-                    TeamOf(entry.VictimActorId),
-                    wording.Label,
-                    wording.Sentence,
-                    entry.Headshot,
-                    localIsKiller: scored && hasLocal && entry.KillerActorId == localActorId,
-                    localIsVictim: hasLocal && entry.VictimActorId == localActorId,
-                    weaponId: wording.WeaponId,
-                    restAfterWeapon: wording.RestAfterWeapon);
-
+                KillfeedLine line = LineFor(in entry, hasLocal, localActorId);
                 hud.SetKillfeedLine(i, in line);
             }
+        }
+
+        /// <summary>
+        /// One feed entry, worded and resolved for the HUD. Owner's report of 2026-09-30.
+        /// </summary>
+        /// <remarks>
+        /// <b>A side resolved at the death is kept</b>, and only a side that was unknown then is
+        /// looked up again here: see <see cref="ResolveTeam"/>.
+        /// </remarks>
+        private KillfeedLine LineFor(in KillfeedEntry entry, bool hasLocal, ushort localActorId)
+        {
+            float hold = _killfeed.HoldSeconds;
+
+            switch (entry.Kind)
+            {
+                case KillfeedKind.Death:
+                {
+                    KillfeedWording wording = KillfeedWording.For(in entry);
+
+                    // A death nobody scored has no killer to name or colour: the sentence says
+                    // what happened to the victim instead of "The world" killing them (feature 2).
+                    bool scored = !wording.IsSentence;
+                    KillfeedBadge badge = scored ? KillfeedWording.BadgeOf(entry.Accolades) : default;
+                    string distance = scored && entry.DistanceMetres >= KillfeedAccoladeTracker.LongShotMetres
+                        ? KillfeedWording.Distance(entry.DistanceMetres)
+                        : string.Empty;
+
+                    return new KillfeedLine(
+                        entry.Sequence,
+                        scored ? NameFor(entry.KillerActorId) : string.Empty,
+                        scored ? KnownOrResolved(entry.KillerTeam, entry.KillerActorId) : TeamId.None,
+                        NameFor(entry.VictimActorId),
+                        KnownOrResolved(entry.VictimTeam, entry.VictimActorId),
+                        wording.Label,
+                        wording.Sentence,
+                        entry.Headshot,
+                        localIsKiller: scored && hasLocal && entry.KillerActorId == localActorId,
+                        localIsVictim: hasLocal && entry.VictimActorId == localActorId,
+                        weaponId: wording.WeaponId,
+                        restAfterWeapon: wording.RestAfterWeapon,
+                        glyph: (int)wording.Glyph,
+                        restAfterGlyph: wording.RestAfterGlyph,
+                        badge: badge.Text,
+                        badgeTone: (int)badge.Tone,
+                        distance: distance,
+                        holdSeconds: hold);
+                }
+
+                case KillfeedKind.FlagCaptured:
+                case KillfeedKind.FlagLost:
+                {
+                    bool captured = entry.Kind == KillfeedKind.FlagCaptured;
+                    return EventLine(
+                        in entry, ScoreboardWording.TeamName(entry.SubjectTeam), entry.SubjectTeam,
+                        KillfeedWording.FlagVerb(captured), FlagNameOf(entry.SubjectIndex),
+                        captured ? entry.SubjectTeam : TeamId.None, string.Empty, KillfeedGlyph.Flag,
+                        highlight: false, hold);
+                }
+
+                case KillfeedKind.PlayerJoined:
+                {
+                    byte team = KnownOrResolved(entry.SubjectTeam, entry.SubjectActorId);
+                    return EventLine(
+                        in entry, NameFor(entry.SubjectActorId), team, KillfeedWording.JoinedVerb,
+                        ScoreboardWording.TeamName(team), team, string.Empty, KillfeedGlyph.Joined,
+                        highlight: false, hold);
+                }
+
+                case KillfeedKind.PlayerLeft:
+                {
+                    string name = _departedNames[entry.SubjectActorId % _departedNames.Length]
+                                  ?? NameFor(entry.SubjectActorId);
+                    return EventLine(
+                        in entry, name, entry.SubjectTeam, string.Empty, string.Empty, TeamId.None,
+                        KillfeedWording.LeftSentence, KillfeedGlyph.Left, highlight: false, hold);
+                }
+
+                case KillfeedKind.RoundStarted:
+                    return EventLine(
+                        in entry, string.Empty, TeamId.None, string.Empty, string.Empty, TeamId.None,
+                        KillfeedWording.RoundWords(true, TeamId.None), KillfeedGlyph.Trophy,
+                        highlight: false, hold);
+
+                case KillfeedKind.RoundEnded:
+                {
+                    bool drawn = entry.SubjectTeam == TeamId.None;
+                    return EventLine(
+                        in entry, drawn ? string.Empty : ScoreboardWording.TeamName(entry.SubjectTeam),
+                        entry.SubjectTeam, drawn ? string.Empty : KillfeedWording.RoundWords(false, entry.SubjectTeam),
+                        string.Empty, TeamId.None,
+                        drawn ? KillfeedWording.RoundWords(false, TeamId.None) : string.Empty,
+                        KillfeedGlyph.Trophy, highlight: false, hold);
+                }
+
+                default:
+                    return EventLine(
+                        in entry, string.Empty, TeamId.None, string.Empty, string.Empty, TeamId.None,
+                        KillfeedWording.OverflowWords(entry.SubjectIndex), KillfeedGlyph.Overflow,
+                        highlight: false, hold);
+            }
+        }
+
+        /// <summary>A line that is not a death: a subject, a verb, an object, closing words and a picture.</summary>
+        private static KillfeedLine EventLine(
+            in KillfeedEntry entry, string subject, byte subjectTeam, string verb, string target,
+            byte targetTeam, string sentence, KillfeedGlyph glyph, bool highlight, float hold)
+            => new KillfeedLine(
+                entry.Sequence, subject, subjectTeam, target, targetTeam, string.Empty, sentence,
+                headshot: false, localIsKiller: highlight, localIsVictim: false,
+                glyph: (int)glyph, verb: verb, isEvent: true, holdSeconds: hold);
+
+        /// <summary>A capture point's name as a player reads it: "Fortress Capture Point" is FORTRESS.</summary>
+        private static string FlagNameOf(int pointIndex)
+        {
+            ICapturePointDirectory points = NetSceneBindings.CapturePoints;
+            string authored = points != null && pointIndex >= 0 && pointIndex < points.Count
+                ? points.GetDefinition(pointIndex).Name
+                : null;
+
+            return KillfeedWording.FlagName(authored, pointIndex);
         }
 
         /// <summary>
@@ -598,6 +747,133 @@ namespace Ironfront.Net.Unity.Client
                 : TeamId.None;
 
         /// <summary>
+        /// The side an actor is on, from the most complete source that knows: the score table
+        /// (every actor in the match), then the spawn (every actor announced to this client), then
+        /// the snapshot (only the actors this client currently sees). <c>TeamId.None</c> when none do.
+        /// </summary>
+        /// <remarks>
+        /// The killfeed used to ask the snapshot alone, which <c>InterestManager</c> sheds by
+        /// distance, so a kill across the map named two actors of no side and drew both names in
+        /// the neutral grey that read as white.
+        /// </remarks>
+        private byte ResolveTeam(ushort actorId)
+        {
+            byte scored = _scores.TeamOf(actorId);
+            if (scored != TeamId.None) return scored;
+
+            byte spawned = _bots.TeamOf(actorId);
+            if (spawned != TeamId.None) return spawned;
+
+            return (byte)TeamOf(actorId);
+        }
+
+        /// <summary>The side a line was written with, or a fresh answer when it was written with none.</summary>
+        private byte KnownOrResolved(byte known, ushort actorId)
+            => known != TeamId.None ? known : ResolveTeam(actorId);
+
+        /// <summary>Whether the round is being played, which is when a flag changing hands is news.</summary>
+        private bool IsRoundLive()
+        {
+            MatchStateModel match = _objectives != null ? _objectives.Match : null;
+            return match != null && match.HasState && match.Current.Phase == MatchPhase.Playing;
+        }
+
+        /// <summary>
+        /// Posts the round's start and end to the feed, and starts every streak afresh with a new
+        /// round. The phase a client joins into is where it came in, not news.
+        /// </summary>
+        private void ObserveRound(float now)
+        {
+            MatchStateModel match = _objectives != null ? _objectives.Match : null;
+            if (match == null || !match.HasState) return;
+
+            int phase = (int)match.Current.Phase;
+            if (phase == _lastPhase) return;
+
+            int previous = _lastPhase;
+            _lastPhase = phase;
+            if (previous < 0) return;
+
+            if (phase == (int)MatchPhase.Playing)
+            {
+                _accolades.Reset();
+                _killfeed.Push(KillfeedEntry.Round(true, TeamId.None, now));
+            }
+            else if (phase == (int)MatchPhase.Ended)
+            {
+                _killfeed.Push(KillfeedEntry.Round(false, match.WinningTeam, now));
+            }
+        }
+
+        /// <summary>
+        /// Posts who joined and who left, by comparing each <c>S_PLAYER_LIST</c> with the last.
+        /// The first list this client holds is the room it joined, not a stream of arrivals, and
+        /// the viewing player's own arrival is not announced to them.
+        /// </summary>
+        private void ObserveRoster(float now)
+        {
+            if (_names.Revision == _rosterRevision) return;
+            _rosterRevision = _names.Revision;
+
+            // An empty table is no baseline: every list names at least the player receiving it.
+            if (!_rosterBaselined && _names.Count == 0) return;
+
+            bool announce = _rosterBaselined;
+            _rosterBaselined = true;
+
+            bool hasLocal = NetClientPresenterGuard.TryResolveLocalActorId(out ushort localActorId);
+
+            for (ushort actorId = 0; actorId < _rosterNames.Length; actorId++)
+            {
+                string current = _names.NameOf(actorId);
+                string before = _rosterNames[actorId];
+                if (string.Equals(current, before, System.StringComparison.Ordinal)) continue;
+
+                _rosterNames[actorId] = current;
+                if (!announce || (hasLocal && actorId == localActorId)) continue;
+
+                if (before == null)
+                {
+                    _killfeed.Push(KillfeedEntry.Roster(true, actorId, ResolveTeam(actorId), now));
+                }
+                else if (current == null)
+                {
+                    _departedNames[actorId] = before;
+                    _accolades.Forget(actorId);
+                    _killfeed.Push(KillfeedEntry.Roster(false, actorId, ResolveTeam(actorId), now));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Posts a flag changing hands while the round is live. Never throws: it is a router
+        /// subscriber (V10 D22).
+        /// </summary>
+        /// <remarks>
+        /// The first report of each point is the state this client joined into and is only
+        /// recorded. A change outside a live round is a round resetting its flags and is recorded
+        /// too, so the next live change is measured from where the flags really stand.
+        /// </remarks>
+        private void OnCapturePointForFeed(CapturePointMessage message)
+        {
+            int point = message.PointId;
+            byte owner = message.OwningTeam;
+            bool seen = _pointSeen[point];
+            byte previous = _pointOwners[point];
+
+            _pointOwners[point] = owner;
+            _pointSeen[point] = true;
+
+            if (!seen || owner == previous || !IsRoundLive()) return;
+
+            float now = Time.time;
+            if (owner != TeamId.None)
+                _killfeed.Push(KillfeedEntry.Flag(true, owner, point, now));
+            else if (previous != TeamId.None)
+                _killfeed.Push(KillfeedEntry.Flag(false, previous, point, now));
+        }
+
+        /// <summary>
         /// The name S_PLAYER_LIST gave this actor, or the id when no broadcast named it.
         /// </summary>
         /// <remarks>
@@ -625,7 +901,21 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void OnDeath(DeathMessage message)
         {
-            _killfeed.Push(in message, Time.time);
+            float now = Time.time;
+            KillfeedEntry entry = KillfeedEntry.From(in message, now);
+
+            // Both sides resolved NOW and kept on the line: a side looked up as the line was drawn
+            // went grey the moment either actor left this client's interest radius -- the white
+            // names of the owner's report of 2026-09-30.
+            entry = entry.WithTeams(
+                entry.KilledByEnvironment ? TeamId.None : ResolveTeam(entry.KillerActorId),
+                ResolveTeam(entry.VictimActorId));
+            entry = entry.WithAccolades(_accolades.Observe(in entry, now));
+            entry = entry.WithPriority(
+                NetClientPresenterGuard.IsLocalActor(entry.VictimActorId)
+                || (!entry.KilledByEnvironment && NetClientPresenterGuard.IsLocalActor(entry.KillerActorId)));
+
+            _killfeed.Push(in entry);
 
             DeathImpulse impulse = DeathImpulse.From(in message);
             Vector3 force = new Vector3(impulse.Force.X, impulse.Force.Y, impulse.Force.Z);

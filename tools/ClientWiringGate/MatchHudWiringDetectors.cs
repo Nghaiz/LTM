@@ -167,7 +167,21 @@ namespace Ironfront.Tools.ClientWiringGate
                     ("_victim", "a kill never names its victim"),
                     ("_sentence",
                      "a death nobody scored — drowned, fell, went down with a vehicle — renders "
-                     + "blank, which is the \"The world\" complaint back in another form")),
+                     + "blank, which is the \"The world\" complaint back in another form"),
+                    // The owner's report of 2026-09-30: more icons, better effects, every event.
+                    ("_lead", "a death nobody scored and a match event lose the picture that says what happened"),
+                    ("_verb", "a match event loses its verb and reads \"BLUE TEAM FORTRESS\""),
+                    ("_glyph", "a vehicle or blast kill loses its picture and falls back to a word"),
+                    ("_glyphSize", "a vehicle picture cannot follow its shape and every one is squashed"),
+                    ("_longShot", "a long shot is not marked as one"),
+                    ("_distance", "a long shot never says how far it flew"),
+                    ("_badge", "a multi-kill, streak, revenge or first blood earns no badge"),
+                    ("_badgeBacking", "a badge has no colour, so every accolade looks alike"),
+                    ("_badgeGlow", "a badge cannot glow as it arrives"),
+                    ("_badgeIcon", "a badge loses its picture"),
+                    ("_badgeText", "a badge draws empty"),
+                    ("_sheen", "a new line arrives without its sweep of light"),
+                    ("_timer", "a line no longer shows how long it has left")),
 
                 new MenuScreenWiringDetectors.Screen(
                     Row, BuildCommand, Clause, Clause, Clause,

@@ -246,6 +246,14 @@ $ClientBaseline = @(
                 'in Screen.resolutions)` at MenuSettingsScreen.cs. It collides with a public ' +
                 'enum NESTED inside UnityStandardAssets BloomOptimized in firstpass -- the same ' +
                 'shape as the Mode row above, and an engine type rather than a legacy one' }
+    # Found by the killfeed's pictures (owner's report of 2026-09-30).
+    @{ Type = 'Tank'                    ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'KillfeedGlyph.Tank, an enum MEMBER on a replication-library enum, in ' +
+                'HudSprites.Killfeed.cs choosing which picture to draw -- the same shape as the ' +
+                'VehicleKind.Helicopter row above. The legacy Tank MonoBehaviour is never referenced' }
+    @{ Type = 'Boat'                    ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'KillfeedGlyph.Boat, an enum MEMBER beside KillfeedGlyph.Tank above, for the ' +
+                'same picture choice. The legacy Boat MonoBehaviour is never referenced' }
 )
 
 # RULE 7's allow-list: the legacy names Net/Diagnostics still contains, one row per NAME.

@@ -121,13 +121,19 @@ namespace Ironfront.Net.Unity.EditorTools
             System.Func<byte, Sprite> previousIcons = NetClientBindings.WeaponIcon;
             NetClientBindings.WeaponIcon = WeaponIcons();
 
+            const float hold = KillfeedModel.DefaultHoldSeconds;
+
+            // One of each shape the feed draws (owner's report of 2026-09-30): your triple kill
+            // with a headshot, a roadkill that killed you, a long shot, a revenge with a vehicle's
+            // gun, a drowning, and two match events.
             var lines = new[]
             {
-                (new KillfeedLine(5, "Minh", TeamId.Team0, ActorNames.BotName(TeamId.Team1, 4), TeamId.Team1, "RK-44", "", false, true, false, WeaponIds.RK44, ""), blue, red),
-                (new KillfeedLine(4, ActorNames.BotName(TeamId.Team1, 9), TeamId.Team1, ActorNames.BotName(TeamId.Team0, 7), TeamId.Team0, "TANK", "", false, false, false), red, blue),
-                (new KillfeedLine(3, ActorNames.BotName(TeamId.Team0, 3), TeamId.Team0, "Hoang", TeamId.Team1, "RECON LRR", "", true, false, false, WeaponIds.RECON_LRR, ""), blue, red),
-                (new KillfeedLine(2, "", TeamId.None, ActorNames.BotName(TeamId.Team1, 12), TeamId.Team1, "", "went down with the Helicopter", false, false, false), red, red),
-                (new KillfeedLine(1, ActorNames.BotName(TeamId.Team1, 2), TeamId.Team1, "Minh", TeamId.Team0, "BIL SCALPEL  ·  MELEE", "", false, false, true, WeaponIds.BIL_SCALPEL, "MELEE"), red, blue),
+                (new KillfeedLine(7, "Minh", TeamId.Team0, ActorNames.BotName(TeamId.Team1, 4), TeamId.Team1, "RK-44", "", true, true, false, WeaponIds.RK44, "", badge: KillfeedWording.MultiKillName(3), badgeTone: (int)KillfeedTone.MultiKill, holdSeconds: hold), blue, red),
+                (new KillfeedLine(6, ActorNames.BotName(TeamId.Team1, 9), TeamId.Team1, "Minh", TeamId.Team0, "QUAD BIKE  ·  ROADKILL", "", false, false, true, glyph: (int)KillfeedGlyph.QuadBike, restAfterGlyph: "ROADKILL", holdSeconds: hold), red, blue),
+                (new KillfeedLine(5, "Hoang", TeamId.Team1, ActorNames.BotName(TeamId.Team0, 3), TeamId.Team0, "RECON LRR", "", true, false, false, WeaponIds.RECON_LRR, "", badge: "LONG SHOT", badgeTone: (int)KillfeedTone.LongShot, distance: KillfeedWording.Distance(312), holdSeconds: hold), red, blue),
+                (new KillfeedLine(4, ActorNames.BotName(TeamId.Team0, 7), TeamId.Team0, ActorNames.BotName(TeamId.Team1, 2), TeamId.Team1, "TANK", "", false, false, false, glyph: (int)KillfeedGlyph.Tank, badge: KillfeedWording.StreakName(10), badgeTone: (int)KillfeedTone.Streak, holdSeconds: hold), blue, red),
+                (new KillfeedLine(3, "", TeamId.None, ActorNames.BotName(TeamId.Team1, 12), TeamId.Team1, "", "drowned", false, false, false, glyph: (int)KillfeedGlyph.Drowned, holdSeconds: hold), red, red),
+                (new KillfeedLine(2, "BLUE TEAM", TeamId.Team0, "FORTRESS", TeamId.Team0, "", "", false, false, false, glyph: (int)KillfeedGlyph.Flag, verb: KillfeedWording.FlagVerb(true), isEvent: true, holdSeconds: hold), blue, blue),
             };
 
             for (int i = 0; i < rows.arraySize && i < lines.Length; i++)

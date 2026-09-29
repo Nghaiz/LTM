@@ -1500,15 +1500,16 @@ namespace Ironfront.Net.Unity.Server
                 break;
             }
 
-            // Always with the detail tail, even when every byte of it is zero: a 1.0 client reads
-            // its twelve bytes and stops, and a 1.1 client then knows "no weapon" was said rather
-            // than left unsaid. protocol-spec.md section 4.6.
+            // Always with both tails, even when every byte of them is zero: a 1.0 client reads its
+            // twelve bytes and stops, a 1.1 client its fifteen, and a newer one then knows "no
+            // weapon" or "no range" was said rather than left unsaid. protocol-spec.md section 4.6.
             var message = new DeathMessage(
                 victimActorId, killerActorId, cause,
                 Quantize.PackVel16(force.X),
                 Quantize.PackVel16(force.Y),
                 Quantize.PackVel16(force.Z),
-                hitbox, weaponId, vehicleType, detail);
+                hitbox, weaponId, vehicleType, detail,
+                KillDistanceMetres(victimActorId, killerActorId));
 
             int written = ServerEventWriter.WriteDeath(_eventPayload, in message);
             if (written >= 0)
@@ -1538,6 +1539,27 @@ namespace Ironfront.Net.Unity.Server
             // stage flushes it. Set here rather than sent here: see _scoresDirty for why one
             // explosion must not become four reliable broadcasts.
             _scoresDirty = true;
+        }
+
+        /// <summary>
+        /// Whole metres from the killer to the victim, for the killfeed's long-shot line (owner's
+        /// report of 2026-09-30); 0 for the world, a suicide, or an actor no longer registered.
+        /// </summary>
+        /// <remarks>
+        /// Read off the two bodies at the death edge. A killer who died to the same blast is still
+        /// registered, so a grenade's thrower is measured from where they fell; a vehicle's crew
+        /// is measured from the seat. Clamped rather than wrapped, for the tally's reason.
+        /// </remarks>
+        private static ushort KillDistanceMetres(ushort victimActorId, ushort killerActorId)
+        {
+            if (killerActorId == DeathMessage.EnvironmentKiller || killerActorId == victimActorId) return 0;
+
+            ServerActorRegistry registry = ServerActorRegistry.Instance;
+            if (!registry.TryFind(victimActorId, out NetServerActor victim) || victim == null) return 0;
+            if (!registry.TryFind(killerActorId, out NetServerActor killer) || killer == null) return 0;
+
+            float metres = Vector3.Distance(victim.transform.position, killer.transform.position);
+            return metres >= ushort.MaxValue ? ushort.MaxValue : (ushort)Mathf.RoundToInt(metres);
         }
 
         /// <summary>
