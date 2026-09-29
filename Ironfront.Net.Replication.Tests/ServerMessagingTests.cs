@@ -149,7 +149,7 @@ namespace Ironfront.Net.Replication.Tests
 
             var body = new byte[ChatTextMessage.MaxClientBodySize];
             int bodyLength = ChatTextMessage.WriteClient(
-                body, System.Text.Encoding.UTF8.GetBytes("hold the ridge"));
+                body, ChatChannel.All, System.Text.Encoding.UTF8.GetBytes("hold the ridge"));
             Assert.True(bodyLength > 0);
 
             byte[] payload = BuildPayload(
@@ -179,9 +179,9 @@ namespace Ironfront.Net.Replication.Tests
             var handler = new RecordingChatHandler();
             router.Chat = handler;
 
-            // A header claiming zero bytes of text.
+            // A header naming the all-chat channel and claiming zero bytes of text.
             Assert.Equal(0, router.Route(
-                BuildPayload((byte)ClientMessageType.Chat, new byte[] { 0 }), session));
+                BuildPayload((byte)ClientMessageType.Chat, new byte[] { (byte)ChatChannel.All, 0 }), session));
 
             Assert.Equal(1, router.MalformedMessages);
             Assert.Equal(0, router.UnknownMessages);
@@ -194,7 +194,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             public string? LastText { get; private set; }
 
-            public void OnChat(ClientSession session, ReadOnlySpan<byte> textUtf8)
+            public void OnChat(ClientSession session, ChatChannel channel, ReadOnlySpan<byte> textUtf8)
                 => LastText = ChatTextMessage.TextOf(textUtf8);
         }
 

@@ -75,6 +75,9 @@ namespace Ironfront.Net.Unity.Bindings
             // The killfeed's weapon pictures: the loadout screen's own sprites, by network id.
             NetClientBindings.WeaponIcon = WeaponIconOf;
 
+            // The chat box's tabs want a pointer; the loadout screen and the Esc menu own it too.
+            NetClientBindings.ChatPointer = FreePointerForChat;
+
             // C4d. The lane-B recorder observes the scoreboard HUD, the offline scoreboard and
             // the scene's capture points, and may name none of them now that Net/Diagnostics is
             // an assembly. Registered unconditionally: the probe resolves its singletons per call
@@ -195,6 +198,53 @@ namespace Ironfront.Net.Unity.Bindings
         /// <summary>The silhouette the loadout screen draws for weapon <paramref name="networkId"/>, or null.</summary>
         private static Sprite WeaponIconOf(byte networkId)
             => WeaponManager.TryGetEntry(networkId, out WeaponManager.WeaponEntry entry) ? entry.image : null;
+
+        private static bool _chatHasPointer;
+        private static bool _lookPausedBeforeChat;
+
+        /// <summary>
+        /// Frees the pointer for the open chat box, or gives it back when the box closes.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Asserted every frame the box is open, not only on the first.</b> A death opens the
+        /// loadout screen and a deploy closes it, and <c>LoadoutUi.HideCanvas</c> locks the
+        /// pointer as it goes -- under a box that is still open and still wants it.
+        /// </para>
+        /// <para>
+        /// <b>Given back only to nobody.</b> When the box closes, the pointer is locked again
+        /// unless the loadout screen or the Esc menu is showing, because either may have opened
+        /// while the box was up and both need it free. The mouse look goes back to what it was,
+        /// unless the Esc menu -- the look's other owner -- is showing and holds it paused.
+        /// </para>
+        /// </remarks>
+        private static void FreePointerForChat(bool free)
+        {
+            if (free)
+            {
+                if (!_chatHasPointer)
+                {
+                    _chatHasPointer = true;
+                    _lookPausedBeforeChat = UnityStandardAssets.Characters.FirstPerson.MouseLook.paused;
+                }
+
+                UnityStandardAssets.Characters.FirstPerson.MouseLook.paused = true;
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+                return;
+            }
+
+            if (!_chatHasPointer) return;
+            _chatHasPointer = false;
+
+            if (!IngameMenuUi.IsOpen())
+                UnityStandardAssets.Characters.FirstPerson.MouseLook.paused = _lookPausedBeforeChat;
+
+            if (LoadoutUi.IsOpen() || IngameMenuUi.IsOpen()) return;
+
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
 
         /// <summary>
         /// The <c>GetComponent&lt;Vehicle&gt;()</c> the client assembly cannot do itself. Null

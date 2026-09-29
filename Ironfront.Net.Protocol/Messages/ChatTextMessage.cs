@@ -5,7 +5,7 @@ namespace Ironfront.Net.Protocol
 {
     /// <summary>
     /// <c>C_CHAT</c> (0x24) and <c>S_CHAT</c> (0x47) body codecs, both channel 2.
-    /// protocol-spec.md section 4.12. Phase P6 task 3.3.
+    /// protocol-spec.md section 4.12. Phase P6 task 3.3; the channel byte since v12.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -22,6 +22,15 @@ namespace Ironfront.Net.Protocol
     /// reason <c>C_SEAT_REQUEST</c> carries no actor id.
     /// </para>
     /// <para>
+    /// <b>The channel says who may hear it (v12, owner request 2026-09-29: team chat).</b> The
+    /// client names a <see cref="ChatChannel"/>; the SERVER decides the audience from it and
+    /// from the sides it already knows, so a client can ask for its own team and never for
+    /// somebody else's. <c>S_CHAT</c> repeats the channel so a receiver can mark a team line as
+    /// one. A channel this build does not define is refused as malformed in both directions,
+    /// never read as <see cref="ChatChannel.All"/>: a decoder that widened an unknown channel
+    /// to everyone would be the one place a team line could leak to the other side.
+    /// </para>
+    /// <para>
     /// <b>The text is not sanitized here.</b> A codec's job is bytes; deciding what a label may
     /// be asked to render is <see cref="PlayerNameSanitizer"/>'s, and both ends run it at their
     /// own ingress exactly as they do for a display name. What this class does enforce is the
@@ -35,7 +44,7 @@ namespace Ironfront.Net.Protocol
         /// </summary>
         /// <remarks>
         /// One line, not a paragraph. 120 bytes is roughly 120 Latin characters or 40 of
-        /// Vietnamese, and the worst-case S_CHAT body is <c>2 + 120 = 122 B</c> — far inside one
+        /// Vietnamese, and the worst-case S_CHAT body is <c>3 + 120 = 123 B</c> — far inside one
         /// un-fragmented channel-2 payload, so a chat message can never be the thing that
         /// fragments. Bytes rather than characters because the wire counts bytes; see
         /// <see cref="MaxTextCharacters"/> for the bound a sender clips against.
@@ -57,17 +66,21 @@ namespace Ironfront.Net.Protocol
         /// </remarks>
         public const int MaxTextCharacters = 60;
 
-        /// <summary>u8 textLength, before the text bytes.</summary>
-        public const int ClientHeaderSize = 1;
+        /// <summary>u8 channel + u8 textLength, before the text bytes.</summary>
+        public const int ClientHeaderSize = 2;
 
-        /// <summary>u8 actorId + u8 textLength, before the text bytes.</summary>
-        public const int ServerHeaderSize = 2;
+        /// <summary>u8 actorId + u8 channel + u8 textLength, before the text bytes.</summary>
+        public const int ServerHeaderSize = 3;
 
         /// <summary>Worst-case C_CHAT body.</summary>
         public const int MaxClientBodySize = ClientHeaderSize + MaxTextBytes;
 
         /// <summary>Worst-case S_CHAT body.</summary>
         public const int MaxServerBodySize = ServerHeaderSize + MaxTextBytes;
+
+        /// <summary>Whether this build defines <paramref name="channel"/>.</summary>
+        public static bool IsKnown(ChatChannel channel)
+            => channel == ChatChannel.All || channel == ChatChannel.Team;
 
         /// <summary>
         /// Writes a <c>C_CHAT</c> body. Returns bytes written, or -1.
@@ -78,12 +91,14 @@ namespace Ironfront.Net.Protocol
         /// splits multi-byte code points and renders as replacement characters. The caller clips
         /// at a character boundary — see <see cref="MaxTextCharacters"/>.
         /// </remarks>
-        public static int WriteClient(Span<byte> dst, ReadOnlySpan<byte> textUtf8)
+        public static int WriteClient(Span<byte> dst, ChatChannel channel, ReadOnlySpan<byte> textUtf8)
         {
+            if (!IsKnown(channel)) return -1;
             if (textUtf8.Length > MaxTextBytes) return -1;
             if (textUtf8.Length == 0) return -1;
 
             var w = new SpanWriter(dst);
+            w.WriteU8((byte)channel);
             w.WriteU8((byte)textUtf8.Length);
             w.WriteBytes(textUtf8);
 
@@ -99,13 +114,16 @@ namespace Ironfront.Net.Protocol
         /// conformance argument: ids are allocated from <c>0..MAX_ACTORS - 1</c> and
         /// <see cref="ProtocolConstants.MAX_ACTORS"/> is 64.
         /// </remarks>
-        public static int WriteServer(Span<byte> dst, byte actorId, ReadOnlySpan<byte> textUtf8)
+        public static int WriteServer(
+            Span<byte> dst, byte actorId, ChatChannel channel, ReadOnlySpan<byte> textUtf8)
         {
+            if (!IsKnown(channel)) return -1;
             if (textUtf8.Length > MaxTextBytes) return -1;
             if (textUtf8.Length == 0) return -1;
 
             var w = new SpanWriter(dst);
             w.WriteU8(actorId);
+            w.WriteU8((byte)channel);
             w.WriteU8((byte)textUtf8.Length);
             w.WriteBytes(textUtf8);
 
@@ -120,17 +138,24 @@ namespace Ironfront.Net.Protocol
         /// zero bytes of text is asking the server to broadcast a blank row to every player,
         /// which costs a reliable send and renders as a rendering fault. Refusing it here makes
         /// it a malformed message at the router, where malformed messages are already counted.
+        /// An unknown channel is refused for the class remark's reason.
         /// </remarks>
-        public static bool TryParseClient(ReadOnlySpan<byte> src, out ReadOnlySpan<byte> textUtf8)
+        public static bool TryParseClient(
+            ReadOnlySpan<byte> src, out ChatChannel channel, out ReadOnlySpan<byte> textUtf8)
         {
+            channel  = ChatChannel.All;
             textUtf8 = default;
 
             if (src.Length < ClientHeaderSize) return false;
 
-            int length = src[0];
+            var parsed = (ChatChannel)src[0];
+            if (!IsKnown(parsed)) return false;
+
+            int length = src[1];
             if (length == 0 || length > MaxTextBytes) return false;
             if (src.Length < ClientHeaderSize + length) return false;
 
+            channel  = parsed;
             textUtf8 = src.Slice(ClientHeaderSize, length);
             return true;
         }
@@ -139,18 +164,23 @@ namespace Ironfront.Net.Protocol
         /// Parses an <c>S_CHAT</c> body. The text points into <paramref name="src"/>.
         /// </summary>
         public static bool TryParseServer(
-            ReadOnlySpan<byte> src, out byte actorId, out ReadOnlySpan<byte> textUtf8)
+            ReadOnlySpan<byte> src, out byte actorId, out ChatChannel channel, out ReadOnlySpan<byte> textUtf8)
         {
             actorId  = 0;
+            channel  = ChatChannel.All;
             textUtf8 = default;
 
             if (src.Length < ServerHeaderSize) return false;
 
-            actorId    = src[0];
-            int length = src[1];
+            var parsed = (ChatChannel)src[1];
+            if (!IsKnown(parsed)) return false;
+
+            int length = src[2];
             if (length == 0 || length > MaxTextBytes) return false;
             if (src.Length < ServerHeaderSize + length) return false;
 
+            actorId  = src[0];
+            channel  = parsed;
             textUtf8 = src.Slice(ServerHeaderSize, length);
             return true;
         }

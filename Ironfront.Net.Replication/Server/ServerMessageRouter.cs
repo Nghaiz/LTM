@@ -204,7 +204,8 @@ namespace Ironfront.Net.Replication.Server
                         break;
 
                     case ClientMessageType.Chat:
-                        if (ChatTextMessage.TryParseClient(body, out ReadOnlySpan<byte> chatText))
+                        if (ChatTextMessage.TryParseClient(
+                                body, out ChatChannel chatChannel, out ReadOnlySpan<byte> chatText))
                         {
                             ChatTextMessagesReceived++;
 
@@ -212,7 +213,7 @@ namespace Ironfront.Net.Replication.Server
                             // class is allocation-free after construction, and a string per
                             // chat message inside the tick loop is exactly the kind of small,
                             // steady allocation that only shows up as a hitch an hour in.
-                            Chat?.OnChat(session, chatText);
+                            Chat?.OnChat(session, chatChannel, chatText);
                             handled++;
                         }
                         else

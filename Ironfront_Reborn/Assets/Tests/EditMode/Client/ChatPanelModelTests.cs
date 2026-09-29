@@ -1,3 +1,4 @@
+using Ironfront.Net.Protocol;
 using NUnit.Framework;
 
 namespace Ironfront.Net.Unity.Client.Tests
@@ -62,7 +63,7 @@ namespace Ironfront.Net.Unity.Client.Tests
         public void EscapeClosesTheBoxWithoutSendingAndHidesItAtOnce()
         {
             var model = new ChatPanelModel();
-            model.Add(3, "earlier line", 9f);
+            model.Add(3, ChatChannel.All, "earlier line", 9f);
             model.PressEnter(10f, out _);
             model.Draft = "never mind";
 
@@ -87,7 +88,7 @@ namespace Ironfront.Net.Unity.Client.Tests
         public void TheHistoryStaysUpForFiveSecondsAfterSendingThenFades()
         {
             var model = new ChatPanelModel(lingerSeconds: 5f, fadeSeconds: 1f);
-            model.Add(1, "the line just sent, echoed back", 20f);
+            model.Add(1, ChatChannel.All, "the line just sent, echoed back", 20f);
             model.PressEnter(20f, out _);
             model.Draft = "hello";
             model.PressEnter(20f, out _);
@@ -103,10 +104,10 @@ namespace Ironfront.Net.Unity.Client.Tests
         public void AnIncomingLineBringsTheHistoryBackForTheLinger()
         {
             var model = new ChatPanelModel(lingerSeconds: 5f, fadeSeconds: 1f);
-            model.Add(2, "first", 0f);
+            model.Add(2, ChatChannel.All, "first", 0f);
             Assert.AreEqual(0f, model.Opacity(30f));
 
-            model.Add(4, "someone else talking", 30f);
+            model.Add(4, ChatChannel.All, "someone else talking", 30f);
 
             Assert.AreEqual(1f, model.Opacity(31f));
             Assert.AreEqual(0f, model.Opacity(35f));
@@ -117,7 +118,7 @@ namespace Ironfront.Net.Unity.Client.Tests
         public void TheHistoryDropsItsOldestLineAtCapacity()
         {
             var model = new ChatPanelModel(capacity: 3);
-            for (byte i = 0; i < 5; i++) model.Add(i, "line " + i, i);
+            for (byte i = 0; i < 5; i++) model.Add(i, ChatChannel.All, "line " + i, i);
 
             Assert.AreEqual(3, model.History.Count);
             Assert.AreEqual("line 2", model.History[0].Text);
@@ -129,7 +130,7 @@ namespace Ironfront.Net.Unity.Client.Tests
         public void AbandonClosesWithoutLingering()
         {
             var model = new ChatPanelModel();
-            model.Add(1, "line", 0f);
+            model.Add(1, ChatChannel.All, "line", 0f);
             model.PressEnter(1f, out _);
             model.Draft = "half typed";
 
@@ -160,6 +161,86 @@ namespace Ironfront.Net.Unity.Client.Tests
             {
                 LocalTextEntry.Composing = before;
             }
+        }
+
+        // ---------------------------------------------------------------- team chat (2026-09-29)
+
+        [Test]
+        public void EnterOpensOnAll_AndShiftEnterOpensOnTeam()
+        {
+            var model = new ChatPanelModel();
+            model.PressEnter(1f, out _);
+            Assert.AreEqual(ChatChannel.All, model.Channel);
+
+            model.PressEscape();
+            model.PressEnter(2f, out _, ChatChannel.Team);
+            Assert.AreEqual(ChatChannel.Team, model.Channel);
+        }
+
+        [Test]
+        public void TabSwapsTheChannel_OnlyWhileTheBoxIsOpen()
+        {
+            var model = new ChatPanelModel();
+            Assert.IsFalse(model.ToggleChannel(), "a closed box has no channel to swap");
+
+            model.PressEnter(1f, out _);
+            Assert.IsTrue(model.ToggleChannel());
+            Assert.AreEqual(ChatChannel.Team, model.Channel);
+            Assert.IsTrue(model.ToggleChannel());
+            Assert.AreEqual(ChatChannel.All, model.Channel);
+        }
+
+        /// <summary>
+        /// The arrows pick a channel only while nothing is typed; with a draft they belong to the
+        /// caret, or a typo in the middle of a line could never be reached.
+        /// </summary>
+        [Test]
+        public void TheArrowsPickAChannel_OnlyBeforeAnythingIsTyped()
+        {
+            var model = new ChatPanelModel();
+            model.PressEnter(1f, out _);
+
+            Assert.IsTrue(model.PressArrow(right: true));
+            Assert.AreEqual(ChatChannel.Team, model.Channel);
+            Assert.IsTrue(model.PressArrow(right: false));
+            Assert.AreEqual(ChatChannel.All, model.Channel);
+
+            model.Draft = "push B";
+            Assert.IsFalse(model.PressArrow(right: true), "the arrow was taken from the caret");
+            Assert.AreEqual(ChatChannel.All, model.Channel);
+        }
+
+        [Test]
+        public void AClickedTabPicksItsChannel()
+        {
+            var model = new ChatPanelModel();
+            Assert.IsFalse(model.SelectChannel(ChatChannel.Team), "a closed box has no tabs to click");
+
+            model.PressEnter(1f, out _);
+            Assert.IsTrue(model.SelectChannel(ChatChannel.Team));
+            Assert.AreEqual(ChatChannel.Team, model.Channel);
+        }
+
+        /// <summary>The sender reads where a submitted line was meant to go after the box closed.</summary>
+        [Test]
+        public void ASubmittedLineKeepsItsChannel()
+        {
+            var model = new ChatPanelModel();
+            model.PressEnter(1f, out _, ChatChannel.Team);
+            model.Draft = "on me";
+
+            Assert.AreEqual(ChatKeyOutcome.Submitted, model.PressEnter(2f, out string submitted));
+            Assert.AreEqual("on me", submitted);
+            Assert.AreEqual(ChatChannel.Team, model.Channel);
+        }
+
+        [Test]
+        public void AReceivedLineRemembersItsChannel()
+        {
+            var model = new ChatPanelModel();
+            model.Add(4, ChatChannel.Team, "flank left", 1f);
+
+            Assert.AreEqual(ChatChannel.Team, model.History[0].Channel);
         }
     }
 }

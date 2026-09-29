@@ -14,6 +14,9 @@ namespace Ironfront.Net.Unity.Client
     /// <remarks>
     /// <para>
     /// <b>Enter opens, Enter sends, Esc closes</b> — the rules live in <see cref="ChatPanelModel"/>.
+    /// Shift+Enter opens on the team channel; while the box is open, Tab, the arrows and a click on
+    /// the ALL / TEAM tabs change channel (owner request 2026-09-29). The server decides who a
+    /// team line reaches; this box only asks, and marks each line with the channel it came on.
     /// Enter used to be the deploy screen's key as well (the <c>Loadout</c> axis in
     /// <c>ProjectSettings/InputManager.asset</c> is bound to return/enter), so the press that sent
     /// a line also opened the deploy screen in the same frame: the send ran here first, cleared
@@ -73,6 +76,9 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>The frame the box last opened on. See <see cref="HandleBoxKeys"/>.</summary>
         private int _openedOnFrame = -1;
+
+        /// <summary>Whether this box asked for the pointer, so it gives back only what it took.</summary>
+        private bool _pointerTaken;
 
         /// <summary><c>C_CHAT</c> messages sent. Zero after typing is the tell.</summary>
         public long MessagesSent { get; private set; }
@@ -151,13 +157,17 @@ namespace Ironfront.Net.Unity.Client
             {
                 if (!enter) return;
 
-                _model.PressEnter(Time.unscaledTime, out _);
+                bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                _model.PressEnter(Time.unscaledTime, out _, shift ? ChatChannel.Team : ChatChannel.All);
                 _openedOnFrame = Time.frameCount;
                 _focusPending = true;
                 ReleaseUiSelection();
                 Publish();
                 return;
             }
+
+            // Every frame the box is open: a screen closing under it may have locked the pointer.
+            NetClientBindings.ChatPointer?.Invoke(true);
 
             // Usually NOT reached while the box is open, and that is the shipped defect this
             // replaces: once the text field holds the keyboard, Input.GetKeyDown stops reporting
@@ -173,7 +183,7 @@ namespace Ironfront.Net.Unity.Client
         private void Submit()
         {
             if (_model.PressEnter(Time.unscaledTime, out string submitted) == ChatKeyOutcome.Submitted)
-                Send(submitted);
+                Send(submitted, _model.Channel);
 
             _releaseFocusPending = true;
             ReleaseUiSelection();
@@ -210,6 +220,22 @@ namespace Ironfront.Net.Unity.Client
         {
             if (current == null || current.type != EventType.KeyDown) return;
 
+            // Tab and the arrows change channel, and only here: read on both paths, a Tab that
+            // reached Update as well would swap the channel twice in one press.
+            if (current.keyCode == KeyCode.Tab || current.character == '\t')
+            {
+                current.Use();
+                if (current.keyCode == KeyCode.Tab) _model.ToggleChannel();
+                return;
+            }
+
+            if ((current.keyCode == KeyCode.LeftArrow || current.keyCode == KeyCode.RightArrow)
+                && _model.PressArrow(current.keyCode == KeyCode.RightArrow))
+            {
+                current.Use();
+                return;
+            }
+
             bool enter = current.keyCode == KeyCode.Return || current.keyCode == KeyCode.KeypadEnter
                          || current.character == '\n' || current.character == '\r';
             bool escape = current.keyCode == KeyCode.Escape || current.character == '\u001b';
@@ -223,8 +249,26 @@ namespace Ironfront.Net.Unity.Client
             else Submit();
         }
 
-        /// <summary>Hands the composing state to the input path, which suppresses gameplay keys.</summary>
-        private void Publish() => LocalTextEntry.Composing = _model != null && _model.IsComposing;
+        /// <summary>
+        /// Hands the composing state to the input path, which suppresses gameplay keys, and the
+        /// pointer to the box while it is open so its channel tabs can be clicked.
+        /// </summary>
+        private void Publish()
+        {
+            bool composing = _model != null && _model.IsComposing;
+            LocalTextEntry.Composing = composing;
+
+            if (composing)
+            {
+                _pointerTaken = true;
+                NetClientBindings.ChatPointer?.Invoke(true);
+            }
+            else if (_pointerTaken)
+            {
+                _pointerTaken = false;
+                NetClientBindings.ChatPointer?.Invoke(false);
+            }
+        }
 
         /// <summary>
         /// Clears the uGUI selection, so the Enter that opens or sends a line is not also the
@@ -256,7 +300,7 @@ namespace Ironfront.Net.Unity.Client
         /// which is what makes what a player sees the same thing everybody else sees.
         /// </para>
         /// </remarks>
-        private void Send(string draft)
+        private void Send(string draft, ChatChannel channel)
         {
             string text = PlayerNameSanitizer.Sanitize(draft, ChatTextMessage.MaxTextCharacters);
             if (text.Length == 0)
@@ -273,7 +317,7 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            int bodyLength = ChatTextMessage.WriteClient(_body, encoded.Slice(0, textLength));
+            int bodyLength = ChatTextMessage.WriteClient(_body, channel, encoded.Slice(0, textLength));
             if (bodyLength < 0)
             {
                 DraftsRefused++;
@@ -301,10 +345,10 @@ namespace Ironfront.Net.Unity.Client
         /// <remarks>
         /// No <c>IsLocalActor</c> guard: a line from a remote player is exactly what chat is for.
         /// </remarks>
-        private void OnChat(byte actorId, string text)
+        private void OnChat(byte actorId, ChatChannel channel, string text)
         {
             MessagesReceived++;
-            _model.Add(actorId, text, Time.unscaledTime);
+            _model.Add(actorId, channel, text, Time.unscaledTime);
         }
 
         // ------------------------------------------------------------------------------ drawing
@@ -324,9 +368,18 @@ namespace Ironfront.Net.Unity.Client
         private GUIStyle _inputStyle;
         private GUIStyle _hintStyle;
         private GUIStyle _panelStyle;
+        private GUIStyle _tabStyle;
+        private GUIStyle _tabAllStyle;
+        private GUIStyle _tabTeamStyle;
+        private GUIStyle _chipStyle;
         private Texture2D _panelTexture;
         private Texture2D _inputTexture;
         private Texture2D _dividerTexture;
+        private Texture2D _tabTexture;
+        private Texture2D _tabHoverTexture;
+        private Texture2D _tabAllTexture;
+        private Texture2D _tabTeamTexture;
+        private int _tabTeamRgb = -1;
         private float _stylesScale = -1f;
 
         private readonly StringBuilder _text = new StringBuilder(160);
@@ -385,7 +438,8 @@ namespace Ironfront.Net.Unity.Client
             if (open)
             {
                 RefreshRoster();
-                titleHeight = _titleStyle.CalcHeight(new GUIContent("CHAT"), inner);
+                EnsureTeamTab(scale);
+                titleHeight = _tabStyle.CalcHeight(new GUIContent(TeamTabLabel), inner);
                 rosterHeight = _rosterStyle.CalcHeight(new GUIContent(_rosterRich), inner);
             }
 
@@ -397,7 +451,7 @@ namespace Ironfront.Net.Unity.Client
             float hintHeight = open ? _hintStyle.CalcHeight(new GUIContent("ENTER"), inner) : 0f;
 
             float height = pad;
-            if (open) height += titleHeight + rosterHeight + gap * 2f + 1f;
+            if (open) height += titleHeight + gap * 0.5f + rosterHeight + gap * 2f + 1f;
             height += linesHeight;
             if (open) height += gap * 1.5f + inputHeight + gap * 0.5f + hintHeight;
             height += pad;
@@ -415,10 +469,10 @@ namespace Ironfront.Net.Unity.Client
 
             if (open)
             {
-                GUI.Label(new Rect(cx, cy, inner, titleHeight), "CHAT", _titleStyle);
-                GUI.Label(new Rect(cx, cy, inner, titleHeight),
+                DrawChannelTabs(cx, cy, titleHeight, scale);
+                GUI.Label(new Rect(cx, cy + 4f * scale, inner, titleHeight),
                     _rosterCount == 1 ? "1 PLAYER" : _rosterCount + " PLAYERS", _metaStyle);
-                cy += titleHeight;
+                cy += titleHeight + gap * 0.5f;
 
                 GUI.Label(new Rect(cx, cy, inner, rosterHeight), _rosterRich, _rosterStyle);
                 cy += rosterHeight + gap;
@@ -441,9 +495,16 @@ namespace Ironfront.Net.Unity.Client
             {
                 cy += gap * 1.5f;
 
+                // The channel the line will go to, in front of it, as a chip in its colour.
+                bool team = _model.Channel == ChatChannel.Team;
+                GUIContent chip = new GUIContent(team ? TeamTabLabel : AllTabLabel);
+                float chipWidth = _chipStyle.CalcSize(chip).x;
+                GUI.Label(new Rect(cx, cy, chipWidth, inputHeight), chip, team ? _tabTeamStyle : _tabAllStyle);
+
+                float field = chipWidth + gap;
                 GUI.SetNextControlName(DraftControlName);
                 _model.Draft = GUI.TextField(
-                    new Rect(cx, cy, inner, inputHeight), _model.Draft ?? string.Empty,
+                    new Rect(cx + field, cy, inner - field, inputHeight), _model.Draft ?? string.Empty,
                     ChatTextMessage.MaxTextCharacters, _inputStyle);
 
                 // Once, on the first pass after the box opened. See _focusPending.
@@ -455,7 +516,7 @@ namespace Ironfront.Net.Unity.Client
 
                 cy += inputHeight + gap * 0.5f;
                 GUI.Label(new Rect(cx, cy, inner, hintHeight),
-                    "ENTER  send     ESC  close", _hintStyle);
+                    "ENTER  send     TAB / ARROWS  channel     ESC  close", _hintStyle);
             }
 
             GUI.color = previous;
@@ -481,21 +542,71 @@ namespace Ironfront.Net.Unity.Client
             {
                 ChatEntry entry = entries[i];
                 string speaker = NameOf(entry.Speaker);
+                bool team = entry.Channel == ChatChannel.Team;
+                string speakerHex = ColourHex(TeamOf(entry.Speaker), 0.28f);
 
+                // Every line says where it went: a team line in its side's colour, so a player
+                // never mistakes what only their side saw for something the enemy read too.
                 _text.Length = 0;
-                _text.Append("<b><color=#").Append(ColourHex(TeamOf(entry.Speaker), 0.28f)).Append('>');
+                _text.Append(team ? "<b><color=#" + speakerHex + ">[TEAM]</color></b>  " : "<color=#9AA3AD>[ALL]</color>  ");
+                _text.Append("<b><color=#").Append(speakerHex).Append('>');
                 AppendEscaped(_text, speaker);
                 _text.Append("</color></b>  ");
                 AppendEscaped(_text, entry.Text);
                 _lineRich.Add(_text.ToString());
 
                 _text.Length = 0;
+                _text.Append(team ? "<b>[TEAM]</b>  " : "[ALL]  ");
                 _text.Append("<b>");
                 AppendEscaped(_text, speaker);
                 _text.Append("</b>  ");
                 AppendEscaped(_text, entry.Text);
                 _linePlain.Add(_text.ToString());
             }
+        }
+
+        private const string AllTabLabel = "ALL";
+        private const string TeamTabLabel = "TEAM";
+
+        /// <summary>
+        /// The ALL and TEAM tabs, the open channel filled in. A click picks a tab; the text field
+        /// is handed the keyboard back afterwards, because the click took it.
+        /// </summary>
+        private void DrawChannelTabs(float x, float y, float height, float scale)
+        {
+            float gap = 6f * scale;
+            float all = _tabStyle.CalcSize(new GUIContent(AllTabLabel)).x;
+            float team = _tabStyle.CalcSize(new GUIContent(TeamTabLabel)).x;
+            bool onTeam = _model.Channel == ChatChannel.Team;
+
+            if (GUI.Button(new Rect(x, y, all, height), AllTabLabel, onTeam ? _tabStyle : _tabAllStyle)
+                && _model.SelectChannel(ChatChannel.All))
+                _focusPending = true;
+
+            if (GUI.Button(new Rect(x + all + gap, y, team, height), TeamTabLabel, onTeam ? _tabTeamStyle : _tabStyle)
+                && _model.SelectChannel(ChatChannel.Team))
+                _focusPending = true;
+        }
+
+        /// <summary>
+        /// Paints the TEAM tab in this player's side's colour, once per side: a player who moves
+        /// to the other side sees their new team's colour on it.
+        /// </summary>
+        private void EnsureTeamTab(float scale)
+        {
+            int rgb = NetClientPresenterGuard.TryResolveLocalTeam(out byte team) && team != TeamId.None
+                ? NetClientBindings.TeamColourRgb(team)
+                : 0x5A8F4E;
+            if (rgb == _tabTeamRgb && _tabTeamTexture != null) return;
+
+            _tabTeamRgb = rgb;
+            if (_tabTeamTexture != null) Destroy(_tabTeamTexture);
+            _tabTeamTexture = RoundedTexture(
+                new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 0.92f), 6);
+
+            _tabTeamStyle.normal.background = _tabTeamTexture;
+            _tabTeamStyle.hover.background = _tabTeamTexture;
+            _tabTeamStyle.active.background = _tabTeamTexture;
         }
 
         /// <summary>
@@ -597,6 +708,9 @@ namespace Ironfront.Net.Unity.Client
                 _panelTexture = RoundedTexture(new Color(0.06f, 0.07f, 0.09f, 0.78f), 10);
                 _inputTexture = RoundedTexture(new Color(1f, 1f, 1f, 0.12f), 6);
                 _dividerTexture = SolidTexture(new Color(1f, 1f, 1f, 0.16f));
+                _tabTexture = RoundedTexture(new Color(1f, 1f, 1f, 0.06f), 6);
+                _tabHoverTexture = RoundedTexture(new Color(1f, 1f, 1f, 0.14f), 6);
+                _tabAllTexture = RoundedTexture(new Color(1f, 1f, 1f, 0.26f), 6);
             }
 
             Font regular = FindFont("Roboto-Medium");
@@ -683,6 +797,44 @@ namespace Ironfront.Net.Unity.Client
                 alignment = TextAnchor.UpperRight,
                 normal = { textColor = new Color(0.62f, 0.67f, 0.73f, 1f) },
             };
+
+            // A tab: a pill with its label centred. Inactive is a faint outline of a pill that
+            // brightens under the pointer; ALL fills white and TEAM fills with the side's colour.
+            _tabStyle = new GUIStyle(GUI.skin.button)
+            {
+                font = bold,
+                fontSize = Mathf.RoundToInt(15f * scale),
+                fontStyle = bold != null ? FontStyle.Normal : FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                padding = new RectOffset(
+                    Mathf.RoundToInt(16f * scale), Mathf.RoundToInt(16f * scale),
+                    Mathf.RoundToInt(6f * scale), Mathf.RoundToInt(6f * scale)),
+                margin = new RectOffset(0, 0, 0, 0),
+                border = new RectOffset(6, 6, 6, 6),
+                richText = false,
+            };
+            SetTabLook(_tabStyle, _tabTexture, _tabHoverTexture, new Color(0.72f, 0.76f, 0.81f, 1f));
+
+            _tabAllStyle = new GUIStyle(_tabStyle);
+            SetTabLook(_tabAllStyle, _tabAllTexture, _tabAllTexture, Color.white);
+
+            _tabTeamStyle = new GUIStyle(_tabStyle);
+            SetTabLook(_tabTeamStyle, _tabTeamTexture ?? _tabAllTexture, _tabTeamTexture ?? _tabAllTexture, Color.white);
+
+            // The chip in front of the input line is a tab that cannot be clicked.
+            _chipStyle = new GUIStyle(_tabStyle);
+        }
+
+        private static void SetTabLook(GUIStyle style, Texture2D rest, Texture2D hover, Color ink)
+        {
+            style.normal.background = rest;
+            style.focused.background = rest;
+            style.hover.background = hover;
+            style.active.background = hover;
+            style.normal.textColor = ink;
+            style.focused.textColor = ink;
+            style.hover.textColor = Color.white;
+            style.active.textColor = Color.white;
         }
 
         /// <summary>
@@ -744,6 +896,10 @@ namespace Ironfront.Net.Unity.Client
             if (_panelTexture != null) Destroy(_panelTexture);
             if (_inputTexture != null) Destroy(_inputTexture);
             if (_dividerTexture != null) Destroy(_dividerTexture);
+            if (_tabTexture != null) Destroy(_tabTexture);
+            if (_tabHoverTexture != null) Destroy(_tabHoverTexture);
+            if (_tabAllTexture != null) Destroy(_tabAllTexture);
+            if (_tabTeamTexture != null) Destroy(_tabTeamTexture);
         }
     }
 }
