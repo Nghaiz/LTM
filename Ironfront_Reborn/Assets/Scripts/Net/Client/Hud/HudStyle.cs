@@ -1,3 +1,4 @@
+using Ironfront.Net.Replication.Client;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -68,6 +69,41 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         public static readonly Color Blood = new Color(0.96f, 0.32f, 0.26f, 0.95f);
 
+        /// <summary>A match event's line at rest: a cooler slate than a death's, so the two part at a glance.</summary>
+        public static readonly Color EventBacking = new Color(0.07f, 0.1f, 0.15f, 0.8f);
+
+        /// <summary>The words on a killfeed badge, over its tone's colour.</summary>
+        public static readonly Color BadgeInk = new Color(1f, 1f, 1f);
+
+        /// <summary>The long-shot mark and its metres.</summary>
+        public static readonly Color LongShotInk = new Color(0.45f, 1f, 0.62f);
+
+        /// <summary>Water, for a drowning.</summary>
+        public static readonly Color WaterInk = new Color(0.36f, 0.72f, 1f);
+
+        /// <summary>Fire, for a blast.</summary>
+        public static readonly Color BlastInk = new Color(1f, 0.62f, 0.2f);
+
+        /// <summary>
+        /// A killfeed badge's colour, by what it announces: orange for a multi-kill, violet for a
+        /// streak, crimson for first blood, cyan for a revenge, gold for a shutdown, red for a team
+        /// kill and green for a long shot. Saturated on purpose: a badge is the loudest thing on a line.
+        /// </summary>
+        public static Color ToneColour(KillfeedTone tone)
+        {
+            switch (tone)
+            {
+                case KillfeedTone.MultiKill:  return new Color(1f, 0.47f, 0.08f);
+                case KillfeedTone.Streak:     return new Color(0.66f, 0.3f, 1f);
+                case KillfeedTone.FirstBlood: return new Color(0.86f, 0.08f, 0.16f);
+                case KillfeedTone.Revenge:    return new Color(0.05f, 0.72f, 0.86f);
+                case KillfeedTone.Shutdown:   return new Color(0.93f, 0.68f, 0.05f);
+                case KillfeedTone.TeamKill:   return new Color(0.9f, 0.16f, 0.12f);
+                case KillfeedTone.LongShot:   return new Color(0.12f, 0.7f, 0.36f);
+                default:                      return new Color(0.4f, 0.44f, 0.5f);
+            }
+        }
+
         /// <summary>
         /// A side's colour for a name or number drawn on a dark pane: the palette's, lifted a
         /// little toward white so a dark blue stays readable on near-black.
@@ -89,6 +125,19 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             size.minWidth = width;
             size.preferredWidth = width;
+        }
+
+        /// <summary>
+        /// Ease-out that overshoots a little and settles back: for a killfeed row or badge that
+        /// should land with some weight.
+        /// </summary>
+        public static float EaseOutBack(float t)
+        {
+            t = Mathf.Clamp01(t);
+            const float c1 = 1.70158f;
+            const float c3 = c1 + 1f;
+            float u = t - 1f;
+            return 1f + c3 * u * u * u + c1 * u * u;
         }
 
         /// <summary>Cubic ease-out, for everything that arrives.</summary>

@@ -337,13 +337,21 @@ namespace Ironfront.Net.Unity.Client.Hud
                 new System.Span<int>(_lineRow, 0, count),
                 _rowKept);
 
-            for (int line = 0; line < count; line++)
+            // New lines arrive oldest first, a beat apart: a burst of kills reads in the order it
+            // happened instead of landing as one block (owner's report of 2026-09-30).
+            int arriving = 0;
+            for (int line = count - 1; line >= 0; line--)
             {
                 if (_lineRow[line] < 0) continue;
 
                 KillfeedLine drawn = _pendingLines[line];
+                bool isNew = _killfeedRows[_lineRow[line]].Sequence != drawn.Sequence;
+                float delay = isNew ? arriving++ * ArrivalStaggerSeconds : 0f;
+
                 _killfeedRows[_lineRow[line]].Show(
-                    in drawn, line, TextInk(drawn.KillerTeam), TextInk(drawn.VictimTeam));
+                    in drawn, line,
+                    LineInk(drawn.KillerTeam, drawn.IsEvent), LineInk(drawn.VictimTeam, drawn.IsEvent),
+                    delay);
             }
 
             for (int row = 0; row < _killfeedRows.Length; row++)
@@ -352,6 +360,17 @@ namespace Ironfront.Net.Unity.Client.Hud
             System.Array.Clear(_pendingHas, 0, _pendingHas.Length);
             _pendingReceived = 0;
         }
+
+        /// <summary>Between two killfeed lines that arrive in one push.</summary>
+        private const float ArrivalStaggerSeconds = 0.08f;
+
+        /// <summary>
+        /// A name's colour on a killfeed line: its side's, or plain ink for an event's object that
+        /// belongs to no side (the flag a side lost, the round). A death's unknown side stays the
+        /// neutral grey, which says "nobody knows" rather than "nobody".
+        /// </summary>
+        private static Color LineInk(int team, bool isEvent)
+            => isEvent && team != TeamId.Team0 && team != TeamId.Team1 ? HudStyle.Ink : TextInk(team);
 
         /// <summary>
         /// What a row costs to hand to a new kill: a free row nothing, a fading one its opacity,
