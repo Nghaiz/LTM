@@ -93,8 +93,8 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
-        public void AddBloodPool(Vector3 point, Vector3 normal, float size)
-            => DecalManager.AddDecal(point, normal, size, DecalManager.DecalType.BloodRed);
+        public void AddBloodPool(Vector3 point, Vector3 normal, float size, int team)
+            => DecalManager.AddDecal(point, normal, size, DecalManager.BloodFor(team));
     }
 
     /// <summary>
