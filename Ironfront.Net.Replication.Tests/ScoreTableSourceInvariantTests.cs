@@ -65,6 +65,42 @@ namespace Ironfront.Net.Replication.Tests
                 + "a player who joins into a leaver's slot inherits the leaver's kills and deaths.");
         }
 
+        /// <summary>
+        /// A room's bots enter the match by registering, not through a connection, so no join
+        /// path marks the table dirty for them; the flush checks the registry's revision itself.
+        /// Found in the v1.1.0 release test: the board listed two humans in a match of fourteen
+        /// until the first death.
+        /// </summary>
+        [Fact]
+        public void ANewActorSetMarksTheTableDirtyBeforeTheFlush()
+        {
+            string source = ReadScript("Net", "Server", "ServerTickLoop.cs");
+
+            int revision = source.IndexOf("ServerActorRegistry.Instance.Revision", StringComparison.Ordinal);
+            int flush = source.IndexOf("if (_scoresDirty) EmitPlayerScores();", StringComparison.Ordinal);
+
+            Assert.True(revision >= 0, "ServerTickLoop no longer reads the registry's revision.");
+            Assert.True(
+                flush > revision,
+                "the registry's revision must be checked before the score flush, or a bot release "
+                + "waits for the first death to reach the board.");
+            Assert.Contains(
+                "_scoresDirty = true;", source.Substring(revision, flush - revision), StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void TheRegistryRevisionMovesOnEveryAddAndRemove()
+        {
+            string registry = ReadScript("Net", "Server", "ServerActorRegistry.cs");
+
+            string register = MethodBody(registry, "ServerActorRegistry.cs", "public void Register(NetServerActor actor)");
+            Assert.Contains("_actors.Add(actor);", register, StringComparison.Ordinal);
+            Assert.Contains("Revision++;", register, StringComparison.Ordinal);
+
+            string unregister = MethodBody(registry, "ServerActorRegistry.cs", "public void Unregister(NetServerActor actor)");
+            Assert.Contains("if (_actors.Remove(actor)) Revision++;", unregister, StringComparison.Ordinal);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static string ReadScript(params string[] relativeParts)
