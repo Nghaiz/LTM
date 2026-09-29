@@ -58,37 +58,6 @@ namespace Ironfront.Net.Protocol
         public static int Award(int points, int flags) => points * ScoreMultiplier(flags);
 
         /// <summary>
-        /// What one territory interval is worth to a team holding <paramref name="flags"/>
-        /// capture points against <paramref name="otherFlags"/>: the points it holds beyond the
-        /// other team's, and nothing when it holds as many or fewer.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// <b>Not in the original, and added on purpose</b> (playtest 2026-09-28, bug 3). There a
-        /// capture point is worth something only when somebody dies, so a team holding four
-        /// points of five gained nothing while the fighting paused, and a round split three-two
-        /// crept towards the margin: the Island round of 2026-09-28 took 29 minutes to reach it,
-        /// 702 to 903, its lead growing about seven points a minute. Holding more ground now
-        /// scores on its own, which is also what makes the losing side attack.
-        /// </para>
-        /// <para>
-        /// The difference rather than the whole count, so an even split scores nothing and the
-        /// kill rule alone decides it, exactly as it did.
-        /// </para>
-        /// </remarks>
-        public static int TerritoryAward(int flags, int otherFlags)
-            => flags > otherFlags ? flags - otherFlags : 0;
-
-        /// <summary>
-        /// The team ahead on points, or <see cref="TeamId.None"/> when level: who takes a round
-        /// the clock ends.
-        /// </summary>
-        public static byte Leader(int score0, int score1)
-            => score0 > score1 ? TeamId.Team0
-             : score1 > score0 ? TeamId.Team1
-             : TeamId.None;
-
-        /// <summary>
         /// Who has won, or <see cref="TeamId.None"/> while neither margin is met.
         /// </summary>
         /// <remarks>
