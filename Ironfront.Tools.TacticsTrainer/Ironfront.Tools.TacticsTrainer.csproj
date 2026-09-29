@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Phase P28, part 4: trains the team commander's weights (TacticsProfile) against the original
+    "attack the nearest flag" squads, in an abstract conquest simulator that runs the SAME
+    TeamPlanner the server runs.
+
+    WHY A TOOL rather than code in Ironfront.Net.Replication: the simulator and the tuner are an
+    experiment, not something the server runs; they must not ship in the plugin DLL Unity loads.
+    Referenced by Ironfront.Net.Replication.Tests so the claims the report makes (a run is
+    reproducible from its seed, the shipped profile beats the baseline) are gated on every CI run.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Tools.TacticsTrainer</RootNamespace>
+    <AssemblyName>Ironfront.Tools.TacticsTrainer</AssemblyName>
+    <Description>Phase P28: trains the bot team commander's weights in a conquest simulator.</Description>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Replication\Ironfront.Net.Replication.csproj" />
+  </ItemGroup>
+
+</Project>

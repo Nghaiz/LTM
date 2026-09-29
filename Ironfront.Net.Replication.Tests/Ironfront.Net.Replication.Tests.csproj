@@ -54,6 +54,12 @@
     -->
     <ProjectReference Include="..\tools\ClientWiringGate\ClientWiringGate.csproj" />
     <!--
+      Phase P28 part 4. The tactics trainer is an experiment, but the claims its report makes are
+      not: a run replays from its seed, the simulator is fair to both sides, and the profile the
+      game ships beats the original squads on rounds the tuner never saw. Held here, on every run.
+    -->
+    <ProjectReference Include="..\Ironfront.Tools.TacticsTrainer\Ironfront.Tools.TacticsTrainer.csproj" />
+    <!--
       phase-V3 task 10, same reasoning one gate over. SpecChecker's vehicle-registry judgement is
       a pure function over (prefab name, id) records precisely so its four failure classes — a
       reassigned id, an id the registry does not know, an id no prefab carries, an unauthored

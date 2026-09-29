@@ -13,8 +13,10 @@ using UnityEngine;
 /// <para>
 /// <b>What a side knows.</b> The flags and their owners, its own squads, and the enemies it is in
 /// contact with: an enemy counts toward the threat at a flag only while some bot of the side is
-/// within <see cref="ContactRadius"/> of it. A commander that knew where every enemy stood would be
-/// a cheat, and would play like one.
+/// within <see cref="ContactRadius"/> of it -- or while it stands on the flag itself, which every
+/// player's map shows as contested. A commander that knew where every enemy stood would be a
+/// cheat, and would play like one; one that did not know its own flag was being taken lost it
+/// (part 4's simulator: the commander held a third fewer flags than the original squads).
 /// </para>
 /// <para>
 /// <b>Where it runs.</b> Wherever the bots think: on the dedicated server, and offline. A networked
@@ -164,8 +166,13 @@ public sealed class BotCommander : MonoBehaviour
 		}
 
 		TeamPlanner planner = _planners[team];
-		int score = team == 0 ? MatchScoreboard.Current.BlueScore : MatchScoreboard.Current.RedScore;
-		int enemyScore = team == 0 ? MatchScoreboard.Current.RedScore : MatchScoreboard.Current.BlueScore;
+		// The networked match's score where there is one; offline, the offline scoreboard's.
+		if (!Ironfront.Net.Unity.MatchScoreFeed.TryScore(team, out int score)
+			|| !Ironfront.Net.Unity.MatchScoreFeed.TryScore(1 - team, out int enemyScore))
+		{
+			score = team == 0 ? MatchScoreboard.Current.BlueScore : MatchScoreboard.Current.RedScore;
+			enemyScore = team == 0 ? MatchScoreboard.Current.RedScore : MatchScoreboard.Current.BlueScore;
+		}
 
 		int written = planner.Plan(
 			team, _flags, _adjacency,
@@ -230,13 +237,17 @@ public sealed class BotCommander : MonoBehaviour
 				continue;
 			}
 			Vector3 at = enemy.Position();
-			if (!InContact(at, ours))
-			{
-				continue;
-			}
+			bool known = InContact(at, ours);
 			for (int f = 0; f < _flags.Length; f++)
 			{
-				if (_points[f] != null && (_points[f].transform.position - at).sqrMagnitude < ThreatRadius * ThreatRadius)
+				SpawnPoint point = _points[f];
+				if (point == null)
+				{
+					continue;
+				}
+				float distance = (point.transform.position - at).sqrMagnitude;
+				float onFlag = point is CapturePoint capture ? capture.captureRange : 0f;
+				if ((known && distance < ThreatRadius * ThreatRadius) || distance < onFlag * onFlag)
 				{
 					_flags[f].EnemiesInContact++;
 				}

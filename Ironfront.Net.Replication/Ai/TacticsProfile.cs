@@ -11,8 +11,10 @@ namespace Ironfront.Net.Replication.Ai
     /// trains and what the server runs.
     /// </para>
     /// <para>
-    /// <see cref="Default"/> is the profile the game ships with; see its remark for where its
-    /// numbers came from.
+    /// <b>Two sets of numbers.</b> The property initialisers are the hand-set weights, each
+    /// argued in its own summary: what <c>new TacticsProfile()</c> gives, what the planner's own
+    /// tests run on, and where part 4's trainer starts. <see cref="Default"/> is the profile the
+    /// game ships: those weights after training; see its remark for the run that produced them.
     /// </para>
     /// </remarks>
     public sealed class TacticsProfile
@@ -79,8 +81,54 @@ namespace Ironfront.Net.Replication.Ai
         /// </summary>
         public float Stickiness { get; set; } = 0.35f;
 
-        /// <summary>A new, independent copy of the shipped profile.</summary>
-        public static TacticsProfile Default() => new TacticsProfile();
+        /// <summary>
+        /// How far past a flag's capture range, in metres, an attacking squad breaks off from its
+        /// objective to take a flag that needs taking -- one not its side's, or its side's with an
+        /// enemy on it. The original squads always went for the nearest such flag; an attack keeps
+        /// that reflex within this reach (read by <c>Squad.MayDivertTo</c>).
+        /// </summary>
+        public float AttackDivertRange { get; set; } = 10f;
+
+        /// <summary>A new, independent copy of the shipped profile: the hand-set weights, trained.</summary>
+        /// <remarks>
+        /// <para>
+        /// From <c>Ironfront.Tools.TacticsTrainer train --seed 2026093001 --generations 100
+        /// --population 32</c>; the run, its numbers and how to repeat it are in
+        /// <c>plans/reports/2026-09-30-p28-tactics-training.md</c>. On 320 held-out simulated rounds this
+        /// profile beat the hand-set one 167 to 30 (mean margin +0.54) and kept roughly level with
+        /// the original game's squads (69 to 88, -0.08), where the hand-set profile lost 21 to 171.
+        /// </para>
+        /// <para>
+        /// <b>What it learned.</b> Go for many flags at once (one objective per two bots, up to
+        /// six), keep almost nobody at home until a flag is actually threatened and then send two
+        /// defenders per attacker, break off for any flag within ~185 m that needs taking, and
+        /// flank only in a big battle (38 bots or more a side).
+        /// </para>
+        /// </remarks>
+        public static TacticsProfile Default() => new TacticsProfile
+        {
+            BotsPerObjective = 2.162f,
+            MaxObjectives = 6,
+            NeutralBonus = 1.32f,
+            ThreatWeight = 0.269f,
+            LinkWeight = 0.284f,
+            DistanceWeight = 0.6f,
+            MinBotsToDefend = 10,
+            GarrisonBalanced = 0.275f,
+            GarrisonAggressive = 0.239f,
+            GarrisonDefensive = 0.363f,
+            DefendPerThreat = 1.973f,
+            MaxDefendShareBalanced = 0.425f,
+            MaxDefendShareAggressive = 0.507f,
+            MaxDefendShareDefensive = 0.434f,
+            PostureScoreMargin = 68,
+            MinBotsToFlank = 38,
+            FlankOffset = 16.657f,
+            FlankStandoff = 9.184f,
+            DefendForward = 3.375f,
+            Stickiness = 0.506f,
+            AttackDivertRange = 185.142f,
+        };
 
         /// <summary>A copy, for a tuner to perturb.</summary>
         public TacticsProfile Clone() => (TacticsProfile)MemberwiseClone();
