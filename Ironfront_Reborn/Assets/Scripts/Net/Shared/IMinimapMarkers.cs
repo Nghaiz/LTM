@@ -38,21 +38,33 @@ namespace Ironfront.Net.Unity
     {
         /// <summary>
         /// Draws — or updates — the soldier icon following <paramref name="subject"/>, the way the
-        /// original's <c>ActorBlip</c> draws one: in its team's colour, turned to its heading, and
-        /// wearing its vehicle's own icon while seated.
+        /// original's <c>ActorBlip</c> draws one: in its team's colour and turned to its heading.
         /// </summary>
         /// <remarks>
         /// Idempotent by subject: called again for a transform that already has an icon it
         /// updates in place rather than stacking a second one. Callers rely on that, because
-        /// a body's team and seat arrive with the snapshot rather than with the spawn, so this is
-        /// written every frame a snapshot is sampled. Whether the icon should exist at all is the
-        /// caller's rule; <see cref="RemoveMarker"/> takes it away.
+        /// a body's team arrives with the snapshot rather than with the spawn, so this is written
+        /// every frame a snapshot is sampled. Whether the icon should exist at all is the
+        /// caller's rule; <see cref="RemoveMarker"/> takes it away. A SEATED body has no icon of
+        /// its own: its vehicle's icon (<see cref="SetVehicleMarker"/>) stands for the crew.
         /// </remarks>
         /// <param name="subject">The body's transform. The icon reads its position and heading each frame.</param>
         /// <param name="team">0, 1, or -1 for "no team known yet".</param>
         /// <param name="isHuman">A player rather than a bot; players draw a lighter shade.</param>
-        /// <param name="seatedIn">The vehicle's transform while the body is seated, else null.</param>
-        void SetBodyMarker(Transform subject, int team, bool isHuman, Transform seatedIn);
+        void SetBodyMarker(Transform subject, int team, bool isHuman);
+
+        /// <summary>
+        /// Draws — or updates — a crewed vehicle's own icon: its silhouette, turned to its
+        /// heading, in its crew's team colour.
+        /// </summary>
+        /// <remarks>
+        /// Idempotent by subject, like <see cref="SetBodyMarker"/>. Whether the vehicle may be
+        /// shown at all is the caller's rule: an empty one never is, a crewed one exactly when a
+        /// soldier of its crew's team would be.
+        /// </remarks>
+        /// <param name="vehicle">The vehicle's root transform.</param>
+        /// <param name="team">The crew's team: 0 or 1.</param>
+        void SetVehicleMarker(Transform vehicle, int team);
 
         /// <summary>
         /// Drops <paramref name="subject"/>'s icon. Safe for a subject that never had one.

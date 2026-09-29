@@ -68,6 +68,10 @@ namespace Ironfront.Net.Unity.Client
         private readonly Dictionary<ushort, Transform> _seatedIn =
             new Dictionary<ushort, Transform>(ProtocolConstants.MAX_ACTORS);
 
+        // Each vehicle's crew team this frame, rebuilt by ApplyVehicleMarkers from _seatedIn.
+        private readonly Dictionary<Transform, byte> _crewTeam =
+            new Dictionary<Transform, byte>(ProtocolConstants.MAX_VEHICLES);
+
         /// <summary>Actors currently drawn.</summary>
         public int LiveCount => _live.Count;
 
@@ -167,7 +171,22 @@ namespace Ironfront.Net.Unity.Client
 
         private void Update()
         {
-            if (_client == null || _live.Count == 0) return;
+            if (_client == null) return;
+
+            byte localTeam = ResolveLocalTeam();
+            bool hasLocalBody = TryLocalPosition(out Vector3 localPosition, out Transform localVehicle);
+
+            SampleBodies(localTeam, hasLocalBody, localPosition);
+
+            // After the bodies, so a crew change sampled this frame is drawn this frame; and
+            // outside SampleBodies' early returns, so empty vehicles still show on a map with no
+            // other player in it.
+            ApplyVehicleMarkers(localTeam, hasLocalBody, localPosition, localVehicle);
+        }
+
+        private void SampleBodies(byte localTeam, bool hasLocalBody, Vector3 localPosition)
+        {
+            if (_live.Count == 0) return;
 
             SnapshotInterpolator buffer = _client.Router.Interpolator;
             if (buffer.Count < 2) return;
@@ -176,9 +195,6 @@ namespace Ironfront.Net.Unity.Client
             // wraps at 30 Hz while snapshots land at 20, and that sum threw every remote body
             // back a tick every 100 ms. See InterpolationClock.
             double renderTick = _client.Router.Clock.AdvanceTo(Time.unscaledTimeAsDouble);
-
-            byte localTeam = ResolveLocalTeam();
-            bool hasLocalBody = TryLocalPosition(out Vector3 localPosition);
 
             foreach (KeyValuePair<ushort, Transform> pair in _live)
             {
@@ -230,7 +246,7 @@ namespace Ironfront.Net.Unity.Client
                 // blip the rule exists to hide simply freezes on screen instead.
                 _seatedIn.TryGetValue(pair.Key, out Transform seatedIn);
                 ApplyMinimapMarker(
-                    pair.Value, view.Team, view.IsAlive, IsHuman(pair.Key), seatedIn,
+                    pair.Value, view.Team, view.IsAlive, IsHuman(pair.Key), seatedIn != null,
                     localTeam, hasLocalBody, localPosition);
             }
         }
@@ -291,9 +307,9 @@ namespace Ironfront.Net.Unity.Client
             // Ledger A-2 is not touched: nothing here registers a proxy with ActorManager, so
             // ActorManager.Player still resolves to the local body. That is the whole reason
             // this goes through MinimapUi.SetMarker (Transform-keyed) and not AddActorBlip.
-            bool spawnHasLocal = TryLocalPosition(out Vector3 spawnLocalPosition);
+            bool spawnHasLocal = TryLocalPosition(out Vector3 spawnLocalPosition, out _);
             ApplyMinimapMarker(
-                t, message.Team, isAlive: true, isHuman: !message.IsBot, seatedIn: null,
+                t, message.Team, isAlive: true, isHuman: !message.IsBot, seated: false,
                 ResolveLocalTeam(), spawnHasLocal, spawnLocalPosition);
 
             RemoteActorView view = t.GetComponent<RemoteActorView>();
@@ -346,21 +362,105 @@ namespace Ironfront.Net.Unity.Client
         /// </para>
         /// </remarks>
         private static void ApplyMinimapMarker(
-            Transform subject, byte team, bool isAlive, bool isHuman, Transform seatedIn,
+            Transform subject, byte team, bool isAlive, bool isHuman, bool seated,
             byte localTeam, bool hasLocalBody, Vector3 localPosition)
         {
             IMinimapMarkers minimap = NetClientBindings.Minimap;
             if (minimap == null) return;
+
+            // A seated body is drawn by its vehicle's icon (ApplyVehicleMarkers): a soldier icon
+            // on top of a jeep icon reads as two things in one place.
+            if (seated)
+            {
+                minimap.RemoveMarker(subject);
+                return;
+            }
 
             float sqrDistance = hasLocalBody
                 ? (subject.position - localPosition).sqrMagnitude
                 : float.PositiveInfinity;
 
             if (ShouldMarkOnMinimap(team, localTeam, isAlive, sqrDistance))
-                minimap.SetBodyMarker(
-                    subject, CapturePointOwnership.ToSpawnPointOwner(team), isHuman, seatedIn);
+                minimap.SetBodyMarker(subject, CapturePointOwnership.ToSpawnPointOwner(team), isHuman);
             else
                 minimap.RemoveMarker(subject);
+        }
+
+        /// <summary>
+        /// Gives every replicated vehicle an icon of its own, or takes it away, by
+        /// <see cref="ShouldMarkVehicle"/>'s rule.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner report 2026-09-29</b>: vehicles need icons, and their movement must be clear.
+        /// Until now a vehicle showed only through a soldier seated in it, wearing a vehicle
+        /// texture on a soldier's icon. An earlier attempt drew every vehicle as a grey SOLDIER
+        /// icon and showed enemy-driven ones wherever they were (the same day's first report);
+        /// this draws the vehicle's own silhouette, only while crewed, with exactly the
+        /// visibility its crew has.
+        /// </para>
+        /// <para>
+        /// <b>The crew is read from the bodies</b>: <see cref="_seatedIn"/> as the last sampled
+        /// snapshot left it, and this player's own seat from its snapshot entry, because the
+        /// local body is predicted and never appears among the remote ones.
+        /// </para>
+        /// </remarks>
+        private void ApplyVehicleMarkers(byte localTeam, bool hasLocalBody, Vector3 localPosition, Transform localVehicle)
+        {
+            IMinimapMarkers minimap = NetClientBindings.Minimap;
+            if (minimap == null) return;
+            if (_vehicles == null) _vehicles = GetComponent<RemoteVehicleRegistry>();
+            if (_vehicles == null) return;
+
+            _crewTeam.Clear();
+            foreach (KeyValuePair<ushort, Transform> seat in _seatedIn)
+            {
+                if (seat.Value == null || _crewTeam.ContainsKey(seat.Value)) continue;
+                if (!_views.TryGetValue(seat.Key, out RemoteActorView crew) || crew == null || !crew.IsAlive) continue;
+                _crewTeam[seat.Value] = crew.Team;
+            }
+            if (localVehicle != null && localTeam != TeamId.None) _crewTeam[localVehicle] = localTeam;
+
+            IReadOnlyList<ushort> ids = _vehicles.LiveIds;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                if (!_vehicles.TryFind(ids[i], out NetClientVehicle vehicle) || !vehicle.Exists || vehicle.Body == null)
+                    continue;
+
+                Transform subject = vehicle.Body.Transform;
+                if (vehicle.DiedFromSnapshot)
+                {
+                    minimap.RemoveMarker(subject);
+                    continue;
+                }
+
+                bool crewed = _crewTeam.TryGetValue(subject, out byte crewTeam);
+                float sqrDistance = hasLocalBody
+                    ? (subject.position - localPosition).sqrMagnitude
+                    : float.PositiveInfinity;
+
+                if (ShouldMarkVehicle(crewed, crewTeam, localTeam, sqrDistance))
+                    minimap.SetVehicleMarker(subject, CapturePointOwnership.ToSpawnPointOwner(crewTeam));
+                else
+                    minimap.RemoveMarker(subject);
+            }
+        }
+
+        /// <summary>
+        /// Whether a vehicle belongs on the minimap of a client on <paramref name="localTeam"/>,
+        /// <paramref name="sqrDistance"/> squared metres away.
+        /// </summary>
+        /// <remarks>
+        /// An EMPTY vehicle is not drawn: owner ruling 2026-09-29, after a map of grey parked
+        /// rides buried the flags they stood beside. A CREWED vehicle is exactly as visible as a
+        /// soldier of its crew's team would be (<see cref="ShouldMarkOnMinimap"/>): a team-mate's
+        /// tank is always on the map, an enemy's only inside <see cref="EnemyRevealRadius"/>.
+        /// Pure, for <see cref="ShouldMarkOnMinimap"/>'s reason.
+        /// </remarks>
+        internal static bool ShouldMarkVehicle(bool crewed, byte crewTeam, byte localTeam, float sqrDistance)
+        {
+            if (!crewed) return false;
+            return ShouldMarkOnMinimap(crewTeam, localTeam, isAlive: true, sqrDistance);
         }
 
         /// <summary>
@@ -398,15 +498,17 @@ namespace Ironfront.Net.Unity.Client
         /// seam, whose writes would land on this player's own HUD. A reading at 20 Hz is plenty for
         /// a 60 m radius.
         /// </remarks>
-        private bool TryLocalPosition(out Vector3 position)
+        private bool TryLocalPosition(out Vector3 position, out Transform seatedIn)
         {
             position = Vector3.zero;
+            seatedIn = null;
             ushort local = _client != null ? _client.LocalActorId : (ushort)0;
             if (local == 0 || !_client.Router.Decoder.Current.TryFind(local, out ActorSnapshotEntry entry))
                 return false;
 
             position = new Vector3(
                 Quantize.UnpackPos(entry.PosX), Quantize.UnpackPos(entry.PosY), Quantize.UnpackPos(entry.PosZ));
+            seatedIn = SeatVehicleOf(in entry);
             return true;
         }
 

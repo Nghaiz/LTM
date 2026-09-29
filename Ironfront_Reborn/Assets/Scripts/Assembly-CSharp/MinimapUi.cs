@@ -41,6 +41,33 @@ public class MinimapUi : MonoBehaviour
 
 	public Sprite spawnPointSelectedSprite;
 
+	/// <summary>
+	/// Vehicle icons are drawn in this child of the map, under the soldiers and the flags.
+	/// </summary>
+	public RectTransform vehicleLayer;
+
+	/// <summary>Soldier icons, player and bot, other than the player's own.</summary>
+	public RectTransform soldierLayer;
+
+	/// <summary>The player's own arrow, view cone and halo: above everything else on the map.</summary>
+	public RectTransform selfLayer;
+
+	/// <summary>
+	/// A dark veil over the whole screen behind the in-match map, faded in with it, so the map
+	/// reads against the scene instead of over it.
+	/// </summary>
+	public Graphic ingameBackdrop;
+
+	/// <summary>How dark <see cref="ingameBackdrop"/> gets with the map fully open.</summary>
+	private const float BACKDROP_OPACITY = 0.45f;
+
+	/// <summary>How often markers whose subject was destroyed without a RemoveMarker are swept.</summary>
+	private const float PRUNE_SECONDS = 2f;
+
+	private float nextPrune;
+
+	private readonly List<Transform> pruneScratch = new List<Transform>();
+
 	private Dictionary<SpawnPoint, Button> minimapSpawnPointButton;
 
 	/// <summary>The team the spawn buttons were last made interactable for.</summary>
@@ -57,6 +84,22 @@ public class MinimapUi : MonoBehaviour
 	private float minimapOpenness;
 
 	private Vector2 minimapTargetAnchor;
+
+	/// <summary>How far the in-match map is zoomed in, 1 being the whole map; eased toward <see cref="targetZoom"/>.</summary>
+	private float zoom = MinimapZoom.MinZoom;
+
+	private float targetZoom = MinimapZoom.MinZoom;
+
+	private Vector2 zoomCentre = new Vector2(0.5f, 0.5f);
+
+	/// <summary>The part of the map picture drawn right now, as a UV rect; all of it unzoomed.</summary>
+	private Rect view = new Rect(0f, 0f, 1f, 1f);
+
+	/// <summary>Each spawn button's point in the minimap camera's viewport, so it can follow the zoom.</summary>
+	private readonly Dictionary<Button, Vector2> spawnButtonViewport = new Dictionary<Button, Vector2>();
+
+	/// <summary>How quickly the map eases to a new zoom; a wheel notch settles in about a quarter second.</summary>
+	private const float ZOOM_EASE = 12f;
 
 	private void Awake()
 	{
@@ -118,6 +161,14 @@ public class MinimapUi : MonoBehaviour
 		minimapOpenness = Mathf.MoveTowards(minimapOpenness, target, Time.deltaTime * 20f);
 		ingameParent.anchorMin = new Vector2(0f, Mathf.Lerp(-1f, 0f, minimapOpenness));
 		ingameParent.anchorMax = new Vector2(1f, Mathf.Lerp(0f, 1f, minimapOpenness));
+		if (ingameBackdrop != null)
+		{
+			Color veil = ingameBackdrop.color;
+			veil.a = BACKDROP_OPACITY * minimapOpenness;
+			ingameBackdrop.color = veil;
+			ingameBackdrop.enabled = minimapOpenness > 0.001f;
+		}
+		UpdateZoom(held);
 
 		// Networked, the buttons are built before any snapshot names this player's team, so every
 		// one of them came up non-interactable -- and nothing refreshed them until a flag changed
@@ -159,7 +210,9 @@ public class MinimapUi : MonoBehaviour
 				SelectSpawnPoint(anonSpawnPoint);
 			});
 			rectTransform.SetParent(minimap.rectTransform);
-			Vector2 anchorMax = (rectTransform.anchorMin = new Vector2(vector.x, vector.y));
+			KeepUnderOwnIcon(rectTransform);
+			spawnButtonViewport[component2] = new Vector2(vector.x, vector.y);
+			Vector2 anchorMax = (rectTransform.anchorMin = ToMap(vector));
 			rectTransform.anchorMax = anchorMax;
 			rectTransform.anchoredPosition = Vector2.zero;
 			minimapSpawnPointButton.Add(spawnPoint, component2);
@@ -347,7 +400,7 @@ public class MinimapUi : MonoBehaviour
 			return;
 		}
 
-		GameObject prefab = ((kind == MinimapMarkerKind.Body)
+		GameObject prefab = ((kind != MinimapMarkerKind.CapturePoint)
 			? instance.actorBlipPrefab
 			: instance.capturePointMarkerPrefab) ?? instance.minimapSpawnPointPrefab;
 
@@ -360,24 +413,283 @@ public class MinimapUi : MonoBehaviour
 			return;
 		}
 
-		var marker = ((GameObject)Object.Instantiate(prefab, instance.minimap.rectTransform))
-			.AddComponent<MinimapMarker>();
-		marker.Bind(subject, color);
+		GameObject icon = (GameObject)Object.Instantiate(prefab, instance.LayerFor(kind));
+		if (kind == MinimapMarkerKind.CapturePoint)
+		{
+			instance.KeepUnderOwnIcon((RectTransform)icon.transform);
+		}
+		// The borrowed actor-blip prefab carries the trail's dot texture; read it before Bind
+		// switches that prefab's own ActorBlip off.
+		ActorBlip borrowed = icon.GetComponent<ActorBlip>();
+		Texture trailDot = borrowed != null ? borrowed.trailDot : null;
+		RawImage borrowedImage = icon.GetComponent<RawImage>();
+		Texture arrow = borrowed != null && borrowedImage != null ? borrowedImage.texture : null;
+		var marker = icon.AddComponent<MinimapMarker>();
+		marker.Bind(subject, color, kind, trailDot, arrow);
 		instance.markers[subject] = marker;
 	}
 
 	/// <summary>
-	/// Draws, or updates, a replicated soldier's icon: its colour, its heading, and its vehicle
-	/// while seated, the way <see cref="ActorBlip"/> draws an <see cref="Actor"/>.
+	/// Draws, or updates, a replicated soldier's icon: its colour and its heading, the way
+	/// <see cref="ActorBlip"/> draws an <see cref="Actor"/>. A seated soldier has no icon of its
+	/// own; its vehicle's stands for the crew.
 	/// </summary>
-	public static void SetBodyMarker(Transform subject, Color color, Transform seatedIn)
+	public static void SetBodyMarker(Transform subject, Color color, bool isHuman)
 	{
 		SetMarker(subject, color, MinimapMarkerKind.Body);
 		MinimapMarker marker;
 		if (instance != null && subject != null && instance.markers.TryGetValue(subject, out marker) && marker != null)
 		{
-			marker.FollowBody(seatedIn);
+			marker.SetHuman(isHuman);
 		}
+	}
+
+	/// <summary>
+	/// Draws, or updates, a vehicle's own icon: its silhouette from <see cref="Vehicle.blip"/>,
+	/// turned to its heading, in <paramref name="color"/>.
+	/// </summary>
+	public static void SetVehicleMarker(Transform vehicle, Color color)
+	{
+		if (instance == null || vehicle == null)
+		{
+			return;
+		}
+		bool isNew = !instance.markers.ContainsKey(vehicle);
+		SetMarker(vehicle, color, MinimapMarkerKind.Vehicle);
+		MinimapMarker marker;
+		if (isNew && instance.markers.TryGetValue(vehicle, out marker) && marker != null)
+		{
+			Vehicle body = vehicle.GetComponentInParent<Vehicle>();
+			marker.SetTexture(body != null ? body.blip : null);
+		}
+	}
+
+	/// <summary>
+	/// Where a point of the minimap camera's viewport lands on the map as it is drawn right now,
+	/// zoomed or not, 0-1 on each axis.
+	/// </summary>
+	public static Vector2 ToMap(Vector3 viewport)
+	{
+		Vector2 point = new Vector2(viewport.x, viewport.y);
+		return instance != null ? MinimapZoom.ToMap(point, instance.view) : point;
+	}
+
+	/// <summary>
+	/// True while the in-match map is zoomed in. An icon beyond the view is then hidden: pinning
+	/// every off-screen soldier to the edge of a zoomed map would line its border with icons.
+	/// </summary>
+	public static bool IsZoomed => instance != null && instance.zoom > MinimapZoom.MinZoom + 0.01f;
+
+	/// <summary>How many times the whole-map scale the map is drawn at right now.</summary>
+	public static float Zoom => instance != null ? instance.zoom : MinimapZoom.MinZoom;
+
+	/// <summary>
+	/// While the in-match map is held open the mouse wheel zooms it, and must not also switch the
+	/// weapon in the player's hands (<c>FpsActorController</c> asks).
+	/// </summary>
+	public static bool OwnsScrollWheel => instance != null && instance.minimapOpenness > 0.5f;
+
+	// The wheel zooms the in-match map while M is held, around the player. The deploy screen's
+	// copy always shows the whole map: that is where a player picks a flag anywhere on it.
+	private void UpdateZoom(bool held)
+	{
+		bool onLoadout = minimap.rectTransform.parent == loadoutParent;
+		if (held && !onLoadout)
+		{
+			float notches = Input.mouseScrollDelta.y;
+			if (notches != 0f)
+			{
+				targetZoom = MinimapZoom.Next(targetZoom, notches);
+			}
+		}
+		float wanted = onLoadout ? MinimapZoom.MinZoom : targetZoom;
+		zoom = Mathf.Lerp(zoom, wanted, 1f - Mathf.Exp((0f - Time.unscaledDeltaTime) * ZOOM_EASE));
+		if (Mathf.Abs(zoom - wanted) < 0.001f)
+		{
+			zoom = wanted;
+		}
+		Vector2 player;
+		if (TryLocalViewport(out player))
+		{
+			zoomCentre = player;
+		}
+		view = MinimapZoom.ViewRect(zoomCentre, zoom);
+		minimap.uvRect = view;
+	}
+
+	private static bool TryLocalViewport(out Vector2 viewport)
+	{
+		viewport = new Vector2(0.5f, 0.5f);
+		FpsActorController player = FpsActorController.instance;
+		if (player == null || player.actor == null || player.actor.dead || MinimapCamera.instance == null)
+		{
+			return false;
+		}
+		Vector3 point = MinimapCamera.instance.camera.WorldToViewportPoint(player.actor.Position());
+		viewport = new Vector2(Mathf.Clamp01(point.x), Mathf.Clamp01(point.y));
+		return true;
+	}
+
+	/// <summary>The map picture every icon is placed on, or null with no HUD.</summary>
+	public static RectTransform MapRect => instance != null ? instance.minimap.rectTransform : null;
+
+	/// <summary>How wide the map is drawn right now, in canvas pixels; icons size from it.</summary>
+	public static float MapWidth => instance != null ? instance.minimap.rectTransform.rect.width : 0f;
+
+	/// <summary>Where the player's own arrow and its decorations are drawn.</summary>
+	public static RectTransform SelfLayer => instance != null ? instance.LayerOrMap(instance.selfLayer) : null;
+
+	private RectTransform LayerFor(MinimapMarkerKind kind)
+	{
+		switch (kind)
+		{
+		case MinimapMarkerKind.Vehicle:
+			return LayerOrMap(vehicleLayer);
+		case MinimapMarkerKind.Body:
+			return LayerOrMap(soldierLayer);
+		default:
+			return minimap.rectTransform;
+		}
+	}
+
+	// A HUD authored before the icon layers existed still draws every icon, just without the
+	// vehicles-under-soldiers order; say so once rather than silently.
+	private RectTransform LayerOrMap(RectTransform layer)
+	{
+		if (layer != null)
+		{
+			return layer;
+		}
+		NetPresenterGate.WarnOnce(
+			"minimap-no-icon-layers",
+			"[minimap] MinimapUi has no icon layers assigned, so vehicles, soldiers and the player's "
+			+ "own arrow are drawn in creation order and may cover each other. Re-run the HUD "
+			+ "prefab's minimap setup.");
+		return minimap.rectTransform;
+	}
+
+	// Flags and spawn buttons go over the vehicles and soldiers and under only the player's own
+	// arrow: a flag is where the fight is and what a player deploys on, and it must never be buried
+	// by the icons crowding it (owner report 2026-09-29).
+	private void KeepUnderOwnIcon(RectTransform element)
+	{
+		if (selfLayer != null && selfLayer.parent == element.parent)
+		{
+			element.SetSiblingIndex(selfLayer.GetSiblingIndex());
+		}
+	}
+
+	private void LateUpdate()
+	{
+		if (NetContext.IsOffline && ActorManager.instance != null && ActorManager.instance.vehicles != null)
+		{
+			MarkOfflineVehicles();
+		}
+		LayoutSpawnButtons();
+		if (Time.unscaledTime >= nextPrune)
+		{
+			nextPrune = Time.unscaledTime + PRUNE_SECONDS;
+			PruneOrphanedMarkers();
+		}
+	}
+
+	// The spawn buttons grow with the map like every other icon (24 px was a fixed size on a map
+	// now half as large again on the deploy screen) and follow the zoom like every other icon.
+	private void LayoutSpawnButtons()
+	{
+		if (minimapSpawnPointButton == null)
+		{
+			return;
+		}
+		float flag = MinimapIconLayout.SoldierPixels(MapWidth) * MinimapIconLayout.FlagScale;
+		Vector2 size = new Vector2(flag, flag);
+		foreach (Button button in minimapSpawnPointButton.Values)
+		{
+			if (button == null)
+			{
+				continue;
+			}
+			RectTransform rect = (RectTransform)button.transform;
+			rect.sizeDelta = size;
+			Vector2 viewport;
+			if (spawnButtonViewport.TryGetValue(button, out viewport))
+			{
+				Vector2 onMap = ToMap(viewport);
+				rect.anchorMin = onMap;
+				rect.anchorMax = onMap;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Offline, the same vehicle icons the networked client draws (RemoteActorRegistry), from the
+	/// vehicles' own seats: a crewed vehicle in its crew's shade when the crew itself would show;
+	/// an empty one or a wreck not at all.
+	/// </summary>
+	private void MarkOfflineVehicles()
+	{
+		List<Vehicle> vehicles = ActorManager.instance.vehicles;
+		for (int i = 0; i < vehicles.Count; i++)
+		{
+			Vehicle vehicle = vehicles[i];
+			if (vehicle == null)
+			{
+				continue;
+			}
+			if (vehicle.dead)
+			{
+				RemoveMarker(vehicle.transform);
+				continue;
+			}
+			bool crewed = false;
+			bool shown = false;
+			int team = -1;
+			if (vehicle.seats != null)
+			{
+				foreach (Seat seat in vehicle.seats)
+				{
+					Actor occupant = seat != null ? seat.occupant : null;
+					if (occupant == null || occupant.dead)
+					{
+						continue;
+					}
+					crewed = true;
+					team = occupant.team;
+					shown |= !occupant.aiControlled || occupant.team == FpsActorController.playerTeam || occupant.IsHighlighted();
+				}
+			}
+			if (!crewed || !shown)
+			{
+				RemoveMarker(vehicle.transform);
+				continue;
+			}
+			SetVehicleMarker(vehicle.transform, ColorScheme.BlipColor(team, false));
+		}
+	}
+
+	// A subject destroyed without a RemoveMarker (a wreck cleaned up offline, a flag unloaded
+	// with its scene) leaves an entry keyed by a dead transform. Collected first and removed
+	// after: writing to a Dictionary while enumerating it throws on Mono.
+	private void PruneOrphanedMarkers()
+	{
+		pruneScratch.Clear();
+		foreach (KeyValuePair<Transform, MinimapMarker> entry in markers)
+		{
+			if (entry.Key == null || entry.Value == null)
+			{
+				pruneScratch.Add(entry.Key);
+			}
+		}
+		for (int i = 0; i < pruneScratch.Count; i++)
+		{
+			MinimapMarker orphan;
+			if (markers.TryGetValue(pruneScratch[i], out orphan) && orphan != null)
+			{
+				Object.Destroy(orphan.gameObject);
+			}
+			markers.Remove(pruneScratch[i]);
+		}
+		pruneScratch.Clear();
 	}
 
 	/// <summary>Drops a marker. Safe for a subject that never had one.</summary>
@@ -409,7 +721,7 @@ public class MinimapUi : MonoBehaviour
 		{
 			return;
 		}
-		ActorBlip component = ((GameObject)Object.Instantiate(instance.actorBlipPrefab, instance.minimap.rectTransform)).GetComponent<ActorBlip>();
+		ActorBlip component = ((GameObject)Object.Instantiate(instance.actorBlipPrefab, instance.LayerOrMap(instance.soldierLayer))).GetComponent<ActorBlip>();
 		component.SetActor(actor, !actor.aiControlled);
 	}
 }
