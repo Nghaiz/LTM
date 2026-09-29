@@ -7,7 +7,8 @@ using UnityEngine;
 namespace Ironfront.Net.Unity.Server.Tests
 {
     /// <summary>
-    /// Pins which actors get a row in S_PLAYER_SCORES: <c>ServerTickLoop.FillScoreRows</c>.
+    /// Pins which actors get a row in S_PLAYER_SCORES (<c>ServerTickLoop.FillScoreRows</c>), and
+    /// that a change to the actor set is visible to the code that re-sends it.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -118,6 +119,38 @@ namespace Ironfront.Net.Unity.Server.Tests
                 0, Fill(actors, new MatchScoreTally(), out _),
                 "a leaver's body goes back to the pool; its row going with it is what takes the "
                 + "leaver off every other player's board.");
+        }
+
+        /// <summary>
+        /// A room's bots enter the match by registering, not through a connection, so the table
+        /// learns of them from the registry's revision. Found in the v1.1.0 release test: the
+        /// board listed two humans in a match of fourteen until the first death.
+        /// </summary>
+        [Test]
+        public void TheActorSetRevision_MovesWhenAnActorEntersOrLeaves_AndOnlyThen()
+        {
+            ServerActorRegistry registry = ServerActorRegistry.Instance;
+            NetServerActor bot = CreateBody("released bot", 0, 1);
+            int before = registry.Revision;
+
+            try
+            {
+                registry.Register(bot);
+                Assert.AreEqual(before + 1, registry.Revision, "a released bot is a new row for the board.");
+
+                registry.Register(bot);
+                Assert.AreEqual(before + 1, registry.Revision, "registering the same actor again adds nobody.");
+
+                registry.Unregister(bot);
+                Assert.AreEqual(before + 2, registry.Revision, "an actor that leaves the world takes its row with it.");
+
+                registry.Unregister(bot);
+                Assert.AreEqual(before + 2, registry.Revision, "removing an actor that is not there changes nothing.");
+            }
+            finally
+            {
+                registry.Unregister(bot);
+            }
         }
 
         [Test]

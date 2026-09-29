@@ -76,6 +76,16 @@ namespace Ironfront.Net.Unity.Server
         private bool _scoresDirty;
 
         /// <summary>
+        /// The <see cref="ServerActorRegistry.Revision"/> the last score table was built from.
+        /// </summary>
+        /// <remarks>
+        /// A room's bots join the match by registering, not through a connection, so no join
+        /// path marks the table dirty for them: without this the board showed only the humans
+        /// until the first death.
+        /// </remarks>
+        private int _scoredRosterRevision = -1;
+
+        /// <summary>
         /// Per-player kills and deaths for this match. Phase P6 task 3.1, checklist A13.
         /// </summary>
         /// <remarks>
@@ -783,8 +793,16 @@ namespace Ironfront.Net.Unity.Server
             _ticksOwedThisStep = 0;
 
             // P18 task 3.1. Once per step that ran ticks, and only when a death moved the
-            // numbers -- the send rule the phase specifies, expressed where the tick boundary
-            // already is. A step that resolved five deaths sends one table.
+            // numbers or the set of actors changed -- the send rule the phase specifies,
+            // expressed where the tick boundary already is. A step that resolved five deaths
+            // sends one table.
+            int rosterRevision = ServerActorRegistry.Instance.Revision;
+            if (rosterRevision != _scoredRosterRevision)
+            {
+                _scoredRosterRevision = rosterRevision;
+                _scoresDirty = true;
+            }
+
             if (_scoresDirty) EmitPlayerScores();
 
             // One sample per fixed step that actually ran ticks, covering the input stage, the
