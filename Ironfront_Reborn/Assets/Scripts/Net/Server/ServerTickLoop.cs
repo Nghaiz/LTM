@@ -1439,9 +1439,13 @@ namespace Ironfront.Net.Unity.Server
         /// left behind, defended by a sentence that had gone stale.
         /// </para>
         /// </remarks>
+        /// <param name="weaponId">The killing hand weapon, for the killfeed; <c>NONE</c> when none.</param>
+        /// <param name="vehicleType">The vehicle the death involved, for the killfeed; <c>NONE</c> when none.</param>
+        /// <param name="detail">How that vehicle was involved (<see cref="DeathAttribution"/>).</param>
         public void EmitDeath(
             ushort victimActorId, ushort killerActorId, in Vec3 force, byte hitbox,
-            CauseOfDeath cause)
+            CauseOfDeath cause, byte weaponId = WeaponIds.NONE, byte vehicleType = VehicleIds.NONE,
+            DeathDetail detail = DeathDetail.None)
         {
             float now = _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE;
 
@@ -1478,12 +1482,15 @@ namespace Ironfront.Net.Unity.Server
                 break;
             }
 
+            // Always with the detail tail, even when every byte of it is zero: a 1.0 client reads
+            // its twelve bytes and stops, and a 1.1 client then knows "no weapon" was said rather
+            // than left unsaid. protocol-spec.md section 4.6.
             var message = new DeathMessage(
                 victimActorId, killerActorId, cause,
                 Quantize.PackVel16(force.X),
                 Quantize.PackVel16(force.Y),
                 Quantize.PackVel16(force.Z),
-                hitbox);
+                hitbox, weaponId, vehicleType, detail);
 
             int written = ServerEventWriter.WriteDeath(_eventPayload, in message);
             if (written >= 0)
@@ -1508,6 +1515,17 @@ namespace Ironfront.Net.Unity.Server
             // explosion must not become four reliable broadcasts.
             _scoresDirty = true;
         }
+
+        /// <summary>
+        /// Who emptied a vehicle recently enough to be credited with the crew that dies with it.
+        /// </summary>
+        /// <remarks>
+        /// The sink records the hit; the window is <see cref="DeathAttribution"/>'s, so the rule
+        /// and the number it is judged by live together in the tested library.
+        /// </remarks>
+        internal bool TryGetVehicleDestroyer(ushort vehicleId, out ushort attackerActorId)
+            => _vehicleDamageSink.TryGetRecentAttacker(
+                vehicleId, DeathAttribution.DestroyerCreditTicks, out attackerActorId);
 
         /// <summary>
         /// Sends S_EXPLOSION to every client within earshot of the blast. phase-V1 task 2.

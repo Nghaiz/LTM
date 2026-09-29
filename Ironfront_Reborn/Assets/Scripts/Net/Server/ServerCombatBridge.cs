@@ -1488,8 +1488,11 @@ namespace Ironfront.Net.Unity.Server
 
             // Through the loop's single death path, not framed here: a bot bullet and a player
             // bullet must produce the same S_DEATH, the same respawn stamp and the same ticket.
+            // Hitscan is always the weapon in hand, so the killfeed names it and no vehicle --
+            // a passenger firing their rifle from a jeep killed with the rifle.
             _loop.EmitDeath(
-                result.DeadActorId, killer.ActorId, in force, hitbox, CauseOfDeath.Bullet);
+                result.DeadActorId, killer.ActorId, in force, hitbox, CauseOfDeath.Bullet,
+                killer.WeaponId);
 
             DeathsReported++;
         }

@@ -73,9 +73,10 @@ namespace Ironfront.Net.Unity.Client.Hud
         [Tooltip("Names the local team, blank until the first snapshot answers.")]
         [SerializeField] private Text _teamReadoutText;
 
-        [Header("Killfeed (3.3)")]
-        [Tooltip("Newest first. One Text per line; the builder authors KillfeedRows of them.")]
-        [SerializeField] private Text[] _killfeedRows = new Text[KillfeedRows];
+        [Header("Killfeed (3.3, rebuilt for feature 2)")]
+        [Tooltip("The rows a kill is drawn in; the builder authors KillfeedRows of them. A row "
+                 + "follows its kill as newer kills push it down, so these are not in screen order.")]
+        [SerializeField] private KillfeedRowView[] _killfeedRows = new KillfeedRowView[KillfeedRows];
 
         [Header("Deploy screen (3.2)")]
         [Tooltip("The whole death overlay. Activated and deactivated, never merely faded.")]
@@ -90,55 +91,47 @@ namespace Ironfront.Net.Unity.Client.Hud
         [Tooltip("Sends the same empty C_SPAWN_REQUEST the respawn key sends.")]
         [SerializeField] private Button _deployButton;
 
-        [Header("Scoreboard (P18 3.3)")]
-        [Tooltip("The whole Tab board. Activated and deactivated, never merely faded.")]
-        [SerializeField] private GameObject _scoreboardRoot;
+        [Header("Scoreboard (P18 3.3, rebuilt for feature 2)")]
+        [Tooltip("The Tab board: the match across the top, both sides below. Draws what it is "
+                 + "handed; this component reads the palette and passes the colours on.")]
+        [SerializeField] private ScoreboardView _scoreboard;
 
-        [Tooltip("Team 1's heading: the side, its roster size, and its column totals.")]
-        [SerializeField] private Text _scoreboardTeam0Header;
-
-        [Tooltip("Team 1's names, one per line. Aligned with the scores label beside it.")]
-        [SerializeField] private Text _scoreboardTeam0Names;
-
-        [Tooltip("Team 1's kills and deaths, one line per name.")]
-        [SerializeField] private Text _scoreboardTeam0Scores;
-
-        [Tooltip("Team 2's heading: the side, its roster size, and its column totals.")]
-        [SerializeField] private Text _scoreboardTeam1Header;
-
-        [Tooltip("Team 2's names, one per line. Aligned with the scores label beside it.")]
-        [SerializeField] private Text _scoreboardTeam1Names;
-
-        [Tooltip("Team 2's kills and deaths, one line per name.")]
-        [SerializeField] private Text _scoreboardTeam1Scores;
+        [Tooltip("What the open board hides: the killfeed and the team readout, which would "
+                 + "otherwise show through its backdrop and crowd its header.")]
+        [SerializeField] private CanvasGroup[] _hiddenUnderScoreboard = new CanvasGroup[2];
 
         /// <summary>Set by the Deploy control, cleared by the read. See the seam's remark.</summary>
         private bool _deployPressed;
 
         /// <summary>
-        /// Lines one column will render. Two per side, so the numbers stay in their own label.
+        /// The killfeed push in progress: its lines, which have arrived, and how many are owed.
         /// </summary>
         /// <remarks>
-        /// <b>One multi-line <c>Text</c> per column rather than a <c>Text</c> per row.</b> A
-        /// 21-a-side board is 42 rows; two labels a side is four references for the gate to grade
-        /// and four objects in the prefab, against 84 of each. It also aligns for free — a row is
-        /// a line in both labels, so name and score cannot drift apart no matter how long a name
-        /// is, which is exactly what a per-row layout gets wrong first.
+        /// <b>Reconciled once the push is whole, never line by line.</b> The newest kill arrives
+        /// first, and claiming it a row before the older lines have said which rows they keep
+        /// would take a row from a kill that is still on screen. So lines are collected and
+        /// matched to rows together; see <see cref="ReconcileKillfeed"/>.
         /// </remarks>
-        private readonly System.Text.StringBuilder[] _columnNames =
-        {
-            new System.Text.StringBuilder(), new System.Text.StringBuilder(),
-        };
+        private readonly KillfeedLine[] _pendingLines = new KillfeedLine[KillfeedRows];
+        private readonly bool[] _pendingHas = new bool[KillfeedRows];
+        private int _pendingCount = -1;
+        private int _pendingReceived;
 
-        private readonly System.Text.StringBuilder[] _columnScores =
-        {
-            new System.Text.StringBuilder(), new System.Text.StringBuilder(),
-        };
+        /// <summary>
+        /// Scratch for <see cref="ReconcileKillfeed"/>, one entry per row: the kill it shows, what
+        /// it costs to reuse, and whether a push kept it. Sized in <see cref="Awake"/> from the
+        /// rows actually authored, which the gate holds at <see cref="KillfeedRows"/> but a stale
+        /// prefab might not.
+        /// </summary>
+        private long[] _rowSequences = System.Array.Empty<long>();
+        private float[] _rowCosts = System.Array.Empty<float>();
+        private bool[] _rowKept = System.Array.Empty<bool>();
 
-        /// <summary>Rows appended to each column since it was begun.</summary>
-        private readonly int[] _columnRows = new int[2];
+        /// <summary>Scratch for <see cref="ReconcileKillfeed"/>, one entry per line.</summary>
+        private readonly long[] _lineSequences = new long[KillfeedRows];
+        private readonly int[] _lineRow = new int[KillfeedRows];
 
-        /// <summary>Whether the board is up, so a hidden board costs no string work.</summary>
+        /// <summary>Whether the board is up, so a repeated call costs nothing.</summary>
         private bool _scoreboardVisible;
 
         /// <summary>
@@ -174,26 +167,43 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         private void Awake()
         {
+            int rows = _killfeedRows != null ? _killfeedRows.Length : 0;
+            _rowSequences = new long[rows];
+            _rowCosts = new float[rows];
+            _rowKept = new bool[rows];
+
             if (!NetClientPresenterGuard.IsPresentable)
             {
                 // Offline. Put the overlay away before disabling, or the authored state of the
                 // prefab is whatever the last Editor session left — and a deploy panel visible
                 // over the bot match is the X-48 failure one screen over.
                 if (_deployRoot != null) _deployRoot.SetActive(false);
-                if (_scoreboardRoot != null) _scoreboardRoot.SetActive(false);
+                if (_scoreboard != null) _scoreboard.HideImmediately();
                 if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
                 ClearKillfeed();
-                ClearScoreboard();
 
                 enabled = false;
                 return;
             }
 
             if (_deployRoot != null) _deployRoot.SetActive(false);
-            if (_scoreboardRoot != null) _scoreboardRoot.SetActive(false);
+            if (_scoreboard != null) _scoreboard.HideImmediately();
             if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
             ClearKillfeed();
-            ClearScoreboard();
+        }
+
+        private void Update()
+        {
+            // A push whose lines never all arrived still draws what did, rather than leaving the
+            // feed frozen on the push before it. The presenter pushes every line synchronously,
+            // so this is a guard for a caller that does not.
+            if (_pendingCount > 0) ReconcileKillfeed();
+
+            if (_killfeedRows == null) return;
+
+            float delta = Time.unscaledDeltaTime;
+            for (int i = 0; i < _killfeedRows.Length; i++)
+                if (_killfeedRows[i] != null) _killfeedRows[i].Tick(delta);
         }
 
         private void OnEnable()
@@ -274,33 +284,83 @@ namespace Ironfront.Net.Unity.Client.Hud
         {
             if (_killfeedRows == null) return;
 
-            for (int i = count; i < _killfeedRows.Length; i++)
-                if (_killfeedRows[i] != null) _killfeedRows[i].text = string.Empty;
+            // More lines than rows cannot be drawn; the oldest (the highest indices) go unshown.
+            _pendingCount = Mathf.Clamp(count, 0, _pendingLines.Length);
+            _pendingReceived = 0;
+            System.Array.Clear(_pendingHas, 0, _pendingHas.Length);
+
+            // A count of zero is the whole push: the clear, and the common case.
+            if (_pendingCount == 0) ReconcileKillfeed();
         }
 
         /// <inheritdoc/>
-        public void SetKillfeedLine(
-            int index, string killerName, int killerTeam, string victimName, int victimTeam,
-            bool headshot)
+        public void SetKillfeedLine(int index, in KillfeedLine line)
         {
-            if (_killfeedRows == null) return;
-            if (index < 0 || index >= _killfeedRows.Length) return;
+            if (_pendingCount < 0) return;
+            if (index < 0 || index >= _pendingCount) return;
 
-            Text row = _killfeedRows[index];
-            if (row == null) return;
+            if (!_pendingHas[index]) _pendingReceived++;
+            _pendingLines[index] = line;
+            _pendingHas[index] = true;
 
-            // Rich text, because ONE Text per line is what an authored row is and the two names
-            // are on different sides. The alternative -- three Texts per row, laid out by hand --
-            // is nine more references for the gate to grade and a layout that breaks on a long
-            // name. The tags are built from the palette, so there is still exactly one mapping.
-            row.supportRichText = true;
-            row.text = Coloured(killerName, killerTeam)
-                       + (headshot ? " <b>▸</b> " : " → ")
-                       + Coloured(victimName, victimTeam);
+            if (_pendingReceived >= _pendingCount) ReconcileKillfeed();
+        }
+
+        /// <summary>
+        /// Matches a finished push to rows and draws it: a kill still on screen keeps its row, a
+        /// new kill takes a free one, and a row whose kill left the push fades out. The rules are
+        /// <see cref="Ironfront.Net.Replication.Client.KillfeedRowAssignment"/>'s, tested there.
+        /// </summary>
+        private void ReconcileKillfeed()
+        {
+            int count = _pendingCount;
+            _pendingCount = -1;
+
+            for (int row = 0; row < _killfeedRows.Length; row++)
+            {
+                KillfeedRowView view = _killfeedRows[row];
+                _rowSequences[row] = view != null ? view.Sequence : -1;
+                _rowCosts[row] = view != null ? ReuseCost(view) : float.MaxValue;
+            }
+
+            for (int line = 0; line < count; line++)
+                _lineSequences[line] = _pendingHas[line] ? _pendingLines[line].Sequence : 0;
+
+            Ironfront.Net.Replication.Client.KillfeedRowAssignment.Assign(
+                _rowSequences, _rowCosts,
+                new System.ReadOnlySpan<long>(_lineSequences, 0, count),
+                new System.Span<int>(_lineRow, 0, count),
+                _rowKept);
+
+            for (int line = 0; line < count; line++)
+            {
+                if (_lineRow[line] < 0) continue;
+
+                KillfeedLine drawn = _pendingLines[line];
+                _killfeedRows[_lineRow[line]].Show(
+                    in drawn, line, TextInk(drawn.KillerTeam), TextInk(drawn.VictimTeam));
+            }
+
+            for (int row = 0; row < _killfeedRows.Length; row++)
+                if (!_rowKept[row] && _killfeedRows[row] != null) _killfeedRows[row].Leave();
+
+            System.Array.Clear(_pendingHas, 0, _pendingHas.Length);
+            _pendingReceived = 0;
+        }
+
+        /// <summary>
+        /// What a row costs to hand to a new kill: a free row nothing, a fading one its opacity,
+        /// one still showing a kill the most -- that kill is the one the model just pushed out.
+        /// </summary>
+        private static float ReuseCost(KillfeedRowView row)
+        {
+            if (row.IsFree) return 0f;
+            if (row.IsLeaving) return 1f + row.Opacity;
+            return 3f;
         }
 
         /// <inheritdoc/>
-        public void ShowDeploy(string killerName, int killerTeam)
+        public void ShowDeploy(string caption, int killerTeam)
         {
             if (_deployRoot != null) _deployRoot.SetActive(true);
 
@@ -308,9 +368,7 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             if (_deployKillerText != null)
             {
-                _deployKillerText.text = string.IsNullOrEmpty(killerName)
-                    ? string.Empty
-                    : "Killed by " + killerName;
+                _deployKillerText.text = caption ?? string.Empty;
                 _deployKillerText.color = TeamColour(killerTeam);
             }
 
@@ -355,117 +413,54 @@ namespace Ironfront.Net.Unity.Client.Hud
         public void SetScoreboardVisible(bool visible)
         {
             if (visible == _scoreboardVisible) return;
-
             _scoreboardVisible = visible;
-            if (_scoreboardRoot != null) _scoreboardRoot.SetActive(visible);
 
-            // Cleared on the way DOWN, not on the way up. A board raised again before its driver
-            // has pushed a row would otherwise show the previous life's numbers for a frame --
-            // and a stale scoreboard is the one artifact this phase is graded on.
-            if (!visible) ClearScoreboard();
+            if (_scoreboard == null) return;
+
+            // Visible first: opening is what activates the board and runs its Awake, and the
+            // palette is applied to parts that exist only after that.
+            _scoreboard.SetVisible(visible);
+            if (visible)
+                _scoreboard.SetPalette(TeamColour(TeamId.Team0), TeamColour(TeamId.Team1));
+
+            if (_hiddenUnderScoreboard == null) return;
+
+            for (int i = 0; i < _hiddenUnderScoreboard.Length; i++)
+                if (_hiddenUnderScoreboard[i] != null) _hiddenUnderScoreboard[i].alpha = visible ? 0f : 1f;
         }
 
         /// <inheritdoc/>
-        public void BeginScoreboardColumn(int team, int playerCount, int totalKills, int totalDeaths)
+        public void SetScoreboardMatch(in ScoreboardMatch match)
         {
-            int column = ColumnFor(team);
-            if (column < 0) return;
+            if (_scoreboard != null) _scoreboard.SetMatch(in match);
+        }
 
-            _columnNames[column].Length = 0;
-            _columnScores[column].Length = 0;
-            _columnRows[column] = 0;
-
-            Text header = column == 0 ? _scoreboardTeam0Header : _scoreboardTeam1Header;
-            if (header == null) return;
+        /// <inheritdoc/>
+        public void BeginScoreboardColumn(
+            int team, int playerCount, int humanCount, int totalKills, int totalDeaths)
+        {
+            if (_scoreboard == null) return;
 
             // The roster size and the column's own totals, on screen, because criterion 7 is the
             // arithmetic that reconciles this board with the team score above it. The count is
             // the TRUE one even when more rows follow than the column can draw.
-            header.text = TeamLabel(team)
-                          + "   " + playerCount + (playerCount == 1 ? " player" : " players")
-                          + "   " + totalKills + " K / " + totalDeaths + " D";
-            header.color = TeamColour(team);
+            _scoreboard.BeginColumn(
+                team,
+                TeamLabel(team),
+                Ironfront.Net.Replication.Client.ScoreboardWording.PlayersLine(playerCount, humanCount),
+                Ironfront.Net.Replication.Client.ScoreboardWording.TotalsLine(totalKills, totalDeaths));
         }
 
         /// <inheritdoc/>
-        public void AddScoreboardRow(int team, string name, int kills, int deaths, bool local)
+        public void AddScoreboardRow(int team, in ScoreboardRow row)
         {
-            int column = ColumnFor(team);
-            if (column < 0) return;
-            if (_columnRows[column] >= ScoreboardRowsPerTeam) return;
-
-            System.Text.StringBuilder names = _columnNames[column];
-            System.Text.StringBuilder scores = _columnScores[column];
-
-            if (_columnRows[column] > 0)
-            {
-                names.Append('\n');
-                scores.Append('\n');
-            }
-
-            // Bold rather than a second colour: the column is already painted in the side's
-            // colour, and re-tinting one row would say "this player is on a different team".
-            if (local) names.Append("<b>");
-            names.Append(name);
-            if (local) names.Append("</b>");
-
-            scores.Append(kills).Append(" / ").Append(deaths);
-
-            _columnRows[column]++;
+            if (_scoreboard != null) _scoreboard.AddRow(team, in row);
         }
 
         /// <inheritdoc/>
         public void EndScoreboard()
         {
-            PaintColumn(0, _scoreboardTeam0Names, _scoreboardTeam0Scores);
-            PaintColumn(1, _scoreboardTeam1Names, _scoreboardTeam1Scores);
-        }
-
-        private void PaintColumn(int column, Text names, Text scores)
-        {
-            int team = column == 0 ? TeamId.Team0 : TeamId.Team1;
-            Color ink = TeamColour(team);
-
-            if (names != null)
-            {
-                names.supportRichText = true;
-                names.text = _columnNames[column].ToString();
-                names.color = ink;
-            }
-
-            if (scores != null)
-            {
-                scores.text = _columnScores[column].ToString();
-                scores.color = ink;
-            }
-        }
-
-        /// <summary>
-        /// Which column a team byte draws in, or -1 for a side this board has no column for.
-        /// </summary>
-        /// <remarks>
-        /// <c>TeamId.None</c> lands here, and it is dropped rather than filed under team 0. An
-        /// actor whose side the server did not state belongs on neither column; putting it on the
-        /// first one would make the totals under a heading wrong in a way nothing on screen could
-        /// contradict.
-        /// </remarks>
-        private static int ColumnFor(int team)
-            => team == TeamId.Team0 ? 0 : team == TeamId.Team1 ? 1 : -1;
-
-        private void ClearScoreboard()
-        {
-            for (int column = 0; column < 2; column++)
-            {
-                _columnNames[column].Length = 0;
-                _columnScores[column].Length = 0;
-                _columnRows[column] = 0;
-            }
-
-            if (_scoreboardTeam0Header != null) _scoreboardTeam0Header.text = string.Empty;
-            if (_scoreboardTeam1Header != null) _scoreboardTeam1Header.text = string.Empty;
-
-            PaintColumn(0, _scoreboardTeam0Names, _scoreboardTeam0Scores);
-            PaintColumn(1, _scoreboardTeam1Names, _scoreboardTeam1Scores);
+            if (_scoreboard != null) _scoreboard.End();
         }
 
         /// <inheritdoc/>
@@ -481,10 +476,14 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         private void ClearKillfeed()
         {
+            _pendingCount = -1;
+            _pendingReceived = 0;
+            System.Array.Clear(_pendingHas, 0, _pendingHas.Length);
+
             if (_killfeedRows == null) return;
 
             for (int i = 0; i < _killfeedRows.Length; i++)
-                if (_killfeedRows[i] != null) _killfeedRows[i].text = string.Empty;
+                if (_killfeedRows[i] != null) _killfeedRows[i].Release();
         }
 
         /// <summary>
@@ -495,16 +494,18 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// picked a side on that screen and then reads a different word for it in the match has
         /// been told about two things. P16 criterion 10 is graded on those exact strings.
         /// </remarks>
-        private static string TeamLabel(int team) => team == TeamId.Team0 ? "TEAM 1" : "TEAM 2";
+        private static string TeamLabel(int team)
+            => Ironfront.Net.Replication.Client.ScoreboardWording.TeamName((byte)team);
 
         /// <summary>
-        /// <paramref name="text"/> wrapped in the colour <paramref name="team"/> is drawn in.
+        /// A side's colour for a name drawn on the killfeed's dark backing: the palette's, lifted
+        /// a little toward white so a dark blue stays readable on near-black.
         /// </summary>
-        private static string Coloured(string text, int team)
-            => "<color=#" + ColourHex(team) + ">" + text + "</color>";
-
-        private static string ColourHex(int team)
-            => (NetClientBindings.TeamColourRgb(team) & 0xFFFFFF).ToString("X6");
+        /// <remarks>
+        /// A transform of <see cref="TeamColour"/>, not a second mapping: re-theming a side still
+        /// happens in one place.
+        /// </remarks>
+        private static Color TextInk(int team) => Color.Lerp(TeamColour(team), Color.white, 0.2f);
 
         /// <summary>
         /// The palette's answer for <paramref name="team"/>, as an engine colour.

@@ -48,10 +48,24 @@ namespace Ironfront.Net.Replication.Server
         /// <summary>Ids are 1-based; 0 means "unassigned" everywhere in the protocol.</summary>
         public const ushort FirstId = 1;
 
+        /// <summary>
+        /// The most ids a pool may issue: 1 to 63, so that every id indexes a table
+        /// <see cref="ProtocolConstants.MAX_ACTORS"/> long.
+        /// </summary>
+        /// <remarks>
+        /// The pool used to issue 1 to 64 while every per-actor table on both sides -- the respawn
+        /// gate, the score tally, the client's score and name tables -- holds indices 0 to 63.
+        /// The FIFO rotation hands out every id in turn, so id 64 reached somebody after the first
+        /// churn of a match, and <c>ServerRespawnGate</c> refused its death: no <c>S_DEATH</c>, no
+        /// killfeed line, no score, and a scoreboard that never listed that actor (feature 2,
+        /// 2026-09-29). 63 ids is still 15 more than sixteen players and thirty-two bots need.
+        /// </remarks>
+        public const ushort MaxCapacity = ProtocolConstants.MAX_ACTORS - FirstId;
+
         public ActorIdPool(
-            ushort capacity = ProtocolConstants.MAX_ACTORS, float quarantineSeconds = 5f)
+            ushort capacity = MaxCapacity, float quarantineSeconds = 5f)
         {
-            if (capacity == 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+            if (capacity == 0 || capacity > MaxCapacity) throw new ArgumentOutOfRangeException(nameof(capacity));
             if (quarantineSeconds < 0f) throw new ArgumentOutOfRangeException(nameof(quarantineSeconds));
 
             _capacity          = capacity;

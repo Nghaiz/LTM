@@ -50,6 +50,13 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 	public Actor source;
 
 	/// <summary>
+	/// The weapon that fired this, as its <c>NetworkId</c>, for the killfeed. Set beside
+	/// <see cref="source"/> in <c>Weapon.SpawnProjectile</c>; 0 (<c>WeaponIds.NONE</c>) otherwise.
+	/// </summary>
+	[NonSerialized]
+	public byte sourceWeaponId;
+
+	/// <summary>
 	/// Whether this projectile warns enemy AI that fire is incoming. V7 task 3.
 	/// </summary>
 	/// <remarks>
@@ -200,6 +207,9 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		Hitbox component = Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer)
 			? hitInfo.collider.GetComponent<Hitbox>()
 			: null;
+		// Names the weapon for a death this hit causes (feature 2, 2026-09-29): the hit reaches
+		// Actor.DamageAttributed through Hitbox.ProjectileHit, which carries no weapon.
+		using (DeathContext.Weapon(sourceWeaponId))
 		if (component != null)
 		{
 			if (component.parent == source)

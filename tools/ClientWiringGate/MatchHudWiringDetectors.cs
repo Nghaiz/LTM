@@ -93,6 +93,9 @@ namespace Ironfront.Tools.ClientWiringGate
                          "the feed renders fewer lines than KillfeedModel holds, so the oldest "
                          + "kill on screen is silently not the oldest kill — and criterion 6 is "
                          + "graded on a screenshot of exactly those lines"),
+                        ("_hiddenUnderScoreboard", 2,
+                         "the killfeed and the team readout stay up under the open board, show "
+                         + "through its backdrop and crowd its clock"),
                     },
                     ("_teamReadoutText",
                      "the local team is resolved every frame and written nowhere, so a player "
@@ -110,28 +113,85 @@ namespace Ironfront.Tools.ClientWiringGate
                     ("_deployButton",
                      "there is no Deploy control at all and the spacebar is the only way back "
                      + "into the match — criteria 3 and 4 become indistinguishable"),
-                    ("_scoreboardRoot",
-                     "the Tab board has no object to activate, so holding Tab shows nothing and "
-                     + "P18 criteria 2, 3, 4 and 7 have no screen to be graded on"),
-                    ("_scoreboardTeam0Header",
-                     "team 1's column has no heading, so its roster size and its totals never "
-                     + "render — and P18 criterion 7 is exactly that arithmetic"),
-                    ("_scoreboardTeam0Names",
-                     "team 1's names render nowhere, so its column is a list of numbers against "
-                     + "nobody — P18 criterion 2"),
-                    ("_scoreboardTeam0Scores",
-                     "team 1's kills and deaths render nowhere, so the column shows a roster and "
-                     + "no scores: the all-zero board P18 criterion 3 exists to forbid, one step "
-                     + "worse"),
-                    ("_scoreboardTeam1Header",
-                     "team 2's column has no heading, so its roster size and its totals never "
-                     + "render — and P18 criterion 7 is exactly that arithmetic"),
-                    ("_scoreboardTeam1Names",
-                     "team 2's names render nowhere, so its column is a list of numbers against "
-                     + "nobody — P18 criterion 2"),
-                    ("_scoreboardTeam1Scores",
-                     "team 2's kills and deaths render nowhere, so the column shows a roster and "
-                     + "no scores")),
+                    ("_scoreboard",
+                     "the Tab board has no view to open, so Tab shows nothing and P18 criteria "
+                     + "2, 3, 4 and 7 have no screen to be graded on")),
+
+                // Feature 2 (2026-09-29): the killfeed row and the scoreboard became views of
+                // their own, so their parts are graded here rather than left to a runtime log.
+                new MenuScreenWiringDetectors.Screen(
+                    Row, BuildCommand, Clause, Clause, Clause,
+                    "KillfeedRowView", "Scripts/Net/Client/Hud/KillfeedRowView.cs",
+                    Array.Empty<(string, int, string)>(),
+                    ("_backing", "a killfeed line has no backing and floats unreadable over a bright sky"),
+                    ("_edge", "your own kills and deaths are no longer picked out of the feed"),
+                    ("_accent", "a line loses the side colour that says who acted"),
+                    ("_killer", "a kill never names its killer"),
+                    ("_how", "the feed stops saying HOW — the weapon or the vehicle — which is feature 2"),
+                    ("_howText", "the how-chip draws empty"),
+                    ("_headshot", "a headshot reads like any other kill"),
+                    ("_victim", "a kill never names its victim"),
+                    ("_sentence",
+                     "a death nobody scored — drowned, fell, went down with a vehicle — renders "
+                     + "blank, which is the \"The world\" complaint back in another form")),
+
+                new MenuScreenWiringDetectors.Screen(
+                    Row, BuildCommand, Clause, Clause, Clause,
+                    "ScoreboardView", "Scripts/Net/Client/Hud/ScoreboardView.cs",
+                    Array.Empty<(string, int, string)>(),
+                    ("_group", "the board cannot fade in, so it never becomes visible"),
+                    ("_vignette", "the board has no backdrop and the match shows through the rows"),
+                    ("_panel", "the board has nothing to move as it opens"),
+                    ("_map", "the board never says which map this is"),
+                    ("_summary", "the head count under the map renders nowhere"),
+                    ("_team0Label", "team 1's score is a number with no name"),
+                    ("_team1Label", "team 2's score is a number with no name"),
+                    ("_score0", "team 1's score renders nowhere on the board"),
+                    ("_score1", "team 2's score renders nowhere on the board"),
+                    ("_score0Glow", "the leading side is not marked when team 1 leads"),
+                    ("_score1Glow", "the leading side is not marked when team 2 leads"),
+                    ("_leadTrack",
+                     "the tug-of-war bar has no track, so how close a side is to the winning "
+                     + "margin is invisible"),
+                    ("_leadFill0", "team 1's lead never shows on the bar"),
+                    ("_leadFill1", "team 2's lead never shows on the bar"),
+                    ("_leadLine", "the lead and what winning still takes are never put in words"),
+                    ("_clock", "the match clock renders nowhere on the board"),
+                    ("_phase", "the clock has no label, so a warmup countdown reads like time left"),
+                    ("_divider", "the match header runs into the columns"),
+                    ("_team0", "team 1's column is missing, so half the players are nowhere"),
+                    ("_team1", "team 2's column is missing, so half the players are nowhere"),
+                    ("_rules", "the scoring rules are explained nowhere")),
+
+                new MenuScreenWiringDetectors.Screen(
+                    Row, BuildCommand, Clause, Clause, Clause,
+                    "ScoreboardTeamView", "Scripts/Net/Client/Hud/ScoreboardTeamView.cs",
+                    Array.Empty<(string, int, string)>(),
+                    ("_band", "the side's colour band is missing, so the columns look alike"),
+                    ("_teamName", "the column never says whose side it is"),
+                    ("_flagIcon", "the flag count has no mark"),
+                    ("_flags", "the capture points a side holds render nowhere"),
+                    ("_players",
+                     "the side's true head count renders nowhere, so a truncated column is silent"),
+                    ("_totals", "the side's totals never render — and P18 criterion 7 is that arithmetic"),
+                    ("_rows", "the rows have nowhere to go"),
+                    ("_empty", "an empty side draws nothing at all instead of saying so"),
+                    ("_rowTemplate", "the column has no row to clone, so it lists nobody — P18 criterion 2")),
+
+                new MenuScreenWiringDetectors.Screen(
+                    Row, BuildCommand, Clause, Clause, Clause,
+                    "ScoreboardRowView", "Scripts/Net/Client/Hud/ScoreboardRowView.cs",
+                    Array.Empty<(string, int, string)>(),
+                    ("_backing", "rows run together with no backing, and your own is not picked out"),
+                    ("_edge", "your own row is not picked out of the column"),
+                    ("_rank", "a row has no rank"),
+                    ("_star", "the top of a side is not marked"),
+                    ("_name", "a row never names its player — P18 criterion 2"),
+                    ("_bot", "bots and players look the same"),
+                    ("_botText", "the BOT tag draws empty"),
+                    ("_kills", "a player's kills render nowhere — P18 criterion 3"),
+                    ("_deaths", "a player's deaths render nowhere"),
+                    ("_ratio", "a player's kills per death render nowhere")),
             };
 
         /// <summary>
@@ -225,23 +285,20 @@ namespace Ironfront.Tools.ClientWiringGate
             var findings = new List<GateFinding>();
             var inks = new Dictionary<string, string>(StringComparer.Ordinal);
 
-            foreach (string field in new[] { "_teamReadoutText", "_killfeedRows" })
+            CollectInks(index, path, hud, "_teamReadoutText", inks);
+
+            // Feature 2 moved the team-coloured names one level down, into the killfeed rows and
+            // the scoreboard. Reading only this component's own fields would now see the team
+            // readout alone and pass on anything -- a green that could not go red.
+            foreach ((string owner, string[] parts) in TeamPaintedParts)
             {
-                foreach (UnityObjectRef reference in Referenced(hud, field))
+                foreach (UnityObjectRef reference in Referenced(hud, owner))
                 {
-                    if (reference.IsNull) continue;
+                    UnityAssetDocument? view = Resolve(index, path, reference);
+                    if (view == null) continue;
 
-                    // A colour lives on the Text component in the SAME asset; a reference that
-                    // leaves it is already reported by the assigned-and-resolves clauses.
-                    if (reference.Guid != null) continue;
-
-                    UnityAssetDocument? text = index.Documents(path)
-                        .FirstOrDefault(d => d.AnchorId == reference.FileId);
-
-                    string? ink = text?.Scalar("m_Color");
-                    if (ink == null) continue;
-
-                    if (!inks.ContainsKey(ink)) inks.Add(ink, $"{field} ({reference.FileId})");
+                    foreach (string part in parts)
+                        CollectInks(index, path, view, part, inks, $"{owner}.{part}");
                 }
             }
 
@@ -256,6 +313,46 @@ namespace Ironfront.Tools.ClientWiringGate
                     + $"({Clause})."));
 
             return findings;
+        }
+
+        /// <summary>
+        /// The views whose named parts the runtime paints in a side's colour, so the asset must
+        /// author them in the one neutral ink.
+        /// </summary>
+        private static readonly (string Owner, string[] Parts)[] TeamPaintedParts =
+        {
+            ("_killfeedRows", new[] { "_killer", "_victim" }),
+            ("_scoreboard", new[] { "_score0", "_score1", "_team0Label", "_team1Label" }),
+        };
+
+        /// <summary>Records the authored colour of every text one field names.</summary>
+        private static void CollectInks(
+            UnityAssetIndex index, string path, UnityAssetDocument document, string field,
+            Dictionary<string, string> inks, string? label = null)
+        {
+            foreach (UnityObjectRef reference in Referenced(document, field))
+            {
+                UnityAssetDocument? text = Resolve(index, path, reference);
+
+                string? ink = text?.Scalar("m_Color");
+                if (ink == null) continue;
+
+                if (!inks.ContainsKey(ink)) inks.Add(ink, $"{label ?? field} ({reference.FileId})");
+            }
+        }
+
+        /// <summary>
+        /// The document a same-asset reference points at, or null.
+        /// </summary>
+        /// <remarks>
+        /// A reference that leaves the asset is already reported by the assigned-and-resolves
+        /// clauses, and a colour lives on a component in the SAME asset.
+        /// </remarks>
+        private static UnityAssetDocument? Resolve(UnityAssetIndex index, string path, UnityObjectRef reference)
+        {
+            if (reference.IsNull || reference.Guid != null) return null;
+
+            return index.Documents(path).FirstOrDefault(d => d.AnchorId == reference.FileId);
         }
 
         /// <summary>

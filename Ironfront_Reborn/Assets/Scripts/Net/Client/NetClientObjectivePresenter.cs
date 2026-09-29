@@ -186,20 +186,24 @@ namespace Ironfront.Net.Unity.Client
         /// team, the same as the server's <c>OwnedPointCount</c>.
         /// </remarks>
         private void RecomputeCapturePointCounts()
+            => NetClientBindings.Objectives?.SetCapturePointCounts(
+                CapturePointsHeldBy(TeamId.Team0), CapturePointsHeldBy(TeamId.Team1));
+
+        /// <summary>The latched <c>S_MATCH_STATE</c>, for the Tab scoreboard (feature 2).</summary>
+        public MatchStateModel Match => _model;
+
+        /// <summary>
+        /// Capture points <paramref name="team"/> holds, as this client last heard. The one
+        /// count the objective HUD and the Tab scoreboard both show, so they cannot disagree.
+        /// </summary>
+        public int CapturePointsHeldBy(byte team)
         {
-            int blue = 0;
-            int red = 0;
+            int held = 0;
 
             for (int i = 0; i < _view.Capacity; i++)
-            {
-                if (!_view.IsKnown(i)) continue;
+                if (_view.IsKnown(i) && _view.OwningTeam(i) == team) held++;
 
-                byte owner = _view.OwningTeam(i);
-                if (owner == TeamId.Team0) blue++;
-                else if (owner == TeamId.Team1) red++;
-            }
-
-            NetClientBindings.Objectives?.SetCapturePointCounts(blue, red);
+            return held;
         }
 
         private void Update()

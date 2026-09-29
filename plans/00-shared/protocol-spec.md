@@ -652,10 +652,28 @@ u16  killerActorId     0xFFFF if killed by the environment
 u8   causeOfDeath      0=bullet 1=explosion 2=fall 3=drown 4=vehicle
 i16  forceX, forceY, forceZ    Quantized velocity, so the client's ragdoll flies the right way
 u8   hitboxHit
+--- detail tail, 1.1 onward (optional) ---
+u8   weaponId          § 4.8; 0 when no hand weapon killed (a vehicle's own gun, a ram, a fall)
+u8   vehicleType       VehicleIds; 0 when no vehicle was involved
+u8   detail            bit0 = killer in vehicle   (its own gun, or driven into the victim)
+                       bit1 = went down with vehicle (the victim's ride was destroyed)
+                       bit2 = melee
 ```
 
 On receiving this the client: enables the ragdoll **locally**, plays audio, updates the killfeed.
 Corpses are not synchronized between clients — accepted per AD-4.
+
+**The detail tail (1.1, playtest 2026-09-28 feature 2).** The body is 12 bytes without it and 15
+with it; a 1.1 server always sends 15. It is compatible in both directions without a
+`PROTOCOL_VERSION` bump, because every message is length-framed: a 1.0 client parses its twelve
+bytes and never reads further, and a 1.1 client takes a 12-byte body from a 1.0 server as "no
+detail". A body of 13 or 14 bytes is malformed — half a tail would name the wrong weapon. Unknown
+`detail` bits are ignored, so a later build can add one without a version change.
+
+The server decides the tail with `DeathAttribution` (Ironfront.Net.Replication): the crew of a
+destroyed vehicle is credited to whoever emptied it within 10 s, since every vehicle burns 4 s
+before it dies, and a kill by a seated killer that no hand weapon names belongs to the vehicle.
+The credited killer is the one `killerActorId` carries and the score tally counts.
 
 ### 4.7. `S_WEAPON_FIRE` (0x49)
 

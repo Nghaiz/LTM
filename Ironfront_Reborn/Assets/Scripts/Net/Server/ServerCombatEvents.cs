@@ -1,5 +1,6 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
+using Ironfront.Net.Replication.Server;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server
@@ -40,6 +41,13 @@ namespace Ironfront.Net.Unity.Server
         /// knows the wire id. A <c>GetComponent</c> per death is affordable; a serialized
         /// back-reference on every actor prefab is not.
         /// </para>
+        /// <para>
+        /// <paramref name="weaponId"/>, <paramref name="vehicle"/> and <paramref name="detail"/>
+        /// come from <c>DeathContext</c>, the scope the damage call sites open, and
+        /// <see cref="DeathAttribution"/> decides what they mean: the crew of a destroyed vehicle
+        /// is credited to whoever destroyed it, and a kill no hand weapon names by a seated killer
+        /// is the vehicle's.
+        /// </para>
         /// </remarks>
         /// <param name="victim">The actor that just died.</param>
         /// <param name="impactForce">The blow that killed it, for each client's own ragdoll.</param>
@@ -48,11 +56,20 @@ namespace Ironfront.Net.Unity.Server
         /// environmental death, so ordinary bot combat is not mislabeled as "The world".
         /// </param>
         /// <param name="cause">What killed it, for the killfeed.</param>
+        /// <param name="weaponId">The hand weapon that dealt the blow, <c>NONE</c> when none did.</param>
+        /// <param name="vehicle">
+        /// The vehicle the damage came from: the one the victim went down with, or the one that
+        /// ran them over. Null for everything else.
+        /// </param>
+        /// <param name="detail">What the call site knew about how (<c>DeathContext</c>).</param>
         public static void ReportDeath(
             Component victim,
             Vector3 impactForce,
             Component attacker = null,
-            CauseOfDeath cause = CauseOfDeath.Bullet)
+            CauseOfDeath cause = CauseOfDeath.Bullet,
+            byte weaponId = WeaponIds.NONE,
+            GameObject vehicle = null,
+            DeathDetail detail = DeathDetail.None)
         {
             if (!NetContext.IsServer) return;
             if (victim == null) return;
@@ -70,13 +87,40 @@ namespace Ironfront.Net.Unity.Server
                 if (replicatedAttacker != null) killerActorId = replicatedAttacker.ActorId;
             }
 
+            ServerVehicleRegistry vehicles = ServerVehicleRegistry.Instance;
+
+            ushort vehicleId = vehicles.NetworkIdOf(vehicle);
+            ushort destroyer = DeathMessage.EnvironmentKiller;
+            if (vehicleId != 0 && loop.TryGetVehicleDestroyer(vehicleId, out ushort attackerId))
+                destroyer = attackerId;
+
+            byte killerSeat = VehicleIds.NONE;
+            if (killerActorId != DeathMessage.EnvironmentKiller
+                && vehicles.Registry.TryFindSeatOf(killerActorId, out ushort seatedIn, out _))
+                killerSeat = TypeOf(vehicles, seatedIn);
+
+            DeathAttribution attribution = DeathAttribution.Resolve(
+                killerActorId, weaponId, detail,
+                vehicleType: TypeOf(vehicles, vehicleId),
+                vehicleDestroyerActorId: destroyer,
+                killerSeatVehicleType: killerSeat);
+
             loop.EmitDeath(
                 replicated.ActorId,
-                killerActorId,
+                attribution.KillerActorId,
                 MovementSimulation.ToCore(impactForce),
                 (byte)HitboxType.Body,
-                cause);
+                cause,
+                attribution.WeaponId,
+                attribution.VehicleType,
+                attribution.Detail);
         }
+
+        /// <summary>The wire type of a registered vehicle, or <c>NONE</c>.</summary>
+        private static byte TypeOf(ServerVehicleRegistry vehicles, ushort vehicleId)
+            => vehicleId != 0 && vehicles.TryFind(vehicleId, out IGameplayVehicleSource source)
+                ? source.NetworkTypeId
+                : VehicleIds.NONE;
 
         /// <summary>
         /// Reports that a blast went off, so every client in earshot can draw it. phase-V1
