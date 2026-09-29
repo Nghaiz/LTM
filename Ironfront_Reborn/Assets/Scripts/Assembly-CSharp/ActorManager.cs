@@ -822,16 +822,17 @@ public class ActorManager : MonoBehaviour
 				float num5 = Vector3.Distance(a, b);
 				if (num5 < 5f)
 				{
-					instance.StartCoroutine(instance.MarkTakingFire((AiActorController)item.controller, -p.transform.forward, num4));
+					instance.StartCoroutine(instance.MarkTakingFire((AiActorController)item.controller, -p.transform.forward, num4, p.source));
 				}
 			}
 		}
 	}
 
-	private IEnumerator MarkTakingFire(AiActorController ai, Vector3 direction, float duration)
+	private IEnumerator MarkTakingFire(AiActorController ai, Vector3 direction, float duration, Actor shooter)
 	{
 		yield return new WaitForSeconds(duration + AiActorController.PARAMETERS.TAKING_FIRE_REACTION_TIME);
-		ai.MarkTakingFireFrom(direction);
+		// The shooter too (phase P28): a bot answers the enemy shooting at it first.
+		ai.MarkTakingFireFrom(direction, shooter);
 	}
 
 	public static void RegisterVehicle(Vehicle vehicle)

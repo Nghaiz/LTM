@@ -16,8 +16,13 @@ And, it being 2026, a trained model rather than only hand-set numbers.
 - `Squad.NewAttackOrder` sends every squad at the spawn point nearest its leader, or a random
   adjacent enemy one. Nothing at the team level: no defence, no split of forces, no flank, no idea
   how many bots the side has.
-- `Squad.DigInTowards` on taking fire uses authored `CoverPoint`s only (`CoverManager`, 50 m); where
-  none is authored a squad just stops.
+- `Squad.DigInTowards` on taking fire sends each bot to the nearest authored `CoverPoint` turned within
+  30 degrees of the fire, up to 50 m away, without asking whether it hides the bot from the shooter;
+  where none faces the right way the bot walks on in the open. The maps carry plenty of points --
+  1,857 on Dustbowl, 1,641 on Island, placed by the original's `CoverPlacer` along every walkable
+  edge that meets an obstacle -- so the gap is the choice, not the supply. Vehicles are never cover.
+- A squad leaves cover three seconds after the last shot passed near it, even mid-exchange; a bot
+  in the open stands still or walks its path while firing; a hurt bot fights on until it dies.
 - `AiTarget` takes the nearest visible enemy; `AiVehicle` boards whatever is near; tanks drive into
   point-blank range.
 
@@ -31,10 +36,14 @@ And, it being 2026, a trained model rather than only hand-set numbers.
    (one for a handful, up to three for a large side), and assignments are sticky, so a squad
    commits instead of turning round every tick. Unity glue in `Assembly-CSharp`
    (`BotCommander`), which also runs offline.
-2. **Combat tactics (`AiActorController`).** Cover found in the level itself — rocks, walls, trees,
-   vehicles — by sampling positions and testing the line from the threat; crouching to fire at range;
-   side-stepping in the open; pulling back to cover when badly hurt; targets chosen by threat, not
-   only by distance.
+2. **Combat tactics (`AiActorController`, `CombatRules`, `CoverProbe`).** Cover judged against the
+   actual shooter with `CoverPlacer`'s own height tests (low line blocked close in; a standing or
+   leaning line clear to fire), over the nearest authored points within 30 m plus ground behind
+   stationary vehicles; a squad still fighting holds its cover up to 12 s after the shots stop; a
+   bot below 35 health falls back to cover away from the enemy; a bot in the open crouches to fire
+   beyond 35 m and side-steps when closer or shot at; targets ranked by threat (the enemy shooting
+   at the bot, the enemy on the squad's flag) over the nearest 16; a sneaking squad holds its fire
+   beyond 45 m until it is found. Numbers in `CombatRules`, rays in `CoverProbe`.
 3. **Vehicles with a purpose.** The commander hands vehicles to squads whose target is far; tanks hold
    a firing distance instead of closing to point-blank.
 4. **A trained profile.** An abstract conquest simulator runs the same `TeamPlanner` code against the
