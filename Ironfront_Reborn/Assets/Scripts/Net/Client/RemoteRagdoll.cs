@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Ironfront.Net.Unity.Client
 {
@@ -65,14 +67,23 @@ namespace Ironfront.Net.Unity.Client
             new PartSpec(HumanBodyBones.RightLowerLeg, HumanBodyBones.RightUpperLeg, HumanBodyBones.RightFoot,    4f, 0.06f),
         };
 
+        // Null for a ragdoll built on a corpse copy, which has no animator to switch off.
         private readonly Animator _animator;
+
+        private readonly Func<HumanBodyBones, Transform> _resolve;
+
+        // Set while the body crumples: joints that hold the death pose with a spring that fades.
+        private ConfigurableJoint[] _crumpleJoints;
+
+        private float _crumpleSeconds;
         private readonly Transform[] _bones = new Transform[Specs.Length];
         private readonly int[] _layers = new int[Specs.Length];
         private readonly Rigidbody[] _bodies = new Rigidbody[Specs.Length];
 
-        private RemoteRagdoll(Animator animator)
+        private RemoteRagdoll(Animator animator, Func<HumanBodyBones, Transform> resolve)
         {
             _animator = animator;
+            _resolve = resolve;
         }
 
         /// <summary>Whether the body is lying limp right now.</summary>
@@ -86,14 +97,29 @@ namespace Ironfront.Net.Unity.Client
         {
             if (animator == null || !animator.isHuman) return null;
 
-            var ragdoll = new RemoteRagdoll(animator);
+            return TryCreate(animator, animator.GetBoneTransform);
+        }
+
+        /// <summary>
+        /// A ragdoll for a skeleton whose bones <paramref name="resolve"/> names, with no animator
+        /// behind it: a corpse's copy of a body (<see cref="RemoteCorpse"/>). Null when a bone the
+        /// ragdoll is built on is missing.
+        /// </summary>
+        public static RemoteRagdoll TryCreate(Func<HumanBodyBones, Transform> resolve)
+        {
+            return resolve == null ? null : TryCreate(null, resolve);
+        }
+
+        private static RemoteRagdoll TryCreate(Animator animator, Func<HumanBodyBones, Transform> resolve)
+        {
+            var ragdoll = new RemoteRagdoll(animator, resolve);
             for (int i = 0; i < Specs.Length; i++)
             {
-                Transform bone = animator.GetBoneTransform(Specs[i].Bone);
+                Transform bone = resolve(Specs[i].Bone);
 
                 // A rig without a separate chest bone has its torso on the spine.
                 if (bone == null && Specs[i].Bone == HumanBodyBones.Chest)
-                    bone = animator.GetBoneTransform(HumanBodyBones.Spine);
+                    bone = resolve(HumanBodyBones.Spine);
 
                 if (bone == null) return null;
                 ragdoll._bones[i] = bone;
@@ -108,11 +134,45 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         public void Fell(Vector3 impulse, HumanBodyBones hit)
         {
+            Fell(impulse, hit, Vector3.zero, 0f);
+        }
+
+        /// <summary>
+        /// As <see cref="Fell(Vector3, HumanBodyBones)"/>, carrying the body's own motion into the
+        /// fall and, for <paramref name="crumpleSeconds"/>, holding the pose it died in with a
+        /// spring that fades to nothing.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Momentum.</b> The original hands its ragdoll the controller's velocity
+        /// (<c>ActiveRaggy.Ragdoll(controller.Velocity())</c>), so a soldier shot mid-sprint pitches
+        /// forward. A body that starts from rest drops straight down on the spot instead, which
+        /// reads as a puppet whose strings were cut.
+        /// </para>
+        /// <para>
+        /// <b>The crumple.</b> The original keeps a weak muscle drive on a death
+        /// (<c>ragdoll.SetDrive(50f, 1f)</c>) so the body sags rather than collapsing in one frame.
+        /// A passive joint cannot do that; a <c>ConfigurableJoint</c> whose slerp drive targets the
+        /// pose at the moment of death, weakened over the crumple, can: the knees give first and
+        /// the torso follows. <see cref="TickCrumple"/> fades it.
+        /// </para>
+        /// </remarks>
+        public void Fell(Vector3 impulse, HumanBodyBones hit, Vector3 inheritedVelocity, float crumpleSeconds)
+        {
             if (IsActive) return;
             IsActive = true;
 
-            _animator.enabled = false;
-            Build();
+            if (_animator != null) _animator.enabled = false;
+            _crumpleSeconds = Mathf.Max(0f, crumpleSeconds);
+            Build(_crumpleSeconds > 0f);
+
+            if (inheritedVelocity.sqrMagnitude > 0f)
+            {
+                for (int i = 0; i < _bodies.Length; i++)
+                {
+                    if (_bodies[i] != null) _bodies[i].linearVelocity = inheritedVelocity;
+                }
+            }
 
             Rigidbody target = _bodies[0];
             for (int i = 0; i < Specs.Length; i++)
@@ -121,6 +181,101 @@ namespace Ironfront.Net.Unity.Client
             }
 
             if (target != null && impulse.sqrMagnitude > 0f) target.AddForce(impulse, ForceMode.Impulse);
+        }
+
+        /// <summary>The spring a crumpling joint starts with, per kilogram it carries.</summary>
+        private const float CrumpleSpringPerKg = 14f;
+
+        /// <summary>Damping on a crumpling joint; enough that the sag does not oscillate.</summary>
+        private const float CrumpleDamper = 2.5f;
+
+        /// <summary>
+        /// Fades the death pose's hold <paramref name="sinceFell"/> seconds into the fall; a no-op
+        /// for a body that is not crumpling. Quadratic, so the body holds for a moment and then goes.
+        /// </summary>
+        public void TickCrumple(float sinceFell)
+        {
+            if (_crumpleJoints == null || _crumpleSeconds <= 0f) return;
+
+            float remaining = Mathf.Clamp01(1f - sinceFell / _crumpleSeconds);
+            float share = remaining * remaining;
+            for (int i = 0; i < _crumpleJoints.Length; i++)
+            {
+                ConfigurableJoint joint = _crumpleJoints[i];
+                if (joint == null) continue;
+
+                Rigidbody body = joint.GetComponent<Rigidbody>();
+                float mass = body != null ? body.mass : 4f;
+                JointDrive drive = joint.slerpDrive;
+                drive.positionSpring = CrumpleSpringPerKg * mass * share;
+                drive.positionDamper = CrumpleDamper * share;
+                joint.slerpDrive = drive;
+            }
+
+            if (remaining <= 0f) _crumpleJoints = null;
+        }
+
+        /// <summary>
+        /// A second impulse on a body that has already fallen -- the <c>S_DEATH</c> that arrived
+        /// after the snapshot which felled it -- landing on <paramref name="hit"/>.
+        /// </summary>
+        public void Push(Vector3 impulse, HumanBodyBones hit)
+        {
+            if (!IsActive || impulse.sqrMagnitude <= 0f) return;
+
+            Rigidbody target = _bodies[0];
+            for (int i = 0; i < Specs.Length; i++)
+            {
+                if (Specs[i].Bone == hit && _bodies[i] != null) target = _bodies[i];
+            }
+            if (target != null && !target.isKinematic) target.AddForce(impulse, ForceMode.Impulse);
+        }
+
+        /// <summary>
+        /// Pushes every part away from a blast: a corpse near a grenade tumbles instead of lying
+        /// still through it.
+        /// </summary>
+        public void AddExplosionForce(float force, Vector3 centre, float radius, float upwards)
+        {
+            if (!IsActive) return;
+            for (int i = 0; i < _bodies.Length; i++)
+            {
+                Rigidbody body = _bodies[i];
+                if (body == null || body.isKinematic) continue;
+                body.AddExplosionForce(force * body.mass, centre, radius, upwards, ForceMode.Impulse);
+            }
+        }
+
+        /// <summary>
+        /// Whether the body has come to rest: every part asleep or all but still.
+        /// </summary>
+        public bool IsResting
+        {
+            get
+            {
+                if (!IsActive) return false;
+                for (int i = 0; i < _bodies.Length; i++)
+                {
+                    Rigidbody body = _bodies[i];
+                    if (body == null || body.isKinematic || body.IsSleeping()) continue;
+                    if (body.linearVelocity.sqrMagnitude > 0.04f) return false;
+                }
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Freezes every part where it lies, so the body can be moved as one piece (a corpse
+        /// sinking out of sight at the end of its time).
+        /// </summary>
+        public void Freeze()
+        {
+            for (int i = 0; i < _bodies.Length; i++)
+            {
+                if (_bodies[i] == null) continue;
+                _bodies[i].isKinematic = true;
+                _bodies[i].detectCollisions = false;
+            }
         }
 
         /// <summary>Seconds the pelvis takes to close on where the server's ragdoll has it.</summary>
@@ -205,7 +360,7 @@ namespace Ironfront.Net.Unity.Client
                 Transform bone = _bones[i];
                 if (bone == null) continue;
 
-                CharacterJoint joint = bone.GetComponent<CharacterJoint>();
+                Joint joint = bone.GetComponent<Joint>();
                 if (joint != null) Object.DestroyImmediate(joint);
             }
 
@@ -222,11 +377,13 @@ namespace Ironfront.Net.Unity.Client
                 bone.gameObject.layer = _layers[i];
             }
 
+            _crumpleJoints = null;
+            if (_animator == null) return;
             _animator.enabled = true;
             _animator.Rebind();
         }
 
-        private void Build()
+        private void Build(bool crumple)
         {
             for (int i = 0; i < Specs.Length; i++)
             {
@@ -245,12 +402,19 @@ namespace Ironfront.Net.Unity.Client
                 AddCollider(bone, spec);
             }
 
+            _crumpleJoints = crumple ? new ConfigurableJoint[Specs.Length] : null;
             for (int i = 0; i < Specs.Length; i++)
             {
                 if (Specs[i].Parent == None) continue;
 
                 Rigidbody parent = BodyFor(Specs[i].Parent);
                 if (parent == null) continue;
+
+                if (crumple)
+                {
+                    _crumpleJoints[i] = AddCrumpleJoint(_bones[i].gameObject, parent, Specs[i].Mass);
+                    continue;
+                }
 
                 CharacterJoint joint = _bones[i].gameObject.AddComponent<CharacterJoint>();
                 joint.connectedBody = parent;
@@ -262,9 +426,39 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        // The CharacterJoint above as a ConfigurableJoint -- the same twist and swing limits on the
+        // same default axes -- plus a slerp drive holding the pose the joint was made in. A
+        // ConfigurableJoint's target rotation is relative to its starting orientation, so the
+        // identity target IS the death pose.
+        private static ConfigurableJoint AddCrumpleJoint(GameObject bone, Rigidbody parent, float mass)
+        {
+            ConfigurableJoint joint = bone.AddComponent<ConfigurableJoint>();
+            joint.connectedBody = parent;
+            joint.xMotion = ConfigurableJointMotion.Locked;
+            joint.yMotion = ConfigurableJointMotion.Locked;
+            joint.zMotion = ConfigurableJointMotion.Locked;
+            joint.angularXMotion = ConfigurableJointMotion.Limited;
+            joint.angularYMotion = ConfigurableJointMotion.Limited;
+            joint.angularZMotion = ConfigurableJointMotion.Limited;
+            joint.lowAngularXLimit = new SoftJointLimit { limit = -30f };
+            joint.highAngularXLimit = new SoftJointLimit { limit = 30f };
+            joint.angularYLimit = new SoftJointLimit { limit = 40f };
+            joint.angularZLimit = new SoftJointLimit { limit = 40f };
+            joint.projectionMode = JointProjectionMode.PositionAndRotation;
+            joint.rotationDriveMode = RotationDriveMode.Slerp;
+            joint.targetRotation = Quaternion.identity;
+            joint.slerpDrive = new JointDrive
+            {
+                positionSpring = CrumpleSpringPerKg * mass,
+                positionDamper = CrumpleDamper,
+                maximumForce = float.MaxValue,
+            };
+            return joint;
+        }
+
         private void AddCollider(Transform bone, in PartSpec spec)
         {
-            Transform toward = spec.Toward != None ? _animator.GetBoneTransform(spec.Toward) : null;
+            Transform toward = spec.Toward != None ? _resolve(spec.Toward) : null;
 
             if (toward == null)
             {

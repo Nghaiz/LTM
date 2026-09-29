@@ -30,7 +30,8 @@ public class BloodParticle : MonoBehaviour
 		RaycastHit hitInfo;
 		if (Physics.Raycast(ray, out hitInfo, vector.magnitude, 1))
 		{
-			DecalManager.AddDecal(hitInfo.point, hitInfo.normal, Random.Range(0.7f, 2.5f), (team == 0) ? DecalManager.DecalType.BloodBlue : DecalManager.DecalType.BloodRed);
+			// Red whichever side it came from; see DecalManager.CreateBloodDrop.
+			DecalManager.AddDecal(hitInfo.point, hitInfo.normal, Random.Range(0.7f, 2.5f), DecalManager.DecalType.BloodRed);
 			Object.Destroy(base.gameObject);
 		}
 		else
