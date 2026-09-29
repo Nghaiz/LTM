@@ -49,6 +49,13 @@ namespace Ironfront.Tools.TacticsTrainer
     public static class Evaluation
     {
         /// <summary>
+        /// The most rounds played at once; -1 for every core. A test run sets 1: the rounds fill
+        /// every core they are given, and the master server's socket tests running beside them on a
+        /// two-core CI runner then miss their timing budgets.
+        /// </summary>
+        public static int MaxParallelism { get; set; } = -1;
+
+        /// <summary>
         /// The rounds a run is judged on: every map, every side size, the tested profile on each
         /// side in turn (so a map's lopsided start cancels), under seeds drawn from <paramref name="seed"/>.
         /// </summary>
@@ -98,7 +105,8 @@ namespace Ironfront.Tools.TacticsTrainer
         public static EvaluationScore Score(IReadOnlyList<MatchSpec> rounds, Func<ISidePolicy> tested, Func<ISidePolicy> opponent)
         {
             var results = new SimResult[rounds.Count];
-            Parallel.For(0, rounds.Count, i => results[i] = Play(rounds[i], tested, opponent));
+            var options = new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism };
+            Parallel.For(0, rounds.Count, options, i => results[i] = Play(rounds[i], tested, opponent));
 
             int wins = 0, losses = 0, draws = 0;
             double margin = 0;

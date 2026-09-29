@@ -17,6 +17,9 @@ namespace Ironfront.Net.Replication.Tests
     {
         private const ulong Seed = 2026093001UL;
 
+        /// <summary>One round at a time: see <see cref="Evaluation.MaxParallelism"/>. Order-independent, so the results are the same.</summary>
+        public TacticsTrainingTests() => Evaluation.MaxParallelism = 1;
+
         /// <summary>
         /// The shipped profile's lead over the hand-set one on the held-out rounds: +0.54 when it
         /// was trained (plans/reports/2026-09-30-p28-tactics-training.md). A fall below this is a regression.
