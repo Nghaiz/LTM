@@ -1522,6 +1522,12 @@ namespace Ironfront.Net.Unity.Server
 
             ReportDeathToMatch(victimActorId);
 
+            // The board counts the deaths the score counts and no others: a warmup skirmish
+            // between bots used to fill it with kills beside a 0 - 0 score. No match controller
+            // (a harness) keeps the old always-count behaviour.
+            MatchStateMachine match = _match != null ? _match.Match : null;
+            if (match != null && !match.CountsDeaths) return;
+
             // Phase P6 task 3.1, checklist A13. HERE and not at the serialisation above, even
             // though the two are three lines apart: this call runs once per resolved death,
             // whereas the broadcast's bytes may be retransmitted by the reliability layer any
