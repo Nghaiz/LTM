@@ -1043,9 +1043,18 @@ public class AiActorController : ActorController
 		recentAntiStuckEvents--;
 	}
 
+	/// <summary>
+	/// Whether a bot standing without a path is lost, and gets split off as a squad of its own.
+	/// </summary>
+	/// <remarks>
+	/// Not while its squad is dug in (phase P28): holding is the order then, cover or no cover. A
+	/// squad now holds its ground while it is still fighting and defenders hold a flag for minutes,
+	/// and every member that found no cover point stood pathless and was split off three seconds
+	/// later -- a live match on Dustbowl ended with sixteen bots in sixteen squads.
+	/// </remarks>
 	private bool ShouldHavePath()
 	{
-		return (!actor.IsSeated() || actor.IsDriver()) && !inCover && squad.hasAssignedOrder;
+		return (!actor.IsSeated() || actor.IsDriver()) && !inCover && squad.hasAssignedOrder && squad.state != Squad.State.DigIn;
 	}
 
 	private void CreateRougeSquad()
