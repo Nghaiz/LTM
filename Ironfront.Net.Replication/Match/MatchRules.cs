@@ -18,6 +18,15 @@ namespace Ironfront.Net.Replication.Match
     /// two scores it scales — because a client cannot draw the score bar without it and a host
     /// can change it per match, so it can be neither assumed nor made constant.
     /// </para>
+    /// <para>
+    /// <b>The round has the original's two endings and no others</b> (owner ruling 2026-09-29).
+    /// A death scores for the victim's opponents, times the capture points they hold, spawn
+    /// points included; a team wins at a <see cref="VictoryPoints"/> lead, or when the other
+    /// side holds no spawn point. #363 added a territory award (the team holding more points
+    /// earned the difference every 5 s) and a 20-minute clock after a slow playtest round; the
+    /// owner had both removed. Do not add a score source that is not a death, or an ending that
+    /// is not one of those two.
+    /// </para>
     /// </remarks>
     public sealed class MatchRules
     {
@@ -44,30 +53,6 @@ namespace Ironfront.Net.Replication.Match
         /// called <c>tickets</c> holding a score is how the next reader re-introduces the bug.
         /// </remarks>
         public int VictoryPoints { get; set; } = 200;
-
-        /// <summary>
-        /// Seconds between territory awards: each interval, a team holding more capture points
-        /// than the other earns the difference (<c>ConquestScoreRule.TerritoryAward</c>). 0 turns
-        /// the award off.
-        /// </summary>
-        /// <remarks>
-        /// Defaults to 0, the original rule, for the reason <see cref="EliminationDwellSeconds"/>
-        /// gives: every engine-free test builds a bare <see cref="MatchRules"/>. The live server
-        /// opts in through <c>MatchController</c>.
-        /// </remarks>
-        public float TerritoryAwardSeconds { get; set; } = 0f;
-
-        /// <summary>
-        /// How long a round may run, in seconds. When it runs out the team ahead wins, by the
-        /// margin rule so every client names the same winner, and a level score plays on until
-        /// the next point decides it. 0 means no limit, which is the original.
-        /// </summary>
-        /// <remarks>
-        /// Playtest 2026-09-28, bug 3: rounds ran past thirty minutes, and an even fight can run
-        /// forever under a margin rule. Off by default for the same reason as
-        /// <see cref="TerritoryAwardSeconds"/>; <c>MatchController</c> opts the live server in.
-        /// </remarks>
-        public float TimeLimitSeconds { get; set; } = 0f;
 
         /// <summary>Points a team is awarded when an actor of the OTHER team dies.</summary>
         /// <remarks>

@@ -269,7 +269,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void ThePlayingPhaseRendersNoTimer()
         {
-            // PhaseSecondsRemaining is 0 during Playing by design — that phase ends on tickets.
+            // PhaseSecondsRemaining is 0 during Playing by design — that phase ends on the score margin.
             // A HUD that renders the field unconditionally shows "0:00" for the whole round and
             // tells every player it is already over.
             var model = new MatchStateModel();
