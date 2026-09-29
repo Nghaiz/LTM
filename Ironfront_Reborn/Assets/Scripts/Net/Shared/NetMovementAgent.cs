@@ -73,6 +73,42 @@ namespace Ironfront.Net.Unity
             set => State.Velocity = MovementSimulation.ToCore(value);
         }
 
+        /// <summary>
+        /// How far the last simulated tick really moved this body, per second, after collision.
+        /// Zero while the clock holds the body still.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the number <c>CharacterController.velocity</c> would read if the tick ran in
+        /// <c>FixedUpdate</c>, the way the original game moves its player.</b> Unity computes that
+        /// property as the last <c>Move</c>'s displacement divided by <c>Time.deltaTime</c>, and
+        /// <see cref="NetPredictionClock"/> calls <c>Move</c> from <c>Update</c> once every 1/30 s.
+        /// So a networked client read one tick's displacement over one RENDER frame: a 3.5 m/s walk
+        /// reported 7 m/s at 60 fps, 16.8 at 144 and 29 at 250. Measured 2026-09-29 in the Editor:
+        /// <c>Move(0.1 m)</c> with <c>deltaTime</c> 0.02 reported 5.0 m/s, not the 6.0 that
+        /// <c>fixedDeltaTime</c> would give.
+        /// </para>
+        /// <para>
+        /// The footstep cycle, the weapon bob in <c>PlayerFpParent</c> and the body's walk blend
+        /// in <c>Actor.UpdateMovement</c> all read that property, so on a fast machine the arms
+        /// swung at full amplitude several times faster than the original and the footsteps ran
+        /// together (owner report 2026-09-29: "cơ thể chuyển động điên cuồng"). The first-person
+        /// controller reads this instead whenever the netcode moves the capsule.
+        /// </para>
+        /// <para>
+        /// <b>The stance change is not movement.</b> <see cref="ApplyStanceHeight"/> shifts the
+        /// transform after the move, and it is left out here the same way the original's
+        /// <c>ForceEndCrouch</c> teleport never reached <c>CharacterController.velocity</c>.
+        /// </para>
+        /// </remarks>
+        public Vector3 TickVelocity { get; private set; }
+
+        /// <summary>
+        /// Zeroes <see cref="TickVelocity"/> for a tick that did not move the body: dead, seated,
+        /// or parked behind the loadout screen.
+        /// </summary>
+        public void HoldStill() => TickVelocity = Vector3.zero;
+
         /// <summary>Ground contact, straight from the CharacterController.</summary>
         /// <remarks>
         /// <b>A disabled controller is not grounded.</b> It keeps answering the
@@ -196,6 +232,7 @@ namespace Ironfront.Net.Unity
             Vector3 motion = MovementSimulation.Step(ref State, in input, dt);
             Vector3 landed = CharacterMove(motion);
 
+            TickVelocity = dt > 0f ? (landed - before) / dt : Vector3.zero;
             State.Position = MovementSimulation.ToCore(landed);
             ApplyStanceHeight();
 

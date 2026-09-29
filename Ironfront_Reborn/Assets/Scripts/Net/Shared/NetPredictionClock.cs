@@ -70,6 +70,23 @@ namespace Ironfront.Net.Unity
         /// </summary>
         public float Alpha => Mathf.Clamp01(_accumulator / TickInterval);
 
+        /// <summary>Where the body stood when the latest tick began.</summary>
+        /// <remarks>
+        /// Recorded for <see cref="PredictedViewInterpolator"/>, which draws the body between this
+        /// and <see cref="LastTickTo"/>. Taken from the transform, so it already includes anything
+        /// that moved the body since the tick before: a correction, a landing, a stand-up.
+        /// </remarks>
+        public Vector3 LastTickFrom { get; private set; }
+
+        /// <summary>Where the latest tick left the body, stance change included.</summary>
+        public Vector3 LastTickTo { get; private set; }
+
+        /// <summary>
+        /// Whether the latest tick moved the body at all. False while dead, seated or parked,
+        /// when there is nothing to smooth.
+        /// </summary>
+        public bool LastTickMovedBody { get; private set; }
+
         /// <summary>
         /// Where a tick's intent comes from. Defaults to local keyboard and mouse; a replay,
         /// a bot, or a received input frame can replace it without touching this component.
@@ -247,6 +264,10 @@ namespace Ironfront.Net.Unity
             _ticksThisSecond = 0;
             _secondTimer = 0f;
 
+            LastTickFrom = transform.position;
+            LastTickTo = transform.position;
+            LastTickMovedBody = false;
+
             Debug.Log($"[NetPredictionClock] enabled on '{name}' · {ProtocolConstants.SIM_TICK_RATE} Hz " +
                       $"(dt={TickInterval:F5}s), independent of Time.fixedDeltaTime={Time.fixedDeltaTime:F5}");
         }
@@ -275,12 +296,24 @@ namespace Ironfront.Net.Unity
                 AimPitchDegrees = AimPitchSource != null ? AimPitchSource() : 0f;
 
                 MoveInput input = InputSource();
-                if (SimulationEnabled == null || SimulationEnabled())
+                Vector3 from = transform.position;
+                bool simulated = SimulationEnabled == null || SimulationEnabled();
+                if (simulated)
+                {
                     _agent.Tick(in input, TickInterval);
-                else if (KeepButtonsWhileSuspended != null && KeepButtonsWhileSuspended())
-                    input = input.WithAxes(0f, 0f);
+                }
                 else
-                    input = default;
+                {
+                    _agent.HoldStill();
+                    if (KeepButtonsWhileSuspended != null && KeepButtonsWhileSuspended())
+                        input = input.WithAxes(0f, 0f);
+                    else
+                        input = default;
+                }
+
+                LastTickFrom = from;
+                LastTickTo = transform.position;
+                LastTickMovedBody = simulated;
 
                 // Unchecked: a u32 tick at 30 Hz wraps after 4.5 years, and every comparison
                 // downstream uses SequenceMath.IsNewer32, which handles the wrap.
