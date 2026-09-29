@@ -133,9 +133,10 @@ ever taken up; what was missing was a decision, and this is it.
 - **One machine, enforced by `--ha=false`.** Fly provisions a standby otherwise, and two
   masters share neither the SQLite volume nor the connection state.
 - **The GHCR package is public, so Fly needs no registry credentials.** Checked 2026-08-25:
-  `gh api user/packages/container/ironfront-master` reports `visibility=public`. Note the
-  sibling `ironfront-gameserver` (no hyphen) is a private, abandoned 2026-08-18 build — the live
-  package is `ironfront-game-server`, with the hyphen.
+  `gh api user/packages/container/ironfront-master` reports `visibility=public`. The abandoned
+  private sibling `ironfront-gameserver` (no hyphen) was deleted 2026-09-29; the live package is
+  `ironfront-game-server`, with the hyphen. Old versions are pruned weekly by
+  `.github/workflows/ghcr-retention.yml`, which never deletes the digest a Fly machine runs.
 - **Currently deployed** (2026-09-14T09:47Z, machine version 4, from the merge of #284):
   ```
   ghcr.io/nghaiz/ironfront-master@sha256:828425bc019c13d99c00089e52cd00074f8636b2c102fafa238e81a1a3788fad

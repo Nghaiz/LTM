@@ -111,6 +111,31 @@ namespace Ironfront.Net.Unity
         public static ITeamPalette TeamPalette { get; set; }
 
         /// <summary>
+        /// A weapon's silhouette by its network id, the one the loadout screen draws; null when the
+        /// id names no weapon or nothing has registered a lookup.
+        /// </summary>
+        /// <remarks>
+        /// The killfeed draws the weapon's picture between the two names (owner report 2026-09-29:
+        /// the text feed was hard to read). The sprites live on <c>WeaponManager</c>'s entries in
+        /// <c>Assembly-CSharp</c>, which no assembly definition can name, so the lookup crosses as a
+        /// delegate; a null answer is normal and the feed falls back to the weapon's name.
+        /// </remarks>
+        public static Func<byte, Sprite> WeaponIcon { get; set; }
+
+        /// <summary>
+        /// Frees the pointer and stills the mouse look while the chat box is open (true), and
+        /// takes them back when it closes (false), so the box's ALL and TEAM tabs can be clicked.
+        /// </summary>
+        /// <remarks>
+        /// Owner request 2026-09-29: a click is one of the three ways to change channel. The
+        /// pointer's other owners -- the loadout screen and the Esc menu -- and the mouse look are
+        /// all in <c>Assembly-CSharp</c> or <c>Assembly-CSharp-firstpass</c>, which no assembly
+        /// definition can name, so the one place that can keep them from fighting crosses as a
+        /// delegate. Null on a server and in edit mode, where the box simply keeps the keyboard.
+        /// </remarks>
+        public static Action<bool> ChatPointer { get; set; }
+
+        /// <summary>
         /// The way into the offline bot match, or null on a build with no legacy menu. P15.
         /// </summary>
         /// <remarks>

@@ -247,7 +247,9 @@ namespace Ironfront.Net.Unity.EditorTools
             feedRect.anchorMin = new Vector2(1f, 1f);
             feedRect.anchorMax = new Vector2(1f, 1f);
             feedRect.pivot = new Vector2(1f, 1f);
-            feedRect.anchoredPosition = new Vector2(-28f, -24f);
+            // Below the original game's score bar, whose right-hand flag counter the first two rows
+            // covered at every aspect (release test 2026-09-29).
+            feedRect.anchoredPosition = new Vector2(-28f, -KillfeedTop);
             feedRect.sizeDelta = new Vector2(760f, MatchHud.KillfeedRows * KillfeedRowView.RowPitch);
 
             var rows = new KillfeedRowView[MatchHud.KillfeedRows];
@@ -295,8 +297,8 @@ namespace Ironfront.Net.Unity.EditorTools
             edge.enabled = false;
 
             var layout = row.GetComponent<HorizontalLayoutGroup>();
-            layout.padding = new RectOffset(9, 14, 4, 4);
-            layout.spacing = 9f;
+            layout.padding = new RectOffset(10, 16, 5, 5);
+            layout.spacing = 10f;
             layout.childAlignment = TextAnchor.MiddleLeft;
             layout.childControlWidth = true;
             layout.childControlHeight = true;
@@ -308,9 +310,19 @@ namespace Ironfront.Net.Unity.EditorTools
             fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
             fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
 
-            Image accent = Block(row, "Accent", new Vector2(4f, 20f));
+            Image accent = Block(row, "Accent", new Vector2(4f, 24f));
 
-            Text killer = BoardText(row, "Killer", bold, 22, Ink);
+            Text killer = BoardText(row, "Killer", bold, 24, Ink);
+
+            // The weapon's own silhouette, from the loadout screen, drawn between the names when the
+            // kill names a weapon that has one. KillfeedRowView sizes it to the picture's shape.
+            Image weapon = Block(row, "Weapon", new Vector2(60f, KillfeedRowView.WeaponIconHeight));
+            weapon.color = Ink;
+            weapon.preserveAspect = true;
+            weapon.material = LoadMaterial(WeaponSilhouettePath);
+            var weaponShadow = weapon.gameObject.AddComponent<Shadow>();
+            weaponShadow.effectColor = new Color(0f, 0f, 0f, 0.7f);
+            weaponShadow.effectDistance = new Vector2(1f, -1f);
 
             var how = new GameObject(
                 "How", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
@@ -330,14 +342,14 @@ namespace Ironfront.Net.Unity.EditorTools
             howLayout.childForceExpandWidth = false;
             howLayout.childForceExpandHeight = false;
 
-            Text howText = BoardText(how, "Text", bold, 16, HudStyle.ChipInk, shadowed: false);
+            Text howText = BoardText(how, "Text", bold, 17, HudStyle.ChipInk, shadowed: false);
 
-            Image headshot = Block(row, "Headshot", new Vector2(20f, 20f));
+            Image headshot = Block(row, "Headshot", new Vector2(22f, 22f));
             headshot.color = HudStyle.HeadshotInk;
             headshot.preserveAspect = true;
 
-            Text victim = BoardText(row, "Victim", bold, 22, Ink);
-            Text sentence = BoardText(row, "Sentence", medium, 20, HudStyle.SentenceInk);
+            Text victim = BoardText(row, "Victim", bold, 24, Ink);
+            Text sentence = BoardText(row, "Sentence", medium, 21, HudStyle.SentenceInk);
 
             KillfeedRowView view = row.AddComponent<KillfeedRowView>();
 
@@ -346,6 +358,8 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_edge", edge);
             Assign(so, "_accent", accent);
             Assign(so, "_killer", killer);
+            Assign(so, "_weapon", weapon);
+            Assign(so, "_weaponSize", weapon.GetComponent<LayoutElement>());
             Assign(so, "_how", how);
             Assign(so, "_howText", howText);
             Assign(so, "_headshot", headshot);
@@ -408,6 +422,23 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         private const string RobotoBoldPath = "Assets/Font/Roboto-Bold.ttf";
+
+        /// <summary>
+        /// The weapon pictures are white guns on black with no alpha, so the killfeed draws them
+        /// through Ironfront/UI/Silhouette, which turns their brightness into alpha.
+        /// </summary>
+        private const string WeaponSilhouettePath = "Assets/Material/UI Weapon Silhouette.mat";
+
+        /// <summary>A material the readout needs; missing is an error, like a missing font.</summary>
+        private static Material LoadMaterial(string path)
+        {
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+                throw new System.InvalidOperationException(
+                    "The killfeed's weapon icons draw through " + path + ", which is not there. "
+                    + "Without it every gun sits in a black box.");
+            return material;
+        }
         private const string RobotoMediumPath = "Assets/Font/Roboto-Medium.ttf";
 
         /// <summary>
@@ -441,18 +472,32 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         /// <summary>
-        /// Feature 1 (playtest 2026-09-28) — the name plates: a full-screen layer and the one
-        /// plate it clones per actor.
+        /// Feature 1 (playtest 2026-09-28) — the name plates, in the holo frame the owner chose on
+        /// 2026-09-29: a full-screen layer and the one plate it clones per person.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The plate's pivot is its bottom centre, the point the presenter places over a head:
-        /// the bar sits on that point and the name above it, as the owner asked. Authored hidden;
-        /// a plate appears when the presenter sets one.
+        /// the pointer sits on that point, and the glass pane sits on the pointer.
+        /// </para>
+        /// <para>
+        /// <b>The pane sizes itself</b>: a vertical layout of two rows under a content fitter. The
+        /// top row is the emblem, the name as written, the leader's star, then -- pushed right by
+        /// a flexible gap -- the vehicle or water mark and the weapon's silhouette. The bottom row
+        /// is the medic cross, the bar, the pin and the metres. The bar is flexible, so it takes
+        /// whatever width a long name gives the pane; its fill and trail are anchored as a share
+        /// of it. The scanlines and the four brackets sit outside the layout, over the pane.
+        /// </para>
+        /// <para>
+        /// Every icon is drawn in code (<see cref="HudSprites"/>) and handed over by
+        /// <see cref="NameplateView"/> at runtime, so none is authored here. Authored hidden; a
+        /// plate appears when the presenter sets one.
+        /// </para>
         /// </remarks>
         private static NameplateLayer BuildNameplates(GameObject root, StringBuilder log)
         {
             Font bold = LoadFont(RobotoBoldPath);
-            Sprite rounded = RoundedSprite();
+            Font medium = LoadFont(RobotoMediumPath);
 
             var layer = new GameObject("Nameplates", typeof(RectTransform), typeof(CanvasGroup));
             layer.transform.SetParent(root.transform, worldPositionStays: false);
@@ -462,82 +507,135 @@ namespace Ironfront.Net.Unity.EditorTools
             group.interactable = false;
             group.blocksRaycasts = false;
 
+            // A point over the head: the parts below hang off its bottom centre.
             var plate = new GameObject("Nameplate Template", typeof(RectTransform), typeof(CanvasGroup));
             plate.transform.SetParent(layer.transform, worldPositionStays: false);
-            RectTransform plateRect = plate.GetComponent<RectTransform>();
-            Place(plateRect, Middle, new Vector2(0.5f, 0f), Vector2.zero, new Vector2(280f, 60f));
+            Place(plate.GetComponent<RectTransform>(), Middle, BottomCentre, Vector2.zero, Vector2.zero);
 
             var plateGroup = plate.GetComponent<CanvasGroup>();
             plateGroup.interactable = false;
             plateGroup.blocksRaycasts = false;
 
-            // The name row, centred on the bar and just above it.
-            var label = new GameObject(
-                "Label", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
-            label.transform.SetParent(plate.transform, worldPositionStays: false);
-            Place(label.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, NameplateView.TrackHeight + 3f), new Vector2(0f, 30f));
+            Image pointer = Picture(plate, "Pointer", Ink);
+            Place(pointer, BottomCentre, BottomCentre, Vector2.zero, new Vector2(PlatePointerWidth, PlatePointerHeight));
 
-            var labelLayout = label.GetComponent<HorizontalLayoutGroup>();
-            labelLayout.childAlignment = TextAnchor.MiddleCenter;
-            labelLayout.spacing = 6f;
-            labelLayout.childControlWidth = true;
-            labelLayout.childControlHeight = true;
-            labelLayout.childForceExpandWidth = false;
-            labelLayout.childForceExpandHeight = false;
+            // The glass pane, sized by its rows.
+            var pane = new GameObject(
+                "Pane", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            pane.transform.SetParent(plate.transform, worldPositionStays: false);
+            Place(pane.GetComponent<RectTransform>(), BottomCentre, BottomCentre,
+                new Vector2(0f, PlatePointerHeight + 4f), Vector2.zero);
 
-            var labelFit = label.GetComponent<ContentSizeFitter>();
-            labelFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-            labelFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var glass = pane.GetComponent<Image>();
+            glass.color = HudStyle.PlateGlass;
+            glass.raycastTarget = false;
 
-            Image marker = Block(label, "Marker", new Vector2(14f, 14f));
-            marker.color = Ink;
+            var paneLayout = pane.GetComponent<VerticalLayoutGroup>();
+            paneLayout.padding = new RectOffset(12, 12, 7, 9);
+            paneLayout.spacing = 5f;
+            paneLayout.childAlignment = TextAnchor.UpperLeft;
+            paneLayout.childControlWidth = true;
+            paneLayout.childControlHeight = true;
+            paneLayout.childForceExpandWidth = true;
+            paneLayout.childForceExpandHeight = false;
 
-            Text name = BoardText(label, "Name", bold, 24, Ink, TextAnchor.MiddleCenter);
-            var outline = name.gameObject.AddComponent<Outline>();
-            outline.effectColor = new Color(0f, 0f, 0f, 0.45f);
-            outline.effectDistance = new Vector2(1f, -1f);
+            var paneFit = pane.GetComponent<ContentSizeFitter>();
+            paneFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            paneFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            var bot = new GameObject("Bot", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
-            bot.transform.SetParent(label.transform, worldPositionStays: false);
+            Image scanlines = Overlay(pane, "Scanlines");
+            Stretch(scanlines.rectTransform);
 
-            var botBacking = bot.GetComponent<Image>();
-            botBacking.sprite = rounded;
-            botBacking.type = Image.Type.Sliced;
-            botBacking.color = new Color(0f, 0f, 0f, 0.55f);
-            botBacking.raycastTarget = false;
+            // The top row: who, and what they carry.
+            GameObject header = PlateRow(pane, "Header");
 
-            var botLayout = bot.GetComponent<HorizontalLayoutGroup>();
-            botLayout.padding = new RectOffset(5, 5, 1, 1);
-            botLayout.childAlignment = TextAnchor.MiddleCenter;
-            botLayout.childControlWidth = true;
-            botLayout.childControlHeight = true;
-            botLayout.childForceExpandWidth = false;
-            botLayout.childForceExpandHeight = false;
+            Image emblem = Block(header, "Emblem", new Vector2(16f, 16f));
+            emblem.color = Ink;
+            emblem.preserveAspect = true;
 
-            Text botText = BoardText(bot, "Text", bold, 11, HudStyle.ChipInk, TextAnchor.MiddleCenter, shadowed: false);
-            botText.text = "BOT";
+            Text name = BoardText(header, "Name", bold, PlateNameSize, Ink);
 
-            // The bar: a dark track, the white trail of the last hit, and the fill.
-            Image track = Picture(plate, "Track", new Color(0f, 0f, 0f, 0.62f), rounded);
-            Place(track, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero,
-                new Vector2(NameplateView.TrackWidth, NameplateView.TrackHeight));
-            var trackEdge = track.gameObject.AddComponent<Outline>();
-            trackEdge.effectColor = new Color(0f, 0f, 0f, 0.5f);
-            trackEdge.effectDistance = new Vector2(1f, -1f);
+            Image star = Block(header, "Star", new Vector2(14f, 14f));
+            star.preserveAspect = true;
+            star.gameObject.SetActive(false);
 
-            Image trail = BarPart(track, "Trail", rounded);
-            Image fill = BarPart(track, "Fill", rounded);
+            var gap = new GameObject("Gap", typeof(RectTransform), typeof(LayoutElement));
+            gap.transform.SetParent(header.transform, worldPositionStays: false);
+            var gapSize = gap.GetComponent<LayoutElement>();
+            gapSize.minWidth = 10f;
+            gapSize.flexibleWidth = 1f;
+
+            Image state = Block(header, "State", new Vector2(16f, 16f));
+            state.color = HudStyle.BoardMuted;
+            state.preserveAspect = true;
+            state.gameObject.SetActive(false);
+
+            // The weapon in hand, as the loadout draws it, through the killfeed's silhouette.
+            Image weapon = Block(header, "Weapon", new Vector2(44f, NameplateView.WeaponHeight));
+            weapon.color = Ink;
+            weapon.preserveAspect = true;
+            weapon.material = LoadMaterial(WeaponSilhouettePath);
+            var weaponShadow = weapon.gameObject.AddComponent<Shadow>();
+            weaponShadow.effectColor = new Color(0f, 0f, 0f, 0.7f);
+            weaponShadow.effectDistance = new Vector2(1f, -1f);
+            weapon.gameObject.SetActive(false);
+
+            // The bottom row: health, and how far away.
+            GameObject status = PlateRow(pane, "Status");
+
+            Image medic = Block(status, "Medic", new Vector2(12f, 12f));
+            medic.color = Ink;
+            medic.preserveAspect = true;
+
+            Image track = Block(status, "Bar", new Vector2(PlateBarWidth, PlateBarHeight));
+            track.color = new Color(1f, 1f, 1f, 0.16f);
+            track.GetComponent<LayoutElement>().flexibleWidth = 1f;
+
+            Image trail = BarShare(track, "Trail");
+            Image fill = BarShare(track, "Fill");
             fill.color = Ink;
+
+            // Quarter ticks, cut through the bar in the pane's own dark.
+            foreach (float quarter in new[] { 0.25f, 0.5f, 0.75f })
+            {
+                Image tick = Picture(track.gameObject, "Tick " + quarter.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                    new Color(HudStyle.PlateGlass.r, HudStyle.PlateGlass.g, HudStyle.PlateGlass.b, 0.95f));
+                Place(tick, new Vector2(quarter, 0.5f), Middle, Vector2.zero, new Vector2(2f, PlateBarHeight + 2f));
+            }
+
+            Image pin = Block(status, "Pin", new Vector2(9f, 12f));
+            pin.color = HudStyle.BoardFaint;
+            pin.preserveAspect = true;
+
+            Text distance = BoardText(status, "Distance", medium, 14, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
+            distance.gameObject.AddComponent<LayoutElement>().minWidth = 36f;
+
+            // The frame's four corners, over everything, out of the layout.
+            Image topLeft = Bracket(pane, "Bracket Top Left", new Vector2(0f, 1f), new Vector3(1f, 1f, 1f));
+            Image topRight = Bracket(pane, "Bracket Top Right", new Vector2(1f, 1f), new Vector3(-1f, 1f, 1f));
+            Image bottomLeft = Bracket(pane, "Bracket Bottom Left", new Vector2(0f, 0f), new Vector3(1f, -1f, 1f));
+            Image bottomRight = Bracket(pane, "Bracket Bottom Right", new Vector2(1f, 0f), new Vector3(-1f, -1f, 1f));
 
             NameplateView view = plate.AddComponent<NameplateView>();
             var viewSo = new SerializedObject(view);
-            Assign(viewSo, "_marker", marker);
+            Assign(viewSo, "_glass", glass);
+            Assign(viewSo, "_scanlines", scanlines);
+            Assign(viewSo, "_bracketTopLeft", topLeft);
+            Assign(viewSo, "_bracketTopRight", topRight);
+            Assign(viewSo, "_bracketBottomLeft", bottomLeft);
+            Assign(viewSo, "_bracketBottomRight", bottomRight);
+            Assign(viewSo, "_emblem", emblem);
             Assign(viewSo, "_name", name);
-            Assign(viewSo, "_bot", bot);
-            Assign(viewSo, "_track", track.rectTransform);
+            Assign(viewSo, "_star", star);
+            Assign(viewSo, "_state", state);
+            Assign(viewSo, "_weapon", weapon);
+            Assign(viewSo, "_weaponSize", weapon.GetComponent<LayoutElement>());
+            Assign(viewSo, "_medic", medic);
             Assign(viewSo, "_trail", trail);
             Assign(viewSo, "_fill", fill);
+            Assign(viewSo, "_pin", pin);
+            Assign(viewSo, "_distance", distance);
+            Assign(viewSo, "_pointer", pointer);
             viewSo.ApplyModifiedPropertiesWithoutUndo();
             plate.SetActive(false);
 
@@ -546,21 +644,72 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(layerSo, "_template", view);
             layerSo.ApplyModifiedPropertiesWithoutUndo();
 
-            log.AppendLine("name plates: a full-screen layer under the readout and one template plate.");
+            log.AppendLine("name plates: a full-screen layer under the readout and one holo-frame template plate.");
             return layerView;
         }
 
-        /// <summary>A left-anchored strip inside a bar's track, its width set at runtime.</summary>
-        private static Image BarPart(Image track, string name, Sprite rounded)
+        private const int PlateNameSize = 20;
+        private const float PlateBarWidth = 92f;
+        private const float PlateBarHeight = 4f;
+        private const float PlatePointerWidth = 14f;
+        private const float PlatePointerHeight = 9f;
+
+        /// <summary>A row of a plate's pane: parts side by side, centred on one line.</summary>
+        private static GameObject PlateRow(GameObject pane, string name)
         {
-            Image part = Picture(track.gameObject, name, Color.white, rounded);
+            var row = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            row.transform.SetParent(pane.transform, worldPositionStays: false);
+
+            var layout = row.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 6f;
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+            return row;
+        }
+
+        /// <summary>An image over a pane that its layout leaves alone.</summary>
+        private static Image Overlay(GameObject pane, string name)
+        {
+            Image image = Picture(pane, name, Color.white);
+            image.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            return image;
+        }
+
+        /// <summary>
+        /// One corner of the frame: <see cref="HudSprites.Bracket"/>'s corner pinned to the pane's
+        /// corner at <paramref name="anchor"/>, mirrored by <paramref name="flip"/> to face in.
+        /// </summary>
+        private static Image Bracket(GameObject pane, string name, Vector2 anchor, Vector3 flip)
+        {
+            Image bracket = Overlay(pane, name);
+            RectTransform rect = bracket.rectTransform;
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = new Vector2(
+                HudSprites.BracketCornerX / HudSprites.BracketSize,
+                HudSprites.BracketCornerY / HudSprites.BracketSize);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(HudSprites.BracketSize, HudSprites.BracketSize);
+            rect.localScale = flip;
+            return bracket;
+        }
+
+        /// <summary>
+        /// A part of a bar's track, stretched over its full height and the first share of its
+        /// width; <see cref="NameplateView"/> moves the right edge as health changes.
+        /// </summary>
+        private static Image BarShare(Image track, string name)
+        {
+            Image part = Picture(track.gameObject, name, Color.white);
             RectTransform rect = part.rectTransform;
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(0f, 1f);
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(0f, 0.5f);
-            rect.anchoredPosition = new Vector2(NameplateView.TrackInset, 0f);
-            rect.sizeDelta = new Vector2(NameplateView.TrackWidth - 2f * NameplateView.TrackInset,
-                -2f * NameplateView.TrackInset);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
             return part;
         }
 
@@ -649,7 +798,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Text map = BoardText(panel, "Map", black, 46, Ink, TextAnchor.UpperLeft);
             Place(map, TopLeft, TopLeft, new Vector2(8f, -14f), new Vector2(620f, 58f));
 
-            Text summary = BoardText(panel, "Summary", medium, 17, HudStyle.Muted, TextAnchor.UpperLeft);
+            Text summary = BoardText(panel, "Summary", medium, 18, HudStyle.BoardMuted, TextAnchor.UpperLeft);
             Place(summary, TopLeft, TopLeft, new Vector2(10f, -74f), new Vector2(620f, 26f));
 
             Text team0Label = BoardText(panel, "Team 0 Label", bold, 18, Ink, TextAnchor.UpperRight);
@@ -681,30 +830,30 @@ namespace Ironfront.Net.Unity.EditorTools
             Image centreMark = Picture(track.gameObject, "Lead Centre", new Color(1f, 1f, 1f, 0.85f));
             Place(centreMark, Middle, Middle, Vector2.zero, new Vector2(2f, 20f));
 
-            Text leadLine = BoardText(panel, "Lead Line", bold, 15, HudStyle.Muted, TextAnchor.UpperCenter);
-            Place(leadLine, TopCentre, TopCentre, new Vector2(0f, -146f), new Vector2(900f, 22f));
+            Text leadLine = BoardText(panel, "Lead Line", bold, 18, HudStyle.BoardMuted, TextAnchor.UpperCenter);
+            Place(leadLine, TopCentre, TopCentre, new Vector2(0f, -146f), new Vector2(1000f, 26f));
 
             Text clock = BoardText(panel, "Clock", black, 46, Ink, TextAnchor.UpperRight);
             Place(clock, TopRight, TopRight, new Vector2(-8f, -14f), new Vector2(320f, 58f));
 
-            Text phase = BoardText(panel, "Phase", medium, 17, HudStyle.Muted, TextAnchor.UpperRight);
+            Text phase = BoardText(panel, "Phase", bold, 20, HudStyle.BoardMuted, TextAnchor.UpperRight);
             Place(phase, TopRight, TopRight, new Vector2(-10f, -74f), new Vector2(320f, 26f));
 
             Image divider = Picture(panel, "Divider", new Color(1f, 1f, 1f, 0.28f));
-            Place(divider, TopCentre, TopCentre, new Vector2(0f, -184f), new Vector2(BoardWidth, 2f));
+            Place(divider, TopCentre, TopCentre, new Vector2(0f, -180f), new Vector2(BoardWidth, 2f));
 
             // ---- both sides
             ScoreboardTeamView team0 = BuildScoreboardSide(panel, "Team 0", false, black, bold, medium, rounded);
-            Place(team0, TopCentre, TopRight, new Vector2(-SideGap * 0.5f, -200f), new Vector2(SideWidth, SideHeight));
+            Place(team0, TopCentre, TopRight, new Vector2(-SideGap * 0.5f, -SideTop), new Vector2(SideWidth, SideHeight));
 
             ScoreboardTeamView team1 = BuildScoreboardSide(panel, "Team 1", true, black, bold, medium, rounded);
-            Place(team1, TopCentre, TopLeft, new Vector2(SideGap * 0.5f, -200f), new Vector2(SideWidth, SideHeight));
+            Place(team1, TopCentre, TopLeft, new Vector2(SideGap * 0.5f, -SideTop), new Vector2(SideWidth, SideHeight));
 
             // ---- the rules, at the foot
-            Text rules = BoardText(panel, "Rules", medium, 15, HudStyle.Faint, TextAnchor.LowerCenter);
-            Place(rules, BottomCentre, BottomCentre, new Vector2(0f, 8f), new Vector2(BoardWidth - 360f, 24f));
+            Text rules = BoardText(panel, "Rules", medium, 17, HudStyle.BoardFaint, TextAnchor.LowerCenter);
+            Place(rules, BottomCentre, BottomCentre, new Vector2(0f, 8f), new Vector2(BoardWidth - 360f, 26f));
 
-            Text hint = BoardText(panel, "Hint", bold, 13, HudStyle.Faint, TextAnchor.LowerRight);
+            Text hint = BoardText(panel, "Hint", bold, 15, HudStyle.BoardFaint, TextAnchor.LowerRight);
             hint.text = "TAB  ·  CLOSE";
             Place(hint, BottomRight, BottomRight, new Vector2(-8f, 10f), new Vector2(200f, 20f));
 
@@ -751,7 +900,7 @@ namespace Ironfront.Net.Unity.EditorTools
             var pane = side.GetComponent<Image>();
             pane.sprite = rounded;
             pane.type = Image.Type.Sliced;
-            pane.color = HudStyle.Pane;
+            pane.color = new Color(HudStyle.Pane.r, HudStyle.Pane.g, HudStyle.Pane.b, 0.96f);
             pane.raycastTarget = false;
 
             // The side's colour is strongest at the board's outer edge: the right-hand side's band
@@ -762,23 +911,27 @@ namespace Ironfront.Net.Unity.EditorTools
             bandRect.anchorMax = new Vector2(1f, 1f);
             bandRect.pivot = new Vector2(0.5f, 1f);
             bandRect.anchoredPosition = Vector2.zero;
-            bandRect.sizeDelta = new Vector2(0f, 92f);
+            bandRect.sizeDelta = new Vector2(0f, BandHeight);
             if (mirrored) bandRect.localScale = new Vector3(-1f, 1f, 1f);
 
-            Text teamName = BoardText(side, "Name", black, 32, Ink, TextAnchor.UpperLeft);
-            Place(teamName, TopLeft, TopLeft, new Vector2(24f, -12f), new Vector2(400f, 42f));
+            Text teamName = BoardText(side, "Name", black, 36, Ink, TextAnchor.UpperLeft);
+            Place(teamName, TopLeft, TopLeft, new Vector2(24f, -10f), new Vector2(400f, 46f));
 
-            Text players = BoardText(side, "Players", medium, 15, Ink, TextAnchor.UpperLeft);
-            Place(players, TopLeft, TopLeft, new Vector2(26f, -56f), new Vector2(480f, 22f));
+            Text players = BoardText(side, "Players", bold, 17, Ink, TextAnchor.UpperLeft);
+            Place(players, TopLeft, TopLeft, new Vector2(26f, -60f), new Vector2(480f, 24f));
 
             Image flagIcon = Picture(side, "Flag Icon", Ink);
-            Place(flagIcon, TopRight, TopRight, new Vector2(-70f, -16f), new Vector2(30f, 30f));
+            Place(flagIcon, TopRight, TopRight, new Vector2(-74f, -16f), new Vector2(32f, 32f));
 
-            Text flags = BoardText(side, "Flags", black, 32, Ink, TextAnchor.UpperRight);
-            Place(flags, TopRight, TopRight, new Vector2(-22f, -10f), new Vector2(48f, 42f));
+            Text flags = BoardText(side, "Flags", black, 36, Ink, TextAnchor.UpperRight);
+            Place(flags, TopRight, TopRight, new Vector2(-22f, -8f), new Vector2(50f, 46f));
 
-            Text totals = BoardText(side, "Totals", medium, 15, Ink, TextAnchor.UpperRight);
-            Place(totals, TopRight, TopRight, new Vector2(-24f, -56f), new Vector2(420f, 22f));
+            // What one enemy death is worth to this side now: its flag count, spelled as the rule.
+            Text perKill = BoardText(side, "Per Kill", bold, 20, Ink, TextAnchor.UpperRight);
+            Place(perKill, TopRight, TopRight, new Vector2(-118f, -17f), new Vector2(260f, 28f));
+
+            Text totals = BoardText(side, "Totals", bold, 17, Ink, TextAnchor.UpperRight);
+            Place(totals, TopRight, TopRight, new Vector2(-24f, -60f), new Vector2(420f, 24f));
 
             // Column heads, on the same insets as the rows so each sits over its numbers.
             var heads = new GameObject("Columns", typeof(RectTransform));
@@ -787,8 +940,8 @@ namespace Ironfront.Net.Unity.EditorTools
             headsRect.anchorMin = new Vector2(0f, 1f);
             headsRect.anchorMax = new Vector2(1f, 1f);
             headsRect.pivot = new Vector2(0.5f, 1f);
-            headsRect.anchoredPosition = new Vector2(0f, -100f);
-            headsRect.sizeDelta = new Vector2(-2f * RowInset, 26f);
+            headsRect.anchoredPosition = new Vector2(0f, -(BandHeight + 8f));
+            headsRect.sizeDelta = new Vector2(-2f * RowInset, 28f);
 
             ColumnHead(heads, "#", bold, TextAnchor.MiddleCenter, fromRight: false, RankX, RankWidth);
             ColumnHead(heads, "PLAYER", bold, TextAnchor.MiddleLeft, fromRight: false, NameX, 300f);
@@ -801,7 +954,7 @@ namespace Ironfront.Net.Unity.EditorTools
             ruleRect.anchorMin = new Vector2(0f, 1f);
             ruleRect.anchorMax = new Vector2(1f, 1f);
             ruleRect.pivot = new Vector2(0.5f, 1f);
-            ruleRect.anchoredPosition = new Vector2(0f, -128f);
+            ruleRect.anchoredPosition = new Vector2(0f, -(BandHeight + 38f));
             ruleRect.sizeDelta = new Vector2(-2f * RowInset, 1f);
 
             var rows = new GameObject("Rows", typeof(RectTransform));
@@ -810,9 +963,9 @@ namespace Ironfront.Net.Unity.EditorTools
             rowsRect.anchorMin = Vector2.zero;
             rowsRect.anchorMax = Vector2.one;
             rowsRect.offsetMin = new Vector2(RowInset, RowInset);
-            rowsRect.offsetMax = new Vector2(-RowInset, -134f);
+            rowsRect.offsetMax = new Vector2(-RowInset, -(BandHeight + 44f));
 
-            Text empty = BoardText(rows, "Empty", medium, 16, HudStyle.Faint, TextAnchor.MiddleCenter);
+            Text empty = BoardText(rows, "Empty", medium, 18, HudStyle.BoardFaint, TextAnchor.MiddleCenter);
             empty.text = "NO PLAYERS YET";
             Stretch(empty.rectTransform);
 
@@ -825,6 +978,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_teamName", teamName);
             Assign(so, "_flagIcon", flagIcon);
             Assign(so, "_flags", flags);
+            Assign(so, "_perKill", perKill);
             Assign(so, "_players", players);
             Assign(so, "_totals", totals);
             Assign(so, "_rows", rowsRect);
@@ -835,7 +989,7 @@ namespace Ironfront.Net.Unity.EditorTools
             return view;
         }
 
-        /// <summary>The one row a side's column clones: rank, star, name, BOT, K, D, K/D.</summary>
+        /// <summary>The one row a side's column clones: rank, star, name, K, D, K/D. A bot's name says it is one.</summary>
         private static ScoreboardRowView BuildScoreboardRow(
             GameObject rows, Font bold, Font medium, Sprite rounded)
         {
@@ -865,7 +1019,7 @@ namespace Ironfront.Net.Unity.EditorTools
             edge.effectDistance = new Vector2(1.5f, -1.5f);
             edge.enabled = false;
 
-            Text rank = BoardText(row, "Rank", medium, 15, HudStyle.Faint, TextAnchor.MiddleCenter, shadowed: false);
+            Text rank = BoardText(row, "Rank", medium, 16, HudStyle.BoardFaint, TextAnchor.MiddleCenter, shadowed: false);
             Column(rank, fromRight: false, RankX, RankWidth);
 
             Image star = Picture(row, "Star", HudStyle.Gold);
@@ -890,33 +1044,13 @@ namespace Ironfront.Net.Unity.EditorTools
 
             Text name = BoardText(identity, "Name", bold, 18, Ink, TextAnchor.MiddleLeft);
 
-            var bot = new GameObject("Bot", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
-            bot.transform.SetParent(identity.transform, worldPositionStays: false);
-
-            var botBacking = bot.GetComponent<Image>();
-            botBacking.sprite = rounded;
-            botBacking.type = Image.Type.Sliced;
-            botBacking.color = HudStyle.ChipBacking;
-            botBacking.raycastTarget = false;
-
-            var botLayout = bot.GetComponent<HorizontalLayoutGroup>();
-            botLayout.padding = new RectOffset(6, 6, 2, 2);
-            botLayout.childAlignment = TextAnchor.MiddleCenter;
-            botLayout.childControlWidth = true;
-            botLayout.childControlHeight = true;
-            botLayout.childForceExpandWidth = false;
-            botLayout.childForceExpandHeight = false;
-
-            Text botText = BoardText(bot, "Text", bold, 11, HudStyle.Muted, TextAnchor.MiddleCenter, shadowed: false);
-            botText.text = "BOT";
-
             Text kills = BoardText(row, "Kills", bold, 18, Ink, TextAnchor.MiddleRight);
             Column(kills, fromRight: true, KillsX, NumberWidth);
 
-            Text deaths = BoardText(row, "Deaths", medium, 18, HudStyle.Muted, TextAnchor.MiddleRight);
+            Text deaths = BoardText(row, "Deaths", bold, 18, HudStyle.BoardMuted, TextAnchor.MiddleRight);
             Column(deaths, fromRight: true, DeathsX, NumberWidth);
 
-            Text ratio = BoardText(row, "Ratio", medium, 16, HudStyle.Muted, TextAnchor.MiddleRight, shadowed: false);
+            Text ratio = BoardText(row, "Ratio", medium, 16, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
             Column(ratio, fromRight: true, RatioX, RatioWidth);
 
             ScoreboardRowView view = row.AddComponent<ScoreboardRowView>();
@@ -927,8 +1061,6 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_rank", rank);
             Assign(so, "_star", star);
             Assign(so, "_name", name);
-            Assign(so, "_bot", bot);
-            Assign(so, "_botText", botText);
             Assign(so, "_kills", kills);
             Assign(so, "_deaths", deaths);
             Assign(so, "_ratio", ratio);
@@ -938,11 +1070,18 @@ namespace Ironfront.Net.Unity.EditorTools
             return view;
         }
 
-        private const float BoardWidth = 1600f;
-        private const float BoardHeight = 920f;
+        // Nearly the whole 1920x1080 reference: the board is a full-screen read, and its rows are
+        // what has to be legible (owner report 2026-09-29: "HUD GUI bé và khó nhìn").
+        /// <summary>Canvas units from the top edge to the killfeed's first row: clear of the score bar.</summary>
+        private const float KillfeedTop = 190f;
+
+        private const float BoardWidth = 1760f;
+        private const float BoardHeight = 1040f;
         private const float SideGap = 28f;
         private const float SideWidth = (BoardWidth - SideGap) * 0.5f;
-        private const float SideHeight = 670f;
+        private const float SideTop = 194f;
+        private const float SideHeight = BoardHeight - SideTop - 44f;
+        private const float BandHeight = 96f;
         private const float RowInset = 12f;
 
         // Columns, from a row's left edge or (fromRight) its right edge.
@@ -966,7 +1105,7 @@ namespace Ironfront.Net.Unity.EditorTools
         private static void ColumnHead(
             GameObject heads, string caption, Font font, TextAnchor anchor, bool fromRight, float x, float width)
         {
-            Text head = BoardText(heads, caption, font, 13, HudStyle.Faint, anchor, shadowed: false);
+            Text head = BoardText(heads, caption, font, 15, HudStyle.BoardFaint, anchor, shadowed: false);
             head.text = caption;
             Column(head, fromRight, x, width);
         }

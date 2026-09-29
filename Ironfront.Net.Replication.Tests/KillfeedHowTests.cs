@@ -128,6 +128,33 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(label, wording.Label);
         }
 
+        /// <summary>
+        /// A weapon kill carries the weapon's id, so the feed can draw its silhouette in place of
+        /// its name; a label that names no weapon carries none.
+        /// </summary>
+        [Fact]
+        public void AWeaponKill_CarriesTheWeaponItsPictureCanStandFor()
+        {
+            KillfeedWording rifle = KillfeedWording.For(Kill(Minh, weapon: WeaponIds.RK44));
+            Assert.Equal(WeaponIds.RK44, rifle.WeaponId);
+            Assert.Equal(string.Empty, rifle.RestAfterWeapon);
+
+            KillfeedWording melee = KillfeedWording.For(
+                Kill(Minh, weapon: WeaponIds.BIL_SCALPEL, detail: DeathDetail.Melee));
+            Assert.Equal(WeaponIds.BIL_SCALPEL, melee.WeaponId);
+            Assert.Equal("MELEE", melee.RestAfterWeapon);
+
+            KillfeedWording tank = KillfeedWording.For(Kill(
+                Minh, CauseOfDeath.Explosion, weapon: WeaponIds.RK44, vehicle: VehicleIds.TANK,
+                detail: DeathDetail.KillerInVehicle));
+            Assert.Equal(0, tank.WeaponId);
+
+            KillfeedWording crew = KillfeedWording.For(Kill(
+                Minh, CauseOfDeath.Vehicle, weapon: WeaponIds.RK44, vehicle: VehicleIds.JEEP,
+                detail: DeathDetail.WentDownWithVehicle));
+            Assert.Equal(0, crew.WeaponId);
+        }
+
         [Fact]
         public void AMeleeKill_SaysMelee()
             => Assert.Equal(

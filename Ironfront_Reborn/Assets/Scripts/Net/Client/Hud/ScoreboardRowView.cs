@@ -25,18 +25,16 @@ namespace Ironfront.Net.Unity.Client.Hud
         private const float AppearSlide = 14f;
         private const float FlashSeconds = 1.1f;
 
-        private static readonly Color ZebraEven = new Color(1f, 1f, 1f, 0.035f);
-        private static readonly Color ZebraOdd = new Color(1f, 1f, 1f, 0.07f);
+        private static readonly Color ZebraEven = new Color(1f, 1f, 1f, 0.05f);
+        private static readonly Color ZebraOdd = new Color(1f, 1f, 1f, 0.1f);
         private static readonly Color Scored = new Color(1f, 0.85f, 0.4f, 0.38f);
-        private static readonly Color BotInk = new Color(0.78f, 0.8f, 0.84f);
+        private static readonly Color BotInk = new Color(0.86f, 0.88f, 0.92f);
 
         [SerializeField] private Image _backing;
         [SerializeField] private Outline _edge;
         [SerializeField] private Text _rank;
         [SerializeField] private Image _star;
         [SerializeField] private Text _name;
-        [SerializeField] private GameObject _bot;
-        [SerializeField] private Text _botText;
         [SerializeField] private Text _kills;
         [SerializeField] private Text _deaths;
         [SerializeField] private Text _ratio;
@@ -69,7 +67,7 @@ namespace Ironfront.Net.Unity.Client.Hud
             _group = GetComponent<CanvasGroup>();
 
             IsComplete = _backing != null && _edge != null && _rank != null && _star != null
-                         && _name != null && _bot != null && _botText != null && _kills != null
+                         && _name != null && _kills != null
                          && _deaths != null && _ratio != null && _group != null;
 
             if (!IsComplete)
@@ -94,11 +92,10 @@ namespace Ironfront.Net.Unity.Client.Hud
             _ratio.text = row.Ratio;
 
             _star.gameObject.SetActive(mvp);
-            _bot.SetActive(row.IsBot);
 
             _name.color = row.IsLocal ? HudStyle.GoldInk : row.IsBot ? BotInk : HudStyle.Ink;
             _kills.color = row.IsLocal ? HudStyle.GoldInk : HudStyle.Ink;
-            _rank.color = row.IsLocal ? HudStyle.GoldInk : HudStyle.Faint;
+            _rank.color = row.IsLocal ? HudStyle.GoldInk : HudStyle.BoardFaint;
 
             _rest = row.IsLocal ? HudStyle.LocalKillBacking : rank % 2 == 0 ? ZebraEven : ZebraOdd;
             _edge.enabled = row.IsLocal;
@@ -123,7 +120,6 @@ namespace Ironfront.Net.Unity.Client.Hud
             _kills.fontSize = fontSize;
             _deaths.fontSize = fontSize;
             _ratio.fontSize = small + 1;
-            _botText.fontSize = Mathf.Max(10, fontSize - 5);
 
             float mark = Mathf.Min(height - 8f, 18f);
             ((RectTransform)_star.transform).sizeDelta = new Vector2(mark, mark);

@@ -5,13 +5,15 @@ using UnityEngine;
 namespace Ironfront.Net.Unity.Client
 {
     /// <summary>
-    /// Puts a name and a health bar over every other player's head. Playtest 2026-09-28,
-    /// feature 1.
+    /// Puts a name and a health bar over every other person's head, on both sides. Playtest
+    /// 2026-09-28, feature 1; people only since the owner's report of 2026-09-29.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Which heads.</b> Every remote body the registry draws that is alive, as
-    /// <see cref="NameplateRules"/> allows: teammates out to 150 m and dimmed behind cover,
+    /// <b>Which heads.</b> Every remote body the registry draws that is alive and that
+    /// <c>S_PLAYER_LIST</c> names -- a person, never a bot (<see cref="NameplateRules.PlateNameOf"/>):
+    /// a plate over each of thirty bots was clutter that hid the few players worth finding. Then
+    /// as <see cref="NameplateRules"/> allows: teammates out to 150 m and dimmed behind cover,
     /// enemies only in line of sight and within 70 m. The local player has no plate; the
     /// registry does not hold its own body.
     /// </para>
@@ -25,6 +27,11 @@ namespace Ironfront.Net.Unity.Client
     /// <b>Last, and every frame.</b> Plates follow heads on screen, so they are placed after the
     /// camera has moved for the frame -- the execution order below -- or they trail it by one
     /// frame and swim whenever the player turns.
+    /// </para>
+    /// <para>
+    /// <b>What a plate says</b> besides the name and health: how far away, the weapon in hand
+    /// (or that the player is in a vehicle or the water), and a star when the player tops their
+    /// side's board -- the same player the Tab board stars, by the score table's one order.
     /// </para>
     /// <para>
     /// Added at runtime by <see cref="NetClientCombatPresenter"/>, which owns the name tables,
@@ -46,10 +53,10 @@ namespace Ironfront.Net.Unity.Client
         private readonly bool[] _covered = new bool[ProtocolConstants.MAX_ACTORS];
         private readonly float[] _nextSightCheck = new float[ProtocolConstants.MAX_ACTORS];
 
-        /// <summary>Display names, built once per name-table revision: a plate is drawn every frame.</summary>
-        private readonly string[] _names = new string[ProtocolConstants.MAX_ACTORS];
-        private int _namesRevision = -1;
-        private int _botsRevision = -1;
+        /// <summary>Each side's top player, recomputed only when the scores change.</summary>
+        private ushort _leader0;
+        private ushort _leader1;
+        private int _scoresRevision = -1;
 
         /// <summary>Hands the presenter what it reads. Called once by the combat presenter.</summary>
         internal void Bind(NetClientCombatPresenter combat, RemoteActorRegistry registry)
@@ -84,14 +91,24 @@ namespace Ironfront.Net.Unity.Client
 
         private void PlaceNameplates(IMatchHud hud, Camera camera)
         {
-            RefreshNames();
-
             bool hasTeam = NetClientPresenterGuard.TryResolveLocalTeam(out byte localTeam);
             Vector3 eye = camera.transform.position;
             float now = Time.time;
 
+            PlayerScoreTable scores = _combat.Scores;
+            if (scores.Revision != _scoresRevision)
+            {
+                _scoresRevision = scores.Revision;
+                _leader0 = scores.LeaderOf(TeamId.Team0);
+                _leader1 = scores.LeaderOf(TeamId.Team1);
+            }
+
             for (ushort actorId = 1; actorId < ProtocolConstants.MAX_ACTORS; actorId++)
             {
+                // First, so a bot costs one array read and never a sight cast.
+                string name = NameplateRules.PlateNameOf(actorId, _combat.Names);
+                if (name == null) continue;
+
                 if (!_registry.TryFindView(actorId, out RemoteActorView view)) continue;
                 if (view == null || !view.isActiveAndEnabled || !view.HasState) continue;
 
@@ -114,9 +131,9 @@ namespace Ironfront.Net.Unity.Client
 
                 var plate = new Nameplate(
                     actorId, screen.x, screen.y, NameplateRules.Scale(distance), opacity,
-                    NameOf(actorId), state.Team, NameplateRules.Health01(state.Health),
-                    isBot: _combat.Bots.IsBot(actorId) && _combat.Names.NameOf(actorId) == null,
-                    isTeammate: teammate);
+                    name, state.Team, NameplateRules.Health01(state.Health), teammate,
+                    distance, state.WeaponId, state.IsSeated, state.IsInWater,
+                    isLeader: actorId == _leader0 || actorId == _leader1);
 
                 hud.SetNameplate(in plate);
             }
@@ -131,18 +148,6 @@ namespace Ironfront.Net.Unity.Client
             _nextSightCheck[actorId] = now + SightRecheckSeconds + actorId * 0.003f;
             _covered[actorId] = Physics.Linecast(eye, anchor, SightMask, QueryTriggerInteraction.Ignore);
             return _covered[actorId];
-        }
-
-        private string NameOf(ushort actorId)
-            => _names[actorId] ?? (_names[actorId] = _combat.DisplayNameOf(actorId));
-
-        private void RefreshNames()
-        {
-            if (_combat.Names.Revision == _namesRevision && _combat.Bots.Revision == _botsRevision) return;
-
-            _namesRevision = _combat.Names.Revision;
-            _botsRevision = _combat.Bots.Revision;
-            System.Array.Clear(_names, 0, _names.Length);
         }
     }
 }

@@ -20,6 +20,25 @@ namespace UnityStandardAssets.Characters.FirstPerson
 		[NonSerialized]
 		public bool externalMovementAuthority;
 
+		// What the capsule really moved per second on the last netcode tick. Needed because
+		// CharacterController.velocity divides a Move by Time.deltaTime: moved from Update at
+		// 30 Hz, a 3.5 m/s walk read 16.8 m/s at 144 fps, and the footsteps and weapon bob that
+		// read it ran several times too fast. Installed by FpsActorController on a client.
+		[NonSerialized]
+		public Func<Vector3> externalVelocitySource;
+
+		private Vector3 BodyVelocity
+		{
+			get
+			{
+				if (externalMovementAuthority && externalVelocitySource != null)
+				{
+					return externalVelocitySource();
+				}
+				return m_CharacterController.velocity;
+			}
+		}
+
 		[SerializeField]
 		private bool m_IsWalking;
 
@@ -115,7 +134,7 @@ namespace UnityStandardAssets.Characters.FirstPerson
 
 		public Vector3 Velocity()
 		{
-			return m_CharacterController.velocity;
+			return BodyVelocity;
 		}
 
 		public void ResetVelocity()
@@ -241,9 +260,9 @@ namespace UnityStandardAssets.Characters.FirstPerson
 
 		private void ProgressStepCycle(float speed)
 		{
-			if (m_CharacterController.velocity.sqrMagnitude > 0f && (m_Input.x != 0f || m_Input.y != 0f))
+			if (BodyVelocity.sqrMagnitude > 0f && (m_Input.x != 0f || m_Input.y != 0f))
 			{
-				m_StepCycle += (m_CharacterController.velocity.magnitude + speed * ((!m_IsWalking) ? m_RunstepLenghten : 1f)) * Time.fixedDeltaTime;
+				m_StepCycle += (BodyVelocity.magnitude + speed * ((!m_IsWalking) ? m_RunstepLenghten : 1f)) * Time.fixedDeltaTime;
 			}
 			if (m_StepCycle > m_NextStep)
 			{
@@ -269,9 +288,9 @@ namespace UnityStandardAssets.Characters.FirstPerson
 			if (m_UseHeadBob)
 			{
 				Vector3 localPosition;
-				if (m_CharacterController.velocity.magnitude > 0f && m_CharacterController.isGrounded)
+				if (BodyVelocity.magnitude > 0f && m_CharacterController.isGrounded)
 				{
-					cameraParent.localPosition = m_HeadBob.DoHeadBob(m_CharacterController.velocity.magnitude + speed * ((!m_IsWalking) ? m_RunstepLenghten : 1f));
+					cameraParent.localPosition = m_HeadBob.DoHeadBob(BodyVelocity.magnitude + speed * ((!m_IsWalking) ? m_RunstepLenghten : 1f));
 					localPosition = cameraParent.localPosition;
 					localPosition.y = cameraParent.localPosition.y - m_JumpBob.Offset();
 				}
@@ -303,7 +322,7 @@ namespace UnityStandardAssets.Characters.FirstPerson
 			{
 				m_Input.Normalize();
 			}
-			if (m_IsWalking != isWalking && m_UseFovKick && m_CharacterController.velocity.sqrMagnitude > 0f)
+			if (m_IsWalking != isWalking && m_UseFovKick && BodyVelocity.sqrMagnitude > 0f)
 			{
 				StopAllCoroutines();
 				IEnumerator routine;
@@ -330,7 +349,7 @@ namespace UnityStandardAssets.Characters.FirstPerson
 			Rigidbody attachedRigidbody = hit.collider.attachedRigidbody;
 			if (m_CollisionFlags != CollisionFlags.Below && !(attachedRigidbody == null) && !attachedRigidbody.isKinematic)
 			{
-				attachedRigidbody.AddForceAtPosition(m_CharacterController.velocity * 0.1f, hit.point, ForceMode.Impulse);
+				attachedRigidbody.AddForceAtPosition(BodyVelocity * 0.1f, hit.point, ForceMode.Impulse);
 			}
 		}
 	}

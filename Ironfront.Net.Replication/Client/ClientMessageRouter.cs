@@ -221,7 +221,7 @@ namespace Ironfront.Net.Replication.Client
         public event Action<PlayerScoreEntry[], int>? OnPlayerScores;
 
         /// <summary>
-        /// Somebody said something. Carries the speaker's actor id and the decoded line.
+        /// Somebody said something. Carries the speaker's actor id, the channel and the decoded line.
         /// Phase P6 task 3.3, ledger X-8.
         /// </summary>
         /// <remarks>
@@ -242,8 +242,13 @@ namespace Ironfront.Net.Replication.Client
         /// <b>Empty is never raised.</b> A line that sanitizes to nothing is dropped rather than
         /// delivered as a blank row, which would read as a rendering fault.
         /// </para>
+        /// <para>
+        /// <b>With the channel <c>S_CHAT</c> carries</b> (v12), so a team line can be marked as
+        /// one. The server has already kept it from everybody on the other side; this only says
+        /// which it was.
+        /// </para>
         /// </remarks>
-        public event Action<byte, string>? OnChat;
+        public event Action<byte, ChatChannel, string>? OnChat;
 
         /// <summary>
         /// A snapshot was applied. Carries the server tick and the newest input tick the server
@@ -453,7 +458,7 @@ namespace Ironfront.Net.Replication.Client
         private bool RouteChat(ReadOnlySpan<byte> body)
         {
             if (!ChatTextMessage.TryParseServer(
-                    body, out byte actorId, out ReadOnlySpan<byte> textUtf8))
+                    body, out byte actorId, out ChatChannel channel, out ReadOnlySpan<byte> textUtf8))
             {
                 MalformedMessages++;
                 return false;
@@ -472,7 +477,7 @@ namespace Ironfront.Net.Replication.Client
                 return true;
             }
 
-            OnChat?.Invoke(actorId, text);
+            OnChat?.Invoke(actorId, channel, text);
             return true;
         }
 

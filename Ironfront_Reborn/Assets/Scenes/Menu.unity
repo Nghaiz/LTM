@@ -150811,7 +150811,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: TEAM 1
+  m_Text: BLUE TEAM
 --- !u!222 &674498173
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -167186,7 +167186,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: TEAM 2
+  m_Text: RED TEAM
 --- !u!222 &1466900109
 CanvasRenderer:
   m_ObjectHideFlags: 0

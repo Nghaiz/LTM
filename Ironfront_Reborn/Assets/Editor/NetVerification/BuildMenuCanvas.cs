@@ -1140,9 +1140,9 @@ namespace Ironfront.Net.Unity.EditorTools
             // from ITeamPalette (criterion 10); authoring one would be the second copy of the
             // team-colour mapping that contracts 6.3 exists to prevent.
             Text zeroHeading = Label(
-                panel, "TeamZeroHeading", "TEAM 1", 34, new Vector2(-420f, 310f), new Vector2(560f, 56f));
+                panel, "TeamZeroHeading", "BLUE TEAM", 34, new Vector2(-420f, 310f), new Vector2(560f, 56f));
             Text oneHeading = Label(
-                panel, "TeamOneHeading", "TEAM 2", 34, new Vector2(420f, 310f), new Vector2(560f, 56f));
+                panel, "TeamOneHeading", "RED TEAM", 34, new Vector2(420f, 310f), new Vector2(560f, 56f));
 
             int perSide = MenuRoomLobbyScreen.RowsPerSide;
             var zeroRows = new Object[perSide];

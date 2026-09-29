@@ -17,8 +17,8 @@ namespace Ironfront.Net.Replication.Client
 
         /// <summary>The name a side goes by: team 0 is "TEAM 1", as in the room lobby.</summary>
         public static string TeamName(byte team)
-            => team == TeamId.Team0 ? "TEAM 1"
-             : team == TeamId.Team1 ? "TEAM 2"
+            => team == TeamId.Team0 ? "BLUE TEAM"
+             : team == TeamId.Team1 ? "RED TEAM"
              : string.Empty;
 
         /// <summary>"14:32"; empty for a negative count, which means "no clock this phase".</summary>
@@ -35,7 +35,7 @@ namespace Ironfront.Net.Replication.Client
             {
                 case MatchPhase.WaitingForPlayers: return "WAITING FOR PLAYERS";
                 case MatchPhase.Warmup:            return hasTimer ? "STARTS IN" : "WARMUP";
-                case MatchPhase.Playing:           return hasTimer ? "TIME LEFT" : "LIVE";
+                case MatchPhase.Playing:           return "LIVE";   // a round has no clock (owner ruling 2026-09-29)
                 case MatchPhase.Ended:             return hasTimer ? "NEXT ROUND IN" : "ROUND OVER";
                 case MatchPhase.Resetting:         return "NEXT ROUND";
                 default:                           return string.Empty;
@@ -83,6 +83,18 @@ namespace Ironfront.Net.Replication.Client
         public static string Ratio(int kills, int deaths)
             => (deaths > 0 ? kills / (float)deaths : kills).ToString("0.00", CultureInfo.InvariantCulture);
 
+        /// <summary>The mode a round is played in, as the board names it.</summary>
+        /// <remarks>
+        /// Point Match is the game's one mode today (owner, 2026-09-29): a death scores for the other
+        /// side, times the flags it holds. One constant, so another mode is a new value here rather
+        /// than a string in every screen that names it.
+        /// </remarks>
+        public const string PointMatch = "POINT MATCH";
+
+        /// <summary>The line under the map's name: "POINT MATCH  ·  38 PLAYERS  ·  3 HUMANS".</summary>
+        public static string SummaryLine(int players, int humans)
+            => PointMatch + Separator + PlayersLine(players, humans);
+
         /// <summary>"12 PLAYERS  ·  2 HUMANS".</summary>
         public static string PlayersLine(int players, int humans)
             => Count(players, "PLAYER") + Separator + Count(humans, "HUMAN");
@@ -91,16 +103,31 @@ namespace Ironfront.Net.Replication.Client
         public static string TotalsLine(int kills, int deaths)
             => Count(kills, "KILL") + Separator + Count(deaths, "DEATH");
 
-        /// <summary>The rules, in one line, for the foot of the board.</summary>
+        /// <summary>
+        /// The rules line at the foot of the board: the original game's rules, and only those.
+        /// </summary>
         /// <remarks>
-        /// Numbers only where the client knows them: the margin travels in
-        /// <c>S_MATCH_STATE</c>; the territory interval is the server's and does not, so the line
-        /// says what holding ground does without claiming how often.
+        /// Owner ruling 2026-09-29. A death scores for the victim's opponents, one point per
+        /// capture point they hold; a side wins at the margin, or by taking every spawn point the
+        /// other side has. The board used to add "holding more flags scores over time", a rule the
+        /// owner had removed.
         /// </remarks>
         public static string Rules(int victoryMargin)
-            => "LEAD BY " + victoryMargin.ToString(CultureInfo.InvariantCulture) + " POINTS TO WIN"
-               + Separator + "KILLS SCORE MORE FOR EVERY FLAG YOU HOLD"
-               + Separator + "HOLDING MORE FLAGS SCORES OVER TIME";
+            => "EVERY ENEMY DEATH SCORES +1 PER FLAG YOU HOLD"
+               + Separator + "LEAD BY " + victoryMargin.ToString(CultureInfo.InvariantCulture) + " TO WIN"
+               + Separator + "OR TAKE EVERY ENEMY SPAWN";
+
+        /// <summary>
+        /// What one enemy death is worth to a side holding <paramref name="flags"/> capture
+        /// points, in the words the side's band shows: "+3 PER KILL".
+        /// </summary>
+        /// <remarks>
+        /// The multiplier on the board, so a score that moves by three on one kill reads as the
+        /// rule rather than as a wrong number. Zero flags is shown as it is: a side with no points
+        /// scores nothing for a kill.
+        /// </remarks>
+        public static string PerKillLine(int flags)
+            => "+" + (flags < 0 ? 0 : flags).ToString(CultureInfo.InvariantCulture) + " PER KILL";
 
         private static string Count(int value, string noun)
             => value.ToString(CultureInfo.InvariantCulture) + " " + noun + (value == 1 ? string.Empty : "S");

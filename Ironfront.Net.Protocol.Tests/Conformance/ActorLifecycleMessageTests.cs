@@ -301,7 +301,9 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //       outside the snapshot entry, so none of their three layouts moved.
             //   v11 weaponStateFlags bit 1 gained pending-release semantics. These layouts
             //       remain untouched even though peers must reject the behavioral mismatch.
-            Assert.Equal(11, ProtocolConstants.PROTOCOL_VERSION);
+            //   v12 C_CHAT and S_CHAT gained a u8 channel (team chat, § 4.12). Chat is not an
+            //       actor lifecycle message, so these three layouts are still untouched.
+            Assert.Equal(12, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

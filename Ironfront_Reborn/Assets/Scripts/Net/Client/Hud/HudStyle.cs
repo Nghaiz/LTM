@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client.Hud
 {
@@ -22,13 +23,29 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// <summary>Tertiary text: column heads, the rules line, hints.</summary>
         public static readonly Color Faint = new Color(0.47f, 0.51f, 0.58f);
 
+        /// <summary>
+        /// The Tab board's secondary numbers (deaths, head counts): brighter than <see cref="Muted"/>,
+        /// because the board is read in a hurry over a dark pane (owner report 2026-09-29: "màu sắc
+        /// không tương phản").
+        /// </summary>
+        public static readonly Color BoardMuted = new Color(0.84f, 0.87f, 0.92f);
+
+        /// <summary>The Tab board's quietest text (ranks, column heads, K/D): still readable at a glance.</summary>
+        public static readonly Color BoardFaint = new Color(0.68f, 0.72f, 0.79f);
+
         /// <summary>A killfeed row at rest: dark enough to read over snow and sky alike.</summary>
         public static readonly Color RowBacking = new Color(0.05f, 0.06f, 0.08f, 0.78f);
 
         /// <summary>The scoreboard's team panels.</summary>
         public static readonly Color Pane = new Color(0.06f, 0.07f, 0.1f, 0.9f);
 
-        /// <summary>A chip on a row: the killfeed's "how", the scoreboard's BOT tag.</summary>
+        /// <summary>
+        /// A name plate's glass, before the side's tint: see-through enough to leave the scene
+        /// the player is aiming into, dark enough for white text over snow or sky.
+        /// </summary>
+        public static readonly Color PlateGlass = new Color(0.03f, 0.047f, 0.07f, 0.64f);
+
+        /// <summary>A chip on a row: the killfeed's "how" (MELEE, TANK).</summary>
         public static readonly Color ChipBacking = new Color(1f, 1f, 1f, 0.12f);
 
         public static readonly Color ChipInk = new Color(0.9f, 0.92f, 0.95f);
@@ -56,6 +73,23 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// little toward white so a dark blue stays readable on near-black.
         /// </summary>
         public static Color TeamInk(Color team) => Color.Lerp(team, Color.white, 0.2f);
+
+        /// <summary>
+        /// Shows <paramref name="picture"/> at <paramref name="height"/>, as wide as its own shape
+        /// allows up to <paramref name="maxWidth"/>: the weapon art in the killfeed and on a name
+        /// plate, which runs from a squat pistol to a long rifle.
+        /// </summary>
+        public static void FitPicture(Image image, LayoutElement size, Sprite picture, float height, float maxWidth)
+        {
+            image.sprite = picture;
+
+            Rect shape = picture.rect;
+            float aspect = shape.height > 0f ? shape.width / shape.height : 1f;
+            float width = Mathf.Clamp(height * aspect, height, maxWidth);
+
+            size.minWidth = width;
+            size.preferredWidth = width;
+        }
 
         /// <summary>Cubic ease-out, for everything that arrives.</summary>
         public static float EaseOut(float t)

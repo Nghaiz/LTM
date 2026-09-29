@@ -298,6 +298,15 @@ public class FpsActorController : ActorController
 
 		controller = GetComponent<FirstPersonController>();
 		controller.externalMovementAuthority = NetContext.IsClient;
+		// The netcode moves this capsule from Update, so CharacterController.velocity reads the
+		// frame rate as much as the walk. Footsteps, the weapon bob and the body's walk blend take
+		// the tick's own displacement instead: see NetMovementAgent.TickVelocity.
+		Ironfront.Net.Unity.NetMovementAgent movementAgent =
+			GetComponent<Ironfront.Net.Unity.NetMovementAgent>();
+		if (controller.externalMovementAuthority && movementAgent != null)
+		{
+			controller.externalVelocitySource = () => movementAgent.TickVelocity;
+		}
 		characterController = GetComponent<CharacterController>();
 		thirdpersonRenderers = actor.ragdoll.AnimatedRenderers();
 		fpCameraParent = fpCamera.transform.parent;

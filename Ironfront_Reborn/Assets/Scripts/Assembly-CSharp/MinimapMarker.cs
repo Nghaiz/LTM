@@ -45,6 +45,18 @@ public class MinimapMarker : MonoBehaviour
 
 	private Color color = Color.white;
 
+	// Set for a soldier's icon (FollowBody): turned to the body's heading, pinned to the map's
+	// edge, and swapped for the vehicle's own icon while seated -- ActorBlip's rules for an Actor.
+	private bool followsBody;
+
+	private Transform vehicle;
+
+	private Texture infantryTexture;
+
+	private Texture vehicleTexture;
+
+	private static readonly Vector3 VehicleScale = new Vector3(1.5f, 1.5f, 1.5f);
+
 	/// <summary>Points this marker at a world transform and gives it a colour.</summary>
 	public void Bind(Transform subject, Color color)
 	{
@@ -55,6 +67,7 @@ public class MinimapMarker : MonoBehaviour
 		// demanding one on a prefab this phase is not allowed to author.
 		image = GetComponent<Image>();
 		rawImage = GetComponent<RawImage>();
+		infantryTexture = rawImage != null ? rawImage.texture : null;
 
 		// A spawn-point prefab is a Button. Left interactable it would eat clicks meant for the
 		// spawn point underneath and silently change where the player spawns.
@@ -79,6 +92,26 @@ public class MinimapMarker : MonoBehaviour
 		rect.anchoredPosition = Vector2.zero;
 
 		SetColor(color);
+	}
+
+	/// <summary>
+	/// Draws this marker as a soldier: turned to its heading, and wearing
+	/// <paramref name="seatedIn"/>'s own icon at the vehicle's heading while seated.
+	/// </summary>
+	/// <remarks>
+	/// The networked counterpart of <see cref="ActorBlip"/>'s LateUpdate. Before it a remote body's
+	/// icon never turned and a seated one stayed a soldier (owner report 2026-09-29).
+	/// </remarks>
+	public void FollowBody(Transform seatedIn)
+	{
+		followsBody = true;
+		if (seatedIn == vehicle)
+		{
+			return;
+		}
+		vehicle = seatedIn;
+		Vehicle seated = seatedIn != null ? seatedIn.GetComponentInParent<Vehicle>() : null;
+		vehicleTexture = seated != null ? seated.blip : null;
 	}
 
 	/// <summary>Recolours in place. Called on every capture-point flip.</summary>
@@ -116,6 +149,20 @@ public class MinimapMarker : MonoBehaviour
 
 		RectTransform rect = (RectTransform)base.transform;
 		Vector2 anchor = new Vector2(viewport.x, viewport.y);
+		if (followsBody)
+		{
+			// ActorBlip's rules: pinned to the edge rather than lost off it, turned to the heading,
+			// and the vehicle's own icon at the vehicle's heading while seated.
+			anchor = new Vector2(Mathf.Clamp01(viewport.x), Mathf.Clamp01(viewport.y));
+			bool inVehicle = vehicle != null && vehicleTexture != null;
+			Transform heading = inVehicle ? vehicle : subject;
+			rect.rotation = Quaternion.Euler(0f, 0f, 0f - heading.eulerAngles.y);
+			rect.localScale = inVehicle ? VehicleScale : Vector3.one;
+			if (rawImage != null)
+			{
+				rawImage.texture = inVehicle ? vehicleTexture : infantryTexture;
+			}
+		}
 		rect.anchorMin = anchor;
 		rect.anchorMax = anchor;
 		SetVisible(true);

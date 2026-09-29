@@ -17,8 +17,9 @@ namespace Ironfront.Net.Replication.Interest
     /// despawn/respawn handshake per (viewer, target) pair and produces a whole class of
     /// pop-in bugs where a client holds a stale actor at its last known position forever.
     /// Keeping everything at Far costs 48 actors x 4 Hz, which is under 2 KB/s, and makes
-    /// that bug class unwriteable. Beyond 500 m an actor really is culled; a sniper scope is
-    /// the exception, handled by the view-cone clause.
+    /// that bug class unwriteable. Beyond 500 m an actor really is culled, with two exceptions:
+    /// a sniper scope, handled by the view-cone clause, and a team-mate, who stays at Far so the
+    /// minimap can draw every friendly on the map.
     /// </para>
     /// <para>
     /// <b>The rate limit is keyed on the snapshot index, not the server tick.</b> The
@@ -452,6 +453,13 @@ namespace Ironfront.Net.Replication.Interest
                 InterestLevel level = Evaluate(in viewer, in target);
                 RecordHumanInterest(target.ActorId, level);
 
+                // A team-mate is never culled, only slowed to Far: the minimap draws every
+                // friendly on the map, and one past the cull radius used to freeze there at the
+                // last place it was sent (owner report 2026-09-29). Promoted AFTER the interest
+                // was recorded, so hitbox history and the bot LOD still see the real distance.
+                if (level == InterestLevel.Culled && IsTeammate(in viewer, in target))
+                    level = InterestLevel.Far;
+
                 if (level == InterestLevel.Culled)
                 {
                     EntriesCulled++;
@@ -560,6 +568,10 @@ namespace Ironfront.Net.Replication.Interest
 
             return admitted;
         }
+
+        /// <summary>Whether <paramref name="target"/> fights on <paramref name="viewer"/>'s side.</summary>
+        private static bool IsTeammate(in ActorSnapshotEntry viewer, in ActorSnapshotEntry target)
+            => target.Team != TeamId.None && target.Team == viewer.Team;
 
         /// <summary>Emits one actor if it is due. Returns whether it was written.</summary>
         private bool Emit(

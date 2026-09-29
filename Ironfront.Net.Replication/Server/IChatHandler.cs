@@ -1,4 +1,5 @@
 using System;
+using Ironfront.Net.Protocol;
 
 namespace Ironfront.Net.Replication.Server
 {
@@ -27,9 +28,14 @@ namespace Ironfront.Net.Replication.Server
     /// <b>Nothing here says who spoke.</b> The session is the attribution: the datagram arrived
     /// on that connection, and a client that stated its own id would be stating somebody else's.
     /// </para>
+    /// <para>
+    /// <b>The channel is a request, not an address.</b> It names who the speaker wants to hear
+    /// the line; the handler works out who that is from the sides the server already knows
+    /// (<see cref="ChatAudience"/>), so a client can reach its own team and nobody else's.
+    /// </para>
     /// </remarks>
     public interface IChatHandler
     {
-        void OnChat(ClientSession session, ReadOnlySpan<byte> textUtf8);
+        void OnChat(ClientSession session, ChatChannel channel, ReadOnlySpan<byte> textUtf8);
     }
 }

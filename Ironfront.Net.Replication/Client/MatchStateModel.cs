@@ -9,12 +9,11 @@ namespace Ironfront.Net.Replication.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The phase timer is interpolated, and during <see cref="MatchPhase.Playing"/> it exists
-    /// only when the host set a time limit.</b> <c>PhaseSecondsRemaining</c> is then the time
-    /// left in the round; without a limit it is 0, because the round ends on the score margin,
-    /// and a HUD that rendered it would show every player "0:00" for the whole round.
-    /// <see cref="HasTimer"/> is the gate; rendering a zero is the bug this type exists to
-    /// prevent.
+    /// <b>The phase timer is interpolated, and during <see cref="MatchPhase.Playing"/> there is
+    /// no timer at all.</b> <c>PhaseSecondsRemaining</c> is 0 in that phase by design — it ends
+    /// on the score margin, not a clock — so a HUD that renders the field unconditionally shows every
+    /// player "0:00" for the whole round. <see cref="HasTimer"/> is the gate; rendering a zero
+    /// is the bug this type exists to prevent.
     /// </para>
     /// <para>
     /// <b>Staleness is reported, never smoothed away.</b> The message arrives at most once a
@@ -59,16 +58,10 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
-        /// Whether this phase has a countdown to draw at all. False before the first broadcast,
-        /// and during <see cref="MatchPhase.Playing"/> unless the round has a time limit.
+        /// Whether this phase has a countdown to draw at all. False during
+        /// <see cref="MatchPhase.Playing"/> and before the first broadcast.
         /// </summary>
-        /// <remarks>
-        /// A limited round's clock is its own broadcast value, not a zero: a round that has run
-        /// out is ended by the server in the same tick, so a Playing state never arrives with the
-        /// limit spent.
-        /// </remarks>
-        public bool HasTimer
-            => _hasAny && (_current.Phase != MatchPhase.Playing || _current.PhaseSecondsRemaining > 0);
+        public bool HasTimer => _hasAny && _current.Phase != MatchPhase.Playing;
 
         /// <summary>
         /// Seconds left in the current phase, counted down from the last broadcast so the

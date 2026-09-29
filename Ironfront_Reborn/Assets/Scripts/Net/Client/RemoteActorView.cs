@@ -213,6 +213,9 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Replicated team. <see cref="TeamId.None"/> before the first snapshot.</summary>
         public byte Team => _hasState ? _state.Team : TeamId.None;
 
+        /// <summary>Alive as of the last snapshot applied; true before the first, as a spawn is.</summary>
+        public bool IsAlive => !_hasState || _state.IsAlive;
+
         /// <summary>Always false — the local player is never drawn by this component.</summary>
         public bool IsLocal => false;
 

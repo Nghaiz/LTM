@@ -138,6 +138,49 @@ namespace Ironfront.Net.Replication.Tests
             Assert.False(manager.IsShootable(2));
         }
 
+        /// <summary>
+        /// A team-mate past the cull radius stays in the snapshot at Far; an enemy there does not.
+        /// </summary>
+        /// <remarks>
+        /// The minimap draws every friendly on the map. A team-mate past 500 m used to drop out of
+        /// the snapshot and freeze on the map where it was last sent (owner report 2026-09-29).
+        /// </remarks>
+        [Fact]
+        public void ATeammateBeyondTheCullRadiusIsStillSent()
+        {
+            var manager = new InterestManager();
+            var world = new WorldSnapshot();
+            world.Add(Actor(1, Vec3.Zero, TeamA, yawDegrees: 0f));
+            world.Add(Actor(2, new Vec3(1500f, 0f, 0f), TeamA));    // out of the view cone
+            world.Add(Actor(3, new Vec3(1500f, 0f, 10f), TeamB));
+            var view = new WorldSnapshot();
+
+            manager.BeginSnapshot();
+            manager.BuildView(1, world, 0, view);
+
+            Assert.True(view.IndexOf(2) >= 0, "a team-mate past the cull radius was dropped");
+            Assert.True(view.IndexOf(3) < 0, "an enemy past the cull radius was sent");
+        }
+
+        /// <summary>
+        /// A team-mate kept for the map is not made shootable: hitbox history and the bot LOD still
+        /// read the real distance, so the promotion costs bandwidth and nothing on the server.
+        /// </summary>
+        [Fact]
+        public void AFarTeammateKeptForTheMapIsNotShootable()
+        {
+            var manager = new InterestManager();
+            var world = new WorldSnapshot();
+            world.Add(Actor(1, Vec3.Zero, TeamA, yawDegrees: 0f));
+            world.Add(Actor(2, new Vec3(1500f, 0f, 0f), TeamA));
+            var view = new WorldSnapshot();
+
+            manager.BeginSnapshot();
+            manager.BuildView(1, world, 0, view);
+
+            Assert.False(manager.IsShootable(2));
+        }
+
         [Fact]
         public void ATeammateInsideTheFloorIsHeldAtMidAndAnEnemyIsNot()
         {

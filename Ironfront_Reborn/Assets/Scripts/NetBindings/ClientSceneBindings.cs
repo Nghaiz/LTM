@@ -106,8 +106,8 @@ namespace Ironfront.Net.Unity.Bindings
     internal sealed class MinimapMarkerBinding : IMinimapMarkers
     {
         /// <inheritdoc/>
-        public void SetBodyMarker(Transform subject, int team)
-            => MinimapUi.SetMarker(subject, ColorScheme.TeamColor(team), MinimapMarkerKind.Body);
+        public void SetBodyMarker(Transform subject, int team, bool isHuman, Transform seatedIn)
+            => MinimapUi.SetBodyMarker(subject, ColorScheme.BlipColor(team, isHuman), seatedIn);
 
         /// <inheritdoc/>
         public void RemoveMarker(Transform subject) => MinimapUi.RemoveMarker(subject);

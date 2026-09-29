@@ -1522,6 +1522,12 @@ namespace Ironfront.Net.Unity.Server
 
             ReportDeathToMatch(victimActorId);
 
+            // The board counts the deaths the score counts and no others: a warmup skirmish
+            // between bots used to fill it with kills beside a 0 - 0 score. No match controller
+            // (a harness) keeps the old always-count behaviour.
+            MatchStateMachine match = _match != null ? _match.Match : null;
+            if (match != null && !match.CountsDeaths) return;
+
             // Phase P6 task 3.1, checklist A13. HERE and not at the serialisation above, even
             // though the two are three lines apart: this call runs once per resolved death,
             // whereas the broadcast's bytes may be retransmitted by the reliability layer any
@@ -1777,7 +1783,8 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
-        /// A client said something. Sanitized here, then broadcast to everyone. Phase P6.
+        /// A client said something. Sanitized here, then sent to everyone its channel reaches.
+        /// Phase P6; team chat since v12 (owner request 2026-09-29).
         /// </summary>
         /// <remarks>
         /// <para>
@@ -1797,8 +1804,16 @@ namespace Ironfront.Net.Unity.Server
         /// hostile or broken sender, and one log line per message is how that becomes a way to
         /// fill the server's console.
         /// </para>
+        /// <para>
+        /// <b>A team line never leaves its side.</b> Each connection is sent the line only when
+        /// <see cref="ChatAudience.Hears"/> says so, from the teams THIS server gave the speaker's
+        /// actor and the listener's -- nothing the client wrote chooses the audience beyond
+        /// asking for its own team. Filtered per recipient rather than broadcast and hidden on
+        /// arrival, because a line that reaches an enemy's machine has leaked whether or not
+        /// their client draws it.
+        /// </para>
         /// </remarks>
-        void IChatHandler.OnChat(ClientSession session, ReadOnlySpan<byte> textUtf8)
+        void IChatHandler.OnChat(ClientSession session, ChatChannel channel, ReadOnlySpan<byte> textUtf8)
         {
             if (Transport == null || session == null) return;
 
@@ -1818,12 +1833,28 @@ namespace Ironfront.Net.Unity.Server
             if (textLength < 0) return;
 
             int written = ServerEventWriter.WriteChat(
-                _eventPayload, _chatBody, (byte)actorId, encoded.Slice(0, textLength));
+                _eventPayload, _chatBody, (byte)actorId, channel, encoded.Slice(0, textLength));
             if (written < 0) return;
 
-            BroadcastReliable(
-                new ReadOnlySpan<byte>(_eventPayload, 0, written),
-                (byte)ServerEventWriter.ReliableChannel);
+            byte speakerTeam = _byConnection.TryGetValue(session.ConnectionId, out ServerPlayer speaker)
+                               && speaker.Actor != null
+                ? speaker.Actor.Team
+                : TeamId.None;
+
+            var payload = new ReadOnlySpan<byte>(_eventPayload, 0, written);
+
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ServerPlayer listener = _players[i];
+                bool isSpeaker = listener.Session.ConnectionId == session.ConnectionId;
+                byte listenerTeam = listener.Actor != null ? listener.Actor.Team : TeamId.None;
+
+                if (!ChatAudience.Hears(channel, speakerTeam, listenerTeam, isSpeaker)) continue;
+
+                Transport.Send(
+                    listener.Session.ConnectionId, (byte)ServerEventWriter.ReliableChannel, payload,
+                    reliable: true);
+            }
         }
 
         /// <summary>

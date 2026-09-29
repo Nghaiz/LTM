@@ -208,16 +208,17 @@ namespace Ironfront.Net.Replication.Server
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Reliable, and broadcast to everyone.</b> Chat is a fact, not a cue: a line
+        /// <b>Reliable, to everyone the channel names.</b> Chat is a fact, not a cue: a line
         /// delivered to eleven of twelve players is a conversation one person is silently
         /// excluded from, with nothing to re-send it and no way for them to know they missed
-        /// anything. There is no earshot filter either — lobby chat is global by definition, and
-        /// the proximity question is a different feature with a different opcode.
+        /// anything. The audience is <see cref="ChatAudience"/>'s to decide — everybody for
+        /// <see cref="ChatChannel.All"/>, the speaker's side for <see cref="ChatChannel.Team"/> —
+        /// and there is no earshot filter: proximity is a different feature.
         /// </para>
         /// <para>
         /// <paramref name="bodyScratch"/> is the caller's rather than a <c>stackalloc</c>, for
         /// <see cref="WritePlayerList"/>'s reason: the body is variable-length. It is far
-        /// smaller here (<see cref="ChatTextMessage.MaxServerBodySize"/>, 122 B), so the stack would
+        /// smaller here (<see cref="ChatTextMessage.MaxServerBodySize"/>, 123 B), so the stack would
         /// survive it — the caller supplies it anyway so that both variable-length writers on
         /// this class read the same way, and so the buffer is sized once at construction rather
         /// than per message.
@@ -231,10 +232,10 @@ namespace Ironfront.Net.Replication.Server
         /// </para>
         /// </remarks>
         public static int WriteChat(
-            Span<byte> destination, Span<byte> bodyScratch, byte actorId,
+            Span<byte> destination, Span<byte> bodyScratch, byte actorId, ChatChannel channel,
             ReadOnlySpan<byte> textUtf8)
         {
-            int bodyLength = ChatTextMessage.WriteServer(bodyScratch, actorId, textUtf8);
+            int bodyLength = ChatTextMessage.WriteServer(bodyScratch, actorId, channel, textUtf8);
             return bodyLength < 0
                 ? -1
                 : Frame(

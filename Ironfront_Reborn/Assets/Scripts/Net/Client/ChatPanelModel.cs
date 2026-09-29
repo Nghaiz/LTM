@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Ironfront.Net.Protocol;
 
 namespace Ironfront.Net.Unity.Client
 {
@@ -32,6 +33,14 @@ namespace Ironfront.Net.Unity.Client
     /// the history stays up for <see cref="LingerSeconds"/> so the player sees their line land,
     /// then fades. Esc closes the box without sending. Enter never means anything else during a
     /// match: it used to toggle the deploy screen as well, which is the defect this replaces.
+    /// </para>
+    /// <para>
+    /// <b>Two channels (owner request 2026-09-29).</b> Enter opens the box on
+    /// <see cref="ChatChannel.All"/> and Shift+Enter on <see cref="ChatChannel.Team"/>. While it is
+    /// open, Tab swaps the channel, the left and right arrows pick ALL and TEAM while nothing has
+    /// been typed (once there is a draft the arrows move the caret, as in any text field), and a
+    /// click on a channel's tab picks it. The line goes to whichever channel is showing when it
+    /// is sent; the server, not this class, decides who that reaches.
     /// </para>
     /// <para>
     /// <b>Split from <c>ClientChatSender</c> so the rules can be tested.</b> The component reads
@@ -75,15 +84,23 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>What has been typed so far. Written by the text field, cleared on every close.</summary>
         public string Draft { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Where the line being typed goes. Set when the box opens and changed while it is open;
+        /// kept after it closes, so the sender can read where a submitted line was meant to go.
+        /// </summary>
+        public ChatChannel Channel { get; private set; } = ChatChannel.All;
+
         /// <summary>The kept history, oldest first.</summary>
         public IReadOnlyList<ChatEntry> History => _entries;
 
         /// <summary>
-        /// Enter was pressed. Opens a closed box; sends and closes an open one.
+        /// Enter was pressed. Opens a closed box on <paramref name="openOn"/>; sends and closes an
+        /// open one, whose channel stays as it was.
         /// </summary>
         /// <param name="now">The clock the linger is measured on.</param>
         /// <param name="submitted">The draft to send, when the outcome is <see cref="ChatKeyOutcome.Submitted"/>.</param>
-        public ChatKeyOutcome PressEnter(float now, out string submitted)
+        /// <param name="openOn">The channel a closed box opens on: TEAM for Shift+Enter, else ALL.</param>
+        public ChatKeyOutcome PressEnter(float now, out string submitted, ChatChannel openOn = ChatChannel.All)
         {
             submitted = null;
 
@@ -91,6 +108,7 @@ namespace Ironfront.Net.Unity.Client
             {
                 IsComposing = true;
                 Draft = string.Empty;
+                Channel = ChatTextMessage.IsKnown(openOn) ? openOn : ChatChannel.All;
                 return ChatKeyOutcome.Opened;
             }
 
@@ -105,6 +123,38 @@ namespace Ironfront.Net.Unity.Client
 
             submitted = draft;
             return ChatKeyOutcome.Submitted;
+        }
+
+        /// <summary>Tab was pressed: the other channel. Nothing while the box is closed.</summary>
+        public bool ToggleChannel()
+        {
+            if (!IsComposing) return false;
+
+            Channel = Channel == ChatChannel.Team ? ChatChannel.All : ChatChannel.Team;
+            return true;
+        }
+
+        /// <summary>
+        /// An arrow was pressed: left picks ALL, right picks TEAM, as their tabs are laid out --
+        /// but only while nothing has been typed. With a draft the arrows belong to the caret, and
+        /// taking them would make a typo in the middle of a line impossible to reach.
+        /// </summary>
+        /// <returns>Whether the arrow was taken; false leaves it to the text field.</returns>
+        public bool PressArrow(bool right)
+        {
+            if (!IsComposing || !string.IsNullOrEmpty(Draft)) return false;
+
+            Channel = right ? ChatChannel.Team : ChatChannel.All;
+            return true;
+        }
+
+        /// <summary>A channel's tab was clicked. Nothing while the box is closed.</summary>
+        public bool SelectChannel(ChatChannel channel)
+        {
+            if (!IsComposing || !ChatTextMessage.IsKnown(channel)) return false;
+
+            Channel = channel;
+            return true;
         }
 
         /// <summary>Esc was pressed. Closes an open box at once and throws the draft away.</summary>
@@ -130,9 +180,9 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>A line arrived. Kept, and the history comes up so it can be read.</summary>
-        public void Add(byte speaker, string text, float now)
+        public void Add(byte speaker, ChatChannel channel, string text, float now)
         {
-            _entries.Add(new ChatEntry(speaker, text ?? string.Empty));
+            _entries.Add(new ChatEntry(speaker, channel, text ?? string.Empty));
             while (_entries.Count > _capacity) _entries.RemoveAt(0);
 
             Linger(now);
@@ -174,7 +224,7 @@ namespace Ironfront.Net.Unity.Client
         }
     }
 
-    /// <summary>One line of chat: who said it, and what.</summary>
+    /// <summary>One line of chat: who said it, to whom, and what.</summary>
     /// <remarks>
     /// <b>The speaker is an actor id, not a name.</b> Names arrive in <c>S_PLAYER_LIST</c> and can
     /// arrive after the line does; resolving at draw time is what lets a line that came in first
@@ -183,11 +233,13 @@ namespace Ironfront.Net.Unity.Client
     public readonly struct ChatEntry
     {
         public readonly byte Speaker;
+        public readonly ChatChannel Channel;
         public readonly string Text;
 
-        public ChatEntry(byte speaker, string text)
+        public ChatEntry(byte speaker, ChatChannel channel, string text)
         {
             Speaker = speaker;
+            Channel = channel;
             Text = text;
         }
     }

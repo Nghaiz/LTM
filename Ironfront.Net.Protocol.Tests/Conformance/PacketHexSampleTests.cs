@@ -425,6 +425,71 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(0x50, (byte)ServerMessageType.SeatChange);
         }
 
+        // -------------------------------------------------------- C_CHAT 0x24 / S_CHAT 0x47 (v12)
+
+        // Written out from the layout, not captured from the implementation:
+        //   C_CHAT  channel u8 01 = Team, textLength u8 02, "gg" 67 67
+        //   S_CHAT  actorId u8 07, channel u8 01 = Team, textLength u8 02, "gg" 67 67
+        // The channel sits BEFORE the length in both, so a v11 decoder reading a v12 body takes
+        // the channel for a length -- which is why v12 is a version, not a detail.
+        private const string ClientChatHex = "01 02 67 67";
+        private const string ServerChatHex = "07 01 02 67 67";
+
+        [Fact]
+        public void ClientChat_Serializes_ToTheExpectedBytes()
+        {
+            Span<byte> buffer = stackalloc byte[ChatTextMessage.MaxClientBodySize];
+            int written = ChatTextMessage.WriteClient(buffer, ChatChannel.Team, new byte[] { 0x67, 0x67 });
+
+            Assert.Equal(ClientChatHex, Hex.ToHex(buffer.Slice(0, written)));
+        }
+
+        [Fact]
+        public void ServerChat_Serializes_ToTheExpectedBytes()
+        {
+            Span<byte> buffer = stackalloc byte[ChatTextMessage.MaxServerBodySize];
+            int written = ChatTextMessage.WriteServer(buffer, 7, ChatChannel.Team, new byte[] { 0x67, 0x67 });
+
+            Assert.Equal(ServerChatHex, Hex.ToHex(buffer.Slice(0, written)));
+        }
+
+        [Fact]
+        public void BothChatBodies_Parse_FromTheExpectedBytes()
+        {
+            Assert.True(ChatTextMessage.TryParseClient(
+                Hex.FromHex(ClientChatHex), out ChatChannel clientChannel, out ReadOnlySpan<byte> clientText));
+            Assert.Equal(ChatChannel.Team, clientChannel);
+            Assert.Equal("gg", ChatTextMessage.TextOf(clientText));
+
+            Assert.True(ChatTextMessage.TryParseServer(
+                Hex.FromHex(ServerChatHex), out byte actorId, out ChatChannel serverChannel, out ReadOnlySpan<byte> serverText));
+            Assert.Equal(7, actorId);
+            Assert.Equal(ChatChannel.Team, serverChannel);
+            Assert.Equal("gg", ChatTextMessage.TextOf(serverText));
+        }
+
+        /// <summary>
+        /// A channel byte this build does not define is refused in both directions and by both
+        /// writers, never read as all-chat: widening it is how a team line would leak.
+        /// </summary>
+        [Fact]
+        public void AnUnknownChatChannel_IsRefused_NeverReadAsAll()
+        {
+            Assert.False(ChatTextMessage.TryParseClient(Hex.FromHex("02 02 67 67"), out _, out _));
+            Assert.False(ChatTextMessage.TryParseServer(Hex.FromHex("07 02 02 67 67"), out _, out _, out _));
+
+            Span<byte> buffer = stackalloc byte[ChatTextMessage.MaxServerBodySize];
+            Assert.Equal(-1, ChatTextMessage.WriteClient(buffer, (ChatChannel)2, new byte[] { 0x67 }));
+            Assert.Equal(-1, ChatTextMessage.WriteServer(buffer, 7, (ChatChannel)2, new byte[] { 0x67 }));
+        }
+
+        [Fact]
+        public void ChatChannels_HoldTheirWireValues()
+        {
+            Assert.Equal(0, (byte)ChatChannel.All);
+            Assert.Equal(1, (byte)ChatChannel.Team);
+        }
+
         // -------------------------------------------------------- S_MATCH_STATE 0x45 (v5)
 
         // Written out from the layout, not captured from the implementation. Little-endian

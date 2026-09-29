@@ -94,7 +94,7 @@ namespace Ironfront.Net.Replication.Tests
         // ------------------------------------------------------------------ names
 
         [Fact]
-        public void APlayersName_IsTheirs_ABot_IsNumbered_AndAStrangerIsAnId()
+        public void APlayersName_IsTheirs_ABot_HasACallsign_AndAStrangerIsAnId()
         {
             var names = new PlayerNameTable();
             var bots = new BotRoster();
@@ -107,7 +107,7 @@ namespace Ironfront.Net.Replication.Tests
             bots.Apply(Spawn(9, bot: true));
 
             Assert.Equal("Minh", ActorNames.Display(3, names, bots));
-            Assert.Equal("Bot 9", ActorNames.Display(9, names, bots));
+            Assert.Equal("Blue Team Bot 1", ActorNames.Display(9, names, bots));
             Assert.Equal("actor 12", ActorNames.Display(12, names, bots));
         }
 
@@ -123,7 +123,7 @@ namespace Ironfront.Net.Replication.Tests
             => Assert.Equal(clock, ScoreboardWording.Clock(seconds));
 
         [Theory]
-        [InlineData(MatchPhase.Playing, true, "TIME LEFT")]
+        [InlineData(MatchPhase.Playing, true, "LIVE")]
         [InlineData(MatchPhase.Playing, false, "LIVE")]
         [InlineData(MatchPhase.Warmup, true, "STARTS IN")]
         [InlineData(MatchPhase.WaitingForPlayers, false, "WAITING FOR PLAYERS")]
@@ -135,11 +135,11 @@ namespace Ironfront.Net.Replication.Tests
         public void TheLeadLine_CountsTheMargin_NotATotal()
         {
             Assert.Equal(
-                "TEAM 1 LEADS BY 36  ·  164 MORE TO WIN",
+                "BLUE TEAM LEADS BY 36  ·  164 MORE TO WIN",
                 ScoreboardWording.LeadLine(MatchPhase.Playing, 412, 376, 200, TeamId.None));
 
             Assert.Equal(
-                "TEAM 2 LEADS BY 210",
+                "RED TEAM LEADS BY 210",
                 ScoreboardWording.LeadLine(MatchPhase.Playing, 100, 310, 200, TeamId.None));
 
             Assert.Equal(
@@ -154,7 +154,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void TheLeadLine_NamesTheWinner_OnceTheRoundIsOver()
         {
-            Assert.Equal("TEAM 2 WINS", ScoreboardWording.LeadLine(MatchPhase.Ended, 100, 300, 200, TeamId.Team1));
+            Assert.Equal("RED TEAM WINS", ScoreboardWording.LeadLine(MatchPhase.Ended, 100, 300, 200, TeamId.Team1));
             Assert.Equal("DRAW", ScoreboardWording.LeadLine(MatchPhase.Ended, 250, 250, 200, TeamId.None));
         }
 
@@ -187,13 +187,40 @@ namespace Ironfront.Net.Replication.Tests
 
         [Fact]
         public void TheRules_StateTheMarginTheServerSent()
-            => Assert.StartsWith("LEAD BY 150 POINTS TO WIN", ScoreboardWording.Rules(150));
+            => Assert.Contains("LEAD BY 150 TO WIN", ScoreboardWording.Rules(150));
+
+        /// <summary>
+        /// The rules line states the original's rules and no rule the owner removed (2026-09-29).
+        /// </summary>
+        [Fact]
+        public void TheRules_AreTheOriginalsAndNothingElse()
+        {
+            string rules = ScoreboardWording.Rules(200);
+
+            Assert.Contains("+1 PER FLAG YOU HOLD", rules);
+            Assert.Contains("TAKE EVERY ENEMY SPAWN", rules);
+            Assert.DoesNotContain("OVER TIME", rules);
+            Assert.DoesNotContain("TIME LEFT", ScoreboardWording.PhaseLabel(MatchPhase.Playing, true));
+        }
+
+        /// <summary>The board names the mode the round is played in: Point Match, not Conquest.</summary>
+        [Fact]
+        public void TheSummary_NamesThePointMatchMode()
+            => Assert.Equal("POINT MATCH  ·  38 PLAYERS  ·  3 HUMANS", ScoreboardWording.SummaryLine(38, 3));
+
+        [Theory]
+        [InlineData(3, "+3 PER KILL")]
+        [InlineData(1, "+1 PER KILL")]
+        [InlineData(0, "+0 PER KILL")]
+        [InlineData(-2, "+0 PER KILL")]
+        public void ASidesBand_SaysWhatAKillIsWorth(int flags, string line)
+            => Assert.Equal(line, ScoreboardWording.PerKillLine(flags));
 
         [Fact]
         public void TheSides_AreNamedAsInTheLobby()
         {
-            Assert.Equal("TEAM 1", ScoreboardWording.TeamName(TeamId.Team0));
-            Assert.Equal("TEAM 2", ScoreboardWording.TeamName(TeamId.Team1));
+            Assert.Equal("BLUE TEAM", ScoreboardWording.TeamName(TeamId.Team0));
+            Assert.Equal("RED TEAM", ScoreboardWording.TeamName(TeamId.Team1));
             Assert.Equal(string.Empty, ScoreboardWording.TeamName(TeamId.None));
         }
     }
