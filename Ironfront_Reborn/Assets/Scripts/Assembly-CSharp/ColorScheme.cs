@@ -28,4 +28,22 @@ public static class ColorScheme
 	{
 		return Color.Lerp(TeamColor(team), Color.white, isHuman ? 0.45f : 0.2f);
 	}
+
+	/// <summary>
+	/// The player's own minimap arrow: a bright, light version of its team's colour, lighter than
+	/// any team-mate's icon so it is the first thing found on the map without leaving its side's
+	/// hue (owner ruling 2026-09-29: not white).
+	/// </summary>
+	public static Color SelfBlipColor(int team)
+	{
+		switch (team)
+		{
+		case 0:
+			return new Color(0.3f, 0.72f, 1f);
+		case 1:
+			return new Color(1f, 0.5f, 0.32f);
+		default:
+			return TeamColor(team);
+		}
+	}
 }

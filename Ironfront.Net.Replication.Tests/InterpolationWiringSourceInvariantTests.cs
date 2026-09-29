@@ -45,7 +45,7 @@ namespace Ironfront.Net.Replication.Tests
         /// stepped back a tick every 100 ms, because Alpha wraps at 30 Hz and snapshots land at 20.
         /// </remarks>
         [Theory]
-        [InlineData("RemoteActorRegistry.cs", "private void Update()")]
+        [InlineData("RemoteActorRegistry.cs", "private void SampleBodies(byte localTeam, bool hasLocalBody, Vector3 localPosition)")]
         [InlineData("ClientVehicleStage.cs", "private void DrawRemoteVehicles()")]
         public void RemoteBodiesAreDrawnAtTheRoutersClock(string file, string signature)
         {
