@@ -3,8 +3,9 @@ using UnityEngine;
 namespace Ironfront.Net.Unity.Client.Hud
 {
     /// <summary>
-    /// The readout's small graphics, drawn once in code: a crosshair, a star, a flag, a diamond, a
-    /// fade, a vignette and a glowing rule. Features 1 and 2, 2026-09-29.
+    /// The readout's small graphics, drawn once in code: a crosshair, a star, a flag, a fade, a
+    /// vignette, a glowing rule, and the name plate's frame and icons. Features 1 and 2,
+    /// 2026-09-29.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -26,7 +27,15 @@ namespace Ironfront.Net.Unity.Client.Hud
         private static Sprite _fade;
         private static Sprite _vignette;
         private static Sprite _rule;
-        private static Sprite _diamond;
+        private static Sprite _caret;
+        private static Sprite _bracket;
+        private static Sprite _scanlines;
+        private static Sprite _shield;
+        private static Sprite _hostile;
+        private static Sprite _medic;
+        private static Sprite _pin;
+        private static Sprite _wheel;
+        private static Sprite _wave;
 
         /// <summary>A ring, a centre dot and four ticks: the headshot mark.</summary>
         public static Sprite Crosshair()
@@ -142,22 +151,230 @@ namespace Ironfront.Net.Unity.Client.Hud
             return _rule;
         }
 
-        /// <summary>A diamond: the mark before a person's name, which a bot's plate does not carry.</summary>
-        public static Sprite Diamond()
+        /// <summary>A small triangle pointing down: the tip under a name plate, over the head it names.</summary>
+        public static Sprite Caret()
         {
-            if (_diamond != null) return _diamond;
+            if (_caret != null) return _caret;
+
+            const int width = 32;
+            const int height = 18;
+
+            // Row 0 is the bottom of the texture: wide at the top, the point at the bottom.
+            var points = new[]
+            {
+                new Vector2(1f, height - 1f),
+                new Vector2(width - 1f, height - 1f),
+                new Vector2(width * 0.5f, 1f),
+            };
+
+            _caret = Draw("Hud Caret", width, height, (x, y) => Supersample(x, y, (px, py) => Inside(points, px, py)));
+            return _caret;
+        }
+
+        /// <summary>Where a bracket's corner sits in <see cref="Bracket"/>, from the bottom-left, in pixels.</summary>
+        public const float BracketCornerX = 8f;
+
+        /// <inheritdoc cref="BracketCornerX"/>
+        public const float BracketCornerY = 24f;
+
+        /// <summary>The side of <see cref="Bracket"/>'s square texture, in pixels.</summary>
+        public const int BracketSize = 32;
+
+        /// <summary>
+        /// One glowing corner of a frame, an L opening right and down, its corner at
+        /// (<see cref="BracketCornerX"/>, <see cref="BracketCornerY"/>) so a plate can pin that
+        /// point to its own corner and mirror the one sprite into all four.
+        /// </summary>
+        /// <remarks>The glow is baked in around the stroke, so one tinted image is the whole effect.</remarks>
+        public static Sprite Bracket()
+        {
+            if (_bracket != null) return _bracket;
+
+            const float arm = 12f;
+            const float half = 1.2f;
+            const float glowSigma = 2.6f;
+
+            _bracket = Draw("Hud Bracket", BracketSize, BracketSize, (x, y) =>
+            {
+                float px = x + 0.5f;
+                float py = y + 0.5f;
+                float distance = Mathf.Min(
+                    SegmentDistance(px, py, BracketCornerX, BracketCornerY, BracketCornerX + arm, BracketCornerY),
+                    SegmentDistance(px, py, BracketCornerX, BracketCornerY, BracketCornerX, BracketCornerY - arm));
+
+                float stroke = Coverage(half - distance);
+                float glow = 0.5f * Mathf.Exp(-(distance * distance) / (2f * glowSigma * glowSigma));
+                return Mathf.Max(stroke, glow);
+            });
+
+            return _bracket;
+        }
+
+        /// <summary>
+        /// Fine horizontal lines, one row in three: a name plate's glass. Drawn to be stretched
+        /// over a plate of about its own height, so the lines stay about three pixels apart.
+        /// </summary>
+        public static Sprite Scanlines()
+        {
+            if (_scanlines != null) return _scanlines;
+
+            _scanlines = Draw("Hud Scanlines", 4, 48, (x, y) => y % 3 == 0 ? 1f : 0f);
+            return _scanlines;
+        }
+
+        /// <summary>A shield with a chevron cut through it: the mark on a teammate's plate.</summary>
+        public static Sprite Shield()
+        {
+            if (_shield != null) return _shield;
+
+            const int size = 48;
+
+            _shield = Draw("Hud Shield", size, size, (x, y) => Supersample(x, y, (px, py) =>
+            {
+                if (py < 4f || py > 44f) return false;
+
+                // Straight sides above y = 26, then an elliptic curve down to the point.
+                float halfWidth = py >= 26f ? 17f : 17f * Mathf.Sqrt(Mathf.Max(0f, 1f - Mathf.Pow((26f - py) / 22f, 2f)));
+                if (Mathf.Abs(px - 24f) > halfWidth) return false;
+
+                // The chevron, cut out: a rank mark, and the shield's one detail.
+                float chevron = Mathf.Min(
+                    SegmentDistance(px, py, 13f, 21f, 24f, 32f),
+                    SegmentDistance(px, py, 24f, 32f, 35f, 21f));
+                return chevron > 3f;
+            }));
+
+            return _shield;
+        }
+
+        /// <summary>
+        /// A diamond frame round a dot: the mark on an enemy's plate, after the hostile frame of
+        /// military map symbols. Not the killfeed's crosshair, which means a headshot.
+        /// </summary>
+        public static Sprite Hostile()
+        {
+            if (_hostile != null) return _hostile;
+
+            const int size = 48;
+            float centre = (size - 1) * 0.5f;
+
+            _hostile = Draw("Hud Hostile", size, size, (x, y) =>
+            {
+                float manhattan = Mathf.Abs(x - centre) + Mathf.Abs(y - centre);
+                float frame = Coverage(3.2f - Mathf.Abs(manhattan - 19f));
+                float dx = x - centre;
+                float dy = y - centre;
+                float dot = Coverage(5.5f - Mathf.Sqrt(dx * dx + dy * dy));
+                return Mathf.Max(frame, dot);
+            });
+
+            return _hostile;
+        }
+
+        /// <summary>A plus with rounded arms: health, beside a plate's bar.</summary>
+        public static Sprite Medic()
+        {
+            if (_medic != null) return _medic;
 
             const int size = 32;
             float centre = (size - 1) * 0.5f;
 
-            // |dx| + |dy| <= r is a square turned 45 degrees; the soft band is its edge.
-            _diamond = Draw("Hud Diamond", size, size,
-                (x, y) => Coverage(13f - (Mathf.Abs(x - centre) + Mathf.Abs(y - centre))));
+            _medic = Draw("Hud Medic", size, size, (x, y) =>
+            {
+                float arm = Mathf.Min(
+                    SegmentDistance(x, y, centre - 10f, centre, centre + 10f, centre),
+                    SegmentDistance(x, y, centre, centre - 10f, centre, centre + 10f));
+                return Coverage(4.2f - arm);
+            });
 
-            return _diamond;
+            return _medic;
+        }
+
+        /// <summary>A map pin with a hole through its head: how far away, beside the metres.</summary>
+        public static Sprite Pin()
+        {
+            if (_pin != null) return _pin;
+
+            const int width = 24;
+            const int height = 32;
+            var head = new Vector2(12f, 20f);
+            var tail = new[] { new Vector2(5.2f, 17f), new Vector2(18.8f, 17f), new Vector2(12f, 2f) };
+
+            _pin = Draw("Hud Pin", width, height, (x, y) => Supersample(x, y, (px, py) =>
+            {
+                float fromHead = Vector2.Distance(new Vector2(px, py), head);
+                if (fromHead < 3.4f) return false;
+                return fromHead <= 8f || Inside(tail, px, py);
+            }));
+
+            return _pin;
+        }
+
+        /// <summary>A steering wheel: this player is at the wheel or in a seat of a vehicle.</summary>
+        public static Sprite Wheel()
+        {
+            if (_wheel != null) return _wheel;
+
+            const int size = 32;
+            float centre = (size - 1) * 0.5f;
+
+            _wheel = Draw("Hud Wheel", size, size, (x, y) =>
+            {
+                float dx = x - centre;
+                float dy = y - centre;
+                float distance = Mathf.Sqrt(dx * dx + dy * dy);
+
+                float rim = Coverage(2.2f - Mathf.Abs(distance - 12f));
+                float hub = Coverage(4f - distance);
+                float spokes = Mathf.Min(
+                    SegmentDistance(x, y, centre - 12f, centre + 1f, centre + 12f, centre + 1f),
+                    SegmentDistance(x, y, centre, centre, centre, centre - 12f));
+                return Mathf.Max(rim, Mathf.Max(hub, Coverage(1.6f - spokes)));
+            });
+
+            return _wheel;
+        }
+
+        /// <summary>Two waves: this player is in the water.</summary>
+        public static Sprite Wave()
+        {
+            if (_wave != null) return _wave;
+
+            const int size = 32;
+
+            _wave = Draw("Hud Wave", size, size, (x, y) =>
+            {
+                float best = 0f;
+                for (int row = 0; row < 2; row++)
+                {
+                    float baseline = row == 0 ? 20f : 11f;
+                    float curve = baseline + 3f * Mathf.Sin((x + row * 3f) * 0.42f);
+
+                    // Vertical distance, divided by the slope, is close enough to the true
+                    // distance for a curve this shallow.
+                    float slope = 3f * 0.42f * Mathf.Cos((x + row * 3f) * 0.42f);
+                    float distance = Mathf.Abs(y - curve) / Mathf.Sqrt(1f + slope * slope);
+                    best = Mathf.Max(best, Coverage(1.8f - distance) * Mathf.Clamp01(Mathf.Min(x - 2f, 29f - x)));
+                }
+
+                return best;
+            });
+
+            return _wave;
         }
 
         private static float Coverage(float signedDistance) => Mathf.Clamp01(signedDistance + 0.5f);
+
+        /// <summary>How far a point lies from the segment a-b.</summary>
+        private static float SegmentDistance(float px, float py, float ax, float ay, float bx, float by)
+        {
+            float abx = bx - ax;
+            float aby = by - ay;
+            float t = Mathf.Clamp01(((px - ax) * abx + (py - ay) * aby) / (abx * abx + aby * aby));
+            float cx = ax + t * abx - px;
+            float cy = ay + t * aby - py;
+            return Mathf.Sqrt(cx * cx + cy * cy);
+        }
 
         /// <summary>Four samples per pixel, so a shape tested by containment has soft edges.</summary>
         private static float Supersample(int x, int y, System.Func<float, float, bool> inside)

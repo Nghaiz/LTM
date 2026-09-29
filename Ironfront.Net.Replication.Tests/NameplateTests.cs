@@ -1,3 +1,7 @@
+using System;
+using System.IO;
+using System.Text;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Movement;
 using Xunit;
@@ -5,11 +9,113 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
-    /// When a name and health bar float over a head, and how large. Playtest 2026-09-28,
-    /// feature 1.
+    /// Whose head gets a name and health bar, when, and how large. Playtest 2026-09-28,
+    /// feature 1; people only since 2026-09-29.
     /// </summary>
     public sealed class NameplateTests
     {
+        private static PlayerListEntry Row(byte actorId, string name)
+            => new PlayerListEntry
+            {
+                ActorId = actorId,
+                Name = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(name)),
+            };
+
+        /// <summary>
+        /// Owner report 2026-09-29: a plate over every bot was clutter. A plate is for a person
+        /// the player list names, on either side, and for nothing else.
+        /// </summary>
+        [Fact]
+        public void APlate_IsForAPersonOnEitherSide_NeverABot()
+        {
+            var bots = new BotRoster();
+            bots.Apply(new SpawnActorMessage(3, TeamId.Team0, SpawnFlags.IsBot, 0, 0, 0, 0, 100, 0));
+            bots.Apply(new SpawnActorMessage(4, TeamId.Team1, SpawnFlags.IsBot, 0, 0, 0, 0, 100, 0));
+            bots.Apply(new SpawnActorMessage(5, TeamId.Team0, SpawnFlags.None, 0, 0, 0, 0, 100, 0));
+            bots.Apply(new SpawnActorMessage(6, TeamId.Team1, SpawnFlags.None, 0, 0, 0, 0, 100, 0));
+
+            var names = new PlayerNameTable();
+            var rows = new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+            rows[0] = Row(5, "Minh");
+            rows[1] = Row(6, "Hoang");
+            names.Apply(rows, 2);
+
+            Assert.Equal("Minh", NameplateRules.PlateNameOf(5, names));
+            Assert.Equal("Hoang", NameplateRules.PlateNameOf(6, names));
+
+            // The bots have names everywhere else ("Blue Team Bot 1") and no plate here.
+            Assert.Equal("Blue Team Bot 1", ActorNames.Display(3, names, bots));
+            Assert.Null(NameplateRules.PlateNameOf(3, names));
+            Assert.Null(NameplateRules.PlateNameOf(4, names));
+        }
+
+        /// <summary>
+        /// A player who leaves drops out of the next list, and their plate with them: a released
+        /// slot's body must not keep floating a name.
+        /// </summary>
+        [Fact]
+        public void APlayerWhoLeaves_LosesTheirPlate()
+        {
+            var names = new PlayerNameTable();
+            var rows = new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+            rows[0] = Row(5, "Minh");
+            names.Apply(rows, 1);
+            Assert.Equal("Minh", NameplateRules.PlateNameOf(5, names));
+
+            names.Apply(new PlayerListEntry[ProtocolConstants.MAX_ACTORS], 0);
+
+            Assert.Null(NameplateRules.PlateNameOf(5, names));
+        }
+
+        /// <summary>
+        /// The presenter asks the rule above for every name it draws. Read off the source because
+        /// the presenter compiles into a Unity assembly this project cannot reference; the name
+        /// the killfeed uses (<c>DisplayNameOf</c>) names bots too, and reaching for it put a plate
+        /// over every bot.
+        /// </summary>
+        [Fact]
+        public void ThePresenter_NamesPlatesOnlyThroughTheRule()
+        {
+            string source = File.ReadAllText(ClientScript("NameplatePresenter.cs"));
+
+            Assert.Contains("NameplateRules.PlateNameOf(actorId, _combat.Names)", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("DisplayNameOf", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("ActorNames.", source, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// The star over a head is the star on the Tab board: the plate asks the score table for
+        /// each side's leader, and the board sorts by that table's one order, so the two can
+        /// never crown different players.
+        /// </summary>
+        [Fact]
+        public void TheStarOnAPlate_IsTheBoardsStar()
+        {
+            string plates = File.ReadAllText(ClientScript("NameplatePresenter.cs"));
+            Assert.Contains("scores.LeaderOf(TeamId.Team0)", plates, StringComparison.Ordinal);
+            Assert.Contains("scores.LeaderOf(TeamId.Team1)", plates, StringComparison.Ordinal);
+
+            string board = File.ReadAllText(ClientScript("NetClientCombatPresenter.cs"));
+            Assert.Contains("=> _scores.CompareRank(left, right);", board, StringComparison.Ordinal);
+        }
+
+        /// <remarks>A missing file fails rather than scanning nothing and passing.</remarks>
+        private static string ClientScript(string fileName)
+        {
+            for (DirectoryInfo? d = new DirectoryInfo(Directory.GetCurrentDirectory()); d != null; d = d.Parent)
+            {
+                if (!File.Exists(Path.Combine(d.FullName, "Ironfront.sln"))) continue;
+
+                string path = Path.Combine(
+                    d.FullName, "Ironfront_Reborn", "Assets", "Scripts", "Net", "Client", fileName);
+                Assert.True(File.Exists(path), $"missing Unity source: {path}");
+                return path;
+            }
+
+            throw new InvalidOperationException(
+                "Ironfront.sln not found walking up from " + Directory.GetCurrentDirectory());
+        }
+
         [Fact]
         public void ATeammate_IsShownThroughCover_ButDimmed()
         {

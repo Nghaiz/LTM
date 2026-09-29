@@ -4,10 +4,14 @@ using Ironfront.Net.Replication.Movement;
 namespace Ironfront.Net.Replication.Client
 {
     /// <summary>
-    /// When a name and health bar float over somebody's head, and how large. Playtest
-    /// 2026-09-28, feature 1.
+    /// Whose head gets a name and health bar, when, and how large. Playtest 2026-09-28,
+    /// feature 1; people only since 2026-09-29.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// <b>People, not bots.</b> A plate is for a player on either side, never a bot: see
+    /// <see cref="PlateNameOf"/>.
+    /// </para>
     /// <para>
     /// <b>Teammates through walls, enemies only in sight.</b> A teammate's plate shows out to
     /// <see cref="TeammateRange"/> and dims behind cover, because knowing where your side is is
@@ -56,6 +60,19 @@ namespace Ironfront.Net.Replication.Client
 
         /// <summary>The top of a body lying prone.</summary>
         public const float ProneHeadHeight = 0.5f;
+
+        /// <summary>
+        /// The name a plate shows over this actor, or null when the actor gets no plate at all:
+        /// people only, on both sides (owner ruling 2026-09-29).
+        /// </summary>
+        /// <remarks>
+        /// <c>S_PLAYER_LIST</c> names every connected person and never a bot, so it is the one
+        /// answer to "is that somebody": a bot has no row, and neither has a slot whose player has
+        /// left. Not <see cref="ActorNames.Display"/>, which names bots too ("Blue Team Bot 3") --
+        /// a plate over every one of them was the clutter the owner asked to have removed.
+        /// </remarks>
+        public static string? PlateNameOf(ushort actorId, PlayerNameTable names)
+            => names.NameOf(actorId);
 
         /// <summary>How visible a plate is, 0 (not drawn) to 1.</summary>
         public static float Opacity(bool teammate, float distance, bool covered)

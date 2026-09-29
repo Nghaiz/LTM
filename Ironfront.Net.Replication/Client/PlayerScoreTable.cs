@@ -144,6 +144,47 @@ namespace Ironfront.Net.Replication.Client
         public byte TeamOf(ushort actorId)
             => Has(actorId) ? _teams[actorId] : TeamId.None;
 
+        /// <summary>
+        /// The board's order: more kills first, then fewer deaths, then the lower actor id.
+        /// Negative when <paramref name="left"/> ranks above <paramref name="right"/>.
+        /// </summary>
+        /// <remarks>
+        /// One order for everything that ranks players -- the Tab board's rows and the star on a
+        /// name plate -- so the two can never crown different people.
+        /// </remarks>
+        public int CompareRank(ushort left, ushort right)
+        {
+            int byKills = KillsOf(right).CompareTo(KillsOf(left));
+            if (byKills != 0) return byKills;
+
+            int byDeaths = DeathsOf(left).CompareTo(DeathsOf(right));
+            if (byDeaths != 0) return byDeaths;
+
+            return left.CompareTo(right);
+        }
+
+        /// <summary>
+        /// The actor at the top of a side's board, or 0 -- never a legal actor id -- when nobody
+        /// on that side has a kill yet: 0 kills leads nobody, which is also when the board shows
+        /// no star.
+        /// </summary>
+        public ushort LeaderOf(byte team)
+        {
+            ushort best = 0;
+            bool found = false;
+
+            for (ushort actorId = 0; actorId < _present.Length; actorId++)
+            {
+                if (!_present[actorId] || _teams[actorId] != team) continue;
+                if (found && CompareRank(actorId, best) >= 0) continue;
+
+                best = actorId;
+                found = true;
+            }
+
+            return found && _kills[best] > 0 ? best : (ushort)0;
+        }
+
         /// <summary>Drops every score. Call on disconnect or when leaving a match.</summary>
         public void Reset()
         {

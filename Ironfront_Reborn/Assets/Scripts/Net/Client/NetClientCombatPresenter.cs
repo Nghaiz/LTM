@@ -574,16 +574,8 @@ namespace Ironfront.Net.Unity.Client
                    && Players == other.Players && Humans == other.Humans;
         }
 
-        private int CompareScoreRows(ushort left, ushort right)
-        {
-            int byKills = _scores.KillsOf(right).CompareTo(_scores.KillsOf(left));
-            if (byKills != 0) return byKills;
-
-            int byDeaths = _scores.DeathsOf(left).CompareTo(_scores.DeathsOf(right));
-            if (byDeaths != 0) return byDeaths;
-
-            return left.CompareTo(right);
-        }
+        /// <summary>The score table's one order, shared with the star on a name plate.</summary>
+        private int CompareScoreRows(ushort left, ushort right) => _scores.CompareRank(left, right);
 
         /// <summary>
         /// The team the snapshot gives this actor, or <c>TeamId.None</c> when it does not carry

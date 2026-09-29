@@ -470,18 +470,32 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         /// <summary>
-        /// Feature 1 (playtest 2026-09-28) — the name plates: a full-screen layer and the one
-        /// plate it clones per actor.
+        /// Feature 1 (playtest 2026-09-28) — the name plates, in the holo frame the owner chose on
+        /// 2026-09-29: a full-screen layer and the one plate it clones per person.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The plate's pivot is its bottom centre, the point the presenter places over a head:
-        /// the bar sits on that point and the name above it, as the owner asked. Authored hidden;
-        /// a plate appears when the presenter sets one.
+        /// the pointer sits on that point, and the glass pane sits on the pointer.
+        /// </para>
+        /// <para>
+        /// <b>The pane sizes itself</b>: a vertical layout of two rows under a content fitter. The
+        /// top row is the emblem, the name as written, the leader's star, then -- pushed right by
+        /// a flexible gap -- the vehicle or water mark and the weapon's silhouette. The bottom row
+        /// is the medic cross, the bar, the pin and the metres. The bar is flexible, so it takes
+        /// whatever width a long name gives the pane; its fill and trail are anchored as a share
+        /// of it. The scanlines and the four brackets sit outside the layout, over the pane.
+        /// </para>
+        /// <para>
+        /// Every icon is drawn in code (<see cref="HudSprites"/>) and handed over by
+        /// <see cref="NameplateView"/> at runtime, so none is authored here. Authored hidden; a
+        /// plate appears when the presenter sets one.
+        /// </para>
         /// </remarks>
         private static NameplateLayer BuildNameplates(GameObject root, StringBuilder log)
         {
             Font bold = LoadFont(RobotoBoldPath);
-            Sprite rounded = RoundedSprite();
+            Font medium = LoadFont(RobotoMediumPath);
 
             var layer = new GameObject("Nameplates", typeof(RectTransform), typeof(CanvasGroup));
             layer.transform.SetParent(root.transform, worldPositionStays: false);
@@ -491,82 +505,135 @@ namespace Ironfront.Net.Unity.EditorTools
             group.interactable = false;
             group.blocksRaycasts = false;
 
+            // A point over the head: the parts below hang off its bottom centre.
             var plate = new GameObject("Nameplate Template", typeof(RectTransform), typeof(CanvasGroup));
             plate.transform.SetParent(layer.transform, worldPositionStays: false);
-            RectTransform plateRect = plate.GetComponent<RectTransform>();
-            Place(plateRect, Middle, new Vector2(0.5f, 0f), Vector2.zero, new Vector2(280f, 60f));
+            Place(plate.GetComponent<RectTransform>(), Middle, BottomCentre, Vector2.zero, Vector2.zero);
 
             var plateGroup = plate.GetComponent<CanvasGroup>();
             plateGroup.interactable = false;
             plateGroup.blocksRaycasts = false;
 
-            // The name row, centred on the bar and just above it.
-            var label = new GameObject(
-                "Label", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
-            label.transform.SetParent(plate.transform, worldPositionStays: false);
-            Place(label.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, NameplateView.TrackHeight + 3f), new Vector2(0f, 30f));
+            Image pointer = Picture(plate, "Pointer", Ink);
+            Place(pointer, BottomCentre, BottomCentre, Vector2.zero, new Vector2(PlatePointerWidth, PlatePointerHeight));
 
-            var labelLayout = label.GetComponent<HorizontalLayoutGroup>();
-            labelLayout.childAlignment = TextAnchor.MiddleCenter;
-            labelLayout.spacing = 6f;
-            labelLayout.childControlWidth = true;
-            labelLayout.childControlHeight = true;
-            labelLayout.childForceExpandWidth = false;
-            labelLayout.childForceExpandHeight = false;
+            // The glass pane, sized by its rows.
+            var pane = new GameObject(
+                "Pane", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            pane.transform.SetParent(plate.transform, worldPositionStays: false);
+            Place(pane.GetComponent<RectTransform>(), BottomCentre, BottomCentre,
+                new Vector2(0f, PlatePointerHeight + 4f), Vector2.zero);
 
-            var labelFit = label.GetComponent<ContentSizeFitter>();
-            labelFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-            labelFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var glass = pane.GetComponent<Image>();
+            glass.color = HudStyle.PlateGlass;
+            glass.raycastTarget = false;
 
-            Image marker = Block(label, "Marker", new Vector2(14f, 14f));
-            marker.color = Ink;
+            var paneLayout = pane.GetComponent<VerticalLayoutGroup>();
+            paneLayout.padding = new RectOffset(12, 12, 7, 9);
+            paneLayout.spacing = 5f;
+            paneLayout.childAlignment = TextAnchor.UpperLeft;
+            paneLayout.childControlWidth = true;
+            paneLayout.childControlHeight = true;
+            paneLayout.childForceExpandWidth = true;
+            paneLayout.childForceExpandHeight = false;
 
-            Text name = BoardText(label, "Name", bold, 24, Ink, TextAnchor.MiddleCenter);
-            var outline = name.gameObject.AddComponent<Outline>();
-            outline.effectColor = new Color(0f, 0f, 0f, 0.45f);
-            outline.effectDistance = new Vector2(1f, -1f);
+            var paneFit = pane.GetComponent<ContentSizeFitter>();
+            paneFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            paneFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            var bot = new GameObject("Bot", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
-            bot.transform.SetParent(label.transform, worldPositionStays: false);
+            Image scanlines = Overlay(pane, "Scanlines");
+            Stretch(scanlines.rectTransform);
 
-            var botBacking = bot.GetComponent<Image>();
-            botBacking.sprite = rounded;
-            botBacking.type = Image.Type.Sliced;
-            botBacking.color = new Color(0f, 0f, 0f, 0.55f);
-            botBacking.raycastTarget = false;
+            // The top row: who, and what they carry.
+            GameObject header = PlateRow(pane, "Header");
 
-            var botLayout = bot.GetComponent<HorizontalLayoutGroup>();
-            botLayout.padding = new RectOffset(5, 5, 1, 1);
-            botLayout.childAlignment = TextAnchor.MiddleCenter;
-            botLayout.childControlWidth = true;
-            botLayout.childControlHeight = true;
-            botLayout.childForceExpandWidth = false;
-            botLayout.childForceExpandHeight = false;
+            Image emblem = Block(header, "Emblem", new Vector2(16f, 16f));
+            emblem.color = Ink;
+            emblem.preserveAspect = true;
 
-            Text botText = BoardText(bot, "Text", bold, 11, HudStyle.ChipInk, TextAnchor.MiddleCenter, shadowed: false);
-            botText.text = "BOT";
+            Text name = BoardText(header, "Name", bold, PlateNameSize, Ink);
 
-            // The bar: a dark track, the white trail of the last hit, and the fill.
-            Image track = Picture(plate, "Track", new Color(0f, 0f, 0f, 0.62f), rounded);
-            Place(track, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero,
-                new Vector2(NameplateView.TrackWidth, NameplateView.TrackHeight));
-            var trackEdge = track.gameObject.AddComponent<Outline>();
-            trackEdge.effectColor = new Color(0f, 0f, 0f, 0.5f);
-            trackEdge.effectDistance = new Vector2(1f, -1f);
+            Image star = Block(header, "Star", new Vector2(14f, 14f));
+            star.preserveAspect = true;
+            star.gameObject.SetActive(false);
 
-            Image trail = BarPart(track, "Trail", rounded);
-            Image fill = BarPart(track, "Fill", rounded);
+            var gap = new GameObject("Gap", typeof(RectTransform), typeof(LayoutElement));
+            gap.transform.SetParent(header.transform, worldPositionStays: false);
+            var gapSize = gap.GetComponent<LayoutElement>();
+            gapSize.minWidth = 10f;
+            gapSize.flexibleWidth = 1f;
+
+            Image state = Block(header, "State", new Vector2(16f, 16f));
+            state.color = HudStyle.BoardMuted;
+            state.preserveAspect = true;
+            state.gameObject.SetActive(false);
+
+            // The weapon in hand, as the loadout draws it, through the killfeed's silhouette.
+            Image weapon = Block(header, "Weapon", new Vector2(44f, NameplateView.WeaponHeight));
+            weapon.color = Ink;
+            weapon.preserveAspect = true;
+            weapon.material = LoadMaterial(WeaponSilhouettePath);
+            var weaponShadow = weapon.gameObject.AddComponent<Shadow>();
+            weaponShadow.effectColor = new Color(0f, 0f, 0f, 0.7f);
+            weaponShadow.effectDistance = new Vector2(1f, -1f);
+            weapon.gameObject.SetActive(false);
+
+            // The bottom row: health, and how far away.
+            GameObject status = PlateRow(pane, "Status");
+
+            Image medic = Block(status, "Medic", new Vector2(12f, 12f));
+            medic.color = Ink;
+            medic.preserveAspect = true;
+
+            Image track = Block(status, "Bar", new Vector2(PlateBarWidth, PlateBarHeight));
+            track.color = new Color(1f, 1f, 1f, 0.16f);
+            track.GetComponent<LayoutElement>().flexibleWidth = 1f;
+
+            Image trail = BarShare(track, "Trail");
+            Image fill = BarShare(track, "Fill");
             fill.color = Ink;
+
+            // Quarter ticks, cut through the bar in the pane's own dark.
+            foreach (float quarter in new[] { 0.25f, 0.5f, 0.75f })
+            {
+                Image tick = Picture(track.gameObject, "Tick " + quarter.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                    new Color(HudStyle.PlateGlass.r, HudStyle.PlateGlass.g, HudStyle.PlateGlass.b, 0.95f));
+                Place(tick, new Vector2(quarter, 0.5f), Middle, Vector2.zero, new Vector2(2f, PlateBarHeight + 2f));
+            }
+
+            Image pin = Block(status, "Pin", new Vector2(9f, 12f));
+            pin.color = HudStyle.BoardFaint;
+            pin.preserveAspect = true;
+
+            Text distance = BoardText(status, "Distance", medium, 14, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
+            distance.gameObject.AddComponent<LayoutElement>().minWidth = 36f;
+
+            // The frame's four corners, over everything, out of the layout.
+            Image topLeft = Bracket(pane, "Bracket Top Left", new Vector2(0f, 1f), new Vector3(1f, 1f, 1f));
+            Image topRight = Bracket(pane, "Bracket Top Right", new Vector2(1f, 1f), new Vector3(-1f, 1f, 1f));
+            Image bottomLeft = Bracket(pane, "Bracket Bottom Left", new Vector2(0f, 0f), new Vector3(1f, -1f, 1f));
+            Image bottomRight = Bracket(pane, "Bracket Bottom Right", new Vector2(1f, 0f), new Vector3(-1f, -1f, 1f));
 
             NameplateView view = plate.AddComponent<NameplateView>();
             var viewSo = new SerializedObject(view);
-            Assign(viewSo, "_marker", marker);
+            Assign(viewSo, "_glass", glass);
+            Assign(viewSo, "_scanlines", scanlines);
+            Assign(viewSo, "_bracketTopLeft", topLeft);
+            Assign(viewSo, "_bracketTopRight", topRight);
+            Assign(viewSo, "_bracketBottomLeft", bottomLeft);
+            Assign(viewSo, "_bracketBottomRight", bottomRight);
+            Assign(viewSo, "_emblem", emblem);
             Assign(viewSo, "_name", name);
-            Assign(viewSo, "_bot", bot);
-            Assign(viewSo, "_track", track.rectTransform);
+            Assign(viewSo, "_star", star);
+            Assign(viewSo, "_state", state);
+            Assign(viewSo, "_weapon", weapon);
+            Assign(viewSo, "_weaponSize", weapon.GetComponent<LayoutElement>());
+            Assign(viewSo, "_medic", medic);
             Assign(viewSo, "_trail", trail);
             Assign(viewSo, "_fill", fill);
+            Assign(viewSo, "_pin", pin);
+            Assign(viewSo, "_distance", distance);
+            Assign(viewSo, "_pointer", pointer);
             viewSo.ApplyModifiedPropertiesWithoutUndo();
             plate.SetActive(false);
 
@@ -575,21 +642,72 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(layerSo, "_template", view);
             layerSo.ApplyModifiedPropertiesWithoutUndo();
 
-            log.AppendLine("name plates: a full-screen layer under the readout and one template plate.");
+            log.AppendLine("name plates: a full-screen layer under the readout and one holo-frame template plate.");
             return layerView;
         }
 
-        /// <summary>A left-anchored strip inside a bar's track, its width set at runtime.</summary>
-        private static Image BarPart(Image track, string name, Sprite rounded)
+        private const int PlateNameSize = 20;
+        private const float PlateBarWidth = 92f;
+        private const float PlateBarHeight = 4f;
+        private const float PlatePointerWidth = 14f;
+        private const float PlatePointerHeight = 9f;
+
+        /// <summary>A row of a plate's pane: parts side by side, centred on one line.</summary>
+        private static GameObject PlateRow(GameObject pane, string name)
         {
-            Image part = Picture(track.gameObject, name, Color.white, rounded);
+            var row = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            row.transform.SetParent(pane.transform, worldPositionStays: false);
+
+            var layout = row.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 6f;
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+            return row;
+        }
+
+        /// <summary>An image over a pane that its layout leaves alone.</summary>
+        private static Image Overlay(GameObject pane, string name)
+        {
+            Image image = Picture(pane, name, Color.white);
+            image.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            return image;
+        }
+
+        /// <summary>
+        /// One corner of the frame: <see cref="HudSprites.Bracket"/>'s corner pinned to the pane's
+        /// corner at <paramref name="anchor"/>, mirrored by <paramref name="flip"/> to face in.
+        /// </summary>
+        private static Image Bracket(GameObject pane, string name, Vector2 anchor, Vector3 flip)
+        {
+            Image bracket = Overlay(pane, name);
+            RectTransform rect = bracket.rectTransform;
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = new Vector2(
+                HudSprites.BracketCornerX / HudSprites.BracketSize,
+                HudSprites.BracketCornerY / HudSprites.BracketSize);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(HudSprites.BracketSize, HudSprites.BracketSize);
+            rect.localScale = flip;
+            return bracket;
+        }
+
+        /// <summary>
+        /// A part of a bar's track, stretched over its full height and the first share of its
+        /// width; <see cref="NameplateView"/> moves the right edge as health changes.
+        /// </summary>
+        private static Image BarShare(Image track, string name)
+        {
+            Image part = Picture(track.gameObject, name, Color.white);
             RectTransform rect = part.rectTransform;
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(0f, 1f);
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(0f, 0.5f);
-            rect.anchoredPosition = new Vector2(NameplateView.TrackInset, 0f);
-            rect.sizeDelta = new Vector2(NameplateView.TrackWidth - 2f * NameplateView.TrackInset,
-                -2f * NameplateView.TrackInset);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
             return part;
         }
 

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client.Hud
 {
@@ -38,7 +39,13 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// <summary>The scoreboard's team panels.</summary>
         public static readonly Color Pane = new Color(0.06f, 0.07f, 0.1f, 0.9f);
 
-        /// <summary>A chip on a row: the killfeed's "how", the scoreboard's BOT tag.</summary>
+        /// <summary>
+        /// A name plate's glass, before the side's tint: see-through enough to leave the scene
+        /// the player is aiming into, dark enough for white text over snow or sky.
+        /// </summary>
+        public static readonly Color PlateGlass = new Color(0.03f, 0.047f, 0.07f, 0.64f);
+
+        /// <summary>A chip on a row: the killfeed's "how" (MELEE, TANK).</summary>
         public static readonly Color ChipBacking = new Color(1f, 1f, 1f, 0.12f);
 
         public static readonly Color ChipInk = new Color(0.9f, 0.92f, 0.95f);
@@ -66,6 +73,23 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// little toward white so a dark blue stays readable on near-black.
         /// </summary>
         public static Color TeamInk(Color team) => Color.Lerp(team, Color.white, 0.2f);
+
+        /// <summary>
+        /// Shows <paramref name="picture"/> at <paramref name="height"/>, as wide as its own shape
+        /// allows up to <paramref name="maxWidth"/>: the weapon art in the killfeed and on a name
+        /// plate, which runs from a squat pistol to a long rifle.
+        /// </summary>
+        public static void FitPicture(Image image, LayoutElement size, Sprite picture, float height, float maxWidth)
+        {
+            image.sprite = picture;
+
+            Rect shape = picture.rect;
+            float aspect = shape.height > 0f ? shape.width / shape.height : 1f;
+            float width = Mathf.Clamp(height * aspect, height, maxWidth);
+
+            size.minWidth = width;
+            size.preferredWidth = width;
+        }
 
         /// <summary>Cubic ease-out, for everything that arrives.</summary>
         public static float EaseOut(float t)
