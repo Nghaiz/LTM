@@ -297,17 +297,17 @@ namespace Ironfront.Net.Protocol
     {
         None = 0,
 
-        /// <summary>The killer was in the vehicle the message names: its gun, or its driver.</summary>
+        /// <summary>
+        /// The killer was in the vehicle the message names and it did the killing: its own gun,
+        /// or the vehicle driven into the victim.
+        /// </summary>
         KillerInVehicle = 1,
 
-        /// <summary>The victim was riding the vehicle the message names.</summary>
-        VictimInVehicle = 2,
-
         /// <summary>The victim died because the vehicle they rode was destroyed.</summary>
-        WentDownWithVehicle = 4,
+        WentDownWithVehicle = 2,
 
         /// <summary>A blade or a wrench, not a round.</summary>
-        Melee = 8,
+        Melee = 4,
     }
 
     /// <summary>

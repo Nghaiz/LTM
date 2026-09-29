@@ -1024,7 +1024,7 @@ public class ActorManager : MonoBehaviour
 	// Vehicle.Damage takes an int attacker slot with a NoAttacker sentinel, so an unattributed
 	// blast -- a world explosive, or a source with no network identity -- is recorded as having
 	// no attacker rather than as actor 0, which is a real id.
-	private static int ResolveAttackerId(Actor source)
+	internal static int ResolveAttackerId(Actor source)
 	{
 		if (source == null) return Vehicle.NoAttacker;
 

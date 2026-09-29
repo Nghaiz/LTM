@@ -64,6 +64,19 @@ public static class DeathContext
 		return scope;
 	}
 
+	/// <summary>
+	/// <paramref name="vehicle"/> driving into somebody: the ram check. A ram is not a weapon, so
+	/// an outer scope's weapon is cleared rather than inherited.
+	/// </summary>
+	public static Scope RunOver(GameObject vehicle)
+	{
+		Scope scope = Scope.Capture();
+		Cause = CauseOfDeath.Vehicle;
+		WeaponId = WeaponIds.NONE;
+		Vehicle = vehicle;
+		return scope;
+	}
+
 	/// <summary>The crew of <paramref name="vehicle"/> dying with it.</summary>
 	public static Scope WentDownWith(GameObject vehicle)
 	{

@@ -296,6 +296,72 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(-1000, parsed.ForceY);
             Assert.Equal(0, parsed.ForceZ);
             Assert.Equal(2, parsed.HitboxHit);
+
+            // Twelve bytes is a 1.0 server's S_DEATH: it parses, and says nothing about how.
+            Assert.False(parsed.HasDetail);
+            Assert.Equal(WeaponIds.NONE, parsed.WeaponId);
+            Assert.Equal(VehicleIds.NONE, parsed.VehicleType);
+            Assert.Equal(DeathDetail.None, parsed.Detail);
+        }
+
+        // The 1.1 detail tail: victim 10, killer 7, cause Explosion, force (1000,-1000,0),
+        // hitbox 0, then weapon NONE, vehicle TANK, detail KillerInVehicle -- a tank's cannon.
+        // Three different values in the three tail bytes, so a swapped pair cannot round-trip.
+        private const string DeathWithDetailHex = "0A 00 07 00 01 E8 03 18 FC 00 00 00 00 05 01";
+
+        [Fact]
+        public void DeathWithDetail_RoundTripsThroughTheExpectedBytes()
+        {
+            var message = new DeathMessage(
+                victimActorId: 10,
+                killerActorId: 7,
+                cause: CauseOfDeath.Explosion,
+                forceX: 1000, forceY: -1000, forceZ: 0,
+                hitboxHit: 0,
+                weaponId: WeaponIds.NONE,
+                vehicleType: VehicleIds.TANK,
+                detail: DeathDetail.KillerInVehicle);
+
+            Span<byte> buffer = stackalloc byte[DeathMessage.SizeWithDetail];
+            Assert.Equal(15, message.Write(buffer));
+            Assert.Equal(DeathWithDetailHex, Hex.ToHex(buffer));
+
+            Assert.True(DeathMessage.TryParse(Hex.FromHex(DeathWithDetailHex), out DeathMessage parsed));
+            Assert.True(parsed.HasDetail);
+            Assert.Equal(7, parsed.KillerActorId);
+            Assert.Equal(WeaponIds.NONE, parsed.WeaponId);
+            Assert.Equal(VehicleIds.TANK, parsed.VehicleType);
+            Assert.Equal(DeathDetail.KillerInVehicle, parsed.Detail);
+        }
+
+        /// <summary>
+        /// The tail is compatible only because a 1.0 client reads twelve bytes and stops, so those
+        /// twelve must be exactly the legacy encoding of the same death.
+        /// </summary>
+        [Fact]
+        public void DeathWithDetail_BeginsWithTheLegacyTwelveBytes()
+        {
+            var legacy = new DeathMessage(10, 7, CauseOfDeath.Explosion, 1000, -1000, 0, 0);
+            var tailed = new DeathMessage(
+                10, 7, CauseOfDeath.Explosion, 1000, -1000, 0, 0,
+                WeaponIds.RK44, VehicleIds.JEEP, DeathDetail.Melee);
+
+            Span<byte> legacyBytes = stackalloc byte[DeathMessage.Size];
+            Span<byte> tailedBytes = stackalloc byte[DeathMessage.SizeWithDetail];
+
+            Assert.Equal(DeathMessage.Size, legacy.Write(legacyBytes));
+            Assert.Equal(DeathMessage.SizeWithDetail, tailed.Write(tailedBytes));
+            Assert.Equal(Hex.ToHex(legacyBytes), Hex.ToHex(tailedBytes.Slice(0, DeathMessage.Size)));
+        }
+
+        /// <summary>Half a tail is malformed, not a shorter message: it would name the wrong gun.</summary>
+        [Theory]
+        [InlineData(13)]
+        [InlineData(14)]
+        public void Death_WithAPartialTail_IsMalformed(int length)
+        {
+            byte[] body = Hex.FromHex(DeathWithDetailHex);
+            Assert.False(DeathMessage.TryParse(body.AsSpan(0, length), out _));
         }
 
         // --------------------------------------------------------- S_WEAPON_FIRE 0x49

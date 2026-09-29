@@ -59,17 +59,22 @@ namespace Ironfront.Net.Unity
         /// One killfeed line. Called after <see cref="SetKillfeedLineCount"/>, for each index
         /// below it, newest first.
         /// </summary>
-        /// <param name="killerTeam">
-        /// <c>TeamId.None</c> when the killer is the world, or when the snapshot does not carry
-        /// that actor — a normal outcome for a kill outside this client's interest radius. The
-        /// HUD colours those neutrally rather than guessing a side.
-        /// </param>
-        void SetKillfeedLine(
-            int index, string killerName, int killerTeam, string victimName, int victimTeam,
-            bool headshot);
+        /// <remarks>
+        /// A team in <paramref name="line"/> is <c>TeamId.None</c> when there is no killer, or
+        /// when the snapshot does not carry that actor — a normal outcome for a kill outside this
+        /// client's interest radius. The HUD colours those neutrally rather than guessing a side.
+        /// A HUD that animates keys its rows on <see cref="KillfeedLine.Sequence"/>: the same
+        /// kill arrives at a new index every time a newer one lands.
+        /// </remarks>
+        void SetKillfeedLine(int index, in KillfeedLine line);
 
-        /// <summary>Raises the deploy screen and names who killed you.</summary>
-        void ShowDeploy(string killerName, int killerTeam);
+        /// <summary>
+        /// Raises the deploy screen with what killed you: "Killed by Minh  ·  RK-44", or
+        /// "You drowned".
+        /// </summary>
+        /// <param name="caption">Already worded (<c>KillfeedWording.DeployCaption</c>).</param>
+        /// <param name="killerTeam">The killer's side, <c>TeamId.None</c> when nobody scored.</param>
+        void ShowDeploy(string caption, int killerTeam);
 
         /// <summary>
         /// The respawn clock, once a frame while the screen is up.

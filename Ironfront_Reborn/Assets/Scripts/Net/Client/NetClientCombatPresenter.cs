@@ -53,6 +53,7 @@ namespace Ironfront.Net.Unity.Client
         private int _pushedCount = -1;
         private long _pushedTotalKills = -1;
         private int _pushedNameRevision = -1;
+        private int _pushedLocalActorId = -1;
 
         private readonly KillfeedModel _killfeed = new KillfeedModel();
         private readonly HitmarkerModel _hitmarker = new HitmarkerModel();
@@ -188,7 +189,7 @@ namespace Ironfront.Net.Unity.Client
         /// replaces.</b> That drawer's remark said "delete it when a HUD element reads
         /// <see cref="Killfeed"/> and <see cref="Names"/> instead", and also that it allocated
         /// its strings every frame — "the honest cost of the stopgap ... the replacement does
-        /// not have this problem". So this writes only on a change, and the change key is three
+        /// not have this problem". So this writes only on a change, and the change key is four
         /// cheap integers rather than a comparison of the rendered text.
         /// </para>
         /// <para>
@@ -227,9 +228,15 @@ namespace Ironfront.Net.Unity.Client
 
             int count = _drawKillfeed ? _killfeed.Count : 0;
 
+            // The local actor is in the key because a line that names you is drawn differently,
+            // and the id can be assigned after the first kills of a match have already landed.
+            bool hasLocal = NetClientPresenterGuard.TryResolveLocalActorId(out ushort localActorId);
+            int localKey = hasLocal ? localActorId : -1;
+
             if (count == _pushedCount
                 && _killfeed.TotalKills == _pushedTotalKills
-                && _names.Revision == _pushedNameRevision)
+                && _names.Revision == _pushedNameRevision
+                && localKey == _pushedLocalActorId)
             {
                 return;
             }
@@ -237,26 +244,32 @@ namespace Ironfront.Net.Unity.Client
             _pushedCount = count;
             _pushedTotalKills = _killfeed.TotalKills;
             _pushedNameRevision = _names.Revision;
+            _pushedLocalActorId = localKey;
 
             hud.SetKillfeedLineCount(count);
 
             for (int i = 0; i < count; i++)
             {
                 KillfeedEntry entry = _killfeed[i];
+                KillfeedWording wording = KillfeedWording.For(in entry);
 
-                string killer = entry.KilledByEnvironment ? "The world" : NameFor(entry.KillerActorId);
+                // A death nobody scored has no killer to name or colour: the sentence says what
+                // happened to the victim instead of "The world" killing them (feature 2).
+                bool scored = !wording.IsSentence;
 
-                // The world has no side. TeamId.None reaches the HUD, which draws it neutrally
-                // -- the same answer NetClientBindings.TeamColourRgb gives for an unknown team,
-                // and for the same reason: a guessed blue or red would look entirely plausible.
-                int killerTeam = entry.KilledByEnvironment
-                    ? TeamId.None
-                    : TeamOf(entry.KillerActorId);
+                var line = new KillfeedLine(
+                    entry.Sequence,
+                    scored ? NameFor(entry.KillerActorId) : string.Empty,
+                    scored ? TeamOf(entry.KillerActorId) : TeamId.None,
+                    NameFor(entry.VictimActorId),
+                    TeamOf(entry.VictimActorId),
+                    wording.Label,
+                    wording.Sentence,
+                    entry.Headshot,
+                    localIsKiller: scored && hasLocal && entry.KillerActorId == localActorId,
+                    localIsVictim: hasLocal && entry.VictimActorId == localActorId);
 
-                hud.SetKillfeedLine(
-                    i, killer, killerTeam,
-                    NameFor(entry.VictimActorId), TeamOf(entry.VictimActorId),
-                    entry.Headshot);
+                hud.SetKillfeedLine(i, in line);
             }
         }
 
@@ -286,7 +299,7 @@ namespace Ironfront.Net.Unity.Client
         /// </para>
         /// <para>
         /// <b>Written only when something moved.</b> The key is the two tables' revisions plus
-        /// the visibility, the same three-integer discipline <see cref="PushKillfeed"/> uses —
+        /// the visibility, the same cheap-integer discipline <see cref="PushKillfeed"/> uses —
         /// a held Tab must not rebuild 42 rows of string every frame.
         /// </para>
         /// </remarks>

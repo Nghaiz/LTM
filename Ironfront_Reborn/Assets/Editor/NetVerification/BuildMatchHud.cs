@@ -127,7 +127,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 MatchHud hud = root.AddComponent<MatchHud>();
 
                 Text team = BuildTeamReadout(root, log);
-                Text[] killfeed = BuildKillfeed(root, log);
+                KillfeedRowView[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
                     root, out Text killer, out Text timer, out Button deployButton, log);
                 GameObject scoreboard = BuildScoreboard(root, out ScoreboardColumn left,
@@ -213,31 +213,227 @@ namespace Ironfront.Net.Unity.EditorTools
             return label;
         }
 
-        /// <summary>3.3 — the killfeed, top-right, newest first.</summary>
-        private static Text[] BuildKillfeed(GameObject root, StringBuilder log)
+        /// <summary>
+        /// 3.3, rebuilt for feature 2 (playtest 2026-09-28) — the killfeed, top-right, newest
+        /// first: one row per kill, each a dark rounded backing sized to what it says.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A row is a small layout, not a line of rich text.</b> The old row was one
+        /// <c>Text</c> with colour tags, which can say who and whom but cannot give the "how" a
+        /// chip, the headshot a mark, or the row a backing it can be read against. Each row
+        /// here is a <see cref="HorizontalLayoutGroup"/> whose width follows its content, so a
+        /// short kill is a short pill and nothing is clipped.
+        /// </para>
+        /// <para>
+        /// <b>Authored hidden.</b> Every row starts inactive and transparent; <see cref="KillfeedRowView"/>
+        /// shows one when a kill arrives. An authored-visible row would be an empty pill on the
+        /// offline game's screen, which never runs the component that would hide it.
+        /// </para>
+        /// </remarks>
+        private static KillfeedRowView[] BuildKillfeed(GameObject root, StringBuilder log)
         {
-            var rows = new Text[MatchHud.KillfeedRows];
+            Font bold = LoadFont(RobotoBoldPath);
+            Font medium = LoadFont(RobotoMediumPath);
+            Sprite rounded = RoundedSprite();
 
+            var feed = new GameObject("Killfeed", typeof(RectTransform));
+            feed.transform.SetParent(root.transform, worldPositionStays: false);
+
+            RectTransform feedRect = feed.GetComponent<RectTransform>();
+            feedRect.anchorMin = new Vector2(1f, 1f);
+            feedRect.anchorMax = new Vector2(1f, 1f);
+            feedRect.pivot = new Vector2(1f, 1f);
+            feedRect.anchoredPosition = new Vector2(-28f, -24f);
+            feedRect.sizeDelta = new Vector2(760f, MatchHud.KillfeedRows * KillfeedRowView.RowPitch);
+
+            var rows = new KillfeedRowView[MatchHud.KillfeedRows];
             for (int i = 0; i < rows.Length; i++)
-            {
-                Text row = Label(root, "Killfeed Row " + i, string.Empty, 26, TextAnchor.UpperRight);
-                RectTransform rect = row.GetComponent<RectTransform>();
-
-                rect.anchorMin = new Vector2(1f, 1f);
-                rect.anchorMax = new Vector2(1f, 1f);
-                rect.pivot = new Vector2(1f, 1f);
-                rect.anchoredPosition = new Vector2(-28f, -24f - i * 30f);
-                rect.sizeDelta = new Vector2(680f, 30f);
-
-                row.supportRichText = true;
-                rows[i] = row;
-            }
+                rows[i] = BuildKillfeedRow(feed, i, bold, medium, rounded);
 
             // Read off MatchHud.KillfeedRows, which reads off KillfeedModel.DefaultCapacity, so
             // raising the model's capacity authors the rows to match instead of silently
             // dropping the oldest lines on the floor.
-            log.AppendLine("killfeed: " + rows.Length + " rows, from KillfeedModel.DefaultCapacity.");
+            log.AppendLine("killfeed: " + rows.Length + " rows, from KillfeedModel.DefaultCapacity; "
+                           + "Roboto, rounded backings, authored hidden.");
             return rows;
+        }
+
+        private static KillfeedRowView BuildKillfeedRow(
+            GameObject feed, int index, Font bold, Font medium, Sprite rounded)
+        {
+            var row = new GameObject(
+                "Killfeed Row " + index,
+                typeof(RectTransform), typeof(CanvasGroup), typeof(Image), typeof(Outline),
+                typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+            row.transform.SetParent(feed.transform, worldPositionStays: false);
+
+            RectTransform rect = row.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(1f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(1f, 1f);
+            rect.anchoredPosition = new Vector2(0f, -index * KillfeedRowView.RowPitch);
+            rect.sizeDelta = new Vector2(0f, KillfeedRowView.RowHeight);
+
+            var group = row.GetComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            var backing = row.GetComponent<Image>();
+            backing.sprite = rounded;
+            backing.type = Image.Type.Sliced;
+            backing.color = KillfeedRowView.RestBacking;
+            backing.raycastTarget = false;
+
+            var edge = row.GetComponent<Outline>();
+            edge.effectDistance = new Vector2(1.5f, -1.5f);
+            edge.useGraphicAlpha = true;
+            edge.enabled = false;
+
+            var layout = row.GetComponent<HorizontalLayoutGroup>();
+            layout.padding = new RectOffset(9, 14, 4, 4);
+            layout.spacing = 9f;
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            // Width follows the content; height is the row's own, so every row lines up.
+            var fitter = row.GetComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            Image accent = Block(row, "Accent", new Vector2(4f, 20f));
+
+            Text killer = RowText(row, "Killer", bold, 22, Color.white);
+
+            var how = new GameObject(
+                "How", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
+            how.transform.SetParent(row.transform, worldPositionStays: false);
+
+            var howBacking = how.GetComponent<Image>();
+            howBacking.sprite = rounded;
+            howBacking.type = Image.Type.Sliced;
+            howBacking.color = KillfeedRowView.HowBacking;
+            howBacking.raycastTarget = false;
+
+            var howLayout = how.GetComponent<HorizontalLayoutGroup>();
+            howLayout.padding = new RectOffset(8, 8, 3, 3);
+            howLayout.childAlignment = TextAnchor.MiddleCenter;
+            howLayout.childControlWidth = true;
+            howLayout.childControlHeight = true;
+            howLayout.childForceExpandWidth = false;
+            howLayout.childForceExpandHeight = false;
+
+            Text howText = RowText(how, "Text", bold, 16, KillfeedRowView.HowInk, shadowed: false);
+
+            Image headshot = Block(row, "Headshot", new Vector2(20f, 20f));
+            headshot.color = KillfeedRowView.HeadshotInk;
+            headshot.preserveAspect = true;
+
+            Text victim = RowText(row, "Victim", bold, 22, Color.white);
+            Text sentence = RowText(row, "Sentence", medium, 20, KillfeedRowView.SentenceInk);
+
+            KillfeedRowView view = row.AddComponent<KillfeedRowView>();
+
+            var so = new SerializedObject(view);
+            Assign(so, "_backing", backing);
+            Assign(so, "_edge", edge);
+            Assign(so, "_accent", accent);
+            Assign(so, "_killer", killer);
+            Assign(so, "_how", how);
+            Assign(so, "_howText", howText);
+            Assign(so, "_headshot", headshot);
+            Assign(so, "_victim", victim);
+            Assign(so, "_sentence", sentence);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            row.SetActive(false);
+            return view;
+        }
+
+        /// <summary>A text part of a killfeed row, sized by its content and shadowed.</summary>
+        /// <remarks>
+        /// The shadow is what keeps a name legible where the backing's alpha lets a bright sky
+        /// through; the chip's own text drops it, sitting on a pane of its own.
+        /// </remarks>
+        private static Text RowText(
+            GameObject parent, string name, Font font, int size, Color ink, bool shadowed = true)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+
+            Text text = go.AddComponent<Text>();
+            text.font = font;
+            text.fontSize = size;
+            text.text = string.Empty;
+            text.color = ink;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.supportRichText = false;
+            text.raycastTarget = false;
+
+            if (shadowed)
+            {
+                var shadow = go.AddComponent<Shadow>();
+                shadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
+                shadow.effectDistance = new Vector2(1f, -1f);
+            }
+
+            return text;
+        }
+
+        /// <summary>A fixed-size image part of a killfeed row.</summary>
+        private static Image Block(GameObject parent, string name, Vector2 size)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+
+            var element = go.GetComponent<LayoutElement>();
+            element.minWidth = size.x;
+            element.preferredWidth = size.x;
+            element.minHeight = size.y;
+            element.preferredHeight = size.y;
+
+            var image = go.GetComponent<Image>();
+            image.raycastTarget = false;
+            return image;
+        }
+
+        private const string RobotoBoldPath = "Assets/Font/Roboto-Bold.ttf";
+        private const string RobotoMediumPath = "Assets/Font/Roboto-Medium.ttf";
+
+        /// <summary>
+        /// The game's own UI face. Missing is an error, not a quiet fall back to Arial: a killfeed
+        /// in the wrong font looks finished, and nobody would go looking for why.
+        /// </summary>
+        private static Font LoadFont(string path)
+        {
+            Font font = AssetDatabase.LoadAssetAtPath<Font>(path);
+            if (font == null)
+                throw new System.InvalidOperationException(
+                    "The killfeed is authored in " + path + ", which is not there. Has the font moved?");
+            return font;
+        }
+
+        /// <summary>
+        /// Unity's built-in nine-sliced rounded rectangle, the one its default Button uses.
+        /// </summary>
+        /// <remarks>
+        /// A built-in extra resource serializes as a reference Unity itself ships in every build,
+        /// so the prefab needs no texture asset of its own for a rounded corner.
+        /// </remarks>
+        private static Sprite RoundedSprite()
+        {
+            Sprite sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            if (sprite == null)
+                throw new System.InvalidOperationException(
+                    "Unity's built-in UI/Skin/UISprite.psd did not load; the killfeed's rounded "
+                    + "backings need it.");
+            return sprite;
         }
 
         /// <summary>3.2 — the deploy screen.</summary>

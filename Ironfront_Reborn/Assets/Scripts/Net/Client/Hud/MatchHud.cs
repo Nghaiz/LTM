@@ -73,9 +73,10 @@ namespace Ironfront.Net.Unity.Client.Hud
         [Tooltip("Names the local team, blank until the first snapshot answers.")]
         [SerializeField] private Text _teamReadoutText;
 
-        [Header("Killfeed (3.3)")]
-        [Tooltip("Newest first. One Text per line; the builder authors KillfeedRows of them.")]
-        [SerializeField] private Text[] _killfeedRows = new Text[KillfeedRows];
+        [Header("Killfeed (3.3, rebuilt for feature 2)")]
+        [Tooltip("The rows a kill is drawn in; the builder authors KillfeedRows of them. A row "
+                 + "follows its kill as newer kills push it down, so these are not in screen order.")]
+        [SerializeField] private KillfeedRowView[] _killfeedRows = new KillfeedRowView[KillfeedRows];
 
         [Header("Deploy screen (3.2)")]
         [Tooltip("The whole death overlay. Activated and deactivated, never merely faded.")]
@@ -114,6 +115,30 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         /// <summary>Set by the Deploy control, cleared by the read. See the seam's remark.</summary>
         private bool _deployPressed;
+
+        /// <summary>
+        /// The killfeed push in progress: its lines, which have arrived, and how many are owed.
+        /// </summary>
+        /// <remarks>
+        /// <b>Reconciled once the push is whole, never line by line.</b> The newest kill arrives
+        /// first, and claiming it a row before the older lines have said which rows they keep
+        /// would take a row from a kill that is still on screen. So lines are collected and
+        /// matched to rows together; see <see cref="ReconcileKillfeed"/>.
+        /// </remarks>
+        private readonly KillfeedLine[] _pendingLines = new KillfeedLine[KillfeedRows];
+        private readonly bool[] _pendingHas = new bool[KillfeedRows];
+        private int _pendingCount = -1;
+        private int _pendingReceived;
+
+        /// <summary>
+        /// Scratch for <see cref="ReconcileKillfeed"/>: which rows a push kept. Sized in
+        /// <see cref="Awake"/> from the rows actually authored, which the gate holds at
+        /// <see cref="KillfeedRows"/> but a stale prefab might not.
+        /// </summary>
+        private bool[] _rowKept = System.Array.Empty<bool>();
+
+        /// <summary>Scratch for <see cref="ReconcileKillfeed"/>: the row each line is drawn in.</summary>
+        private readonly int[] _lineRow = new int[KillfeedRows];
 
         /// <summary>
         /// Lines one column will render. Two per side, so the numbers stay in their own label.
@@ -174,6 +199,8 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         private void Awake()
         {
+            _rowKept = new bool[_killfeedRows != null ? _killfeedRows.Length : 0];
+
             if (!NetClientPresenterGuard.IsPresentable)
             {
                 // Offline. Put the overlay away before disabling, or the authored state of the
@@ -194,6 +221,20 @@ namespace Ironfront.Net.Unity.Client.Hud
             if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
             ClearKillfeed();
             ClearScoreboard();
+        }
+
+        private void Update()
+        {
+            // A push whose lines never all arrived still draws what did, rather than leaving the
+            // feed frozen on the push before it. The presenter pushes every line synchronously,
+            // so this is a guard for a caller that does not.
+            if (_pendingCount > 0) ReconcileKillfeed();
+
+            if (_killfeedRows == null) return;
+
+            float delta = Time.unscaledDeltaTime;
+            for (int i = 0; i < _killfeedRows.Length; i++)
+                if (_killfeedRows[i] != null) _killfeedRows[i].Tick(delta);
         }
 
         private void OnEnable()
@@ -274,33 +315,106 @@ namespace Ironfront.Net.Unity.Client.Hud
         {
             if (_killfeedRows == null) return;
 
-            for (int i = count; i < _killfeedRows.Length; i++)
-                if (_killfeedRows[i] != null) _killfeedRows[i].text = string.Empty;
+            // More lines than rows cannot be drawn; the oldest (the highest indices) go unshown.
+            _pendingCount = Mathf.Clamp(count, 0, _pendingLines.Length);
+            _pendingReceived = 0;
+            System.Array.Clear(_pendingHas, 0, _pendingHas.Length);
+
+            // A count of zero is the whole push: the clear, and the common case.
+            if (_pendingCount == 0) ReconcileKillfeed();
         }
 
         /// <inheritdoc/>
-        public void SetKillfeedLine(
-            int index, string killerName, int killerTeam, string victimName, int victimTeam,
-            bool headshot)
+        public void SetKillfeedLine(int index, in KillfeedLine line)
         {
-            if (_killfeedRows == null) return;
-            if (index < 0 || index >= _killfeedRows.Length) return;
+            if (_pendingCount < 0) return;
+            if (index < 0 || index >= _pendingCount) return;
 
-            Text row = _killfeedRows[index];
-            if (row == null) return;
+            if (!_pendingHas[index]) _pendingReceived++;
+            _pendingLines[index] = line;
+            _pendingHas[index] = true;
 
-            // Rich text, because ONE Text per line is what an authored row is and the two names
-            // are on different sides. The alternative -- three Texts per row, laid out by hand --
-            // is nine more references for the gate to grade and a layout that breaks on a long
-            // name. The tags are built from the palette, so there is still exactly one mapping.
-            row.supportRichText = true;
-            row.text = Coloured(killerName, killerTeam)
-                       + (headshot ? " <b>▸</b> " : " → ")
-                       + Coloured(victimName, victimTeam);
+            if (_pendingReceived >= _pendingCount) ReconcileKillfeed();
+        }
+
+        /// <summary>
+        /// Matches a finished push to rows: a kill still on screen keeps its row, a new kill takes
+        /// a free one, and a row whose kill left the push fades out.
+        /// </summary>
+        /// <remarks>
+        /// A new kill prefers a free row, then the faintest row already fading, then -- when the
+        /// feed was full -- the row of the kill the model just pushed out, which is leaving anyway.
+        /// That last case cuts the oldest line instead of fading it, which is what a full feed
+        /// should do: the new kill is the news.
+        /// </remarks>
+        private void ReconcileKillfeed()
+        {
+            int count = _pendingCount;
+            _pendingCount = -1;
+
+            System.Array.Clear(_rowKept, 0, _rowKept.Length);
+
+            for (int line = 0; line < count; line++)
+            {
+                _lineRow[line] = -1;
+                if (!_pendingHas[line]) continue;
+
+                long sequence = _pendingLines[line].Sequence;
+                for (int row = 0; row < _killfeedRows.Length; row++)
+                {
+                    KillfeedRowView view = _killfeedRows[row];
+                    if (_rowKept[row] || view == null || view.IsFree || view.Sequence != sequence) continue;
+
+                    _rowKept[row] = true;
+                    _lineRow[line] = row;
+                    break;
+                }
+            }
+
+            for (int line = 0; line < count; line++)
+            {
+                if (!_pendingHas[line] || _lineRow[line] >= 0) continue;
+
+                int best = -1;
+                for (int row = 0; row < _killfeedRows.Length; row++)
+                {
+                    if (_rowKept[row] || _killfeedRows[row] == null) continue;
+                    if (best < 0 || Claimability(_killfeedRows[row]) < Claimability(_killfeedRows[best]))
+                        best = row;
+                }
+
+                if (best < 0) continue;
+
+                _rowKept[best] = true;
+                _lineRow[line] = best;
+            }
+
+            for (int line = 0; line < count; line++)
+            {
+                if (_lineRow[line] < 0) continue;
+
+                KillfeedLine drawn = _pendingLines[line];
+                _killfeedRows[_lineRow[line]].Show(
+                    in drawn, line, TextInk(drawn.KillerTeam), TextInk(drawn.VictimTeam));
+            }
+
+            for (int row = 0; row < _killfeedRows.Length; row++)
+                if (!_rowKept[row] && _killfeedRows[row] != null) _killfeedRows[row].Leave();
+
+            System.Array.Clear(_pendingHas, 0, _pendingHas.Length);
+            _pendingReceived = 0;
+        }
+
+        /// <summary>Lower is better to reuse: free, then fading, then still showing a kill.</summary>
+        private static float Claimability(KillfeedRowView row)
+        {
+            if (row.IsFree) return 0f;
+            if (row.IsLeaving) return 1f + row.Opacity;
+            return 3f;
         }
 
         /// <inheritdoc/>
-        public void ShowDeploy(string killerName, int killerTeam)
+        public void ShowDeploy(string caption, int killerTeam)
         {
             if (_deployRoot != null) _deployRoot.SetActive(true);
 
@@ -308,9 +422,7 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             if (_deployKillerText != null)
             {
-                _deployKillerText.text = string.IsNullOrEmpty(killerName)
-                    ? string.Empty
-                    : "Killed by " + killerName;
+                _deployKillerText.text = caption ?? string.Empty;
                 _deployKillerText.color = TeamColour(killerTeam);
             }
 
@@ -481,10 +593,14 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         private void ClearKillfeed()
         {
+            _pendingCount = -1;
+            _pendingReceived = 0;
+            System.Array.Clear(_pendingHas, 0, _pendingHas.Length);
+
             if (_killfeedRows == null) return;
 
             for (int i = 0; i < _killfeedRows.Length; i++)
-                if (_killfeedRows[i] != null) _killfeedRows[i].text = string.Empty;
+                if (_killfeedRows[i] != null) _killfeedRows[i].Release();
         }
 
         /// <summary>
@@ -498,13 +614,14 @@ namespace Ironfront.Net.Unity.Client.Hud
         private static string TeamLabel(int team) => team == TeamId.Team0 ? "TEAM 1" : "TEAM 2";
 
         /// <summary>
-        /// <paramref name="text"/> wrapped in the colour <paramref name="team"/> is drawn in.
+        /// A side's colour for a name drawn on the killfeed's dark backing: the palette's, lifted
+        /// a little toward white so a dark blue stays readable on near-black.
         /// </summary>
-        private static string Coloured(string text, int team)
-            => "<color=#" + ColourHex(team) + ">" + text + "</color>";
-
-        private static string ColourHex(int team)
-            => (NetClientBindings.TeamColourRgb(team) & 0xFFFFFF).ToString("X6");
+        /// <remarks>
+        /// A transform of <see cref="TeamColour"/>, not a second mapping: re-theming a side still
+        /// happens in one place.
+        /// </remarks>
+        private static Color TextInk(int team) => Color.Lerp(TeamColour(team), Color.white, 0.2f);
 
         /// <summary>
         /// The palette's answer for <paramref name="team"/>, as an engine colour.
