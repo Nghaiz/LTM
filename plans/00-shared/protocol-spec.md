@@ -658,6 +658,8 @@ u8   vehicleType       VehicleIds; 0 when no vehicle was involved
 u8   detail            bit0 = killer in vehicle   (its own gun, or driven into the victim)
                        bit1 = went down with vehicle (the victim's ride was destroyed)
                        bit2 = melee
+--- range tail, 2026-09-30 onward (optional, only after the detail tail) ---
+u16  distanceMetres    whole metres from the killer to the victim; 0 = not said
 ```
 
 On receiving this the client: enables the ragdoll **locally**, plays audio, updates the killfeed.
@@ -669,6 +671,14 @@ with it; a 1.1 server always sends 15. It is compatible in both directions witho
 bytes and never reads further, and a 1.1 client takes a 12-byte body from a 1.0 server as "no
 detail". A body of 13 or 14 bytes is malformed — half a tail would name the wrong weapon. Unknown
 `detail` bits are ignored, so a later build can add one without a version change.
+
+**The range tail (2026-09-30, the owner's killfeed report).** Two more bytes after the detail
+tail, 17 in all, carrying how far the killing blow flew so the killfeed can mark a long shot. Same
+compatibility argument, one layer further out: a 1.0 client reads twelve bytes, a 1.1 client
+fifteen, and neither looks further, so no `PROTOCOL_VERSION` bump. A 16-byte body is malformed
+(half a range). Bytes after the range tail are a later tail and are ignored, the way a 1.0 client
+ignores the detail tail. The server measures the two bodies at the death edge; the world's deaths
+and suicides carry 0.
 
 The server decides the tail with `DeathAttribution` (Ironfront.Net.Replication): the crew of a
 destroyed vehicle is credited to whoever emptied it within 10 s, since every vehicle burns 4 s
@@ -1124,9 +1134,28 @@ repeat playerCount times:
     u16  kills
     u16  deaths
     u8   team                 0, 1, or 255 for none
+--- stats tail, 2026-09-30 onward (optional, after every row) ---
+u8   statsVersion             1; a tail of any other version is left unread
+repeat playerCount times, in the rows' order:
+    u8   status               bit0 = alive, bit1 = in a vehicle seat
+    u8   headshots            enemy kills with a head killing blow, clamped at 255
+    u8   streak               enemy kills since this actor last died, clamped at 255
+    u8   bestStreak           the longest streak this match, clamped at 255
+    u16  points               what this actor's enemy kills put on its side's score
+    u16  pingMs               a connected human's smoothed round trip; 0 for a bot
 ```
 
-Worst case `1 + 64 × 6 = 385 B`, comfortably inside one un-fragmented channel-2 payload (1181).
+Worst case without the tail `1 + 64 × 6 = 385 B`; with it `385 + 1 + 64 × 8 = 898 B`, still inside
+one un-fragmented channel-2 payload (1181).
+
+**The stats tail (2026-09-30, the owner's Tab-board report).** Everything the board shows beyond
+kills and deaths. It comes after every row, so a client from before it reads the count and the rows
+and stops: compatible without a `PROTOCOL_VERSION` bump, on `S_DEATH`'s detail-tail argument. A
+partial tail is malformed; a tail of an unknown version is ignored, so a later server can change it.
+Because status and ping move without a death, a server that sends the tail also resends the table
+every 2 s. `points` is exact: the server reads its two team scores either side of the award a death
+makes and credits the difference to a killer on the scoring side, so a team kill earns its killer
+nothing.
 
 **A new opcode rather than a wider § 4.11**, for the two reasons that section now states: 0x4B has
 28 bytes of headroom and a different send cadence.

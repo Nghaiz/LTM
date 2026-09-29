@@ -298,6 +298,10 @@ namespace Ironfront.Net.Unity.Client
             }
 
             _names = GetComponent<NetClientCombatPresenter>();
+
+            // The breath bar a swimmer watches (2026-09-29). Beside this driver because it asks
+            // this driver whether the player is deployed, and a dead player's breath is full.
+            if (GetComponent<Hud.BreathHud>() == null) gameObject.AddComponent<Hud.BreathHud>();
         }
 
         private void OnEnable()
@@ -822,6 +826,11 @@ namespace Ironfront.Net.Unity.Client
             // spends. Read as a release, like the server does: when the lock completes under a
             // held trigger, the next frame is the rising edge on both sides at once.
             if (NetClientBindings.LocalPlayer.CarriedWeaponWithholdsTrigger) return false;
+
+            // A swimmer's gun is put away (Actor.UpdateSwimWeapon) and the server's trigger refuses
+            // a body in water (ActorFireEligibility.IsInWater), so a pull in water is a release here
+            // too: predicted, it would drain a magazine nobody can see and snap it back.
+            if (NetClientBindings.LocalPlayer.IsInWater) return false;
 
             return (input.Buttons & (ushort)InputButtons.Fire) != 0;
         }

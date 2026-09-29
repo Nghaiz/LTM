@@ -242,6 +242,15 @@ public class DecalManager : MonoBehaviour
 		vertexIndex[type] = (num + 4) % maxVerts;
 	}
 
+	/// <summary>
+	/// The stain a drop of <paramref name="team"/>'s blood leaves: blue for team 0, red for the rest,
+	/// as the original's <c>BloodParticle</c> chose it.
+	/// </summary>
+	public static DecalType BloodFor(int team)
+	{
+		return (team == 0) ? DecalType.BloodBlue : DecalType.BloodRed;
+	}
+
 	public static void CreateBloodDrop(Vector3 point, Vector3 baseVelocity, int team)
 	{
 		// Actor.Damage calls this ceil(damage / 10) times per hit, so on a server it is the
@@ -250,6 +259,8 @@ public class DecalManager : MonoBehaviour
 		{
 			return;
 		}
+		// The bleeder's team colour, as the original: a blue soldier bleeds blue, a red one red. Owner
+		// ruling 2026-09-30, restoring it after #382 made every drop dark red.
 		Color color = ColorScheme.TeamColor(team);
 		BloodParticle component = ((GameObject)UnityEngine.Object.Instantiate(instance.bloodDropPrefab, point, Quaternion.identity)).GetComponent<BloodParticle>();
 		component.transform.localScale.Scale(Vector3.one * UnityEngine.Random.Range(2f, 3f));

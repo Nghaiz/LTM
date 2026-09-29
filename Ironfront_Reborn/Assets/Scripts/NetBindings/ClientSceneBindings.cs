@@ -91,6 +91,10 @@ namespace Ironfront.Net.Unity.Bindings
                 DecalManager.CreateBloodDrop(point, carried, team);
             }
         }
+
+        /// <inheritdoc/>
+        public void AddBloodPool(Vector3 point, Vector3 normal, float size, int team)
+            => DecalManager.AddDecal(point, normal, size, DecalManager.BloodFor(team));
     }
 
     /// <summary>
@@ -106,8 +110,12 @@ namespace Ironfront.Net.Unity.Bindings
     internal sealed class MinimapMarkerBinding : IMinimapMarkers
     {
         /// <inheritdoc/>
-        public void SetBodyMarker(Transform subject, int team, bool isHuman, Transform seatedIn)
-            => MinimapUi.SetBodyMarker(subject, ColorScheme.BlipColor(team, isHuman), seatedIn);
+        public void SetBodyMarker(Transform subject, int team, bool isHuman)
+            => MinimapUi.SetBodyMarker(subject, ColorScheme.BlipColor(team, isHuman), isHuman);
+
+        /// <inheritdoc/>
+        public void SetVehicleMarker(Transform vehicle, int team)
+            => MinimapUi.SetVehicleMarker(vehicle, ColorScheme.BlipColor(team, false));
 
         /// <inheritdoc/>
         public void RemoveMarker(Transform subject) => MinimapUi.RemoveMarker(subject);

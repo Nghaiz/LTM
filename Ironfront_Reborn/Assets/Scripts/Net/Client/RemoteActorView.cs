@@ -134,21 +134,16 @@ namespace Ironfront.Net.Unity.Client
         private static readonly int _hashMovementX = Animator.StringToHash("movement x");
         private static readonly int _hashMovementY = Animator.StringToHash("movement y");
 
-        // Water, and these two cost nothing to add because the bit is ALREADY on the wire.
-        // ActorStateFlags.IsInWater has been decoded into RemoteActorVisualState.IsInWater since
-        // the flags byte was defined, and nothing read it -- so a networked body in a river kept
-        // its walking pose and appeared to march along the bottom, which is exactly what it was
-        // doing. `swim forward` is the stroke rather than the float, so it needs the same
-        // movement the locomotion solver already computes; there is no third state on the
-        // controller between them.
+        // Water: `swim` and `swim forward` cost nothing to add because the bit is ALREADY on the
+        // wire (ActorStateFlags.IsInWater). They live on the controller's Ragdoll Layer, which
+        // plays nothing at weight 0 -- so a networked swimmer marched along the bottom in its
+        // walking pose -- and SwimPresentation now raises that layer for the swim (2026-09-29).
         //
         // The remaining gap is NOT free and is deliberately not attempted here: `falling`,
         // `onBack`, `lean`, `hurt` and `hurt x` have no bit and no field on the wire, and
         // neither ActorStateFlags nor SnapshotField has a spare -- both bytes are full. Adding
         // them means widening a field the way v10 widened Weapon, which is a protocol change
         // and its own phase.
-        private static readonly int _hashSwim        = Animator.StringToHash("swim");
-        private static readonly int _hashSwimForward = Animator.StringToHash("swim forward");
 
         // Which seated pose: 0 the chair, 1 astride the quad bike. Actor.EnterSeat writes it from
         // Seat.animation offline; a remote body is seated from the snapshot, and nothing wrote it,
@@ -182,6 +177,27 @@ namespace Ironfront.Net.Unity.Client
         private IRemoteActorPresentation _presentation;
         private bool _hiddenForDeath;
 
+        // When the body was hidden for its death, and whether a snapshot has said "dead" since:
+        // what tells a respawn from the interpolator still drawing the moment before the death.
+        private float _hiddenAt;
+        private bool _sawDeadSinceHide;
+
+        // This life's death has left a RemoteCorpse, so the proxy itself is hidden and not felled.
+        private bool _corpseThisLife;
+
+        // The body's own ground speed at the last solve, handed to a corpse as its momentum.
+        private Vector3 _planarVelocity;
+
+        // Whether this body's gun is put away because it swims (StowWeaponForSwim).
+        private bool _weaponStowed;
+
+        // The head bone, which a swimmer is placed by. Null when the animator is not a humanoid.
+        private Transform _head;
+
+        // 1 while the body stands still, 0 while it moves, eased between: how much of the idle
+        // pose's sole lift the registry takes off (SoleLift).
+        private float _idleWeight = 1f;
+
         // E1: the runtime ragdoll for a proxy with no authored rig. Null when the animator is
         // not a humanoid that names every bone RemoteRagdoll needs.
         private RemoteRagdoll _ragdoll;
@@ -191,6 +207,58 @@ namespace Ironfront.Net.Unity.Client
         /// and the registry must stop writing its transform.
         /// </summary>
         public bool IsRagdollPosed => _ragdoll != null && _ragdoll.IsActive;
+
+        /// <summary>
+        /// How far the head bone stands over this body's root in the pose last drawn: what a swimmer
+        /// is placed by (<see cref="SwimPresentation.RootHeight"/>).
+        /// </summary>
+        internal float HeadAboveRoot => _head != null
+            ? _head.position.y - transform.position.y
+            : SwimPresentation.IdleHeadAboveRoot;
+
+        /// <summary>The body's animator, which a corpse copies the skeleton and pose from.</summary>
+        internal Animator BodyAnimator => _animator;
+
+        /// <summary>How fast, and which way, the body was moving over the ground.</summary>
+        internal Vector3 PlanarVelocity => _planarVelocity;
+
+        /// <summary>This life's death already left a corpse.</summary>
+        internal bool HasCorpseThisLife => _corpseThisLife;
+
+        /// <summary>
+        /// How far the idle pose stands the soles above the body's origin, measured on the proxy's
+        /// model (0.081 m, crouched or not). The walk and run cycles plant a foot at the origin or
+        /// just under it, so a body standing still is the one that hovers (owner report 2026-09-29,
+        /// image 3: a player and their teammate floating right after spawning).
+        /// </summary>
+        public const float IdleSoleLiftMetres = 0.08f;
+
+        /// <summary>How long the animator takes to blend idle into a walk (measured about 0.15 s).</summary>
+        public const float IdleBlendSeconds = 0.15f;
+
+        /// <summary>
+        /// How far this body is lowered to stand its soles on the ground: the idle pose's lift,
+        /// eased out as it starts moving so the body does not drop at the first step.
+        /// </summary>
+        internal float SoleLift => IdleSoleLiftMetres * _idleWeight;
+
+        /// <summary>The idle weight <paramref name="elapsed"/> seconds on from <paramref name="current"/>.</summary>
+        internal static float NextIdleWeight(float current, bool moving, float elapsed)
+            => Mathf.MoveTowards(current, moving ? 0f : 1f, elapsed / IdleBlendSeconds);
+
+        /// <summary>
+        /// Records that this life's death left a <see cref="RemoteCorpse"/> and hides the proxy
+        /// until the respawn snapshot shows it again.
+        /// </summary>
+        internal void HandOverToCorpse()
+        {
+            _corpseThisLife = true;
+            // A body knocked over just before it died is lying as this proxy's own ragdoll. The
+            // corpse has copied that pose; left simulating, the hidden ragdoll would lie in the
+            // same place on the same layer and shove the corpse about.
+            _ragdoll?.Restore();
+            HideForDeathFallback();
+        }
 
         /// <summary>The network actor id this body is currently drawing.</summary>
         public ushort ActorId { get; private set; }
@@ -266,6 +334,7 @@ namespace Ironfront.Net.Unity.Client
             ReportUnknownParameters();
 
             _teamRenderer = GetComponentInChildren<SkinnedMeshRenderer>(true);
+            if (_animator != null && _animator.isHuman) _head = _animator.GetBoneTransform(HumanBodyBones.Head);
             CreateFallbackMuzzleFlash();
             _presentation = NetClientBindings.ResolveRemoteActorPresentation(gameObject);
 
@@ -389,6 +458,11 @@ namespace Ironfront.Net.Unity.Client
         public void Bind(ushort actorId, byte team)
         {
             _ragdoll?.Restore();
+            _corpseThisLife = false;
+            _planarVelocity = Vector3.zero;
+            _idleWeight = 1f;
+            if (_weaponStowed && !_hiddenForDeath) _presentation?.SetWeaponShown(true);
+            _weaponStowed = false;
 
             ActorId          = actorId;
             _state           = default;
@@ -420,6 +494,7 @@ namespace Ironfront.Net.Unity.Client
             _animator.SetFloat(_hashMovementY, 0f);
             _seatAnimation = 0;
             _animator.SetInteger(_hashSeatedType, 0);
+            SwimPresentation.Apply(_animator, swimming: false, moving: false);
         }
 
         /// <summary>
@@ -451,10 +526,34 @@ namespace Ironfront.Net.Unity.Client
             // A proxy without the original Actor/ragdoll rig is hidden on its death event. Spawn
             // announcements are lifetime announcements, not respawn announcements, so the same
             // proxy must become visible again when a later snapshot says the actor is alive.
-            if (_state.IsAlive && _hiddenForDeath)
+            //
+            // "Later" is the whole difficulty. S_DEATH is reliable and lands at once, while this
+            // entry is the interpolator's, drawn a moment in the past -- so for the next few
+            // frames it still says alive. Taken as a respawn, that stood the body back up beside
+            // its own corpse and, when the dead entry arrived, left a SECOND corpse (seen in the
+            // rig 2026-09-29: two corpses of one actor, 0.3 m apart). A respawn is an alive entry
+            // after a dead one, or one that comes too long after the death to be stale: the
+            // server holds every respawn back RESPAWN_SECONDS, and half of that is far more than
+            // any interpolation delay.
+            if (_hiddenForDeath && !_state.IsAlive) _sawDeadSinceHide = true;
+            if (_hiddenForDeath && IsRespawn(_state.IsAlive, _sawDeadSinceHide, Time.time - _hiddenAt))
             {
                 _hiddenForDeath = false;
+                _corpseThisLife = false;
                 _presentation?.SetVisible(true);
+                if (_weaponStowed) _presentation?.SetWeaponShown(false);
+            }
+
+            // A death the snapshot reports before S_DEATH -- the event is reliable, the snapshot
+            // not, and either can land first -- still leaves a corpse; the late S_DEATH then only
+            // throws it (NetClientCombatPresenter.FellBody).
+            if (hadState && previous.IsAlive && !_state.IsAlive && !_corpseThisLife)
+            {
+                RemoteCorpseDirector corpses = RemoteCorpseDirector.Current;
+                if (corpses != null && corpses.TrySpawn(this, Vector3.zero, HumanBodyBones.Hips))
+                {
+                    HandOverToCorpse();
+                }
             }
 
             ApplyWeapon(_state.WeaponId);
@@ -481,15 +580,37 @@ namespace Ironfront.Net.Unity.Client
                 _animator.SetFloat(_hashMovementY, _locomotion.MovementY);
 
                 // Read from the wire, not guessed from the body's height against a water plane:
-                // the server owns whether an actor is in water (it is the same bit the drowning
-                // clock runs off), and a client re-deciding it locally would put two answers on
-                // one question for the sake of an animation.
-                _animator.SetBool(_hashSwim,        _state.IsInWater);
-                _animator.SetBool(_hashSwimForward, _state.IsInWater && _locomotion.IsMoving);
+                // the server owns whether an actor is in water (the same test its breath drains
+                // on), and a client re-deciding it locally would put two answers on one question
+                // for the sake of an animation. After `ragdolled` above, which it overrides for a
+                // swimmer: the swim states sit behind it on the Ragdoll Layer.
+                SwimPresentation.Apply(_animator, IsSwimming, _locomotion.IsMoving, ragdolledOtherwise: _state.IsRagdoll);
             }
 
-            ApplyRagdoll(_state.IsRagdoll);
+            // A swimmer is drawn swimming, not lying: a bot swims on the server as a buoyant ragdoll,
+            // and the original's swim animation at the surface is what that looks like here.
+            ApplyRagdoll(_state.IsRagdoll && !IsSwimming);
+            StowWeaponForSwim(IsSwimming);
         }
+
+        /// <summary>
+        /// Puts this body's gun away while it swims and brings it back on land, as the original
+        /// does in water (<c>Actor.UpdateSwimWeapon</c> does it for the local player).
+        /// </summary>
+        private void StowWeaponForSwim(bool swimming)
+        {
+            if (swimming == _weaponStowed) return;
+            _weaponStowed = swimming;
+
+            // A body hidden for its death shows nothing, gun included, and SetVisible brings both back.
+            if (!_hiddenForDeath) _presentation?.SetWeaponShown(!swimming);
+        }
+
+        /// <summary>
+        /// Whether this body is swimming: alive, in water and not in a seat. Drawn in the original's
+        /// swim animation at the surface (<see cref="SwimPresentation"/>), a bot included.
+        /// </summary>
+        public bool IsSwimming => _hasState && SwimPresentation.Swims(_state.IsAlive, _state.IsInWater, _state.IsSeated);
 
         /// <summary>
         /// Keeps a body lying as a runtime ragdoll with the server: it floats while in water, and a
@@ -551,8 +672,24 @@ namespace Ironfront.Net.Unity.Client
         public void HideForDeathFallback()
         {
             _hiddenForDeath = true;
+            _hiddenAt = Time.time;
+            _sawDeadSinceHide = _hasState && !_state.IsAlive;
             _presentation?.SetVisible(false);
         }
+
+        /// <summary>
+        /// How long after a death an entry that still says "alive" is taken as the interpolator
+        /// catching up, not as a respawn: half the server's respawn delay.
+        /// </summary>
+        public const float StaleAliveSeconds = ProtocolConstants.RESPAWN_SECONDS * 0.5f;
+
+        /// <summary>
+        /// Whether an entry saying <paramref name="isAlive"/>, <paramref name="secondsSinceHide"/>
+        /// after the body was hidden for its death, is the actor back from a respawn rather than
+        /// the interpolator still drawing the moment before the death.
+        /// </summary>
+        internal static bool IsRespawn(bool isAlive, bool sawDeadSinceHide, float secondsSinceHide)
+            => isAlive && (sawDeadSinceHide || secondsSinceHide >= StaleAliveSeconds);
 
         /// <summary>
         /// Advances this body's locomotion parameters by one frame.
@@ -594,6 +731,8 @@ namespace Ironfront.Net.Unity.Client
 
             _locomotion = RemoteLocomotionSolver.Solve(
                 in _locomotion, in _state, in derived, t.eulerAngles.y, elapsed);
+            if (elapsed > 0f) _planarVelocity = new Vector3(derived.X, 0f, derived.Z);
+            _idleWeight = NextIdleWeight(_idleWeight, _locomotion.IsMoving, elapsed);
         }
 
         /// <summary>
@@ -603,6 +742,14 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         private void ApplyRagdoll(bool shouldRagdoll)
         {
+            // The death left a corpse and the proxy is hidden: felling it too would build a second,
+            // invisible body under the first.
+            if (shouldRagdoll && _corpseThisLife && !_state.IsAlive)
+            {
+                _ragdollApplied = true;
+                return;
+            }
+
             if (shouldRagdoll == _ragdollApplied) return;
             _ragdollApplied = shouldRagdoll;
 
@@ -610,7 +757,19 @@ namespace Ironfront.Net.Unity.Client
             {
                 if (_ragdoll != null)
                 {
-                    if (shouldRagdoll) _ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips);
+                    if (shouldRagdoll)
+                    {
+                        // Knocked over alive (a blast, a hard landing): the server's ragdoll was
+                        // thrown and this one would only collapse on the spot, so it takes the push
+                        // of the blast that just went off beside it, and the steering does the rest.
+                        _ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips, _planarVelocity, 0f);
+                        RemoteCorpseDirector corpses = RemoteCorpseDirector.Current;
+                        if (corpses != null && corpses.TryRecentBlast(transform.position, out Vector3 centre, out float radius))
+                        {
+                            float reach = radius * RemoteCorpseDirector.BlastReachScale;
+                            _ragdoll.AddExplosionForce(RemoteCorpseDirector.BlastSpeedPerMetre * radius, centre, reach, 1f);
+                        }
+                    }
                     else _ragdoll.Restore();
                     return;
                 }
@@ -671,6 +830,7 @@ namespace Ironfront.Net.Unity.Client
                             : transform)
                     : null;
                 if (_hiddenForDeath) _presentation?.SetVisible(false);
+                else if (_weaponStowed) _presentation?.SetWeaponShown(false);
                 return;
             }
 

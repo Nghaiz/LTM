@@ -175,6 +175,9 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly byte[] _eventPayload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
+        // Set once an S_DEATH fails to serialise, so the error is said once, not per death.
+        private bool _reportedUnwritableDeath;
+
         // Built once and kept across rebinds, so the id quarantine and the counters survive a
         // transport swap. It is the server's only vehicle-id authority; NetVehicleLifecycle
         // publishes it to the spawners scattered across the map.
@@ -800,6 +803,17 @@ namespace Ironfront.Net.Unity.Server
             if (rosterRevision != _scoredRosterRevision)
             {
                 _scoredRosterRevision = rosterRevision;
+                _scoresDirty = true;
+            }
+
+            // The stats tail carries who is alive, who sits in a vehicle and each player's ping,
+            // none of which waits for a death to move, so the table also goes out every couple of
+            // seconds. Not gated on anybody being connected: this stage never consults the player
+            // count (PadBlockerDiagnosticTests), and a broadcast to nobody costs nothing.
+            float scoresNow = _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE;
+            if (scoresNow >= _nextScoresRefreshAt)
+            {
+                _nextScoresRefreshAt = scoresNow + ScoresRefreshSeconds;
                 _scoresDirty = true;
             }
 
@@ -1500,15 +1514,16 @@ namespace Ironfront.Net.Unity.Server
                 break;
             }
 
-            // Always with the detail tail, even when every byte of it is zero: a 1.0 client reads
-            // its twelve bytes and stops, and a 1.1 client then knows "no weapon" was said rather
-            // than left unsaid. protocol-spec.md section 4.6.
+            // Always with both tails, even when every byte of them is zero: a 1.0 client reads its
+            // twelve bytes and stops, a 1.1 client its fifteen, and a newer one then knows "no
+            // weapon" or "no range" was said rather than left unsaid. protocol-spec.md section 4.6.
             var message = new DeathMessage(
                 victimActorId, killerActorId, cause,
                 Quantize.PackVel16(force.X),
                 Quantize.PackVel16(force.Y),
                 Quantize.PackVel16(force.Z),
-                hitbox, weaponId, vehicleType, detail);
+                hitbox, weaponId, vehicleType, detail,
+                KillDistanceMetres(victimActorId, killerActorId));
 
             int written = ServerEventWriter.WriteDeath(_eventPayload, in message);
             if (written >= 0)
@@ -1519,13 +1534,27 @@ namespace Ironfront.Net.Unity.Server
                     new ReadOnlySpan<byte>(_eventPayload, 0, written),
                     (byte)ServerEventWriter.ReliableChannel);
             }
+            else if (!_reportedUnwritableDeath)
+            {
+                // Said out loud, once: the silent branch here is how every death after #386 went
+                // unsent for a day while the score, the Tab board and the logs all looked healthy.
+                _reportedUnwritableDeath = true;
+                Debug.LogError(
+                    $"[net] S_DEATH for actor {victimActorId} could not be written ({written}); "
+                    + "clients get no killfeed line and no ragdoll for any death until this is fixed.");
+            }
+
+            // The two scores either side of the award, so the killer can be credited with exactly
+            // what this death put on their side (the Tab board's SCORE column).
+            MatchStateMachine match = _match != null ? _match.Match : null;
+            int score0Before = match != null ? match.Score0 : 0;
+            int score1Before = match != null ? match.Score1 : 0;
 
             ReportDeathToMatch(victimActorId);
 
             // The board counts the deaths the score counts and no others: a warmup skirmish
             // between bots used to fill it with kills beside a 0 - 0 score. No match controller
             // (a harness) keeps the old always-count behaviour.
-            MatchStateMachine match = _match != null ? _match.Match : null;
             if (match != null && !match.CountsDeaths) return;
 
             // Phase P6 task 3.1, checklist A13. HERE and not at the serialisation above, even
@@ -1533,11 +1562,57 @@ namespace Ironfront.Net.Unity.Server
             // whereas the broadcast's bytes may be retransmitted by the reliability layer any
             // number of times. A tally reading the wire would count one kill per lost ack.
             _scoreTally.RecordDeath(victimActorId, killerActorId);
+            CreditKillExtras(victimActorId, killerActorId, hitbox, match, score0Before, score1Before);
 
             // P18 task 3.1. The tally moved, so the scoreboard is stale until the next snapshot
             // stage flushes it. Set here rather than sent here: see _scoresDirty for why one
             // explosion must not become four reliable broadcasts.
             _scoresDirty = true;
+        }
+
+        /// <summary>
+        /// Credits an enemy kill's headshot, streak and points to its killer, for the Tab board's
+        /// columns (owner's report of 2026-09-30). A team kill earns nothing: the award went to
+        /// the other side, and the tally has already counted it as a kill.
+        /// </summary>
+        private void CreditKillExtras(
+            ushort victimActorId, ushort killerActorId, byte hitbox, MatchStateMachine match,
+            int score0Before, int score1Before)
+        {
+            if (killerActorId == DeathMessage.EnvironmentKiller || killerActorId == victimActorId) return;
+
+            ServerActorRegistry registry = ServerActorRegistry.Instance;
+            if (!registry.TryFind(killerActorId, out NetServerActor killer) || killer == null) return;
+            if (!registry.TryFind(victimActorId, out NetServerActor victim) || victim == null) return;
+            if (killer.Team == victim.Team) return;
+
+            int points = match == null ? 0
+                : killer.Team == TeamId.Team0 ? match.Score0 - score0Before
+                : killer.Team == TeamId.Team1 ? match.Score1 - score1Before
+                : 0;
+
+            _scoreTally.CreditKill(killerActorId, (HitboxType)hitbox == HitboxType.Head, points);
+        }
+
+        /// <summary>
+        /// Whole metres from the killer to the victim, for the killfeed's long-shot line (owner's
+        /// report of 2026-09-30); 0 for the world, a suicide, or an actor no longer registered.
+        /// </summary>
+        /// <remarks>
+        /// Read off the two bodies at the death edge. A killer who died to the same blast is still
+        /// registered, so a grenade's thrower is measured from where they fell; a vehicle's crew
+        /// is measured from the seat. Clamped rather than wrapped, for the tally's reason.
+        /// </remarks>
+        private static ushort KillDistanceMetres(ushort victimActorId, ushort killerActorId)
+        {
+            if (killerActorId == DeathMessage.EnvironmentKiller || killerActorId == victimActorId) return 0;
+
+            ServerActorRegistry registry = ServerActorRegistry.Instance;
+            if (!registry.TryFind(victimActorId, out NetServerActor victim) || victim == null) return 0;
+            if (!registry.TryFind(killerActorId, out NetServerActor killer) || killer == null) return 0;
+
+            float metres = Vector3.Distance(victim.transform.position, killer.transform.position);
+            return metres >= ushort.MaxValue ? ushort.MaxValue : (ushort)Mathf.RoundToInt(metres);
         }
 
         /// <summary>
@@ -2370,8 +2445,10 @@ namespace Ironfront.Net.Unity.Server
 
             if (Transport == null) return;
 
+            if (_pingMsOf == null) _pingMsOf = PingMsOf;
+
             int count = FillScoreRows(
-                ServerActorRegistry.Instance.Actors, _scoreTally, _playerScoreEntries);
+                ServerActorRegistry.Instance.Actors, _scoreTally, _playerScoreEntries, _pingMsOf);
 
             int written = ServerEventWriter.WritePlayerScores(
                 _eventPayload,
@@ -2412,7 +2489,8 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// </remarks>
         internal static int FillScoreRows(
-            IReadOnlyList<NetServerActor> actors, MatchScoreTally tally, PlayerScoreEntry[] rows)
+            IReadOnlyList<NetServerActor> actors, MatchScoreTally tally, PlayerScoreEntry[] rows,
+            Func<ushort, ushort> pingMsOf = null)
         {
             int count = 0;
             for (int i = 0; i < actors.Count && count < rows.Length; i++)
@@ -2436,10 +2514,54 @@ namespace Ironfront.Net.Unity.Server
                 // it currently sees -- and a scoreboard has to place every row. See
                 // PlayerScoreEntry.Team for why that is not a second source of truth.
                 rows[count].Team    = actor.Team;
+
+                // The stats tail (owner's report of 2026-09-30). Every field written every time:
+                // the row buffer is reused, and a field left over from another actor's row is a
+                // number on the wrong player.
+                rows[count].HasStats   = true;
+                rows[count].Status     = (actor.IsAlive ? PlayerStatusFlags.Alive : PlayerStatusFlags.None)
+                                         | (actor.IsSeatedOnServer ? PlayerStatusFlags.Seated : PlayerStatusFlags.None);
+                rows[count].Headshots  = ClampToU8(tally.HeadshotsOf(actorId));
+                rows[count].Streak     = ClampToU8(tally.StreakOf(actorId));
+                rows[count].BestStreak = ClampToU8(tally.BestStreakOf(actorId));
+                rows[count].Points     = ClampToU16(tally.PointsOf(actorId));
+                rows[count].PingMs     = pingMsOf != null ? pingMsOf(actorId) : (ushort)0;
                 count++;
             }
 
             return count;
+        }
+
+        private static byte ClampToU8(int value)
+            => value < 0 ? (byte)0 : value > byte.MaxValue ? byte.MaxValue : (byte)value;
+
+        /// <summary>How often the score table goes out while nothing else moves it.</summary>
+        private const float ScoresRefreshSeconds = 2f;
+
+        private float _nextScoresRefreshAt;
+
+        /// <summary><see cref="PingMsOf"/>, bound once rather than on every table.</summary>
+        private Func<ushort, ushort> _pingMsOf;
+
+        /// <summary>
+        /// A connected player's smoothed round trip in whole milliseconds, for the Tab board's
+        /// PING column; 0 for a bot, an actor nobody is playing, or a transport that cannot say.
+        /// </summary>
+        private ushort PingMsOf(ushort actorId)
+        {
+            if (Transport == null) return 0;
+
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ClientSession session = _players[i].Session;
+                if (session.ActorId != actorId) continue;
+
+                float rtt = Transport.GetInfo(session.ConnectionId).SmoothedRttMs;
+                if (float.IsNaN(rtt) || rtt <= 0f) return 0;
+                return rtt >= ushort.MaxValue ? ushort.MaxValue : (ushort)Mathf.RoundToInt(rtt);
+            }
+
+            return 0;
         }
 
         /// <summary>A tally count as the wire's <c>u16</c>, saturating rather than wrapping.</summary>

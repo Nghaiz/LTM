@@ -110,6 +110,8 @@ public class GameManager : MonoBehaviour
 		}
 		ActorManager.instance.StartGame();
 		CoverManager.instance.StartGame();
+		// Each side's commander (phase P28): after ActorManager, whose spawn points it reads.
+		BotCommander.EnsureOn(ActorManager.instance.gameObject).StartGame();
 		if (DecalManager.instance != null)
 		{
 			DecalManager.instance.StartGame();

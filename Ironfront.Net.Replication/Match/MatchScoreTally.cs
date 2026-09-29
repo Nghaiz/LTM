@@ -33,6 +33,13 @@ namespace Ironfront.Net.Replication.Match
         private readonly int[] _kills  = new int[ProtocolConstants.MAX_ACTORS];
         private readonly int[] _deaths = new int[ProtocolConstants.MAX_ACTORS];
 
+        // The Tab board's extra columns (owner's report of 2026-09-30), kept beside the counts
+        // they extend so one Forget and one Clear cover every per-actor number.
+        private readonly int[] _headshots  = new int[ProtocolConstants.MAX_ACTORS];
+        private readonly int[] _streak     = new int[ProtocolConstants.MAX_ACTORS];
+        private readonly int[] _bestStreak = new int[ProtocolConstants.MAX_ACTORS];
+        private readonly int[] _points     = new int[ProtocolConstants.MAX_ACTORS];
+
         /// <summary>Deaths recorded this match, across every actor.</summary>
         /// <remarks>
         /// Cumulative and un-attributed, so "did anything reach the tally at all" is answerable
@@ -86,6 +93,7 @@ namespace Ironfront.Net.Replication.Match
             }
 
             _deaths[victimActorId]++;
+            _streak[victimActorId] = 0;
             DeathsRecorded++;
 
             if (killerActorId == DeathMessage.EnvironmentKiller || killerActorId == victimActorId)
@@ -102,6 +110,44 @@ namespace Ironfront.Net.Replication.Match
 
             _kills[killerActorId]++;
         }
+
+        /// <summary>
+        /// Credits one ENEMY kill's extras to its killer: the streak it extends, whether it was a
+        /// headshot, and the points it put on the killer's side. Call after <see cref="RecordDeath"/>
+        /// for the same death, and only for a kill of the other side.
+        /// </summary>
+        /// <remarks>
+        /// <b>A team kill earns none of these</b>, although <see cref="RecordDeath"/> still counts
+        /// it as a kill: that count records what happened, and these record what the kill was
+        /// worth to the side, which for friendly fire is nothing -- the award goes to the enemy.
+        /// </remarks>
+        public void CreditKill(ushort killerActorId, bool headshot, int points)
+        {
+            if (killerActorId >= ProtocolConstants.MAX_ACTORS) return;
+
+            if (headshot) _headshots[killerActorId]++;
+
+            int streak = ++_streak[killerActorId];
+            if (streak > _bestStreak[killerActorId]) _bestStreak[killerActorId] = streak;
+
+            if (points > 0) _points[killerActorId] += points;
+        }
+
+        /// <summary>Enemy kills this actor made with a headshot, or 0.</summary>
+        public int HeadshotsOf(ushort actorId)
+            => actorId < ProtocolConstants.MAX_ACTORS ? _headshots[actorId] : 0;
+
+        /// <summary>Enemy kills since this actor last died, or 0.</summary>
+        public int StreakOf(ushort actorId)
+            => actorId < ProtocolConstants.MAX_ACTORS ? _streak[actorId] : 0;
+
+        /// <summary>The longest streak this actor has had this match, or 0.</summary>
+        public int BestStreakOf(ushort actorId)
+            => actorId < ProtocolConstants.MAX_ACTORS ? _bestStreak[actorId] : 0;
+
+        /// <summary>The points this actor's kills put on its side's score, or 0.</summary>
+        public int PointsOf(ushort actorId)
+            => actorId < ProtocolConstants.MAX_ACTORS ? _points[actorId] : 0;
 
         /// <summary>Kills credited to this actor, or 0.</summary>
         public int KillsOf(ushort actorId)
@@ -139,6 +185,10 @@ namespace Ironfront.Net.Replication.Match
 
             _kills[actorId] = 0;
             _deaths[actorId] = 0;
+            _headshots[actorId] = 0;
+            _streak[actorId] = 0;
+            _bestStreak[actorId] = 0;
+            _points[actorId] = 0;
         }
 
         /// <summary>Empties the tally for a new round.</summary>
@@ -146,6 +196,10 @@ namespace Ironfront.Net.Replication.Match
         {
             Array.Clear(_kills, 0, _kills.Length);
             Array.Clear(_deaths, 0, _deaths.Length);
+            Array.Clear(_headshots, 0, _headshots.Length);
+            Array.Clear(_streak, 0, _streak.Length);
+            Array.Clear(_bestStreak, 0, _bestStreak.Length);
+            Array.Clear(_points, 0, _points.Length);
 
             DeathsRecorded     = 0;
             UnattributedDeaths = 0;

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using Ironfront.Net.Replication.Ai;
+using Ironfront.Net.Unity;
 using Ironfront.Net.Unity.Bindings;
 using Ironfront.Net.Unity.Server;
 using Pathfinding;
@@ -321,6 +323,38 @@ public class AiActorController : ActorController
 
 	private Vector3 blockerPosition;
 
+	// ---- combat tactics (phase P28, part 2; CombatRules holds the numbers) ----
+
+	/// <summary>The enemy that last shot at this bot, and when: the first it answers.</summary>
+	private Actor threatActor;
+
+	private float threatActorTime = -100f;
+
+	/// <summary>This bot's marker for cover found behind a vehicle, made on first use.</summary>
+	private CoverPoint ownCoverSpot;
+
+	/// <summary>
+	/// Which way the bot faces in its cover and how it uses it -- judged against the enemy it hid
+	/// from, where the original read the authored point's own facing and type.
+	/// </summary>
+	private Vector3 coverFacing;
+
+	private CoverPoint.Type coverType;
+
+	/// <summary>Metres to the current target, refreshed by AiTrack; infinite with none.</summary>
+	private float targetDistance = float.PositiveInfinity;
+
+	private Vector3 sideStepDirection;
+
+	private Action sideStepAction = new Action(1f);
+
+	private Action sideStepPauseAction = new Action(2f);
+
+	/// <summary>Until when a hurt bot keeps to the cover it fell back to.</summary>
+	private float fallingBackUntil;
+
+	private Action fallBackCooldownAction = new Action(CombatRules.FallBackCooldownSeconds);
+
 	public static AiParameters PARAMETERS
 	{
 		get
@@ -439,19 +473,276 @@ public class AiActorController : ActorController
 		helicopterTargetFlightHeight = UnityEngine.Random.Range(30f, 60f);
 	}
 
+	/// <summary>
+	/// The enemies worth a look this round, most urgent first: nearest, less the head start
+	/// <see cref="CombatRules.TargetScore"/> gives one that shot at this bot or stands on its
+	/// squad's flag (phase P28), at most <see cref="CombatRules.MaxTargetCandidates"/>. The
+	/// original sorted every enemy by distance alone.
+	/// </summary>
+	/// <remarks>
+	/// A new list each call, as the original's was: AiTarget walks it across yields, and a shared
+	/// buffer would be rewritten under a second walker.
+	/// </remarks>
 	private List<Actor> FindPotentialTargets()
 	{
 		int team = ((actor.team == 0) ? 1 : 0);
-		List<Actor> list = new List<Actor>(ActorManager.AliveActorsOnTeam(team));
-		list.RemoveAll((Actor target) => !HasEffectiveWeaponAgainst(target) || (target.IsSeated() && target.seat.vehicle.burning));
-		Dictionary<Actor, float> distanceTo = new Dictionary<Actor, float>(list.Count);
-		foreach (Actor item in list)
+		List<Actor> enemies = ActorManager.AliveActorsOnTeam(team);
+		List<Actor> list = new List<Actor>(CombatRules.MaxTargetCandidates);
+		Span<float> scores = stackalloc float[CombatRules.MaxTargetCandidates];
+		Vector3 position = actor.Position();
+		Actor shooter = RecentShooter();
+		bool hasObjective = squad != null && squad.commandTarget != null;
+		Vector3 objective = hasObjective ? squad.commandTarget.transform.position : Vector3.zero;
+		float objectiveRadius = CombatRules.ObjectiveRadius * CombatRules.ObjectiveRadius;
+		for (int i = 0; i < enemies.Count; i++)
 		{
-			float num = ((!item.fallenOver) ? 0f : 30f);
-			distanceTo.Add(item, Vector3.Distance(item.Position(), actor.Position()) + num);
+			Actor item = enemies[i];
+			if (item == null || !HasEffectiveWeaponAgainst(item) || (item.IsSeated() && item.seat.vehicle.burning))
+			{
+				continue;
+			}
+			Vector3 at = item.Position();
+			bool onObjective = hasObjective && (at - objective).sqrMagnitude < objectiveRadius;
+			float score = CombatRules.TargetScore(Vector3.Distance(at, position), item.fallenOver, item == shooter, onObjective);
+			InsertByScore(list, scores, item, score);
 		}
-		list.Sort((Actor x, Actor y) => distanceTo[x].CompareTo(distanceTo[y]));
 		return list;
+	}
+
+	private static void InsertByScore(List<Actor> list, Span<float> scores, Actor item, float score)
+	{
+		int capacity = scores.Length;
+		int count = list.Count;
+		if (count == capacity)
+		{
+			if (score >= scores[capacity - 1])
+			{
+				return;
+			}
+			list.RemoveAt(capacity - 1);
+			count--;
+		}
+		int at = count;
+		while (at > 0 && scores[at - 1] > score)
+		{
+			scores[at] = scores[at - 1];
+			at--;
+		}
+		scores[at] = score;
+		list.Insert(at, item);
+	}
+
+	/// <summary>The enemy that shot at this bot within <see cref="CombatRules.ShooterMemorySeconds"/>, if still alive.</summary>
+	private Actor RecentShooter()
+	{
+		if (threatActor == null || threatActor.dead || Time.time - threatActorTime > CombatRules.ShooterMemorySeconds)
+		{
+			return null;
+		}
+		return threatActor;
+	}
+
+	/// <summary>
+	/// Remembers who shot at this bot: a hit (from <c>Actor.DamageAttributed</c>) or a near miss
+	/// (from <c>ActorManager</c>'s incoming-fire warning). A teammate's stray round is not a threat.
+	/// </summary>
+	public void NoteAttacker(Actor attacker)
+	{
+		if (attacker == null || attacker == actor || attacker.dead || (actor != null && attacker.team == actor.team))
+		{
+			return;
+		}
+		threatActor = attacker;
+		threatActorTime = Time.time;
+	}
+
+	/// <summary>
+	/// Where to judge cover against: the eye of the enemy that shot at this bot, else its target,
+	/// else a point 40 m along <paramref name="direction"/> -- the incoming fire's bearing.
+	/// </summary>
+	private Vector3 ThreatEye(Vector3 direction)
+	{
+		Actor shooter = RecentShooter();
+		if (shooter != null)
+		{
+			return shooter.CenterPosition() + Vector3.up * 0.5f;
+		}
+		if (HasTarget())
+		{
+			return target.CenterPosition() + Vector3.up * 0.5f;
+		}
+		Vector3 flat = new Vector3(direction.x, 0f, direction.z);
+		if (flat.sqrMagnitude < 0.01f)
+		{
+			flat = FacingDirection();
+			flat.y = 0f;
+		}
+		return actor.CenterPosition() + flat.normalized * 40f + Vector3.up * 0.5f;
+	}
+
+	/// <summary>
+	/// Where the enemy will come from, seen from <paramref name="point"/>: a known threat, or the
+	/// nearest flag the other side holds. False when neither is known.
+	/// </summary>
+	private bool ThreatEyeAround(Vector3 point, out Vector3 eye)
+	{
+		if (RecentShooter() != null || HasTarget() || IsTakingFire())
+		{
+			eye = ThreatEye(takingFireDirection);
+			return true;
+		}
+		eye = Vector3.zero;
+		SpawnPoint[] points = ActorManager.instance != null ? ActorManager.instance.spawnPoints : null;
+		if (points == null)
+		{
+			return false;
+		}
+		float best = float.PositiveInfinity;
+		foreach (SpawnPoint spawnPoint in points)
+		{
+			if (spawnPoint == null || spawnPoint.owner < 0 || spawnPoint.owner == actor.team)
+			{
+				continue;
+			}
+			float distance = (spawnPoint.transform.position - point).sqrMagnitude;
+			if (distance < best)
+			{
+				best = distance;
+				eye = spawnPoint.transform.position + Vector3.up * 1.5f;
+			}
+		}
+		return best < float.PositiveInfinity;
+	}
+
+	/// <summary>
+	/// Takes the best cover round <paramref name="origin"/> against <paramref name="threatEye"/>,
+	/// claiming it; false leaves this bot's cover state as it was.
+	/// </summary>
+	private bool TakeLevelCover(Vector3 origin, Vector3 threatEye, float radius, bool fallingBack)
+	{
+		if (!BotCover.Find(origin, threatEye, radius, fallingBack, out BotCover.Pick pick))
+		{
+			return false;
+		}
+		CoverPoint point = pick.Authored;
+		if (point == null)
+		{
+			if (ownCoverSpot == null)
+			{
+				ownCoverSpot = BotCover.NewBotSpot();
+			}
+			point = ownCoverSpot;
+			point.transform.position = pick.Spot;
+		}
+		Vector3 facing = threatEye - pick.Spot;
+		facing.y = 0f;
+		ClaimCover(point, facing.sqrMagnitude > 0.01f ? facing.normalized : point.transform.forward, BotCover.TypeFor(pick.Fit));
+		return true;
+	}
+
+	private void ClaimCover(CoverPoint point, Vector3 facing, CoverPoint.Type type)
+	{
+		if (cover != null && cover != point)
+		{
+			cover.taken = false;
+		}
+		cover = point;
+		cover.taken = true;
+		coverFacing = facing;
+		coverType = type;
+	}
+
+	/// <summary>Whether this bot is hurt and keeping to the cover it fell back to.</summary>
+	public bool IsFallingBack()
+	{
+		return Time.time < fallingBackUntil && !actor.dead;
+	}
+
+	/// <summary>
+	/// A badly hurt bot in a fight breaks off to the nearest spot that hides it, preferring ground
+	/// away from the enemy, and stays there a while (phase P28). The original fought on in the open
+	/// until it died.
+	/// </summary>
+	private void FallBackIfHurt()
+	{
+		if (IsFallingBack() || !fallBackCooldownAction.TrueDone())
+		{
+			return;
+		}
+		bool onFoot = !actor.IsSeated() && !actor.fallenOver && !actor.inWater;
+		if (!CombatRules.ShouldFallBack(actor.health, HasTarget() || IsTakingFire(), InCover(), onFoot))
+		{
+			return;
+		}
+		fallBackCooldownAction.Start();
+		if (!TakeLevelCover(actor.Position(), ThreatEye(takingFireDirection), CombatRules.FallBackSearchRadius, true))
+		{
+			return;
+		}
+		inCover = false;
+		fallingBackUntil = Time.time + CombatRules.FallBackHoldSeconds;
+		CancelPath();
+		Goto(cover.transform.position);
+		// A sprint whether or not the squad is sneaking: this is a bot running for its life.
+		sprintAction.StartLifetime(UnityEngine.Random.Range(3f, 6f));
+	}
+
+	/// <summary>
+	/// What a bot standing in the open does each look: crouch for a far shot, or step sideways
+	/// when shot at or close in (phase P28). The original stood still.
+	/// </summary>
+	private void UpdateOpenGround()
+	{
+		if (!sideStepAction.TrueDone())
+		{
+			return;
+		}
+		bool onFoot = !actor.IsSeated() && !actor.fallenOver && !actor.inWater;
+		if (!CombatRules.InTheOpen(onFoot, hasPath, HasCover()))
+		{
+			return;
+		}
+		if (CombatRules.InTheOpenMove(HasTarget(), targetDistance, IsTakingFire()) != OpenGroundMove.SideStep
+			|| !sideStepPauseAction.TrueDone())
+		{
+			return;
+		}
+		Vector3 toThreat = HasTarget() ? target.Position() - actor.Position() : takingFireDirection;
+		toThreat.y = 0f;
+		if (toThreat.sqrMagnitude < 0.01f)
+		{
+			return;
+		}
+		Vector3 side = Vector3.Cross(Vector3.up, toThreat.normalized);
+		if (UnityEngine.Random.Range(0, 2) == 0)
+		{
+			side = -side;
+		}
+		if (!SideStepClear(side))
+		{
+			side = -side;
+			if (!SideStepClear(side))
+			{
+				sideStepPauseAction.StartLifetime(CombatRules.SideStepPauseMinSeconds);
+				return;
+			}
+		}
+		float step = UnityEngine.Random.Range(CombatRules.SideStepMinSeconds, CombatRules.SideStepMaxSeconds);
+		sideStepDirection = side;
+		sideStepAction.StartLifetime(step);
+		sideStepPauseAction.StartLifetime(step + UnityEngine.Random.Range(CombatRules.SideStepPauseMinSeconds, CombatRules.SideStepPauseMaxSeconds));
+	}
+
+	/// <summary>Whether a step along <paramref name="side"/> meets no wall, no drop and no water.</summary>
+	private bool SideStepClear(Vector3 side)
+	{
+		Vector3 feet = actor.Position();
+		float reach = CombatRules.SideStepClearance;
+		if (Physics.SphereCast(feet + Vector3.up * 0.9f, 0.3f, side, out RaycastHit _, reach, CoverProbe.ObstacleMask, QueryTriggerInteraction.Ignore))
+		{
+			return false;
+		}
+		return CoverProbe.Ground(feet + side * reach, feet.y, out Vector3 _);
 	}
 
 
@@ -631,7 +922,9 @@ public class AiActorController : ActorController
 						}
 					}
 					Vector3 newPosition = actor.seat.vehicle.transform.position;
-					if (Vector3.Distance(newPosition, lastSampledVehiclePosition) > 0.4f)
+					// A tank holding its standoff is stopped on purpose, not stuck (phase P28).
+					bool holdingStandoff = vehicleType == typeof(Tank) && VehicleRules.HoldStandoff(VehicleKind.Armour, HasTarget(), targetDistance);
+					if (holdingStandoff || Vector3.Distance(newPosition, lastSampledVehiclePosition) > 0.4f)
 					{
 						lastSampledVehiclePosition = newPosition;
 						lastSampleTime = Time.time;
@@ -750,9 +1043,18 @@ public class AiActorController : ActorController
 		recentAntiStuckEvents--;
 	}
 
+	/// <summary>
+	/// Whether a bot standing without a path is lost, and gets split off as a squad of its own.
+	/// </summary>
+	/// <remarks>
+	/// Not while its squad is dug in (phase P28): holding is the order then, cover or no cover. A
+	/// squad now holds its ground while it is still fighting and defenders hold a flag for minutes,
+	/// and every member that found no cover point stood pathless and was split off three seconds
+	/// later -- a live match on Dustbowl ended with sixteen bots in sixteen squads.
+	/// </remarks>
 	private bool ShouldHavePath()
 	{
-		return (!actor.IsSeated() || actor.IsDriver()) && !inCover && squad.hasAssignedOrder;
+		return (!actor.IsSeated() || actor.IsDriver()) && !inCover && squad.hasAssignedOrder && squad.state != Squad.State.DigIn;
 	}
 
 	private void CreateRougeSquad()
@@ -778,9 +1080,11 @@ public class AiActorController : ActorController
 			{
 				CreateRougeSquad();
 			}
+			FallBackIfHurt();
 			if (IsSquadLeader())
 			{
 				squad.Update();
+				squad.UpdateCommandProgress();
 				if (actor.IsSeated() && flying && helicopterNewOrderAction.Done())
 				{
 					squad.NewAttackOrder();
@@ -819,18 +1123,27 @@ public class AiActorController : ActorController
 				}
 				if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire())
 				{
-					squad.DigInTowards(takingFireDirection);
+					// The bearing of the member actually under fire (phase P28): the original used
+					// the leader's own, stale or zero whenever the shots were aimed at someone else.
+					squad.DigInTowards(squad.TakingFireDirection(takingFireDirection));
 				}
-				else if (!squad.IsTakingFire())
+				else if (!squad.IsTakingFire() && !squad.HoldingCover())
 				{
+					// A squad firing from cover finishes the exchange before it moves (phase P28):
+					// the original walked out into the open three seconds after the last shot came
+					// near it, mid-fight.
+					//
+					// The team commander's order comes first (phase P28): a squad sent round the side
+					// or told to hold a flag does not break off for every flag it passes, the way
+					// the original's "take whatever is nearest" did.
 					SpawnPoint closestSpawnPoint = squad.ClosestSpawnPoint();
-					if ((!squad.HasTargetSpawnPoint() || squad.targetSpawnPoint != closestSpawnPoint) && squad.ShouldGotoSpawnPoint(closestSpawnPoint))
+					if ((!squad.HasTargetSpawnPoint() || squad.targetSpawnPoint != closestSpawnPoint) && squad.ShouldGotoSpawnPoint(closestSpawnPoint) && squad.MayDivertTo(closestSpawnPoint))
 					{
 						squad.AttackSpawnPoint(closestSpawnPoint);
 					}
 					else if (squad.HasTargetSpawnPoint() && squad.targetSpawnPoint == closestSpawnPoint && !squad.ShouldGotoSpawnPoint(closestSpawnPoint))
 					{
-						squad.NewAttackOrder();
+						squad.FollowCommand();
 					}
 					else if (!hasPath && !hasFlightTarget && squad.state != Squad.State.EnterVehicle)
 					{
@@ -840,6 +1153,12 @@ public class AiActorController : ActorController
 							List<Vehicle> nearbyVehicles = NearbyNonFullVehicles();
 							foreach (Vehicle vehicle in nearbyVehicles)
 							{
+								// Taken with a purpose (phase P28, part 3): not by a squad holding a flag or
+								// sneaking, not for a short walk, not at the cost of a long detour.
+								if (!squad.ShouldBoard(vehicle))
+								{
+									continue;
+								}
 								int emptySeats = vehicle.EmptySeats();
 								if (vehicle.claimedByPlayer)
 								{
@@ -855,11 +1174,27 @@ public class AiActorController : ActorController
 									enteringVehicle = true;
 									break;
 								}
+								// A tank is crewed by part of the squad instead of standing empty (phase P28):
+								// the original wanted a seat for every member, so a squad of four never took a
+								// tank with fewer. The rest carry on with the squad's order on foot.
+								if (emptySeats > 0 && !vehicle.claimedByPlayer && Squad.KindOf(vehicle) == VehicleKind.Armour)
+								{
+									Squad crew = squad.SplitCrew(emptySeats);
+									if (crew != null)
+									{
+										crew.EnterVehicle(vehicle);
+										break;
+									}
+								}
 							}
 						}
 						if (!enteringVehicle && !actor.IsPassenger())
 						{
-							if (!squad.HasTargetSpawnPoint() || !squad.ShouldGotoSpawnPoint(squad.targetSpawnPoint))
+							if (squad.HasCommand)
+							{
+								squad.FollowCommand();
+							}
+							else if (!squad.HasTargetSpawnPoint() || !squad.ShouldGotoSpawnPoint(squad.targetSpawnPoint))
 							{
 								squad.NewAttackOrder();
 							}
@@ -950,6 +1285,11 @@ public class AiActorController : ActorController
 
 	private void StartSprint()
 	{
+		// A squad sneaking round the side walks (phase P28): a sprint is heard and seen.
+		if (squad != null && squad.sneaking)
+		{
+			return;
+		}
 		sprintAction.StartLifetime(UnityEngine.Random.Range(3f, 6f));
 		sprintCooldownAction.StartLifetime(UnityEngine.Random.Range(5f, 11f));
 	}
@@ -1082,7 +1422,7 @@ public class AiActorController : ActorController
 			float b = Vector3.Dot(deltaTarget, orth2);
 			float allowedAimSpread = actor.activeWeapon.configuration.aiAllowedAimSpread;
 			bool insideAimCube = Vector3.Dot(deltaTarget, forward) > 0f && Mathf.Abs(a) < PARAMETERS.AI_FIRE_RECTANGLE_BOUND * allowedAimSpread && Mathf.Abs(b) < PARAMETERS.AI_FIRE_RECTANGLE_BOUND * allowedAimSpread;
-			if (actor.activeWeapon.CanFire() && insideAimCube && CanSeeActor(target))
+			if (actor.activeWeapon.CanFire() && insideAimCube && !CombatRules.HoldFire(squad != null && squad.sneaking, IsTakingFire(), distance) && CanSeeActor(target))
 			{
 				Ray friendlyRay = new Ray(muzzlePosition + 0.3f * forward, forward);
 				RaycastHit hitInfo;
@@ -1133,6 +1473,8 @@ public class AiActorController : ActorController
 					DropTarget();
 				}
 			}
+			targetDistance = HasTarget() ? Vector3.Distance(target.Position(), actor.Position()) : float.PositiveInfinity;
+			UpdateOpenGround();
 			yield return new WaitForSeconds(0.2f);
 		}
 	}
@@ -1159,7 +1501,7 @@ public class AiActorController : ActorController
 				}
 				if (InCover())
 				{
-					facingDirection = cover.transform.forward + UnityEngine.Random.insideUnitSphere * 0.1f;
+					facingDirection = coverFacing + UnityEngine.Random.insideUnitSphere * 0.1f;
 				}
 				else
 				{
@@ -1365,11 +1707,11 @@ public class AiActorController : ActorController
 		{
 			lean = Mathf.MoveTowards(lean, 0f, 2f * Time.deltaTime);
 		}
-		else if (InCover() && cover.type == CoverPoint.Type.LeanLeft)
+		else if (InCover() && coverType == CoverPoint.Type.LeanLeft)
 		{
 			lean = Mathf.MoveTowards(lean, -1f, 2f * Time.deltaTime);
 		}
-		else if (InCover() && cover.type == CoverPoint.Type.LeanRight)
+		else if (InCover() && coverType == CoverPoint.Type.LeanRight)
 		{
 			lean = Mathf.MoveTowards(lean, 1f, 2f * Time.deltaTime);
 		}
@@ -1660,7 +2002,7 @@ public class AiActorController : ActorController
 	{
 		if (HasCover())
 		{
-			LookDirection(cover.transform.forward);
+			LookDirection(coverFacing);
 			inCover = true;
 			stayInCoverAction.Start();
 			StopSprint();
@@ -1717,6 +2059,11 @@ public class AiActorController : ActorController
 			}
 			fatigue = Mathf.Clamp01(fatigue + num * 0.04f * Time.deltaTime);
 			return (GetWaypointDeltaBlockable().ToGround().normalized + LocalAvoidanceVelocity() * 0.4f).normalized * num;
+		}
+		// A side-step in the open (phase P28), checked clear by UpdateOpenGround before it began.
+		if (!sideStepAction.TrueDone())
+		{
+			return sideStepDirection * CombatRules.SideStepSpeed;
 		}
 		return Vector3.zero;
 	}
@@ -1856,6 +2203,12 @@ public class AiActorController : ActorController
 	{
 		Vehicle vehicle = actor.seat.vehicle;
 		float z = vehicle.LocalVelocity().z;
+		// A tank with an enemy in its sights inside the standoff stops and fires from there (phase
+		// P28, part 3); the original drove its path into point-blank range of every defender.
+		if (VehicleRules.HoldStandoff(VehicleKind.Armour, HasTarget(), targetDistance))
+		{
+			return new Vector2(0f, Mathf.Clamp(0f - z, -1f, 1f));
+		}
 		if (blockerAhead)
 		{
 			float num = Mathf.Sign(vehicle.transform.worldToLocalMatrix.MultiplyPoint(blockerPosition).x) * 0.3f;
@@ -2104,6 +2457,27 @@ public class AiActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// A hit by an enemy is incoming fire from them (phase P28), called by
+	/// <c>Actor.DamageAttributed</c>, which knows who fired. The original only turned the bot to
+	/// look, so one hit by a grenade, a blast or a round the near-miss warning had not flagged kept
+	/// standing where it was. A teammate's stray round is ignored: friendly fire is part of the
+	/// game, not a reason to dig in facing your own side.
+	/// </summary>
+	public void NoteHit(Actor attacker, Vector3 direction)
+	{
+		if (!base.enabled || attacker == null || attacker == actor || attacker.team == actor.team)
+		{
+			return;
+		}
+		Vector3 from = new Vector3(0f - direction.x, 0f, 0f - direction.z);
+		if (from.sqrMagnitude > 0.01f)
+		{
+			MarkTakingFireFrom(from.normalized);
+		}
+		NoteAttacker(attacker);
+	}
+
 	public override void DisableInput()
 	{
 	}
@@ -2324,6 +2698,10 @@ public class AiActorController : ActorController
 		targetVehicle = null;
 		hasFlightTarget = false;
 		takingFireAction.Stop();
+		threatActor = null;
+		targetDistance = float.PositiveInfinity;
+		fallingBackUntil = 0f;
+		sideStepAction.Stop();
 		radiusModifier.enabled = false;
 		recentAntiStuckEvents = 0;
 		ragdollAutokillAction.Start();
@@ -2343,16 +2721,30 @@ public class AiActorController : ActorController
 
 	public bool FindCoverAtPoint(Vector3 point)
 	{
+		// A hurt bot keeps the cover it fell back to (phase P28).
+		if (IsFallingBack())
+		{
+			return HasCover();
+		}
 		if (HasCover())
 		{
 			LeaveCover();
 		}
 		inCover = false;
+		// Cover round the point that hides the bot from where the enemy will come (phase P28);
+		// the original's nearest vacant point, whichever way it faced, when none there does.
+		if (ThreatEyeAround(point, out Vector3 threatEye) && TakeLevelCover(point, threatEye, CombatRules.CoverSearchRadius, false))
+		{
+			CancelPath();
+			Goto(cover.transform.position);
+			StartSprint();
+			return true;
+		}
 		cover = CoverManager.instance.ClosestVacant(point);
 		if (HasCover())
 		{
 			CancelPath();
-			cover.taken = true;
+			ClaimCover(cover, cover.transform.forward, cover.type);
 			Goto(cover.transform.position);
 			StartSprint();
 			return true;
@@ -2364,15 +2756,27 @@ public class AiActorController : ActorController
 
 	public bool FindCoverTowards(Vector3 direction)
 	{
+		if (IsFallingBack())
+		{
+			return HasCover();
+		}
 		if (HasCover())
 		{
 			LeaveCover();
 		}
 		inCover = false;
+		// Cover judged against the shooter itself (phase P28); the original's nearest point turned
+		// toward the fire, up to 50 m off, when nothing within reach hides the bot.
+		if (TakeLevelCover(actor.Position(), ThreatEye(direction), CombatRules.CoverSearchRadius, false))
+		{
+			Goto(cover.transform.position);
+			StartSprint();
+			return true;
+		}
 		cover = CoverManager.instance.ClosestVacantCoveringDirection(base.transform.position, direction);
 		if (HasCover())
 		{
-			cover.taken = true;
+			ClaimCover(cover, cover.transform.forward, cover.type);
 			Goto(cover.transform.position);
 			StartSprint();
 			return true;
@@ -2430,6 +2834,8 @@ public class AiActorController : ActorController
 		{
 			squad.DropMember(this);
 		}
+		BotCover.ForgetBotSpot(ownCoverSpot);
+		ownCoverSpot = null;
 	}
 
 	public bool InSquad()
@@ -2509,6 +2915,13 @@ public class AiActorController : ActorController
 		takingFireAction.Start();
 	}
 
+	/// <summary>Incoming fire from a known shooter: <see cref="ActorManager"/>'s near-miss warning.</summary>
+	public void MarkTakingFireFrom(Vector3 direction, Actor shooter)
+	{
+		MarkTakingFireFrom(direction);
+		NoteAttacker(shooter);
+	}
+
 	public bool IsTakingFire()
 	{
 		return !takingFireAction.TrueDone();
@@ -2563,7 +2976,19 @@ public class AiActorController : ActorController
 
 	public override bool Crouch()
 	{
-		return InCover() && cover.type == CoverPoint.Type.Crouch && (IsReloading() || CoolingDown());
+		if (!base.enabled)
+		{
+			return false;
+		}
+		if (InCover())
+		{
+			return (coverType == CoverPoint.Type.Crouch && (IsReloading() || CoolingDown())) || IsFallingBack();
+		}
+		// A far shot from the open is taken crouching (phase P28): a smaller body to hit.
+		bool onFoot = !actor.IsSeated() && !actor.fallenOver && !actor.inWater;
+		return CombatRules.InTheOpen(onFoot, hasPath, HasCover())
+			&& sideStepAction.TrueDone()
+			&& CombatRules.InTheOpenMove(HasTarget(), targetDistance, IsTakingFire()) == OpenGroundMove.Crouch;
 	}
 
 	public override void StartCrouch()

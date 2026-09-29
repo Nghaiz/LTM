@@ -1,22 +1,16 @@
 Shader "Masked/Mask" {
-	//DummyShaderTextExporter
-	
-	SubShader{
-		Tags { "RenderType" = "Opaque" }
-		LOD 200
-		CGPROGRAM
-#pragma surface surf Standard fullforwardshadows
-#pragma target 3.0
-		sampler2D _MainTex;
-		struct Input
-		{
-			float2 uv_MainTex;
-		};
-		void surf(Input IN, inout SurfaceOutputStandard o)
-		{
-			fixed4 c = tex2D(_MainTex, IN.uv_MainTex);
-			o.Albedo = c.rgb;
+	// Depth only: writes the depth buffer and no colour, so whatever lies behind it is hidden
+	// while it is there. The splash's title plane is the one user; it slides away as the
+	// helicopter passes the camera, which is what wipes the title in.
+	//
+	// Rebuilt from the original's compiled ShaderLab (queue Geometry+10, ColorMask 0). The
+	// decompiler left a stub here that drew an opaque textured surface instead: a grey block
+	// over the title for the first nine seconds (2026-09-29).
+	SubShader {
+		Tags { "Queue" = "Geometry+10" }
+		Pass {
+			ColorMask 0
+			ZWrite On
 		}
-		ENDCG
 	}
 }

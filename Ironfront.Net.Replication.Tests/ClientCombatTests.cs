@@ -622,32 +622,39 @@ namespace Ironfront.Net.Replication.Tests
 
         // --------------------------------------------------------- killfeed
 
+        /// <summary>
+        /// The feed used to push its oldest line out the moment a sixth arrived, so a burst of
+        /// deaths showed some for a single frame (owner's report of 2026-09-30). A full feed now
+        /// keeps what it shows and the rest wait their turn.
+        /// </summary>
         [Fact]
-        public void TheKillfeedIsNewestFirstAndDropsTheOldestWhenFull()
+        public void AFullKillfeedIsNewestFirstAndQueuesTheRestInsteadOfDroppingThem()
         {
             var feed = new KillfeedModel(capacity: 5);
             for (ushort i = 0; i < 7; i++)
                 feed.Push(new DeathMessage(i, (ushort)(100 + i), CauseOfDeath.Bullet, 0, 0, 0, 0), 1f);
 
             Assert.Equal(5, feed.Count);
+            Assert.Equal(2, feed.Waiting);
             Assert.Equal(7, feed.TotalKills);
-            Assert.Equal(6, feed[0].VictimActorId);      // newest
-            Assert.Equal(2, feed[4].VictimActorId);      // oldest still held
+            Assert.Equal(4, feed[0].VictimActorId);      // newest shown
+            Assert.Equal(0, feed[4].VictimActorId);      // oldest, still shown
         }
 
         [Fact]
         public void KillfeedLinesExpireOldestFirst()
         {
+            const float hold = KillfeedModel.DefaultHoldSeconds;
             var feed = new KillfeedModel();
             feed.Push(new DeathMessage(1, 2, CauseOfDeath.Bullet, 0, 0, 0, 0), 0f);
             feed.Push(new DeathMessage(3, 4, CauseOfDeath.Explosion, 0, 0, 0, 0), 4f);
 
-            feed.Prune(5.5f);   // the first is 5.5 s old, the second only 1.5 s
+            feed.Advance(hold + 0.5f);   // the first has been up past its hold, the second not
 
             Assert.Equal(1, feed.Count);
             Assert.Equal(3, feed[0].VictimActorId);
 
-            feed.Prune(9.5f);
+            feed.Advance(4f + hold + 0.5f);
             Assert.Equal(0, feed.Count);
         }
 
@@ -717,6 +724,42 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(fire.HasValue);
             Assert.Equal(3, fire!.Value.ShooterActorId);
             Assert.Equal(2, fire.Value.WeaponId);
+        }
+
+        /// <summary>
+        /// The death the server actually sends -- both tails, weapon detail and range -- written by
+        /// the server's writer and routed by the client's router, whole.
+        /// </summary>
+        /// <remarks>
+        /// The test above writes a bare twelve-byte death, which is not what the server sends:
+        /// ServerTickLoop writes every death with both tails. When the range tail arrived (#386)
+        /// the writer's buffer still held only the detail tail, so every real death overflowed it,
+        /// the writer returned -1, and no S_DEATH left the server for a day -- no killfeed line and
+        /// no ragdoll on any client -- while this suite stayed green. A live two-client test found it.
+        /// </remarks>
+        [Fact]
+        public void ADeathWithBothTails_IsWrittenAndRoutedWhole()
+        {
+            var router = new ClientMessageRouter();
+            DeathMessage? death = null;
+            router.OnDeath += m => death = m;
+
+            Span<byte> buffer = stackalloc byte[256];
+            var sent = new DeathMessage(
+                7, 3, CauseOfDeath.Bullet, 10, 20, 30, (byte)HitboxType.Head,
+                weaponId: 4, vehicleType: 2, DeathDetail.KillerInVehicle, distanceMetres: 312);
+
+            int written = ServerEventWriter.WriteDeath(buffer, in sent);
+            Assert.True(written > 0, "the server's writer refused the death it sends for every kill");
+            Assert.Equal(1, router.Route(buffer.Slice(0, written)));
+            Assert.Equal(0, router.MalformedMessages);
+
+            Assert.True(death.HasValue);
+            Assert.True(death!.Value.HasDetail);
+            Assert.True(death.Value.HasRange);
+            Assert.Equal(312, death.Value.DistanceMetres);
+            Assert.Equal(4, death.Value.WeaponId);
+            Assert.Equal(DeathDetail.KillerInVehicle, death.Value.Detail);
         }
 
         [Fact]

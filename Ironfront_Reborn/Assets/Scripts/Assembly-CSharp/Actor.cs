@@ -623,7 +623,14 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	{
 		Vector3 position = CenterPosition();
 		position.y += 0.5f;
-		inWater = WaterLevel.InWater(position);
+		// A networked player swims by its capsule (MovementCore), and the swim draws the body at the
+		// surface, a metre above where the capsule would put it: read off the posed spine, that
+		// would look out of the water and flicker in and out of the swim. So its test is the
+		// capsule's -- the one its movement, its breath and its server all use.
+		FpsActorController localNetworkBody = IsNetworkDrivenLocalBody() ? controller as FpsActorController : null;
+		inWater = localNetworkBody != null
+			? Ironfront.Net.Replication.Movement.MovementCore.IsInWater(localNetworkBody.transform.position.y)
+			: WaterLevel.InWater(position);
 		if (dead)
 		{
 			return;
@@ -1352,6 +1359,11 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			return false;
 		}
 		bool ownsHealth = !Ironfront.Net.Unity.NetContext.IsClient;
+		// Who fired, for the bot's own reaction (phase P28): cover, and answering that shooter first.
+		if (controller is AiActorController ai)
+		{
+			ai.NoteHit(attacker, direction);
+		}
 		controller.ReceivedDamage(healthDamage, balanceDamage, point, direction, impactForce);
 		if (ownsHealth)
 		{

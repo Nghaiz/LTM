@@ -121,13 +121,19 @@ namespace Ironfront.Net.Unity.EditorTools
             System.Func<byte, Sprite> previousIcons = NetClientBindings.WeaponIcon;
             NetClientBindings.WeaponIcon = WeaponIcons();
 
+            const float hold = KillfeedModel.DefaultHoldSeconds;
+
+            // One of each shape the feed draws (owner's report of 2026-09-30): your triple kill
+            // with a headshot, a roadkill that killed you, a long shot, a revenge with a vehicle's
+            // gun, a drowning, and two match events.
             var lines = new[]
             {
-                (new KillfeedLine(5, "Minh", TeamId.Team0, ActorNames.BotName(TeamId.Team1, 4), TeamId.Team1, "RK-44", "", false, true, false, WeaponIds.RK44, ""), blue, red),
-                (new KillfeedLine(4, ActorNames.BotName(TeamId.Team1, 9), TeamId.Team1, ActorNames.BotName(TeamId.Team0, 7), TeamId.Team0, "TANK", "", false, false, false), red, blue),
-                (new KillfeedLine(3, ActorNames.BotName(TeamId.Team0, 3), TeamId.Team0, "Hoang", TeamId.Team1, "RECON LRR", "", true, false, false, WeaponIds.RECON_LRR, ""), blue, red),
-                (new KillfeedLine(2, "", TeamId.None, ActorNames.BotName(TeamId.Team1, 12), TeamId.Team1, "", "went down with the Helicopter", false, false, false), red, red),
-                (new KillfeedLine(1, ActorNames.BotName(TeamId.Team1, 2), TeamId.Team1, "Minh", TeamId.Team0, "BIL SCALPEL  ·  MELEE", "", false, false, true, WeaponIds.BIL_SCALPEL, "MELEE"), red, blue),
+                (new KillfeedLine(7, "Minh", TeamId.Team0, BotCallsigns.For(36), TeamId.Team1, "RK-44", "", true, true, false, WeaponIds.RK44, "", badge: KillfeedWording.MultiKillName(3), badgeTone: (int)KillfeedTone.MultiKill, holdSeconds: hold), blue, red),
+                (new KillfeedLine(6, BotCallsigns.For(41), TeamId.Team1, "Minh", TeamId.Team0, "QUAD BIKE  ·  ROADKILL", "", false, false, true, glyph: (int)KillfeedGlyph.QuadBike, restAfterGlyph: "ROADKILL", holdSeconds: hold), red, blue),
+                (new KillfeedLine(5, "Hoang", TeamId.Team1, BotCallsigns.For(5), TeamId.Team0, "RECON LRR", "", true, false, false, WeaponIds.RECON_LRR, "", badge: "LONG SHOT", badgeTone: (int)KillfeedTone.LongShot, distance: KillfeedWording.Distance(312), holdSeconds: hold), red, blue),
+                (new KillfeedLine(4, BotCallsigns.For(9), TeamId.Team0, BotCallsigns.For(34), TeamId.Team1, "TANK", "", false, false, false, glyph: (int)KillfeedGlyph.Tank, badge: KillfeedWording.StreakName(10), badgeTone: (int)KillfeedTone.Streak, holdSeconds: hold), blue, red),
+                (new KillfeedLine(3, "", TeamId.None, BotCallsigns.For(44), TeamId.Team1, "", "drowned", false, false, false, glyph: (int)KillfeedGlyph.Drowned, holdSeconds: hold), red, red),
+                (new KillfeedLine(2, "BLUE TEAM", TeamId.Team0, "FORTRESS", TeamId.Team0, "", "", false, false, false, glyph: (int)KillfeedGlyph.Flag, verb: KillfeedWording.FlagVerb(true), isEvent: true, holdSeconds: hold), blue, blue),
             };
 
             for (int i = 0; i < rows.arraySize && i < lines.Length; i++)
@@ -252,6 +258,7 @@ namespace Ironfront.Net.Unity.EditorTools
             int kills = 0;
             int deaths = 0;
             var rows = new ScoreboardRow[players];
+            var order = new int[players];
 
             for (int i = 0; i < players; i++)
             {
@@ -259,11 +266,32 @@ namespace Ironfront.Net.Unity.EditorTools
                 int k = Mathf.Max(0, 17 - i + (i % 3));
                 int d = 3 + (i * 7) % 9;
                 bool human = i < humans;
-                string name = !human ? ActorNames.BotName(team, i - humans + 1) : team == TeamId.Team0 ? (i == 0 ? "Minh" : "Lan") : "Hoang";
-                rows[i] = new ScoreboardRow(id, name, k, d, (d > 0 ? k / (float)d : k).ToString("0.00"), !human, id == local);
+                string name = !human ? BotCallsigns.For(id) : team == TeamId.Team0 ? (i == 0 ? "Minh" : "Lan") : "Hoàng";
+
+                // A spread of every state the board draws: dead, in a vehicle, a live streak, a
+                // slow connection.
+                bool alive = i % 5 != 3;
+                bool seated = i % 7 == 2;
+                int streak = i % 4 == 0 ? 3 + i % 5 : i % 3;
+                int ping = human ? (i == 0 ? 38 : 124 + i * 40) : 0;
+                float ratio = d > 0 ? k / (float)d : k;
+
+                rows[i] = new ScoreboardRow(
+                    id, name, k, d, ratio.ToString("0.00"), !human, id == local,
+                    rank: 0, hasStats: true, isAlive: alive, isSeated: seated,
+                    headshots: k / 3, streak: streak, bestStreak: streak + i % 6, points: k * 2 + i % 4,
+                    pingMs: ping, isLeader: i == 0 && k > 0, ratioValue: ratio);
+                order[i] = i;
                 kills += k;
                 deaths += d;
             }
+
+            // Ranks by the board's order (kills, then fewer deaths), players listed first.
+            System.Array.Sort(order, (a, b) => rows[b].Kills != rows[a].Kills
+                ? rows[b].Kills.CompareTo(rows[a].Kills)
+                : rows[a].Deaths.CompareTo(rows[b].Deaths));
+            var ranks = new int[players];
+            for (int place = 0; place < players; place++) ranks[order[place]] = place + 1;
 
             view.BeginColumn(
                 team,
@@ -271,7 +299,20 @@ namespace Ironfront.Net.Unity.EditorTools
                 ScoreboardWording.PlayersLine(players, humans),
                 ScoreboardWording.TotalsLine(kills, deaths));
 
-            foreach (ScoreboardRow row in rows) view.AddRow(team, in row);
+            for (int pass = 0; pass < 2; pass++)
+            {
+                for (int i = 0; i < players; i++)
+                {
+                    ScoreboardRow r = rows[i];
+                    if (r.IsBot != (pass == 1)) continue;
+
+                    var ranked = new ScoreboardRow(
+                        r.ActorId, r.Name, r.Kills, r.Deaths, r.Ratio, r.IsBot, r.IsLocal, ranks[i],
+                        r.HasStats, r.IsAlive, r.IsSeated, r.Headshots, r.Streak, r.BestStreak, r.Points,
+                        r.PingMs, r.IsLeader, r.RatioValue);
+                    view.AddRow(team, in ranked);
+                }
+            }
         }
 
         private static Color TeamInk(Color team) => HudStyle.TeamInk(team);

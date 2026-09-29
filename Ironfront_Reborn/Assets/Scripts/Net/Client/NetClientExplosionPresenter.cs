@@ -72,10 +72,14 @@ namespace Ironfront.Net.Unity.Client
                  + "is zero, so a distant explosion is seen and not felt.")]
         [SerializeField] private float _shakeRadiusMultiplier = 3f;
 
-        [Tooltip("Scorch decal size per metre of blast radius. There is no scorch DecalType "
-                 + "(client-track V7 gap); this reuses Impact the same way a grenade's direct "
-                 + "hit does today.")]
+        [Tooltip("Scorch decal size per metre of blast radius, drawn with DecalType.Scorch "
+                 + "(the 'Scorch Decal Drawer' on _Managers).")]
         [SerializeField] private float _decalSizePerMetre = 0.5f;
+
+        // How far above and below a blast the ground is looked for. A blast in the air, higher
+        // than this over anything, leaves no mark on it.
+        private const float ScorchProbeAbove = 1.5f;
+        private const float ScorchProbeBelow = 2.5f;
 
         private NetClientBootstrap _client;
 
@@ -191,13 +195,24 @@ namespace Ironfront.Net.Unity.Client
             ApplyScreenshake(position, radiusMetres);
 
             // debt-closure phase 2 task 2d (ledger C-7): a blast now draws a scorch mark rather
-            // than the bullet chip it reused for want of an enum member. DecalManager falls back
-            // to Impact when Scorch has no authored drawer, so this is safe on a build that
-            // predates that authoring. There is still no surface normal on the wire, so this
-            // projects straight up rather than raycasting for one; a slightly wrong decal
-            // orientation is a cosmetic detail, not a correctness one.
+            // than the bullet chip it reused for want of an enum member ('Scorch Decal Drawer' on
+            // _Managers, authored 2026-09-29). The wire carries no surface normal, so the ground
+            // under the blast is found here. Laid flat instead, the mark failed DecalManager's
+            // corner test on any slope and was drawn at 30% of its size: a grenade left a smudge.
+            Vector3 scorchAt = position;
+            Vector3 scorchNormal = Vector3.up;
+            if (Physics.Raycast(position + Vector3.up * ScorchProbeAbove, Vector3.down, out RaycastHit ground,
+                    ScorchProbeAbove + ScorchProbeBelow, 1, QueryTriggerInteraction.Ignore))
+            {
+                scorchAt = ground.point;
+                scorchNormal = ground.normal;
+            }
             NetClientBindings.Decals?.AddScorch(
-                position, Vector3.up, radiusMetres * _decalSizePerMetre);
+                scorchAt, scorchNormal, radiusMetres * _decalSizePerMetre);
+
+            // The bodies already on the ground are thrown by it, and a body that falls in the next
+            // moment -- knocked over or killed by this blast -- takes its push.
+            RemoteCorpseDirector.Current?.Explode(position, radiusMetres);
             return drewParticles;
         }
 

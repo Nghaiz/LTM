@@ -19,7 +19,7 @@ namespace Ironfront.Net.Unity.Client.Hud
     /// that uses one is disabled off the client.
     /// </para>
     /// </remarks>
-    public static class HudSprites
+    public static partial class HudSprites
     {
         private static Sprite _crosshair;
         private static Sprite _star;

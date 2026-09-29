@@ -40,25 +40,6 @@
         bool IsDead { get; set; }
 
         /// <summary>
-        /// Whether this actor's head is under water: the crown of its Head bone below the water
-        /// plane. The drowning rule's sensor.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// <b>Deliberately NOT <c>Actor.inWater</c>, which it used to be.</b> That field samples
-        /// the spine plus half a metre and means "deep enough that the shipped body swims" -- a
-        /// bot floating on its back as a ragdoll keeps it true with its head in the air. Read as
-        /// "the head is under", it drowned swimming bots (measured 2026-09-27:
-        /// <c>sampleDepth=0.29m headDepth=0.00m</c> on a drowned bot).
-        /// </para>
-        /// <para>
-        /// <b>Computed from bone positions, so it is live on the server</b> for a claimed body as
-        /// much as for a bot; nothing here depends on <c>Actor.Update</c> running.
-        /// </para>
-        /// </remarks>
-        bool IsSubmerged { get; }
-
-        /// <summary>
         /// Whether this actor sits in an enclosed seat -- a tank's or a helicopter's crew --
         /// where only a piercing round reaches it. <c>Actor.IsSeated() &amp;&amp; seat.enclosed</c>,
         /// the rule <c>Actor.DamageAttributed</c> applies offline.
@@ -87,8 +68,8 @@
 
         /// <summary>
         /// Whether the game counts this actor as in water deep enough to swim (<c>Actor.inWater</c>,
-        /// the spine plus half a metre under the surface). Not the drowning sensor -- that is
-        /// <see cref="IsSubmerged"/>, the crown of the head.
+        /// the spine plus half a metre under the surface). What a bot's breath drains on; a
+        /// player's drains on its capsule's own test (<c>NetServerActor.InWater</c>).
         /// </summary>
         bool IsInWater => false;
 
@@ -110,9 +91,9 @@
         }
 
         /// <summary>
-        /// One line of what the body's water state is made of: where its feet are, how deep the
-        /// crown <see cref="IsSubmerged"/> reads and the shipped swim sample sit, whether it has
-        /// fallen over into a ragdoll, and which seat it is in. For the drowning log.
+        /// One line of what the body's water state is made of: where its feet are, how deep its
+        /// crown and the shipped swim sample sit, whether it has fallen over into a ragdoll, and
+        /// which seat it is in. For the drowning log.
         /// </summary>
         /// <remarks>
         /// A drowning line that says only "actor 32 drowned" cannot tell a player who waded in

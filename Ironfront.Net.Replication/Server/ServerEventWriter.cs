@@ -58,9 +58,12 @@ namespace Ironfront.Net.Replication.Server
         /// <summary>Writes S_DEATH as a channel-2 payload. Broadcast — the killfeed is global.</summary>
         public static int WriteDeath(Span<byte> destination, in DeathMessage message)
         {
-            // Room for the detail tail; framed at the length actually written, so a message
-            // without the tail still goes out as the twelve bytes a 1.0 client expects.
-            Span<byte> body = stackalloc byte[DeathMessage.SizeWithDetail];
+            // Room for BOTH tails -- detail and range -- framed at the length actually written, so
+            // a message without them still goes out as the twelve bytes a 1.0 client expects.
+            // This held only the detail tail when the range tail was added (#386): the server
+            // writes every death with both, so every write overflowed, returned -1, and not one
+            // S_DEATH reached a client -- no killfeed, no ragdoll -- until a live test found it.
+            Span<byte> body = stackalloc byte[DeathMessage.SizeWithRange];
             int written = message.Write(body);
             return written < 0
                 ? -1
@@ -195,7 +198,8 @@ namespace Ironfront.Net.Replication.Server
             Span<byte> bodyScratch,
             ReadOnlySpan<PlayerScoreEntry> entries)
         {
-            int bodyLength = PlayerScoresMessage.Write(bodyScratch, entries);
+            // Always with the stats tail: a client from before it reads the rows and stops.
+            int bodyLength = PlayerScoresMessage.Write(bodyScratch, entries, includeStats: true);
             return bodyLength < 0
                 ? -1
                 : Frame(

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Interest;
 using Ironfront.Net.Replication.Match;
@@ -67,6 +68,10 @@ namespace Ironfront.Net.Unity.Client
         // samples so a frame without one does not turn a driver's icon back into a soldier.
         private readonly Dictionary<ushort, Transform> _seatedIn =
             new Dictionary<ushort, Transform>(ProtocolConstants.MAX_ACTORS);
+
+        // Each vehicle's crew team this frame, rebuilt by ApplyVehicleMarkers from _seatedIn.
+        private readonly Dictionary<Transform, byte> _crewTeam =
+            new Dictionary<Transform, byte>(ProtocolConstants.MAX_VEHICLES);
 
         /// <summary>Actors currently drawn.</summary>
         public int LiveCount => _live.Count;
@@ -167,7 +172,22 @@ namespace Ironfront.Net.Unity.Client
 
         private void Update()
         {
-            if (_client == null || _live.Count == 0) return;
+            if (_client == null) return;
+
+            byte localTeam = ResolveLocalTeam();
+            bool hasLocalBody = TryLocalPosition(out Vector3 localPosition, out Transform localVehicle);
+
+            SampleBodies(localTeam, hasLocalBody, localPosition);
+
+            // After the bodies, so a crew change sampled this frame is drawn this frame; and
+            // outside SampleBodies' early returns, so empty vehicles still show on a map with no
+            // other player in it.
+            ApplyVehicleMarkers(localTeam, hasLocalBody, localPosition, localVehicle);
+        }
+
+        private void SampleBodies(byte localTeam, bool hasLocalBody, Vector3 localPosition)
+        {
+            if (_live.Count == 0) return;
 
             SnapshotInterpolator buffer = _client.Router.Interpolator;
             if (buffer.Count < 2) return;
@@ -176,9 +196,6 @@ namespace Ironfront.Net.Unity.Client
             // wraps at 30 Hz while snapshots land at 20, and that sum threw every remote body
             // back a tick every 100 ms. See InterpolationClock.
             double renderTick = _client.Router.Clock.AdvanceTo(Time.unscaledTimeAsDouble);
-
-            byte localTeam = ResolveLocalTeam();
-            bool hasLocalBody = TryLocalPosition(out Vector3 localPosition);
 
             foreach (KeyValuePair<ushort, Transform> pair in _live)
             {
@@ -195,13 +212,29 @@ namespace Ironfront.Net.Unity.Client
                 {
                     Vec3 p = sample.Position;
                     float y = p.Y;
-                    if (_centrePivotActors.Contains(pair.Key))
+                    bool human = _centrePivotActors.Contains(pair.Key);
+                    if (human)
                     {
                         bool crouching = (sample.State.StateFlags & ActorStateFlags.IsCrouching) != 0;
                         y -= MovementCore.HeightFor(crouching) * 0.5f;
                     }
-                    pair.Value.SetPositionAndRotation(
-                        new Vector3(p.X, y, p.Z), Quaternion.Euler(0f, sample.YawDegrees, 0f));
+                    Quaternion facing = Quaternion.Euler(0f, sample.YawDegrees, 0f);
+                    if (Swims(in sample.State) && !float.IsNegativeInfinity(MovementCore.WaterHeight))
+                    {
+                        // At the surface, by its head: a player's capsule and a bot's buoyant
+                        // ragdoll both float there, and the pose last drawn says how far under the
+                        // head the root has to be (SwimPresentation.RootHeight).
+                        y = SwimPresentation.RootHeight(
+                            MovementCore.WaterHeight,
+                            lying != null ? lying.HeadAboveRoot : SwimPresentation.IdleHeadAboveRoot);
+                        if ((sample.State.StateFlags & ActorStateFlags.IsRagdoll) != 0 && lying != null)
+                            facing = SwimmingHeading(pair.Value.rotation, lying.PlanarVelocity, Time.deltaTime);
+                    }
+                    // On the ground, with the soles on it rather than the origin: the idle pose
+                    // stands its feet above the body's origin (RemoteActorView.SoleLift).
+                    else if (StandsOnGround(in sample.State, human) && TryGroundUnder(p.X, y, p.Z, out float ground))
+                        y = ground - (lying != null ? lying.SoleLift : RemoteActorView.IdleSoleLiftMetres);
+                    pair.Value.SetPositionAndRotation(new Vector3(p.X, y, p.Z), facing);
                 }
 
                 // Everything past position and yaw -- pitch, stance, aim, ragdoll, weapon, team
@@ -230,9 +263,103 @@ namespace Ironfront.Net.Unity.Client
                 // blip the rule exists to hide simply freezes on screen instead.
                 _seatedIn.TryGetValue(pair.Key, out Transform seatedIn);
                 ApplyMinimapMarker(
-                    pair.Value, view.Team, view.IsAlive, IsHuman(pair.Key), seatedIn,
+                    pair.Value, view.Team, view.IsAlive, IsHuman(pair.Key), seatedIn != null,
                     localTeam, hasLocalBody, localPosition);
             }
+        }
+
+        /// <summary>
+        /// Whether a body in <paramref name="state"/> is swimming: alive, in water, not seated.
+        /// </summary>
+        internal static bool Swims(in ActorSnapshotEntry state)
+        {
+            ActorStateFlags flags = state.StateFlags;
+            return SwimPresentation.Swims(
+                (flags & ActorStateFlags.IsAlive) != 0,
+                (flags & ActorStateFlags.IsInWater) != 0,
+                (flags & ActorStateFlags.IsSeated) != 0);
+        }
+
+        /// <summary>How fast a swimming bot turns to face where it is going, degrees per second.</summary>
+        internal const float SwimTurnDegreesPerSecond = 240f;
+
+        /// <summary>
+        /// A ragdoll-swimming bot's heading: toward where it is moving. The server's yaw for a body
+        /// lying as a ragdoll is the one it had when it fell, so a bot drawn by it swims sideways.
+        /// </summary>
+        internal static Quaternion SwimmingHeading(Quaternion current, Vector3 planarVelocity, float deltaSeconds)
+        {
+            if (planarVelocity.sqrMagnitude < 0.09f) return current;
+            Quaternion toward = Quaternion.LookRotation(new Vector3(planarVelocity.x, 0f, planarVelocity.z), Vector3.up);
+            return Quaternion.RotateTowards(current, toward, SwimTurnDegreesPerSecond * deltaSeconds);
+        }
+
+        /// <summary>How far above a body's feet the ground under it is looked for.</summary>
+        internal const float FootingProbeAboveMetres = 0.5f;
+
+        /// <summary>
+        /// How far below a body's feet a surface still counts as the ground it stands on. Past
+        /// this the body is in the air, and is drawn where the server has it.
+        /// </summary>
+        internal const float FootingReachMetres = 0.3f;
+
+        /// <summary>A player whose body rises faster than this is jumping, not standing.</summary>
+        internal const float RisingMetresPerSecond = 1f;
+
+        // Scenery: terrain, buildings and props. Vehicles are layer 12 and bodies carry no
+        // collider here, so a body is never stood on a vehicle's roof or another body's head.
+        private const int GroundMask = 1;
+
+        /// <summary>
+        /// Whether a body in <paramref name="state"/> is standing on its feet, and so is drawn on
+        /// the ground under it rather than at the height the snapshot carries.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner report 2026-09-29, image 3: a friend stood in the air right after spawning.</b>
+        /// Every body is a <c>CharacterController</c>, which rests a skin width (0.08 m) above
+        /// whatever it stands on, and a player's replicated centre ran a few centimetres above
+        /// its own client's on top of that (friend's log: <c>srv</c> 21.20 against 21.14 standing
+        /// still). Measured in the rig: an idle player's feet 0.09 m up, its soles higher still.
+        /// The original has the same gap and never showed it, because nobody saw a player from
+        /// outside; bots come off a navmesh with gaps of their own, and snapshot interpolation
+        /// cuts across every bump and dip between two samples.
+        /// </para>
+        /// <para>
+        /// A grounded player replicates a vertical speed of -10 m/s (MovementCore's
+        /// StickToGroundForce), so a falling one cannot be told from it -- only a rising one can,
+        /// and that is a jump. The reach below the feet is what keeps the rest of a jump, and a
+        /// fall, in the air.
+        /// </para>
+        /// </remarks>
+        internal static bool StandsOnGround(in ActorSnapshotEntry state, bool isHuman)
+        {
+            ActorStateFlags flags = state.StateFlags;
+            if ((flags & ActorStateFlags.IsAlive) == 0) return false;
+
+            const ActorStateFlags offFeet =
+                ActorStateFlags.IsRagdoll | ActorStateFlags.IsSeated | ActorStateFlags.IsInWater;
+            if ((flags & offFeet) != 0) return false;
+
+            return !isHuman || SnapshotBuilder.UnpackVelocity(in state).Y <= RisingMetresPerSecond;
+        }
+
+        /// <summary>
+        /// The height of the ground under feet at (<paramref name="x"/>, <paramref name="feetY"/>,
+        /// <paramref name="z"/>), false when there is none within reach -- above as well as below,
+        /// so feet a little under the surface come up onto it.
+        /// </summary>
+        internal static bool TryGroundUnder(float x, float feetY, float z, out float groundY)
+        {
+            var from = new Vector3(x, feetY + FootingProbeAboveMetres, z);
+            if (Physics.Raycast(from, Vector3.down, out RaycastHit ground,
+                    FootingProbeAboveMetres + FootingReachMetres, GroundMask, QueryTriggerInteraction.Ignore))
+            {
+                groundY = ground.point.y;
+                return true;
+            }
+            groundY = feetY;
+            return false;
         }
 
         private void OnSpawn(SpawnActorMessage message)
@@ -262,14 +389,19 @@ namespace Ironfront.Net.Unity.Client
             // the centimetre. Nothing was wrong with the wire, the interest manager or the
             // decoder. The scripted aim solver reported `resolved: true` and fired 240 rounds
             // into open sky, and a human's crosshair would have done the same.
+            float spawnX = Quantize.UnpackPos(message.PosX);
             float spawnY = Quantize.UnpackPos(message.PosY);
+            float spawnZ = Quantize.UnpackPos(message.PosZ);
             if (!message.IsBot)
                 spawnY -= MovementCore.HeightFor(crouching: false) * 0.5f;
 
-            t.position = new Vector3(
-                Quantize.UnpackPos(message.PosX),
-                spawnY,
-                Quantize.UnpackPos(message.PosZ));
+            // On the ground, as SampleBodies stands every body on its feet (StandsOnGround): for
+            // an actor out of interest range this is the only position it is ever drawn at, and
+            // it came off the server a controller's skin width up (measured 0.15 m in the rig). A
+            // body that has just spawned stands still, so it gets the idle pose's sole lift.
+            if (TryGroundUnder(spawnX, spawnY, spawnZ, out float spawnGround))
+                spawnY = spawnGround - RemoteActorView.IdleSoleLiftMetres;
+            t.position = new Vector3(spawnX, spawnY, spawnZ);
             t.rotation = Quaternion.Euler(0f, Quantize.UnpackYaw(message.Yaw), 0f);
 
             t.gameObject.SetActive(true);
@@ -291,9 +423,9 @@ namespace Ironfront.Net.Unity.Client
             // Ledger A-2 is not touched: nothing here registers a proxy with ActorManager, so
             // ActorManager.Player still resolves to the local body. That is the whole reason
             // this goes through MinimapUi.SetMarker (Transform-keyed) and not AddActorBlip.
-            bool spawnHasLocal = TryLocalPosition(out Vector3 spawnLocalPosition);
+            bool spawnHasLocal = TryLocalPosition(out Vector3 spawnLocalPosition, out _);
             ApplyMinimapMarker(
-                t, message.Team, isAlive: true, isHuman: !message.IsBot, seatedIn: null,
+                t, message.Team, isAlive: true, isHuman: !message.IsBot, seated: false,
                 ResolveLocalTeam(), spawnHasLocal, spawnLocalPosition);
 
             RemoteActorView view = t.GetComponent<RemoteActorView>();
@@ -346,21 +478,105 @@ namespace Ironfront.Net.Unity.Client
         /// </para>
         /// </remarks>
         private static void ApplyMinimapMarker(
-            Transform subject, byte team, bool isAlive, bool isHuman, Transform seatedIn,
+            Transform subject, byte team, bool isAlive, bool isHuman, bool seated,
             byte localTeam, bool hasLocalBody, Vector3 localPosition)
         {
             IMinimapMarkers minimap = NetClientBindings.Minimap;
             if (minimap == null) return;
+
+            // A seated body is drawn by its vehicle's icon (ApplyVehicleMarkers): a soldier icon
+            // on top of a jeep icon reads as two things in one place.
+            if (seated)
+            {
+                minimap.RemoveMarker(subject);
+                return;
+            }
 
             float sqrDistance = hasLocalBody
                 ? (subject.position - localPosition).sqrMagnitude
                 : float.PositiveInfinity;
 
             if (ShouldMarkOnMinimap(team, localTeam, isAlive, sqrDistance))
-                minimap.SetBodyMarker(
-                    subject, CapturePointOwnership.ToSpawnPointOwner(team), isHuman, seatedIn);
+                minimap.SetBodyMarker(subject, CapturePointOwnership.ToSpawnPointOwner(team), isHuman);
             else
                 minimap.RemoveMarker(subject);
+        }
+
+        /// <summary>
+        /// Gives every replicated vehicle an icon of its own, or takes it away, by
+        /// <see cref="ShouldMarkVehicle"/>'s rule.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner report 2026-09-29</b>: vehicles need icons, and their movement must be clear.
+        /// Until now a vehicle showed only through a soldier seated in it, wearing a vehicle
+        /// texture on a soldier's icon. An earlier attempt drew every vehicle as a grey SOLDIER
+        /// icon and showed enemy-driven ones wherever they were (the same day's first report);
+        /// this draws the vehicle's own silhouette, only while crewed, with exactly the
+        /// visibility its crew has.
+        /// </para>
+        /// <para>
+        /// <b>The crew is read from the bodies</b>: <see cref="_seatedIn"/> as the last sampled
+        /// snapshot left it, and this player's own seat from its snapshot entry, because the
+        /// local body is predicted and never appears among the remote ones.
+        /// </para>
+        /// </remarks>
+        private void ApplyVehicleMarkers(byte localTeam, bool hasLocalBody, Vector3 localPosition, Transform localVehicle)
+        {
+            IMinimapMarkers minimap = NetClientBindings.Minimap;
+            if (minimap == null) return;
+            if (_vehicles == null) _vehicles = GetComponent<RemoteVehicleRegistry>();
+            if (_vehicles == null) return;
+
+            _crewTeam.Clear();
+            foreach (KeyValuePair<ushort, Transform> seat in _seatedIn)
+            {
+                if (seat.Value == null || _crewTeam.ContainsKey(seat.Value)) continue;
+                if (!_views.TryGetValue(seat.Key, out RemoteActorView crew) || crew == null || !crew.IsAlive) continue;
+                _crewTeam[seat.Value] = crew.Team;
+            }
+            if (localVehicle != null && localTeam != TeamId.None) _crewTeam[localVehicle] = localTeam;
+
+            IReadOnlyList<ushort> ids = _vehicles.LiveIds;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                if (!_vehicles.TryFind(ids[i], out NetClientVehicle vehicle) || !vehicle.Exists || vehicle.Body == null)
+                    continue;
+
+                Transform subject = vehicle.Body.Transform;
+                if (vehicle.DiedFromSnapshot)
+                {
+                    minimap.RemoveMarker(subject);
+                    continue;
+                }
+
+                bool crewed = _crewTeam.TryGetValue(subject, out byte crewTeam);
+                float sqrDistance = hasLocalBody
+                    ? (subject.position - localPosition).sqrMagnitude
+                    : float.PositiveInfinity;
+
+                if (ShouldMarkVehicle(crewed, crewTeam, localTeam, sqrDistance))
+                    minimap.SetVehicleMarker(subject, CapturePointOwnership.ToSpawnPointOwner(crewTeam));
+                else
+                    minimap.RemoveMarker(subject);
+            }
+        }
+
+        /// <summary>
+        /// Whether a vehicle belongs on the minimap of a client on <paramref name="localTeam"/>,
+        /// <paramref name="sqrDistance"/> squared metres away.
+        /// </summary>
+        /// <remarks>
+        /// An EMPTY vehicle is not drawn: owner ruling 2026-09-29, after a map of grey parked
+        /// rides buried the flags they stood beside. A CREWED vehicle is exactly as visible as a
+        /// soldier of its crew's team would be (<see cref="ShouldMarkOnMinimap"/>): a team-mate's
+        /// tank is always on the map, an enemy's only inside <see cref="EnemyRevealRadius"/>.
+        /// Pure, for <see cref="ShouldMarkOnMinimap"/>'s reason.
+        /// </remarks>
+        internal static bool ShouldMarkVehicle(bool crewed, byte crewTeam, byte localTeam, float sqrDistance)
+        {
+            if (!crewed) return false;
+            return ShouldMarkOnMinimap(crewTeam, localTeam, isAlive: true, sqrDistance);
         }
 
         /// <summary>
@@ -398,15 +614,17 @@ namespace Ironfront.Net.Unity.Client
         /// seam, whose writes would land on this player's own HUD. A reading at 20 Hz is plenty for
         /// a 60 m radius.
         /// </remarks>
-        private bool TryLocalPosition(out Vector3 position)
+        private bool TryLocalPosition(out Vector3 position, out Transform seatedIn)
         {
             position = Vector3.zero;
+            seatedIn = null;
             ushort local = _client != null ? _client.LocalActorId : (ushort)0;
             if (local == 0 || !_client.Router.Decoder.Current.TryFind(local, out ActorSnapshotEntry entry))
                 return false;
 
             position = new Vector3(
                 Quantize.UnpackPos(entry.PosX), Quantize.UnpackPos(entry.PosY), Quantize.UnpackPos(entry.PosZ));
+            seatedIn = SeatVehicleOf(in entry);
             return true;
         }
 

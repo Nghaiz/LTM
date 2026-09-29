@@ -884,6 +884,69 @@ public class FpsActorController : ActorController
 		}
 	}
 
+	// Whether this networked player is swimming, as last presented.
+	private bool networkSwimming;
+
+	// The body's head bone, which a swimmer is placed by (SwimPresentation.RootHeight).
+	private Transform swimHead;
+
+	/// <summary>Whether this networked player is in water, swimming: drawn third-person at the surface.</summary>
+	public bool IsNetworkSwimming => networkSwimming;
+
+	/// <summary>
+	/// Swims a networked player the way the original swims one: third person, the body at the
+	/// surface in the game's own swim animation, and back to first person on land.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Owner ruling 2026-09-29.</b> The original fells a body in water and swims it as a ragdoll,
+	/// with the camera behind it (<see cref="StartRagdoll"/>, <see cref="SwimInput"/> steering by the
+	/// third-person camera). A networked body is never felled for water -- its movement is
+	/// <c>MovementCore</c>'s, which the server replays, and a ragdoll here would be a second writer
+	/// (PR #281) -- so the camera and the pose are given without the physics:
+	/// <see cref="SwimPresentation"/> plays the original's swim clips on the animated body, and
+	/// <see cref="LateUpdate"/> draws it at the surface.
+	/// </para>
+	/// <para>
+	/// <b>In water is <c>actor.inWater</c></b>, which for this body is the capsule's own test (see
+	/// <c>Actor.Update</c>) -- the one its movement swims by and its breath drains on. Offline play
+	/// is untouched: <c>NetContext.IsClient</c> is false there, and the body swims by ragdoll as it
+	/// always has.
+	/// </para>
+	/// <para>
+	/// <b>A death in water leaves the camera to the death</b>: the swim ends without returning to
+	/// first person, and <see cref="FollowCorpse"/> takes the camera from there.
+	/// </para>
+	/// </remarks>
+	private void UpdateNetworkSwim()
+	{
+		bool swim = NetContext.IsClient && actor != null && SwimPresentation.Swims(!actor.dead, actor.inWater, actor.IsSeated());
+		if (swim || networkSwimming)
+		{
+			bool moving = swim && (Mathf.Abs(inputSource.MoveX) > 0.01f || Mathf.Abs(inputSource.MoveZ) > 0.01f);
+			SwimPresentation.Apply(actor.animator, swim, moving);
+		}
+		if (swim == networkSwimming)
+		{
+			return;
+		}
+		networkSwimming = swim;
+		if (swim)
+		{
+			if (swimHead == null && actor.animator.isHuman)
+			{
+				swimHead = actor.animator.GetBoneTransform(HumanBodyBones.Head);
+			}
+			ThirdPersonCamera();
+			return;
+		}
+		actor.transform.localPosition = actorLocalOrigin;
+		if (!actor.dead)
+		{
+			FirstPersonCamera();
+		}
+	}
+
 	private void ThirdPersonCamera()
 	{
 		fpCamera.enabled = false;
@@ -933,6 +996,8 @@ public class FpsActorController : ActorController
 
 	private void Update()
 	{
+		UpdateNetworkSwim();
+
 		// Capture the edge every render frame. NetPredictionClock may or may not simulate a tick
 		// in this frame; OnNetworkTickSimulated clears it only after it reached C_INPUT.
 		bool fireHeldNow = Input.GetButton("Fire1") || Input.GetMouseButton(0);
@@ -1147,11 +1212,14 @@ public class FpsActorController : ActorController
 		{
 			crouchInput = !crouchInput;
 		}
-		if (Input.mouseScrollDelta.y < 0f)
+		// While the map is held open the wheel zooms it (MinimapUi); switching weapons with the
+		// same notch would change the gun in the player's hands every time they zoom.
+		float wheel = MinimapUi.OwnsScrollWheel ? 0f : Input.mouseScrollDelta.y;
+		if (wheel < 0f)
 		{
 			QueueWeaponSwitch(actor.FindWeaponSlot(1, skipToggleable: true));
 		}
-		else if (Input.mouseScrollDelta.y > 0f)
+		else if (wheel > 0f)
 		{
 			QueueWeaponSwitch(actor.FindWeaponSlot(-1, skipToggleable: false));
 		}
@@ -1191,9 +1259,45 @@ public class FpsActorController : ActorController
 
 	private void LateUpdate()
 	{
+		if (networkSwimming)
+		{
+			// At the surface by its head, in the pose the animator drew this frame; the camera below
+			// then frames it there.
+			Transform body = actor.transform;
+			float headAboveRoot = swimHead != null
+				? swimHead.position.y - body.position.y
+				: SwimPresentation.IdleHeadAboveRoot;
+			Vector3 at = body.position;
+			body.position = new Vector3(
+				at.x,
+				SwimPresentation.RootHeight(Ironfront.Net.Replication.Movement.MovementCore.WaterHeight, headAboveRoot),
+				at.z);
+		}
 		if (tpCamera.enabled)
 		{
 			UpdateThirdPersonCamera(followingCorpse);
+			if (networkSwimming)
+			{
+				KeepSwimCameraAboveTheSurface();
+			}
+		}
+	}
+
+	// How far over the surface the camera behind a swimmer is held.
+	private const float SwimCameraAboveSurface = 0.6f;
+
+	/// <summary>
+	/// Keeps the camera behind a swimmer out of the water. It hangs off the spine, which a swimmer
+	/// carries under the surface, so a level or upward look put it under water, facing the seabed
+	/// (live test 2026-09-30).
+	/// </summary>
+	private void KeepSwimCameraAboveTheSurface()
+	{
+		float lowest = Ironfront.Net.Replication.Movement.MovementCore.WaterHeight + SwimCameraAboveSurface;
+		Vector3 at = tpCamera.transform.position;
+		if (at.y < lowest)
+		{
+			tpCamera.transform.position = new Vector3(at.x, lowest, at.z);
 		}
 	}
 

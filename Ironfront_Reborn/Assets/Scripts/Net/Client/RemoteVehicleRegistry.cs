@@ -279,10 +279,8 @@ namespace Ironfront.Net.Unity.Client
             _liveIds.Add(message.VehicleId);
             _byGameObject[spawned] = message.VehicleId;
 
-            // No minimap icon of its own: as in the original, a vehicle shows on the map only
-            // through the soldier seated in it, wearing the vehicle's icon (RemoteActorRegistry).
-            // Drawing every vehicle here painted the map with grey soldier icons and showed the
-            // enemy's too, wherever they were (owner report 2026-09-29).
+            // Its minimap icon is RemoteActorRegistry.ApplyVehicleMarkers' to draw, not this
+            // spawn's: whether an icon may show depends on who is aboard, which changes every tick.
         }
 
         private void OnVehicleDespawn(VehicleDespawnMessage message)
@@ -301,6 +299,10 @@ namespace Ironfront.Net.Unity.Client
             if (vehicle.Exists) _byGameObject.Remove(vehicle.Body.GameObject);
 
             if (!vehicle.Exists) return;
+
+            // Before the destroy, for the key reason Clear() gives: the icon is keyed by this
+            // transform (RemoteActorRegistry.ApplyVehicleMarkers draws one for every vehicle).
+            NetClientBindings.Minimap?.RemoveMarker(vehicle.Body.Transform);
 
             // Destroyed rather than Die()'d for a WorldReset: Die plays the explosion, which is
             // right for a vehicle that was shot and wrong for one the round simply ended around.

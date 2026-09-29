@@ -388,24 +388,35 @@ namespace Ironfront.Net.Replication.Tests
         /// <c>Apply</c> -- moving them to <c>Bind</c> would set the pose once per spawn and never
         /// update it, which is the same shape of defect as not writing them at all.
         /// </para>
+        /// <para>
+        /// <b>Written through <c>SwimPresentation</c> since 2026-09-29</b>, which the local
+        /// player's own swim uses too: the pair sits on the controller's Ragdoll Layer, whose
+        /// weight and <c>ragdolled</c> flag have to move with it, and one writer keeps the three
+        /// in step for every swimmer.
+        /// </para>
         /// </remarks>
         [Fact]
         public void ApplyWritesTheWaterPoseFromTheReplicatedBit()
         {
-            string source = ViewSource();
-            string apply = MethodBody(source, "public void Apply(in ActorSnapshotEntry entry)");
+            string view = ViewSource();
+            string apply = MethodBody(view, "public void Apply(in ActorSnapshotEntry entry)");
 
-            Assert.Contains("_hashSwim", apply);
-            Assert.Contains("_hashSwimForward", apply);
+            Assert.Matches(@"SwimPresentation\.Apply\(\s*_animator,\s*IsSwimming,", apply);
 
             // From the server's bit, never from a local water-plane test: two answers to one
             // question is what the flags byte exists to prevent.
-            Assert.Matches(@"_hashSwim,\s*_state\.IsInWater", apply);
-            Assert.Matches(@"_hashSwimForward,\s*_state\.IsInWater\s*&&", apply);
+            Assert.Matches(
+                @"public bool IsSwimming\s*=>\s*_hasState\s*&&\s*SwimPresentation\.Swims\(\s*_state\.IsAlive,\s*_state\.IsInWater,\s*_state\.IsSeated\s*\)",
+                view);
+            Assert.DoesNotContain("WaterLevel", view);
 
-            // Bound to the controller's spelling, like the locomotion trio above.
-            Assert.Contains("Animator.StringToHash(\"swim\")", source);
-            Assert.Contains("Animator.StringToHash(\"swim forward\")", source);
+            // Bound to the controller's spelling, like the locomotion trio above, and driven by
+            // whether the body swims.
+            string swim = SwimPresentationSource();
+            Assert.Contains("Animator.StringToHash(\"swim\")", swim);
+            Assert.Contains("Animator.StringToHash(\"swim forward\")", swim);
+            Assert.Matches(@"SetBool\(Swim,\s*swimming\)", swim);
+            Assert.Matches(@"SetBool\(SwimForward,\s*swimming\s*&&\s*moving\)", swim);
         }
 
         /// <summary>
@@ -545,18 +556,33 @@ namespace Ironfront.Net.Replication.Tests
             return names;
         }
 
-        /// <summary>Every parameter name RemoteActorView hashes.</summary>
+        /// <summary>
+        /// Every parameter name RemoteActorView writes: its own hashes, and those of
+        /// <c>SwimPresentation</c>, which it writes the water pose through.
+        /// </summary>
         private static HashSet<string> ViewParameters()
         {
             var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (System.Text.RegularExpressions.Match match in Regex.Matches(
-                         ViewSource(), @"Animator\.StringToHash\(""([^""]+)""\)"))
+            foreach (string source in new[] { ViewSource(), SwimPresentationSource() })
             {
-                names.Add(match.Groups[1].Value);
+                foreach (System.Text.RegularExpressions.Match match in Regex.Matches(
+                             source, @"Animator\.StringToHash\(""([^""]+)""\)"))
+                {
+                    names.Add(match.Groups[1].Value);
+                }
             }
 
             Assert.NotEmpty(names);
             return names;
+        }
+
+        private static string SwimPresentationSource()
+        {
+            string path = Path.Combine(
+                UnityAssets(), "Scripts", "Net", "Shared", "SwimPresentation.cs");
+
+            Assert.True(File.Exists(path), $"Expected SwimPresentation at {path}.");
+            return File.ReadAllText(path);
         }
 
         private static string ViewSource()

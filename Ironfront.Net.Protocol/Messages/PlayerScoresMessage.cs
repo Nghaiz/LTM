@@ -60,6 +60,32 @@ namespace Ironfront.Net.Protocol
         /// </para>
         /// </remarks>
         public byte Team;
+
+        // ---- the stats tail (2026-09-30, the owner's Tab-board report) ----
+
+        /// <summary>Whether the stats tail was sent for this row. A server before 2026-09-30 never sends it.</summary>
+        public bool HasStats;
+
+        /// <summary>Alive, and in a vehicle seat, as the server holds the actor now.</summary>
+        public PlayerStatusFlags Status;
+
+        /// <summary>Enemy kills this match whose killing blow was to the head. Clamped at 255.</summary>
+        public byte Headshots;
+
+        /// <summary>Enemy kills since this actor last died. Clamped at 255.</summary>
+        public byte Streak;
+
+        /// <summary>The longest <see cref="Streak"/> this match. Clamped at 255.</summary>
+        public byte BestStreak;
+
+        /// <summary>
+        /// The points this actor's kills put on its side's score this match: each enemy kill is
+        /// worth what the match awarded for it, one per flag the side held.
+        /// </summary>
+        public ushort Points;
+
+        /// <summary>A connected human's smoothed round trip in milliseconds; 0 for a bot or unknown.</summary>
+        public ushort PingMs;
     }
 
     /// <summary>
@@ -99,11 +125,21 @@ namespace Ironfront.Net.Protocol
         /// <summary>u8 actorId + u16 kills + u16 deaths + u8 team.</summary>
         public const int EntrySize = 6;
 
+        /// <summary>The stats tail's version byte. A tail with any other version is left unread.</summary>
+        public const byte StatsTailVersion = 1;
+
         /// <summary>
-        /// Worst case: every actor scored. 1 + 64 x 6 = 385, comfortably inside one
-        /// un-fragmented channel-2 payload (1181).
+        /// One row of the stats tail, in the rows' order: u8 status + u8 headshots + u8 streak +
+        /// u8 best streak + u16 points + u16 ping.
         /// </summary>
-        public const int MaxBodySize = HeaderSize + ProtocolConstants.MAX_ACTORS * EntrySize;
+        public const int StatsEntrySize = 8;
+
+        /// <summary>
+        /// Worst case: every actor scored, with the stats tail. 1 + 64 x 6 + 1 + 64 x 8 = 898,
+        /// inside one un-fragmented channel-2 payload (1181).
+        /// </summary>
+        public const int MaxBodySize =
+            HeaderSize + ProtocolConstants.MAX_ACTORS * EntrySize + 1 + ProtocolConstants.MAX_ACTORS * StatsEntrySize;
 
         /// <summary>Encoded size of a score table with this many entries.</summary>
         /// <remarks>
@@ -113,8 +149,24 @@ namespace Ironfront.Net.Protocol
         /// </remarks>
         public static int SizeFor(int entryCount) => HeaderSize + entryCount * EntrySize;
 
+        /// <summary>Encoded size of a score table with this many entries and the stats tail.</summary>
+        public static int SizeWithStatsFor(int entryCount)
+            => SizeFor(entryCount) + 1 + entryCount * StatsEntrySize;
+
         /// <summary>Writes the message body. Returns bytes written, or -1.</summary>
         public static int Write(Span<byte> dst, ReadOnlySpan<PlayerScoreEntry> entries)
+            => Write(dst, entries, includeStats: false);
+
+        /// <summary>
+        /// Writes the message body, with the stats tail when <paramref name="includeStats"/>.
+        /// Returns bytes written, or -1.
+        /// </summary>
+        /// <remarks>
+        /// <b>The tail comes after every row, not inside each.</b> A client from before it reads
+        /// the count and the rows and stops, so the tail is compatible without a
+        /// <c>PROTOCOL_VERSION</c> bump -- the same argument as <c>S_DEATH</c>'s detail tail.
+        /// </remarks>
+        public static int Write(Span<byte> dst, ReadOnlySpan<PlayerScoreEntry> entries, bool includeStats)
         {
             if (entries.Length > byte.MaxValue) return -1;
 
@@ -127,6 +179,21 @@ namespace Ironfront.Net.Protocol
                 w.WriteU16(entries[i].Kills);
                 w.WriteU16(entries[i].Deaths);
                 w.WriteU8(entries[i].Team);
+            }
+
+            if (includeStats)
+            {
+                w.WriteU8(StatsTailVersion);
+
+                for (int i = 0; i < entries.Length; i++)
+                {
+                    w.WriteU8((byte)entries[i].Status);
+                    w.WriteU8(entries[i].Headshots);
+                    w.WriteU8(entries[i].Streak);
+                    w.WriteU8(entries[i].BestStreak);
+                    w.WriteU16(entries[i].Points);
+                    w.WriteU16(entries[i].PingMs);
+                }
             }
 
             return w.Ok ? w.Position : -1;
@@ -169,6 +236,36 @@ namespace Ironfront.Net.Protocol
             }
 
             entryCount = count;
+
+            // The stats tail is optional: a server from before it sends the rows alone. A tail of
+            // a version this build does not know is left unread rather than refused, so a later
+            // server can change it without cutting this client off. Half a tail is malformed --
+            // it would put one player's numbers on another's row.
+            if (r.Remaining == 0) return true;
+
+            byte version = r.ReadU8();
+            if (!r.Ok) return false;
+            if (version != StatsTailVersion) return true;
+
+            for (int i = 0; i < count; i++)
+            {
+                byte status   = r.ReadU8();
+                byte heads    = r.ReadU8();
+                byte streak   = r.ReadU8();
+                byte best     = r.ReadU8();
+                ushort points = r.ReadU16();
+                ushort ping   = r.ReadU16();
+                if (!r.Ok) return false;
+
+                entries[i].HasStats   = true;
+                entries[i].Status     = (PlayerStatusFlags)status;
+                entries[i].Headshots  = heads;
+                entries[i].Streak     = streak;
+                entries[i].BestStreak = best;
+                entries[i].Points     = points;
+                entries[i].PingMs     = ping;
+            }
+
             return true;
         }
     }

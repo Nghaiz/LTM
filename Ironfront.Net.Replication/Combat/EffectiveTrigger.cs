@@ -96,11 +96,13 @@ namespace Ironfront.Net.Replication.Combat
     public readonly struct ActorFireEligibility
     {
         public ActorFireEligibility(
-            bool isAlive, bool isDeployed, bool isSeatedWithoutCarriedWeapon = false)
+            bool isAlive, bool isDeployed, bool isSeatedWithoutCarriedWeapon = false,
+            bool isInWater = false)
         {
             IsAlive = isAlive;
             IsDeployed = isDeployed;
             IsSeatedWithoutCarriedWeapon = isSeatedWithoutCarriedWeapon;
+            IsInWater = isInWater;
         }
 
         public bool IsAlive { get; }
@@ -125,6 +127,17 @@ namespace Ironfront.Net.Replication.Combat
         /// seat rules are the game's and this library cannot see them.
         /// </remarks>
         public bool IsSeatedWithoutCarriedWeapon { get; }
+
+        /// <summary>
+        /// True while the body is in water, swimming: the original puts the weapon away there
+        /// and fires nothing until the body is out (owner ruling 2026-09-29, swimming).
+        /// </summary>
+        /// <remarks>
+        /// The client stows the gun for the same test (<c>Actor.UpdateSwimWeapon</c>) and stops
+        /// predicting shots with it, so a trigger held in water is refused on both sides rather
+        /// than drawn as nothing here and spent as a round there.
+        /// </remarks>
+        public bool IsInWater { get; }
 
         /// <summary>An actor standing on its own feet, holding its own weapon.</summary>
         public static ActorFireEligibility OnFoot(bool isAlive)
@@ -284,6 +297,7 @@ namespace Ironfront.Net.Replication.Combat
                 && actor.IsAlive
                 && actor.IsDeployed
                 && !actor.IsSeatedWithoutCarriedWeapon
+                && !actor.IsInWater
                 && !sprinting
                 && SprintAllowsFire(in trigger, nowSeconds)
                 && weapon.Unholstered;

@@ -167,7 +167,21 @@ namespace Ironfront.Tools.ClientWiringGate
                     ("_victim", "a kill never names its victim"),
                     ("_sentence",
                      "a death nobody scored — drowned, fell, went down with a vehicle — renders "
-                     + "blank, which is the \"The world\" complaint back in another form")),
+                     + "blank, which is the \"The world\" complaint back in another form"),
+                    // The owner's report of 2026-09-30: more icons, better effects, every event.
+                    ("_lead", "a death nobody scored and a match event lose the picture that says what happened"),
+                    ("_verb", "a match event loses its verb and reads \"BLUE TEAM FORTRESS\""),
+                    ("_glyph", "a vehicle or blast kill loses its picture and falls back to a word"),
+                    ("_glyphSize", "a vehicle picture cannot follow its shape and every one is squashed"),
+                    ("_longShot", "a long shot is not marked as one"),
+                    ("_distance", "a long shot never says how far it flew"),
+                    ("_badge", "a multi-kill, streak, revenge or first blood earns no badge"),
+                    ("_badgeBacking", "a badge has no colour, so every accolade looks alike"),
+                    ("_badgeGlow", "a badge cannot glow as it arrives"),
+                    ("_badgeIcon", "a badge loses its picture"),
+                    ("_badgeText", "a badge draws empty"),
+                    ("_sheen", "a new line arrives without its sweep of light"),
+                    ("_timer", "a line no longer shows how long it has left")),
 
                 new MenuScreenWiringDetectors.Screen(
                     Row, BuildCommand, Clause, Clause, Clause,
@@ -211,7 +225,18 @@ namespace Ironfront.Tools.ClientWiringGate
                     ("_totals", "the side's totals never render — and P18 criterion 7 is that arithmetic"),
                     ("_rows", "the rows have nowhere to go"),
                     ("_empty", "an empty side draws nothing at all instead of saying so"),
-                    ("_rowTemplate", "the column has no row to clone, so it lists nobody — P18 criterion 2")),
+                    ("_rowTemplate", "the column has no row to clone, so it lists nobody — P18 criterion 2"),
+                    // Owner's report of 2026-09-30: players apart from bots.
+                    ("_humansSection", "the players are not headed apart from the bots"),
+                    ("_botsSection", "the bots are not headed apart from the players")),
+
+                new MenuScreenWiringDetectors.Screen(
+                    Row, BuildCommand, Clause, Clause, Clause,
+                    "ScoreboardSectionView", "Scripts/Net/Client/Hud/ScoreboardSectionView.cs",
+                    Array.Empty<(string, int, string)>(),
+                    ("_icon", "a group heading loses the mark that says players or bots"),
+                    ("_label", "a group heading draws empty"),
+                    ("_rule", "a group heading loses the rule that closes it off")),
 
                 new MenuScreenWiringDetectors.Screen(
                     Row, BuildCommand, Clause, Clause, Clause,
@@ -221,11 +246,24 @@ namespace Ironfront.Tools.ClientWiringGate
                     ("_edge", "your own row is not picked out of the column"),
                     ("_rank", "a row has no rank"),
                     ("_star", "the top of a side is not marked"),
-                    // No BOT tag since 2026-09-29: a bot's name says it is one ("Blue Team Bot 3").
                     ("_name", "a row never names its player — P18 criterion 2"),
                     ("_kills", "a player's kills render nowhere — P18 criterion 3"),
                     ("_deaths", "a player's deaths render nowhere"),
-                    ("_ratio", "a player's kills per death render nowhere")),
+                    ("_ratio", "a player's kills per death render nowhere"),
+                    // Owner's report of 2026-09-30: more columns, colour and marks.
+                    ("_accent", "a player's row loses its side's colour down the edge"),
+                    ("_medal", "the side's top three wear no gold, silver or bronze"),
+                    ("_kind", "a row no longer marks a player apart from a bot"),
+                    ("_youChip", "your own row loses its YOU chip"),
+                    ("_botChip", "a bot's row loses its BOT chip"),
+                    ("_status", "a row never says whether the player is alive or in a vehicle"),
+                    ("_headshots", "a player's headshots render nowhere"),
+                    ("_streakIcon", "a live streak loses its flame"),
+                    ("_streak", "a player's current streak renders nowhere"),
+                    ("_best", "a player's best streak renders nowhere"),
+                    ("_score", "the points a player's kills earned render nowhere"),
+                    ("_pingIcon", "a player's ping loses its bars"),
+                    ("_ping", "a player's ping renders nowhere")),
             };
 
         /// <summary>

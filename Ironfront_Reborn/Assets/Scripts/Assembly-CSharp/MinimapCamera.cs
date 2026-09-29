@@ -3,7 +3,9 @@ using UnityEngine;
 
 public class MinimapCamera : MonoBehaviour
 {
-	private const int RESOLUTION = 1024;
+	// 2048, not the original 1024: the in-match map zooms in to a third of the picture, which at
+	// 1024 would draw each texel over three screen pixels.
+	private const int RESOLUTION = 2048;
 
 	public static MinimapCamera instance;
 
@@ -28,7 +30,12 @@ public class MinimapCamera : MonoBehaviour
 	{
 		instance = this;
 		camera = GetComponent<Camera>();
-		minimapRenderTexture = new RenderTexture(1024, 1024, 16);
+		minimapRenderTexture = new RenderTexture(RESOLUTION, RESOLUTION, 16);
+		// Mip-mapped: the whole map is drawn at under half its texel size, and without mips the
+		// minified picture shimmers into noise.
+		minimapRenderTexture.useMipMap = true;
+		minimapRenderTexture.autoGenerateMips = true;
+		minimapRenderTexture.filterMode = FilterMode.Trilinear;
 		camera.targetTexture = minimapRenderTexture;
 
 		// Assigned BEFORE the framing: a camera rendering into a square target has aspect 1, so

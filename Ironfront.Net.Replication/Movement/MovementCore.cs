@@ -14,6 +14,19 @@ namespace Ironfront.Net.Replication.Movement
         /// </summary>
         public bool IsGrounded;
 
+        /// <summary>
+        /// Set by the caller like <see cref="IsGrounded"/>: whether the body's last move ran into
+        /// something at its side -- a wall, a rock, the bank where the water ends.
+        /// </summary>
+        public bool IsBlockedSideways;
+
+        /// <summary>
+        /// Whether a swimmer is hauling itself out up what it is pushing against
+        /// (<see cref="MovementCore.ClimbOutLip"/>). In the state because the climb carries the body
+        /// past the in-water test, and both sides have to agree it is still climbing.
+        /// </summary>
+        public bool IsClimbingOut;
+
         public bool IsCrouching;
 
         /// <summary>
@@ -173,6 +186,10 @@ namespace Ironfront.Net.Replication.Movement
         /// </param>
         public static Vec3 Step(ref MoveState state, in MoveInput input, float dt)
         {
+            bool inWater = IsInWater(state.Position.Y);
+            state.IsClimbingOut = (inWater || state.IsClimbingOut) && CanClimbOut(in state, in input);
+            if (inWater || state.IsClimbingOut) return Swim(ref state, in input, dt);
+
             float speed = SpeedFor(in input);
 
             Vec3 forward = ForwardFromYaw(input.YawDegrees);
@@ -215,6 +232,128 @@ namespace Ironfront.Net.Replication.Movement
 
             state.Velocity    = velocity;
             state.IsCrouching = input.Crouch;
+            state.JumpHeld    = input.Jump;
+
+            return velocity * dt;
+        }
+
+        // ===== Water =====
+
+        /// <summary>
+        /// The surface of the loaded map's water, or negative infinity on a map with none.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Set by the map, on both sides, before anybody moves.</b> <c>WaterLevel.Awake</c>
+        /// publishes its own height here, on the client and on the game server alike, so the
+        /// prediction and the authority swim against the same surface -- a water line the two
+        /// disagreed about would mispredict every tick of every swim.
+        /// </para>
+        /// <para>
+        /// A process runs one map at a time (a game server hosts one match; a client plays one),
+        /// which is what lets this be a single value rather than an input every call site has to
+        /// thread through.
+        /// </para>
+        /// </remarks>
+        public static float WaterHeight { get; set; } = float.NegativeInfinity;
+
+        /// <summary>
+        /// How far above the capsule's centre the swim test samples: the original's
+        /// <c>Actor.Update</c> swims once <c>CenterPosition() + 0.5</c> is under the surface,
+        /// which on a standing body is about 1.4 m of water.
+        /// </summary>
+        public const float SwimSampleAbove = 0.5f;
+
+        /// <summary>
+        /// Where a swimmer's capsule centre floats: this far under the surface. Deeper than
+        /// <see cref="SwimSampleAbove"/>, so a body that has floated up is still swimming.
+        /// </summary>
+        public const float SwimFloatDepth = 0.7f;
+
+        /// <summary>
+        /// Swimming speed, m/s: the original's, where <c>SwimInput() * 30 * 0.8</c> pulls the head
+        /// through water with a drag of 10 and so settles at 2.4 m/s.
+        /// </summary>
+        public const float SwimSpeed = 2.4f;
+
+        /// <summary>How fast a swimmer closes on its floating depth, per second of the gap.</summary>
+        public const float SwimLiftRate = 3f;
+
+        /// <summary>The fastest a swimmer rises or sinks toward the floating depth, m/s.</summary>
+        public const float MaxSwimVerticalSpeed = 2f;
+
+        /// <summary>
+        /// How far over the surface a swimmer can lift its feet climbing out up what it is pushing
+        /// against; the capsule's own step then carries it onto a lip about twice this high.
+        /// </summary>
+        public const float ClimbOutLip = 0.3f;
+
+        /// <summary>How fast a swimmer climbs out, m/s.</summary>
+        public const float ClimbOutSpeed = 2f;
+
+        /// <summary>
+        /// Whether a swimmer pushing against something is still low enough to haul itself up it:
+        /// moving, blocked at its side, and its feet no more than <see cref="ClimbOutLip"/> over
+        /// the surface.
+        /// </summary>
+        /// <remarks>
+        /// <b>Live test 2026-09-30, Island's west shore.</b> The capsule floats with its feet 1.6 m
+        /// under the surface, and there the bottom rises from that depth to the beach inside two
+        /// metres at 43 to 51 degrees -- steeper than the 45 degrees the capsule can walk. The
+        /// swimmer pressed against the bank until its breath ran out. The original's swimmer is a
+        /// ragdoll shoved up any bank by its swim force; this is that shove for a capsule.
+        /// </remarks>
+        private static bool CanClimbOut(in MoveState state, in MoveInput input)
+            => state.IsBlockedSideways
+               && (input.MoveX != 0f || input.MoveZ != 0f)
+               && state.Position.Y - StandHeight * 0.5f <= WaterHeight + ClimbOutLip;
+
+        /// <summary>
+        /// Whether a body whose capsule centre is at <paramref name="centreY"/> is in water: the
+        /// same half metre over the centre the original tests, against <see cref="WaterHeight"/>.
+        /// </summary>
+        public static bool IsInWater(float centreY) => centreY + SwimSampleAbove <= WaterHeight;
+
+        /// <summary>
+        /// A tick in water: no gravity and no jump; the body floats up to
+        /// <see cref="SwimFloatDepth"/> and swims at <see cref="SwimSpeed"/> where it looks.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Players could not swim before 2026-09-29.</b> The original swims by ragdoll --
+        /// <c>Actor.Update</c> fells a body the moment it is in water and buoys its hips and head --
+        /// and a networked player is never ragdolled, so this file, which is all a player's body
+        /// moves by, walked it along the bottom instead. This is that swim as a capsule: the same
+        /// test for being in water, the same speed, and the body held at the surface.
+        /// </para>
+        /// <para>
+        /// <b>Leaving the water is the same test failing.</b> Swimming into shallows, the bottom
+        /// lifts the capsule until its centre is more than <see cref="SwimSampleAbove"/> under the
+        /// surface no longer, and the next tick walks. A crouch has no meaning in water and is
+        /// dropped, so the capsule does not shrink under a swimmer.
+        /// </para>
+        /// <para>
+        /// <b>Or climbing out.</b> Where the bottom rises too steeply to walk up, a swimmer pushing
+        /// against it rises along it instead, and keeps rising past the in-water test until its
+        /// feet are <see cref="ClimbOutLip"/> over the surface (<see cref="CanClimbOut"/>).
+        /// </para>
+        /// </remarks>
+        private static Vec3 Swim(ref MoveState state, in MoveInput input, float dt)
+        {
+            Vec3 forward = ForwardFromYaw(input.YawDegrees);
+            Vec3 right   = new Vec3(forward.Z, 0f, -forward.X);
+            Vec3 wish    = (forward * input.MoveZ + right * input.MoveX).Normalized;
+
+            float gap = WaterHeight - SwimFloatDepth - state.Position.Y;
+            float rise = gap * SwimLiftRate;
+            if (rise > MaxSwimVerticalSpeed) rise = MaxSwimVerticalSpeed;
+            else if (rise < -MaxSwimVerticalSpeed) rise = -MaxSwimVerticalSpeed;
+            if (state.IsClimbingOut) rise = ClimbOutSpeed;
+
+            Vec3 velocity = new Vec3(wish.X * SwimSpeed, rise, wish.Z * SwimSpeed);
+
+            state.Velocity    = velocity;
+            state.IsCrouching = false;
             state.JumpHeld    = input.Jump;
 
             return velocity * dt;

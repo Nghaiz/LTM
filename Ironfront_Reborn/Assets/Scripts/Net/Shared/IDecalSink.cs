@@ -48,5 +48,13 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// </remarks>
         void AddBlood(Vector3 point, Vector3 velocity, int team, int drops) { }
+
+        /// <summary>
+        /// Lays a pool of <paramref name="team"/>'s blood of <paramref name="size"/> at
+        /// <paramref name="point"/>, flat on the surface facing <paramref name="normal"/>: what a body
+        /// leaves where it comes to rest. In the team's colour, as every drop is.
+        /// </summary>
+        /// <remarks>Default-implemented as a no-op, like <see cref="AddBlood"/>.</remarks>
+        void AddBloodPool(Vector3 point, Vector3 normal, float size, int team) { }
     }
 }

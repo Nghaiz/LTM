@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Ironfront.Net.Replication.Ai;
 using UnityEngine;
 
 public class Squad
@@ -37,6 +38,112 @@ public class Squad
 	private bool hasSquadVehicle;
 
 	private int recentTakingFireEvents;
+
+	// ---- the team commander's order (phase P28, BotCommander) ----
+
+	/// <summary>What the commander has this squad doing; None leaves it to the original behaviour.</summary>
+	public SquadRole commandRole;
+
+	/// <summary>The flag the order names.</summary>
+	public SpawnPoint commandTarget;
+
+	/// <summary>The flag's index in the commander's list, -1 for none.</summary>
+	public int commandFlag = -1;
+
+	/// <summary>A flank's side approach, or the spot a defence digs in round.</summary>
+	public Vector3 commandPoint;
+
+	/// <summary>A flank has reached its side approach and turned in.</summary>
+	public bool commandReachedPoint = true;
+
+	/// <summary>Approaching quietly: nobody sprints until the waypoint.</summary>
+	public bool sneaking;
+
+	/// <summary>Whether the commander has given this squad a job.</summary>
+	public bool HasCommand => commandRole != SquadRole.None && commandTarget != null;
+
+	/// <summary>When the squad last dug in (phase P28): how long it has held its cover.</summary>
+	private float digInTime;
+
+	/// <summary>
+	/// Whether a dug-in squad stays in its cover this tick: while any member still has an enemy
+	/// in its sights, up to <see cref="CombatRules.HoldCoverSeconds"/> (phase P28).
+	/// </summary>
+	public bool HoldingCover()
+	{
+		return CombatRules.HoldCover(state == State.DigIn, GetTarget() != null, Time.time - digInTime);
+	}
+
+	/// <summary>
+	/// Whether the squad takes <paramref name="vehicle"/> for the job it has (phase P28, part 3):
+	/// <see cref="VehicleRules.ShouldBoard"/> over the trip to its objective and the walk to the
+	/// vehicle. A squad with no objective keeps the original's "take what is near".
+	/// </summary>
+	public bool ShouldBoard(Vehicle vehicle)
+	{
+		AiActorController leader = Leader();
+		if (leader == null || vehicle == null)
+		{
+			return false;
+		}
+		Vector3 at = leader.actor.Position();
+		SpawnPoint objective = HasCommand ? commandTarget : targetSpawnPoint;
+		float objectiveDistance = objective != null ? Vector3.Distance(at, objective.transform.position) : float.PositiveInfinity;
+		float vehicleDistance = Vector3.Distance(at, vehicle.transform.position);
+		return VehicleRules.ShouldBoard(KindOf(vehicle), HasCommand ? commandRole : SquadRole.None, objectiveDistance, vehicleDistance);
+	}
+
+	/// <summary>What <paramref name="vehicle"/> is for, to a squad deciding whether to take it.</summary>
+	public static VehicleKind KindOf(Vehicle vehicle)
+	{
+		if (vehicle is Tank)
+		{
+			return VehicleKind.Armour;
+		}
+		if (vehicle is Helicopter)
+		{
+			return VehicleKind.Aircraft;
+		}
+		if (vehicle is Boat)
+		{
+			return VehicleKind.Boat;
+		}
+		return VehicleKind.Transport;
+	}
+
+	/// <summary>
+	/// Splits off up to <paramref name="count"/> members on foot, never the leader, as a new squad
+	/// -- a tank's crew (phase P28, part 3). Null when nobody can go.
+	/// </summary>
+	public Squad SplitCrew(int count)
+	{
+		var crew = new List<AiActorController>(count);
+		for (int i = members.Count - 1; i >= 0 && crew.Count < count; i--)
+		{
+			AiActorController member = members[i];
+			if (member != null && member != leader && !member.actor.IsSeated())
+			{
+				crew.Add(member);
+			}
+		}
+		return crew.Count > 0 ? SplitSquad(crew) : null;
+	}
+
+	/// <summary>
+	/// The bearing of the fire coming at the squad: the first member under fire's, else
+	/// <paramref name="fallback"/>.
+	/// </summary>
+	public Vector3 TakingFireDirection(Vector3 fallback)
+	{
+		foreach (AiActorController member in members)
+		{
+			if (member.IsTakingFire())
+			{
+				return member.takingFireDirection;
+			}
+		}
+		return fallback;
+	}
 
 	public Squad(List<AiActorController> members, float timeUntilReady)
 	{
@@ -144,6 +251,126 @@ public class Squad
 		AttackSpawnPoint(targetSpawnPoint);
 	}
 
+	/// <summary>
+	/// Takes the commander's order, and carries it out now when <paramref name="applyNow"/> --
+	/// otherwise at the leader's next order tick, so a squad under fire finishes the fight first.
+	/// </summary>
+	public void Command(SquadRole role, SpawnPoint target, int flag, Vector3 point, bool sneak, bool applyNow)
+	{
+		commandRole = target != null ? role : SquadRole.None;
+		commandTarget = target;
+		commandFlag = flag;
+		commandPoint = point;
+		commandReachedPoint = role != SquadRole.Flank;
+		sneaking = sneak && role == SquadRole.Flank;
+
+		if (applyNow && HasCommand)
+		{
+			FollowCommand();
+		}
+	}
+
+	/// <summary>
+	/// Does what the commander ordered: straight at the flag, dig in round it, or round the side
+	/// through the waypoint first. With no order it is the original "attack the nearest".
+	/// </summary>
+	public void FollowCommand()
+	{
+		if (!HasCommand)
+		{
+			NewAttackOrder();
+			return;
+		}
+
+		AiActorController leader = Leader();
+		int team = leader != null && leader.actor != null ? leader.actor.team : -1;
+
+		switch (commandRole)
+		{
+		case SquadRole.Defend:
+			if (HasVehicle())
+			{
+				AttackSpawnPoint(commandTarget);
+				return;
+			}
+			// Already dug in round the flag: hold, rather than get up and lie down again.
+			if (state == State.DigIn && leader != null && Vector3.Distance(leader.actor.Position(), commandPoint) < 20f)
+			{
+				return;
+			}
+			targetSpawnPoint = commandTarget;
+			MoveToAndDigIn(commandPoint);
+			return;
+		case SquadRole.Flank:
+			if (!commandReachedPoint)
+			{
+				targetSpawnPoint = commandTarget;
+				MoveTo(commandPoint);
+				return;
+			}
+			break;
+		}
+
+		// The flag has fallen to this side: hold it until the commander hands out the next one.
+		if (commandTarget.owner == team && commandTarget.IsSafe())
+		{
+			DigIn();
+			return;
+		}
+
+		AttackSpawnPoint(commandTarget);
+	}
+
+	/// <summary>
+	/// Called on the leader's order tick: a flanking squad that has reached its side approach
+	/// stops sneaking and turns in on the flag.
+	/// </summary>
+	public void UpdateCommandProgress()
+	{
+		if (commandRole != SquadRole.Flank || commandReachedPoint || !HasCommand)
+		{
+			return;
+		}
+		AiActorController leader = Leader();
+		if (leader == null || leader.actor == null)
+		{
+			return;
+		}
+		if (Vector3.Distance(leader.actor.Position(), commandPoint) < 12f)
+		{
+			commandReachedPoint = true;
+			sneaking = false;
+			AttackSpawnPoint(commandTarget);
+		}
+	}
+
+	/// <summary>
+	/// Whether the squad may break off for <paramref name="spawnPoint"/>, the flag nearest its
+	/// leader, the way the original always did. With no order, yes. An attack takes one within
+	/// <see cref="TacticsProfile.AttackDivertRange"/> of its capture range -- the original's reflex,
+	/// kept within a reach part 4 trained -- a defence only its own flag, and a flank nothing until
+	/// it has turned in.
+	/// </summary>
+	public bool MayDivertTo(SpawnPoint spawnPoint)
+	{
+		if (!HasCommand || spawnPoint == commandTarget)
+		{
+			return true;
+		}
+		switch (commandRole)
+		{
+		case SquadRole.Attack:
+		{
+			AiActorController leader = Leader();
+			return leader != null && Vector3.Distance(leader.actor.Position(), spawnPoint.transform.position) < spawnPoint.GotoRadius() + BotCommander.Profile.AttackDivertRange;
+		}
+		case SquadRole.Flank:
+			return false;
+		default:
+			return false;
+		}
+	}
+
 	public void AttackSpawnPoint(SpawnPoint spawnPoint)
 	{
 		targetSpawnPoint = spawnPoint;
@@ -161,6 +388,11 @@ public class Squad
 		state = State.Moving;
 		foreach (AiActorController member in members)
 		{
+			// A hurt member keeps to the cover it fell back to, and catches up after (phase P28).
+			if (member.IsFallingBack())
+			{
+				continue;
+			}
 			member.Goto(point + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f)));
 			if (member.squadLeader)
 			{
@@ -178,6 +410,7 @@ public class Squad
 			return;
 		}
 		state = State.DigIn;
+		digInTime = Time.time;
 		foreach (AiActorController member in members)
 		{
 			member.FindCoverAtPoint(point);
@@ -199,6 +432,7 @@ public class Squad
 				return;
 			}
 			state = State.DigIn;
+			digInTime = Time.time;
 			foreach (AiActorController member in members)
 			{
 				member.FindCover();
@@ -218,6 +452,7 @@ public class Squad
 			return;
 		}
 		state = State.DigIn;
+		digInTime = Time.time;
 		foreach (AiActorController member in members)
 		{
 			member.FindCoverTowards(direction);

@@ -275,6 +275,23 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0, fixture.StepFor(5, InputButtons.Fire));
         }
 
+        [Fact]
+        public void ABodyInWaterHasNoEffectiveTriggerAndFiresOnceOut()
+        {
+            // The original stows the weapon while swimming (owner ruling 2026-09-29).
+            var fixture = new TriggerFixture
+            {
+                Actor = new ActorFireEligibility(isAlive: true, isDeployed: true, isInWater: true),
+            };
+
+            Assert.Equal(0, fixture.StepFor(5, InputButtons.Fire));
+            Assert.Equal(0, fixture.Weapon.ClipSpent(fixture.Config));
+
+            fixture.Actor = ActorFireEligibility.OnFoot(isAlive: true);
+            Assert.True(fixture.Step(1f, InputButtons.Fire).Fired,
+                "a trigger held while swimming stayed dead on dry land");
+        }
+
         /// <summary>A rifle's numbers with one press per shot.</summary>
         internal static WeaponConfig SemiAuto => new WeaponConfig(
             cooldown: 0.1f, spread: 0f, projectilesPerShot: 1, range: 300f,

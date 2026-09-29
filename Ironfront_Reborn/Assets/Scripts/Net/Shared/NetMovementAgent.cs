@@ -122,6 +122,14 @@ namespace Ironfront.Net.Unity
         public bool IsGrounded => CollisionEnabled && Controller.isGrounded;
 
         /// <summary>
+        /// Whether the last move ran into something at the capsule's side: what lets a swimmer climb
+        /// out up a bank it is pushing against (<c>MovementCore.ClimbOutLip</c>). False with the
+        /// capsule switched off, for <see cref="IsGrounded"/>'s reason.
+        /// </summary>
+        public bool IsBlockedSideways
+            => CollisionEnabled && (LastCollisionFlags & CollisionFlags.Sides) != 0;
+
+        /// <summary>
         /// Whether this body's capsule is in the physics world, so its moves resolve against it.
         /// False while seated (<see cref="SetSeated"/>) — and on a body something forgot to
         /// switch back, which is what <see cref="CollisionBypassedMoves"/> counts the cost of.
@@ -227,6 +235,7 @@ namespace Ironfront.Net.Unity
         public void Tick(in MoveInput input, float dt)
         {
             State.IsGrounded = IsGrounded;
+            State.IsBlockedSideways = IsBlockedSideways;
 
             Vector3 before = transform.position;
             Vector3 motion = MovementSimulation.Step(ref State, in input, dt);
