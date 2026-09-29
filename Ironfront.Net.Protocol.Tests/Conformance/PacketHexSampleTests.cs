@@ -1161,9 +1161,11 @@ namespace Ironfront.Net.Protocol.Tests
         [Fact]
         public void PlayerScores_WorstCase_FitsOneUnfragmentedPayload()
         {
+            // With the stats tail (2026-09-30), which is what a server now always sends.
             Assert.Equal(
                 PlayerScoresMessage.HeaderSize
-                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize,
+                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize
+                    + 1 + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.StatsEntrySize,
                 PlayerScoresMessage.MaxBodySize);
 
             Assert.True(

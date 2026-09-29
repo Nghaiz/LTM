@@ -127,6 +127,48 @@ namespace Ironfront.Net.Unity.Client.Hud
             size.preferredWidth = width;
         }
 
+        // ---- the Tab board (owner's report of 2026-09-30) ----
+
+        /// <summary>A bot's callsign: quieter than a player's name, still easy to read.</summary>
+        public static readonly Color BotInk = new Color(0.78f, 0.81f, 0.86f);
+
+        /// <summary>The robot beside a bot's name.</summary>
+        public static readonly Color BotMark = new Color(0.58f, 0.63f, 0.7f);
+
+        /// <summary>A live streak's flame and count.</summary>
+        public static readonly Color StreakInk = new Color(1f, 0.55f, 0.12f);
+
+        /// <summary>The dot beside a live player.</summary>
+        public static readonly Color AliveInk = new Color(0.3f, 0.95f, 0.45f);
+
+        /// <summary>The skull beside a dead player.</summary>
+        public static readonly Color DeadInk = new Color(1f, 0.3f, 0.26f);
+
+        /// <summary>The rank number on a medal: dark, to read on gold, silver and bronze alike.</summary>
+        public static readonly Color MedalInk = new Color(0.08f, 0.08f, 0.1f);
+
+        /// <summary>Gold, silver and bronze for ranks 1 to 3.</summary>
+        public static Color MedalColour(int rank)
+            => rank == 1 ? new Color(1f, 0.8f, 0.22f)
+             : rank == 2 ? new Color(0.8f, 0.84f, 0.9f)
+             : new Color(0.86f, 0.55f, 0.3f);
+
+        /// <summary>K/D from red to green: under 0.5, under 1, under 2, and 2 or better.</summary>
+        public static Color RatioInk(float ratio, bool hasAny)
+        {
+            if (!hasAny) return BoardFaint;
+            if (ratio >= 2f) return new Color(0.4f, 1f, 0.5f);
+            if (ratio >= 1f) return Ink;
+            if (ratio >= 0.5f) return new Color(1f, 0.78f, 0.35f);
+            return new Color(1f, 0.45f, 0.4f);
+        }
+
+        /// <summary>Ping green under 80 ms, amber under 150, red beyond.</summary>
+        public static Color PingInk(int pingMs)
+            => pingMs < 80 ? new Color(0.4f, 1f, 0.5f)
+             : pingMs < 150 ? new Color(1f, 0.8f, 0.3f)
+             : new Color(1f, 0.4f, 0.35f);
+
         /// <summary>
         /// Ease-out that overshoots a little and settles back: for a killfeed row or badge that
         /// should land with some weight.

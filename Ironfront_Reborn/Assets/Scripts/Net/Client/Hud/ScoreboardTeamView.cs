@@ -1,35 +1,39 @@
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client.Hud
 {
     /// <summary>
-    /// One side's column on the Tab scoreboard: its band, flags, head count, totals and rows.
-    /// Feature 2, 2026-09-29.
+    /// One side's column on the Tab scoreboard: its band, flags, head count, totals and rows, the
+    /// players first under their own heading and the bots after them under theirs. Feature 2,
+    /// 2026-09-29; the groups are the owner's report of 2026-09-30.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>Rows are cloned, not authored.</b> The builder authors one row template and this clones
-    /// <see cref="MatchHud.ScoreboardRowsPerTeam"/> of it on first use, so the prefab carries one
-    /// row per side instead of thirty-two and a restyle is one edit.
+    /// as many as a side needs on first use, so the prefab carries one row per side instead of
+    /// thirty-two and a restyle is one edit.
     /// </para>
     /// <para>
-    /// <b>Rows fit the column.</b> A usual side is sixteen bots and a few players, and a full one
-    /// is <see cref="MatchHud.ScoreboardRowsPerTeam"/>; rows are as tall as the column allows, up
-    /// to <see cref="MaxRowHeight"/>, and the text follows the row. There is deliberately no
-    /// floor: the first capture of a full board had one, and it pushed rows 31 and 32 through the
-    /// rules line -- the same fault the old board had, one clamp further down.
+    /// <b>Rows fit the column.</b> A player's row is a third taller than a bot's, and both shrink
+    /// together until the side fits, up to a comfortable ceiling; there is deliberately no floor,
+    /// which on the first full board pushed rows through the rules line. The two sides size from
+    /// the larger count of each group, so the two BOTS headings and every row line up across.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
     public sealed class ScoreboardTeamView : MonoBehaviour
     {
-        public const float MaxRowHeight = 40f;
+        public const float MaxBotRowHeight = 32f;
+        public const float MaxHumanRowHeight = 42f;
 
-        /// <summary>A short column still lays out as if it held this many, so a row is not huge.</summary>
-        private const int MinRowsForSizing = 16;
+        /// <summary>How much taller a player's row is than a bot's.</summary>
+        private const float HumanRowScale = 1.3f;
 
+        private const float SectionHeight = 24f;
+        private const float SectionGap = 4f;
         private const float RowGap = 2f;
         private const float StaggerSeconds = 0.014f;
 
@@ -43,18 +47,22 @@ namespace Ironfront.Net.Unity.Client.Hud
         [SerializeField] private RectTransform _rows;
         [SerializeField] private Text _empty;
         [SerializeField] private ScoreboardRowView _rowTemplate;
+        [SerializeField] private ScoreboardSectionView _humansSection;
+        [SerializeField] private ScoreboardSectionView _botsSection;
 
         private readonly List<ScoreboardRowView> _rowViews = new List<ScoreboardRowView>();
         private readonly ScoreboardRow[] _pending = new ScoreboardRow[MatchHud.ScoreboardRowsPerTeam];
         private int _pendingCount;
         private int _shownCount;
         private bool _complete;
+        private Color _teamColour = Color.grey;
 
         private void Awake()
         {
             _complete = _band != null && _teamName != null && _flagIcon != null && _flags != null
                         && _perKill != null && _players != null && _totals != null && _rows != null
-                        && _empty != null && _rowTemplate != null;
+                        && _empty != null && _rowTemplate != null && _humansSection != null
+                        && _botsSection != null && _humansSection.IsComplete && _botsSection.IsComplete;
 
             if (!_complete)
             {
@@ -69,9 +77,10 @@ namespace Ironfront.Net.Unity.Client.Hud
             _rowTemplate.gameObject.SetActive(false);
         }
 
-        /// <summary>The side's colour, from the palette: the band and the flag.</summary>
+        /// <summary>The side's colour, from the palette: the band, the flag, the headings and the rows.</summary>
         public void SetColour(Color team)
         {
+            _teamColour = team;
             if (!_complete) return;
 
             _band.color = new Color(team.r, team.g, team.b, 0.9f);
@@ -81,7 +90,7 @@ namespace Ironfront.Net.Unity.Client.Hud
         public void SetFlags(int flags)
         {
             if (!_complete) return;
-            _flags.text = flags.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _flags.text = flags.ToString(CultureInfo.InvariantCulture);
 
             // What a kill is worth to this side right now, beside the flags that make it so: a score
             // that jumps by three reads as the rule, not as a wrong number.
@@ -109,26 +118,71 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// <summary>Rows queued since <see cref="Begin"/>.</summary>
         public int PendingCount => _pendingCount;
 
+        /// <summary>Players queued since <see cref="Begin"/>; the rest are bots.</summary>
+        public int PendingHumans
+        {
+            get
+            {
+                int humans = 0;
+                for (int i = 0; i < _pendingCount; i++) if (!_pending[i].IsBot) humans++;
+                return humans;
+            }
+        }
+
         /// <summary>
         /// Lays the queued rows out. <paramref name="scored"/> says which actors just gained a
         /// kill; <paramref name="stagger"/> plays the rows in one after another, for an opening.
-        /// <paramref name="sizingRows"/> is the longer column's count, so both sides share one
-        /// row height and read across as a table.
+        /// <paramref name="sizingHumans"/> and <paramref name="sizingBots"/> are the larger side's
+        /// counts, so both sides share one layout and read across as a table.
         /// </summary>
-        public void End(System.Func<ushort, bool> scored, bool stagger, int sizingRows)
+        public void End(System.Func<ushort, bool> scored, bool stagger, int sizingHumans, int sizingBots)
         {
             if (!_complete) return;
 
             EnsureRows(_pendingCount);
 
-            float area = _rows.rect.height;
-            sizingRows = Mathf.Max(Mathf.Max(sizingRows, _pendingCount), MinRowsForSizing);
-            float pitch = Mathf.Min(area / sizingRows, MaxRowHeight + RowGap);
-            float height = pitch - (pitch >= 20f ? RowGap : 1f);
-            int fontSize = Mathf.Clamp(Mathf.RoundToInt(height * 0.62f), 14, 24);
+            int humans = PendingHumans;
+            int bots = _pendingCount - humans;
+            sizingHumans = Mathf.Max(sizingHumans, humans);
+            sizingBots = Mathf.Max(sizingBots, bots);
 
-            // The top of a column earns the star only by having scored: 0 kills leads nobody.
-            bool starred = _pendingCount > 0 && _pending[0].Kills > 0;
+            int sections = (sizingHumans > 0 ? 1 : 0) + (sizingBots > 0 ? 1 : 0);
+            float usable = _rows.rect.height - sections * (SectionHeight + SectionGap);
+            float units = sizingHumans * HumanRowScale + sizingBots;
+            float botPitch = units > 0f ? Mathf.Min(usable / units, MaxBotRowHeight + RowGap) : MaxBotRowHeight;
+            float humanPitch = Mathf.Min(botPitch * HumanRowScale, MaxHumanRowHeight + RowGap);
+
+            float botHeight = botPitch - (botPitch >= 20f ? RowGap : 1f);
+            float humanHeight = humanPitch - (humanPitch >= 20f ? RowGap : 1f);
+            int botFont = Mathf.Clamp(Mathf.RoundToInt(botHeight * 0.56f), 12, 17);
+            int humanFont = Mathf.Clamp(Mathf.RoundToInt(humanHeight * 0.5f), 14, 20);
+
+            float top = 0f;
+
+            if (humans > 0)
+                _humansSection.Show(HudSprites.Person(), "PLAYERS  ·  " + humans.ToString(CultureInfo.InvariantCulture), _teamColour);
+            else
+                _humansSection.Hide();
+
+            if (sizingHumans > 0)
+            {
+                _humansSection.Place(top, SectionHeight);
+                top -= SectionHeight + SectionGap;
+            }
+
+            float botsTop = top - sizingHumans * humanPitch;
+
+            if (bots > 0)
+            {
+                _botsSection.Show(HudSprites.Bot(), "BOTS  ·  " + bots.ToString(CultureInfo.InvariantCulture), _teamColour);
+                _botsSection.Place(botsTop, SectionHeight);
+            }
+            else
+            {
+                _botsSection.Hide();
+            }
+
+            float botRowsTop = botsTop - (sizingBots > 0 ? SectionHeight + SectionGap : 0f);
 
             for (int i = 0; i < _rowViews.Count; i++)
             {
@@ -144,8 +198,15 @@ namespace Ironfront.Net.Unity.Client.Hud
                 if (!view.gameObject.activeSelf) view.gameObject.SetActive(true);
 
                 ScoreboardRow row = _pending[i];
-                view.Bind(in row, i + 1, starred && i == 0, scored(row.ActorId));
-                view.Place(-i * pitch, height, fontSize);
+                bool human = !row.IsBot;
+                int indexInGroup = human ? i : i - humans;
+
+                view.Bind(in row, _teamColour, indexInGroup, scored(row.ActorId));
+
+                if (human)
+                    view.Place(top - indexInGroup * humanPitch, humanHeight, humanFont);
+                else
+                    view.Place(botRowsTop - indexInGroup * botPitch, botHeight, botFont);
 
                 if (appearing) view.Appear(stagger ? i * StaggerSeconds : 0f);
             }

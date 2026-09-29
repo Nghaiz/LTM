@@ -86,11 +86,17 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             // u8 actorId + u16 kills + u16 deaths + u8 team.
             Assert.Equal(6, PlayerScoresMessage.EntrySize);
 
+            // The stats tail (2026-09-30): a version byte after the rows, then per row u8 status,
+            // u8 headshots, u8 streak, u8 best, u16 points, u16 ping.
+            Assert.Equal(1, PlayerScoresMessage.StatsTailVersion);
+            Assert.Equal(8, PlayerScoresMessage.StatsEntrySize);
+
             // Derived rather than restated, for MaxBodySize's reason one test up: a hand-written
-            // 385 would go on passing after MAX_ACTORS moved.
+            // 898 would go on passing after MAX_ACTORS moved.
             Assert.Equal(
                 PlayerScoresMessage.HeaderSize
-                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize,
+                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize
+                    + 1 + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.StatsEntrySize,
                 PlayerScoresMessage.MaxBodySize);
 
             Assert.Equal(0x51, (byte)ServerMessageType.PlayerScores);

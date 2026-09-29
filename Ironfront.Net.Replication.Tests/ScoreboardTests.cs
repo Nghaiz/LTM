@@ -107,7 +107,7 @@ namespace Ironfront.Net.Replication.Tests
             bots.Apply(Spawn(9, bot: true));
 
             Assert.Equal("Minh", ActorNames.Display(3, names, bots));
-            Assert.Equal("Blue Team Bot 1", ActorNames.Display(9, names, bots));
+            Assert.Equal(BotCallsigns.For(9), ActorNames.Display(9, names, bots));
             Assert.Equal("actor 12", ActorNames.Display(12, names, bots));
         }
 

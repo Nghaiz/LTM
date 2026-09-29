@@ -217,9 +217,14 @@ namespace Ironfront.Net.Unity.Client.Hud
             bool stagger = _staggerNext;
             _staggerNext = false;
 
-            int sizingRows = Mathf.Max(_team0.PendingCount, _team1.PendingCount);
-            _team0.End(Scored, stagger, sizingRows);
-            _team1.End(Scored, stagger, sizingRows);
+            // Both sides lay out from the larger count of each group, so the players, the BOTS
+            // heading and every bot row line up across the board.
+            int humans0 = _team0.PendingHumans;
+            int humans1 = _team1.PendingHumans;
+            int sizingHumans = Mathf.Max(humans0, humans1);
+            int sizingBots = Mathf.Max(_team0.PendingCount - humans0, _team1.PendingCount - humans1);
+            _team0.End(Scored, stagger, sizingHumans, sizingBots);
+            _team1.End(Scored, stagger, sizingHumans, sizingBots);
 
             System.Array.Copy(_nextKills, _lastKills, _lastKills.Length);
             System.Array.Copy(_nextSeen, _lastSeen, _lastSeen.Length);

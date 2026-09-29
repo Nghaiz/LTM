@@ -277,6 +277,22 @@ namespace Ironfront.Net.Protocol
         Contested = 1 << 0,
     }
 
+    /// <summary>
+    /// What <c>S_PLAYER_SCORES</c>'s stats tail says about an actor right now. protocol-spec.md
+    /// section 4.13. Bits, and unknown bits are ignored, so a later build can add one.
+    /// </summary>
+    [Flags]
+    public enum PlayerStatusFlags : byte
+    {
+        None = 0,
+
+        /// <summary>The actor is alive.</summary>
+        Alive = 1 << 0,
+
+        /// <summary>The actor sits in a vehicle seat.</summary>
+        Seated = 1 << 1,
+    }
+
     /// <summary>S_DEATH causeOfDeath. protocol-spec.md section 4.6.</summary>
     public enum CauseOfDeath : byte
     {

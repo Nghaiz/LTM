@@ -68,7 +68,7 @@ namespace Ironfront.Net.Replication.Client
         /// <remarks>
         /// <c>S_PLAYER_LIST</c> names every connected person and never a bot, so it is the one
         /// answer to "is that somebody": a bot has no row, and neither has a slot whose player has
-        /// left. Not <see cref="ActorNames.Display"/>, which names bots too ("Blue Team Bot 3") --
+        /// left. Not <see cref="ActorNames.Display"/>, which names bots too ("VIPER") --
         /// a plate over every one of them was the clutter the owner asked to have removed.
         /// </remarks>
         public static string? PlateNameOf(ushort actorId, PlayerNameTable names)

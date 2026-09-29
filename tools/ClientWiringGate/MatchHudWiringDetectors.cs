@@ -225,7 +225,18 @@ namespace Ironfront.Tools.ClientWiringGate
                     ("_totals", "the side's totals never render — and P18 criterion 7 is that arithmetic"),
                     ("_rows", "the rows have nowhere to go"),
                     ("_empty", "an empty side draws nothing at all instead of saying so"),
-                    ("_rowTemplate", "the column has no row to clone, so it lists nobody — P18 criterion 2")),
+                    ("_rowTemplate", "the column has no row to clone, so it lists nobody — P18 criterion 2"),
+                    // Owner's report of 2026-09-30: players apart from bots.
+                    ("_humansSection", "the players are not headed apart from the bots"),
+                    ("_botsSection", "the bots are not headed apart from the players")),
+
+                new MenuScreenWiringDetectors.Screen(
+                    Row, BuildCommand, Clause, Clause, Clause,
+                    "ScoreboardSectionView", "Scripts/Net/Client/Hud/ScoreboardSectionView.cs",
+                    Array.Empty<(string, int, string)>(),
+                    ("_icon", "a group heading loses the mark that says players or bots"),
+                    ("_label", "a group heading draws empty"),
+                    ("_rule", "a group heading loses the rule that closes it off")),
 
                 new MenuScreenWiringDetectors.Screen(
                     Row, BuildCommand, Clause, Clause, Clause,
@@ -235,11 +246,24 @@ namespace Ironfront.Tools.ClientWiringGate
                     ("_edge", "your own row is not picked out of the column"),
                     ("_rank", "a row has no rank"),
                     ("_star", "the top of a side is not marked"),
-                    // No BOT tag since 2026-09-29: a bot's name says it is one ("Blue Team Bot 3").
                     ("_name", "a row never names its player — P18 criterion 2"),
                     ("_kills", "a player's kills render nowhere — P18 criterion 3"),
                     ("_deaths", "a player's deaths render nowhere"),
-                    ("_ratio", "a player's kills per death render nowhere")),
+                    ("_ratio", "a player's kills per death render nowhere"),
+                    // Owner's report of 2026-09-30: more columns, colour and marks.
+                    ("_accent", "a player's row loses its side's colour down the edge"),
+                    ("_medal", "the side's top three wear no gold, silver or bronze"),
+                    ("_kind", "a row no longer marks a player apart from a bot"),
+                    ("_youChip", "your own row loses its YOU chip"),
+                    ("_botChip", "a bot's row loses its BOT chip"),
+                    ("_status", "a row never says whether the player is alive or in a vehicle"),
+                    ("_headshots", "a player's headshots render nowhere"),
+                    ("_streakIcon", "a live streak loses its flame"),
+                    ("_streak", "a player's current streak renders nowhere"),
+                    ("_best", "a player's best streak renders nowhere"),
+                    ("_score", "the points a player's kills earned render nowhere"),
+                    ("_pingIcon", "a player's ping loses its bars"),
+                    ("_ping", "a player's ping renders nowhere")),
             };
 
         /// <summary>

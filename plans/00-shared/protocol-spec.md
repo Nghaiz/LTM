@@ -1134,9 +1134,28 @@ repeat playerCount times:
     u16  kills
     u16  deaths
     u8   team                 0, 1, or 255 for none
+--- stats tail, 2026-09-30 onward (optional, after every row) ---
+u8   statsVersion             1; a tail of any other version is left unread
+repeat playerCount times, in the rows' order:
+    u8   status               bit0 = alive, bit1 = in a vehicle seat
+    u8   headshots            enemy kills with a head killing blow, clamped at 255
+    u8   streak               enemy kills since this actor last died, clamped at 255
+    u8   bestStreak           the longest streak this match, clamped at 255
+    u16  points               what this actor's enemy kills put on its side's score
+    u16  pingMs               a connected human's smoothed round trip; 0 for a bot
 ```
 
-Worst case `1 + 64 × 6 = 385 B`, comfortably inside one un-fragmented channel-2 payload (1181).
+Worst case without the tail `1 + 64 × 6 = 385 B`; with it `385 + 1 + 64 × 8 = 898 B`, still inside
+one un-fragmented channel-2 payload (1181).
+
+**The stats tail (2026-09-30, the owner's Tab-board report).** Everything the board shows beyond
+kills and deaths. It comes after every row, so a client from before it reads the count and the rows
+and stops: compatible without a `PROTOCOL_VERSION` bump, on `S_DEATH`'s detail-tail argument. A
+partial tail is malformed; a tail of an unknown version is ignored, so a later server can change it.
+Because status and ping move without a death, a server that sends the tail also resends the table
+every 2 s. `points` is exact: the server reads its two team scores either side of the award a death
+makes and credits the difference to a killer on the scoring side, so a team kill earns its killer
+nothing.
 
 **A new opcode rather than a wider § 4.11**, for the two reasons that section now states: 0x4B has
 28 bytes of headroom and a different send cadence.
