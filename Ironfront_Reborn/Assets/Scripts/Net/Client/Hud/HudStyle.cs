@@ -22,6 +22,16 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// <summary>Tertiary text: column heads, the rules line, hints.</summary>
         public static readonly Color Faint = new Color(0.47f, 0.51f, 0.58f);
 
+        /// <summary>
+        /// The Tab board's secondary numbers (deaths, head counts): brighter than <see cref="Muted"/>,
+        /// because the board is read in a hurry over a dark pane (owner report 2026-09-29: "màu sắc
+        /// không tương phản").
+        /// </summary>
+        public static readonly Color BoardMuted = new Color(0.84f, 0.87f, 0.92f);
+
+        /// <summary>The Tab board's quietest text (ranks, column heads, K/D): still readable at a glance.</summary>
+        public static readonly Color BoardFaint = new Color(0.68f, 0.72f, 0.79f);
+
         /// <summary>A killfeed row at rest: dark enough to read over snow and sky alike.</summary>
         public static readonly Color RowBacking = new Color(0.05f, 0.06f, 0.08f, 0.78f);
 

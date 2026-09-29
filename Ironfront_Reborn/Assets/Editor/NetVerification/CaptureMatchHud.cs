@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Unity.Client.Hud;
 using UnityEditor;
 using UnityEngine;
@@ -114,13 +116,18 @@ namespace Ironfront.Net.Unity.EditorTools
             Color blue = TeamInk(Blue);
             Color red = TeamInk(Red);
 
+            // The weapon pictures come from the game's own WeaponManager entries, read off the
+            // prefab by name: this assembly cannot name the type, and edit mode has no instance.
+            System.Func<byte, Sprite> previousIcons = NetClientBindings.WeaponIcon;
+            NetClientBindings.WeaponIcon = WeaponIcons();
+
             var lines = new[]
             {
-                (new KillfeedLine(5, "Minh", TeamId.Team0, "Bot 12", TeamId.Team1, "RK-44", "", false, true, false), blue, red),
-                (new KillfeedLine(4, "Bot 7", TeamId.Team1, "Bot 30", TeamId.Team0, "TANK", "", false, false, false), red, blue),
-                (new KillfeedLine(3, "Bot 3", TeamId.Team0, "Hoang", TeamId.Team1, "RECON LRR", "", true, false, false), blue, red),
-                (new KillfeedLine(2, "", TeamId.None, "Bot 21", TeamId.Team1, "", "went down with the Helicopter", false, false, false), red, red),
-                (new KillfeedLine(1, "Bot 18", TeamId.Team1, "Minh", TeamId.Team0, "DESTROYED JEEP", "", false, false, true), red, blue),
+                (new KillfeedLine(5, "Minh", TeamId.Team0, ActorNames.BotName(TeamId.Team1, 4), TeamId.Team1, "RK-44", "", false, true, false, WeaponIds.RK44, ""), blue, red),
+                (new KillfeedLine(4, ActorNames.BotName(TeamId.Team1, 9), TeamId.Team1, ActorNames.BotName(TeamId.Team0, 7), TeamId.Team0, "TANK", "", false, false, false), red, blue),
+                (new KillfeedLine(3, ActorNames.BotName(TeamId.Team0, 3), TeamId.Team0, "Hoang", TeamId.Team1, "RECON LRR", "", true, false, false, WeaponIds.RECON_LRR, ""), blue, red),
+                (new KillfeedLine(2, "", TeamId.None, ActorNames.BotName(TeamId.Team1, 12), TeamId.Team1, "", "went down with the Helicopter", false, false, false), red, red),
+                (new KillfeedLine(1, ActorNames.BotName(TeamId.Team1, 2), TeamId.Team1, "Minh", TeamId.Team0, "BIL SCALPEL  ·  MELEE", "", false, false, true, WeaponIds.BIL_SCALPEL, "MELEE"), red, blue),
             };
 
             for (int i = 0; i < rows.arraySize && i < lines.Length; i++)
@@ -134,6 +141,34 @@ namespace Ironfront.Net.Unity.EditorTools
 
                 for (int t = 0; t < 40; t++) view.Tick(0.05f);
             }
+
+            NetClientBindings.WeaponIcon = previousIcons;
+        }
+
+        /// <summary>The loadout screen's weapon silhouettes by network id, read off <c>_Managers.prefab</c>.</summary>
+        private static System.Func<byte, Sprite> WeaponIcons()
+        {
+            var icons = new Dictionary<byte, Sprite>();
+
+            GameObject managers = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/_Managers.prefab");
+            System.Type managerType = System.Type.GetType("WeaponManager, Assembly-CSharp");
+            Component manager = managers != null && managerType != null
+                ? managers.GetComponentInChildren(managerType, true)
+                : null;
+
+            if (manager != null)
+            {
+                SerializedProperty weapons = new SerializedObject(manager).FindProperty("weapons");
+                for (int i = 0; weapons != null && i < weapons.arraySize; i++)
+                {
+                    SerializedProperty entry = weapons.GetArrayElementAtIndex(i);
+                    int id = entry.FindPropertyRelative("NetworkId").intValue;
+                    if (id > 0 && id <= byte.MaxValue && entry.FindPropertyRelative("image").objectReferenceValue is Sprite sprite)
+                        icons[(byte)id] = sprite;
+                }
+            }
+
+            return id => icons.TryGetValue(id, out Sprite sprite) ? sprite : null;
         }
 
         /// <summary>
@@ -152,9 +187,9 @@ namespace Ironfront.Net.Unity.EditorTools
             var plates = new (ushort Id, float X, float Y, float Scale, float Opacity, string Name, byte Team, float Before, float After, bool Bot, Color Ink)[]
             {
                 (1, 760f, 640f, 1f, 1f, "Minh", TeamId.Team0, 1f, 0.55f, false, blue),
-                (7, 1010f, 600f, 0.86f, 1f, "Bot 7", TeamId.Team0, 0.8f, 0.8f, true, blue),
+                (7, 1010f, 600f, 0.86f, 1f, ActorNames.BotName(TeamId.Team0, 7), TeamId.Team0, 0.8f, 0.8f, true, blue),
                 (33, 1250f, 660f, 0.95f, 1f, "Hoang", TeamId.Team1, 0.2f, 0.2f, false, red),
-                (41, 1470f, 560f, 0.68f, 0.9f, "Bot 41", TeamId.Team1, 1f, 1f, true, red),
+                (41, 1470f, 560f, 0.68f, 0.9f, ActorNames.BotName(TeamId.Team1, 8), TeamId.Team1, 1f, 1f, true, red),
                 (2, 540f, 540f, 0.66f, 0.5f, "Lan", TeamId.Team0, 0.9f, 0.9f, false, blue),
             };
 
@@ -187,11 +222,13 @@ namespace Ironfront.Net.Unity.EditorTools
             ((MatchHud)hud.targetObject).SetScoreboardVisible(true);
             view.SetPalette(Blue, Red);
 
+            // Worded by the same statics the presenter calls, so the capture shows what a match does.
             view.SetMatch(new ScoreboardMatch(
-                "DUSTBOWL", "CONQUEST  ·  38 PLAYERS  ·  3 HUMANS", 412, 376, -36f / 200f,
-                "TEAM 1 LEADS BY 36  ·  164 MORE TO WIN", "14:32", "TIME LEFT", false, 3, 2,
-                TeamId.None,
-                "LEAD BY 200 POINTS TO WIN  ·  KILLS SCORE MORE FOR EVERY FLAG YOU HOLD  ·  HOLDING MORE FLAGS SCORES OVER TIME"));
+                "DUSTBOWL", ScoreboardWording.SummaryLine(team0Players + team1Players, 3),
+                412, 376, ScoreboardWording.Lead(412, 376, 200),
+                ScoreboardWording.LeadLine(MatchPhase.Playing, 412, 376, 200, TeamId.None),
+                ScoreboardWording.Clock(-1), ScoreboardWording.PhaseLabel(MatchPhase.Playing, false), false,
+                3, 2, TeamId.None, ScoreboardWording.Rules(200)));
 
             Column(view, TeamId.Team0, team0Players, humans: 2, firstId: 1, local: 1);
             Column(view, TeamId.Team1, team1Players, humans: 1, firstId: 33, local: 0);
@@ -212,7 +249,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 int k = Mathf.Max(0, 17 - i + (i % 3));
                 int d = 3 + (i * 7) % 9;
                 bool human = i < humans;
-                string name = !human ? "Bot " + id : team == TeamId.Team0 ? (i == 0 ? "Minh" : "Lan") : "Hoang";
+                string name = !human ? ActorNames.BotName(team, i - humans + 1) : team == TeamId.Team0 ? (i == 0 ? "Minh" : "Lan") : "Hoang";
                 rows[i] = new ScoreboardRow(id, name, k, d, (d > 0 ? k / (float)d : k).ToString("0.00"), !human, id == local);
                 kills += k;
                 deaths += d;
@@ -220,9 +257,9 @@ namespace Ironfront.Net.Unity.EditorTools
 
             view.BeginColumn(
                 team,
-                team == TeamId.Team0 ? "TEAM 1" : "TEAM 2",
-                players + " PLAYERS  ·  " + humans + (humans == 1 ? " HUMAN" : " HUMANS"),
-                kills + " KILLS  ·  " + deaths + " DEATHS");
+                ScoreboardWording.TeamName(team),
+                ScoreboardWording.PlayersLine(players, humans),
+                ScoreboardWording.TotalsLine(kills, deaths));
 
             foreach (ScoreboardRow row in rows) view.AddRow(team, in row);
         }

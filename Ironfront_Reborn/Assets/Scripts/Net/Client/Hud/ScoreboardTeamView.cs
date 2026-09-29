@@ -25,10 +25,10 @@ namespace Ironfront.Net.Unity.Client.Hud
     [DisallowMultipleComponent]
     public sealed class ScoreboardTeamView : MonoBehaviour
     {
-        public const float MaxRowHeight = 30f;
+        public const float MaxRowHeight = 40f;
 
         /// <summary>A short column still lays out as if it held this many, so a row is not huge.</summary>
-        private const int MinRowsForSizing = 14;
+        private const int MinRowsForSizing = 16;
 
         private const float RowGap = 2f;
         private const float StaggerSeconds = 0.014f;
@@ -37,6 +37,7 @@ namespace Ironfront.Net.Unity.Client.Hud
         [SerializeField] private Text _teamName;
         [SerializeField] private Image _flagIcon;
         [SerializeField] private Text _flags;
+        [SerializeField] private Text _perKill;
         [SerializeField] private Text _players;
         [SerializeField] private Text _totals;
         [SerializeField] private RectTransform _rows;
@@ -52,8 +53,8 @@ namespace Ironfront.Net.Unity.Client.Hud
         private void Awake()
         {
             _complete = _band != null && _teamName != null && _flagIcon != null && _flags != null
-                        && _players != null && _totals != null && _rows != null && _empty != null
-                        && _rowTemplate != null;
+                        && _perKill != null && _players != null && _totals != null && _rows != null
+                        && _empty != null && _rowTemplate != null;
 
             if (!_complete)
             {
@@ -81,6 +82,10 @@ namespace Ironfront.Net.Unity.Client.Hud
         {
             if (!_complete) return;
             _flags.text = flags.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            // What a kill is worth to this side right now, beside the flags that make it so: a score
+            // that jumps by three reads as the rule, not as a wrong number.
+            _perKill.text = Ironfront.Net.Replication.Client.ScoreboardWording.PerKillLine(flags);
         }
 
         /// <summary>Starts the column: name, head count and totals. Rows follow.</summary>
@@ -120,7 +125,7 @@ namespace Ironfront.Net.Unity.Client.Hud
             sizingRows = Mathf.Max(Mathf.Max(sizingRows, _pendingCount), MinRowsForSizing);
             float pitch = Mathf.Min(area / sizingRows, MaxRowHeight + RowGap);
             float height = pitch - (pitch >= 20f ? RowGap : 1f);
-            int fontSize = Mathf.Clamp(Mathf.RoundToInt(height * 0.64f), 11, 19);
+            int fontSize = Mathf.Clamp(Mathf.RoundToInt(height * 0.62f), 14, 24);
 
             // The top of a column earns the star only by having scored: 0 kills leads nobody.
             bool starred = _pendingCount > 0 && _pending[0].Kills > 0;

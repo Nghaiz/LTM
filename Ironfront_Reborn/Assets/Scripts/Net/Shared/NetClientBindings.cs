@@ -111,6 +111,18 @@ namespace Ironfront.Net.Unity
         public static ITeamPalette TeamPalette { get; set; }
 
         /// <summary>
+        /// A weapon's silhouette by its network id, the one the loadout screen draws; null when the
+        /// id names no weapon or nothing has registered a lookup.
+        /// </summary>
+        /// <remarks>
+        /// The killfeed draws the weapon's picture between the two names (owner report 2026-09-29:
+        /// the text feed was hard to read). The sprites live on <c>WeaponManager</c>'s entries in
+        /// <c>Assembly-CSharp</c>, which no assembly definition can name, so the lookup crosses as a
+        /// delegate; a null answer is normal and the feed falls back to the weapon's name.
+        /// </remarks>
+        public static Func<byte, Sprite> WeaponIcon { get; set; }
+
+        /// <summary>
         /// The way into the offline bot match, or null on a build with no legacy menu. P15.
         /// </summary>
         /// <remarks>
