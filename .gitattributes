@@ -61,3 +61,9 @@ Ironfront_Reborn/Assets/ForestLake/**/*.fbx filter=lfs diff=lfs merge=lfs -text
 Ironfront_Reborn/Assets/ForestLake/**/*.FBX filter=lfs diff=lfs merge=lfs -text
 Ironfront_Reborn/Assets/ForestLake/**/*.exr filter=lfs diff=lfs merge=lfs -text
 Ironfront_Reborn/Assets/ForestLake/**/*.psd filter=lfs diff=lfs merge=lfs -text
+# The weapon models the reskin (Assets/Editor/Weapons) bakes from: ~140 MB of meshes and
+# textures, the largest a 16 MB FBX.
+Ironfront_Reborn/Assets/WeaponModels/**/*.png filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/WeaponModels/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/WeaponModels/**/*.fbx filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/WeaponModels/**/*.obj filter=lfs diff=lfs merge=lfs -text
