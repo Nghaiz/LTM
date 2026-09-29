@@ -70,6 +70,13 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         public static BotRosterSize RosterFor(int authoredTeam0, int authoredTeam1)
         {
+            // BENCH ONLY (bench/bot-capacity): a master-less server fields this many per team.
+            string bench = Environment.GetEnvironmentVariable("IRONFRONT_BENCH_BOTS_PER_TEAM");
+            if (int.TryParse(bench, out int benchPerTeam) && benchPerTeam >= 0)
+            {
+                return new BotRosterSize(benchPerTeam, benchPerTeam, "bench override");
+            }
+
             Func<ushort> hosted = HostedRoom;
             return RoomPlan.Resolve(hosted != null ? hosted() : (ushort)0, authoredTeam0, authoredTeam1);
         }
