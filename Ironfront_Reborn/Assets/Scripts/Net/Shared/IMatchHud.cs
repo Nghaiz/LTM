@@ -101,11 +101,21 @@ namespace Ironfront.Net.Unity
         /// Raises or lowers the Tab scoreboard. P18 3.3.
         /// </summary>
         /// <remarks>
-        /// A level, not a toggle — the caller polls a held key and passes what it read, so the
-        /// board cannot end up inverted after a frame the HUD missed. Same shape as
-        /// <c>MinimapUi.HoldSource</c>, which is the other held-open overlay in this game.
+        /// A level, not a toggle, on this side of the seam: the CALLER owns whether the board is
+        /// open -- since 2026-09-29 Tab toggles it rather than holding it (owner's request) -- and
+        /// passes the answer, so the board cannot end up inverted after a frame the HUD missed.
         /// </remarks>
         void SetScoreboardVisible(bool visible);
+
+        /// <summary>
+        /// The match the board states: map, scores, the lead against the winning margin, clock,
+        /// flags and rules. Feature 2, 2026-09-29.
+        /// </summary>
+        /// <remarks>
+        /// Pushed on its own, apart from the columns, because it changes on a different clock:
+        /// the clock ticks every second while nobody scores.
+        /// </remarks>
+        void SetScoreboardMatch(in ScoreboardMatch match);
 
         /// <summary>
         /// Starts one side's column and states its totals. P18 3.3.
@@ -114,9 +124,8 @@ namespace Ironfront.Net.Unity
         /// <para>
         /// <b>Called before that team's rows, and it clears them.</b> The three scoreboard calls
         /// are ordered: this, then <see cref="AddScoreboardRow"/> once per row in display order,
-        /// then <see cref="EndScoreboard"/> once for the whole board. An explicit terminator
-        /// rather than the killfeed's count-then-index shape, because a column here is composed
-        /// into one multi-line label and the HUD has to know when the last row has arrived.
+        /// then <see cref="EndScoreboard"/> once for the whole board, so the HUD knows when the
+        /// last row has arrived and can lay the column out once.
         /// </para>
         /// <para>
         /// <b><paramref name="playerCount"/> is the true roster size, which can exceed the rows
@@ -129,22 +138,20 @@ namespace Ironfront.Net.Unity
         /// reconciled with it, and an unreconcilable scoreboard is decoration.
         /// </para>
         /// </remarks>
-        void BeginScoreboardColumn(int team, int playerCount, int totalKills, int totalDeaths);
+        /// <param name="humanCount">How many of <paramref name="playerCount"/> are people.</param>
+        void BeginScoreboardColumn(
+            int team, int playerCount, int humanCount, int totalKills, int totalDeaths);
 
         /// <summary>
         /// Appends one row to a side's column, in display order.
         /// </summary>
-        /// <param name="name">
-        /// Already resolved by the caller, and never null — an actor no <c>S_PLAYER_LIST</c> has
+        /// <remarks>
+        /// The name is already resolved and never empty — an actor no <c>S_PLAYER_LIST</c> has
         /// named still gets a row, under whatever the caller falls back to. The scoreboard is
         /// keyed on actor id precisely so that a name arriving second does not make a player
         /// appear and disappear (P18 criterion 5).
-        /// </param>
-        /// <param name="local">
-        /// Whether this row is the viewing player, so their own line can be picked out of a
-        /// 21-row column.
-        /// </param>
-        void AddScoreboardRow(int team, string name, int kills, int deaths, bool local);
+        /// </remarks>
+        void AddScoreboardRow(int team, in ScoreboardRow row);
 
         /// <summary>Ends the board and paints it. Called once, after both columns.</summary>
         void EndScoreboard();

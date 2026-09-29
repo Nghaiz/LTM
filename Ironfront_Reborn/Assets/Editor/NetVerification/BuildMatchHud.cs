@@ -64,7 +64,7 @@ namespace Ironfront.Net.Unity.EditorTools
         /// </remarks>
         private const int SortingOrder = 50;
 
-        private static readonly Color Ink = new Color(0.93f, 0.94f, 0.96f);
+        private static readonly Color Ink = HudStyle.Ink;
         private static readonly Color Backdrop = new Color(0.04f, 0.05f, 0.07f, 0.82f);
 
         [MenuItem("Ironfront/Net/Build in-match readout")]
@@ -130,8 +130,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 KillfeedRowView[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
                     root, out Text killer, out Text timer, out Button deployButton, log);
-                GameObject scoreboard = BuildScoreboard(root, out ScoreboardColumn left,
-                    out ScoreboardColumn right, log);
+                ScoreboardView scoreboard = BuildScoreboard(root, log);
 
                 var so = new SerializedObject(hud);
                 Assign(so, "_teamReadoutText", team);
@@ -140,20 +139,14 @@ namespace Ironfront.Net.Unity.EditorTools
                 Assign(so, "_deployKillerText", killer);
                 Assign(so, "_deployTimerText", timer);
                 Assign(so, "_deployButton", deployButton);
-                Assign(so, "_scoreboardRoot", scoreboard);
-                Assign(so, "_scoreboardTeam0Header", left.Header);
-                Assign(so, "_scoreboardTeam0Names", left.Names);
-                Assign(so, "_scoreboardTeam0Scores", left.Scores);
-                Assign(so, "_scoreboardTeam1Header", right.Header);
-                Assign(so, "_scoreboardTeam1Names", right.Names);
-                Assign(so, "_scoreboardTeam1Scores", right.Scores);
+                Assign(so, "_scoreboard", scoreboard);
                 so.ApplyModifiedPropertiesWithoutUndo();
 
                 // The authored state is what a reader of the prefab sees, and what the offline
                 // game gets if MatchHud.Awake never runs. Down is the only safe one: an overlay
                 // authored visible is ledger X-48's failure, one screen over.
                 deploy.SetActive(false);
-                scoreboard.SetActive(false);
+                scoreboard.gameObject.SetActive(false);
 
                 PrefabUtility.SaveAsPrefabAsset(contents, PrefabPath);
                 log.AppendLine("saved: " + PrefabPath);
@@ -283,7 +276,7 @@ namespace Ironfront.Net.Unity.EditorTools
             var backing = row.GetComponent<Image>();
             backing.sprite = rounded;
             backing.type = Image.Type.Sliced;
-            backing.color = KillfeedRowView.RestBacking;
+            backing.color = HudStyle.RowBacking;
             backing.raycastTarget = false;
 
             var edge = row.GetComponent<Outline>();
@@ -307,7 +300,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
             Image accent = Block(row, "Accent", new Vector2(4f, 20f));
 
-            Text killer = RowText(row, "Killer", bold, 22, Color.white);
+            Text killer = BoardText(row, "Killer", bold, 22, Ink);
 
             var how = new GameObject(
                 "How", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
@@ -316,7 +309,7 @@ namespace Ironfront.Net.Unity.EditorTools
             var howBacking = how.GetComponent<Image>();
             howBacking.sprite = rounded;
             howBacking.type = Image.Type.Sliced;
-            howBacking.color = KillfeedRowView.HowBacking;
+            howBacking.color = HudStyle.ChipBacking;
             howBacking.raycastTarget = false;
 
             var howLayout = how.GetComponent<HorizontalLayoutGroup>();
@@ -327,14 +320,14 @@ namespace Ironfront.Net.Unity.EditorTools
             howLayout.childForceExpandWidth = false;
             howLayout.childForceExpandHeight = false;
 
-            Text howText = RowText(how, "Text", bold, 16, KillfeedRowView.HowInk, shadowed: false);
+            Text howText = BoardText(how, "Text", bold, 16, HudStyle.ChipInk, shadowed: false);
 
             Image headshot = Block(row, "Headshot", new Vector2(20f, 20f));
-            headshot.color = KillfeedRowView.HeadshotInk;
+            headshot.color = HudStyle.HeadshotInk;
             headshot.preserveAspect = true;
 
-            Text victim = RowText(row, "Victim", bold, 22, Color.white);
-            Text sentence = RowText(row, "Sentence", medium, 20, KillfeedRowView.SentenceInk);
+            Text victim = BoardText(row, "Victim", bold, 22, Ink);
+            Text sentence = BoardText(row, "Sentence", medium, 20, HudStyle.SentenceInk);
 
             KillfeedRowView view = row.AddComponent<KillfeedRowView>();
 
@@ -354,13 +347,14 @@ namespace Ironfront.Net.Unity.EditorTools
             return view;
         }
 
-        /// <summary>A text part of a killfeed row, sized by its content and shadowed.</summary>
+        /// <summary>A text part of the killfeed or the scoreboard, in Roboto and shadowed.</summary>
         /// <remarks>
-        /// The shadow is what keeps a name legible where the backing's alpha lets a bright sky
-        /// through; the chip's own text drops it, sitting on a pane of its own.
+        /// The shadow is what keeps a name legible where a backing's alpha lets a bright sky
+        /// through; a chip's own text drops it, sitting on a pane of its own.
         /// </remarks>
-        private static Text RowText(
-            GameObject parent, string name, Font font, int size, Color ink, bool shadowed = true)
+        private static Text BoardText(
+            GameObject parent, string name, Font font, int size, Color ink,
+            TextAnchor anchor = TextAnchor.MiddleLeft, bool shadowed = true)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent.transform, worldPositionStays: false);
@@ -370,7 +364,7 @@ namespace Ironfront.Net.Unity.EditorTools
             text.fontSize = size;
             text.text = string.Empty;
             text.color = ink;
-            text.alignment = TextAnchor.MiddleLeft;
+            text.alignment = anchor;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.supportRichText = false;
@@ -466,27 +460,16 @@ namespace Ironfront.Net.Unity.EditorTools
             return panel;
         }
 
-        /// <summary>The three labels one side's column is made of.</summary>
-        private readonly struct ScoreboardColumn
-        {
-            public ScoreboardColumn(Text header, Text names, Text scores)
-            {
-                Header = header;
-                Names = names;
-                Scores = scores;
-            }
-
-            public Text Header { get; }
-            public Text Names { get; }
-            public Text Scores { get; }
-        }
-
-        /// <summary>P18 3.3 — the Tab scoreboard: two columns over a backdrop.</summary>
+        /// <summary>
+        /// P18 3.3, rebuilt for feature 2 (the owner's request, 2026-09-29) — the Tab scoreboard:
+        /// the match across the top, both sides below, the rules at the foot.
+        /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Two multi-line labels per side, not a label per row.</b> <c>MatchHud</c>'s own
-        /// remark carries the reason: a row is a LINE in both labels, so a long name cannot push
-        /// its score out of alignment, and a 21-a-side board is six references rather than 126.
+        /// <b>A row per player, cloned from one template per side.</b> The old board was two
+        /// multi-line labels a side, which cannot give a row its own backing, a star, a BOT tag
+        /// or a light when that player scores. <see cref="ScoreboardTeamView"/> clones the
+        /// template, so the prefab still carries one row a side rather than thirty-two.
         /// </para>
         /// <para>
         /// <b>Authored in the neutral ink, like every other element here.</b> The side colours are
@@ -494,100 +477,421 @@ namespace Ironfront.Net.Unity.EditorTools
         /// the second copy of a mapping the game already owns, which is what
         /// <c>MatchHudTeamColoursComeFromThePalette</c> forbids (contracts § 6.3).
         /// </para>
+        /// <para>
+        /// <b>Authored hidden and transparent.</b> The board fades in when it opens; authored
+        /// visible it would sit over the offline game, which never runs the component that hides it.
+        /// </para>
         /// </remarks>
-        private static GameObject BuildScoreboard(
-            GameObject root, out ScoreboardColumn left, out ScoreboardColumn right,
-            StringBuilder log)
+        private static ScoreboardView BuildScoreboard(GameObject root, StringBuilder log)
         {
-            var panel = new GameObject("Scoreboard", typeof(RectTransform), typeof(Image));
-            panel.transform.SetParent(root.transform, worldPositionStays: false);
-            Stretch(panel.GetComponent<RectTransform>());
+            Font black = LoadFont(RobotoBlackPath);
+            Font bold = LoadFont(RobotoBoldPath);
+            Font medium = LoadFont(RobotoMediumPath);
+            Sprite rounded = RoundedSprite();
 
-            var backdrop = panel.GetComponent<Image>();
-            backdrop.color = Backdrop;
+            var board = new GameObject(
+                "Scoreboard", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+            board.transform.SetParent(root.transform, worldPositionStays: false);
+            Stretch(board.GetComponent<RectTransform>());
+
+            var group = board.GetComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.interactable = false;
+            group.blocksRaycasts = false;
 
             // Raycast target OFF, unlike the deploy screen's. This board comes up while the
             // player is alive and still shooting; swallowing their clicks would be a scoreboard
             // that disarms them.
-            backdrop.raycastTarget = false;
+            var vignette = board.GetComponent<Image>();
+            vignette.color = new Color(0.01f, 0.015f, 0.03f, 1f);
+            vignette.raycastTarget = false;
 
-            Text heading = Label(panel, "Heading", "SCOREBOARD", 40, TextAnchor.UpperCenter);
-            Centre(heading.GetComponent<RectTransform>(), new Vector2(0f, 460f), new Vector2(900f, 48f));
+            var panel = new GameObject("Panel", typeof(RectTransform));
+            panel.transform.SetParent(board.transform, worldPositionStays: false);
+            RectTransform panelRect = panel.GetComponent<RectTransform>();
+            Centre(panelRect, Vector2.zero, new Vector2(BoardWidth, BoardHeight));
 
-            left = BuildScoreboardColumn(panel, "Team 0", -440f);
-            right = BuildScoreboardColumn(panel, "Team 1", 440f);
+            // ---- the match, across the top
+            Text map = BoardText(panel, "Map", black, 46, Ink, TextAnchor.UpperLeft);
+            Place(map, TopLeft, TopLeft, new Vector2(8f, -14f), new Vector2(620f, 58f));
+
+            Text summary = BoardText(panel, "Summary", medium, 17, HudStyle.Muted, TextAnchor.UpperLeft);
+            Place(summary, TopLeft, TopLeft, new Vector2(10f, -74f), new Vector2(620f, 26f));
+
+            Text team0Label = BoardText(panel, "Team 0 Label", bold, 18, Ink, TextAnchor.UpperRight);
+            Place(team0Label, TopCentre, TopRight, new Vector2(-40f, -12f), new Vector2(260f, 26f));
+
+            Text score0 = BoardText(panel, "Score 0", black, 72, Ink, TextAnchor.UpperRight);
+            Place(score0, TopCentre, TopRight, new Vector2(-40f, -32f), new Vector2(320f, 86f));
+            Outline glow0 = Glow(score0);
+
+            Text team1Label = BoardText(panel, "Team 1 Label", bold, 18, Ink, TextAnchor.UpperLeft);
+            Place(team1Label, TopCentre, TopLeft, new Vector2(40f, -12f), new Vector2(260f, 26f));
+
+            Text score1 = BoardText(panel, "Score 1", black, 72, Ink, TextAnchor.UpperLeft);
+            Place(score1, TopCentre, TopLeft, new Vector2(40f, -32f), new Vector2(320f, 86f));
+            Outline glow1 = Glow(score1);
+
+            Image versus = Picture(panel, "Versus", new Color(1f, 1f, 1f, 0.22f));
+            Place(versus, TopCentre, TopCentre, new Vector2(0f, -40f), new Vector2(2f, 66f));
+
+            Image track = Picture(panel, "Lead Track", new Color(1f, 1f, 1f, 0.1f), rounded);
+            Place(track, TopCentre, TopCentre, new Vector2(0f, -128f), new Vector2(600f, 10f));
+
+            Image fill0 = Picture(track.gameObject, "Lead Fill 0", Ink, rounded);
+            Place(fill0, Middle, new Vector2(1f, 0.5f), Vector2.zero, new Vector2(0f, 10f));
+
+            Image fill1 = Picture(track.gameObject, "Lead Fill 1", Ink, rounded);
+            Place(fill1, Middle, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(0f, 10f));
+
+            Image centreMark = Picture(track.gameObject, "Lead Centre", new Color(1f, 1f, 1f, 0.85f));
+            Place(centreMark, Middle, Middle, Vector2.zero, new Vector2(2f, 20f));
+
+            Text leadLine = BoardText(panel, "Lead Line", bold, 15, HudStyle.Muted, TextAnchor.UpperCenter);
+            Place(leadLine, TopCentre, TopCentre, new Vector2(0f, -146f), new Vector2(900f, 22f));
+
+            Text clock = BoardText(panel, "Clock", black, 46, Ink, TextAnchor.UpperRight);
+            Place(clock, TopRight, TopRight, new Vector2(-8f, -14f), new Vector2(320f, 58f));
+
+            Text phase = BoardText(panel, "Phase", medium, 17, HudStyle.Muted, TextAnchor.UpperRight);
+            Place(phase, TopRight, TopRight, new Vector2(-10f, -74f), new Vector2(320f, 26f));
+
+            Image divider = Picture(panel, "Divider", new Color(1f, 1f, 1f, 0.28f));
+            Place(divider, TopCentre, TopCentre, new Vector2(0f, -184f), new Vector2(BoardWidth, 2f));
+
+            // ---- both sides
+            ScoreboardTeamView team0 = BuildScoreboardSide(panel, "Team 0", false, black, bold, medium, rounded);
+            Place(team0, TopCentre, TopRight, new Vector2(-SideGap * 0.5f, -200f), new Vector2(SideWidth, SideHeight));
+
+            ScoreboardTeamView team1 = BuildScoreboardSide(panel, "Team 1", true, black, bold, medium, rounded);
+            Place(team1, TopCentre, TopLeft, new Vector2(SideGap * 0.5f, -200f), new Vector2(SideWidth, SideHeight));
+
+            // ---- the rules, at the foot
+            Text rules = BoardText(panel, "Rules", medium, 15, HudStyle.Faint, TextAnchor.LowerCenter);
+            Place(rules, BottomCentre, BottomCentre, new Vector2(0f, 8f), new Vector2(BoardWidth - 360f, 24f));
+
+            Text hint = BoardText(panel, "Hint", bold, 13, HudStyle.Faint, TextAnchor.LowerRight);
+            hint.text = "TAB  ·  CLOSE";
+            Place(hint, BottomRight, BottomRight, new Vector2(-8f, 10f), new Vector2(200f, 20f));
+
+            ScoreboardView view = board.AddComponent<ScoreboardView>();
+
+            var so = new SerializedObject(view);
+            Assign(so, "_group", group);
+            Assign(so, "_vignette", vignette);
+            Assign(so, "_panel", panelRect);
+            Assign(so, "_map", map);
+            Assign(so, "_summary", summary);
+            Assign(so, "_team0Label", team0Label);
+            Assign(so, "_team1Label", team1Label);
+            Assign(so, "_score0", score0);
+            Assign(so, "_score1", score1);
+            Assign(so, "_score0Glow", glow0);
+            Assign(so, "_score1Glow", glow1);
+            Assign(so, "_leadTrack", track.rectTransform);
+            Assign(so, "_leadFill0", fill0);
+            Assign(so, "_leadFill1", fill1);
+            Assign(so, "_leadLine", leadLine);
+            Assign(so, "_clock", clock);
+            Assign(so, "_phase", phase);
+            Assign(so, "_divider", divider);
+            Assign(so, "_team0", team0);
+            Assign(so, "_team1", team1);
+            Assign(so, "_rules", rules);
+            so.ApplyModifiedPropertiesWithoutUndo();
 
             log.AppendLine(
-                "scoreboard: two columns of " + MatchHud.ScoreboardRowsPerTeam
-                + " rows each, from ProtocolConstants.MAX_ACTORS.");
+                "scoreboard: match header, two sides of up to " + MatchHud.ScoreboardRowsPerTeam
+                + " cloned rows (from ProtocolConstants.MAX_ACTORS), rules line; authored hidden.");
 
-            return panel;
+            return view;
         }
 
-        /// <summary>One side's heading, name column and score column.</summary>
-        private static ScoreboardColumn BuildScoreboardColumn(
-            GameObject panel, string name, float centreX)
+        /// <summary>One side: its band, name, head count, flags, totals, column heads and rows.</summary>
+        private static ScoreboardTeamView BuildScoreboardSide(
+            GameObject panel, string name, bool mirrored, Font black, Font bold, Font medium, Sprite rounded)
         {
-            const float ColumnWidth = 720f;
-            const float ScoresWidth = 150f;
-            const float HeaderTop = 400f;
-            const float BodyTop = 356f;
+            var side = new GameObject(name, typeof(RectTransform), typeof(Image));
+            side.transform.SetParent(panel.transform, worldPositionStays: false);
 
-            // Sized so the FULL column fits the 1080-tall reference frame, rather than picked to
-            // look right at three rows. A 21-a-side map fills 21 of these and a full one fills
-            // ScoreboardRowsPerTeam; at 22 px the body ends at y = -348, comfortably above the
-            // bottom edge. The first authoring of this used 26 px from y = 280 and ran 32 rows
-            // straight off the screen — caught on the captured artifact, which is the only place
-            // a layout fault of this kind is visible at all.
-            const float RowHeight = 22f;
-            const int RowFontSize = 19;
+            var pane = side.GetComponent<Image>();
+            pane.sprite = rounded;
+            pane.type = Image.Type.Sliced;
+            pane.color = HudStyle.Pane;
+            pane.raycastTarget = false;
 
-            float bodyHeight = MatchHud.ScoreboardRowsPerTeam * RowHeight;
+            // The side's colour is strongest at the board's outer edge: the right-hand side's band
+            // is the same fade, mirrored.
+            Image band = Picture(side, "Band", Ink);
+            RectTransform bandRect = band.rectTransform;
+            bandRect.anchorMin = new Vector2(0f, 1f);
+            bandRect.anchorMax = new Vector2(1f, 1f);
+            bandRect.pivot = new Vector2(0.5f, 1f);
+            bandRect.anchoredPosition = Vector2.zero;
+            bandRect.sizeDelta = new Vector2(0f, 92f);
+            if (mirrored) bandRect.localScale = new Vector3(-1f, 1f, 1f);
 
-            Text header = Label(panel, name + " Header", string.Empty, 26, TextAnchor.UpperLeft);
-            TopLeftBlock(
-                header.GetComponent<RectTransform>(),
-                centreX - ColumnWidth * 0.5f, HeaderTop, ColumnWidth, 34f);
+            Text teamName = BoardText(side, "Name", black, 32, Ink, TextAnchor.UpperLeft);
+            Place(teamName, TopLeft, TopLeft, new Vector2(24f, -12f), new Vector2(400f, 42f));
 
-            // The names take the left of the column and the scores the right of the SAME column,
-            // rather than each getting half the screen: a name and its score belong to one row,
-            // and 400 px of empty desert between them is a row the eye cannot follow.
-            Text names = Label(panel, name + " Names", string.Empty, RowFontSize, TextAnchor.UpperLeft);
-            names.supportRichText = true;
-            names.verticalOverflow = VerticalWrapMode.Truncate;
-            TopLeftBlock(
-                names.GetComponent<RectTransform>(),
-                centreX - ColumnWidth * 0.5f, BodyTop,
-                ColumnWidth - ScoresWidth - 20f, bodyHeight);
+            Text players = BoardText(side, "Players", medium, 15, Ink, TextAnchor.UpperLeft);
+            Place(players, TopLeft, TopLeft, new Vector2(26f, -56f), new Vector2(480f, 22f));
 
-            Text scores = Label(panel, name + " Scores", string.Empty, RowFontSize, TextAnchor.UpperRight);
-            scores.verticalOverflow = VerticalWrapMode.Truncate;
-            TopLeftBlock(
-                scores.GetComponent<RectTransform>(),
-                centreX + ColumnWidth * 0.5f - ScoresWidth, BodyTop,
-                ScoresWidth, bodyHeight);
+            Image flagIcon = Picture(side, "Flag Icon", Ink);
+            Place(flagIcon, TopRight, TopRight, new Vector2(-70f, -16f), new Vector2(30f, 30f));
 
-            return new ScoreboardColumn(header, names, scores);
+            Text flags = BoardText(side, "Flags", black, 32, Ink, TextAnchor.UpperRight);
+            Place(flags, TopRight, TopRight, new Vector2(-22f, -10f), new Vector2(48f, 42f));
+
+            Text totals = BoardText(side, "Totals", medium, 15, Ink, TextAnchor.UpperRight);
+            Place(totals, TopRight, TopRight, new Vector2(-24f, -56f), new Vector2(420f, 22f));
+
+            // Column heads, on the same insets as the rows so each sits over its numbers.
+            var heads = new GameObject("Columns", typeof(RectTransform));
+            heads.transform.SetParent(side.transform, worldPositionStays: false);
+            RectTransform headsRect = heads.GetComponent<RectTransform>();
+            headsRect.anchorMin = new Vector2(0f, 1f);
+            headsRect.anchorMax = new Vector2(1f, 1f);
+            headsRect.pivot = new Vector2(0.5f, 1f);
+            headsRect.anchoredPosition = new Vector2(0f, -100f);
+            headsRect.sizeDelta = new Vector2(-2f * RowInset, 26f);
+
+            ColumnHead(heads, "#", bold, TextAnchor.MiddleCenter, fromRight: false, RankX, RankWidth);
+            ColumnHead(heads, "PLAYER", bold, TextAnchor.MiddleLeft, fromRight: false, NameX, 300f);
+            ColumnHead(heads, "K", bold, TextAnchor.MiddleRight, fromRight: true, KillsX, NumberWidth);
+            ColumnHead(heads, "D", bold, TextAnchor.MiddleRight, fromRight: true, DeathsX, NumberWidth);
+            ColumnHead(heads, "K/D", bold, TextAnchor.MiddleRight, fromRight: true, RatioX, RatioWidth);
+
+            Image rule = Picture(side, "Column Rule", new Color(1f, 1f, 1f, 0.12f));
+            RectTransform ruleRect = rule.rectTransform;
+            ruleRect.anchorMin = new Vector2(0f, 1f);
+            ruleRect.anchorMax = new Vector2(1f, 1f);
+            ruleRect.pivot = new Vector2(0.5f, 1f);
+            ruleRect.anchoredPosition = new Vector2(0f, -128f);
+            ruleRect.sizeDelta = new Vector2(-2f * RowInset, 1f);
+
+            var rows = new GameObject("Rows", typeof(RectTransform));
+            rows.transform.SetParent(side.transform, worldPositionStays: false);
+            RectTransform rowsRect = rows.GetComponent<RectTransform>();
+            rowsRect.anchorMin = Vector2.zero;
+            rowsRect.anchorMax = Vector2.one;
+            rowsRect.offsetMin = new Vector2(RowInset, RowInset);
+            rowsRect.offsetMax = new Vector2(-RowInset, -134f);
+
+            Text empty = BoardText(rows, "Empty", medium, 16, HudStyle.Faint, TextAnchor.MiddleCenter);
+            empty.text = "NO PLAYERS YET";
+            Stretch(empty.rectTransform);
+
+            ScoreboardRowView template = BuildScoreboardRow(rows, bold, medium, rounded);
+
+            ScoreboardTeamView view = side.AddComponent<ScoreboardTeamView>();
+
+            var so = new SerializedObject(view);
+            Assign(so, "_band", band);
+            Assign(so, "_teamName", teamName);
+            Assign(so, "_flagIcon", flagIcon);
+            Assign(so, "_flags", flags);
+            Assign(so, "_players", players);
+            Assign(so, "_totals", totals);
+            Assign(so, "_rows", rowsRect);
+            Assign(so, "_empty", empty);
+            Assign(so, "_rowTemplate", template);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            return view;
+        }
+
+        /// <summary>The one row a side's column clones: rank, star, name, BOT, K, D, K/D.</summary>
+        private static ScoreboardRowView BuildScoreboardRow(
+            GameObject rows, Font bold, Font medium, Sprite rounded)
+        {
+            var row = new GameObject(
+                "Row Template", typeof(RectTransform), typeof(CanvasGroup), typeof(Image), typeof(Outline));
+            row.transform.SetParent(rows.transform, worldPositionStays: false);
+
+            RectTransform rect = row.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(0f, 28f);
+
+            var group = row.GetComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            var backing = row.GetComponent<Image>();
+            backing.sprite = rounded;
+            backing.type = Image.Type.Sliced;
+            backing.color = new Color(1f, 1f, 1f, 0.05f);
+            backing.raycastTarget = false;
+
+            var edge = row.GetComponent<Outline>();
+            edge.effectDistance = new Vector2(1.5f, -1.5f);
+            edge.enabled = false;
+
+            Text rank = BoardText(row, "Rank", medium, 15, HudStyle.Faint, TextAnchor.MiddleCenter, shadowed: false);
+            Column(rank, fromRight: false, RankX, RankWidth);
+
+            Image star = Picture(row, "Star", HudStyle.Gold);
+            Place(star, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(StarX, 0f), new Vector2(18f, 18f));
+            star.preserveAspect = true;
+
+            var identity = new GameObject("Identity", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            identity.transform.SetParent(row.transform, worldPositionStays: false);
+            RectTransform identityRect = identity.GetComponent<RectTransform>();
+            identityRect.anchorMin = Vector2.zero;
+            identityRect.anchorMax = Vector2.one;
+            identityRect.offsetMin = new Vector2(NameX, 0f);
+            identityRect.offsetMax = new Vector2(-(KillsX + NumberWidth + 16f), 0f);
+
+            var identityLayout = identity.GetComponent<HorizontalLayoutGroup>();
+            identityLayout.childAlignment = TextAnchor.MiddleLeft;
+            identityLayout.spacing = 8f;
+            identityLayout.childControlWidth = true;
+            identityLayout.childControlHeight = true;
+            identityLayout.childForceExpandWidth = false;
+            identityLayout.childForceExpandHeight = false;
+
+            Text name = BoardText(identity, "Name", bold, 18, Ink, TextAnchor.MiddleLeft);
+
+            var bot = new GameObject("Bot", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
+            bot.transform.SetParent(identity.transform, worldPositionStays: false);
+
+            var botBacking = bot.GetComponent<Image>();
+            botBacking.sprite = rounded;
+            botBacking.type = Image.Type.Sliced;
+            botBacking.color = HudStyle.ChipBacking;
+            botBacking.raycastTarget = false;
+
+            var botLayout = bot.GetComponent<HorizontalLayoutGroup>();
+            botLayout.padding = new RectOffset(6, 6, 2, 2);
+            botLayout.childAlignment = TextAnchor.MiddleCenter;
+            botLayout.childControlWidth = true;
+            botLayout.childControlHeight = true;
+            botLayout.childForceExpandWidth = false;
+            botLayout.childForceExpandHeight = false;
+
+            Text botText = BoardText(bot, "Text", bold, 11, HudStyle.Muted, TextAnchor.MiddleCenter, shadowed: false);
+            botText.text = "BOT";
+
+            Text kills = BoardText(row, "Kills", bold, 18, Ink, TextAnchor.MiddleRight);
+            Column(kills, fromRight: true, KillsX, NumberWidth);
+
+            Text deaths = BoardText(row, "Deaths", medium, 18, HudStyle.Muted, TextAnchor.MiddleRight);
+            Column(deaths, fromRight: true, DeathsX, NumberWidth);
+
+            Text ratio = BoardText(row, "Ratio", medium, 16, HudStyle.Muted, TextAnchor.MiddleRight, shadowed: false);
+            Column(ratio, fromRight: true, RatioX, RatioWidth);
+
+            ScoreboardRowView view = row.AddComponent<ScoreboardRowView>();
+
+            var so = new SerializedObject(view);
+            Assign(so, "_backing", backing);
+            Assign(so, "_edge", edge);
+            Assign(so, "_rank", rank);
+            Assign(so, "_star", star);
+            Assign(so, "_name", name);
+            Assign(so, "_bot", bot);
+            Assign(so, "_botText", botText);
+            Assign(so, "_kills", kills);
+            Assign(so, "_deaths", deaths);
+            Assign(so, "_ratio", ratio);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            row.SetActive(false);
+            return view;
+        }
+
+        private const float BoardWidth = 1600f;
+        private const float BoardHeight = 920f;
+        private const float SideGap = 28f;
+        private const float SideWidth = (BoardWidth - SideGap) * 0.5f;
+        private const float SideHeight = 670f;
+        private const float RowInset = 12f;
+
+        // Columns, from a row's left edge or (fromRight) its right edge.
+        private const float RankX = 0f;
+        private const float RankWidth = 40f;
+        private const float StarX = 44f;
+        private const float NameX = 68f;
+        private const float KillsX = 190f;
+        private const float DeathsX = 110f;
+        private const float RatioX = 12f;
+        private const float NumberWidth = 60f;
+        private const float RatioWidth = 80f;
+
+        private static readonly Vector2 TopLeft = new Vector2(0f, 1f);
+        private static readonly Vector2 TopCentre = new Vector2(0.5f, 1f);
+        private static readonly Vector2 TopRight = new Vector2(1f, 1f);
+        private static readonly Vector2 Middle = new Vector2(0.5f, 0.5f);
+        private static readonly Vector2 BottomCentre = new Vector2(0.5f, 0f);
+        private static readonly Vector2 BottomRight = new Vector2(1f, 0f);
+
+        private static void ColumnHead(
+            GameObject heads, string caption, Font font, TextAnchor anchor, bool fromRight, float x, float width)
+        {
+            Text head = BoardText(heads, caption, font, 13, HudStyle.Faint, anchor, shadowed: false);
+            head.text = caption;
+            Column(head, fromRight, x, width);
+        }
+
+        /// <summary>A full-height column in a row, <paramref name="x"/> in from one edge.</summary>
+        private static void Column(Component part, bool fromRight, float x, float width)
+        {
+            var rect = (RectTransform)part.transform;
+            rect.anchorMin = new Vector2(fromRight ? 1f : 0f, 0f);
+            rect.anchorMax = new Vector2(fromRight ? 1f : 0f, 1f);
+            rect.pivot = new Vector2(fromRight ? 1f : 0f, 0.5f);
+            rect.anchoredPosition = new Vector2(fromRight ? -x : x, 0f);
+            rect.sizeDelta = new Vector2(width, 0f);
+        }
+
+        /// <summary>Places a part by one anchor point, its pivot, an offset and a size.</summary>
+        private static void Place(Component part, Vector2 anchor, Vector2 pivot, Vector2 position, Vector2 size)
+        {
+            var rect = (RectTransform)part.transform;
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = pivot;
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+        }
+
+        /// <summary>An image part, optionally a nine-sliced one.</summary>
+        private static Image Picture(GameObject parent, string name, Color colour, Sprite sliced = null)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+
+            var image = go.GetComponent<Image>();
+            image.color = colour;
+            image.raycastTarget = false;
+
+            if (sliced != null)
+            {
+                image.sprite = sliced;
+                image.type = Image.Type.Sliced;
+            }
+
+            return image;
         }
 
         /// <summary>
-        /// Places a rect by its TOP-LEFT corner, in the panel's centred coordinates.
+        /// The breathing edge on a leading score. Authored off; the board turns it on for the
+        /// side ahead and paints it that side's colour.
         /// </summary>
-        /// <remarks>
-        /// Both bodies of a column are placed this way with the same <c>top</c> and the same font
-        /// size, which is what makes line N of one sit beside line N of the other. Placing them
-        /// by centre — as the first authoring did — moves the taller one's first line, so a
-        /// column with more rows silently puts every score against the wrong name.
-        /// </remarks>
-        private static void TopLeftBlock(
-            RectTransform rect, float left, float top, float width, float height)
+        private static Outline Glow(Text score)
         {
-            rect.anchorMin = new Vector2(0.5f, 0.5f);
-            rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.sizeDelta = new Vector2(width, height);
-            rect.anchoredPosition = new Vector2(left, top);
+            var glow = score.gameObject.AddComponent<Outline>();
+            glow.effectDistance = new Vector2(2.4f, -2.4f);
+            glow.useGraphicAlpha = true;
+            glow.enabled = false;
+            return glow;
         }
+
+        private const string RobotoBlackPath = "Assets/Font/Roboto-Black.ttf";
 
         // ------------------------------------------------------------------ helpers
 

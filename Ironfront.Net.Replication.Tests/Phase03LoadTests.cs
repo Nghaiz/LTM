@@ -94,7 +94,7 @@ namespace Ironfront.Net.Replication.Tests
             var manager = new InterestManager();
             var spawnAcks = new SpawnAckTracker();
             var history = new HitboxHistory();
-            var pool = new ActorIdPool(ProtocolConstants.MAX_ACTORS, quarantineSeconds: 0f);
+            var pool = new ActorIdPool(ActorIdPool.MaxCapacity, quarantineSeconds: 0f);
             var audit = new ServerStateAudit(pool, history, manager, spawnAcks);
 
             var view = new WorldSnapshot();
@@ -140,7 +140,7 @@ namespace Ironfront.Net.Replication.Tests
             var manager = new InterestManager();
             var spawnAcks = new SpawnAckTracker();
             var history = new HitboxHistory();
-            var pool = new ActorIdPool(ProtocolConstants.MAX_ACTORS);
+            var pool = new ActorIdPool(ActorIdPool.MaxCapacity);
             var audit = new ServerStateAudit(pool, history, manager, spawnAcks);
 
             var view = new WorldSnapshot();
@@ -176,7 +176,7 @@ namespace Ironfront.Net.Replication.Tests
 
                 ServerStateSnapshot clean = audit.Capture();
                 Assert.True(clean.IsClean, $"round {round} left state behind — {clean}");
-                Assert.Equal(ProtocolConstants.MAX_ACTORS, clean.ActorIdsFree);
+                Assert.Equal(ActorIdPool.MaxCapacity, clean.ActorIdsFree);
             }
         }
 

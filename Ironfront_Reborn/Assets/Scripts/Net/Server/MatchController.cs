@@ -161,7 +161,7 @@ namespace Ironfront.Net.Unity.Server
             };
 
             _actorIds = new ActorIdPool(
-                ProtocolConstants.MAX_ACTORS, rules.ActorIdQuarantineSeconds);
+                ActorIdPool.MaxCapacity, rules.ActorIdQuarantineSeconds);
 
             // Without this the pool is decoration: the registry allocated from its own counter
             // and nothing ever called TryAcquire, so the quarantine never ran and the audit's

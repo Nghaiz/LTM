@@ -1215,16 +1215,15 @@ namespace Ironfront.Net.Unity.Client
         /// "You drowned" where it used to say "Killed by The world".
         /// </summary>
         /// <remarks>
-        /// The name's fallback is the killfeed's, verbatim: an id when no S_PLAYER_LIST has named
-        /// that actor. Manufacturing something friendlier would make a genuinely missing name
-        /// indistinguishable from a real one, which is the reason <c>PlayerNameTable</c> returns
-        /// null and leaves the wording to its caller. The wording itself is
+        /// The name is the killfeed's (<see cref="NetClientCombatPresenter.DisplayNameOf"/>): a
+        /// player's name, "Bot 23", or the id while nobody has said. The wording is
         /// <see cref="KillfeedWording.DeployCaption"/>'s, so the screen and the feed agree.
         /// </remarks>
         private string DeployCaption()
         {
-            string fallback = "actor " + _lastKillerActorId;
-            string killer = _names != null ? _names.Names.NameOr(_lastKillerActorId, fallback) : fallback;
+            string killer = _names != null
+                ? _names.DisplayNameOf(_lastKillerActorId)
+                : "actor " + _lastKillerActorId;
 
             return KillfeedWording.DeployCaption(in _lastDeath, killer);
         }

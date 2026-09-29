@@ -91,27 +91,10 @@ namespace Ironfront.Net.Unity.Client.Hud
         [Tooltip("Sends the same empty C_SPAWN_REQUEST the respawn key sends.")]
         [SerializeField] private Button _deployButton;
 
-        [Header("Scoreboard (P18 3.3)")]
-        [Tooltip("The whole Tab board. Activated and deactivated, never merely faded.")]
-        [SerializeField] private GameObject _scoreboardRoot;
-
-        [Tooltip("Team 1's heading: the side, its roster size, and its column totals.")]
-        [SerializeField] private Text _scoreboardTeam0Header;
-
-        [Tooltip("Team 1's names, one per line. Aligned with the scores label beside it.")]
-        [SerializeField] private Text _scoreboardTeam0Names;
-
-        [Tooltip("Team 1's kills and deaths, one line per name.")]
-        [SerializeField] private Text _scoreboardTeam0Scores;
-
-        [Tooltip("Team 2's heading: the side, its roster size, and its column totals.")]
-        [SerializeField] private Text _scoreboardTeam1Header;
-
-        [Tooltip("Team 2's names, one per line. Aligned with the scores label beside it.")]
-        [SerializeField] private Text _scoreboardTeam1Names;
-
-        [Tooltip("Team 2's kills and deaths, one line per name.")]
-        [SerializeField] private Text _scoreboardTeam1Scores;
+        [Header("Scoreboard (P18 3.3, rebuilt for feature 2)")]
+        [Tooltip("The Tab board: the match across the top, both sides below. Draws what it is "
+                 + "handed; this component reads the palette and passes the colours on.")]
+        [SerializeField] private ScoreboardView _scoreboard;
 
         /// <summary>Set by the Deploy control, cleared by the read. See the seam's remark.</summary>
         private bool _deployPressed;
@@ -140,30 +123,7 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// <summary>Scratch for <see cref="ReconcileKillfeed"/>: the row each line is drawn in.</summary>
         private readonly int[] _lineRow = new int[KillfeedRows];
 
-        /// <summary>
-        /// Lines one column will render. Two per side, so the numbers stay in their own label.
-        /// </summary>
-        /// <remarks>
-        /// <b>One multi-line <c>Text</c> per column rather than a <c>Text</c> per row.</b> A
-        /// 21-a-side board is 42 rows; two labels a side is four references for the gate to grade
-        /// and four objects in the prefab, against 84 of each. It also aligns for free — a row is
-        /// a line in both labels, so name and score cannot drift apart no matter how long a name
-        /// is, which is exactly what a per-row layout gets wrong first.
-        /// </remarks>
-        private readonly System.Text.StringBuilder[] _columnNames =
-        {
-            new System.Text.StringBuilder(), new System.Text.StringBuilder(),
-        };
-
-        private readonly System.Text.StringBuilder[] _columnScores =
-        {
-            new System.Text.StringBuilder(), new System.Text.StringBuilder(),
-        };
-
-        /// <summary>Rows appended to each column since it was begun.</summary>
-        private readonly int[] _columnRows = new int[2];
-
-        /// <summary>Whether the board is up, so a hidden board costs no string work.</summary>
+        /// <summary>Whether the board is up, so a repeated call costs nothing.</summary>
         private bool _scoreboardVisible;
 
         /// <summary>
@@ -207,20 +167,18 @@ namespace Ironfront.Net.Unity.Client.Hud
                 // prefab is whatever the last Editor session left — and a deploy panel visible
                 // over the bot match is the X-48 failure one screen over.
                 if (_deployRoot != null) _deployRoot.SetActive(false);
-                if (_scoreboardRoot != null) _scoreboardRoot.SetActive(false);
+                if (_scoreboard != null) _scoreboard.HideImmediately();
                 if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
                 ClearKillfeed();
-                ClearScoreboard();
 
                 enabled = false;
                 return;
             }
 
             if (_deployRoot != null) _deployRoot.SetActive(false);
-            if (_scoreboardRoot != null) _scoreboardRoot.SetActive(false);
+            if (_scoreboard != null) _scoreboard.HideImmediately();
             if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
             ClearKillfeed();
-            ClearScoreboard();
         }
 
         private void Update()
@@ -467,117 +425,49 @@ namespace Ironfront.Net.Unity.Client.Hud
         public void SetScoreboardVisible(bool visible)
         {
             if (visible == _scoreboardVisible) return;
-
             _scoreboardVisible = visible;
-            if (_scoreboardRoot != null) _scoreboardRoot.SetActive(visible);
 
-            // Cleared on the way DOWN, not on the way up. A board raised again before its driver
-            // has pushed a row would otherwise show the previous life's numbers for a frame --
-            // and a stale scoreboard is the one artifact this phase is graded on.
-            if (!visible) ClearScoreboard();
+            if (_scoreboard == null) return;
+
+            // Visible first: opening is what activates the board and runs its Awake, and the
+            // palette is applied to parts that exist only after that.
+            _scoreboard.SetVisible(visible);
+            if (visible)
+                _scoreboard.SetPalette(TeamColour(TeamId.Team0), TeamColour(TeamId.Team1));
         }
 
         /// <inheritdoc/>
-        public void BeginScoreboardColumn(int team, int playerCount, int totalKills, int totalDeaths)
+        public void SetScoreboardMatch(in ScoreboardMatch match)
         {
-            int column = ColumnFor(team);
-            if (column < 0) return;
+            if (_scoreboard != null) _scoreboard.SetMatch(in match);
+        }
 
-            _columnNames[column].Length = 0;
-            _columnScores[column].Length = 0;
-            _columnRows[column] = 0;
-
-            Text header = column == 0 ? _scoreboardTeam0Header : _scoreboardTeam1Header;
-            if (header == null) return;
+        /// <inheritdoc/>
+        public void BeginScoreboardColumn(
+            int team, int playerCount, int humanCount, int totalKills, int totalDeaths)
+        {
+            if (_scoreboard == null) return;
 
             // The roster size and the column's own totals, on screen, because criterion 7 is the
             // arithmetic that reconciles this board with the team score above it. The count is
             // the TRUE one even when more rows follow than the column can draw.
-            header.text = TeamLabel(team)
-                          + "   " + playerCount + (playerCount == 1 ? " player" : " players")
-                          + "   " + totalKills + " K / " + totalDeaths + " D";
-            header.color = TeamColour(team);
+            _scoreboard.BeginColumn(
+                team,
+                TeamLabel(team),
+                Ironfront.Net.Replication.Client.ScoreboardWording.PlayersLine(playerCount, humanCount),
+                Ironfront.Net.Replication.Client.ScoreboardWording.TotalsLine(totalKills, totalDeaths));
         }
 
         /// <inheritdoc/>
-        public void AddScoreboardRow(int team, string name, int kills, int deaths, bool local)
+        public void AddScoreboardRow(int team, in ScoreboardRow row)
         {
-            int column = ColumnFor(team);
-            if (column < 0) return;
-            if (_columnRows[column] >= ScoreboardRowsPerTeam) return;
-
-            System.Text.StringBuilder names = _columnNames[column];
-            System.Text.StringBuilder scores = _columnScores[column];
-
-            if (_columnRows[column] > 0)
-            {
-                names.Append('\n');
-                scores.Append('\n');
-            }
-
-            // Bold rather than a second colour: the column is already painted in the side's
-            // colour, and re-tinting one row would say "this player is on a different team".
-            if (local) names.Append("<b>");
-            names.Append(name);
-            if (local) names.Append("</b>");
-
-            scores.Append(kills).Append(" / ").Append(deaths);
-
-            _columnRows[column]++;
+            if (_scoreboard != null) _scoreboard.AddRow(team, in row);
         }
 
         /// <inheritdoc/>
         public void EndScoreboard()
         {
-            PaintColumn(0, _scoreboardTeam0Names, _scoreboardTeam0Scores);
-            PaintColumn(1, _scoreboardTeam1Names, _scoreboardTeam1Scores);
-        }
-
-        private void PaintColumn(int column, Text names, Text scores)
-        {
-            int team = column == 0 ? TeamId.Team0 : TeamId.Team1;
-            Color ink = TeamColour(team);
-
-            if (names != null)
-            {
-                names.supportRichText = true;
-                names.text = _columnNames[column].ToString();
-                names.color = ink;
-            }
-
-            if (scores != null)
-            {
-                scores.text = _columnScores[column].ToString();
-                scores.color = ink;
-            }
-        }
-
-        /// <summary>
-        /// Which column a team byte draws in, or -1 for a side this board has no column for.
-        /// </summary>
-        /// <remarks>
-        /// <c>TeamId.None</c> lands here, and it is dropped rather than filed under team 0. An
-        /// actor whose side the server did not state belongs on neither column; putting it on the
-        /// first one would make the totals under a heading wrong in a way nothing on screen could
-        /// contradict.
-        /// </remarks>
-        private static int ColumnFor(int team)
-            => team == TeamId.Team0 ? 0 : team == TeamId.Team1 ? 1 : -1;
-
-        private void ClearScoreboard()
-        {
-            for (int column = 0; column < 2; column++)
-            {
-                _columnNames[column].Length = 0;
-                _columnScores[column].Length = 0;
-                _columnRows[column] = 0;
-            }
-
-            if (_scoreboardTeam0Header != null) _scoreboardTeam0Header.text = string.Empty;
-            if (_scoreboardTeam1Header != null) _scoreboardTeam1Header.text = string.Empty;
-
-            PaintColumn(0, _scoreboardTeam0Names, _scoreboardTeam0Scores);
-            PaintColumn(1, _scoreboardTeam1Names, _scoreboardTeam1Scores);
+            if (_scoreboard != null) _scoreboard.End();
         }
 
         /// <inheritdoc/>
@@ -611,7 +501,8 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// picked a side on that screen and then reads a different word for it in the match has
         /// been told about two things. P16 criterion 10 is graded on those exact strings.
         /// </remarks>
-        private static string TeamLabel(int team) => team == TeamId.Team0 ? "TEAM 1" : "TEAM 2";
+        private static string TeamLabel(int team)
+            => Ironfront.Net.Replication.Client.ScoreboardWording.TeamName((byte)team);
 
         /// <summary>
         /// A side's colour for a name drawn on the killfeed's dark backing: the palette's, lifted

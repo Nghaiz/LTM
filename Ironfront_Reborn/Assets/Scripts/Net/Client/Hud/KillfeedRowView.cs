@@ -43,24 +43,6 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// <summary>Per second: how fast a pushed-down row closes on its new slot.</summary>
         private const float SettleRate = 14f;
 
-        /// <summary>The backing at rest: dark enough to read over snow and sky alike.</summary>
-        public static readonly Color RestBacking = new Color(0.05f, 0.06f, 0.08f, 0.78f);
-
-        /// <summary>The chip's backing, a lighter pane on the row's own.</summary>
-        public static readonly Color HowBacking = new Color(1f, 1f, 1f, 0.12f);
-
-        public static readonly Color HowInk = new Color(0.9f, 0.92f, 0.95f);
-        public static readonly Color SentenceInk = new Color(0.8f, 0.82f, 0.86f);
-        public static readonly Color HeadshotInk = new Color(1f, 0.36f, 0.28f);
-
-        /// <summary>Your kill: a warm backing and a gold edge.</summary>
-        private static readonly Color LocalKillBacking = new Color(0.24f, 0.19f, 0.05f, 0.9f);
-        private static readonly Color LocalKillEdge = new Color(1f, 0.78f, 0.25f, 0.95f);
-
-        /// <summary>Your death: a dark red backing and a red edge.</summary>
-        private static readonly Color LocalDeathBacking = new Color(0.28f, 0.06f, 0.06f, 0.9f);
-        private static readonly Color LocalDeathEdge = new Color(0.96f, 0.32f, 0.26f, 0.95f);
-
         /// <summary>Shown in the chip when the server named no weapon (a 1.0 server).</summary>
         private const string NoLabel = "›";
 
@@ -81,10 +63,8 @@ namespace Ironfront.Net.Unity.Client.Hud
         private float _slotY;
         private float _age;
         private float _leaveAge = -1f;
-        private Color _restBacking = RestBacking;
+        private Color _restBacking = HudStyle.RowBacking;
         private bool _flashSettled = true;
-
-        private static Sprite _headshotSprite;
 
         /// <summary>The kill this row shows, 0 when it shows none.</summary>
         public long Sequence { get; private set; }
@@ -114,8 +94,8 @@ namespace Ironfront.Net.Unity.Client.Hud
                 return;
             }
 
-            _headshot.sprite = HeadshotSprite();
-            _headshot.color = HeadshotInk;
+            _headshot.sprite = HudSprites.Crosshair();
+            _headshot.color = HudStyle.HeadshotInk;
         }
 
         /// <summary>
@@ -159,12 +139,12 @@ namespace Ironfront.Net.Unity.Client.Hud
             // The side that acted: the killer's for a kill, the victim's for a death nobody scored.
             _accent.color = sentence ? victimInk : killerInk;
 
-            _restBacking = line.LocalIsKiller ? LocalKillBacking
-                : line.LocalIsVictim ? LocalDeathBacking
-                : RestBacking;
+            _restBacking = line.LocalIsKiller ? HudStyle.LocalKillBacking
+                : line.LocalIsVictim ? HudStyle.LocalDeathBacking
+                : HudStyle.RowBacking;
 
             _edge.enabled = line.LocalIsKiller || line.LocalIsVictim;
-            _edge.effectColor = line.LocalIsKiller ? LocalKillEdge : LocalDeathEdge;
+            _edge.effectColor = line.LocalIsKiller ? HudStyle.Gold : HudStyle.Blood;
 
             if (_flashSettled) _backing.color = _restBacking;
         }
@@ -193,7 +173,7 @@ namespace Ironfront.Net.Unity.Client.Hud
             _age += deltaSeconds;
             _y = Mathf.Lerp(_y, _slotY, 1f - Mathf.Exp(-SettleRate * deltaSeconds));
 
-            float arrive = EaseOut(_age / ArriveSeconds);
+            float arrive = HudStyle.EaseOut(_age / ArriveSeconds);
             float x = (1f - arrive) * SlideDistance;
             float alpha = arrive;
 
@@ -222,73 +202,6 @@ namespace Ironfront.Net.Unity.Client.Hud
             Color lit = Color.Lerp(_restBacking, new Color(1f, 1f, 1f, 0.92f), 0.32f);
             _backing.color = Color.Lerp(_restBacking, lit, flash * flash);
             _flashSettled = flash <= 0f;
-        }
-
-        private static float EaseOut(float t)
-        {
-            t = Mathf.Clamp01(t);
-            float remaining = 1f - t;
-            return 1f - remaining * remaining * remaining;
-        }
-
-        /// <summary>
-        /// A crosshair drawn once in code: a ring, a centre dot and four ticks through the ring.
-        /// </summary>
-        /// <remarks>
-        /// Drawn rather than imported because the project has no icon for it and a glyph cannot
-        /// be trusted to exist in Roboto; a tinted white shape also takes the headshot colour
-        /// from <see cref="HeadshotInk"/> instead of carrying one of its own.
-        /// </remarks>
-        private static Sprite HeadshotSprite()
-        {
-            if (_headshotSprite != null) return _headshotSprite;
-
-            const int size = 48;
-            const float ringRadius = 15f;
-            const float ringHalfWidth = 2.2f;
-            const float dotRadius = 4.5f;
-            const float tickHalfWidth = 1.6f;
-            const float tickInner = 9f;
-            const float tickOuter = 22f;
-
-            var pixels = new Color32[size * size];
-            float centre = (size - 1) * 0.5f;
-
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dx = x - centre;
-                    float dy = y - centre;
-                    float distance = Mathf.Sqrt(dx * dx + dy * dy);
-
-                    float ring = Mathf.Clamp01(ringHalfWidth + 0.5f - Mathf.Abs(distance - ringRadius));
-                    float dot = Mathf.Clamp01(dotRadius + 0.5f - distance);
-
-                    bool inTickSpan = distance > tickInner && distance < tickOuter;
-                    float tick = inTickSpan
-                        ? Mathf.Max(
-                            Mathf.Clamp01(tickHalfWidth + 0.5f - Mathf.Abs(dx)),
-                            Mathf.Clamp01(tickHalfWidth + 0.5f - Mathf.Abs(dy)))
-                        : 0f;
-
-                    float alpha = Mathf.Max(ring, Mathf.Max(dot, tick));
-                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
-                }
-            }
-
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                name = "Killfeed Headshot",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp,
-            };
-            texture.SetPixels32(pixels);
-            texture.Apply(false, true);
-
-            _headshotSprite = Sprite.Create(
-                texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f);
-            return _headshotSprite;
         }
     }
 }
