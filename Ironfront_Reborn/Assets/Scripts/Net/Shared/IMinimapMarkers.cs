@@ -37,17 +37,22 @@ namespace Ironfront.Net.Unity
     public interface IMinimapMarkers
     {
         /// <summary>
-        /// Draws — or recolours — the icon following <paramref name="subject"/>.
+        /// Draws — or updates — the soldier icon following <paramref name="subject"/>, the way the
+        /// original's <c>ActorBlip</c> draws one: in its team's colour, turned to its heading, and
+        /// wearing its vehicle's own icon while seated.
         /// </summary>
         /// <remarks>
         /// Idempotent by subject: called again for a transform that already has an icon it
-        /// recolours in place rather than stacking a second one. Callers rely on that, because
-        /// a body's team arrives with the snapshot rather than with the spawn, so this is
-        /// written every frame a snapshot is sampled.
+        /// updates in place rather than stacking a second one. Callers rely on that, because
+        /// a body's team and seat arrive with the snapshot rather than with the spawn, so this is
+        /// written every frame a snapshot is sampled. Whether the icon should exist at all is the
+        /// caller's rule; <see cref="RemoveMarker"/> takes it away.
         /// </remarks>
-        /// <param name="subject">The body's transform. The icon reads its position each frame.</param>
+        /// <param name="subject">The body's transform. The icon reads its position and heading each frame.</param>
         /// <param name="team">0, 1, or -1 for "no team known yet".</param>
-        void SetBodyMarker(Transform subject, int team);
+        /// <param name="isHuman">A player rather than a bot; players draw a lighter shade.</param>
+        /// <param name="seatedIn">The vehicle's transform while the body is seated, else null.</param>
+        void SetBodyMarker(Transform subject, int team, bool isHuman, Transform seatedIn);
 
         /// <summary>
         /// Drops <paramref name="subject"/>'s icon. Safe for a subject that never had one.

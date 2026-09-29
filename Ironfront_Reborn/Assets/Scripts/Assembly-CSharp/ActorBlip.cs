@@ -17,6 +17,11 @@ public class ActorBlip : MonoBehaviour
 
 	private bool useSightCone;
 
+	// The team the icon was last coloured for. A networked client's own body learns its team
+	// from the first snapshot, after ActorManager.Register has already made this icon, so a
+	// colour taken once at SetActor stayed the grey of "no team" for the whole match.
+	private int colouredTeam = int.MinValue;
+
 	private void Awake()
 	{
 		image = GetComponent<RawImage>();
@@ -33,7 +38,7 @@ public class ActorBlip : MonoBehaviour
 			return;
 		}
 		this.actor = actor;
-		image.color = Color.Lerp(ColorScheme.TeamColor(actor.team), Color.white, (!actor.aiControlled) ? 0.7f : 0.2f);
+		Recolour();
 		this.useSightCone = useSightCone;
 		if (this.useSightCone)
 		{
@@ -45,8 +50,18 @@ public class ActorBlip : MonoBehaviour
 		}
 	}
 
+	private void Recolour()
+	{
+		colouredTeam = actor.team;
+		image.color = ColorScheme.BlipColor(actor.team, !actor.aiControlled);
+	}
+
 	private void LateUpdate()
 	{
+		if (actor != null && actor.team != colouredTeam)
+		{
+			Recolour();
+		}
 		if (actor != null && !actor.dead && (actor.team == FpsActorController.playerTeam || actor.IsHighlighted()))
 		{
 			RectTransform rectTransform = (RectTransform)base.transform;

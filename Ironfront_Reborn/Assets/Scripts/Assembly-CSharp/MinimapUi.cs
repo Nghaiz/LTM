@@ -366,6 +366,20 @@ public class MinimapUi : MonoBehaviour
 		instance.markers[subject] = marker;
 	}
 
+	/// <summary>
+	/// Draws, or updates, a replicated soldier's icon: its colour, its heading, and its vehicle
+	/// while seated, the way <see cref="ActorBlip"/> draws an <see cref="Actor"/>.
+	/// </summary>
+	public static void SetBodyMarker(Transform subject, Color color, Transform seatedIn)
+	{
+		SetMarker(subject, color, MinimapMarkerKind.Body);
+		MinimapMarker marker;
+		if (instance != null && subject != null && instance.markers.TryGetValue(subject, out marker) && marker != null)
+		{
+			marker.FollowBody(seatedIn);
+		}
+	}
+
 	/// <summary>Drops a marker. Safe for a subject that never had one.</summary>
 	public static void RemoveMarker(Transform subject)
 	{
