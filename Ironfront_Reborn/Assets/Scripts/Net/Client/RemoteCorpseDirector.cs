@@ -271,7 +271,7 @@ namespace Ironfront.Net.Unity.Client
             if (Physics.Raycast(corpse.ChestPosition + Vector3.up * 0.5f, Vector3.down, out RaycastHit hit, 3f, 1,
                     QueryTriggerInteraction.Ignore))
             {
-                decals.AddBloodPool(hit.point + hit.normal * 0.02f, hit.normal, Random.Range(1.2f, 1.8f));
+                decals.AddBloodPool(hit.point + hit.normal * 0.02f, hit.normal, Random.Range(1.2f, 1.8f), corpse.Team);
             }
         }
     }
