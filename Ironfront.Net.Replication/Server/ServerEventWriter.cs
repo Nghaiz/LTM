@@ -58,10 +58,13 @@ namespace Ironfront.Net.Replication.Server
         /// <summary>Writes S_DEATH as a channel-2 payload. Broadcast — the killfeed is global.</summary>
         public static int WriteDeath(Span<byte> destination, in DeathMessage message)
         {
-            Span<byte> body = stackalloc byte[DeathMessage.Size];
-            return message.Write(body) < 0
+            // Room for the detail tail; framed at the length actually written, so a message
+            // without the tail still goes out as the twelve bytes a 1.0 client expects.
+            Span<byte> body = stackalloc byte[DeathMessage.SizeWithDetail];
+            int written = message.Write(body);
+            return written < 0
                 ? -1
-                : Frame(destination, ReliableChannel, ServerMessageType.Death, body);
+                : Frame(destination, ReliableChannel, ServerMessageType.Death, body.Slice(0, written));
         }
 
         /// <summary>

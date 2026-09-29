@@ -1372,7 +1372,9 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (ownsHealth && health <= 0f)
 		{
 			Die(impactForce);
-			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(this, impactForce, attacker);
+			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(
+				this, impactForce, attacker, DeathContext.Cause,
+				DeathContext.WeaponId, DeathContext.Vehicle, DeathContext.Detail);
 		}
 		else if (ragdoll.IsRagdoll())
 		{

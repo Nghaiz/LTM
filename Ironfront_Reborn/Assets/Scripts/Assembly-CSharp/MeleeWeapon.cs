@@ -48,8 +48,13 @@ public class MeleeWeapon : Weapon
 			// Null for a client's remote corpse: RemoteRagdoll builds its colliders on the Ragdoll
 			// layer with no Hitbox behind them (see Projectile.Hit). The swing lands and has nothing
 			// to damage.
-			if (component != null
-				&& component.parent.Damage(damage, balanceDamage, false, hitInfo.point, ray.direction, ray.direction * force))
+			bool hurt;
+			using (DeathContext.Melee(NetworkId))
+			{
+				hurt = component != null
+					&& component.parent.Damage(damage, balanceDamage, false, hitInfo.point, ray.direction, ray.direction * force);
+			}
+			if (hurt)
 			{
 				IngameUi.Hit();
 			}

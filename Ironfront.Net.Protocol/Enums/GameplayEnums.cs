@@ -288,6 +288,29 @@ namespace Ironfront.Net.Protocol
     }
 
     /// <summary>
+    /// What <c>S_DEATH</c>'s detail tail adds to <see cref="CauseOfDeath"/>. protocol-spec.md
+    /// section 4.6. Bits, and unknown bits are ignored, so a later build can add one without a
+    /// version change.
+    /// </summary>
+    [Flags]
+    public enum DeathDetail : byte
+    {
+        None = 0,
+
+        /// <summary>The killer was in the vehicle the message names: its gun, or its driver.</summary>
+        KillerInVehicle = 1,
+
+        /// <summary>The victim was riding the vehicle the message names.</summary>
+        VictimInVehicle = 2,
+
+        /// <summary>The victim died because the vehicle they rode was destroyed.</summary>
+        WentDownWithVehicle = 4,
+
+        /// <summary>A blade or a wrench, not a round.</summary>
+        Melee = 8,
+    }
+
+    /// <summary>
     /// Shared error codes returned by MSP responses. protocol-spec.md section 13.
     /// </summary>
     public enum ErrorCode : ushort

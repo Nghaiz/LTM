@@ -597,6 +597,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 					$"Projectile prefab '{configuration.projectilePrefab.name}' has no Projectile component.");
 
 			component.source = user;
+			component.sourceWeaponId = NetworkId;
 			// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
 			// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
 			// the direction announced is the direction fired. A no-op off the server.

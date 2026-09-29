@@ -143,9 +143,20 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Client clock at receipt, in seconds. Drives the hold timer.</summary>
         public readonly float PostedAtSeconds;
 
+        /// <summary>The killing weapon (<see cref="WeaponIds"/>), <c>NONE</c> when the server named none.</summary>
+        public readonly byte WeaponId;
+
+        /// <summary>The vehicle involved (<see cref="VehicleIds"/>), <c>NONE</c> when none was.</summary>
+        public readonly byte VehicleType;
+
+        /// <summary>How the vehicle was involved. <see cref="DeathDetail.None"/> from a 1.0 server.</summary>
+        public readonly DeathDetail Detail;
+
         public KillfeedEntry(
             ushort killerActorId, ushort victimActorId, CauseOfDeath cause,
-            bool killedByEnvironment, bool headshot, float postedAtSeconds)
+            bool killedByEnvironment, bool headshot, float postedAtSeconds,
+            byte weaponId = WeaponIds.NONE, byte vehicleType = VehicleIds.NONE,
+            DeathDetail detail = DeathDetail.None)
         {
             KillerActorId = killerActorId;
             VictimActorId = victimActorId;
@@ -153,7 +164,13 @@ namespace Ironfront.Net.Replication.Client
             KilledByEnvironment = killedByEnvironment;
             Headshot = headshot;
             PostedAtSeconds = postedAtSeconds;
+            WeaponId = weaponId;
+            VehicleType = vehicleType;
+            Detail = detail;
         }
+
+        /// <summary>The victim killed themselves: their own grenade, their own crash.</summary>
+        public bool Self => !KilledByEnvironment && KillerActorId == VictimActorId;
 
         /// <summary>Builds one from the wire message.</summary>
         public static KillfeedEntry From(in DeathMessage message, float nowSeconds)
@@ -163,7 +180,10 @@ namespace Ironfront.Net.Replication.Client
                 message.Cause,
                 message.KilledByEnvironment,
                 (HitboxType)message.HitboxHit == HitboxType.Head,
-                nowSeconds);
+                nowSeconds,
+                message.WeaponId,
+                message.VehicleType,
+                message.Detail);
     }
 
     /// <summary>

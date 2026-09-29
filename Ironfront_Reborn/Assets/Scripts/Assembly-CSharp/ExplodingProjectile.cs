@@ -91,10 +91,14 @@ public class ExplodingProjectile : Projectile
 		// "does the engine apply damage" would switch corpses off on every client. The narrower
 		// question is false offline and on a client, so both are byte-for-byte unchanged; it goes
 		// true only on a server that has handed flight to the library stepper (ledger C-1).
-		bool result = !Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
-			&& ActorManager.Explode(
-				position, explosionConfiguration, source,
-				Ironfront.Net.Protocol.ExplosionKind.Rocket);
+		bool result;
+		using (DeathContext.Weapon(sourceWeaponId))
+		{
+			result = !Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
+				&& ActorManager.Explode(
+					position, explosionConfiguration, source,
+					Ironfront.Net.Protocol.ExplosionKind.Rocket);
+		}
 		base.transform.rotation = Quaternion.LookRotation(up);
 		base.enabled = false;
 		Renderer[] array = renderers;

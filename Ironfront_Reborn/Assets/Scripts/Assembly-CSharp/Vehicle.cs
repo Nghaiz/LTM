@@ -1048,13 +1048,18 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 				else
 				{
 					occupant.LeaveSeat();
-					if (seat.enclosed)
+					// Dies WITH the vehicle, so the killfeed can say so and credit whoever destroyed
+					// it rather than "The world" (feature 2, 2026-09-29).
+					using (DeathContext.WentDownWith(base.gameObject))
 					{
-						occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
-					}
-					else
-					{
-						occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+						if (seat.enclosed)
+						{
+							occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+						}
+						else
+						{
+							occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+						}
 					}
 				}
 			}
