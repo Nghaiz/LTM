@@ -43,6 +43,28 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("if (!IsAnnounceable(actor)) continue;", fill, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// A player who joins into a leaver's slot starts at 0/0 rather than wearing the
+        /// leaver's row. The reset itself is <c>MatchScoreTallyTests</c>' to test; this pins that
+        /// the join path calls it, after the claim that decides which id is being reused.
+        /// </summary>
+        [Fact]
+        public void AClaimedSlotStartsFromZero()
+        {
+            string join = MethodBody(
+                ReadScript("Net", "Server", "ServerTickLoop.cs"), "ServerTickLoop.cs",
+                "private void OnClientConnected(ushort connectionId, ConnectionInfo info)");
+
+            int claim = join.IndexOf("TryClaimPlayerSlot(", StringComparison.Ordinal);
+            int forget = join.IndexOf("_scoreTally.Forget(actor.ActorId);", StringComparison.Ordinal);
+
+            Assert.True(claim >= 0, "OnClientConnected no longer claims a player slot.");
+            Assert.True(
+                forget > claim,
+                "OnClientConnected must zero the claimed body's tally after the claim; without it "
+                + "a player who joins into a leaver's slot inherits the leaver's kills and deaths.");
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static string ReadScript(params string[] relativeParts)

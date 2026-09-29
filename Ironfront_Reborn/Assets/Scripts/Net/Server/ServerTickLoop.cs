@@ -2081,6 +2081,11 @@ namespace Ironfront.Net.Unity.Server
                 $"[net] conn {connectionId} player {info.PlayerId} joined on team {ticketTeam} "
                 + $"(ticket) -> actor {actor.ActorId} team {actor.Team} (body)");
 
+            // A slot keeps its actor id from one occupant to the next, and the tally is keyed by
+            // it: without this, a player who joined into a leaver's slot wore the leaver's kills
+            // and deaths on every board and in the end-of-match report to the master.
+            _scoreTally.Forget(actor.ActorId);
+
             var player = new ServerPlayer(
                 connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),
                 info.PlayerId)
