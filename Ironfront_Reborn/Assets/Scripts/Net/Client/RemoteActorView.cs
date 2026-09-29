@@ -193,6 +193,10 @@ namespace Ironfront.Net.Unity.Client
         // The body's own ground speed at the last solve, handed to a corpse as its momentum.
         private Vector3 _planarVelocity;
 
+        // 1 while the body stands still, 0 while it moves, eased between: how much of the idle
+        // pose's sole lift the registry takes off (SoleLift).
+        private float _idleWeight = 1f;
+
         // E1: the runtime ragdoll for a proxy with no authored rig. Null when the animator is
         // not a humanoid that names every bone RemoteRagdoll needs.
         private RemoteRagdoll _ragdoll;
@@ -211,6 +215,27 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>This life's death already left a corpse.</summary>
         internal bool HasCorpseThisLife => _corpseThisLife;
+
+        /// <summary>
+        /// How far the idle pose stands the soles above the body's origin, measured on the proxy's
+        /// model (0.081 m, crouched or not). The walk and run cycles plant a foot at the origin or
+        /// just under it, so a body standing still is the one that hovers (owner report 2026-09-29,
+        /// image 3: a player and their teammate floating right after spawning).
+        /// </summary>
+        public const float IdleSoleLiftMetres = 0.08f;
+
+        /// <summary>How long the animator takes to blend idle into a walk (measured about 0.15 s).</summary>
+        public const float IdleBlendSeconds = 0.15f;
+
+        /// <summary>
+        /// How far this body is lowered to stand its soles on the ground: the idle pose's lift,
+        /// eased out as it starts moving so the body does not drop at the first step.
+        /// </summary>
+        internal float SoleLift => IdleSoleLiftMetres * _idleWeight;
+
+        /// <summary>The idle weight <paramref name="elapsed"/> seconds on from <paramref name="current"/>.</summary>
+        internal static float NextIdleWeight(float current, bool moving, float elapsed)
+            => Mathf.MoveTowards(current, moving ? 0f : 1f, elapsed / IdleBlendSeconds);
 
         /// <summary>
         /// Records that this life's death left a <see cref="RemoteCorpse"/> and hides the proxy
@@ -425,6 +450,7 @@ namespace Ironfront.Net.Unity.Client
             _ragdoll?.Restore();
             _corpseThisLife = false;
             _planarVelocity = Vector3.zero;
+            _idleWeight = 1f;
 
             ActorId          = actorId;
             _state           = default;
@@ -670,6 +696,7 @@ namespace Ironfront.Net.Unity.Client
             _locomotion = RemoteLocomotionSolver.Solve(
                 in _locomotion, in _state, in derived, t.eulerAngles.y, elapsed);
             if (elapsed > 0f) _planarVelocity = new Vector3(derived.X, 0f, derived.Z);
+            _idleWeight = NextIdleWeight(_idleWeight, _locomotion.IsMoving, elapsed);
         }
 
         /// <summary>

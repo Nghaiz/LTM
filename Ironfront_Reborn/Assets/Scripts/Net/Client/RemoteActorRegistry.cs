@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Interest;
 using Ironfront.Net.Replication.Match;
@@ -211,11 +212,16 @@ namespace Ironfront.Net.Unity.Client
                 {
                     Vec3 p = sample.Position;
                     float y = p.Y;
-                    if (_centrePivotActors.Contains(pair.Key))
+                    bool human = _centrePivotActors.Contains(pair.Key);
+                    if (human)
                     {
                         bool crouching = (sample.State.StateFlags & ActorStateFlags.IsCrouching) != 0;
                         y -= MovementCore.HeightFor(crouching) * 0.5f;
                     }
+                    // On the ground, with the soles on it rather than the origin: the idle pose
+                    // stands its feet above the body's origin (RemoteActorView.SoleLift).
+                    if (StandsOnGround(in sample.State, human) && TryGroundUnder(p.X, y, p.Z, out float ground))
+                        y = ground - (lying != null ? lying.SoleLift : RemoteActorView.IdleSoleLiftMetres);
                     pair.Value.SetPositionAndRotation(
                         new Vector3(p.X, y, p.Z), Quaternion.Euler(0f, sample.YawDegrees, 0f));
                 }
@@ -251,6 +257,74 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        /// <summary>How far above a body's feet the ground under it is looked for.</summary>
+        internal const float FootingProbeAboveMetres = 0.5f;
+
+        /// <summary>
+        /// How far below a body's feet a surface still counts as the ground it stands on. Past
+        /// this the body is in the air, and is drawn where the server has it.
+        /// </summary>
+        internal const float FootingReachMetres = 0.3f;
+
+        /// <summary>A player whose body rises faster than this is jumping, not standing.</summary>
+        internal const float RisingMetresPerSecond = 1f;
+
+        // Scenery: terrain, buildings and props. Vehicles are layer 12 and bodies carry no
+        // collider here, so a body is never stood on a vehicle's roof or another body's head.
+        private const int GroundMask = 1;
+
+        /// <summary>
+        /// Whether a body in <paramref name="state"/> is standing on its feet, and so is drawn on
+        /// the ground under it rather than at the height the snapshot carries.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner report 2026-09-29, image 3: a friend stood in the air right after spawning.</b>
+        /// Every body is a <c>CharacterController</c>, which rests a skin width (0.08 m) above
+        /// whatever it stands on, and a player's replicated centre ran a few centimetres above
+        /// its own client's on top of that (friend's log: <c>srv</c> 21.20 against 21.14 standing
+        /// still). Measured in the rig: an idle player's feet 0.09 m up, its soles higher still.
+        /// The original has the same gap and never showed it, because nobody saw a player from
+        /// outside; bots come off a navmesh with gaps of their own, and snapshot interpolation
+        /// cuts across every bump and dip between two samples.
+        /// </para>
+        /// <para>
+        /// A grounded player replicates a vertical speed of -10 m/s (MovementCore's
+        /// StickToGroundForce), so a falling one cannot be told from it -- only a rising one can,
+        /// and that is a jump. The reach below the feet is what keeps the rest of a jump, and a
+        /// fall, in the air.
+        /// </para>
+        /// </remarks>
+        internal static bool StandsOnGround(in ActorSnapshotEntry state, bool isHuman)
+        {
+            ActorStateFlags flags = state.StateFlags;
+            if ((flags & ActorStateFlags.IsAlive) == 0) return false;
+
+            const ActorStateFlags offFeet =
+                ActorStateFlags.IsRagdoll | ActorStateFlags.IsSeated | ActorStateFlags.IsInWater;
+            if ((flags & offFeet) != 0) return false;
+
+            return !isHuman || SnapshotBuilder.UnpackVelocity(in state).Y <= RisingMetresPerSecond;
+        }
+
+        /// <summary>
+        /// The height of the ground under feet at (<paramref name="x"/>, <paramref name="feetY"/>,
+        /// <paramref name="z"/>), false when there is none within reach -- above as well as below,
+        /// so feet a little under the surface come up onto it.
+        /// </summary>
+        internal static bool TryGroundUnder(float x, float feetY, float z, out float groundY)
+        {
+            var from = new Vector3(x, feetY + FootingProbeAboveMetres, z);
+            if (Physics.Raycast(from, Vector3.down, out RaycastHit ground,
+                    FootingProbeAboveMetres + FootingReachMetres, GroundMask, QueryTriggerInteraction.Ignore))
+            {
+                groundY = ground.point.y;
+                return true;
+            }
+            groundY = feetY;
+            return false;
+        }
+
         private void OnSpawn(SpawnActorMessage message)
         {
             // The local player is predicted, never interpolated. See the type remarks.
@@ -278,14 +352,19 @@ namespace Ironfront.Net.Unity.Client
             // the centimetre. Nothing was wrong with the wire, the interest manager or the
             // decoder. The scripted aim solver reported `resolved: true` and fired 240 rounds
             // into open sky, and a human's crosshair would have done the same.
+            float spawnX = Quantize.UnpackPos(message.PosX);
             float spawnY = Quantize.UnpackPos(message.PosY);
+            float spawnZ = Quantize.UnpackPos(message.PosZ);
             if (!message.IsBot)
                 spawnY -= MovementCore.HeightFor(crouching: false) * 0.5f;
 
-            t.position = new Vector3(
-                Quantize.UnpackPos(message.PosX),
-                spawnY,
-                Quantize.UnpackPos(message.PosZ));
+            // On the ground, as SampleBodies stands every body on its feet (StandsOnGround): for
+            // an actor out of interest range this is the only position it is ever drawn at, and
+            // it came off the server a controller's skin width up (measured 0.15 m in the rig). A
+            // body that has just spawned stands still, so it gets the idle pose's sole lift.
+            if (TryGroundUnder(spawnX, spawnY, spawnZ, out float spawnGround))
+                spawnY = spawnGround - RemoteActorView.IdleSoleLiftMetres;
+            t.position = new Vector3(spawnX, spawnY, spawnZ);
             t.rotation = Quaternion.Euler(0f, Quantize.UnpackYaw(message.Yaw), 0f);
 
             t.gameObject.SetActive(true);
