@@ -127,6 +127,40 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         /// <summary>
+        /// <c>inputs/field.svg</c> on an existing surface: an uncut frame with a 1px border, and
+        /// the 3px cyan bar over its left edge.
+        /// </summary>
+        /// <remarks>
+        /// The menu's settings rows and the pause menu's OPTIONS rows, so the two read as one
+        /// family. It finds the bar a previous call made rather than adding a second, for the
+        /// restyles that run over their own output.
+        /// </remarks>
+        internal static void StyleFieldFace(AngularPanel face)
+        {
+            face.color = WithAlpha(Hex("071523"), 0.92f);
+            face.Configure(0f, AngularEdge.All, 1f, Hex("5E89A9"));
+
+            Transform existing = face.transform.Find("Accent");
+            GameObject barObject = existing != null
+                ? existing.gameObject
+                : new GameObject("Accent", typeof(RectTransform), typeof(AngularPanel));
+            barObject.transform.SetParent(face.transform, worldPositionStays: false);
+            barObject.transform.SetAsFirstSibling();
+
+            RectTransform barRect = barObject.GetComponent<RectTransform>();
+            barRect.anchorMin = new Vector2(0f, 0f);
+            barRect.anchorMax = new Vector2(0f, 1f);
+            barRect.pivot = new Vector2(0f, 0.5f);
+            barRect.anchoredPosition = Vector2.zero;
+            barRect.sizeDelta = new Vector2(3f, 0f);
+
+            AngularPanel bar = barObject.GetComponent<AngularPanel>();
+            bar.color = Hex("39AEF5");
+            bar.Configure(0f, AngularEdge.None, 0f, Color.clear);
+            bar.raycastTarget = false;
+        }
+
+        /// <summary>
         /// The button face for an action variant: <c>primary.svg</c>, <c>secondary.svg</c>, and
         /// the two semantic states the pack has no master for.
         /// </summary>

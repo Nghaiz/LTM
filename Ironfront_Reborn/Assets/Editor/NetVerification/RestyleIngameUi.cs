@@ -4,7 +4,9 @@ using System.Linq;
 using System.Text;
 using Ironfront.Net.Unity.Client.Menu;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using static Ironfront.Net.Unity.EditorTools.IronfrontUiKit;
 
@@ -36,12 +38,100 @@ namespace Ironfront.Net.Unity.EditorTools
     /// A second run finds the surfaces and children the first one made and restyles them in
     /// place. The <c>Match Readout</c> canvas is <c>BuildMatchHud</c>'s and is not touched here.
     /// </para>
+    /// <para>
+    /// <b>The pause menu's OPTIONS page is the one canvas not on the prefab.</b> It is
+    /// <c>OptionsUi</c>'s, which <c>Menu.unity</c> carries and keeps across every scene load, so
+    /// this command also opens that scene, restyles the page and saves it. Nothing else in the
+    /// scene is touched; <c>BuildMenuCanvas</c> authors the rest of it.
+    /// </para>
     /// </remarks>
     public static class RestyleIngameUi
     {
         private const string PrefabPath = "Assets/Prefab/Ingame UI Container.prefab";
         private const string ManagersPath = "Assets/Resources/_Managers.prefab";
+        private const string MenuScenePath = "Assets/Scenes/Menu.unity";
         private const string ReportFile = "restyle-ingame-ui.txt";
+
+        /// <summary><c>OptionsUi</c>'s canvas, a root of <c>Menu.unity</c>.</summary>
+        private const string OptionsCanvasName = "Options Canvas";
+
+        /// <summary>
+        /// Over every in-match canvas the page is opened above: the pause menu's 0, the score
+        /// bar's 1 and the Match Readout's 50. It shared the pause menu's 0 and drew over it only
+        /// by the order Unity happened to list the two canvases in.
+        /// </summary>
+        private const int OptionsSortingOrder = 60;
+
+        // ---- the options page's grid, in reference pixels from the panel's centre.
+
+        private const float OptionsHalfWidth = 600f;
+        private const float OptionsHalfHeight = 400f;
+
+        /// <summary>The panel's padding round its content.</summary>
+        private const float OptionsInset = 48f;
+
+        private const float OptionRowWidth = 520f;
+        private const float OptionRowHeight = 44f;
+        private const float OptionRowPitch = 54f;
+
+        /// <summary>The width of a row's slider or dropdown, at its right end.</summary>
+        private const float OptionControlWidth = 220f;
+
+        private enum OptionKind { Slider, Switch, Choice }
+
+        /// <summary>
+        /// The page by column and section: each row an existing caption of the legacy panel, the
+        /// control beside it, and what the caption now says.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The legacy captions padded themselves into place with newlines and spaces — the field
+        /// of view's ended in seven spaces to make room for its value — and nothing reads them, so
+        /// they are rewritten. The controls' names are the ones <c>OptionsUi</c>'s fields point at.
+        /// </para>
+        /// <para>
+        /// The heli scheme is the last row of the shorter column on purpose: its Custom scheme
+        /// shows a card of three more switches under it (<see cref="StyleHeliScheme"/>), and there
+        /// it covers nothing.
+        /// </para>
+        /// </remarks>
+        private static readonly (string Heading, (string Caption, string Control, OptionKind Kind, string Text)[] Rows)[][]
+            OptionColumns =
+            {
+                new[]
+                {
+                    ("01  CONTROLS", new[]
+                    {
+                        ("Mouse Sensitivity", "Mouse Sensitivity Slider", OptionKind.Slider, "MOUSE SENSITIVITY"),
+                        ("Sniper Multiplier", "Sniper Multiplier Slider", OptionKind.Slider, "SNIPER MULTIPLIER"),
+                        ("Invert Mouse", "Invert Mouse Toggle", OptionKind.Switch, "INVERT MOUSE Y"),
+                        ("Toggle Aim", "Toggle Aim Toggle", OptionKind.Switch, "TOGGLE AIM"),
+                        ("Toggle Crouch", "Toggle Crouch Toggle", OptionKind.Switch, "TOGGLE CROUCH"),
+                    }),
+                    ("02  GAMEPLAY", new[]
+                    {
+                        ("Hit Indicator", "Hit Indicator Toggle", OptionKind.Switch, "HIT INDICATORS"),
+                        ("Auto Reload", "Auto Reload Toggle", OptionKind.Switch, "AUTO RELOAD"),
+                        ("Difficulty", "Difficulty Dropdown", OptionKind.Choice, "DIFFICULTY"),
+                    }),
+                },
+                new[]
+                {
+                    ("03  DISPLAY & AUDIO", new[]
+                    {
+                        ("Field Of View", "Field Of View Slider", OptionKind.Slider, "FIELD OF VIEW"),
+                        ("Vegetation Density", "Vegetation Density Slider", OptionKind.Slider, "VEGETATION DENSITY"),
+                        ("Vegetation Distance", "Vegetation Distance Slider", OptionKind.Slider, "VEGETATION DISTANCE"),
+                        ("Master Volume", "Master Volume Slider", OptionKind.Slider, "MASTER VOLUME"),
+                    }),
+                    ("04  VEHICLES", new[]
+                    {
+                        ("Helicopter Sensitivity", "Helicopter Sensitivity Slider", OptionKind.Slider, "HELI SENSITIVITY"),
+                        ("Invert Helicopter", "Invert Helicopter Toggle", OptionKind.Switch, "INVERT HELI PITCH"),
+                        ("Helicopter Type", "Helicopter Type Dropdown", OptionKind.Choice, "HELI CONTROL TYPE"),
+                    }),
+                },
+            };
 
         /// <summary>The HUD's distance from the screen edge; the Match Readout's too.</summary>
         private const float Margin = 24f;
@@ -180,6 +270,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 }
             }
 
+            RestyleOptionsScreen(log);
             return true;
         }
 
@@ -338,6 +429,436 @@ namespace Ironfront.Net.Unity.EditorTools
             text.alignment = TextAnchor.MiddleCenter;
             text.resizeTextForBestFit = false;
             Centre(text.rectTransform, new Vector2(16f, 0f), new Vector2(Width - 72f, Height));
+        }
+
+        // ------------------------------------------------------------------ the options page
+
+        /// <summary>
+        /// Opens <c>Menu.unity</c> if it is not open, restyles <c>OptionsUi</c>'s page in it and
+        /// saves it.
+        /// </summary>
+        /// <remarks>
+        /// Opened additively and closed again, so whatever the Editor had open stays open. The
+        /// save's answer is checked: <c>BuildMenuCanvas</c> learnt that a save Unity declined, if
+        /// not checked, reports the scene written while the file still holds the previous one.
+        /// </remarks>
+        private static void RestyleOptionsScreen(StringBuilder log)
+        {
+            Scene scene = SceneManager.GetSceneByPath(MenuScenePath);
+            bool opened = !scene.isLoaded;
+            if (opened) scene = EditorSceneManager.OpenScene(MenuScenePath, OpenSceneMode.Additive);
+
+            try
+            {
+                GameObject canvas = scene.GetRootGameObjects().FirstOrDefault(root => root.name == OptionsCanvasName);
+                if (canvas == null)
+                    throw new System.InvalidOperationException(
+                        MenuScenePath + " has no '" + OptionsCanvasName + "' at its root. The scene and the restyle "
+                        + "have drifted; fix this file rather than the scene by hand.");
+
+                RestyleOptions(canvas.transform, log);
+
+                EditorSceneManager.MarkSceneDirty(scene);
+                if (!EditorSceneManager.SaveScene(scene, MenuScenePath))
+                    throw new System.InvalidOperationException(
+                        "Unity declined to write " + MenuScenePath + ". Is it open in another Editor?");
+                log.AppendLine("saved: " + MenuScenePath);
+            }
+            finally
+            {
+                if (opened) EditorSceneManager.CloseScene(scene, removeScene: true);
+            }
+        }
+
+        /// <summary>
+        /// The pause menu's OPTIONS page as the menu's settings surface: a heading, the options in
+        /// four sections of rows on field frames, and CANCEL and SAVE &amp; APPLY.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why.</b> The pause menu had been restyled while its OPTIONS button still opened
+        /// Ravenfield's page: a 280px white card of default Unity controls at a constant pixel size,
+        /// drawn over the pause panel, with the pause buttons still live round its edges.
+        /// </para>
+        /// <para>
+        /// <b>Every object <c>OptionsUi</c> reaches keeps its name, its parent and its component.</b>
+        /// It reaches them all through serialized fields, <c>DropdownExplanation</c> finds its
+        /// dropdown as its parent, and the two buttons, the hit-indicator switch and the
+        /// field-of-view slider call <c>OptionsUi</c> through persistent listeners, so the controls
+        /// only change face and place. The frames and section headings are new, and decoration:
+        /// they sit in one <c>Rows</c> object drawn first. The one behaviour added is the dim's,
+        /// which takes the clicks that reached the pause buttons behind the page.
+        /// </para>
+        /// </remarks>
+        private static void RestyleOptions(Transform canvasTransform, StringBuilder log)
+        {
+            ScaleWithScreen(canvasTransform, log);
+            Canvas canvas = canvasTransform.GetComponent<Canvas>();
+            canvas.pixelPerfect = true;
+            canvas.sortingOrder = OptionsSortingOrder;
+
+            Image dim = Ensure<Image>(canvasTransform, "Dim");
+            Stretch(dim.rectTransform);
+            dim.color = new Color(3f / 255f, 9f / 255f, 19f / 255f, 0.6f);
+            dim.raycastTarget = true;
+            dim.transform.SetAsFirstSibling();
+
+            Transform panelTransform = Child(canvasTransform, "Panel");
+            AngularPanel panel = AsAngular(panelTransform.gameObject);
+            Centre(panel.rectTransform, Vector2.zero, new Vector2(OptionsHalfWidth * 2f, OptionsHalfHeight * 2f));
+            StyleOperationsPanel(panel);
+            // Opaque, not the pack's glass: the pause panel sits right behind it, and through the
+            // glass RESUME's orange and the captions read as ghosts between the rows.
+            panel.color = WithAlpha(panel.color, 1f);
+            panel.raycastTarget = true;
+
+            float left = -OptionsHalfWidth + OptionsInset;
+            float top = OptionsHalfHeight - OptionsInset;
+
+            Text kicker = EnsureLabel(panelTransform, "Kicker", "SYSTEM CONTROL  //  MATCH CONFIGURATION", 11, bold: true);
+            kicker.color = CyanSoft;
+            kicker.alignment = TextAnchor.MiddleLeft;
+            TopLeft(kicker.rectTransform, new Vector2(left, top), new Vector2(700f, 18f));
+
+            Text heading = EnsureLabel(panelTransform, "Heading", "OPTIONS", 34, bold: true);
+            heading.alignment = TextAnchor.MiddleLeft;
+            TopLeft(heading.rectTransform, new Vector2(left, top - 22f), new Vector2(700f, 44f));
+
+            Text subtitle = EnsureLabel(panelTransform, "Subtitle",
+                "Controls, gameplay, display and vehicles. Saved on this machine.", 14, bold: false);
+            subtitle.color = Muted;
+            subtitle.alignment = TextAnchor.MiddleLeft;
+            TopLeft(subtitle.rectTransform, new Vector2(left, top - 70f), new Vector2(900f, 22f));
+
+            RectTransform rows = Ensure<RectTransform>(panelTransform, "Rows");
+            Stretch(rows);
+            rows.SetAsFirstSibling();
+            Rule(rows, "Header Rule", top: true, OptionsInset + 106f);
+            Rule(rows, "Footer Rule", top: false, 104f);
+
+            int placed = 0;
+            for (int column = 0; column < OptionColumns.Length; column++)
+            {
+                float x = column == 0 ? left : OptionsHalfWidth - OptionsInset - OptionRowWidth;
+                float y = top - 124f;
+                foreach ((string sectionHeading, var sectionRows) in OptionColumns[column])
+                {
+                    Text section = EnsureLabel(rows, sectionHeading, sectionHeading, 13, bold: true);
+                    section.color = CyanSoft;
+                    section.alignment = TextAnchor.MiddleLeft;
+                    TopLeft(section.rectTransform, new Vector2(x, y), new Vector2(OptionRowWidth, 22f));
+                    y -= 34f;
+
+                    foreach (var row in sectionRows)
+                    {
+                        OptionRow(panelTransform, rows, row.Caption, row.Control, row.Kind, row.Text, x, y);
+                        y -= OptionRowPitch;
+                        placed++;
+                    }
+                    y -= 12f;
+                }
+            }
+
+            // The field of view's figure, between its caption and its slider.
+            Transform fovRow = rows.Find("Field Of View Row");
+            Text fov = Child(panelTransform, "Field Of View Label").GetComponent<Text>();
+            Style(fov, BoldFont(), 15, CyanSoft, TextAnchor.MiddleRight);
+            fov.raycastTarget = false;
+            RectTransform fovFrame = (RectTransform)fovRow;
+            Pin(fov.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(fovFrame.anchoredPosition.x + OptionRowWidth - 16f - OptionControlWidth - 12f,
+                    fovFrame.anchoredPosition.y - OptionRowHeight * 0.5f),
+                new Vector2(56f, 24f));
+
+            StyleHeliScheme(Child(panelTransform, "Helicopter Type Dropdown"));
+
+            float footer = -OptionsHalfHeight + 52f;
+            float apply = OptionsHalfWidth - OptionsInset - 120f;
+            OptionsAction(Child(panelTransform, "Apply Button"), "SAVE & APPLY", "primary", new Vector2(apply, footer), 240f);
+            OptionsAction(Child(panelTransform, "Cancel Button"), "CANCEL", "secondary",
+                new Vector2(apply - 120f - 16f - 90f, footer), 180f);
+
+            log.AppendLine("options: settings surface, " + placed + " rows in four sections, a modal dim, sorted "
+                           + OptionsSortingOrder + " over the match.");
+        }
+
+        /// <summary>One row: its field frame, its caption on the left and its control on the right.</summary>
+        private static void OptionRow(Transform panel, Transform rows, string captionName, string controlName,
+            OptionKind kind, string caption, float x, float top)
+        {
+            AngularPanel frame = EnsureAngular(rows, captionName + " Row");
+            TopLeft(frame.rectTransform, new Vector2(x, top), new Vector2(OptionRowWidth, OptionRowHeight));
+            StyleFieldFace(frame);
+            frame.raycastTarget = false;
+
+            Text text = Child(panel, captionName).GetComponent<Text>();
+            text.text = caption;
+            Style(text, RegularFont(), 15, Ink, TextAnchor.MiddleLeft);
+            text.raycastTarget = false;
+            TopLeft(text.rectTransform, new Vector2(x + 20f, top),
+                new Vector2(OptionRowWidth - OptionControlWidth - 40f, OptionRowHeight));
+
+            RectTransform control = (RectTransform)Child(panel, controlName);
+            var rightCentre = new Vector2(x + OptionRowWidth - 16f, top - OptionRowHeight * 0.5f);
+            switch (kind)
+            {
+                case OptionKind.Slider:
+                    Pin(control, new Vector2(0.5f, 0.5f), new Vector2(1f, 0.5f), rightCentre,
+                        new Vector2(OptionControlWidth, 24f));
+                    SliderFace(control);
+                    break;
+                case OptionKind.Switch:
+                    Pin(control, new Vector2(0.5f, 0.5f), new Vector2(1f, 0.5f), rightCentre, new Vector2(44f, 24f));
+                    SwitchFace(control);
+                    break;
+                default:
+                    Pin(control, new Vector2(0.5f, 0.5f), new Vector2(1f, 0.5f), rightCentre,
+                        new Vector2(OptionControlWidth, 32f));
+                    ChoiceFace(control);
+                    break;
+            }
+        }
+
+        /// <summary>The menu's slider on a legacy one: a thin track, the orange fill, a cyan handle.</summary>
+        private static void SliderFace(RectTransform control)
+        {
+            Slider slider = control.GetComponent<Slider>();
+
+            AngularPanel track = AsAngular(Child(control, "Background").gameObject);
+            track.color = Hex("0B2133");
+            track.Configure(0f, AngularEdge.All, 1f, Hex("2C5573"));
+            track.raycastTarget = false;
+            Band(track.rectTransform, 6f);
+
+            Band((RectTransform)Child(control, "Fill Area"), 6f);
+            Image fill = Child(control, "Fill Area/Fill").GetComponent<Image>();
+            fill.sprite = null;
+            fill.type = Image.Type.Simple;
+            fill.color = Orange;
+            fill.raycastTarget = false;
+            fill.rectTransform.anchoredPosition = Vector2.zero;
+            fill.rectTransform.sizeDelta = Vector2.zero;
+
+            RectTransform handleArea = (RectTransform)Child(control, "Handle Slide Area");
+            Stretch(handleArea);
+            AngularPanel handle = AsAngular(Child(handleArea, "Handle").gameObject);
+            handle.color = Cyan;
+            handle.Configure(4f, AngularEdge.All, 1f, CyanSoft);
+            handle.raycastTarget = true;
+            handle.rectTransform.anchoredPosition = Vector2.zero;
+            handle.rectTransform.sizeDelta = new Vector2(14f, 0f);
+
+            slider.targetGraphic = handle;
+            slider.transition = Selectable.Transition.ColorTint;
+        }
+
+        /// <summary>
+        /// The menu's switch on a legacy toggle: an empty track, lit at its far end when on. At
+        /// the toggle's right end, or its left for <paramref name="leading"/>.
+        /// </summary>
+        /// <remarks>
+        /// The toggle's <c>Checkmark</c> becomes the lit end, so it is still the graphic the toggle
+        /// fades; the hit-indicator's preview flash, a child of it, flashes there.
+        /// </remarks>
+        private static void SwitchFace(Transform control, bool leading = false)
+        {
+            Toggle toggle = control.GetComponent<Toggle>();
+
+            AngularPanel track = AsAngular(Child(control, "Background").gameObject);
+            track.color = Hex("06131F");
+            track.Configure(0f, AngularEdge.All, 1f, Hex("5E89A9"));
+            track.raycastTarget = true;
+            var end = new Vector2(leading ? 0f : 1f, 0.5f);
+            Pin(track.rectTransform, end, end, Vector2.zero, new Vector2(36f, 18f));
+
+            AngularPanel mark = AsAngular(Child(control, "Background/Checkmark").gameObject);
+            mark.color = Cyan;
+            mark.Configure(0f, AngularEdge.None, 0f, Color.clear);
+            mark.raycastTarget = false;
+            Centre(mark.rectTransform, new Vector2(8f, 0f), new Vector2(14f, 10f));
+
+            toggle.targetGraphic = track;
+            toggle.graphic = mark;
+            toggle.transition = Selectable.Transition.ColorTint;
+        }
+
+        /// <summary>The menu's dropdown field on a legacy dropdown, and its list in the same palette.</summary>
+        private static void ChoiceFace(RectTransform control)
+        {
+            Dropdown dropdown = control.GetComponent<Dropdown>();
+            AngularPanel face = AsAngular(control.gameObject);
+            face.color = WithAlpha(Hex("0B1E2E"), 0.95f);
+            face.Configure(0f, AngularEdge.All, 1f, Hex("5E89A9"));
+            face.raycastTarget = true;
+            dropdown.targetGraphic = face;
+            dropdown.transition = Selectable.Transition.ColorTint;
+
+            Text label = dropdown.captionText;
+            Style(label, RegularFont(), 15, Ink, TextAnchor.MiddleLeft);
+            label.raycastTarget = false;
+            Stretch(label.rectTransform);
+            label.rectTransform.offsetMin = new Vector2(12f, 0f);
+            label.rectTransform.offsetMax = new Vector2(-34f, 0f);
+
+            // The pack's chevron turned downward, as on the menu's dropdowns.
+            Image arrow = Child(control, "Arrow").GetComponent<Image>();
+            arrow.sprite = IronfrontRebornUiAssetCatalog.Sprite("icons/chevron.png");
+            arrow.type = Image.Type.Simple;
+            arrow.preserveAspect = true;
+            arrow.color = CyanSoft;
+            arrow.raycastTarget = false;
+            Pin(arrow.rectTransform, new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-17f, 0f),
+                new Vector2(14f, 14f));
+            arrow.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -90f);
+
+            const float ItemHeight = 34f;
+            RectTransform template = dropdown.template;
+            Image list = template.GetComponent<Image>();
+            list.sprite = null;
+            list.type = Image.Type.Simple;
+            list.color = new Color(4f / 255f, 16f / 255f, 27f / 255f, 0.98f);
+            template.anchorMin = new Vector2(0f, 0f);
+            template.anchorMax = new Vector2(1f, 0f);
+            template.pivot = new Vector2(0.5f, 1f);
+            template.anchoredPosition = new Vector2(0f, -2f);
+            template.sizeDelta = new Vector2(0f, dropdown.options.Count * ItemHeight + 8f);
+
+            ScrollRect scroll = template.GetComponent<ScrollRect>();
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+            RectTransform viewport = (RectTransform)Child(template, "Viewport");
+            Stretch(viewport);
+            viewport.offsetMin = new Vector2(0f, 4f);
+            viewport.offsetMax = new Vector2(0f, -4f);
+            ((RectTransform)Child(viewport, "Content")).sizeDelta = new Vector2(0f, ItemHeight);
+
+            Toggle item = dropdown.itemText.GetComponentInParent<Toggle>(includeInactive: true);
+            ((RectTransform)item.transform).sizeDelta = new Vector2(0f, ItemHeight);
+            Image itemBackground = Child(item.transform, "Item Background").GetComponent<Image>();
+            itemBackground.sprite = null;
+            itemBackground.type = Image.Type.Simple;
+            itemBackground.color = Color.white;
+            item.targetGraphic = itemBackground;
+            item.transition = Selectable.Transition.ColorTint;
+            ColorBlock colours = item.colors;
+            colours.normalColor = Hex("08192A");
+            colours.highlightedColor = Hex("123A57");
+            colours.pressedColor = Hex("176F9F");
+            colours.selectedColor = Hex("0D2B42");
+            colours.colorMultiplier = 1f;
+            item.colors = colours;
+
+            // The chosen option's mark: the field's cyan bar, down the item's left edge.
+            Image check = Child(item.transform, "Item Checkmark").GetComponent<Image>();
+            check.sprite = null;
+            check.type = Image.Type.Simple;
+            check.color = Hex("39AEF5");
+            check.raycastTarget = false;
+            Pin(check.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(3f, ItemHeight));
+
+            Text itemText = dropdown.itemText;
+            Style(itemText, RegularFont(), 15, Ink, TextAnchor.MiddleLeft);
+            itemText.raycastTarget = false;
+            Stretch(itemText.rectTransform);
+            itemText.rectTransform.offsetMin = new Vector2(14f, 0f);
+            itemText.rectTransform.offsetMax = new Vector2(-8f, 0f);
+
+            Scrollbar scrollbar = scroll.verticalScrollbar;
+            if (scrollbar != null)
+            {
+                Image bed = scrollbar.GetComponent<Image>();
+                bed.sprite = null;
+                bed.color = new Color(1f, 1f, 1f, 0.06f);
+                ((RectTransform)scrollbar.transform).sizeDelta = new Vector2(6f, 0f);
+                Image thumb = scrollbar.handleRect.GetComponent<Image>();
+                thumb.sprite = null;
+                thumb.color = WithAlpha(CyanSoft, 0.7f);
+            }
+        }
+
+        /// <summary>
+        /// The note and three switches the heli dropdown shows for its Custom scheme, as a card
+        /// under the dropdown's row.
+        /// </summary>
+        /// <remarks>
+        /// A canvas of its own, sorted over the page: the card is a child of the dropdown, which
+        /// <c>DropdownExplanation</c> needs, and without it any row drawn after the dropdown would
+        /// draw over it and take its clicks.
+        /// </remarks>
+        private static void StyleHeliScheme(Transform dropdown)
+        {
+            Transform card = Child(dropdown, "Dropdown Explanation");
+            AngularPanel face = AsAngular(card.gameObject);
+            StyleCard(face);
+            // Right edge on the row frame's, just under the row.
+            Pin(face.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(16f, -12f),
+                new Vector2(OptionRowWidth, 64f));
+
+            Canvas canvas = card.GetComponent<Canvas>();
+            if (canvas == null) canvas = card.gameObject.AddComponent<Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = OptionsSortingOrder + 1;
+            if (card.GetComponent<GraphicRaycaster>() == null) card.gameObject.AddComponent<GraphicRaycaster>();
+
+            Text note = Child(card, "Text").GetComponent<Text>();
+            note.text = "Custom helicopter input is bound in the game launcher.";
+            Style(note, RegularFont(), 13, Muted, TextAnchor.MiddleLeft);
+            note.raycastTarget = false;
+            Pin(note.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -8f),
+                new Vector2(OptionRowWidth - 32f, 18f));
+
+            // Three side by side, each switch ahead of its caption: behind it, a switch sat as close
+            // to the next caption as to its own.
+            float x = 16f;
+            foreach ((string toggle, string caption) in new[]
+                     {
+                         ("Invert Throttle Toggle", "INVERT THROTTLE"),
+                         ("Invert Yaw Toggle", "INVERT YAW"),
+                         ("Invert Roll Toggle", "INVERT ROLL"),
+                     })
+            {
+                RectTransform control = (RectTransform)Child(card, toggle);
+                Pin(control, new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(x, -44f), new Vector2(160f, 26f));
+                SwitchFace(control, leading: true);
+
+                Text label = Child(control, "Label").GetComponent<Text>();
+                label.text = caption;
+                Style(label, RegularFont(), 12, Ink, TextAnchor.MiddleLeft);
+                label.raycastTarget = true;
+                Pin(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(46f, 0f),
+                    new Vector2(114f, 26f));
+                x += 164f;
+            }
+        }
+
+        /// <summary>A footer action of the options page, on the menu's face.</summary>
+        private static void OptionsAction(Transform buttonTransform, string caption, string kind, Vector2 centre, float width)
+        {
+            const float Height = 48f;
+            Centre((RectTransform)buttonTransform, centre, new Vector2(width, Height));
+
+            Button button = buttonTransform.GetComponent<Button>();
+            AngularPanel face = AsAngular(buttonTransform.gameObject);
+            StyleButtonFace(face, kind, Height);
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = ButtonColours(button.colors, kind);
+
+            Text text = Child(buttonTransform, "Text").GetComponent<Text>();
+            text.text = caption;
+            Style(text, BoldFont(), CaptionSize(Height), CaptionInk(kind), TextAnchor.MiddleCenter);
+            text.fontStyle = FontStyle.Bold;
+            text.raycastTarget = false;
+            Stretch(text.rectTransform);
+        }
+
+        /// <summary>A horizontal band <paramref name="height"/> tall across its parent's middle.</summary>
+        private static void Band(RectTransform rect, float height)
+        {
+            rect.anchorMin = new Vector2(0f, 0.5f);
+            rect.anchorMax = new Vector2(1f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(0f, height);
         }
 
         /// <summary>
