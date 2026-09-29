@@ -180,6 +180,17 @@ namespace Ironfront.Net.Replication.Match
 
         public MatchPhase Phase { get; private set; } = MatchPhase.WaitingForPlayers;
 
+        /// <summary>
+        /// Whether a death counts right now: only while the round is live. The one rule for both
+        /// the team score (<see cref="ReportDeath"/>) and the Tab board's kills and deaths, so a
+        /// warmup skirmish between bots, or a kill after the round is decided, moves neither.
+        /// </summary>
+        /// <remarks>
+        /// Release test 2026-09-29: six warmup deaths showed on the board as "2 kills, 3 deaths"
+        /// beside a 0 - 0 score, which reads as the board lying.
+        /// </remarks>
+        public bool CountsDeaths => Phase == MatchPhase.Playing;
+
         public MatchRules Rules => _rules;
 
         public IReadOnlyList<CapturePointState> CapturePoints => _points;
@@ -268,7 +279,7 @@ namespace Ironfront.Net.Replication.Match
         /// </remarks>
         public void ReportDeath(byte team)
         {
-            if (Phase != MatchPhase.Playing) return;
+            if (!CountsDeaths) return;
 
             if (team == TeamId.Team0)
                 _score1 += ConquestScoreRule.Award(

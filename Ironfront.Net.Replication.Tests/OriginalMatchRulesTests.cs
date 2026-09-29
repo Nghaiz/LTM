@@ -90,6 +90,48 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(1, match.Score0);
         }
 
+        /// <summary>
+        /// A death counts only while the round is live, for the score and the Tab board alike.
+        /// Release test 2026-09-29: warmup deaths filled the board beside a 0 - 0 score.
+        /// </summary>
+        [Fact]
+        public void DeathsCountOnlyWhileTheRoundIsLive()
+        {
+            MatchStateMachine match = RedHoldsFiveOfSix();
+            Advance(match, 0.1f);
+            Assert.Equal(MatchPhase.Warmup, match.Phase);
+            Assert.False(match.CountsDeaths, "a warmup death counted");
+
+            match.ReportDeath(TeamId.Team0);
+            Assert.Equal(0, match.Score1);
+
+            Advance(match, 1.5f);
+            Assert.Equal(MatchPhase.Playing, match.Phase);
+            Assert.True(match.CountsDeaths);
+
+            for (int i = 0; i < 40; i++) match.ReportDeath(TeamId.Team0);   // red past 200: decided
+            Advance(match, 0.1f);
+            Assert.NotEqual(MatchPhase.Playing, match.Phase);
+            Assert.False(match.CountsDeaths, "a death after the round was decided counted");
+        }
+
+        /// <summary>
+        /// The server feeds the board's tally through the same rule. Read off the source, because
+        /// the loop is a MonoBehaviour no test assembly can reference.
+        /// </summary>
+        [Fact]
+        public void TheBoardsTallyIsGatedByTheSameRule()
+        {
+            string loop = File.ReadAllText(Path.Combine(
+                RepoRoot(), "Ironfront_Reborn", "Assets", "Scripts", "Net", "Server", "ServerTickLoop.cs"));
+
+            int gate = loop.IndexOf("if (match != null && !match.CountsDeaths) return;", StringComparison.Ordinal);
+            int record = loop.IndexOf("_scoreTally.RecordDeath(victimActorId, killerActorId);", StringComparison.Ordinal);
+
+            Assert.True(gate > 0, "EmitDeath no longer asks CountsDeaths before the board's tally.");
+            Assert.True(record > gate, "the tally is fed before the CountsDeaths gate.");
+        }
+
         [Fact]
         public void HoldingMoreGroundScoresNothingUntilSomebodyDies()
         {
