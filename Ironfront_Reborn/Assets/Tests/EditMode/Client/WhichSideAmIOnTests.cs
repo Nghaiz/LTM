@@ -191,33 +191,47 @@ namespace Ironfront.Net.Unity.Client.Tests
         // ------------------------------------------------------------------ D-3: the minimap
 
         /// <summary>
-        /// The minimap draws friendlies and not enemies — the offline game's own rule.
+        /// The minimap draws every living friendly, and an enemy only when it is near.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <c>RemoteActorRegistry</c> marked every live remote actor and
-        /// <c>MinimapUi.SetMarker</c> has no team test, so a networked client saw the position of
-        /// every hostile inside <c>InterestManager.CullRadius</c>. That is a regression against
-        /// <c>ActorBlip.LateUpdate</c>, which has filtered to friendlies since the original game.
-        /// </para>
-        /// <para>
-        /// <b>The <c>IsHighlighted()</c> half of that rule is deliberately absent.</b> Nothing
-        /// carries a highlight bit across the wire — <c>ActorSnapshotEntry</c> has no such field
-        /// and neither does <c>SpawnActorMessage</c> — so spotting an enemy is already impossible
-        /// over the network, for a reason older than this filter. Asserting a disjunct over a
-        /// value that can only be false would be a green that proves nothing.
+        /// <c>RemoteActorRegistry</c> once marked every live remote actor, so a networked client
+        /// saw every hostile inside <c>InterestManager.CullRadius</c> -- a map hack. P12 D-3 then
+        /// hid every enemy, including the one standing next to you. The owner's rule
+        /// (2026-09-29): team-mates always, enemies only when near, the dead never.
         /// </para>
         /// </remarks>
         [Test]
-        public void Minimap_MarksFriendliesAndNotEnemies()
+        public void Minimap_MarksEveryLivingFriendlyWhereverItIs()
         {
-            Assert.IsTrue(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team1, TeamId.Team1));
-            Assert.IsTrue(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.Team0));
+            float farAway = 2000f * 2000f;
+            Assert.IsTrue(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team1, TeamId.Team1, true, farAway));
+            Assert.IsTrue(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.Team0, true, farAway));
+            Assert.IsTrue(RemoteActorRegistry.ShouldMarkOnMinimap(
+                TeamId.Team0, TeamId.Team0, true, float.PositiveInfinity),
+                "a team-mate vanished because this client had no body to measure from.");
+        }
 
-            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.Team1),
-                "an enemy was drawn on the minimap — D-3.");
-            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team1, TeamId.Team0),
-                "an enemy was drawn on the minimap — D-3.");
+        [Test]
+        public void Minimap_MarksAnEnemyOnlyWhenItIsNear()
+        {
+            float r = RemoteActorRegistry.EnemyRevealRadius;
+            Assert.IsTrue(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.Team1, true, (r - 1f) * (r - 1f)),
+                "an enemy inside the reveal radius was hidden.");
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.Team1, true, (r + 1f) * (r + 1f)),
+                "an enemy outside the reveal radius was drawn -- a map hack.");
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(
+                TeamId.Team1, TeamId.Team0, true, float.PositiveInfinity),
+                "an enemy was drawn while this client had no body to measure from.");
+        }
+
+        [Test]
+        public void Minimap_MarksNoCorpse()
+        {
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team1, TeamId.Team1, false, 0f),
+                "a dead team-mate kept its icon.");
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.Team1, false, 0f),
+                "a dead enemy kept its icon.");
         }
 
         /// <summary>
@@ -232,14 +246,14 @@ namespace Ironfront.Net.Unity.Client.Tests
         [Test]
         public void Minimap_MarksNothingWhileEitherTeamIsUnknown()
         {
-            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.None),
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.None, true, 0f),
                 "everything was drawn while this client's own team was still unknown.");
-            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.None, TeamId.Team0),
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.None, TeamId.Team0, true, 0f),
                 "a body of unknown team was drawn as a friendly.");
 
             // Two unknowns are EQUAL, which a bare `team == localTeam` would read as friendly.
             // That is the D-1 sentinel trap wearing a different hat, one rule over.
-            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.None, TeamId.None),
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.None, TeamId.None, true, 0f),
                 "two unknown teams compared equal and were drawn as friendlies.");
         }
 
