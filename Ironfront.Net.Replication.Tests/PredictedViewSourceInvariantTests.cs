@@ -2,11 +2,11 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using RegexMatch = System.Text.RegularExpressions.Match;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Xunit;
+using RegexMatch = System.Text.RegularExpressions.Match;
 
 namespace Ironfront.Net.Replication.Tests
 {
@@ -102,13 +102,14 @@ namespace Ironfront.Net.Replication.Tests
                 .OfType<MethodDeclarationSyntax>()
                 .Single(m => m.Identifier.ValueText == "Update");
 
-            IfStatementSyntax gate = update.DescendantNodes()
-                .OfType<IfStatementSyntax>()
-                .Single(i => i.Statement.ToString().Contains("_agent.Tick(", StringComparison.Ordinal));
+            IfStatementSyntax[] ifs = update.DescendantNodes().OfType<IfStatementSyntax>().ToArray();
 
-            Assert.True(gate.Else != null
-                        && gate.Else.Statement.ToString().Contains("_agent.HoldStill()", StringComparison.Ordinal),
-                "The branch of NetPredictionClock.Update that does not tick the agent must call "
+            Assert.Contains(ifs, i => i.Condition.ToString() == "simulated"
+                                      && i.Statement.ToString().Contains("_agent.Tick(", StringComparison.Ordinal));
+            Assert.True(
+                ifs.Any(i => i.Condition.ToString() == "!simulated"
+                             && i.Statement.ToString().Contains("_agent.HoldStill()", StringComparison.Ordinal)),
+                "A tick of NetPredictionClock.Update that does not step the agent must call "
                 + "_agent.HoldStill().");
         }
 

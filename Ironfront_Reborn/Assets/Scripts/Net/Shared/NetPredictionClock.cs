@@ -299,17 +299,15 @@ namespace Ironfront.Net.Unity
                 Vector3 from = transform.position;
                 bool simulated = SimulationEnabled == null || SimulationEnabled();
                 if (simulated)
-                {
                     _agent.Tick(in input, TickInterval);
-                }
+                else if (KeepButtonsWhileSuspended != null && KeepButtonsWhileSuspended())
+                    input = input.WithAxes(0f, 0f);
                 else
-                {
-                    _agent.HoldStill();
-                    if (KeepButtonsWhileSuspended != null && KeepButtonsWhileSuspended())
-                        input = input.WithAxes(0f, 0f);
-                    else
-                        input = default;
-                }
+                    input = default;
+
+                // A tick that does not move the body reports it standing still, whatever the last
+                // one walked: the footsteps and weapon bob read this speed.
+                if (!simulated) _agent.HoldStill();
 
                 LastTickFrom = from;
                 LastTickTo = transform.position;
