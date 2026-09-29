@@ -247,7 +247,9 @@ namespace Ironfront.Net.Unity.EditorTools
             feedRect.anchorMin = new Vector2(1f, 1f);
             feedRect.anchorMax = new Vector2(1f, 1f);
             feedRect.pivot = new Vector2(1f, 1f);
-            feedRect.anchoredPosition = new Vector2(-28f, -24f);
+            // Below the original game's score bar, whose right-hand flag counter the first two rows
+            // covered at every aspect (release test 2026-09-29).
+            feedRect.anchoredPosition = new Vector2(-28f, -KillfeedTop);
             feedRect.sizeDelta = new Vector2(760f, MatchHud.KillfeedRows * KillfeedRowView.RowPitch);
 
             var rows = new KillfeedRowView[MatchHud.KillfeedRows];
@@ -1070,6 +1072,9 @@ namespace Ironfront.Net.Unity.EditorTools
 
         // Nearly the whole 1920x1080 reference: the board is a full-screen read, and its rows are
         // what has to be legible (owner report 2026-09-29: "HUD GUI bé và khó nhìn").
+        /// <summary>Canvas units from the top edge to the killfeed's first row: clear of the score bar.</summary>
+        private const float KillfeedTop = 190f;
+
         private const float BoardWidth = 1760f;
         private const float BoardHeight = 1040f;
         private const float SideGap = 28f;

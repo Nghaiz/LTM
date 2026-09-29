@@ -36,6 +36,9 @@ namespace Ironfront.Net.Unity.Client.Hud
         private const float CloseSeconds = 0.14f;
         private const float OpenScale = 0.965f;
         private const float OpenDrop = 22f;
+
+        /// <summary>Clear space kept between a shrunk board and the edges of the screen.</summary>
+        public const float FitMargin = 16f;
         private const float LeadRate = 5f;
         private const float BreathHertz = 0.55f;
 
@@ -253,7 +256,8 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             float eased = HudStyle.EaseOut(_open);
             _group.alpha = eased;
-            _panel.localScale = Vector3.one * Mathf.Lerp(OpenScale, 1f, eased);
+            float fit = FitScale(((RectTransform)_panel.parent).rect.size, _panel.rect.size, FitMargin);
+            _panel.localScale = Vector3.one * (Mathf.Lerp(OpenScale, 1f, eased) * fit);
             _panel.anchoredPosition = new Vector2(0f, (1f - eased) * -OpenDrop);
 
             TickLead(delta);
@@ -261,6 +265,22 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             _team0.Tick(delta);
             _team1.Tick(delta);
+        }
+
+        /// <summary>
+        /// How far a <paramref name="board"/>-sized panel must shrink to sit inside
+        /// <paramref name="area"/> with <paramref name="margin"/> to spare: 1 on a 16:9 or 16:10
+        /// screen, where the board was drawn to fit, and less in a narrow window or on 4:3, where
+        /// the full-width board ran off both edges (release test 2026-09-29). Never more than 1:
+        /// the board does not grow past the size its type was set at.
+        /// </summary>
+        public static float FitScale(Vector2 area, Vector2 board, float margin)
+        {
+            if (board.x <= 0f || board.y <= 0f) return 1f;
+
+            float wide = (area.x - 2f * margin) / board.x;
+            float tall = (area.y - 2f * margin) / board.y;
+            return Mathf.Clamp(Mathf.Min(wide, tall), 0.1f, 1f);
         }
 
         /// <summary>The tug-of-war bar closes on the lead rather than jumping to it.</summary>

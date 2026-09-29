@@ -157,7 +157,10 @@ namespace Ironfront.Net.Unity.Client
             {
                 if (!enter) return;
 
-                bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                // GetKeyDown as well as GetKey: a macro key or a remote-desktop client can press and
+                // release Shift inside the same frame as Enter, where GetKey already reads it as up.
+                bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)
+                             || Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift);
                 _model.PressEnter(Time.unscaledTime, out _, shift ? ChatChannel.Team : ChatChannel.All);
                 _openedOnFrame = Time.frameCount;
                 _focusPending = true;
