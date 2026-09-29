@@ -1359,6 +1359,11 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			return false;
 		}
 		bool ownsHealth = !Ironfront.Net.Unity.NetContext.IsClient;
+		// Who fired, for the bot's own reaction (phase P28): cover, and answering that shooter first.
+		if (controller is AiActorController ai)
+		{
+			ai.NoteHit(attacker, direction);
+		}
 		controller.ReceivedDamage(healthDamage, balanceDamage, point, direction, impactForce);
 		if (ownsHealth)
 		{

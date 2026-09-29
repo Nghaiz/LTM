@@ -62,6 +62,34 @@ public class Squad
 	/// <summary>Whether the commander has given this squad a job.</summary>
 	public bool HasCommand => commandRole != SquadRole.None && commandTarget != null;
 
+	/// <summary>When the squad last dug in (phase P28): how long it has held its cover.</summary>
+	private float digInTime;
+
+	/// <summary>
+	/// Whether a dug-in squad stays in its cover this tick: while any member still has an enemy
+	/// in its sights, up to <see cref="CombatRules.HoldCoverSeconds"/> (phase P28).
+	/// </summary>
+	public bool HoldingCover()
+	{
+		return CombatRules.HoldCover(state == State.DigIn, GetTarget() != null, Time.time - digInTime);
+	}
+
+	/// <summary>
+	/// The bearing of the fire coming at the squad: the first member under fire's, else
+	/// <paramref name="fallback"/>.
+	/// </summary>
+	public Vector3 TakingFireDirection(Vector3 fallback)
+	{
+		foreach (AiActorController member in members)
+		{
+			if (member.IsTakingFire())
+			{
+				return member.takingFireDirection;
+			}
+		}
+		return fallback;
+	}
+
 	public Squad(List<AiActorController> members, float timeUntilReady)
 	{
 		number = nextNumber++;
@@ -303,6 +331,11 @@ public class Squad
 		state = State.Moving;
 		foreach (AiActorController member in members)
 		{
+			// A hurt member keeps to the cover it fell back to, and catches up after (phase P28).
+			if (member.IsFallingBack())
+			{
+				continue;
+			}
 			member.Goto(point + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f)));
 			if (member.squadLeader)
 			{
@@ -320,6 +353,7 @@ public class Squad
 			return;
 		}
 		state = State.DigIn;
+		digInTime = Time.time;
 		foreach (AiActorController member in members)
 		{
 			member.FindCoverAtPoint(point);
@@ -341,6 +375,7 @@ public class Squad
 				return;
 			}
 			state = State.DigIn;
+			digInTime = Time.time;
 			foreach (AiActorController member in members)
 			{
 				member.FindCover();
@@ -360,6 +395,7 @@ public class Squad
 			return;
 		}
 		state = State.DigIn;
+		digInTime = Time.time;
 		foreach (AiActorController member in members)
 		{
 			member.FindCoverTowards(direction);
