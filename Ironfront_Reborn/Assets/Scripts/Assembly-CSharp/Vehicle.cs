@@ -347,11 +347,19 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	{
 		Vector3 vector = rigidbody.linearVelocity * Time.fixedDeltaTime;
 		int num = Physics.BoxCastNonAlloc(base.transform.localToWorldMatrix.MultiplyPoint(ramOffset), ramSize, vector.normalized, ramResults, base.transform.rotation, vector.magnitude, 256);
+		Actor driver = HasDriver() ? Driver() : null;
 		for (int i = 0; i < num; i++)
 		{
 			RaycastHit raycastHit = ramResults[i];
 			Hitbox component = raycastHit.collider.GetComponent<Hitbox>();
-			if (component.RigidbodyHit(rigidbody, raycastHit.point) && HasDriver() && !Driver().aiControlled)
+			// Names the vehicle and its driver for a death the ram causes, which used to reach the
+			// killfeed as "The world" (feature 2, 2026-09-29).
+			bool hurt;
+			using (DeathContext.RunOver(base.gameObject))
+			{
+				hurt = component.RigidbodyHit(rigidbody, raycastHit.point, driver);
+			}
+			if (hurt && driver != null && !driver.aiControlled)
 			{
 				IngameUi.Hit();
 			}
@@ -1048,13 +1056,18 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 				else
 				{
 					occupant.LeaveSeat();
-					if (seat.enclosed)
+					// Dies WITH the vehicle, so the killfeed can say so and credit whoever destroyed
+					// it rather than "The world" (feature 2, 2026-09-29).
+					using (DeathContext.WentDownWith(base.gameObject))
 					{
-						occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
-					}
-					else
-					{
-						occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+						if (seat.enclosed)
+						{
+							occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+						}
+						else
+						{
+							occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+						}
 					}
 				}
 			}

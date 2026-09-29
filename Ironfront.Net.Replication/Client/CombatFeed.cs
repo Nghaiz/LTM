@@ -143,9 +143,31 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Client clock at receipt, in seconds. Drives the hold timer.</summary>
         public readonly float PostedAtSeconds;
 
+        /// <summary>The killing weapon (<see cref="WeaponIds"/>), <c>NONE</c> when the server named none.</summary>
+        public readonly byte WeaponId;
+
+        /// <summary>The vehicle involved (<see cref="VehicleIds"/>), <c>NONE</c> when none was.</summary>
+        public readonly byte VehicleType;
+
+        /// <summary>How the vehicle was involved. <see cref="DeathDetail.None"/> from a 1.0 server.</summary>
+        public readonly DeathDetail Detail;
+
+        /// <summary>
+        /// This line's place in the feed's kill order, 1 for the first. Stamped by
+        /// <see cref="KillfeedModel.Push(in KillfeedEntry)"/>; 0 on an entry never pushed.
+        /// </summary>
+        /// <remarks>
+        /// A drawing layer keys a row on this rather than on its index, because every index moves
+        /// down one when a kill arrives: keyed on the index, the whole feed would re-animate as if
+        /// five kills had just happened. Unique per model, across its resets.
+        /// </remarks>
+        public readonly long Sequence;
+
         public KillfeedEntry(
             ushort killerActorId, ushort victimActorId, CauseOfDeath cause,
-            bool killedByEnvironment, bool headshot, float postedAtSeconds)
+            bool killedByEnvironment, bool headshot, float postedAtSeconds,
+            byte weaponId = WeaponIds.NONE, byte vehicleType = VehicleIds.NONE,
+            DeathDetail detail = DeathDetail.None, long sequence = 0)
         {
             KillerActorId = killerActorId;
             VictimActorId = victimActorId;
@@ -153,7 +175,20 @@ namespace Ironfront.Net.Replication.Client
             KilledByEnvironment = killedByEnvironment;
             Headshot = headshot;
             PostedAtSeconds = postedAtSeconds;
+            WeaponId = weaponId;
+            VehicleType = vehicleType;
+            Detail = detail;
+            Sequence = sequence;
         }
+
+        /// <summary>This entry, numbered.</summary>
+        internal KillfeedEntry WithSequence(long sequence)
+            => new KillfeedEntry(
+                KillerActorId, VictimActorId, Cause, KilledByEnvironment, Headshot,
+                PostedAtSeconds, WeaponId, VehicleType, Detail, sequence);
+
+        /// <summary>The victim killed themselves: their own grenade, their own crash.</summary>
+        public bool Self => !KilledByEnvironment && KillerActorId == VictimActorId;
 
         /// <summary>Builds one from the wire message.</summary>
         public static KillfeedEntry From(in DeathMessage message, float nowSeconds)
@@ -163,7 +198,10 @@ namespace Ironfront.Net.Replication.Client
                 message.Cause,
                 message.KilledByEnvironment,
                 (HitboxType)message.HitboxHit == HitboxType.Head,
-                nowSeconds);
+                nowSeconds,
+                message.WeaponId,
+                message.VehicleType,
+                message.Detail);
     }
 
     /// <summary>
@@ -192,6 +230,13 @@ namespace Ironfront.Net.Replication.Client
 
         private readonly KillfeedEntry[] _entries;
         private int _count;
+
+        /// <summary>
+        /// The last <see cref="KillfeedEntry.Sequence"/> handed out. Survives <see cref="Reset"/>
+        /// on purpose: a row still fading from the last match must not share a number with the
+        /// first kill of the next one.
+        /// </summary>
+        private long _lastSequence;
 
         public KillfeedModel(int capacity = DefaultCapacity)
         {
@@ -225,15 +270,15 @@ namespace Ironfront.Net.Replication.Client
         public void Push(in DeathMessage message, float nowSeconds)
             => Push(KillfeedEntry.From(in message, nowSeconds));
 
-        /// <summary>Posts an already-built entry.</summary>
+        /// <summary>Posts an already-built entry, numbering it (<see cref="KillfeedEntry.Sequence"/>).</summary>
         public void Push(in KillfeedEntry entry)
         {
             int keep = _count < _entries.Length ? _count : _entries.Length - 1;
             for (int i = keep; i > 0; i--) _entries[i] = _entries[i - 1];
 
-            _entries[0] = entry;
-            _count = keep + 1;
             TotalKills++;
+            _entries[0] = entry.WithSequence(++_lastSequence);
+            _count = keep + 1;
         }
 
         /// <summary>

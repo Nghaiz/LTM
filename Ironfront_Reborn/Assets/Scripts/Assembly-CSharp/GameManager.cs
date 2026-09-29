@@ -30,6 +30,12 @@ public class GameManager : MonoBehaviour
 
 	public int victoryPoints = 200;
 
+	// The offline round's counterparts of MatchController's two rules (playtest 2026-09-28,
+	// bug 3), beside victoryPoints for the same reason victoryPoints is here. 0 turns either off.
+	public float territoryAwardSeconds = 5f;
+
+	public float timeLimitSeconds = 1200f;
+
 	public AudioMixerGroup fpMixerGroup;
 
 	public GameObject spectatorCameraPrefab;
@@ -151,5 +157,16 @@ public class GameManager : MonoBehaviour
 	public float ElapsedGameTime()
 	{
 		return Time.time - gameStartTime;
+	}
+
+	private void Update()
+	{
+		// Offline only. A networked round is clocked on the server by MatchStateMachine, and a
+		// dedicated server's offline scoreboard is one nobody sees. Time.deltaTime, so the pause
+		// menu, which stops time offline, stops the clock too.
+		if (ingame && NetContext.IsOffline)
+		{
+			MatchScoreboard.Current.Tick(Time.deltaTime, territoryAwardSeconds, timeLimitSeconds);
+		}
 	}
 }

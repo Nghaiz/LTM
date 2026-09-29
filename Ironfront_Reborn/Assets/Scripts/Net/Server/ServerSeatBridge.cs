@@ -211,6 +211,17 @@ namespace Ironfront.Net.Unity.Server
             if (!_actors.TryFind(actorId, out NetServerActor actor) || actor == null)
                 return SeatChangeResult.RejectedNoSuchSeat;
 
+            // A corpse is not anywhere a seat can reach it. Nothing refused one before: a player
+            // killed in the air who pressed the key to bail out had the seat granted to his dead
+            // body, which the client then stood back up (the symptom of bug 1 of the 2026-09-28
+            // playtest, by another route) and which held the seat against every living player
+            // until the respawn moved it. Answered with the existing "body is out of position"
+            // code rather than an appended one: a fixed client never asks while dead
+            // (ClientSeatRequester waits for the deploy), so only an older client meets this, on
+            // its death screen, and a new value would change the protocol assembly for nobody.
+            if (!actor.IsAlive)
+                return SeatChangeResult.RejectedActorUnplaced;
+
             if (!_vehicles.TryFind(vehicleId, out IGameplayVehicleSource vehicle))
                 return SeatChangeResult.RejectedNoSuchSeat;
 

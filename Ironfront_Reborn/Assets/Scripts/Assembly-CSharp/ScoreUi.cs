@@ -169,8 +169,9 @@ public class ScoreUi : MonoBehaviour
 	/// </param>
 	/// <param name="secondsRemaining">
 	/// Whole seconds left in the phase, or a negative value meaning "this phase has no timer" —
-	/// <c>MatchPhase.Playing</c> ends on the score margin, not a clock, and rendering it as
-	/// "0:00" would tell every player the round is over. A negative value hides the timer.
+	/// a <c>MatchPhase.Playing</c> round with no time limit ends on the score margin, not a
+	/// clock, and rendering it as "0:00" would tell every player the round is over. A negative
+	/// value hides the timer.
 	/// </param>
 	/// <param name="victoryPoints">
 	/// The lead a side needs to win, from <c>S_MATCH_STATE</c>. The bars are meaningless without
@@ -521,6 +522,17 @@ public class ScoreUi : MonoBehaviour
 		if (!redPulse.Done())
 		{
 			redBar.color = Color.Lerp(Color.white, red, redPulse.Ratio());
+		}
+		// The offline round's clock, in the element the server's clock uses networked
+		// (SetAuthoritativeState). Written only when the whole seconds change.
+		if (NetContext.IsOffline && phaseTimerText != null && GameManager.instance != null)
+		{
+			float left = MatchScoreboard.Current.SecondsRemaining(GameManager.instance.timeLimitSeconds);
+			string clock = left > 0f ? FormatTimer(Mathf.CeilToInt(left)) : string.Empty;
+			if (phaseTimerText.text != clock)
+			{
+				phaseTimerText.text = clock;
+			}
 		}
 		// TAB BELONGS TO THE SCOREBOARD NOW (P18 3.3). It was bound here to an early dismissal
 		// of the victory banner, which is a five-second overlay that also hides itself -- and

@@ -76,6 +76,19 @@ namespace Ironfront.Net.Unity.Server
             + "unchanged; THIS is the one place that opts a live server into the protection.")]
         [SerializeField] private float _eliminationDwellSeconds = 5f;
 
+        [Tooltip(
+            "Seconds between territory awards: each interval, the team holding more capture "
+            + "points earns the difference. 0 = the original rule, where ground only multiplies "
+            + "kills. Playtest 2026-09-28, bug 3: a three-two split crept to the margin in 29 "
+            + "minutes.")]
+        [SerializeField] private float _territoryAwardSeconds = 5f;
+
+        [Tooltip(
+            "Longest a round may run, in seconds; the team ahead then wins, and a level score "
+            + "plays on until the next point. 0 = no limit, the original. Playtest 2026-09-28, "
+            + "bug 3: rounds ran past thirty minutes.")]
+        [SerializeField] private float _timeLimitSeconds = 1200f;
+
         private ServerTickLoop _loop;
         private MatchStateMachine _match;
         private ActorIdPool _actorIds;
@@ -143,10 +156,12 @@ namespace Ironfront.Net.Unity.Server
                 VictoryPoints          = _victoryPoints,
                 EliminationGraceSeconds = _eliminationGraceSeconds,
                 EliminationDwellSeconds = _eliminationDwellSeconds,
+                TerritoryAwardSeconds   = _territoryAwardSeconds,
+                TimeLimitSeconds        = _timeLimitSeconds,
             };
 
             _actorIds = new ActorIdPool(
-                ProtocolConstants.MAX_ACTORS, rules.ActorIdQuarantineSeconds);
+                ActorIdPool.MaxCapacity, rules.ActorIdQuarantineSeconds);
 
             // Without this the pool is decoration: the registry allocated from its own counter
             // and nothing ever called TryAcquire, so the quarantine never ran and the audit's
@@ -417,7 +432,11 @@ namespace Ironfront.Net.Unity.Server
                       + $"(win by {_match.VictoryPoints}), flags "
                       + $"{_match.OwnedPointCount(TeamId.Team0)} / {_match.OwnedPointCount(TeamId.Team1)}, "
                       + $"deaths {_loop.Scores.DeathsRecorded}, repeat death reports dropped "
-                      + $"{_loop.RespawnGate.DuplicateDeathsSuppressed}");
+                      + $"{_loop.RespawnGate.DuplicateDeathsSuppressed}, territory points "
+                      + $"{_match.TerritoryPointsAwarded}, time left "
+                      + (_match.Rules.TimeLimitSeconds > 0f
+                          ? $"{Mathf.CeilToInt(_match.PhaseSecondsRemaining)} s"
+                          : "unlimited"));
         }
 
         /// <summary>The <c>id -> name</c> order, for the D7 fallback's one log line.</summary>
@@ -524,8 +543,19 @@ namespace Ironfront.Net.Unity.Server
         }
 
         private void OnPhaseChanged(MatchPhase phase)
-            => Debug.Log($"[net] match phase -> {phase} "
-                         + $"({_match.Score0} / {_match.Score1}, win by {_match.VictoryPoints})");
+        {
+            // Named, because a round the clock ended reads as a margin win in the scores: the
+            // leader is raised to the margin so every client names the same winner.
+            bool timedOut = phase == MatchPhase.Ended
+                            && _match.RoundsEndedByTimeLimit != _roundsEndedByTimeLimitLogged;
+            _roundsEndedByTimeLimitLogged = _match.RoundsEndedByTimeLimit;
+
+            Debug.Log($"[net] match phase -> {phase} "
+                      + $"({_match.Score0} / {_match.Score1}, win by {_match.VictoryPoints})"
+                      + (timedOut ? ", ended by the time limit" : string.Empty));
+        }
+
+        private int _roundsEndedByTimeLimitLogged;
 
         private void OnResetRequested()
         {

@@ -437,6 +437,9 @@ namespace Ironfront.Net.Replication.Tests
             for (int shot = 0; shot < 5; shot++) state.PredictFire(ShotTime(shot));
             state.ApplySnapshot(LocalEntry(health: 0, alive: false, ammo: 25), Now);
 
+            // A respawn is always the answer to a deploy request; one without is held back
+            // (ClientUnrequestedRevivalTests).
+            state.NoteDeployRequested();
             state.ApplySnapshot(LocalEntry(health: 100, alive: true, ammo: 30), Now);
 
             Assert.Equal(1, respawned);

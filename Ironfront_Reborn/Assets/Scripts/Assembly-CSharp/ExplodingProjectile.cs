@@ -67,7 +67,11 @@ public class ExplodingProjectile : Projectile
 				return false;
 			}
 			flag = !componentInParent.dead;
-			componentInParent.Damage(Damage());
+			// Attributed like the blast that follows it. The direct hit lands first, so when it is
+			// the one that empties the vehicle the burn has already started by the time the blast
+			// names the shooter -- and the crew that dies in that burn was credited to nobody
+			// (feature 2, 2026-09-29).
+			componentInParent.Damage(Damage(), ActorManager.ResolveAttackerId(source));
 		}
 		// The hitmarker belongs to a human shooter. No source means nobody local fired this, so
 		// there is no one to mark for -- the real marker reaches the real shooter as
@@ -91,10 +95,14 @@ public class ExplodingProjectile : Projectile
 		// "does the engine apply damage" would switch corpses off on every client. The narrower
 		// question is false offline and on a client, so both are byte-for-byte unchanged; it goes
 		// true only on a server that has handed flight to the library stepper (ledger C-1).
-		bool result = !Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
-			&& ActorManager.Explode(
-				position, explosionConfiguration, source,
-				Ironfront.Net.Protocol.ExplosionKind.Rocket);
+		bool result;
+		using (DeathContext.Weapon(sourceWeaponId))
+		{
+			result = !Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
+				&& ActorManager.Explode(
+					position, explosionConfiguration, source,
+					Ironfront.Net.Protocol.ExplosionKind.Rocket);
+		}
 		base.transform.rotation = Quaternion.LookRotation(up);
 		base.enabled = false;
 		Renderer[] array = renderers;

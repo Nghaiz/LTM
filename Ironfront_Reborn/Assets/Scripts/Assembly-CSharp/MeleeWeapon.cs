@@ -48,8 +48,18 @@ public class MeleeWeapon : Weapon
 			// Null for a client's remote corpse: RemoteRagdoll builds its colliders on the Ragdoll
 			// layer with no Hitbox behind them (see Projectile.Hit). The swing lands and has nothing
 			// to damage.
-			if (component != null
-				&& component.parent.Damage(damage, balanceDamage, false, hitInfo.point, ray.direction, ray.direction * force))
+			// Attributed to whoever swung, so a melee kill names its killer instead of "The world"
+			// (feature 2, 2026-09-29). A prop takes the plain path: only an Actor keeps a killer.
+			bool hurt;
+			using (DeathContext.Melee(NetworkId))
+			{
+				Actor victim = component != null ? component.parent as Actor : null;
+				hurt = victim != null
+					? victim.DamageAttributed(damage, balanceDamage, false, hitInfo.point, ray.direction, ray.direction * force, user)
+					: component != null
+						&& component.parent.Damage(damage, balanceDamage, false, hitInfo.point, ray.direction, ray.direction * force);
+			}
+			if (hurt)
 			{
 				IngameUi.Hit();
 			}

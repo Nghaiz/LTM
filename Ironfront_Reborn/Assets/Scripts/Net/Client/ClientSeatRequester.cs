@@ -77,6 +77,7 @@ namespace Ironfront.Net.Unity.Client
         private NetClientBootstrap _client;
         private RemoteVehicleRegistry _registry;
         private ClientVehicleStage _stage;
+        private NetClientLocalCombatDriver _combatDriver;
 
         private readonly byte[] _body = new byte[SeatRequestMessage.Size];
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
@@ -142,6 +143,25 @@ namespace Ironfront.Net.Unity.Client
             _stage    = GetComponent<ClientVehicleStage>();
         }
 
+        /// <summary>
+        /// Whether the local body is deployed and alive, which is the only state that may ask
+        /// for a seat.
+        /// </summary>
+        /// <remarks>
+        /// Read from <see cref="NetClientLocalCombatDriver.IsAuthoritativelyDeployed"/>, the
+        /// signal <c>ClientPredictionStage</c> already gates on, rather than from a second copy of
+        /// the alive state. Resolved lazily for the same reason that stage gives: the driver may
+        /// wake after this component. No driver at all (a bare test scene) is not a reason to
+        /// refuse, so it reads as deployed.
+        /// </remarks>
+        private bool LocalBodyIsDeployed()
+        {
+            if (_combatDriver == null && _client != null)
+                _combatDriver = _client.GetComponent<NetClientLocalCombatDriver>();
+
+            return _combatDriver == null || _combatDriver.IsAuthoritativelyDeployed;
+        }
+
         private void OnEnable()
         {
             if (_client == null) return;
@@ -163,6 +183,19 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null || !_client.IsConnected) return;
 
             ExpirePending();
+
+            // A corpse asks for no seat, and a walk to the next free seat that a death
+            // interrupted is not resumed on the next life. Nothing stopped either before: a
+            // player killed in a falling helicopter who pressed the key to bail out sent a
+            // request, a server that let a dead body take a seat granted it, and the grant stood
+            // the corpse back up -- the symptom of bug 1 of the 2026-09-28 playtest, by another
+            // route.
+            if (!LocalBodyIsDeployed())
+            {
+                _retryVehicleId = 0;
+                return;
+            }
+
             SendDueRetry();
 
             // Not while the chat box owns the keyboard: F is a letter people type.

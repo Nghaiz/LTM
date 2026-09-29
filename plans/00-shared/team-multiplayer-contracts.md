@@ -228,6 +228,25 @@ second. The alternative — a separate one-shot match-config message — puts th
 scaled values in two packets that can arrive out of order, and gives a late joiner a bar it
 cannot draw until the next config broadcast.
 
+### 2.3 A time-limited round (2026-09-29, playtest bug 3)
+
+`phaseSecondsRemaining` was 0 for the whole of `Playing`, because a round ended only on the margin
+or on elimination. The live server now caps a round (`MatchRules.TimeLimitSeconds`, 1200 s through
+`MatchController`), and the field carries the time left in `Playing` exactly as it carries the
+warmup's. **No layout change and no version bump:** a client that predates the limit hides the
+clock in `Playing` whatever the field says (`MatchStateModel.HasTimer`), and 0 still means "no
+clock", so an unlimited round reads as it always did.
+
+At the limit the leader wins, and the server raises the leader's score to exactly the margin
+before `Ended` goes out. `WinningTeam` stays `ConquestScoreRule.Decide(score0, score1,
+victoryPoints)`, so every client, a released 1.0 one included, names the same winner. A level
+score plays on until the next point.
+
+The same fix adds a territory award (`MatchRules.TerritoryAwardSeconds`, 5 s live): each interval
+the team holding more capture points earns the difference (`ConquestScoreRule.TerritoryAward`).
+It only moves the two scores this message already carries. Both rules also run offline
+(`MatchScoreboard.Tick`), so the two runtimes still play one game.
+
 ### 2.3 The version bump — mandatory, and why
 
 **`PROTOCOL_VERSION` 4 → 5.** Two independent reasons, either sufficient:

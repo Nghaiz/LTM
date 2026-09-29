@@ -937,7 +937,10 @@ public class ActorManager : MonoBehaviour
 				// actor's reaction is the snapshot's to describe.
 				if (!isClient)
 				{
-					item.DamageAttributed(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2, source);
+					using (DeathContext.Explosion())
+					{
+						item.DamageAttributed(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2, source);
+					}
 					result = true;
 				}
 			}
@@ -1021,7 +1024,7 @@ public class ActorManager : MonoBehaviour
 	// Vehicle.Damage takes an int attacker slot with a NoAttacker sentinel, so an unattributed
 	// blast -- a world explosive, or a source with no network identity -- is recorded as having
 	// no attacker rather than as actor 0, which is a real id.
-	private static int ResolveAttackerId(Actor source)
+	internal static int ResolveAttackerId(Actor source)
 	{
 		if (source == null) return Vehicle.NoAttacker;
 

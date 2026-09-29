@@ -120,6 +120,27 @@ namespace Ironfront.Net.Replication.Match
         /// </remarks>
         public bool IsUntouched(ushort actorId) => KillsOf(actorId) == 0 && DeathsOf(actorId) == 0;
 
+        /// <summary>Zeroes one actor's kills and deaths, for a body handed to a new occupant.</summary>
+        /// <remarks>
+        /// <para>
+        /// The tally is keyed by actor id, and a player slot keeps its id from one occupant to
+        /// the next. Without this, a player who joins into a leaver's slot inherits the leaver's
+        /// row: on every scoreboard, and in the end-of-match report, which reads this tally by
+        /// the actor ids of the players still connected.
+        /// </para>
+        /// <para>
+        /// The match-wide counters are left alone. They describe the deaths the round has
+        /// resolved, and a player leaving does not un-resolve any of them.
+        /// </para>
+        /// </remarks>
+        public void Forget(ushort actorId)
+        {
+            if (actorId >= ProtocolConstants.MAX_ACTORS) return;
+
+            _kills[actorId] = 0;
+            _deaths[actorId] = 0;
+        }
+
         /// <summary>Empties the tally for a new round.</summary>
         public void Clear()
         {

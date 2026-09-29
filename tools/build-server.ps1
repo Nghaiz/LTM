@@ -110,7 +110,7 @@ Set it to your Unity Editor executable and re-run, e.g.:
     # method has to switch platforms itself, which forces a full asset reimport in the middle of
     # the build; and on this Windows host the Server subtarget it sets would otherwise have
     # landed on Windows, not Linux. The method still switches defensively for the menu-item path.
-    # Start-Process -Wait, NOT the call operator. Unity.exe is a WINDOWS_GUI subsystem binary
+    # Start-Process, NOT the call operator. Unity.exe is a WINDOWS_GUI subsystem binary
     # (PE Optional Header Subsystem = 2, checked against 6000.3.21f1), and PowerShell does not
     # wait for one: `& $UnityPath ...` returns the instant the process is spawned and leaves
     # $LASTEXITCODE unset. Every line below then ran against a build that had not happened —
@@ -140,7 +140,16 @@ Set it to your Unity Editor executable and re-run, e.g.:
     # forget it the same way.
     $stamp = Write-BuildStamp -RepoRoot $repoRoot -Dirty $unityProjectDirty
     try {
-        $unityProcess = Start-Process -FilePath $UnityPath -ArgumentList $unityArgs -Wait -PassThru
+        # -PassThru and then WaitForExit(), NOT -Wait. -Wait waits on the whole descendant tree,
+        # and Unity leaves processes behind that outlive it -- its Roslyn compiler server
+        # (VBCSCompiler) stayed up after the Editor closed on 2026-09-29 -- so a finished build
+        # need not return. build-player.ps1 measured the hang on 2026-09-03 and has carried this
+        # fix since; this script kept the old call.
+        $unityProcess = Start-Process -FilePath $UnityPath -ArgumentList $unityArgs -PassThru
+        $unityProcess.WaitForExit()
+        # Refresh before reading ExitCode, for build-player.ps1's reason: the property can read
+        # empty after WaitForExit, and an empty code compares as a failed build.
+        $unityProcess.Refresh()
         $unityExit = $unityProcess.ExitCode
     }
     finally {

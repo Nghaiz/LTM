@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Vehicles;
 
@@ -35,6 +36,12 @@ namespace Ironfront.Net.Unity.Server
         private readonly VehicleBurnClock _burnClock;
         private readonly Func<uint> _currentTick;
 
+        /// <summary>
+        /// Who last took health off each vehicle while it was still alive, and on which tick. The
+        /// crew that dies with it is credited to that actor (feature 2, 2026-09-29).
+        /// </summary>
+        private readonly Dictionary<ushort, LastAttack> _lastAttacks = new Dictionary<ushort, LastAttack>();
+
         internal ServerVehicleDamageSink(
             ServerVehicleRegistry vehicles, VehicleBurnClock burnClock, Func<uint> currentTick)
         {
@@ -65,6 +72,12 @@ namespace Ironfront.Net.Unity.Server
                 DamageToWrecks++;
                 return VehicleDamageOutcome.NoOp;
             }
+
+            // Before the burn starts, not during it: the hit that empties a vehicle decides its
+            // fate, and a shot into the fire four seconds later must not steal the credit for
+            // the crew. An attacker of 0 is NetVehicleAuthority's "unknown" -- a crash, AutoDamage.
+            if (!state.Burning && attackerId != 0 && amount > 0f)
+                _lastAttacks[vehicleId] = new LastAttack(attackerId, _currentTick());
 
             float remaining = state.Health - amount;
             if (remaining < 0f) remaining = 0f;
@@ -99,6 +112,42 @@ namespace Ironfront.Net.Unity.Server
             _burnClock.StartBurning(vehicleId, burnTicks, _currentTick());
 
             return new VehicleDamageOutcome(0f, startedBurning: true, died: false);
+        }
+
+        /// <summary>
+        /// Who last damaged <paramref name="vehicleId"/> before it began to burn, if that was at
+        /// most <paramref name="withinTicks"/> ago.
+        /// </summary>
+        /// <remarks>
+        /// Bounded by age rather than cleared on despawn, which this sink never sees. A reused id
+        /// cannot inherit a record: the wreck holds its id for 15 s after <c>Die</c>
+        /// (<c>Vehicle.Die</c> invokes <c>Cleanup</c> then), so any record it left is already
+        /// past <see cref="Ironfront.Net.Replication.Server.DeathAttribution.DestroyerCreditSeconds"/>
+        /// before the next vehicle can take that id.
+        /// </remarks>
+        internal bool TryGetRecentAttacker(ushort vehicleId, uint withinTicks, out ushort attackerId)
+        {
+            if (_lastAttacks.TryGetValue(vehicleId, out LastAttack last)
+                && _currentTick() - last.Tick <= withinTicks)
+            {
+                attackerId = last.ActorId;
+                return true;
+            }
+
+            attackerId = 0;
+            return false;
+        }
+
+        private readonly struct LastAttack
+        {
+            public LastAttack(ushort actorId, uint tick)
+            {
+                ActorId = actorId;
+                Tick = tick;
+            }
+
+            public ushort ActorId { get; }
+            public uint Tick { get; }
         }
 
         /// <inheritdoc />

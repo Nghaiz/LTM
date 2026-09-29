@@ -134,11 +134,15 @@ public partial class GrenadeProjectile : Projectile
 			// the same possibly-null reference and handles it. The hitmarker is the thing being
 			// gated, and a shot nobody local fired has nobody local to mark for. Ordering it
 			// after Explode keeps the blast, which is the half a client is here to draw.
-			if (!Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
-				&& ActorManager.Explode(
-					base.transform.position, explosionConfiguration, source,
-					Ironfront.Net.Protocol.ExplosionKind.Grenade)
-				&& source != null && !source.aiControlled && NetContext.IsOffline)
+			bool exploded;
+			using (DeathContext.Weapon(sourceWeaponId))
+			{
+				exploded = !Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
+					&& ActorManager.Explode(
+						base.transform.position, explosionConfiguration, source,
+						Ironfront.Net.Protocol.ExplosionKind.Grenade);
+			}
+			if (exploded && source != null && !source.aiControlled && NetContext.IsOffline)
 			{
 				// V7 task 3: the hitmarker is server-driven on a network, arriving as
 				// S_HIT_CONFIRM to the thrower alone.

@@ -90,8 +90,13 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>Who killed this client last, for the deploy screen. P17 3.2.</summary>
         private ushort _lastKillerActorId;
-        private bool _lastKillerWasEnvironment;
         private int _lastKillerTeam = TeamId.None;
+
+        /// <summary>
+        /// This client's last death as the killfeed holds it, so the deploy screen can say HOW:
+        /// the weapon, the vehicle, or what the world did (feature 2, 2026-09-29).
+        /// </summary>
+        private KillfeedEntry _lastDeath;
 
         /// <summary>Whether the deploy screen is raised, so show and hide each fire once.</summary>
         private bool _deployShown;
@@ -913,6 +918,11 @@ namespace Ironfront.Net.Unity.Client
                 ChannelId.ReliableOrdered, new System.ReadOnlySpan<byte>(_payload, 0, total),
                 reliable: true);
 
+            // From here a snapshot saying the body is alive is the server's answer. Before it,
+            // one is a stale capture racing S_DEATH (bug 1 of the 2026-09-28 playtest) and
+            // ClientCombatState holds it back rather than respawning a corpse.
+            _state.NoteDeployRequested();
+
             // The client logged NOTHING about deploy, and that is why the 2026-09-04 playtest had
             // to be solved by reading source instead of logs: three log files, 18,929 lines, and
             // no way to tell a request that was never sent from one the server never answered.
@@ -1021,7 +1031,7 @@ namespace Ironfront.Net.Unity.Client
             // Update off the alive flag, so this lands before the frame that renders it, and a
             // snapshot-first death gets its killer named on the frame S_DEATH arrives.
             _lastKillerActorId = message.KillerActorId;
-            _lastKillerWasEnvironment = message.KilledByEnvironment;
+            _lastDeath = KillfeedEntry.From(in message, Time.time);
             _lastKillerTeam = message.KilledByEnvironment
                 ? TeamId.None
                 : (NetClientPresenterGuard.TryResolveActorTeam(message.KillerActorId, out byte team)
@@ -1191,7 +1201,9 @@ namespace Ironfront.Net.Unity.Client
             {
                 _deployShown = true;
                 _killerLabelStale = false;
-                hud.ShowDeploy(KillerLabel(), _lastKillerTeam);
+                hud.ShowDeploy(
+                    DeployCaption(),
+                    KillfeedWording.For(in _lastDeath).IsSentence ? TeamId.None : _lastKillerTeam);
             }
 
             hud.TickDeploy(
@@ -1199,21 +1211,21 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>
-        /// What the deploy screen calls whoever killed this client.
+        /// What the deploy screen says killed this client: "Killed by Minh  ·  RK-44", or
+        /// "You drowned" where it used to say "Killed by The world".
         /// </summary>
         /// <remarks>
-        /// The fallback is the killfeed's, verbatim: an id when no S_PLAYER_LIST has named that
-        /// actor. Manufacturing something friendlier would make a genuinely missing name
-        /// indistinguishable from a real one, which is the reason <c>PlayerNameTable</c> returns
-        /// null and leaves the wording to its caller.
+        /// The name is the killfeed's (<see cref="NetClientCombatPresenter.DisplayNameOf"/>): a
+        /// player's name, "Bot 23", or the id while nobody has said. The wording is
+        /// <see cref="KillfeedWording.DeployCaption"/>'s, so the screen and the feed agree.
         /// </remarks>
-        private string KillerLabel()
+        private string DeployCaption()
         {
-            if (_lastKillerWasEnvironment) return "The world";
+            string killer = _names != null
+                ? _names.DisplayNameOf(_lastKillerActorId)
+                : "actor " + _lastKillerActorId;
 
-            string fallback = "actor " + _lastKillerActorId;
-
-            return _names != null ? _names.Names.NameOr(_lastKillerActorId, fallback) : fallback;
+            return KillfeedWording.DeployCaption(in _lastDeath, killer);
         }
 
         /// <summary>Whether the HUD's Deploy control was pressed, clearing the edge.</summary>

@@ -115,6 +115,94 @@ public sealed class MatchScoreboard
 		// match and the networked one cannot end at different moments -- which they did, in
 		// opposite directions, until P11. Blue is team 0: Actor.Die passes the VICTIM's team,
 		// and a team-1 death is what credits blue.
+		CheckMargin();
+	}
+
+	/// <summary>Seconds of this round played. The time limit counts against it.</summary>
+	public float ElapsedSeconds { get; private set; }
+
+	/// <summary>Seconds since the last territory award.</summary>
+	private float territoryClock;
+
+	/// <summary>
+	/// Seconds left under a <paramref name="timeLimitSeconds"/> limit, or a negative value when
+	/// the round has none.
+	/// </summary>
+	public float SecondsRemaining(float timeLimitSeconds)
+	{
+		if (timeLimitSeconds <= 0f)
+		{
+			return -1f;
+		}
+		float left = timeLimitSeconds - ElapsedSeconds;
+		return left > 0f ? left : 0f;
+	}
+
+	/// <summary>
+	/// Advances the offline round's clock: the territory award and the time limit, the two
+	/// rules the networked match plays by in <c>MatchStateMachine</c>. Playtest 2026-09-28, bug 3.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Both runtimes, one rule.</b> The awards come from <c>ConquestScoreRule.TerritoryAward</c>
+	/// and the winner at the limit from <c>ConquestScoreRule.Leader</c>, the statics the server
+	/// calls, so an offline round and a networked one end the same way.
+	/// </para>
+	/// <para>
+	/// <b>A level score at the limit plays on</b> until the next point decides it, on both
+	/// runtimes: neither has a drawn-round screen worth showing, and scores in the hundreds are
+	/// rarely level for long.
+	/// </para>
+	/// </remarks>
+	public void Tick(float deltaSeconds, float territoryAwardSeconds, float timeLimitSeconds)
+	{
+		if (GameEnded || deltaSeconds <= 0f)
+		{
+			return;
+		}
+		ElapsedSeconds += deltaSeconds;
+
+		if (territoryAwardSeconds > 0f)
+		{
+			territoryClock += deltaSeconds;
+			while (territoryClock >= territoryAwardSeconds)
+			{
+				territoryClock -= territoryAwardSeconds;
+				int blue = ConquestScoreRule.TerritoryAward(BlueFlags, RedFlags);
+				int red = ConquestScoreRule.TerritoryAward(RedFlags, BlueFlags);
+				if (blue == 0 && red == 0)
+				{
+					continue;
+				}
+				BlueScore += blue;
+				RedScore += red;
+				Scored?.Invoke(blue > 0, red > 0);
+				Changed?.Invoke();
+				CheckMargin();
+				if (GameEnded)
+				{
+					return;
+				}
+			}
+		}
+
+		if (timeLimitSeconds > 0f && ElapsedSeconds >= timeLimitSeconds)
+		{
+			byte leader = ConquestScoreRule.Leader(BlueScore, RedScore);
+			if (leader == TeamId.Team0)
+			{
+				Win(true);
+			}
+			else if (leader == TeamId.Team1)
+			{
+				Win(false);
+			}
+		}
+	}
+
+	/// <summary>Ends the round when either side leads by the margin. The one copy of that test.</summary>
+	private void CheckMargin()
+	{
 		byte winner = ConquestScoreRule.Decide(BlueScore, RedScore, VictoryPoints);
 		if (winner == TeamId.Team0)
 		{
@@ -184,6 +272,8 @@ public sealed class MatchScoreboard
 		BlueFlags = 0;
 		RedFlags = 0;
 		GameEnded = false;
+		ElapsedSeconds = 0f;
+		territoryClock = 0f;
 		Changed?.Invoke();
 	}
 }

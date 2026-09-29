@@ -82,6 +82,14 @@ public class IngameMenuUi : MonoBehaviour
 	public void Menu()
 	{
 		MouseLook.paused = false;
+		// A matchmade match is left through the flow, which drops the game-server link and
+		// returns to the lobby still signed in. Loading the scene underneath it, all this did
+		// until 2026-09-29, left the flow in a match with the link up, and MULTIPLAYER on the
+		// menu it landed on did nothing until the game was restarted.
+		if (Ironfront.Net.Unity.NetClientBindings.TryLeaveMatch())
+		{
+			return;
+		}
 		SceneManager.LoadScene(1);
 	}
 

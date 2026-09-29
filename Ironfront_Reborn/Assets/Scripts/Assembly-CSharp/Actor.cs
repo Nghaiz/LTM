@@ -1372,7 +1372,9 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (ownsHealth && health <= 0f)
 		{
 			Die(impactForce);
-			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(this, impactForce, attacker);
+			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(
+				this, impactForce, attacker, DeathContext.Cause,
+				DeathContext.WeaponId, DeathContext.Vehicle, DeathContext.Detail);
 		}
 		else if (ragdoll.IsRagdoll())
 		{
@@ -1499,6 +1501,14 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	public bool EnterSeat(Seat seat)
 	{
+		// A corpse takes no seat, and the test comes first because InstantGetUp below would
+		// otherwise stand it up and give it the first-person camera before any refusal. A
+		// networked grant can outrun the death that should have stopped it -- bug 1 of the
+		// 2026-09-28 playtest put a shot-down pilot back on his feet in mid-air.
+		if (dead)
+		{
+			return false;
+		}
 		if (fallenOver)
 		{
 			InstantGetUp();
@@ -1616,7 +1626,11 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		rigidbody.rotation = quaternion;
 		animator.SetLayerWeight(1, 1f);
 		ik.turnBody = true;
-		if (drawWeapon && activeWeapon == null)
+		// Never for a corpse, whatever the caller asked. A client learns of a death before the
+		// messages that take the body out of its seat can all arrive -- a seat Left answering a
+		// request sent in the same moment reaches LeaveSeat() with the default draw -- and the
+		// offline Die never gets here with a weapon to draw, because it drops them first.
+		if (drawWeapon && !dead && activeWeapon == null)
 		{
 			SwitchToFirstAvailableWeapon();
 		}

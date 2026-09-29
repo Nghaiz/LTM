@@ -207,7 +207,15 @@ namespace Ironfront.Net.Replication.Projectiles
 
             ref readonly ProjectileConfig config = ref _catalog[message.Kind];
             var state = new BallisticState(position, velocity);
-            Ballistics.FastForward(ref state, in config, age, _tickDurationSeconds, in _gravity);
+
+            // Never a deployable. Its pose is the server's physics, landed on a floor this
+            // arithmetic cannot see: fast-forwarding a pack mid-bounce -- or at rest, where gravity
+            // alone sinks it -- drew it inside the floor, and the client's own rigidbody then
+            // dropped it a storey while the real one healed upstairs. Measured in the farmhouse
+            // on Island, 2026-09-29: at 6-9 ticks of catch-up the client's copy fell through in
+            // five throws of eight, the server's in none (playtest 2026-09-28, bug 4).
+            if (!DeployableKinds.Is(message.Kind))
+                Ballistics.FastForward(ref state, in config, age, _tickDurationSeconds, in _gravity);
 
             float remainingAfterCatchUp = remaining - age * _tickDurationSeconds;
             if (remainingAfterCatchUp < 0f) remainingAfterCatchUp = 0f;

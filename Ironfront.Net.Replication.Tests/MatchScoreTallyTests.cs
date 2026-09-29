@@ -129,6 +129,50 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A slot handed to a new player starts them at zero, and touches nobody else's row.
+        /// </summary>
+        /// <remarks>
+        /// Found in the v1.1.0 release test: a player slot keeps its actor id between occupants,
+        /// so whoever joined into a leaver's slot wore the leaver's kills and deaths on the board
+        /// and in the end-of-match report.
+        /// </remarks>
+        [Fact]
+        public void ForgetStartsOneActorAgain_AndOnlyThatActor()
+        {
+            var tally = new MatchScoreTally();
+
+            tally.RecordDeath(victimActorId: Bob, killerActorId: Alice);
+            tally.RecordDeath(victimActorId: Alice, killerActorId: Bob);
+            tally.RecordDeath(victimActorId: Carol, killerActorId: Alice);
+
+            tally.Forget(Alice);
+
+            Assert.Equal(0, tally.KillsOf(Alice));
+            Assert.Equal(0, tally.DeathsOf(Alice));
+            Assert.True(tally.IsUntouched(Alice));
+
+            // BY NAME: a Forget that cleared the wrong slot, or everybody's, moves these.
+            Assert.Equal(1, tally.KillsOf(Bob));
+            Assert.Equal(1, tally.DeathsOf(Bob));
+            Assert.Equal(1, tally.DeathsOf(Carol));
+
+            // The round's own count of resolved deaths does not go back.
+            Assert.Equal(3, tally.DeathsRecorded);
+        }
+
+        [Fact]
+        public void ForgettingAnIdOutsideTheActorSpaceIsHarmless()
+        {
+            var tally = new MatchScoreTally();
+            tally.RecordDeath(Bob, Alice);
+
+            tally.Forget((ushort)ProtocolConstants.MAX_ACTORS);
+
+            Assert.Equal(1, tally.KillsOf(Alice));
+            Assert.Equal(1, tally.DeathsOf(Bob));
+        }
+
+        /// <summary>
         /// Acceptance 2: a match with no kills reports an EMPTY list, not rows of zeroes.
         /// </summary>
         /// <remarks>

@@ -21,9 +21,12 @@ namespace Ironfront.Net.Replication.Combat
     /// in here — including out of <see cref="Occlusion"/> — cannot corrupt anything.
     /// </para>
     /// <para>
-    /// <b>Trap 5 — the shooter is never rewound.</b> They are at the server's present time;
-    /// the ray's origin and direction come from the caller and are used as given. Rewinding
-    /// the shooter as well would compute the shot from where they used to be.
+    /// <b>Trap 5 — the shooter is never rewound</b>, on foot. A player predicts their own
+    /// body, so the eye they aimed from is the server's present one; the ray's origin and
+    /// direction come from the caller and are used as given. A PASSENGER is the exception:
+    /// nobody predicts a vehicle but its driver, so a passenger's own seat is drawn as far in
+    /// the past as everything else, and <see cref="TryMeasureOwnTravel"/> measures how far to
+    /// move that origin back.
     /// </para>
     /// <para>
     /// <b>The interpolation constant is read, not assumed.</b>
@@ -43,9 +46,9 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>
-        /// Optional line-of-sight test against world geometry: origin, the point that was hit,
-        /// the distance between them, and <b>the actor that point belongs to</b>; returns true
-        /// when a wall is in the way.
+        /// Optional line-of-sight test against world geometry, asked once per shot for the box
+        /// that won; returns true when a wall is in the way. See <see cref="OcclusionQuery"/>
+        /// for what the engine is told, including <b>the actor the point belongs to</b>.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -56,7 +59,7 @@ namespace Ironfront.Net.Replication.Combat
         /// tests want and what a geometry-free test map gets.
         /// </para>
         /// <para>
-        /// <b>The victim's actor id is the fourth argument, and ledger row X-26 is why.</b> The
+        /// <b>The victim's actor id is in the query, and ledger row X-26 is why.</b> The
         /// endpoint of this query sits INSIDE the body that was hit, so the first thing a
         /// linecast meets there is that body's own collider. Measured on
         /// <c>artifacts/lane-b/x27-pinned-01..03</c>: all 34 occlusions across three runs were
@@ -66,7 +69,7 @@ namespace Ironfront.Net.Replication.Combat
         /// closer the pair got.
         /// </para>
         /// <para>
-        /// <b>The shooter's actor id is the fifth, for the same reason at the other end</b>
+        /// <b>The shooter's actor id is too, for the same reason at the other end</b>
         /// (playtest 2026-09-28, bug 5). The origin sits inside the shooter's own rig, and a
         /// shot fired down a slope passes out through that body's own box on its way — so the
         /// shooter's body was cover for their own shots, exactly as the victim's was for the
@@ -78,7 +81,7 @@ namespace Ironfront.Net.Replication.Combat
         /// know what a collider is, which is the whole point of the seam.
         /// </para>
         /// </remarks>
-        public Func<Vec3, Vec3, float, ushort, ushort, bool>? Occlusion { get; set; }
+        public Func<OcclusionQuery, bool>? Occlusion { get; set; }
 
         /// <summary>Shots resolved. Denominator for the hit-rate experiment.</summary>
         public long ShotsResolved { get; private set; }
@@ -123,22 +126,39 @@ namespace Ironfront.Net.Replication.Combat
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Half the RTT is the one-way trip the fire message took; the interpolation buffer is
-        /// how far behind the client was rendering when they pulled the trigger. Together they
-        /// are the age of the world the shooter was actually looking at.
+        /// <b>The whole round trip, not half of it.</b> The world a shooter sees is already a
+        /// one-way trip old when it arrives: <c>InterpolationClock</c> renders
+        /// <see cref="ProtocolConstants.INTERP_BUFFER_MS"/> behind the NEWEST snapshot the client
+        /// holds, and that snapshot left the server half a round trip ago. The fire message then
+        /// takes the other half to get here, and waits for the next tick to be applied (half a
+        /// tick on average). So the age of what was on screen when the trigger was pulled, seen
+        /// from the tick that resolves the shot, is
+        /// <c>rtt + INTERP_BUFFER_MS + MS_PER_TICK / 2</c>.
         /// </para>
         /// <para>
-        /// The clamp at <see cref="ProtocolConstants.MAX_REWIND_TICKS"/> (6 ticks, 200 ms) is
-        /// the anti-abuse limit from protocol-spec.md section 7.2, not a performance guard: a
-        /// cheater who inflates their reported ping would otherwise be able to shoot
-        /// arbitrarily far into the past.
+        /// This used <c>rtt / 2 + INTERP_BUFFER_MS</c> until 2026-09-29, and protocol-spec.md
+        /// section 7.1's own sequence diagram shows the gap: the client "sees B at ~tick 297" and
+        /// the formula rewinds to 301. Measured on the live Azure server from a client at
+        /// ~100 ms: 1,384 inputs, the tick that applied each one minus the tick being rendered
+        /// when it was generated, mean 7.1 ticks (an upper bound by about 0.75 tick, since a
+        /// snapshot only brackets the tick that applied it) against 5 rewound. That missing
+        /// ~60 ms is 0.3-0.4 m on a running soldier and more than a metre on a moving vehicle --
+        /// shots at a drawn body missed and shots ahead of it landed (playtest 2026-09-28,
+        /// bug 2).
+        /// </para>
+        /// <para>
+        /// The clamp at <see cref="ProtocolConstants.MAX_REWIND_TICKS"/> is the anti-abuse limit
+        /// from protocol-spec.md section 7.2, not a performance guard: a cheater who inflates
+        /// their reported ping would otherwise be able to shoot arbitrarily far into the past.
         /// </para>
         /// </remarks>
         public static int RewindTicks(float smoothedRttMs)
         {
             if (float.IsNaN(smoothedRttMs) || smoothedRttMs <= 0f) smoothedRttMs = 0f;
 
-            float rewindMs = smoothedRttMs * 0.5f + ProtocolConstants.INTERP_BUFFER_MS;
+            float rewindMs = smoothedRttMs
+                             + ProtocolConstants.INTERP_BUFFER_MS
+                             + ProtocolConstants.MS_PER_TICK * 0.5f;
             int ticks = (int)MathF.Round(rewindMs / ProtocolConstants.MS_PER_TICK);
 
             if (ticks < 0) ticks = 0;
@@ -150,7 +170,7 @@ namespace Ironfront.Net.Replication.Combat
         /// The tick a shot fired now by a client at this RTT should be resolved against.
         /// </summary>
         /// <remarks>
-        /// Saturates at 0 rather than wrapping. In the first 200 ms of a match
+        /// Saturates at 0 rather than wrapping. In the opening ticks of a match
         /// <paramref name="currentTick"/> is smaller than the rewind, and an unsigned
         /// subtraction there produces a tick near four billion — which no history frame
         /// matches, so every opening shot would silently fall back to the present.
@@ -160,6 +180,62 @@ namespace Ironfront.Net.Replication.Combat
             uint rewind = (uint)RewindTicks(smoothedRttMs);
             return currentTick > rewind ? currentTick - rewind : 0u;
         }
+
+        /// <summary>
+        /// How far the shooter's own body has moved since the tick a shot by a client at this
+        /// RTT is judged against, read from its hitbox history: present minus past, to be
+        /// SUBTRACTED from a present origin.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// For a shooter who sees their own body from an interpolated vehicle -- any seat but the
+        /// driver's, whose vehicle alone is predicted -- the camera the trigger was pulled from
+        /// rode the vehicle as it was <see cref="RewindTicks"/> ago, not as it is now. Firing from
+        /// the present seat moved the muzzle by the vehicle's travel over the rewind: 2-3 m at
+        /// jeep speed, which put a passenger's ray in FRONT of the driver sitting a metre ahead of
+        /// them. Playtest 2026-09-28, bug 2: riding in a car a bot was driving, a magazine
+        /// emptied into the driver did no damage.
+        /// </para>
+        /// <para>
+        /// The body rides the seat rigidly, so its own displacement is the seat's. Translation
+        /// only: the heading change over a rewind window is a few degrees, a decimetre at the
+        /// eye. False, and no correction, when the shooter has no frame at that tick or is not
+        /// among <paramref name="targets"/> -- the present origin is then the best available
+        /// answer, as it is for a target.
+        /// </para>
+        /// <para>
+        /// Asked once per trigger pull, not once per pellet: every pellet of a shotgun blast
+        /// leaves the same muzzle.
+        /// </para>
+        /// </remarks>
+        public bool TryMeasureOwnTravel(
+            ReadOnlySpan<HitscanTarget> targets, ushort actorId,
+            float smoothedRttMs, uint currentTick, out Vec3 travelled)
+        {
+            travelled = default;
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                ref readonly HitscanTarget self = ref targets[i];
+                if (self.ActorId != actorId) continue;
+
+                uint targetTick = ResolveTargetTick(currentTick, smoothedRttMs);
+                if (!_history.TryGetFrame(actorId, targetTick, out HitboxHistory.Frame frame)) break;
+
+                travelled = self.Present.Torso.Center - frame.Boxes.Torso.Center;
+                OwnTravelMeasured++;
+                return true;
+            }
+
+            OwnTravelUnmeasured++;
+            return false;
+        }
+
+        /// <summary>Seated origins moved back to the tick the shooter was seeing.</summary>
+        public long OwnTravelMeasured { get; private set; }
+
+        /// <summary>Seated origins left at the present because the shooter had no history frame.</summary>
+        public long OwnTravelUnmeasured { get; private set; }
 
         /// <summary>
         /// Fires one ray into the rewound world and returns the nearest actor it struck.
@@ -178,6 +254,11 @@ namespace Ironfront.Net.Replication.Combat
         /// The round reaches crews in enclosed seats. Only the sniper's does, as in the original;
         /// see <see cref="HitscanTarget.InEnclosedSeat"/>.
         /// </param>
+        /// <param name="shooterTravel">
+        /// How far <paramref name="origin"/> was moved back from the shooter's present eye, from
+        /// <see cref="TryMeasureOwnTravel"/>. Zero for a shooter on foot or driving. Only the
+        /// occlusion query reads it: the ray itself already starts where it should.
+        /// </param>
         public HitResult ResolveHitscan(
             ReadOnlySpan<HitscanTarget> targets,
             ushort shooterActorId,
@@ -186,7 +267,8 @@ namespace Ironfront.Net.Replication.Combat
             float maxDistance,
             float smoothedRttMs,
             uint currentTick,
-            bool piercing = false)
+            bool piercing = false,
+            in Vec3 shooterTravel = default)
         {
             ShotsResolved++;
 
@@ -206,6 +288,7 @@ namespace Ironfront.Net.Replication.Combat
             ushort bestActor = 0;
             HitboxType bestType = HitboxType.Body;
             bool bestUsedFallback = false;
+            Vec3 bestTravel = default;
 
             for (int i = 0; i < targets.Length; i++)
             {
@@ -220,11 +303,13 @@ namespace Ironfront.Net.Replication.Combat
 
                 HitboxSet boxes;
                 bool usedFallback;
+                Vec3 travel = default;
 
                 if (_history.TryGetFrame(target.ActorId, targetTick, out HitboxHistory.Frame frame))
                 {
                     boxes = frame.Boxes;
                     usedFallback = false;
+                    travel = target.Present.Torso.Center - frame.Boxes.Torso.Center;
                 }
                 else
                 {
@@ -251,6 +336,7 @@ namespace Ironfront.Net.Replication.Combat
                     bestActor = target.ActorId;
                     bestType = HitboxSet.TypeOf(box);
                     bestUsedFallback = usedFallback;
+                    bestTravel = travel;
                 }
             }
 
@@ -265,7 +351,10 @@ namespace Ironfront.Net.Replication.Combat
             // Walls last: an occluded shot is a miss, and asking the engine about geometry is
             // the most expensive thing here, so it runs once for the winner rather than once
             // per candidate box.
-            if (Occlusion != null && Occlusion(origin, point, bestDistance, bestActor, shooterActorId))
+            if (Occlusion != null
+                && Occlusion(new OcclusionQuery(
+                    in origin, in point, bestDistance, bestActor, shooterActorId,
+                    in bestTravel, in shooterTravel)))
             {
                 ShotsOccluded++;
                 return HitResult.Miss(targetTick);

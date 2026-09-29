@@ -59,6 +59,19 @@ namespace Ironfront.Net.Unity.Server
         /// the other two, which is the defect this property exists to close.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// Bumped whenever an actor is added or removed, so a reader keyed on the actor set can
+        /// tell it changed without diffing it.
+        /// </summary>
+        /// <remarks>
+        /// The scoreboard's reason, found in the v1.1.0 release test: a room's bots enter the
+        /// match 30 s after the first player deploys, by registering, and nothing re-sent
+        /// S_PLAYER_SCORES until the first death, so the board listed two humans in a match of
+        /// fourteen until somebody died. A claim or a release does not move it: those change who
+        /// holds a body without changing the set, and the join and leave paths say so themselves.
+        /// </remarks>
+        public int Revision { get; private set; }
+
         public int ClaimableCount
         {
             get
@@ -106,6 +119,7 @@ namespace Ironfront.Net.Unity.Server
             }
 
             _actors.Add(actor);
+            Revision++;
         }
 
         /// <summary>
@@ -127,7 +141,7 @@ namespace Ironfront.Net.Unity.Server
             ushort actorId = actor.ActorId;
 
             actor.Release();
-            _actors.Remove(actor);
+            if (_actors.Remove(actor)) Revision++;
 
             // Back to the pool, which quarantines it rather than handing it straight out again.
             if (_idPool != null) _idPool.Release(actorId, NowSeconds());
@@ -308,6 +322,7 @@ namespace Ironfront.Net.Unity.Server
         private void Clear()
         {
             _actors.Clear();
+            Revision++;
             _nextAutoId = 1;
             _idPool = null;
             ActorUnregistered = null;

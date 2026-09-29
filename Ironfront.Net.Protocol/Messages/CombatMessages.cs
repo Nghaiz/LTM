@@ -68,15 +68,27 @@ namespace Ironfront.Net.Protocol
     /// S_DEATH (0x44). protocol-spec.md section 4.6.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// On receipt the client enables the ragdoll LOCALLY, plays audio and updates the
     /// killfeed. Corpses are never synchronized between clients (architecture.md AD-4) —
     /// the force vector exists so each client's ragdoll flies in roughly the right
     /// direction without a byte of ongoing replication.
+    /// </para>
+    /// <para>
+    /// <b>The detail tail (1.1, 2026-09-29).</b> Three optional bytes after the twelve: the
+    /// weapon, the vehicle and <see cref="DeathDetail"/>, so the killfeed can say HOW (playtest
+    /// 2026-09-28, feature 2). Every message is length-framed, and a 1.0 client reads its twelve
+    /// bytes and never looks further, so the tail needs no version change;
+    /// <see cref="TryParse"/> takes a message with or without it.
+    /// </para>
     /// </remarks>
     public readonly struct DeathMessage
     {
-        /// <summary>u16 + u16 + u8 + i16 x 3 + u8 = 12 bytes.</summary>
+        /// <summary>u16 + u16 + u8 + i16 x 3 + u8 = 12 bytes, without the detail tail.</summary>
         public const int Size = 12;
+
+        /// <summary>With the detail tail: u8 weapon + u8 vehicle + u8 detail.</summary>
+        public const int SizeWithDetail = Size + 3;
 
         /// <summary>Sentinel killer id meaning "killed by the environment".</summary>
         public const ushort EnvironmentKiller = 0xFFFF;
@@ -88,9 +100,39 @@ namespace Ironfront.Net.Protocol
         public readonly short ForceX, ForceY, ForceZ;
         public readonly byte HitboxHit;
 
+        /// <summary>The weapon that killed, as a <see cref="WeaponIds"/> id; <c>NONE</c> when none did.</summary>
+        public readonly byte WeaponId;
+
+        /// <summary>The vehicle the death involved, as a <see cref="VehicleIds"/> id; <c>NONE</c> when none.</summary>
+        public readonly byte VehicleType;
+
+        /// <summary>How the vehicle was involved, and whether it was a melee kill.</summary>
+        public readonly DeathDetail Detail;
+
+        /// <summary>Whether the tail was sent. A 1.0 server never sends it.</summary>
+        public readonly bool HasDetail;
+
         public DeathMessage(
             ushort victimActorId, ushort killerActorId, CauseOfDeath cause,
             short forceX, short forceY, short forceZ, byte hitboxHit)
+            : this(victimActorId, killerActorId, cause, forceX, forceY, forceZ, hitboxHit,
+                   WeaponIds.NONE, VehicleIds.NONE, DeathDetail.None, hasDetail: false)
+        {
+        }
+
+        public DeathMessage(
+            ushort victimActorId, ushort killerActorId, CauseOfDeath cause,
+            short forceX, short forceY, short forceZ, byte hitboxHit,
+            byte weaponId, byte vehicleType, DeathDetail detail)
+            : this(victimActorId, killerActorId, cause, forceX, forceY, forceZ, hitboxHit,
+                   weaponId, vehicleType, detail, hasDetail: true)
+        {
+        }
+
+        private DeathMessage(
+            ushort victimActorId, ushort killerActorId, CauseOfDeath cause,
+            short forceX, short forceY, short forceZ, byte hitboxHit,
+            byte weaponId, byte vehicleType, DeathDetail detail, bool hasDetail)
         {
             VictimActorId = victimActorId;
             KillerActorId = killerActorId;
@@ -99,6 +141,10 @@ namespace Ironfront.Net.Protocol
             ForceY        = forceY;
             ForceZ        = forceZ;
             HitboxHit     = hitboxHit;
+            WeaponId      = weaponId;
+            VehicleType   = vehicleType;
+            Detail        = detail;
+            HasDetail     = hasDetail;
         }
 
         public bool KilledByEnvironment => KillerActorId == EnvironmentKiller;
@@ -113,6 +159,14 @@ namespace Ironfront.Net.Protocol
             w.WriteI16(ForceY);
             w.WriteI16(ForceZ);
             w.WriteU8(HitboxHit);
+
+            if (HasDetail)
+            {
+                w.WriteU8(WeaponId);
+                w.WriteU8(VehicleType);
+                w.WriteU8((byte)Detail);
+            }
+
             return w.Ok ? w.Position : -1;
         }
 
@@ -127,7 +181,22 @@ namespace Ironfront.Net.Protocol
             byte hitbox   = r.ReadU8();
             if (!r.Ok) return false;
 
-            message = new DeathMessage(victim, killer, (CauseOfDeath)cause, fx, fy, fz, hitbox);
+            // The tail is optional: a 1.0 server sends twelve bytes. A partial tail is a
+            // malformed message, not a shorter one -- reading half of it would name the wrong gun.
+            if (r.Remaining == 0)
+            {
+                message = new DeathMessage(victim, killer, (CauseOfDeath)cause, fx, fy, fz, hitbox);
+                return true;
+            }
+
+            byte weapon  = r.ReadU8();
+            byte vehicle = r.ReadU8();
+            byte detail  = r.ReadU8();
+            if (!r.Ok) return false;
+
+            message = new DeathMessage(
+                victim, killer, (CauseOfDeath)cause, fx, fy, fz, hitbox,
+                weapon, vehicle, (DeathDetail)detail);
             return true;
         }
     }

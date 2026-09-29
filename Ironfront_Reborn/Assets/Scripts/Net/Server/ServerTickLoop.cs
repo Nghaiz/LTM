@@ -76,6 +76,16 @@ namespace Ironfront.Net.Unity.Server
         private bool _scoresDirty;
 
         /// <summary>
+        /// The <see cref="ServerActorRegistry.Revision"/> the last score table was built from.
+        /// </summary>
+        /// <remarks>
+        /// A room's bots join the match by registering, not through a connection, so no join
+        /// path marks the table dirty for them: without this the board showed only the humans
+        /// until the first death.
+        /// </remarks>
+        private int _scoredRosterRevision = -1;
+
+        /// <summary>
         /// Per-player kills and deaths for this match. Phase P6 task 3.1, checklist A13.
         /// </summary>
         /// <remarks>
@@ -245,6 +255,8 @@ namespace Ironfront.Net.Unity.Server
                 LeanClearance = LeanClearance,
                 // A seated shooter fires from the seat's camera, which only the engine can place.
                 SeatedEye = SeatedEye,
+                // ... and a passenger's camera is an interpolated one; see RidesAsPassenger.
+                RidesAsPassenger = RidesAsPassenger,
             };
             // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
             // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
@@ -781,8 +793,16 @@ namespace Ironfront.Net.Unity.Server
             _ticksOwedThisStep = 0;
 
             // P18 task 3.1. Once per step that ran ticks, and only when a death moved the
-            // numbers -- the send rule the phase specifies, expressed where the tick boundary
-            // already is. A step that resolved five deaths sends one table.
+            // numbers or the set of actors changed -- the send rule the phase specifies,
+            // expressed where the tick boundary already is. A step that resolved five deaths
+            // sends one table.
+            int rosterRevision = ServerActorRegistry.Instance.Revision;
+            if (rosterRevision != _scoredRosterRevision)
+            {
+                _scoredRosterRevision = rosterRevision;
+                _scoresDirty = true;
+            }
+
             if (_scoresDirty) EmitPlayerScores();
 
             // One sample per fixed step that actually ran ticks, covering the input stage, the
@@ -864,9 +884,6 @@ namespace Ironfront.Net.Unity.Server
 
         private void BuildAndSendSnapshots()
         {
-            _world.ServerTick = _scheduler.CurrentTick;
-            ServerActorRegistry.Instance.CaptureInto(_world);
-
             // V4. Deaths are resolved BEFORE the capture, and that ordering is the whole of
             // acceptance criterion 9.
             //
@@ -882,7 +899,22 @@ namespace Ironfront.Net.Unity.Server
             //
             // Killing first means the despawn unregisters the vehicle, so the capture below
             // simply does not see it. No filter, no dead-entry special case.
+            //
+            // THE ACTOR CAPTURE TOO, and that half was missed. It sat above this call, so a
+            // vehicle that burned out killed its crew (Vehicle.Die -> Actor.Die ->
+            // ServerCombatEvents.ReportDeath) AFTER the actors had been captured: S_DEATH went out
+            // on the reliable channel at once, and this tick's snapshot followed it carrying the
+            // crew as they were a moment earlier -- alive, and already out of the seat, because
+            // the seat table had let go of them. The client read that as a respawn and played
+            // the whole deploy on the corpse: a pilot shot down or crashed jumped out of the
+            // cockpit drawing his rifle in mid-air, then got the deploy screen (playtest
+            // 2026-09-28, bug 1; reproduced live 2026-09-29 by flying a helicopter into the
+            // ground). Capturing after the burn puts every death in the same snapshot as its
+            // S_DEATH.
             AdvanceVehicleBurn();
+
+            _world.ServerTick = _scheduler.CurrentTick;
+            ServerActorRegistry.Instance.CaptureInto(_world);
 
             // Reads each vehicle's Rigidbody once per snapshot, not once per viewer — quantizing
             // here is what makes change detection mean anything, because a vehicle idling on a
@@ -1425,9 +1457,13 @@ namespace Ironfront.Net.Unity.Server
         /// left behind, defended by a sentence that had gone stale.
         /// </para>
         /// </remarks>
+        /// <param name="weaponId">The killing hand weapon, for the killfeed; <c>NONE</c> when none.</param>
+        /// <param name="vehicleType">The vehicle the death involved, for the killfeed; <c>NONE</c> when none.</param>
+        /// <param name="detail">How that vehicle was involved (<see cref="DeathAttribution"/>).</param>
         public void EmitDeath(
             ushort victimActorId, ushort killerActorId, in Vec3 force, byte hitbox,
-            CauseOfDeath cause)
+            CauseOfDeath cause, byte weaponId = WeaponIds.NONE, byte vehicleType = VehicleIds.NONE,
+            DeathDetail detail = DeathDetail.None)
         {
             float now = _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE;
 
@@ -1464,12 +1500,15 @@ namespace Ironfront.Net.Unity.Server
                 break;
             }
 
+            // Always with the detail tail, even when every byte of it is zero: a 1.0 client reads
+            // its twelve bytes and stops, and a 1.1 client then knows "no weapon" was said rather
+            // than left unsaid. protocol-spec.md section 4.6.
             var message = new DeathMessage(
                 victimActorId, killerActorId, cause,
                 Quantize.PackVel16(force.X),
                 Quantize.PackVel16(force.Y),
                 Quantize.PackVel16(force.Z),
-                hitbox);
+                hitbox, weaponId, vehicleType, detail);
 
             int written = ServerEventWriter.WriteDeath(_eventPayload, in message);
             if (written >= 0)
@@ -1494,6 +1533,17 @@ namespace Ironfront.Net.Unity.Server
             // explosion must not become four reliable broadcasts.
             _scoresDirty = true;
         }
+
+        /// <summary>
+        /// Who emptied a vehicle recently enough to be credited with the crew that dies with it.
+        /// </summary>
+        /// <remarks>
+        /// The sink records the hit; the window is <see cref="DeathAttribution"/>'s, so the rule
+        /// and the number it is judged by live together in the tested library.
+        /// </remarks>
+        internal bool TryGetVehicleDestroyer(ushort vehicleId, out ushort attackerActorId)
+            => _vehicleDamageSink.TryGetRecentAttacker(
+                vehicleId, DeathAttribution.DestroyerCreditTicks, out attackerActorId);
 
         /// <summary>
         /// Sends S_EXPLOSION to every client within earshot of the blast. phase-V1 task 2.
@@ -2049,6 +2099,11 @@ namespace Ironfront.Net.Unity.Server
                 $"[net] conn {connectionId} player {info.PlayerId} joined on team {ticketTeam} "
                 + $"(ticket) -> actor {actor.ActorId} team {actor.Team} (body)");
 
+            // A slot keeps its actor id from one occupant to the next, and the tally is keyed by
+            // it: without this, a player who joined into a leaver's slot wore the leaver's kills
+            // and deaths on every board and in the end-of-match report to the master.
+            _scoreTally.Forget(actor.ActorId);
+
             var player = new ServerPlayer(
                 connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),
                 info.PlayerId)
@@ -2266,21 +2321,16 @@ namespace Ironfront.Net.Unity.Server
         /// second count assembled here would be a second answer to a question that has one.
         /// </para>
         /// <para>
-        /// <b>Every registered actor gets a row, bots included</b> (P18 § 3.3, and the default it
-        /// records). The team score moves on every death regardless of who died, so a scoreboard
-        /// that omitted the bots could not be reconciled with the number above it — criterion 7
-        /// is that arithmetic. It also means a live player who has not killed anybody appears as
-        /// a 0/0 row rather than vanishing, which is what a player looking for their own name
-        /// expects.
+        /// <b>Every actor in the match gets a row, bots included</b> (P18 § 3.3, and the default
+        /// it records). The team score moves on every death regardless of who died, so a
+        /// scoreboard that omitted the bots could not be reconciled with the number above it —
+        /// criterion 7 is that arithmetic. It also means a live player who has not killed anybody
+        /// appears as a 0/0 row rather than vanishing, which is what a player looking for their
+        /// own name expects. Which actors are in the match is <see cref="FillScoreRows"/>'s call.
         /// </para>
         /// <para>
         /// <b>Actors, not <c>_players</c>.</b> The player list is human connections; the tally
         /// counts whoever died. Iterating the registry is what makes those two agree.
-        /// </para>
-        /// <para>
-        /// The counters are clamped to <c>ushort</c> rather than wrapped. A match that somehow
-        /// passes 65535 kills renders a stuck maximum, which reads as an anomaly; a wrapped
-        /// counter renders as a small plausible number, which does not.
         /// </para>
         /// </remarks>
         private void EmitPlayerScores()
@@ -2289,32 +2339,8 @@ namespace Ironfront.Net.Unity.Server
 
             if (Transport == null) return;
 
-            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
-
-            int count = 0;
-            for (int i = 0; i < actors.Count && count < _playerScoreEntries.Length; i++)
-            {
-                NetServerActor actor = actors[i];
-                if (actor == null) continue;
-
-                ushort actorId = actor.ActorId;
-
-                // Skipped rather than truncated, for EmitPlayerList's reason: a truncated id
-                // credits the WRONG player, which is worse than crediting none.
-                if (actorId > byte.MaxValue) continue;
-
-                _playerScoreEntries[count].ActorId = (byte)actorId;
-                _playerScoreEntries[count].Kills   = ClampToU16(_scoreTally.KillsOf(actorId));
-                _playerScoreEntries[count].Deaths  = ClampToU16(_scoreTally.DeathsOf(actorId));
-
-                // The side, from the actor the server owns rather than from the snapshot the
-                // client will receive. The snapshot carries a team too, but InterestManager sheds
-                // actors under a per-snapshot ceiling, so a client holds one only for the actors
-                // it currently sees -- and a scoreboard has to place every row. See
-                // PlayerScoreEntry.Team for why that is not a second source of truth.
-                _playerScoreEntries[count].Team    = actor.Team;
-                count++;
-            }
+            int count = FillScoreRows(
+                ServerActorRegistry.Instance.Actors, _scoreTally, _playerScoreEntries);
 
             int written = ServerEventWriter.WritePlayerScores(
                 _eventPayload,
@@ -2332,6 +2358,57 @@ namespace Ironfront.Net.Unity.Server
             BroadcastReliable(
                 new ReadOnlySpan<byte>(_eventPayload, 0, written),
                 (byte)ServerEventWriter.ReliableChannel);
+        }
+
+        /// <summary>
+        /// Writes one S_PLAYER_SCORES row per actor in the match into <paramref name="rows"/>
+        /// and returns how many it wrote.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An unclaimed player slot is not in the match</b>, by <see cref="IsAnnounceable"/>,
+        /// the rule that already keeps it out of every spawn announce (X-18).
+        /// <c>ServerPlayerSlotPool</c> parks sixteen bodies at startup, and every one of them
+        /// is registered, so before this rule the board listed each as a 0/0 player named
+        /// "actor 3" -- live on 2026-09-29, fourteen of them beside two humans, and the header
+        /// counted 28 players in a match that had 14. A body joins the table when it is claimed
+        /// and leaves it when it is released; both paths already mark the scores dirty.
+        /// </para>
+        /// <para>
+        /// The counters are clamped to <c>ushort</c> rather than wrapped. A match that somehow
+        /// passes 65535 kills renders a stuck maximum, which reads as an anomaly; a wrapped
+        /// counter renders as a small plausible number, which does not.
+        /// </para>
+        /// </remarks>
+        internal static int FillScoreRows(
+            IReadOnlyList<NetServerActor> actors, MatchScoreTally tally, PlayerScoreEntry[] rows)
+        {
+            int count = 0;
+            for (int i = 0; i < actors.Count && count < rows.Length; i++)
+            {
+                NetServerActor actor = actors[i];
+                if (!IsAnnounceable(actor)) continue;
+
+                ushort actorId = actor.ActorId;
+
+                // Skipped rather than truncated, for EmitPlayerList's reason: a truncated id
+                // credits the WRONG player, which is worse than crediting none.
+                if (actorId > byte.MaxValue) continue;
+
+                rows[count].ActorId = (byte)actorId;
+                rows[count].Kills   = ClampToU16(tally.KillsOf(actorId));
+                rows[count].Deaths  = ClampToU16(tally.DeathsOf(actorId));
+
+                // The side, from the actor the server owns rather than from the snapshot the
+                // client will receive. The snapshot carries a team too, but InterestManager sheds
+                // actors under a per-snapshot ceiling, so a client holds one only for the actors
+                // it currently sees -- and a scoreboard has to place every row. See
+                // PlayerScoreEntry.Team for why that is not a second source of truth.
+                rows[count].Team    = actor.Team;
+                count++;
+            }
+
+            return count;
         }
 
         /// <summary>A tally count as the wire's <c>u16</c>, saturating rather than wrapping.</summary>
@@ -2404,30 +2481,43 @@ namespace Ironfront.Net.Unity.Server
         /// <para>
         /// Triggers are ignored: a capture-point volume or a water trigger is not cover.
         /// </para>
+        /// <para>
+        /// <b>A vehicle is judged where the shooter saw it</b> (playtest 2026-09-28, bug 2). The
+        /// segment lies in the rewound world and a hull stands where it is now, metres further
+        /// along at speed. So the hull the victim sits in, and the one the shooter sits in, are
+        /// left out of the first query and asked again with the segment moved by that crew's
+        /// travel; <see cref="OcclusionQuery"/> says why that is the same question. Against the
+        /// present hull alone, a car driving at the shooter put its bonnet across a shot at its
+        /// own driver, and a car driving away left its driver uncovered.
+        /// </para>
         /// </remarks>
-        private static bool IsOccluded(
-            Vec3 origin, Vec3 point, float distance, ushort victimActorId, ushort shooterActorId)
+        private static bool IsOccluded(OcclusionQuery query)
         {
-            Vector3 from = MovementSimulation.ToUnity(origin);
-            Vector3 to = MovementSimulation.ToUnity(point);
+            Vector3 from = MovementSimulation.ToUnity(query.Origin);
+            Vector3 to = MovementSimulation.ToUnity(query.Point);
 
             Vector3 segment = to - from;
             float length = segment.magnitude;
             if (length <= 0.0001f) return false;   // muzzle inside the box: nothing to occlude
 
-            Transform victim = VictimRoot(victimActorId);
+            Vector3 direction = segment / length;
+
+            Transform victim = VictimRoot(query.VictimActorId);
 
             // The other end of X-26 (playtest 2026-09-28, bug 5): the origin sits inside the
             // shooter's own rig, and a shot fired down a slope leaves through that body's own
             // box. A body is not cover for the shots it fires.
-            Transform shooter = VictimRoot(shooterActorId);
+            Transform shooter = VictimRoot(query.ShooterActorId);
+
+            Transform victimVehicle = SeatedVehicleRoot(query.VictimActorId);
+            Transform shooterVehicle = SeatedVehicleRoot(query.ShooterActorId);
 
             // RaycastNonAlloc, not Linecast: the nearest hit may be the victim's own rig bone,
             // and a query that returns only the nearest cannot look past it. The buffer is a
             // reused static -- this runs on the tick loop, and the one loop that must not
             // allocate is this one (M1 criterion 9).
             int count = Physics.RaycastNonAlloc(
-                from, segment / length, _occlusionHits, length, BulletBlockingLayers,
+                from, direction, _occlusionHits, length, BulletBlockingLayers,
                 QueryTriggerInteraction.Ignore);
 
             if (count >= _occlusionHits.Length) OcclusionBufferSaturations++;
@@ -2446,10 +2536,30 @@ namespace Ironfront.Net.Unity.Server
                 if (IsPartOf(candidate.collider, victim)) continue;
                 if (IsPartOf(candidate.collider, shooter)) continue;
 
+                // Asked again below, where the shooter saw them. A seated body hangs off its
+                // seat, so this also skips the crews: a body is judged by its hitboxes.
+                if (IsPartOf(candidate.collider, victimVehicle)) continue;
+                if (IsPartOf(candidate.collider, shooterVehicle)) continue;
+
                 if (found && candidate.distance >= nearest.distance) continue;
 
                 nearest = candidate;
                 found = true;
+            }
+
+            if (!found && victimVehicle != null)
+            {
+                found = TryHitHull(
+                    from + MovementSimulation.ToUnity(query.VictimTravel), direction, length,
+                    victimVehicle, out nearest);
+            }
+
+            // Sharing a vehicle, the two crews travelled together and the pass above was this one.
+            if (!found && shooterVehicle != null && shooterVehicle != victimVehicle)
+            {
+                found = TryHitHull(
+                    from + MovementSimulation.ToUnity(query.ShooterTravel), direction, length,
+                    shooterVehicle, out nearest);
             }
 
             if (!found)
@@ -2467,6 +2577,49 @@ namespace Ironfront.Net.Unity.Server
                 length);
 
             return true;
+        }
+
+        /// <summary>
+        /// The nearest collider of <paramref name="hull"/> on a segment, skipping the bodies
+        /// seated in it -- a body is judged by its hitboxes, never as cover.
+        /// </summary>
+        private static bool TryHitHull(
+            Vector3 from, Vector3 direction, float length, Transform hull, out RaycastHit nearest)
+        {
+            nearest = default;
+            bool found = false;
+
+            int count = Physics.RaycastNonAlloc(
+                from, direction, _occlusionHits, length, BulletBlockingLayers,
+                QueryTriggerInteraction.Ignore);
+
+            if (count >= _occlusionHits.Length) OcclusionBufferSaturations++;
+
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit candidate = _occlusionHits[i];
+
+                if (!IsPartOf(candidate.collider, hull)) continue;
+                if (candidate.collider.GetComponentInParent<NetServerActor>() != null) continue;
+                if (found && candidate.distance >= nearest.distance) continue;
+
+                nearest = candidate;
+                found = true;
+            }
+
+            return found;
+        }
+
+        /// <summary>The vehicle <paramref name="actorId"/> sits in, or null on foot.</summary>
+        private static Transform SeatedVehicleRoot(ushort actorId)
+        {
+            if (actorId == 0) return null;
+
+            ServerVehicleRegistry vehicles = ServerVehicleRegistry.Instance;
+            if (!vehicles.Registry.TryFindSeatOf(actorId, out ushort vehicleId, out _)) return null;
+
+            GameObject vehicle = vehicles.GameObjectOf(vehicleId);
+            return vehicle != null ? vehicle.transform : null;
         }
 
         /// <summary>
@@ -2518,6 +2671,14 @@ namespace Ironfront.Net.Unity.Server
                 0f, ProtocolConstants.SEATED_EYE_HEIGHT, ProtocolConstants.SEATED_EYE_FORWARD));
         }
 
+        /// <summary>
+        /// True when <paramref name="actorId"/> sits in a seat other than the driver's: the
+        /// seats whose vehicle their client interpolates rather than predicts.
+        /// </summary>
+        private static bool RidesAsPassenger(ushort actorId)
+            => ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(actorId, out _, out byte seat)
+               && seat != VehicleInputAuthority.DriverSeatIndex;
+
         /// <summary><c>PlayerFpParent.LateUpdate</c>'s sphere radius.</summary>
         private const float LeanSweepRadius = 0.3f;
 
@@ -2525,7 +2686,8 @@ namespace Ironfront.Net.Unity.Server
         private const int LeanSweepLayers = 1;
 
         /// <summary>
-        /// Shots where every collider on the segment belonged to the victim, so nothing blocked.
+        /// Shots where every collider on the segment belonged to the victim or the shooter, or
+        /// to a hull that was not in the way where the shooter saw it, so nothing blocked.
         /// X-26's counter: it rises exactly where the pre-fix build reported an occlusion.
         /// </summary>
         internal static long SelfOcclusionsIgnored { get; private set; }
