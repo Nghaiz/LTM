@@ -85,6 +85,7 @@ namespace Ironfront.Net.Configuration
         {
             new MapEntry(1, "Dustbowl", "Dustbowl"),
             new MapEntry(2, "Island", "Island"),
+            new MapEntry(3, "ForestLake", "Forest Lake"),
         };
 
         /// <summary>The scene hosting <paramref name="mapId"/>, or false if no row claims it.</summary>
