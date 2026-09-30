@@ -45,3 +45,25 @@ Ironfront_Reborn/Assets/TerrainData/*.asset binary
 .gitignore      text eol=lf
 CODEOWNERS      text eol=lf
 LICENSE         text eol=lf
+
+# Git LFS: large binary art is stored as pointers, so a clone fetches only the revision it checks
+# out rather than every version ever committed. The ForestLake terrain is tens of MB a revision
+# and the ForestLake environment pack's textures run to ~100 MB a file, which plain Git on GitHub
+# refuses outright. A machine needs `git lfs install` once (Git for Windows ships git-lfs).
+# Scoped to these paths on purpose: a repo-wide *.png rule would turn every PNG already committed
+# as a normal blob into a pending "modification".
+Ironfront_Reborn/Assets/TerrainData/ForestLake_Terrain.asset filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/ForestLake/**/*.png filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/ForestLake/**/*.PNG filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/ForestLake/**/*.tga filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/ForestLake/**/*.TGA filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/ForestLake/**/*.fbx filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/ForestLake/**/*.FBX filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/ForestLake/**/*.exr filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/ForestLake/**/*.psd filter=lfs diff=lfs merge=lfs -text
+# The weapon models the reskin (Assets/Editor/Weapons) bakes from: ~140 MB of meshes and
+# textures, the largest a 16 MB FBX.
+Ironfront_Reborn/Assets/WeaponModels/**/*.png filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/WeaponModels/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/WeaponModels/**/*.fbx filter=lfs diff=lfs merge=lfs -text
+Ironfront_Reborn/Assets/WeaponModels/**/*.obj filter=lfs diff=lfs merge=lfs -text
