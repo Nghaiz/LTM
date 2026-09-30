@@ -110,14 +110,17 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             Assert.False(PlayerScoresMessage.TryParse(buffer.AsSpan(0, written - 3), parsed, out _));
         }
 
-        /// <summary>A full table with the tail still fits one un-fragmented payload.</summary>
+        /// <summary>
+        /// A full page with the stats tail and the page tail fits one un-fragmented payload, and
+        /// so does the whole of a table sent in one message, at any roster size.
+        /// </summary>
         [Fact]
-        public void AFullTableWithTheTail_FitsOnePayload()
+        public void AFullPageWithBothTails_FitsOnePayload()
         {
-            Assert.True(PlayerScoresMessage.SizeWithStatsFor(ProtocolConstants.MAX_ACTORS)
-                        <= ProtocolConstants.MAX_CHANNEL_PAYLOAD);
             Assert.Equal(PlayerScoresMessage.MaxBodySize,
-                         PlayerScoresMessage.SizeWithStatsFor(ProtocolConstants.MAX_ACTORS));
+                         PlayerScoresMessage.SizeWithStatsFor(PlayerScoresMessage.RowsPerPage)
+                             + PlayerScoresMessage.PageTailSize);
+            Assert.True(PlayerScoresMessage.MaxBodySize <= ProtocolConstants.MAX_CHANNEL_PAYLOAD);
         }
     }
 }

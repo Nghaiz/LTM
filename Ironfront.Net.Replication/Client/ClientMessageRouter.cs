@@ -58,6 +58,18 @@ namespace Ironfront.Net.Replication.Client
         private readonly PlayerScoreEntry[] _playerScoreEntries =
             new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
 
+        /// <summary>
+        /// One S_PLAYER_SCORES message's rows, before they are known to be a whole table or a
+        /// page of one: the page tail comes after every row.
+        /// </summary>
+        private readonly PlayerScoreEntry[] _playerScorePage =
+            new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
+        /// <summary>Rows of a paged table gathered so far, and the page expected next (-1: none open).</summary>
+        private int _scoreRowsGathered;
+        private int _scoreNextPage = -1;
+        private int _scorePageCount;
+
         /// <summary>Buffers snapshots so remote actors can be drawn between them.</summary>
         public SnapshotInterpolator Interpolator { get; } = new SnapshotInterpolator();
 
@@ -514,7 +526,7 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
-        /// Parses a score table into the reusable row buffer and raises
+        /// Parses a score table, or one page of a longer one, into the reusable row buffer and raises
         /// <see cref="OnPlayerScores"/>.
         /// </summary>
         /// <remarks>
@@ -524,13 +536,57 @@ namespace Ironfront.Net.Replication.Client
         /// </remarks>
         private bool RoutePlayerScores(ReadOnlySpan<byte> body)
         {
-            if (!PlayerScoresMessage.TryParse(body, _playerScoreEntries, out int count))
+            if (!PlayerScoresMessage.TryParse(
+                    body, _playerScorePage, out int count, out int pageIndex, out int pageCount))
             {
                 MalformedMessages++;
                 return false;
             }
 
-            OnPlayerScores?.Invoke(_playerScoreEntries, count);
+            // A table sent whole: every table of up to RowsPerPage rows, and all a server before
+            // pages ever sent.
+            if (pageCount == 1)
+            {
+                _scoreNextPage = -1;
+                Array.Copy(_playerScorePage, _playerScoreEntries, count);
+                OnPlayerScores?.Invoke(_playerScoreEntries, count);
+                return true;
+            }
+
+            // A page of a longer table (2026-09-30). The channel is reliable and ordered and the
+            // server sends a table's pages back to back, so they arrive in order; anything else
+            // -- a page out of sequence, a count that changed, more rows than an actor id can
+            // name -- drops the table being gathered rather than showing half of one.
+            if (pageIndex == 0)
+            {
+                _scoreRowsGathered = 0;
+                _scorePageCount = pageCount;
+            }
+            else if (pageIndex != _scoreNextPage || pageCount != _scorePageCount)
+            {
+                _scoreNextPage = -1;
+                MalformedMessages++;
+                return false;
+            }
+
+            if (_scoreRowsGathered + count > _playerScoreEntries.Length)
+            {
+                _scoreNextPage = -1;
+                MalformedMessages++;
+                return false;
+            }
+
+            Array.Copy(_playerScorePage, 0, _playerScoreEntries, _scoreRowsGathered, count);
+            _scoreRowsGathered += count;
+
+            if (pageIndex < pageCount - 1)
+            {
+                _scoreNextPage = pageIndex + 1;
+                return true;
+            }
+
+            _scoreNextPage = -1;
+            OnPlayerScores?.Invoke(_playerScoreEntries, _scoreRowsGathered);
             return true;
         }
 

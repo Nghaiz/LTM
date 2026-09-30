@@ -2449,23 +2449,28 @@ namespace Ironfront.Net.Unity.Server
 
             int count = FillScoreRows(
                 ServerActorRegistry.Instance.Actors, _scoreTally, _playerScoreEntries, _pingMsOf);
+            var rows = new ReadOnlySpan<PlayerScoreEntry>(_playerScoreEntries, 0, count);
 
-            int written = ServerEventWriter.WritePlayerScores(
-                _eventPayload,
-                _playerScoreBody,
-                new ReadOnlySpan<PlayerScoreEntry>(_playerScoreEntries, 0, count));
-
-            if (written < 0)
+            // In pages of PlayerScoresMessage.RowsPerPage, back to back on the ordered channel,
+            // so each stays one un-fragmented payload: a table of 88 rows or more used to fail
+            // to frame here and was never sent (P29 capacity bench, 100 bots and 14 players).
+            int pages = PlayerScoresMessage.PageCountFor(count);
+            for (int page = 0; page < pages; page++)
             {
-                Debug.LogError(
-                    $"[net] S_PLAYER_SCORES with {count} row(s) did not frame. The scoreboard "
-                    + "will keep showing the previous table.");
-                return;
-            }
+                int written = ServerEventWriter.WritePlayerScores(_eventPayload, _playerScoreBody, rows, page);
 
-            BroadcastReliable(
-                new ReadOnlySpan<byte>(_eventPayload, 0, written),
-                (byte)ServerEventWriter.ReliableChannel);
+                if (written < 0)
+                {
+                    Debug.LogError(
+                        $"[net] S_PLAYER_SCORES page {page + 1} of {pages} ({count} row(s)) did not "
+                        + "frame. The scoreboard will keep showing the previous table.");
+                    return;
+                }
+
+                BroadcastReliable(
+                    new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                    (byte)ServerEventWriter.ReliableChannel);
+            }
         }
 
         /// <summary>
