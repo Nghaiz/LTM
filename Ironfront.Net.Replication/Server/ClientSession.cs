@@ -331,6 +331,16 @@ namespace Ironfront.Net.Replication.Server
         /// </remarks>
         public int ShedCursor;
 
+        /// <summary>The Mid bucket's own rotation. See <see cref="ShedCursor"/>, which is Near's.</summary>
+        /// <remarks>
+        /// One per interest level since the 2026-09-30 live test: a single cursor advanced by
+        /// everything admitted rotated each bucket by an unrelated step.
+        /// </remarks>
+        public int MidShedCursor;
+
+        /// <summary>The Far bucket's own rotation. See <see cref="MidShedCursor"/>.</summary>
+        public int FarShedCursor;
+
         /// <summary>
         /// The same rotation for the vehicle stream, and deliberately a <b>separate</b> cursor.
         /// </summary>
