@@ -44,9 +44,9 @@ namespace Ironfront.Net.Unity.Server
     [DisallowMultipleComponent]
     public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender, IShotAnnouncer
     {
-        /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the protocol ceiling.</summary>
+        /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the list's own ceiling, a row per connection.</summary>
         private readonly PlayerListEntry[] _playerListEntries =
-            new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+            new PlayerListEntry[PlayerListMessage.MaxEntries];
 
         /// <summary>The variable-length body S_PLAYER_LIST is framed from. Never a stackalloc.</summary>
         private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
@@ -948,7 +948,8 @@ namespace Ironfront.Net.Unity.Server
                 ClientSession session = _players[i].Session;
 
                 AnnounceNewActors(session);
-                AnnounceNewVehicles(session);
+                AnnounceNewVehicles(session, warnIfEmpty: !_players[i].VehicleTableChecked);
+                _players[i].VehicleTableChecked = true;
 
                 // Interest management picks which actors this client is sent and how often. The
                 // per-client view is what the encoder files as its baseline, so a client can
@@ -1306,7 +1307,7 @@ namespace Ironfront.Net.Unity.Server
         /// the frozen-copy symptom X-64 is named after.
         /// </para>
         /// </remarks>
-        private void AnnounceNewVehicles(ClientSession session)
+        private void AnnounceNewVehicles(ClientSession session, bool warnIfEmpty)
         {
             ServerVehicleRegistry vehicles = ServerVehicleRegistry.Instance;
             if (vehicles == null || Transport == null) return;
@@ -1328,8 +1329,10 @@ namespace Ironfront.Net.Unity.Server
             // both client logs contain the word "vehicle" zero times, which proves the absence
             // and says nothing about the cause -- and the server's log, which would have, was not
             // kept. This line is what makes the next occurrence decidable, and it is logged per
-            // join rather than once per process because a join is already a rare event.
-            if (liveCount == 0)
+            // join rather than once per process because a join is already a rare event -- per
+            // join, not per call: this runs every snapshot, and a round reset empties the table
+            // for every client at once (ServerPlayer.VehicleTableChecked).
+            if (liveCount == 0 && warnIfEmpty)
             {
                 Debug.LogWarning(
                     "[net] a client joined while the replicated vehicle table is EMPTY. No "
@@ -2073,6 +2076,13 @@ namespace Ironfront.Net.Unity.Server
             _respawnGate.ResetForNewRound(
                 _stillDeadPlayers, CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
+            // The bots of the new round. The world reset that ran just before this despawned the
+            // last round's and re-armed the release gate; the gate opens 30 s after a player body
+            // ENTERS the world, which only a deploy reports. Players still alive are carried into
+            // this round without deploying, so they are this round's anchor. B2, live test
+            // 2026-09-30: without it the second round released no bots at all.
+            NetBotRelease.NotifyPlayersCarriedIntoRound(CountPlayersCarriedAlive(_players));
+
             // Beside the respawn gate, because the two are stamped from the same death edge: a
             // corpse record surviving into the next round would report a body that no longer
             // exists as blocking a pad, forever.
@@ -2102,6 +2112,25 @@ namespace Ironfront.Net.Unity.Server
 
                 _players[i].Session.ResetWeapon();
             }
+        }
+
+        /// <summary>
+        /// Players whose body is in the world and alive: deployed at least once, not dead.
+        /// </summary>
+        /// <remarks>
+        /// The complement of the <c>_stillDeadPlayers</c> rule above, and for the same reason:
+        /// a player who never deployed has no body in the world yet, whatever its flags say.
+        /// </remarks>
+        internal static int CountPlayersCarriedAlive(IReadOnlyList<ServerPlayer> players)
+        {
+            int alive = 0;
+            for (int i = 0; i < players.Count; i++)
+            {
+                NetServerActor body = players[i].Actor;
+                if (body != null && body.IsAlive && !players[i].AwaitingFirstDeploy) alive++;
+            }
+
+            return alive;
         }
 
         /// <summary>
@@ -2449,23 +2478,28 @@ namespace Ironfront.Net.Unity.Server
 
             int count = FillScoreRows(
                 ServerActorRegistry.Instance.Actors, _scoreTally, _playerScoreEntries, _pingMsOf);
+            var rows = new ReadOnlySpan<PlayerScoreEntry>(_playerScoreEntries, 0, count);
 
-            int written = ServerEventWriter.WritePlayerScores(
-                _eventPayload,
-                _playerScoreBody,
-                new ReadOnlySpan<PlayerScoreEntry>(_playerScoreEntries, 0, count));
-
-            if (written < 0)
+            // In pages of PlayerScoresMessage.RowsPerPage, back to back on the ordered channel,
+            // so each stays one un-fragmented payload: a table of 88 rows or more used to fail
+            // to frame here and was never sent (P29 capacity bench, 100 bots and 14 players).
+            int pages = PlayerScoresMessage.PageCountFor(count);
+            for (int page = 0; page < pages; page++)
             {
-                Debug.LogError(
-                    $"[net] S_PLAYER_SCORES with {count} row(s) did not frame. The scoreboard "
-                    + "will keep showing the previous table.");
-                return;
-            }
+                int written = ServerEventWriter.WritePlayerScores(_eventPayload, _playerScoreBody, rows, page);
 
-            BroadcastReliable(
-                new ReadOnlySpan<byte>(_eventPayload, 0, written),
-                (byte)ServerEventWriter.ReliableChannel);
+                if (written < 0)
+                {
+                    Debug.LogError(
+                        $"[net] S_PLAYER_SCORES page {page + 1} of {pages} ({count} row(s)) did not "
+                        + "frame. The scoreboard will keep showing the previous table.");
+                    return;
+                }
+
+                BroadcastReliable(
+                    new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                    (byte)ServerEventWriter.ReliableChannel);
+            }
         }
 
         /// <summary>

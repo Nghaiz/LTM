@@ -2,17 +2,6 @@ using System.Collections.Generic;
 
 namespace Ironfront.Tools.TacticsTrainer
 {
-    /// <summary>
-    /// Which rounds a run trains on and which it is judged on. The two share no generated map and
-    /// no seed, so the test numbers are on rounds the tuner never saw.
-    /// </summary>
-    /// <remarks>
-    /// <b>Weighted to the maps the game has.</b> Only Dustbowl and Island ship, so they are played
-    /// several times each; twenty-four generated maps sit beside them so the weights learn the mode,
-    /// not two layouts. A first plan with four generated maps and one repeat scored the same profile
-    /// -0.20 on its training rounds and +0.09 on its test rounds: too few rounds, and the tuner
-    /// learned the maps it was shown.
-    /// </remarks>
     /// <summary>The three sets of rounds a run uses: to search on, to choose on, to report on.</summary>
     public sealed class TrainingSets
     {
@@ -32,8 +21,31 @@ namespace Ironfront.Tools.TacticsTrainer
             => new TrainingSets(TrainingPlan.TrainRounds(seed), TrainingPlan.ValidationRounds(seed), TrainingPlan.TestRounds(seed));
     }
 
+    /// <summary>
+    /// Which rounds a run trains on and which it is judged on. The two share no generated map and
+    /// no seed, so the test numbers are on rounds the tuner never saw.
+    /// </summary>
+    /// <remarks>
+    /// <b>Weighted to the maps the game has.</b> Only Dustbowl and Island ship, so they are played
+    /// several times each; twenty-four generated maps sit beside them so the weights learn the mode,
+    /// not two layouts. A first plan with four generated maps and one repeat scored the same profile
+    /// -0.20 on its training rounds and +0.09 on its test rounds: too few rounds, and the tuner
+    /// learned the maps it was shown.
+    /// </remarks>
     public static class TrainingPlan
     {
+        /// <summary>
+        /// The half of <paramref name="rounds"/> a candidate also plays against the P28 commander
+        /// (phase P29): every other seed, both sides of each, so a map's lopsided start still cancels.
+        /// </summary>
+        public static List<MatchSpec> LeagueOf(List<MatchSpec> rounds)
+        {
+            var league = new List<MatchSpec>(rounds.Count / 2 + 2);
+            for (int i = 0; i < rounds.Count; i++)
+                if ((i / 2) % 2 == 0) league.Add(rounds[i]);
+            return league;
+        }
+
         /// <summary>
         /// Side sizes trained and judged on: from a handful up to the 100-bot match the owner plans.
         /// Training on 8 to 32 alone left 50 a side at -0.28 on the test rounds.
@@ -59,6 +71,12 @@ namespace Ironfront.Tools.TacticsTrainer
 
         /// <summary>320 rounds of the same shape on other seeds and other generated maps.</summary>
         public static List<MatchSpec> TestRounds(ulong seed) => RoundsFor(seed ^ TestStream, TestSizes);
+
+        /// <summary>
+        /// Held-out rounds of the same shape at other side sizes: the game allows 0 to 50 bots a side,
+        /// 100 a match, and the training sizes do not cover the smallest.
+        /// </summary>
+        public static List<MatchSpec> TestRoundsAt(ulong seed, int[] sizes) => RoundsFor(seed ^ TestStream, sizes);
 
         /// <summary>
         /// A third 320, which picks the run's result from its finalists, so the test rounds are

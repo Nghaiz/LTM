@@ -217,21 +217,22 @@ namespace Ironfront.Net.Protocol.Tests
             }
         }
 
-        // -------------------------------------------- 5. 64 actors, seated, bit for bit
+        // -------------------------------------------- 5. every actor, seated, bit for bit
 
         [Fact]
-        public void ASeatedSixtyFourActorSnapshotIsSixteenSeventySevenAndReassemblesBitForBit()
+        public void AFullySeatedSnapshotOfEveryActorReassemblesBitForBit()
         {
             byte[] snapshot = BuildSeatedFullSnapshot();
 
-            // 13 + 64 * 26. The join baseline's worst case, and the number every bandwidth
-            // figure downstream of § 4.3 is computed from.
+            // 13 + 128 * 26. The join baseline's worst case, and the number every bandwidth
+            // figure downstream of § 4.3 is computed from. It was 13 + 64 * 26 = 1677 in two
+            // fragments until protocol 13 doubled MAX_ACTORS for 100-bot matches.
             Assert.Equal(SnapshotHeader.Size + ProtocolConstants.MAX_ACTORS * 26, snapshot.Length);
-            Assert.Equal(1677, snapshot.Length);
+            Assert.Equal(3341, snapshot.Length);
             Assert.True(Fragmenter.NeedsFragmentation(snapshot.Length));
 
             int count = Fragmenter.FragmentCount(snapshot.Length);
-            Assert.Equal(2, count);
+            Assert.Equal(3, count);
 
             var reassembler = new FragmentReassembler();
             byte[]? completed = null;

@@ -100,10 +100,18 @@ public class SpawnPoint : MonoBehaviour
 
 	/// <summary>
 	/// How far a container-authored child may sit from its ground-snapped position before the
-	/// correction is worth a warning. Small mesh irregularities correct by centimetres; this
-	/// keeps those silent while still catching an authored point that is metres off the ground.
+	/// correction is worth a warning. The snap corrects every child; the warning is for a point
+	/// placed so far from its ground that it is a mistake, not a height.
 	/// </summary>
-	protected const float ContainerSnapWarnDistanceMetres = 1f;
+	/// <remarks>
+	/// Raised from 1 m on 2026-09-30. The original maps author their spawn spheres at chest
+	/// height, where the original game's bodies dropped from: all 218 spawn children on Dustbowl
+	/// and Island sit 1.0 to 3.1 m up (median 1.6 m, P29 capacity bench), and at 1 m every one of
+	/// them was reported as "a scene defect the level author should fix" -- the ground truth
+	/// called a defect, 218 times a server. 4 m keeps that silent and still catches the kind of
+	/// fault X-81 found, a child 42.6 m in the air.
+	/// </remarks>
+	protected const float ContainerSnapWarnDistanceMetres = 4f;
 
 	public Vector3 RandomSpawnPointPosition()
 	{

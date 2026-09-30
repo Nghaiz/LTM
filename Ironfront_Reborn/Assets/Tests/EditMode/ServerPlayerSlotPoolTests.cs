@@ -282,23 +282,17 @@ namespace Ironfront.Net.Unity.Server.Tests
         // ------------------------------------------------------------------ claim lifecycle
 
         /// <summary>
-        /// Claiming a body stops the bot brain steering it; releasing hands it back.
+        /// Claiming a body stops the bot brain steering it, and releasing does not start it again.
         /// </summary>
         /// <remarks>
-        /// <para>
         /// The mechanism <c>NetVerificationHarness</c> discovered by hand, now on the shipped
         /// claim path. Server movement for a claimed body runs through <c>ServerPlayer</c> and
         /// <c>NetMovementAgent</c>; an AI still driving the same <c>CharacterController</c> is a
         /// second writer to one position and the client is predicting against only one of them.
-        /// </para>
-        /// <para>
-        /// The resume half is not symmetry for its own sake: a slot is reused across a match,
-        /// and without it every disconnect would leave one more inert mannequin standing in the
-        /// map for the rest of the round.
-        /// </para>
+        /// The release half is <see cref="AReleasedBody_LeavesTheMatchInsteadOfPlayingOnUnseen"/>.
         /// </remarks>
         [Test]
-        public void ClaimSuspendsTheBotBrain_AndReleaseResumesIt()
+        public void ClaimParksTheBotBrain_AndReleaseLeavesItParked()
         {
             NetServerActor actor = CreateBody(0);
             actor.MarkAvailableForPlayers();
@@ -311,7 +305,52 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(1, driver.Suspends, "claiming a body left its AI driving");
 
             _registry.ReleaseSlot(claimed);
-            Assert.AreEqual(1, driver.Resumes, "releasing a body left it an inert mannequin");
+            Assert.AreEqual(1, driver.Suspends, "releasing a body touched its bot brain");
+        }
+
+        /// <summary>
+        /// A leaver's body leaves the match: dead, back on the spot the pool built it on, and still
+        /// not announced to anybody.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The defect.</b> #401 resumed the bot brain on release, so a leaver's body would play
+        /// on as a lone bot instead of standing in the map as an inert mannequin. An unclaimed
+        /// slot is told to no client (X-18), and the leave had just despawned it on every one, so
+        /// the body played on as a bot nobody could see: shooting, capturing, scoring. In the
+        /// 2026-09-30 live test one of them sat off Island's navgraph and asked for a path twice a
+        /// second for four hours, 28,187 failures in the server log.
+        /// </para>
+        /// <para>
+        /// <b>The mutation that proves it:</b> drop the <c>ReturnToPool</c> call from
+        /// <c>ServerActorRegistry.ReleaseSlot</c> and the body is still alive, still where the
+        /// leaver stood.
+        /// </para>
+        /// </remarks>
+        [Test]
+        public void AReleasedBody_LeavesTheMatchInsteadOfPlayingOnUnseen()
+        {
+            var built = new Vector3(0f, 1000f, 0f);
+            var driver = new FakeAiDriver();
+
+            NetServerActor actor = CreateBody(0);
+            actor.transform.position = built;
+            actor.BindAiDriver(driver);
+            actor.MarkAvailableForPlayers();
+
+            // Claimed, deployed, and playing somewhere on the map.
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(0, out NetServerActor claimed));
+            claimed.IsAlive = true;
+            claimed.transform.position = new Vector3(512f, 24f, 377f);
+            Assert.IsTrue(ServerTickLoop.IsAnnounceable(claimed), "guard: a held slot is announced.");
+
+            _registry.ReleaseSlot(claimed);
+
+            Assert.IsFalse(claimed.IsAlive, "a leaver's body is still alive in the match, and nobody can see it");
+            Assert.AreEqual(built, claimed.transform.position,
+                "a leaver's body stayed where the leaver stood, a corpse in the world no client knows of");
+            Assert.AreEqual(1, driver.Suspends, "a leaver's body went back to the bot brain");
+            Assert.IsFalse(ServerTickLoop.IsAnnounceable(claimed), "a released slot is announced again");
         }
 
         /// <summary>
@@ -344,22 +383,20 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             Assert.AreEqual(1, driver.Suspends,
                 "an unclaimed player slot was left AI-driven — D-4.");
-            Assert.AreEqual(0, driver.Resumes);
         }
 
         /// <summary>
-        /// Claiming an already-parked slot does not re-park it, and releasing still resumes.
+        /// A slot's bot brain is parked once in its whole life: not again on a claim, and not
+        /// undone by a release.
         /// </summary>
         /// <remarks>
-        /// The lifecycle P12 changes is only the state a slot STARTS in. <c>Release</c> still
-        /// hands the body back to the bots, for the reason <c>IAiDriver.Resume</c> gives: a slot
-        /// is reused across a match, and without it every disconnect would leave one more inert
-        /// mannequin standing in the map. Pinning the call COUNTS is what makes that a decision
-        /// rather than an accident of ordering — a re-park on claim would be a redundant
-        /// <c>enabled</c> write on every join.
+        /// Pinning the call COUNT across a second claim is what makes that a decision rather than
+        /// an accident of ordering: a re-park on claim would be a redundant <c>enabled</c> write
+        /// on every join, and an un-park on release is the defect
+        /// <see cref="AReleasedBody_LeavesTheMatchInsteadOfPlayingOnUnseen"/> describes.
         /// </remarks>
         [Test]
-        public void ParkedSlot_IsNotReparkedOnClaimAndStillResumesOnRelease()
+        public void ParkedSlot_IsParkedOnceAcrossClaimsAndReleases()
         {
             var driver = new FakeAiDriver();
             NetServerActor actor = CreateBody(0);
@@ -371,7 +408,9 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(1, driver.Suspends, "claiming re-parked an already-parked slot.");
 
             _registry.ReleaseSlot(claimed);
-            Assert.AreEqual(1, driver.Resumes, "releasing a body left it an inert mannequin");
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(0, out NetServerActor again));
+            Assert.AreSame(actor, again, "the released slot was not claimable again");
+            Assert.AreEqual(1, driver.Suspends, "a slot's bot brain was parked more than once.");
         }
 
         /// <summary>A body with no bot brain claims without incident.</summary>
@@ -394,13 +433,10 @@ namespace Ironfront.Net.Unity.Server.Tests
         private sealed class FakeAiDriver : IAiDriver
         {
             internal int Suspends;
-            internal int Resumes;
 
             public bool Exists => true;
 
             public void Suspend() => Suspends++;
-
-            public void Resume() => Resumes++;
         }
         // --------------------------------------------------------------- P13: claim by team
 

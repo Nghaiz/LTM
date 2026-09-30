@@ -477,32 +477,32 @@ namespace Ironfront.Net.Replication.Tests
             var point = new CapturePointMessage(1, 25, CaptureFlags.None);
             ExplosionMessage boom = Explosion(source: 5);
 
-            // Warm every path first: the first call through a code path JITs it, and that
-            // allocation is the compiler's, not the model's.
-            feed.Push(in death, 0f);
-            feed.Prune(0f);
-            hits.Push(in hit, 0, 0f);
-            match.Apply(in state, 0f);
-            points.Apply(in point);
-            suppressor.PredictLocal(5, 0f);
-            suppressor.ShouldSuppress(in boom, 0f);
-
-            long before = GC.GetAllocatedBytesForCurrentThread();
-
-            for (int i = 0; i < 1000; i++)
+            void RunThousand(int from)
             {
-                float now = i * 0.01f;
-                feed.Push(in death, now);
-                feed.Prune(now);
-                hits.Push(in hit, (uint)i, now);
-                match.Apply(in state, now);
-                match.SecondsRemaining(now);
-                points.Apply(in point);
-                points.DirtySinceLastRead(1);
-                suppressor.PredictLocal(5, now);
-                suppressor.ShouldSuppress(in boom, now);
+                for (int i = from; i < from + 1000; i++)
+                {
+                    float now = i * 0.01f;
+                    feed.Push(in death, now);
+                    feed.Prune(now);
+                    hits.Push(in hit, (uint)i, now);
+                    match.Apply(in state, now);
+                    match.SecondsRemaining(now);
+                    points.Apply(in point);
+                    points.DirtySinceLastRead(1);
+                    suppressor.PredictLocal(5, now);
+                    suppressor.ShouldSuppress(in boom, now);
+                }
             }
 
+            // Warm the whole loop first, every call in it, not one call each: the claim is the
+            // steady state. Warming only some calls measured the first-ever run of two others
+            // (SecondsRemaining, DirtySinceLastRead) and of the loop itself, and under a loaded
+            // full CI run of 2026-09-30 that measured 2,520 B once -- never when run alone, and
+            // never on a second thousand.
+            RunThousand(0);
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            RunThousand(1000);
             Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         }
 

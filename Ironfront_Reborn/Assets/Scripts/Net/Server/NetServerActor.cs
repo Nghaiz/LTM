@@ -1149,6 +1149,7 @@ namespace Ironfront.Net.Unity.Server
         internal void MarkAvailableForPlayers()
         {
             _availableForPlayers = true;
+            _poolPosition = transform.position;
 
             // P12 D-4. A player slot's bot brain is parked FROM CREATION, not from the claim.
             //
@@ -1166,43 +1167,50 @@ namespace Ironfront.Net.Unity.Server
             //
             // IAiDriver.Suspend is the existing seam and the existing mechanism -- the same one
             // Claim uses -- deliberately rather than a second suspension concept.
-            SetAiDriverSuspended(true);
+            ParkAiDriver();
         }
 
         /// <summary>
-        /// Parks or unparks the bot brain, doing nothing when it is already in that state.
+        /// Where the pool built this body, and where <see cref="ReturnToPool"/> puts it back.
+        /// </summary>
+        /// <remarks>
+        /// The prefab's own origin in practice: nothing places a slot before its claim (see
+        /// <c>IronfrontNetBindings.CreatePlayerBody</c>), so this is the spot an unclaimed slot
+        /// has always stood on.
+        /// </remarks>
+        private Vector3 _poolPosition;
+
+        /// <summary>
+        /// Parks the bot brain, once. A body that has been a player slot is never bot-driven
+        /// again.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Transition-tracked, because the callers now overlap.</b> A pool body is marked
-        /// available and then claimed, and both want it suspended;
-        /// <c>AiActorController.enabled</c> is not a free write to repeat, and — more to the
-        /// point — collapsing the repeat is what keeps <see cref="Claim"/> and
-        /// <see cref="Release"/> emitting exactly one driver call each, which is the count
-        /// <c>ServerPlayerSlotPoolTests</c> already pins.
+        /// <b>Transition-tracked, because the callers overlap.</b> A pool body is marked available
+        /// and then claimed, and both want it parked; <c>AiActorController.enabled</c> is not a
+        /// free write to repeat, and collapsing the repeat is what keeps a slot's whole life to
+        /// exactly one driver call, which <c>ServerPlayerSlotPoolTests</c> pins.
         /// </para>
         /// <para>
-        /// <b><see cref="Release"/> still resumes, and that is deliberate.</b> The invariant is
-        /// "a body that has been handed to a connection is not bot-driven", not "a player slot is
-        /// never bot-driven" — <c>IAiDriver.Resume</c>'s own remark gives the reason: a slot is
-        /// reused across a match, and without the resume every disconnect would leave one more
-        /// inert mannequin standing in the map. What P12 changes is only the state a slot starts
-        /// in, which nothing set before.
+        /// <b>There is no un-park.</b> Until the 2026-09-30 live test <see cref="Release"/> resumed
+        /// the brain, so a leaver's body would play on as a lone bot rather than stand in the map
+        /// as an inert mannequin (#401). But an unclaimed slot is told to no client (X-18), and
+        /// the leave had just despawned it on every one: the body played on as a bot nobody could
+        /// see, shooting, capturing and scoring. On Island one of them then asked for a path twice
+        /// a second for four hours from somewhere off the navgraph: 28,187 failures in the server
+        /// log. A released body now leaves the match instead (<see cref="ReturnToPool"/>).
         /// </para>
         /// </remarks>
-        private void SetAiDriverSuspended(bool suspended)
+        private void ParkAiDriver()
         {
-            if (_aiDriver == null || !_aiDriver.Exists) return;
-            if (suspended == _aiDriverSuspended) return;
+            if (_aiDriverParked || _aiDriver == null || !_aiDriver.Exists) return;
 
-            _aiDriverSuspended = suspended;
-
-            if (suspended) _aiDriver.Suspend();
-            else _aiDriver.Resume();
+            _aiDriverParked = true;
+            _aiDriver.Suspend();
         }
 
-        /// <summary>Whether <see cref="SetAiDriverSuspended"/> has the brain parked.</summary>
-        private bool _aiDriverSuspended;
+        /// <summary>Whether <see cref="ParkAiDriver"/> has parked the brain.</summary>
+        private bool _aiDriverParked;
 
         /// <summary>
         /// Hands this body to a connection, and stops the bot brain steering it.
@@ -1221,16 +1229,58 @@ namespace Ironfront.Net.Unity.Server
             // Already parked when this body came from the slot pool (P12 D-4), so on that path
             // this is a no-op. Still called, because Claim's contract is "the bot brain is not
             // steering after this returns" and that must not depend on who built the body.
-            SetAiDriverSuspended(true);
+            ParkAiDriver();
         }
 
-        /// <summary>Takes the body back and returns it to the bot brain.</summary>
+        /// <summary>Takes the body back from its connection.</summary>
+        /// <remarks>
+        /// Also run for every actor, bots included, as it leaves the registry
+        /// (<c>ServerActorRegistry.Unregister</c>), so it only undoes the claim. Taking a
+        /// leaver's body out of the match is <see cref="ReturnToPool"/>, which only the leave
+        /// path calls.
+        /// </remarks>
         internal void Release()
         {
             IsClaimed = false;
 
             EndPlayerPresentation();
-            SetAiDriverSuspended(false);
+        }
+
+        /// <summary>
+        /// Puts a released slot back the way the pool built it: dead, its capsule on, standing on
+        /// the spot it was built on, its bot brain still parked. Called by
+        /// <c>ServerActorRegistry.ReleaseSlot</c> as a connection leaves.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Dead by the join path's own two writes</b>, and the seam behind
+        /// <see cref="IsAlive"/> does the rest: out of any seat, the brain's <c>Die</c>, off
+        /// <c>ActorManager</c>'s alive register so no bot aims at it. No death is reported: every
+        /// client has just been sent the despawn, and nobody is credited a kill for a leave.
+        /// </para>
+        /// <para>
+        /// <b>Moved back</b> because a corpse left at the leaver's feet is still a body in the
+        /// physics world that no client knows is there. The next connection to claim the slot is
+        /// placed by <c>ServerCombatBridge.PlaceAtSpawn</c> from its own spawn request, exactly
+        /// as a fresh slot is.
+        /// </para>
+        /// </remarks>
+        internal void ReturnToPool()
+        {
+            Health = 0f;
+            IsAlive = false;
+
+            NetMovementAgent agent = Movement;
+            if (agent == null)
+            {
+                transform.position = _poolPosition;
+                return;
+            }
+
+            // A seated leaver's capsule is still off: ServerPlayer.ReleaseBody leaves it off in
+            // a seat, and the seam above has only now taken the body out of that seat.
+            if (!agent.CollisionEnabled) agent.SetSeated(false);
+            agent.Teleport(_poolPosition);
         }
     }
 }

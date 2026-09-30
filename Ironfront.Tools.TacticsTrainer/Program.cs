@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Ironfront.Net.Replication.Ai;
+using Ironfront.Tools.TacticsTrainer.Baselines;
 
 namespace Ironfront.Tools.TacticsTrainer
 {
@@ -32,7 +33,7 @@ namespace Ironfront.Tools.TacticsTrainer
                 return 0;
             default:
                 Console.Error.WriteLine(
-                    "usage: evaluate [--seed N] [--set Name=Value;...] [--diagnose]\n"
+                    "usage: evaluate [--seed N] [--start] [--set Name=Value;...] [--diagnose] [--sizes 1,2,4,...]\n"
                     + "       trace [--seed N] [--map Dustbowl|Island] [--size N] [--original] [--plans S]\n"
                     + "       train [--seed N] [--generations G] [--population L] [--out report.md]");
                 return 2;
@@ -41,7 +42,7 @@ namespace Ironfront.Tools.TacticsTrainer
 
         private static void Evaluate(string[] args, ulong seed)
         {
-            TacticsProfile profile = TacticsProfile.Default();
+            TacticsProfile profile = Array.IndexOf(args, "--start") >= 0 ? ProfileTrainer.StartProfile() : TacticsProfile.Default();
             foreach (string pair in Option(args, "--set", "").Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
                 string[] kv = pair.Split('=');
@@ -51,8 +52,12 @@ namespace Ironfront.Tools.TacticsTrainer
 
             List<MatchSpec> rounds = TrainingPlan.TestRounds(seed);
             var clock = Stopwatch.StartNew();
+            TacticsProfileV1 v1 = TacticsProfileV1.Default();
             Console.WriteLine("original vs original: " + Line(Evaluation.Score(rounds, () => new OriginalPolicy(), () => new OriginalPolicy())));
+            Console.WriteLine("P28 (v1) vs original: " + Line(Evaluation.ScoreV1(rounds, v1)));
             Console.WriteLine("profile  vs original: " + Line(Evaluation.Score(rounds, profile)));
+            Console.WriteLine("profile  vs P28 (v1): " + Line(Evaluation.ScoreAgainstV1(rounds, profile, v1)));
+            Console.WriteLine("profile  vs hand-set: " + Line(Evaluation.Score(rounds, profile, new TacticsProfile())));
             Console.WriteLine("  on training rounds: " + Line(Evaluation.Score(TrainingPlan.TrainRounds(seed), profile)));
             foreach (int size in TrainingPlan.TestSizes)
                 Console.WriteLine($"  {size,3} a side: " + Line(Evaluation.Score(rounds.FindAll(r => r.BotsPerTeam == size), profile)));
@@ -61,6 +66,19 @@ namespace Ironfront.Tools.TacticsTrainer
             Console.WriteLine($"{rounds.Count} rounds in {clock.Elapsed.TotalSeconds:F1}s");
 
             if (Array.IndexOf(args, "--diagnose") >= 0) Diagnose(rounds, profile);
+
+            string sizesOption = Option(args, "--sizes", "");
+            if (sizesOption.Length > 0)
+            {
+                int[] sizes = Array.ConvertAll(sizesOption.Split(','), x => int.Parse(x, CultureInfo.InvariantCulture));
+                List<MatchSpec> bySize = TrainingPlan.TestRoundsAt(seed, sizes);
+                Console.WriteLine("by side size (bots a side; a match has twice as many):");
+                foreach (int size in sizes)
+                {
+                    List<MatchSpec> slice = bySize.FindAll(r => r.BotsPerTeam == size);
+                    Console.WriteLine($"  {size,3}: P28 vs original {Short(Evaluation.ScoreV1(slice, v1))}; profile vs original {Short(Evaluation.Score(slice, profile))}; profile vs P28 {Short(Evaluation.ScoreAgainstV1(slice, profile, v1))}");
+                }
+            }
         }
 
         /// <summary>Where a profile wins or loses: the kill ratio, and the flags each side held on average.</summary>
@@ -106,22 +124,25 @@ namespace Ironfront.Tools.TacticsTrainer
         private static int Train(string[] args, ulong seed)
         {
             int generations = int.Parse(Option(args, "--generations", "100"), CultureInfo.InvariantCulture);
-            int population = int.Parse(Option(args, "--population", "32"), CultureInfo.InvariantCulture);
+            int population = int.Parse(Option(args, "--population", "24"), CultureInfo.InvariantCulture);
             string output = Option(args, "--out", "");
             var clock = Stopwatch.StartNew();
 
-            // From the hand-set numbers (the profile's own initialisers), not from the shipped
-            // Default, which is this run's own output: a re-run starts where the first one did.
-            TrainingRun run = ProfileTrainer.Train(new TacticsProfile(), seed, generations, population, Console.WriteLine);
+            // From the frozen P28 weights and P29's hand-set ones, not from the shipped Default, which
+            // is this run's own output: a re-run starts where the first one did.
+            TrainingRun run = ProfileTrainer.Train(ProfileTrainer.StartProfile(), seed, generations, population, Console.WriteLine);
             string report = TrainingReport.Write(run, clock.Elapsed);
             Console.WriteLine(report);
             if (output.Length > 0) File.WriteAllText(output, report);
             return 0;
         }
 
+        private static string Short(EvaluationScore s)
+            => string.Create(CultureInfo.InvariantCulture, $"{s.Wins}-{s.Losses}-{s.Draws} {s.MeanMargin:+0.00;-0.00;+0.00}");
+
         public static string Line(EvaluationScore s)
             => string.Create(CultureInfo.InvariantCulture,
-                $"won {s.Wins}, lost {s.Losses}, drawn {s.Draws} of {s.Rounds} ({s.WinRate:P0}); mean margin {s.MeanMargin:+0.000;-0.000}");
+                $"won {s.Wins}, lost {s.Losses}, drawn {s.Draws} of {s.Rounds} ({s.WinRate:P0}); mean margin {s.MeanMargin:+0.000;-0.000;+0.000}");
 
         private static string Option(string[] args, string name, string fallback)
         {

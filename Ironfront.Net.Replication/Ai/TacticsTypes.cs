@@ -16,6 +16,12 @@ namespace Ironfront.Net.Replication.Ai
 
         /// <summary>Take the flag from the side: a quiet approach through a waypoint off the main axis first.</summary>
         Flank = 3,
+
+        /// <summary>
+        /// Gather at the waypoint short of a defended flag and wait for the rest of the assault
+        /// (phase P29): the squads go in together once enough of them are there.
+        /// </summary>
+        Assemble = 4,
     }
 
     /// <summary>How the side is playing, from the flags it holds and the score. Phase P28.</summary>
@@ -49,6 +55,13 @@ namespace Ironfront.Net.Replication.Ai
 
         /// <summary>Enemies of the planning side near this flag that the side is in contact with.</summary>
         public int EnemiesInContact;
+
+        /// <summary>
+        /// An enemy stands inside the flag's capture range: every player's map shows it contested
+        /// (phase P29). One of the side's own flags in this state is taken back, not guarded -- the
+        /// original squads' "take the nearest flag that is not safely ours".
+        /// </summary>
+        public bool Contested;
     }
 
     /// <summary>One squad of the planning side, as the commander needs to see it.</summary>

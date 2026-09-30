@@ -18,9 +18,9 @@ namespace Ironfront.Net.Replication.Client
     /// capitals, which also sets a bot apart from the players, whose names keep their own case.
     /// </para>
     /// <para>
-    /// The list holds more callsigns than today's 64 actor ids, so every bot in a match is named
-    /// differently; an id past the end of the list takes a number after its callsign ("VIPER 2"),
-    /// which keeps a larger roster unique too.
+    /// The list holds a callsign for each of the 128 actor ids (protocol 13, 100-bot matches), so
+    /// every bot in a match is named differently; an id past the end of the list takes a number
+    /// after its callsign ("VIPER 2"), which keeps a larger roster unique too.
     /// </para>
     /// </remarks>
     public static class BotCallsigns
@@ -37,6 +37,12 @@ namespace Ironfront.Net.Replication.Client
             "ARROW", "BRICK", "COMET", "DIESEL", "EMBER", "FLINT", "GRANITE", "HARRIER",
             "ICARUS", "KRAKEN", "LYNX", "MAVERICK", "NIGHTHAWK", "OUTLAW", "PYTHON", "RAMPART",
             "SCORPION", "TOMAHAWK", "VULTURE", "WARTHOG", "BANSHEE", "CYCLONE", "GOLIATH", "HAMMER",
+            "APEX", "BADGER", "BARRACUDA", "BLIZZARD", "BRONCO", "BUZZARD", "CARBINE", "CHIMERA",
+            "CONDOR", "CORSAIR", "COYOTE", "CROSSBOW", "CUTLASS", "DINGO", "DRAGOON", "FIREBRAND",
+            "FOXHOUND", "GARGOYLE", "GLADIUS", "GRIFFIN", "HALBERD", "HELLCAT", "HORNET", "HURRICANE",
+            "JAVELIN", "JUGGERNAUT", "KATANA", "LEOPARD", "LONGBOW", "MARAUDER", "MUSTANG", "OSPREY",
+            "PALADIN", "PEREGRINE", "RAPTOR", "RATTLER", "RIPTIDE", "SENTINEL", "SHRIKE", "SIDEWINDER",
+            "SPARTAN", "STINGRAY", "TYPHOON", "WILDCAT", "WOLVERINE", "BULWARK", "CATAPULT", "DYNAMO",
         };
 
         /// <summary>How many callsigns there are before one repeats with a number.</summary>

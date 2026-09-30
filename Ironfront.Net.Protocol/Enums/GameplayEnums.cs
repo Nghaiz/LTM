@@ -421,6 +421,14 @@ namespace Ironfront.Net.Protocol
         GameServerNotResponding = 3001,
 
         /// <summary>
+        /// The room asks for more bots than the game servers can carry beside the matches already
+        /// running (protocol 13). The room list's <c>capacity.maxBotsForNewRoom</c> says how many
+        /// fit, and the create form never offers more; this is the answer to a client that raced
+        /// another room to the last of it.
+        /// </summary>
+        ServerAtBotCapacity = 3002,
+
+        /// <summary>
         /// The chat line was longer than <see cref="MspChatLimits.MaxTextCharacters"/>.
         /// </summary>
         /// <remarks>

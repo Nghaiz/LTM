@@ -42,7 +42,9 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
         [Fact]
         public void ProtocolVersionIsWhereTheChangelogSaysItIs()
         {
-            Assert.Equal(12, ProtocolConstants.PROTOCOL_VERSION);
+            // 13: MAX_ACTORS 64 -> 128 and the room's bot count became a total (§ 15). Neither
+            // layout below moved; a v12 client drops actor ids at or above 64.
+            Assert.Equal(13, ProtocolConstants.PROTOCOL_VERSION);
         }
 
         [Fact]
@@ -57,11 +59,15 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             // The 16-character bound MSP already enforces on a username.
             Assert.Equal(16, PlayerListMessage.MaxNameBytes);
 
+            // A row per connected human, 64 at most (2026-09-30): bounded by connections, not by
+            // MAX_ACTORS, because the list names people and never bots.
+            Assert.Equal(64, PlayerListMessage.MaxEntries);
+
             // Derived rather than restated: a hand-written 1153 here would go on passing after
-            // MAX_ACTORS moved, and the symptom would be a truncated broadcast on a full server.
+            // the bound moved, and the symptom would be a truncated broadcast on a full server.
             Assert.Equal(
                 PlayerListMessage.HeaderSize
-                    + ProtocolConstants.MAX_ACTORS
+                    + PlayerListMessage.MaxEntries
                         * (PlayerListMessage.EntryHeaderSize + PlayerListMessage.MaxNameBytes),
                 PlayerListMessage.MaxBodySize);
 
@@ -91,12 +97,19 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             Assert.Equal(1, PlayerScoresMessage.StatsTailVersion);
             Assert.Equal(8, PlayerScoresMessage.StatsEntrySize);
 
-            // Derived rather than restated, for MaxBodySize's reason one test up: a hand-written
-            // 898 would go on passing after MAX_ACTORS moved.
+            // The page tail (2026-09-30): after the stats tail, u8 version, u8 page, u8 pages, on
+            // a table longer than one page of 64 rows. A table that fits one page has none.
+            Assert.Equal(64, PlayerScoresMessage.RowsPerPage);
+            Assert.Equal(1, PlayerScoresMessage.PageTailVersion);
+            Assert.Equal(3, PlayerScoresMessage.PageTailSize);
+
+            // Derived rather than restated, for MaxBodySize's reason one test up: one full page
+            // with both tails, 901, whatever MAX_ACTORS is.
             Assert.Equal(
                 PlayerScoresMessage.HeaderSize
-                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize
-                    + 1 + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.StatsEntrySize,
+                    + PlayerScoresMessage.RowsPerPage * PlayerScoresMessage.EntrySize
+                    + 1 + PlayerScoresMessage.RowsPerPage * PlayerScoresMessage.StatsEntrySize
+                    + PlayerScoresMessage.PageTailSize,
                 PlayerScoresMessage.MaxBodySize);
 
             Assert.Equal(0x51, (byte)ServerMessageType.PlayerScores);

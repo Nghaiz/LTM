@@ -135,11 +135,36 @@ namespace Ironfront.Net.Protocol
         public const int StatsEntrySize = 8;
 
         /// <summary>
-        /// Worst case: every actor scored, with the stats tail. 1 + 64 x 6 + 1 + 64 x 8 = 898,
-        /// inside one un-fragmented channel-2 payload (1181).
+        /// The most rows one message carries. A longer table goes in pages of this many
+        /// (2026-09-30, ahead of rooms of more than 64 actors).
+        /// </summary>
+        /// <remarks>
+        /// At 14 B a row with the stats tail, a table of 88 rows no longer fits one un-fragmented
+        /// channel-2 payload, and the server logged "did not frame" and sent nothing every time
+        /// 100 bots and 14 players were scored (P29 capacity bench). Pages keep the guarantee this
+        /// message was built on at any roster size instead of trading it for fragments at the
+        /// cadence of every death. 64 is today's whole table, so a room of up to 64 actors still
+        /// sends exactly the bytes it always has.
+        /// </remarks>
+        public const int RowsPerPage = 64;
+
+        /// <summary>The page tail's version byte. A tail with any other version is left unread.</summary>
+        public const byte PageTailVersion = 1;
+
+        /// <summary>u8 version + u8 page index + u8 page count, after the stats tail.</summary>
+        public const int PageTailSize = 3;
+
+        /// <summary>
+        /// Worst case of one message: a full page with the stats tail and the page tail.
+        /// 1 + 64 x 6 + 1 + 64 x 8 + 3 = 901, inside one un-fragmented channel-2 payload (1181)
+        /// whatever <see cref="ProtocolConstants.MAX_ACTORS"/> is.
         /// </summary>
         public const int MaxBodySize =
-            HeaderSize + ProtocolConstants.MAX_ACTORS * EntrySize + 1 + ProtocolConstants.MAX_ACTORS * StatsEntrySize;
+            HeaderSize + RowsPerPage * EntrySize + 1 + RowsPerPage * StatsEntrySize + PageTailSize;
+
+        /// <summary>How many messages a table of this many rows takes: one, up to <see cref="RowsPerPage"/>.</summary>
+        public static int PageCountFor(int rowCount)
+            => rowCount <= RowsPerPage ? 1 : (rowCount + RowsPerPage - 1) / RowsPerPage;
 
         /// <summary>Encoded size of a score table with this many entries.</summary>
         /// <remarks>
@@ -167,8 +192,32 @@ namespace Ironfront.Net.Protocol
         /// <c>PROTOCOL_VERSION</c> bump -- the same argument as <c>S_DEATH</c>'s detail tail.
         /// </remarks>
         public static int Write(Span<byte> dst, ReadOnlySpan<PlayerScoreEntry> entries, bool includeStats)
+            => Write(dst, entries, includeStats, pageIndex: 0, pageCount: 1);
+
+        /// <summary>
+        /// Writes one page of a table: <paramref name="entries"/> are that page's rows. Returns
+        /// bytes written, or -1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A table of one page carries no page tail</b>, so it is byte for byte what a server
+        /// before pages sent. A longer table sends <paramref name="pageCount"/> messages in order,
+        /// each with the stats tail and then <c>u8 version, u8 pageIndex, u8 pageCount</c>; a
+        /// client puts the rows together and shows the table once the last page is in.
+        /// </para>
+        /// <para>
+        /// <b>Pages ride after the stats tail, so a paged table always carries it</b>: the byte
+        /// after the rows is the stats tail's version, and a page tail in its place would read as
+        /// one.
+        /// </para>
+        /// </remarks>
+        public static int Write(
+            Span<byte> dst, ReadOnlySpan<PlayerScoreEntry> entries, bool includeStats, int pageIndex, int pageCount)
         {
             if (entries.Length > byte.MaxValue) return -1;
+            if (pageCount < 1 || pageCount > byte.MaxValue || pageIndex < 0 || pageIndex >= pageCount) return -1;
+            bool paged = pageCount > 1;
+            if (paged && (!includeStats || entries.Length > RowsPerPage)) return -1;
 
             var w = new SpanWriter(dst);
             w.WriteU8((byte)entries.Length);
@@ -196,6 +245,13 @@ namespace Ironfront.Net.Protocol
                 }
             }
 
+            if (paged)
+            {
+                w.WriteU8(PageTailVersion);
+                w.WriteU8((byte)pageIndex);
+                w.WriteU8((byte)pageCount);
+            }
+
             return w.Ok ? w.Position : -1;
         }
 
@@ -210,8 +266,19 @@ namespace Ironfront.Net.Protocol
         /// </remarks>
         public static bool TryParse(
             ReadOnlySpan<byte> src, Span<PlayerScoreEntry> entries, out int entryCount)
+            => TryParse(src, entries, out entryCount, out _, out _);
+
+        /// <summary>
+        /// Parses one message of a score table and says which page of how many it is: 0 of 1
+        /// for a table sent whole, which is every table of up to <see cref="RowsPerPage"/> rows.
+        /// </summary>
+        public static bool TryParse(
+            ReadOnlySpan<byte> src, Span<PlayerScoreEntry> entries, out int entryCount,
+            out int pageIndex, out int pageCount)
         {
             entryCount = 0;
+            pageIndex = 0;
+            pageCount = 1;
 
             var r = new SpanReader(src);
             byte count = r.ReadU8();
@@ -266,6 +333,21 @@ namespace Ironfront.Net.Protocol
                 entries[i].PingMs     = ping;
             }
 
+            // The page tail: absent on a table sent whole. A tail of a version this build does
+            // not know is left unread, as the stats tail's is; a page that claims to be past the
+            // end of its own table is malformed.
+            if (r.Remaining == 0) return true;
+
+            byte pageVersion = r.ReadU8();
+            if (!r.Ok) return false;
+            if (pageVersion != PageTailVersion) return true;
+
+            byte index = r.ReadU8();
+            byte total = r.ReadU8();
+            if (!r.Ok || total == 0 || index >= total) return false;
+
+            pageIndex = index;
+            pageCount = total;
             return true;
         }
     }

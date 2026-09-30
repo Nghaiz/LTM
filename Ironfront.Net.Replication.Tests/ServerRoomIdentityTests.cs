@@ -106,10 +106,10 @@ namespace Ironfront.Net.Replication.Tests
             identity.Release();
             Assert.False(identity.HasRoom);
 
-            // The master releases the game server on GsMatchEnded, so the process is
-            // allocatable again. Without this, the first room a server ever hosted would be the
-            // only one it could host: every later allocation's tickets would hit the refusal
-            // above and be turned away by a server that is, in fact, free.
+            // The last player leaving releases the room, and the master frees the server when
+            // the room closes, so the process is allocatable again. Without this, the first room a
+            // server ever hosted would be the only one it could host: every later allocation's
+            // tickets would hit the refusal above and be turned away by a server that is free.
             Assert.True(identity.Observe(42, out _));
             Assert.Equal(42, identity.RoomId);
             Assert.Equal(0, identity.ConflictingTickets);

@@ -222,6 +222,24 @@ public class AiActorController : ActorController
 
 	private bool hasPath;
 
+	/// <summary>
+	/// Walked the whole of its last path and is standing where it was sent (phase P29): waiting
+	/// for the squad's next order, which is not the same thing as having lost its way.
+	/// </summary>
+	/// <remarks>
+	/// The original told the two apart by nothing but a 3 s timeout, so every member that reached
+	/// its spot more than three seconds before its leader reached his was split off as a squad of
+	/// its own (<see cref="CreateRougeSquad"/>). Measured offline on Dustbowl, 16 bots a side:
+	/// 162 such splits in fourteen minutes, and fifteen squads for fifteen bots.
+	/// </remarks>
+	private bool arrivedAtGoto;
+
+	/// <summary>
+	/// Said once already that this body is walking a path with no squad (<see cref="Velocity"/>);
+	/// cleared when a squad takes it.
+	/// </summary>
+	private bool reportedPathWithoutSquad;
+
 	private bool calculatingPath;
 
 	private Seeker seeker;
@@ -1061,7 +1079,7 @@ public class AiActorController : ActorController
 	{
 		List<AiActorController> list = new List<AiActorController>(1);
 		list.Add(this);
-		squad.SplitSquad(list);
+		squad.SplitSquad(list, Squad.SplitReason.Rogue);
 		moveTimeoutAction.Start();
 	}
 
@@ -1076,7 +1094,11 @@ public class AiActorController : ActorController
 				yield return LodSkipWait;
 				continue;
 			}
-			if (!hasPath && ShouldHavePath() && moveTimeoutAction.TrueDone())
+			// A member with no path goes its own way only when it never got where it was sent; one
+			// that arrived waits for its squad (phase P29). A bot alone in its squad has nowhere to
+			// split to: "splitting" it made a new squad of the same one bot, which dropped the
+			// commander's order every few seconds while its search kept failing.
+			if (!hasPath && !arrivedAtGoto && ShouldHavePath() && moveTimeoutAction.TrueDone() && squad.members.Count > 1)
 			{
 				CreateRougeSquad();
 			}
@@ -1623,6 +1645,12 @@ public class AiActorController : ActorController
 		}
 		else
 		{
+			// Free to ask again (phase P29). The original left calculatingPath set, and Goto
+			// refuses to start a path while one is being calculated, so a bot whose search failed
+			// -- "Couldn't find a close node to the start point" -- never walked again until it
+			// died.
+			calculatingPath = false;
+			moveTimeoutAction.Start();
 			Debug.LogError(p.errorLog);
 		}
 	}
@@ -1653,6 +1681,7 @@ public class AiActorController : ActorController
 				graphMask = ((!aquatic) ? 4 : 2);
 			}
 			lastGotoPoint = targetPoint;
+			arrivedAtGoto = false;
 			seeker.StartPath(actor.Position(), targetPoint, null, graphMask);
 			lastWaypoint = base.transform.position;
 		}
@@ -1663,6 +1692,7 @@ public class AiActorController : ActorController
 		calculatingPath = false;
 		path = null;
 		hasPath = false;
+		arrivedAtGoto = false;
 		moveTimeoutAction.Start();
 	}
 
@@ -2000,6 +2030,7 @@ public class AiActorController : ActorController
 
 	private void PathDone()
 	{
+		arrivedAtGoto = true;
 		if (HasCover())
 		{
 			LookDirection(coverFacing);
@@ -2058,7 +2089,20 @@ public class AiActorController : ActorController
 				num = 2f;
 			}
 			fatigue = Mathf.Clamp01(fatigue + num * 0.04f * Time.deltaTime);
-			return (GetWaypointDeltaBlockable().ToGround().normalized + LocalAvoidanceVelocity() * 0.4f).normalized * num;
+			// Keeping clear of squadmates needs a squad. A bot walking with none -- what a squad
+			// roster left behind by a death that never left it produced, P29 capacity bench:
+			// 4,966 NullReferenceExceptions in 43 s from LocalAvoidanceVelocity -- walks on
+			// without the nudge, and the line says it happened, once.
+			Vector3 avoidance = Vector3.zero;
+			if (InSquad())
+			{
+				avoidance = LocalAvoidanceVelocity() * 0.4f;
+			}
+			else
+			{
+				ReportPathWithoutSquad();
+			}
+			return (GetWaypointDeltaBlockable().ToGround().normalized + avoidance).normalized * num;
 		}
 		// A side-step in the open (phase P28), checked clear by UpdateOpenGround before it began.
 		if (!sideStepAction.TrueDone())
@@ -2370,6 +2414,17 @@ public class AiActorController : ActorController
 		{
 			return NetVehicleAxisRelay.HelicopterAxesFor(this);
 		}
+		// An enabled pilot with no squad. A player's body left in a pilot seat by a disconnect
+		// was one: the line below threw once per physics step for as long as it sat there, 867
+		// NullReferenceExceptions in 14 s (2026-09-30, Island, run p29new-i16), each aborting
+		// Helicopter.FixedUpdate. Such a body now leaves the match with its connection, so this is
+		// the net under whatever leaves a pilot squadless next: the neutral stick the
+		// relay gives a seat with no driver, without reading the relay (an enabled controller is
+		// never steered by the network).
+		if (!InSquad())
+		{
+			return Vector4.zero;
+		}
 		if (!squad.AllSeated() || !helicopterTakeoffAction.TrueDone())
 		{
 			return new Vector4(0f, -1f + helicopterTakeoffAction.Ratio() * 1.5f, 0f, 0f);
@@ -2635,6 +2690,10 @@ public class AiActorController : ActorController
 		if (InSquad())
 		{
 			squad.DropMember(this);
+			if (squad.members.Count == 1)
+			{
+				Squad.Census.NoteLeftAlone(actor.team);
+			}
 		}
 
 		squad = null;
@@ -2704,6 +2763,7 @@ public class AiActorController : ActorController
 		sideStepAction.Stop();
 		radiusModifier.enabled = false;
 		recentAntiStuckEvents = 0;
+		arrivedAtGoto = false;
 		ragdollAutokillAction.Start();
 		moveTimeoutAction.Start();
 		StartAiCoroutines();
@@ -2843,9 +2903,45 @@ public class AiActorController : ActorController
 		return squad != null;
 	}
 
+	/// <summary>The one line <see cref="Velocity"/> writes for a body walking a path with no squad.</summary>
+	private void ReportPathWithoutSquad()
+	{
+		if (reportedPathWithoutSquad)
+		{
+			return;
+		}
+		reportedPathWithoutSquad = true;
+		Debug.LogWarning("[ai] " + base.name + " (team " + actor.team + ") is walking a path with no squad: aiControlled "
+			+ actor.aiControlled + ", seated " + actor.IsSeated() + ", dead " + actor.dead + ", at " + actor.Position());
+	}
+
+	/// <summary>
+	/// A body a connection has just claimed leaves the bot side of the game: off its squad, its
+	/// cover and its path, its AI stopped until a squad takes it again (phase P29).
+	/// </summary>
+	/// <remarks>
+	/// Parking the brain (<c>enabled = false</c>) stops Unity's callbacks and not the running
+	/// coroutines, which only idle. A body a bot had been using still sat on its squad's roster,
+	/// so the commander counted and ordered a player as one of its bots.
+	/// </remarks>
+	public void HandOverToPlayer()
+	{
+		LeaveCover();
+		CancelPath();
+		if (InSquad())
+		{
+			squad.DropMember(this);
+		}
+		squad = null;
+		StopAllCoroutines();
+		CancelInvoke();
+		aiCoroutinesAwaitSquad = true;
+	}
+
 	public void AssignedToSquad(Squad squad)
 	{
 		this.squad = squad;
+		reportedPathWithoutSquad = false;
 		if (IsSquadLeader())
 		{
 			EmoteRegroup();
@@ -2863,6 +2959,30 @@ public class AiActorController : ActorController
 	public bool IsSquadLeader()
 	{
 		return squad.Leader() == this;
+	}
+
+	/// <summary>
+	/// Sends a bot that has just joined <paramref name="joined"/> after the others (phase P29): to
+	/// where its new leader is going, or into cover round him when the squad is holding its ground.
+	/// </summary>
+	public void JoinedSquad(Squad joined)
+	{
+		AiActorController leader = joined.Leader();
+		if (leader == null || leader == this || leader.actor == null || actor.IsSeated() || IsFallingBack())
+		{
+			return;
+		}
+		if (joined.state == Squad.State.DigIn)
+		{
+			FindCoverAtPoint(leader.actor.Position());
+			return;
+		}
+		if (InCover())
+		{
+			LeaveCover();
+		}
+		Vector3 goal = leader.hasPath || leader.calculatingPath ? leader.lastGotoPoint : leader.actor.Position();
+		Goto(goal + Vector3.Scale(UnityEngine.Random.insideUnitSphere, new Vector3(3f, 0f, 3f)));
 	}
 
 	public bool InCover()
@@ -3081,6 +3201,10 @@ public class AiActorController : ActorController
 		}
 	}
 
+	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
+	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
+	// lines in one 100-bot match (B4, 2026-09-30).
+#if !UNITY_SERVER
 	private void OnGUI()
 	{
 		if (!ActorManager.instance.debug || actor.dead || !(Camera.main != null))
@@ -3103,6 +3227,7 @@ public class AiActorController : ActorController
 			}
 		}
 	}
+#endif
 
 	public override bool IsGroupedUp()
 	{

@@ -67,6 +67,12 @@ namespace Ironfront.Net.Unity.EditorTools
         private static readonly Color Ink = HudStyle.Ink;
         private static readonly Color Backdrop = new Color(0.04f, 0.05f, 0.07f, 0.82f);
 
+        /// <summary>
+        /// The original HUD's flag capture indicator, whose bottom edge the team readout sits
+        /// under. See <see cref="BuildTeamReadout"/>.
+        /// </summary>
+        private const string FlagIndicatorName = "Flag Capture Indicator Edge";
+
         [MenuItem("Ironfront/Net/Build in-match readout")]
         public static void RunFromMenu() => Execute(exitOnFailure: false);
 
@@ -128,7 +134,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
                 // First, so everything else on this Canvas draws over the plates.
                 NameplateLayer nameplates = BuildNameplates(root, log);
-                Text team = BuildTeamReadout(root, log);
+                Text team = BuildTeamReadout(root, FlagIndicatorBottom(contents), log);
                 KillfeedRowView[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
                     root, out Text killer, out Text timer, out Button deployButton, log);
@@ -186,8 +192,17 @@ namespace Ironfront.Net.Unity.EditorTools
 
         // ------------------------------------------------------------------ the elements
 
-        /// <summary>3.1 — which side you are on, top-left, above the ammo readout.</summary>
-        private static Text BuildTeamReadout(GameObject root, StringBuilder log)
+        /// <summary>3.1 — which side you are on, top-left, under the flag capture indicator.</summary>
+        /// <remarks>
+        /// <b>Under the flag, not at the corner.</b> The original HUD's capture indicator
+        /// (<c>IngameUi.flagIndicatorParent</c>, "Flag Capture Indicator Edge") owns the top-left
+        /// corner: anchored from 85% to the top of the screen, 107 px wide, on a constant-pixel
+        /// Canvas. This readout used to sit at (36, -36) on this scaled Canvas, right inside it,
+        /// so standing in a capture zone drew the flag over "BLUE TEAM" (live test 2026-09-30).
+        /// Anchored to the same 85% line, it sits under the indicator at every resolution, which
+        /// no fixed offset on a Canvas that scales differently could do.
+        /// </remarks>
+        private static Text BuildTeamReadout(GameObject root, float flagIndicatorBottom, StringBuilder log)
         {
             // Backdrop, the same way BuildDeployScreen and BuildScoreboard back their own text —
             // a bare Text over the killfeed and minimap underneath it was unreadable at a glance.
@@ -196,10 +211,10 @@ namespace Ironfront.Net.Unity.EditorTools
             panel.transform.SetParent(root.transform, worldPositionStays: false);
 
             RectTransform panelRect = panel.GetComponent<RectTransform>();
-            panelRect.anchorMin = new Vector2(0f, 1f);
-            panelRect.anchorMax = new Vector2(0f, 1f);
+            panelRect.anchorMin = new Vector2(0f, flagIndicatorBottom);
+            panelRect.anchorMax = new Vector2(0f, flagIndicatorBottom);
             panelRect.pivot = new Vector2(0f, 1f);
-            panelRect.anchoredPosition = new Vector2(36f, -36f);
+            panelRect.anchoredPosition = new Vector2(12f, -8f);
             panelRect.sizeDelta = new Vector2(320f, 44f);
 
             var backdrop = panel.GetComponent<Image>();
@@ -213,7 +228,22 @@ namespace Ironfront.Net.Unity.EditorTools
             // placeholder string would render as an answer for however long the first snapshot
             // takes -- the fabricated zero ScoreUi refuses, wearing a different label.
             log.AppendLine("team readout: authored blank; MatchHud.SetLocalTeam writes it.");
+            log.AppendLine($"team readout: under the flag capture indicator, at {flagIndicatorBottom:0.##} of the screen height.");
             return label;
+        }
+
+        /// <summary>
+        /// The flag capture indicator's bottom edge, as a fraction of the screen height, read off
+        /// the prefab rather than copied here, so moving the indicator moves the readout with it.
+        /// </summary>
+        private static float FlagIndicatorBottom(GameObject contents)
+        {
+            foreach (RectTransform rect in contents.GetComponentsInChildren<RectTransform>(includeInactive: true))
+                if (rect.name == FlagIndicatorName) return rect.anchorMin.y;
+
+            throw new System.InvalidOperationException(
+                $"'{FlagIndicatorName}' is not in {PrefabPath}. The team readout is placed under it; "
+                + "find where the capture indicator went before building the readout anywhere else.");
         }
 
         /// <summary>

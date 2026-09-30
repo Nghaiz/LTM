@@ -209,9 +209,10 @@ namespace Ironfront.MasterServer.Tests
         /// An outsider is still refused a room whose match is running. P16 § 6.
         /// </summary>
         /// <remarks>
-        /// The member arm above deliberately skips <c>CanJoinRoom</c>, so this is the check that
-        /// the skip reaches members only — "reconnect to a running match" stays out of scope, and
-        /// a gate that let everybody in would look identical at the call site.
+        /// The member arm above deliberately skips <c>CanJoinRoom</c>, and so does the rejoin arm
+        /// for a player on the room's roster (<c>MatchRejoinTests</c>), so this is the check that
+        /// both reach only the people they are for: a gate that let everybody in would look
+        /// identical at the call site.
         /// </remarks>
         [Fact]
         public async Task AnOutsiderIsStillRefusedARoomWhoseMatchIsRunning()

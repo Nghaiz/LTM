@@ -84,8 +84,8 @@
              Link="Linked\MasterSession.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\MatchTransportHandoff.cs"
              Link="Linked\MatchTransportHandoff.cs" />
-    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\RoomBotsField.cs"
-             Link="Linked\RoomBotsField.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\RoomBotChoice.cs"
+             Link="Linked\RoomBotChoice.cs" />
   </ItemGroup>
 
 </Project>

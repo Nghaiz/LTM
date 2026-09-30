@@ -226,9 +226,19 @@ namespace Ironfront.Net.Unity.Server
             return false;
         }
 
+        /// <summary>
+        /// Takes a body back from a connection that has left, and out of the match.
+        /// </summary>
+        /// <remarks>
+        /// A leaver's body used to play on as a bot, and an unclaimed slot is announced to
+        /// nobody (X-18), so it played on unseen. See <c>NetServerActor.ReturnToPool</c>.
+        /// </remarks>
         public void ReleaseSlot(NetServerActor actor)
         {
-            if (actor != null) actor.Release();
+            if (actor == null) return;
+
+            actor.Release();
+            actor.ReturnToPool();
         }
 
         /// <summary>

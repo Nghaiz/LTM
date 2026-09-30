@@ -7,3 +7,6 @@ using System.Runtime.CompilerServices;
 // that need actually wanted. Same shape, and same reasoning, as the server assembly's own
 // AssemblyInfo.
 [assembly: InternalsVisibleTo("Ironfront.Net.Unity.Client.Tests")]
+
+// The menu capture tool lays a screen out with the screen's own drawing code.
+[assembly: InternalsVisibleTo("Ironfront.Net.Unity.EditorHarness")]

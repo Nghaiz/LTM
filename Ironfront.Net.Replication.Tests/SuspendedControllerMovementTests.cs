@@ -114,6 +114,81 @@ namespace Ironfront.Net.Replication.Tests
             }
         }
 
+        [Fact]
+        public void AnEnabledBrainWithNoSquadNeverReachesTheSquadAvoidance()
+        {
+            // The enabled half. The P29 capacity bench (two maps at 100 bots, Island) had one
+            // body walking a path with no squad: LocalAvoidanceVelocity enumerates squad.members
+            // and threw every frame, 4,966 times in 43 s. The avoidance is only asked for inside
+            // a squad check; a bot with no squad walks on without it. Comments out first: the
+            // remark there names the method in prose.
+            string body = Regex.Replace(
+                MethodBody(ReadUnitySource(Controller), "public override Vector3 Velocity()"),
+                @"//[^\n]*", "");
+
+            Assert.True(
+                body.Contains("LocalAvoidanceVelocity()", StringComparison.Ordinal),
+                "Velocity no longer calls LocalAvoidanceVelocity; this test pins nothing");
+            Assert.Matches(
+                new Regex(@"if\s*\(\s*InSquad\(\)\s*\)\s*\{[^{}]*LocalAvoidanceVelocity\(\)"), body);
+            Assert.Single(Regex.Matches(body, @"LocalAvoidanceVelocity\(\)"));
+        }
+
+        [Fact]
+        public void ParkingABodyHandsItOverAndAReleasedBodyLeavesTheMatch()
+        {
+            // Disabling the controller parks it and stops nothing else: Unity stops coroutines
+            // when a GameObject is deactivated, not when a component is disabled. So a claimed
+            // body stayed on its squad's roster, and the commander counted a player as its bot (P29).
+            string driver = MethodBody(
+                ReadUnitySource("Ironfront_Reborn/Assets/Scripts/NetBindings/IronfrontNetBindings.cs"),
+                "internal sealed class AiActorControllerDriver");
+
+            string suspend = MethodBody(driver, "public void Suspend()");
+            Assert.Matches(new Regex(@"HandOverToPlayer\(\)\s*;\s*_ai\.enabled\s*=\s*false"), suspend);
+
+            string controller = ReadUnitySource(Controller);
+            string handOver = MethodBody(controller, "public void HandOverToPlayer()");
+            Assert.Contains("squad.DropMember(this)", handOver, StringComparison.Ordinal);
+            Assert.Contains("StopAllCoroutines()", handOver, StringComparison.Ordinal);
+
+            // And nothing hands it back. A resume on release made a leaver's body play on as a
+            // bot, and an unclaimed slot is announced to no client (X-18): on Island on
+            // 2026-09-30 it played on unseen, and asked for a path twice a second for four hours
+            // from off the navgraph. The leave takes the body out of the match instead.
+            Assert.DoesNotContain("Resume()", driver, StringComparison.Ordinal);
+            Assert.DoesNotContain("TakeOverAsBot", controller, StringComparison.Ordinal);
+
+            string registry = ReadUnitySource("Ironfront_Reborn/Assets/Scripts/Net/Server/ServerActorRegistry.cs");
+            string releaseSlot = MethodBody(registry, "public void ReleaseSlot(NetServerActor actor)");
+            Assert.Matches(new Regex(@"actor\.Release\(\)\s*;\s*actor\.ReturnToPool\(\)\s*;"), releaseSlot);
+
+            string body = ReadUnitySource("Ironfront_Reborn/Assets/Scripts/Net/Server/NetServerActor.cs");
+            string returnToPool = MethodBody(body, "internal void ReturnToPool()");
+            Assert.Matches(new Regex(@"Health\s*=\s*0f\s*;\s*IsAlive\s*=\s*false\s*;"), returnToPool);
+            Assert.Contains("Teleport(_poolPosition)", returnToPool, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void EveryWayOntoASquadRosterIsAMove()
+        {
+            // A bot is on exactly one roster, the one its squad field names. A roster that kept a
+            // bot it had lost counted it twice (56 bots a side against 50 in the P29 bench), and
+            // Join returned early for a bot already listed -- leaving it walking the squad's
+            // orders with no squad of its own. Both ways onto a roster now take the bot off any
+            // other first, and Join always hands over the squad.
+            string squad = ReadUnitySource("Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Squad.cs");
+
+            string constructor = MethodBody(squad, "public Squad(List<AiActorController> members, float timeUntilReady)");
+            Assert.Matches(new Regex(@"TakeOffOtherRoster\(member\)\s*;\s*member\.AssignedToSquad\(this\)"), constructor);
+
+            string join = MethodBody(squad, "public void Join(AiActorController member)");
+            Assert.Contains("TakeOffOtherRoster(member)", join, StringComparison.Ordinal);
+            Assert.DoesNotMatch(new Regex(@"members\.Contains\(member\)\s*\)\s*\{\s*return"), join);
+            Assert.DoesNotMatch(new Regex(@"\|\|\s*members\.Contains\(member\)"), join);
+            Assert.Contains("member.AssignedToSquad(this)", join, StringComparison.Ordinal);
+        }
+
         /// <summary>
         /// Overrides that MUST still run on a suspended controller, each with the reason.
         /// </summary>

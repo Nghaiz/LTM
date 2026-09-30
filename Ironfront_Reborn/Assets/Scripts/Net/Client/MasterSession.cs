@@ -336,6 +336,13 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>The newest room list. Empty until <see cref="OpenRoomBrowserAsync"/> runs.</summary>
         public RoomInfo[] Rooms { get; private set; } = Array.Empty<RoomInfo>();
 
+        /// <summary>
+        /// What the game-server host can still take, from the same answer as <see cref="Rooms"/>
+        /// (protocol 13), or null before the first list. The create-room form reads its bot
+        /// ceiling here.
+        /// </summary>
+        public RoomCapacity? Capacity { get; private set; }
+
         /// <summary>The address and ticket from the last successful join.</summary>
         public PendingJoin PendingJoin { get; private set; } = PendingJoin.None;
 
@@ -668,7 +675,9 @@ namespace Ironfront.Net.Unity.Client
             try
             {
                 long startedTicks = Stopwatch.GetTimestamp();
-                Rooms = await _master.GetRoomsAsync().ConfigureAwait(false) ?? Array.Empty<RoomInfo>();
+                RoomList list = await _master.GetRoomListAsync().ConfigureAwait(false) ?? new RoomList();
+                Rooms = list.Rooms ?? Array.Empty<RoomInfo>();
+                Capacity = list.Capacity;
                 NoteMasterAnswered();
 
                 // Measured around the request the browser was making anyway (P16 3.2). Rounded
@@ -1136,9 +1145,127 @@ namespace Ironfront.Net.Unity.Client
             // timeout in Tick can never fire, and ConnectingGame's only exits are driven by a
             // junction that no longer exists -- the flow would park there permanently.
             if (_flow.State == GameFlowState.InMatch || _flow.State == GameFlowState.MatchEnd)
+            {
+                LeaveRoomAfterMatch();
                 Recover(GameFlowState.Lobby);
+            }
             else if (_flow.State == GameFlowState.ConnectingGame)
                 Recover(GameFlowState.RoomLobby);
+        }
+
+        /// <summary>
+        /// Gives the room up on the master once this client has left its match, keeping a way
+        /// back through the room browser.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Leaving a match used to leave the player a member of its room</b>, with nothing on
+        /// screen to say so: the flow went to the lobby, the browser listed the room as "In match"
+        /// and refused it, and every other room answered <c>AlreadyInAnotherRoom</c>. The 2026-09-30
+        /// playtest found no way out but quitting the game -- both players did, twice.
+        /// </para>
+        /// <para>
+        /// The way back is the master's roster, not the membership: a room still running its match
+        /// lists itself to this player with <c>CanRejoin</c>, and <see cref="RejoinMatchAsync"/>
+        /// takes them back to it on their side. A room nobody else is left in closes, exactly as
+        /// its game server resets the match when its last player leaves.
+        /// </para>
+        /// <para>
+        /// Not awaited, for <see cref="LeaveRoomAsync"/>'s reason: the room is left locally either
+        /// way, and a master that did not hear it drops the membership when the link closes.
+        /// </para>
+        /// </remarks>
+        private void LeaveRoomAfterMatch()
+        {
+            if (JoinedRoomId != 0) _ = LeaveRoomQuietlyAsync();
+
+            PendingJoin = PendingJoin.None;
+            JoinedRoomId = 0;
+            JoinedMapId = 0;
+            Room = null;
+            _unclaimedRoom = null;
+            _enteringMatch = false;
+        }
+
+        private async Task LeaveRoomQuietlyAsync()
+        {
+            try
+            {
+                await _master.LeaveRoomAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is MasterServerException || IsLinkFailure(ex))
+            {
+                // Nothing to tell the player: they have already left, and a link that failed
+                // under this write has taken the membership with it.
+            }
+        }
+
+        /// <summary>
+        /// Goes back into a running match this player left, from the room browser.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Only for a room the master listed with <see cref="RoomInfo.CanRejoin"/>: the master
+        /// puts the player back on the roster's side and answers with a ticket for the game server
+        /// that is still running the match, so there is no start to wait for. The flow takes the
+        /// ordinary road -- <c>RoomBrowser -&gt; JoiningRoom -&gt; RoomLobby -&gt; ConnectingGame</c>
+        /// -- and goes straight through the room lobby.
+        /// </para>
+        /// <para>
+        /// <b><see cref="_enteringMatch"/> is set before the room lobby is entered</b>, because the
+        /// master's push about the room (state <c>InMatch</c>) arrives with the answer, and
+        /// <see cref="OnRoomStatePushed"/> would otherwise fetch a second ticket and dial twice.
+        /// </para>
+        /// </remarks>
+        public async Task<bool> RejoinMatchAsync(int roomId)
+        {
+            _flow.Transition(GameFlowState.JoiningRoom);
+            _unclaimedRoom = null;
+
+            try
+            {
+                JoinResult result = await _master.JoinRoomAsync(roomId, null).ConfigureAwait(false);
+                NoteMasterAnswered();
+
+                if (!result.Ok)
+                {
+                    Fail(MasterErrorText.DescribeFailure(result.ErrorCode));
+                    Recover(GameFlowState.RoomBrowser);
+                    return false;
+                }
+
+                var join = new PendingJoin(result.GameServerIp, result.GameServerPort, result.JoinTicket);
+                if (!join.IsValid)
+                {
+                    Fail("The master server did not name a game server for that match.");
+                    Recover(GameFlowState.RoomBrowser);
+                    return false;
+                }
+
+                PendingJoin = join;
+                JoinedMapId = MapIdOf(roomId);
+                JoinedRoomId = roomId;
+                _enteringMatch = true;
+
+                ClaimRoomState();
+
+                LastError = string.Empty;
+                _flow.Transition(GameFlowState.RoomLobby);
+                return EnterMatch();
+            }
+            catch (MasterServerException ex)
+            {
+                NoteMasterAnswered();
+                Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
+                Recover(GameFlowState.RoomBrowser);
+                return false;
+            }
+            catch (Exception ex) when (IsLinkFailure(ex))
+            {
+                Fail(LinkFailureText());
+                Recover(GameFlowState.RoomBrowser);
+                return false;
+            }
         }
 
         /// <summary>
@@ -1228,7 +1355,13 @@ namespace Ironfront.Net.Unity.Client
             Fail($"Disconnected from the game server ({reason}).");
 
             if (_flow.State == GameFlowState.InMatch || _flow.State == GameFlowState.MatchEnd)
+            {
+                // Out of the room too, for LeaveMatch's reason: a dropped player who stays a member
+                // cannot enter any other room, and the running match stays reachable through the
+                // browser's rejoin row.
+                LeaveRoomAfterMatch();
                 Recover(GameFlowState.Lobby);
+            }
         }
 
         private void FailJunction(string message)

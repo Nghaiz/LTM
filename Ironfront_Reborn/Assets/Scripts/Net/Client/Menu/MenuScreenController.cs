@@ -186,6 +186,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         public Ironfront.MasterClient.RoomInfo[] Rooms
             => _session != null ? _session.Rooms : System.Array.Empty<Ironfront.MasterClient.RoomInfo>();
 
+        /// <summary>What the game-server host can still take, from the last refresh, or null.</summary>
+        public Ironfront.MasterClient.RoomCapacity? Capacity => _session != null ? _session.Capacity : null;
+
         /// <summary>Round trip to the MASTER on the last refresh, or -1. P16 3.2.</summary>
         public int MasterPingMs => _session != null ? _session.MasterPingMs : -1;
 
@@ -487,6 +490,15 @@ namespace Ironfront.Net.Unity.Client.Menu
             Submit(_session.RefreshRoomsAsync());
         }
 
+        /// <summary>
+        /// Opens the create form, and re-lists the rooms so its bot ceiling is the host's NOW.
+        /// </summary>
+        /// <remarks>
+        /// The ceiling comes with the room list (protocol 13), which is as old as the browser's
+        /// last refresh; another player may have made a 100-bot room since. The create is checked
+        /// by the master either way, but a form that offers what it will then refuse is the thing
+        /// the slider's limit exists to prevent.
+        /// </remarks>
         public void ShowCreateRoom()
         {
             if (_flow == null || _flow.State != GameFlowState.RoomBrowser) return;
@@ -494,6 +506,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearError();
             _createRequested = true;
             _dirty = true;
+            if (_session != null) Submit(_session.RefreshRoomsAsync());
         }
 
         public void HideCreateRoom()
@@ -524,6 +537,24 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearChat();
             ClearError();
             Submit(JoinAsync(roomId, password));
+        }
+
+        /// <summary>
+        /// Goes back into a running match this player left: the browser's REJOIN.
+        /// </summary>
+        /// <remarks>
+        /// Only rooms the master listed with <c>CanRejoin</c> reach this; the master decides the
+        /// side, and the session dials the game server as soon as it answers.
+        /// </remarks>
+        public void RejoinMatch(int roomId)
+        {
+            if (_session == null || _flow == null) return;
+            if (_flow.State != GameFlowState.RoomBrowser) return;
+
+            _roomHeading = HeadingFor(roomId);
+            ClearChat();
+            ClearError();
+            Submit(RejoinAsync(roomId));
         }
 
         /// <summary>Creates a room from the form and lands in its lobby. P16 3.3.</summary>
@@ -642,6 +673,17 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_session == null) return false;
 
             if (await _session.JoinRoomAsync(roomId, password)) return true;
+
+            _roomHeading = string.Empty;
+            return false;
+        }
+
+        /// <summary>Rejoins, and drops the heading again if the master refused.</summary>
+        private async Task<bool> RejoinAsync(int roomId)
+        {
+            if (_session == null) return false;
+
+            if (await _session.RejoinMatchAsync(roomId)) return true;
 
             _roomHeading = string.Empty;
             return false;

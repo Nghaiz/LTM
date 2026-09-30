@@ -38,6 +38,13 @@ namespace Ironfront.Tools.TacticsTrainer
         /// <summary>In a fight this tick, and the index of the enemy squad it is shooting.</summary>
         public bool Engaged;
         public int Victim = -1;
+
+        /// <summary>
+        /// The id of the squad this one is walking over to join, -1 for none: a lone bot a spawn wave
+        /// sent to reinforce a squad, or one the commander folded into another (phase P29). It
+        /// merges on arrival and takes no orders on the way.
+        /// </summary>
+        public int JoinId = -1;
     }
 
     /// <summary>How a round ended.</summary>

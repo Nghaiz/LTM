@@ -182,12 +182,13 @@ namespace Ironfront.Net.Unity.Server
             Debug.Log($"[net] match ended, winner "
                       + (winningTeam == TeamId.None ? "draw" : $"team {winningTeam}"));
 
-            // The master releases the game server on GsMatchEnded, so this process is
-            // allocatable again and the next room's tickets must be free to be adopted. Without
-            // this, the first room a server ever hosted would be the only one it could host:
-            // every later allocation's tickets would be refused by a server that is in fact
-            // free. Ordered after the report, which still needs the room it is reporting.
-            if (_loop != null) _loop.RoomIdentity.Release();
+            // The room is KEPT. A round that ends is followed by the next one on this server, with
+            // the same players still connected (MatchStateMachine resets after PostMatchSeconds),
+            // and the master keeps the room in its match and this server allocated to it. This
+            // released the room here, while the master put it back to Waiting and handed this
+            // server to the next room: that room's tickets were then adopted into a round the
+            // first room's players were still playing. The room is released when its last player
+            // leaves (ServerTickLoop.OnClientDisconnected), which is when it is really over.
         }
 
         /// <summary>

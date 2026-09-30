@@ -1148,32 +1148,70 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(0, count);
         }
 
+        // S_PLAYER_SCORES, one page of a longer table (2026-09-30): page 2 of 2 holding one row,
+        // with the stats tail a server always sends and the page tail after it.
+        //   u8 count 1                                              -> 01
+        //   row    u8 actorId 7 · u16 kills 10 · u16 deaths 3 · u8 team 1
+        //                                                           -> 07 0A 00 03 00 01
+        //   stats  u8 version 1                                     -> 01
+        //          u8 status 1 · u8 headshots 2 · u8 streak 3 · u8 best 4 · u16 points 5 · u16 ping 6
+        //                                                           -> 01 02 03 04 05 00 06 00
+        //   page   u8 version 1 · u8 pageIndex 1 · u8 pageCount 2   -> 01 01 02
+        private const string PlayerScoresPageHex =
+            "01 07 0A 00 03 00 01 01 01 02 03 04 05 00 06 00 01 01 02";
+
+        [Fact]
+        public void PlayerScoresPage_Serializes_ToTheExpectedBytes_AndParsesBack()
+        {
+            var row = new PlayerScoreEntry
+            {
+                ActorId = 7, Kills = 10, Deaths = 3, Team = TeamId.Team1,
+                Status = PlayerStatusFlags.Alive, Headshots = 2, Streak = 3, BestStreak = 4,
+                Points = 5, PingMs = 6,
+            };
+
+            var buffer = new byte[PlayerScoresMessage.MaxBodySize];
+            int written = PlayerScoresMessage.Write(buffer, new[] { row }, includeStats: true, pageIndex: 1, pageCount: 2);
+            Assert.Equal(PlayerScoresPageHex, Hex.ToHex(buffer.AsSpan(0, written)));
+
+            var parsed = new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+            Assert.True(PlayerScoresMessage.TryParse(
+                Hex.FromHex(PlayerScoresPageHex), parsed, out int count, out int pageIndex, out int pageCount));
+            Assert.Equal(1, count);
+            Assert.Equal(1, pageIndex);
+            Assert.Equal(2, pageCount);
+            Assert.Equal(7, parsed[0].ActorId);
+            Assert.Equal(5, parsed[0].Points);
+        }
+
         /// <summary>
-        /// The whole table fits one un-fragmented channel-2 payload, at every player count.
+        /// Every message of the table fits one un-fragmented channel-2 payload, at every roster
+        /// size.
         /// </summary>
         /// <remarks>
         /// This is P18 § 1.2's arithmetic as an assertion rather than as a table in a document.
-        /// It is the check that would have gone red on the design this phase rejected — putting
-        /// the same two counters on <c>S_PLAYER_LIST</c>, whose worst case already leaves 28
-        /// bytes — and it is derived from the constants so that raising MAX_ACTORS re-runs the
-        /// sum rather than leaving a stale 385 behind.
+        /// It was the whole table until 2026-09-30, when rows of 14 B made a table of 88 rows
+        /// overflow it and the P29 bench saw 100-bot scoreboards stop; the table now goes in
+        /// pages of <see cref="PlayerScoresMessage.RowsPerPage"/>, so the guarantee is per
+        /// message and no longer moves with MAX_ACTORS.
         /// </remarks>
         [Fact]
         public void PlayerScores_WorstCase_FitsOneUnfragmentedPayload()
         {
-            // With the stats tail (2026-09-30), which is what a server now always sends.
+            // A full page with the stats tail, which a server always sends, and the page tail.
             Assert.Equal(
                 PlayerScoresMessage.HeaderSize
-                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize
-                    + 1 + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.StatsEntrySize,
+                    + PlayerScoresMessage.RowsPerPage * PlayerScoresMessage.EntrySize
+                    + 1 + PlayerScoresMessage.RowsPerPage * PlayerScoresMessage.StatsEntrySize
+                    + PlayerScoresMessage.PageTailSize,
                 PlayerScoresMessage.MaxBodySize);
 
             Assert.True(
                 PlayerScoresMessage.MaxBodySize <= ProtocolConstants.MAX_CHANNEL_PAYLOAD,
                 $"S_PLAYER_SCORES worst case is {PlayerScoresMessage.MaxBodySize} B against a "
                 + $"{ProtocolConstants.MAX_CHANNEL_PAYLOAD} B budget. Widening a row costs "
-                + $"{ProtocolConstants.MAX_ACTORS} B per byte — see P18 § 1.2 for why the "
-                + "un-fragmented guarantee is worth more than the field.");
+                + $"{PlayerScoresMessage.RowsPerPage} B per byte a page — see P18 § 1.2 for why "
+                + "the un-fragmented guarantee is worth more than the field.");
         }
 
         [Fact]

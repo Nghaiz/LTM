@@ -1,6 +1,7 @@
 #nullable enable
 
 using System.Collections.Generic;
+using Ironfront.MasterClient;
 using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
 using UnityEngine;
@@ -23,6 +24,12 @@ namespace Ironfront.Net.Unity.Client.Menu
     /// which surfaces much later as <c>NoGameServerAvailable</c> and reads as the master being
     /// down.
     /// </para>
+    /// <para>
+    /// <b>Bots are a slider of the match's total, bounded by the servers</b> (protocol 13). The
+    /// ceiling comes with the room list the browser holds, re-fetched when this form opens
+    /// (<c>MenuScreenController.ShowCreateRoom</c>), and <see cref="MenuBotSlider"/> will not
+    /// go past it; <see cref="MenuHostCapacityCard"/> says why.
+    /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
     public sealed class MenuCreateRoomScreen : MenuFormScreen
@@ -43,7 +50,8 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private InputField? _nameField;
         [SerializeField] private Dropdown? _mapDropdown;
         [SerializeField] private InputField? _maxPlayersField;
-        [SerializeField] private InputField? _botCountField;
+        [SerializeField] private MenuBotSlider? _botSlider;
+        [SerializeField] private MenuHostCapacityCard? _capacityCard;
         [SerializeField] private Toggle? _privateToggle;
         [SerializeField] private InputField? _passwordField;
 
@@ -75,6 +83,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// </remarks>
         private readonly List<ushort> _mapIds = new List<ushort>();
 
+        /// <summary>The capacity last handed to the slider, so an unchanged answer is not re-applied every frame.</summary>
+        private RoomCapacity? _shownCapacity;
+        private bool _hasShownCapacity;
+
         private void Awake()
         {
             PopulateMaps();
@@ -84,7 +96,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_privateToggle != null) _privateToggle.onValueChanged.AddListener(OnPrivateChanged);
             if (_mapDropdown != null) _mapDropdown.onValueChanged.AddListener(_ => RefreshMapPreview());
             if (_maxPlayersField != null) _maxPlayersField.onValueChanged.AddListener(_ => RefreshPreviewStats());
-            if (_botCountField != null) _botCountField.onValueChanged.AddListener(_ => RefreshPreviewStats());
+            if (_botSlider != null) _botSlider.ValueChanged += _ => RefreshPreviewStats();
 
             if (_maxPlayersField != null && _maxPlayersField.text.Length == 0)
                 _maxPlayersField.text = DefaultMaxPlayers.ToString();
@@ -105,6 +117,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             int index = Mathf.Clamp(_mapDropdown.value, 0, _mapDropdown.options.Count - 1);
             _mapPreviewTitle.text = _mapDropdown.options[index].text;
+            RefreshPreviewStats();
         }
 
         /// <summary>Fills the dropdown from <see cref="MapCatalog"/>, in catalogue order.</summary>
@@ -142,15 +155,24 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_mapPreviewCapacity != null)
                 _mapPreviewCapacity.text = PreviewValue(_maxPlayersField, DefaultMaxPlayers.ToString());
             if (_mapPreviewBots != null)
-                _mapPreviewBots.text = RoomBotsField.Preview(BotFieldText());
+                _mapPreviewBots.text = RoomBotChoice.Preview(ChosenBots());
             if (_mapPreviewSecurity != null)
                 _mapPreviewSecurity.text = _privateToggle != null && _privateToggle.isOn
                     ? "PRIVATE"
                     : "PUBLIC";
+            if (_capacityCard != null)
+                _capacityCard.Show(_shownCapacity, ChosenBots(), SelectedMapId(), SelectedMapName());
         }
 
-        // Not `?.`: an InputField is a UnityEngine.Object, whose null test is the overloaded one.
-        private string? BotFieldText() => _botCountField != null ? _botCountField.text : null;
+        // Not `?.`: a MenuBotSlider is a UnityEngine.Object, whose null test is the overloaded one.
+        private int ChosenBots() => _botSlider != null ? _botSlider.Value : ProtocolConstants.DEFAULT_ROOM_BOTS;
+
+        private string SelectedMapName()
+        {
+            if (_mapDropdown == null || _mapDropdown.options.Count == 0) return "This map";
+            int index = Mathf.Clamp(_mapDropdown.value, 0, _mapDropdown.options.Count - 1);
+            return _mapDropdown.options[index].text;
+        }
 
         private static string PreviewValue(InputField? field, string fallback)
         {
@@ -215,11 +237,13 @@ namespace Ironfront.Net.Unity.Client.Menu
                 return;
             }
 
-            // Bots PER TEAM, not capped by the seat count; empty means the design roster. See
-            // RoomBotsField for why.
-            if (!RoomBotsField.TryRead(BotFieldText(), out int botCount))
+            // The match's total, which the slider has already held under the servers' ceiling;
+            // asked again here because the ceiling can have moved since it was drawn. Not capped
+            // by the seat count: bots do not take a player's seat.
+            int botCount = ChosenBots();
+            if (!RoomBotChoice.IsAllowed(botCount, _shownCapacity))
             {
-                SetError(RoomBotsField.RangeError);
+                SetError(RoomBotChoice.CeilingText(_shownCapacity));
                 return;
             }
 
@@ -266,7 +290,18 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         public override void OnControllerStateChanged(MenuScreenController controller)
         {
-            if (_createButton != null) _createButton.interactable = !controller.IsBusy;
+            RoomCapacity? capacity = controller.Capacity;
+            if (!_hasShownCapacity || !ReferenceEquals(capacity, _shownCapacity))
+            {
+                _shownCapacity = capacity;
+                _hasShownCapacity = true;
+                if (_botSlider != null) _botSlider.SetCapacity(capacity);
+                RefreshPreviewStats();
+            }
+
+            if (_botSlider != null) _botSlider.SetInteractable(!controller.IsBusy);
+            if (_createButton != null)
+                _createButton.interactable = !controller.IsBusy && RoomBotChoice.CanCreate(capacity);
             if (_backButton != null) _backButton.interactable = !controller.IsBusy;
         }
     }

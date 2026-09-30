@@ -24,6 +24,7 @@ namespace Ironfront.Tools.TacticsTrainer
     public sealed class CommanderPolicy : ISidePolicy
     {
         private readonly TeamPlanner _planner;
+        private readonly TacticsProfile _profile;
         private readonly float _divertRange;
         private readonly List<SimSquad> _mine = new List<SimSquad>();
         private FlagInfo[] _flags = Array.Empty<FlagInfo>();
@@ -31,10 +32,18 @@ namespace Ironfront.Tools.TacticsTrainer
         private SquadInfo[] _info = new SquadInfo[TeamPlanner.MaxSquads];
         private SquadOrder[] _orders = new SquadOrder[TeamPlanner.MaxSquads];
         private float _nextPlan = -1f;
+        private readonly SquadRegroup _regroup = new SquadRegroup();
+        private readonly bool _upkeep;
 
-        public CommanderPolicy(TacticsProfile profile)
+        /// <param name="upkeep">
+        /// Keep the side's squads whole as the game has since phase P29 (the default); false plays
+        /// the squad handling the game had before, which P28 part 4's numbers were measured on.
+        /// </param>
+        public CommanderPolicy(TacticsProfile profile, bool upkeep = true)
         {
+            _upkeep = upkeep;
             _planner = new TeamPlanner(profile);
+            _profile = profile;
             _divertRange = profile.AttackDivertRange;
         }
 
@@ -48,6 +57,9 @@ namespace Ironfront.Tools.TacticsTrainer
             if (_nextPlan < 0f)
             {
                 sim.DivertRange[team] = _divertRange;
+                // The game keeps its squads whole since phase P29, whichever commander plans.
+                sim.SquadUpkeep[team] = _upkeep;
+                sim.ReinforceRadius[team] = _profile.ReinforceRadius;
                 BuildFlags(sim.Map);
                 // BotCommander: the first plan 3 s in, then the sides alternate once a second.
                 _nextPlan = 3f + team;
@@ -58,10 +70,12 @@ namespace Ironfront.Tools.TacticsTrainer
             }
             _nextPlan += SimRules.PlanPeriod;
 
+            if (_upkeep) sim.Regroup(team, _regroup, _profile.RegroupRadius);
             _mine.Clear();
             foreach (SimSquad s in sim.Squads)
             {
-                if (s.Team == team && _mine.Count < TeamPlanner.MaxSquads) _mine.Add(s);
+                // A squad walking over to join another takes no orders of its own on the way.
+                if (s.Team == team && s.JoinId < 0 && _mine.Count < TeamPlanner.MaxSquads) _mine.Add(s);
             }
             if (_mine.Count == 0)
             {
@@ -88,12 +102,12 @@ namespace Ironfront.Tools.TacticsTrainer
                 team, _flags, _adjacency,
                 new ReadOnlySpan<SquadInfo>(_info, 0, _mine.Count),
                 sim.Score(team), sim.Score(1 - team),
-                new Span<SquadOrder>(_orders, 0, _mine.Count));
+                new Span<SquadOrder>(_orders, 0, _mine.Count), sim.Time);
 
             if (Log != null && sim.Time < LogUntil)
             {
                 var line = new System.Text.StringBuilder();
-                line.Append(System.FormattableString.Invariant($"t={sim.Time:0} team {team} {_planner.LastPosture} obj {_planner.LastObjectives} def {_planner.LastDefenders}:"));
+                line.Append(System.FormattableString.Invariant($"t={sim.Time:0} team {team} {_planner.LastPosture} obj {_planner.LastObjectives} def {_planner.LastDefenders} gather {_planner.LastGathering}:"));
                 for (int i = 0; i < written; i++)
                 {
                     SimSquad s = _mine[_orders[i].SquadIndex];
@@ -141,6 +155,8 @@ namespace Ironfront.Tools.TacticsTrainer
             {
                 _flags[f].Owner = sim.Owner[f];
                 _flags[f].EnemiesInContact = 0;
+                // Contested as the map shows it: an enemy stood inside the capture range lately.
+                _flags[f].Contested = !sim.Safe(f);
             }
             float threat = SimRules.ThreatRadius * SimRules.ThreatRadius;
             float contact = SimRules.ContactRadius * SimRules.ContactRadius;

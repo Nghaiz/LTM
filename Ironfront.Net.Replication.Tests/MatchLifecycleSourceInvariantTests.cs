@@ -41,6 +41,57 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A round's end keeps the room: only the last player leaving releases it.
+        /// </summary>
+        /// <remarks>
+        /// The next round follows on this server with the same players still connected, and the
+        /// master keeps the room in its match (<c>RoundEndKeepsTheRoomTests</c>). Releasing the room
+        /// at <c>MatchEnded</c> let the next room allocated to this server have its tickets adopted
+        /// into a round the first room's players were still playing.
+        /// </remarks>
+        [Fact]
+        public void ARoundThatEndsKeepsItsRoom()
+        {
+            string ended = MethodBody(
+                ReadScript("Net", "Server", "ServerMasterReporter.cs"), "ServerMasterReporter.cs",
+                "private void OnMatchEnded(byte winningTeam)");
+
+            Assert.Contains("Reporter.MatchEnded(RoomId", ended, StringComparison.Ordinal);
+            Assert.DoesNotContain("RoomIdentity.Release()", ended, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// A round reset anchors the bot release for players carried into the new round alive.
+        /// </summary>
+        /// <remarks>
+        /// B2, live test 2026-09-30: the gate is re-armed on the world reset and anchored only
+        /// by a deploy, so a round that ended with its players alive opened a round with no bots
+        /// at all. The anchor must come after the respawn gate's reset (which runs after the
+        /// world reset that re-armed the bot gate), and count only bodies really in the world.
+        /// </remarks>
+        [Fact]
+        public void ARoundResetReleasesBotsForPlayersCarriedIntoItAlive()
+        {
+            string source = ReadScript("Net", "Server", "ServerTickLoop.cs");
+            string reset = MethodBody(source, "ServerTickLoop.cs", "public void ResetForNewMatch()");
+
+            int respawnGate = reset.IndexOf("_respawnGate.ResetForNewRound(", StringComparison.Ordinal);
+            int anchor = reset.IndexOf(
+                "NetBotRelease.NotifyPlayersCarriedIntoRound(CountPlayersCarriedAlive(_players))",
+                StringComparison.Ordinal);
+            Assert.True(
+                respawnGate >= 0 && anchor > respawnGate,
+                "ResetForNewMatch must anchor the bot release for players carried into the round "
+                + "alive, after the respawn gate's reset.");
+
+            string count = MethodBody(
+                source, "ServerTickLoop.cs",
+                "internal static int CountPlayersCarriedAlive(IReadOnlyList<ServerPlayer> players)");
+            Assert.Contains("body.IsAlive", count, StringComparison.Ordinal);
+            Assert.Contains("!players[i].AwaitingFirstDeploy", count, StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// The HUD's flag counts are pushed every frame, not only when a capture point changes.
         /// </summary>
         /// <remarks>

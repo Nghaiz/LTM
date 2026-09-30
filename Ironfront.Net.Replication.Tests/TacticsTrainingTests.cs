@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Ironfront.Net.Replication.Ai;
 using Ironfront.Tools.TacticsTrainer;
+using Ironfront.Tools.TacticsTrainer.Baselines;
 using Xunit;
 
 namespace Ironfront.Net.Replication.Tests
@@ -20,9 +21,10 @@ namespace Ironfront.Net.Replication.Tests
     }
 
     /// <summary>
-    /// The claims phase P28 part 4's report makes, held on every run: a training run replays from
-    /// its seed, the simulator is fair to both sides, the tuner moves every weight the commander
-    /// has, and the profile the game ships beats the original squads on rounds the tuner never saw.
+    /// The claims the training reports make (P28 part 4, P29 part 4), held on every run: a training
+    /// run replays from its seed, the simulator is fair to both sides, the tuner moves every weight
+    /// the commander has, and the profile the game ships beats the original squads, the commander it
+    /// replaced and its own hand-set start, on rounds the tuner never saw.
     /// </summary>
     [Collection(SimulatorCollection.Name)]
     public sealed class TacticsTrainingTests
@@ -33,16 +35,22 @@ namespace Ironfront.Net.Replication.Tests
         public TacticsTrainingTests() => Evaluation.MaxParallelism = 1;
 
         /// <summary>
-        /// The shipped profile's lead over the hand-set one on the held-out rounds: +0.54 when it
-        /// was trained (plans/reports/2026-09-30-p28-tactics-training.md). A fall below this is a regression.
+        /// The shipped profile's lead over its hand-set start on the held-out rounds: +0.71 when it
+        /// was trained (plans/reports/2026-09-30-p29-commander-training.md). A fall below this is a regression.
         /// </summary>
-        private const float LeadOverHandSet = 0.4f;
+        private const float LeadOverHandSet = 0.55f;
 
         /// <summary>
-        /// How far behind the original squads the shipped profile may be, on the same rounds: it was
-        /// -0.08 when trained -- roughly level, where the hand-set profile was -0.56.
+        /// The shipped profile's lead over the original squads on the same rounds: +0.42 when
+        /// trained. P28's commander only drew with them (-0.08); this is the line it must stay above.
         /// </summary>
-        private const float BehindOriginalAtMost = 0.15f;
+        private const float LeadOverOriginal = 0.30f;
+
+        /// <summary>
+        /// The shipped profile's lead over the P28 commander it replaced, frozen in the trainer: +0.54
+        /// when trained.
+        /// </summary>
+        private const float LeadOverP28 = 0.40f;
 
         [Fact]
         public void ARoundReplaysExactly()
@@ -85,18 +93,35 @@ namespace Ironfront.Net.Replication.Tests
             EvaluationScore shipped = Evaluation.Score(TrainingPlan.TestRounds(Seed), TacticsProfile.Default(), new TacticsProfile());
             Assert.True(shipped.MeanMargin >= LeadOverHandSet && shipped.Wins > shipped.Losses,
                 $"the shipped profile no longer clearly beats the hand-set one: {shipped.Wins} won, {shipped.Losses} lost, "
-                + $"{shipped.Draws} drawn, mean margin {shipped.MeanMargin:+0.000;-0.000} (at least +{LeadOverHandSet:0.00}). "
-                + "Re-run the trainer and read plans/reports/2026-09-30-p28-tactics-training.md before changing this number.");
+                + $"{shipped.Draws} drawn, mean margin {shipped.MeanMargin:+0.000;-0.000;+0.000} (at least +{LeadOverHandSet:0.00}). "
+                + "Re-run the trainer and read plans/reports/2026-09-30-p29-commander-training.md before changing this number.");
         }
 
         [Fact]
-        public void TheShippedProfile_KeepsLevelWithTheOriginalSquads()
+        public void TheShippedProfile_BeatsTheOriginalSquads()
         {
             EvaluationScore shipped = Evaluation.Score(TrainingPlan.TestRounds(Seed), TacticsProfile.Default());
-            Assert.True(shipped.MeanMargin >= -BehindOriginalAtMost,
-                $"the shipped commander has fallen behind the original squads: {shipped.Wins} won, {shipped.Losses} lost, "
-                + $"{shipped.Draws} drawn, mean margin {shipped.MeanMargin:+0.000;-0.000} (no worse than -{BehindOriginalAtMost:0.00}). "
-                + "A planner change that loses the ground part 4 won back shows here first.");
+            Assert.True(shipped.MeanMargin >= LeadOverOriginal && shipped.Wins > shipped.Losses,
+                $"the shipped commander no longer beats the original squads: {shipped.Wins} won, {shipped.Losses} lost, "
+                + $"{shipped.Draws} drawn, mean margin {shipped.MeanMargin:+0.000;-0.000;+0.000} (at least +{LeadOverOriginal:0.00}). "
+                + "A planner change that gives back what P29 won shows here first; do not lower the number to pass.");
+        }
+
+        [Fact]
+        public void TheShippedProfile_BeatsTheCommanderItReplaced()
+        {
+            EvaluationScore shipped = Evaluation.ScoreAgainstV1(TrainingPlan.TestRounds(Seed), TacticsProfile.Default(), TacticsProfileV1.Default());
+            Assert.True(shipped.MeanMargin >= LeadOverP28 && shipped.Wins > shipped.Losses,
+                $"the shipped commander no longer beats P28's: {shipped.Wins} won, {shipped.Losses} lost, "
+                + $"{shipped.Draws} drawn, mean margin {shipped.MeanMargin:+0.000;-0.000;+0.000} (at least +{LeadOverP28:0.00}).");
+        }
+
+        [Fact]
+        public void TheSimulatorIsFair_ToTheShippedCommanderAgainstItself()
+        {
+            EvaluationScore mirror = Evaluation.Score(Few(Seed), TacticsProfile.Default(), TacticsProfile.Default());
+            Assert.Equal(0f, mirror.MeanMargin, 6);
+            Assert.Equal(mirror.Wins, mirror.Losses);
         }
 
         [Fact]

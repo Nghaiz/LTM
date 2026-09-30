@@ -55,6 +55,8 @@ public sealed class BotCommander : MonoBehaviour
 	private readonly HashSet<Squad> _seen = new HashSet<Squad>();
 	private readonly SquadInfo[] _squadInfo = new SquadInfo[TeamPlanner.MaxSquads];
 	private readonly SquadOrder[] _orders = new SquadOrder[TeamPlanner.MaxSquads];
+	private readonly SquadRegroup _regroup = new SquadRegroup();
+	private readonly SquadMerge[] _merges = new SquadMerge[TeamPlanner.MaxSquads];
 	private readonly string[] _lastSummary = new string[2];
 	private readonly float[] _lastLogged = new float[2];
 	private readonly StringBuilder _log = new StringBuilder(256);
@@ -133,6 +135,7 @@ public sealed class BotCommander : MonoBehaviour
 		_adjacency = adjacency.ToArray();
 		_nextPlan = Time.time + 3f;
 		_lastSummary[0] = _lastSummary[1] = null;
+		Squad.Census.Reset();
 	}
 
 	private void Update()
@@ -157,6 +160,11 @@ public sealed class BotCommander : MonoBehaviour
 			return;
 		}
 
+		if (Regroup())
+		{
+			CollectSquads(team);
+		}
+
 		ReadFlags(team);
 
 		int squadCount = Mathf.Min(_squads.Count, TeamPlanner.MaxSquads);
@@ -178,7 +186,7 @@ public sealed class BotCommander : MonoBehaviour
 			team, _flags, _adjacency,
 			new System.ReadOnlySpan<SquadInfo>(_squadInfo, 0, squadCount),
 			score, enemyScore,
-			new System.Span<SquadOrder>(_orders, 0, squadCount));
+			new System.Span<SquadOrder>(_orders, 0, squadCount), Time.time);
 
 		for (int i = 0; i < written; i++)
 		{
@@ -186,6 +194,26 @@ public sealed class BotCommander : MonoBehaviour
 		}
 
 		Report(team, planner, written);
+	}
+
+	/// <summary>
+	/// Folds the side's lone bots into squads near them before the plan is made (phase P29,
+	/// <see cref="SquadRegroup"/>); true when any squad changed.
+	/// </summary>
+	private bool Regroup()
+	{
+		int count = Mathf.Min(_squads.Count, TeamPlanner.MaxSquads);
+		for (int i = 0; i < count; i++)
+		{
+			_squadInfo[i] = Describe(_squads[i]);
+		}
+
+		int merges = _regroup.Plan(new System.ReadOnlySpan<SquadInfo>(_squadInfo, 0, count), _merges, Profile.RegroupRadius);
+		for (int m = 0; m < merges; m++)
+		{
+			_squads[_merges[m].Into].Absorb(_squads[_merges[m].From]);
+		}
+		return merges > 0;
 	}
 
 	/// <summary>The side's squads: every squad with a live bot in it, once.</summary>
@@ -227,6 +255,10 @@ public sealed class BotCommander : MonoBehaviour
 			_flags[f].Capturable = point is CapturePoint capture && capture.canBeCaptured;
 			_flags[f].Position = ToCore(point != null ? point.transform.position : Vector3.zero);
 			_flags[f].EnemiesInContact = 0;
+			// Contested as every player's map shows it (phase P29): an enemy stood on it lately.
+			// A base is never safe by SpawnPoint's own default and can never be taken, so only a
+			// capture point can be contested.
+			_flags[f].Contested = point is CapturePoint contested && !contested.IsSafe();
 		}
 
 		for (int e = 0; e < theirs.Count; e++)
@@ -306,7 +338,7 @@ public sealed class BotCommander : MonoBehaviour
 	/// </summary>
 	private void Report(int team, TeamPlanner planner, int squadCount)
 	{
-		int attack = 0, defend = 0, flank = 0, bots = 0;
+		int attack = 0, defend = 0, flank = 0, gather = 0, bots = 0;
 		for (int i = 0; i < squadCount; i++)
 		{
 			bots += _squadInfo[i].Size;
@@ -315,6 +347,7 @@ public sealed class BotCommander : MonoBehaviour
 			case SquadRole.Attack: attack++; break;
 			case SquadRole.Defend: defend++; break;
 			case SquadRole.Flank: flank++; break;
+			case SquadRole.Assemble: gather++; break;
 			}
 		}
 
@@ -322,9 +355,19 @@ public sealed class BotCommander : MonoBehaviour
 		_log.Append("[bots] team ").Append(team).Append(": ").Append(bots).Append(" bots in ")
 			.Append(squadCount).Append(" squads, ").Append(planner.LastPosture)
 			.Append(", ").Append(planner.LastObjectives).Append(" objective(s); squads attack ")
-			.Append(attack).Append(", flank ").Append(flank).Append(", defend ").Append(defend)
+			.Append(attack).Append(", gather ").Append(gather).Append(", flank ").Append(flank).Append(", defend ").Append(defend)
 			.Append(" (").Append(planner.LastDefenders).Append(" bots)");
 		string summary = _log.ToString();
+
+		// Where the squads came from, which changes on nearly every plan: kept out of the summary
+		// the change test compares, so the line still only prints when the plan changes shape.
+		int[] splits = Squad.Census.Splits[team];
+		_log.Append("; squads formed ").Append(Squad.Census.Formed[team])
+			.Append(" (").Append(Squad.Census.FormedAlone[team]).Append(" alone), split rogue ")
+			.Append(splits[(int)Squad.SplitReason.Rogue]).Append(" crew ").Append(splits[(int)Squad.SplitReason.Crew])
+			.Append(" full ").Append(splits[(int)Squad.SplitReason.VehicleFull]).Append(", left alone by a death ")
+			.Append(Squad.Census.LeftAlone[team]).Append(", merged ").Append(Squad.Census.Merged[team])
+			.Append(", reinforced by a spawn ").Append(Squad.Census.Reinforced[team]);
 
 		bool changed = summary != _lastSummary[team];
 		if (!changed && Time.time - _lastLogged[team] < QuietLogPeriod)
@@ -334,7 +377,7 @@ public sealed class BotCommander : MonoBehaviour
 
 		_lastSummary[team] = summary;
 		_lastLogged[team] = Time.time;
-		Debug.Log(summary);
+		Debug.Log(_log.ToString());
 	}
 
 	private static Vec3 ToCore(Vector3 v) => new Vec3(v.x, v.y, v.z);

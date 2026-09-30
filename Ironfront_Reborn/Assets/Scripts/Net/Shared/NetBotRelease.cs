@@ -113,6 +113,34 @@ namespace Ironfront.Net.Unity
         }
 
         /// <summary>
+        /// Anchors a re-armed gate for players carried into the new round alive.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A deploy is the only other anchor, and these players never deploy.</b>
+        /// <see cref="NotifyPlayerSpawned"/> is reported by <c>ServerCombatBridge.PlaceAtSpawn</c>
+        /// when a body is placed. A player who was alive when the round ended keeps their body
+        /// standing where it was, so nothing places it and the round's gate was never anchored:
+        /// the second round of a 100-bot room released no bots at all, and both clients watched a
+        /// map where nothing moved (live test 2026-09-30, B2).
+        /// </para>
+        /// <para>
+        /// Called by <c>ServerTickLoop.ResetForNewMatch</c>, which runs after
+        /// <see cref="ResetForNewRound"/> has re-armed the gate. Zero players carried leaves it
+        /// armed for the first deploy, exactly as the first round opens.
+        /// </para>
+        /// </remarks>
+        public static void NotifyPlayersCarriedIntoRound(int playersAlive)
+        {
+            if (playersAlive <= 0 || Gate.HasAnchor) return;
+
+            Gate.NotifyPlayerSpawned(Time.time);
+            Debug.Log(
+                $"[net] {playersAlive} player(s) carried into the new round alive; "
+                + $"bots release in {Gate.DelaySeconds:F0}s.");
+        }
+
+        /// <summary>
         /// Re-arms the gate for a new round, so the next one opens as empty as the first did.
         /// </summary>
         /// <remarks>

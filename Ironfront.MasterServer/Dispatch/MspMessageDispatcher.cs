@@ -62,7 +62,7 @@ namespace Ironfront.MasterServer.Dispatch
                     case MspMessageType.LoginRequest:
                         Login(connection, Deserialize<LoginRequest>(body)); break;
                     case MspMessageType.RoomListRequest:
-                        if (TryGetAuthenticatedSession(connection, out _)) ListRooms(connection);
+                        if (TryGetAuthenticatedSession(connection, out Session listSession)) ListRooms(connection, listSession);
                         break;
                     case MspMessageType.RoomCreateRequest:
                     {
@@ -163,11 +163,13 @@ namespace Ironfront.MasterServer.Dispatch
         {
             if (!_lobby.TryGetRoomById(roomId, out Room? room) || room is null) return;
             room.AssignedGameServerId = 0;
-            room.State = RoomLifecycleState.Waiting;
             foreach (RoomMember member in room.Members)
                 if (_connectionsByPlayer.TryGetValue(member.PlayerId, out ClientConnection? connection))
                     SendError(connection, ErrorCode.GameServerNotResponding, "Game server connection was lost.");
-            BroadcastRoom(room);
+
+            // Raises RoomChanged, which broadcasts the room: the match went with its server, so
+            // there is nothing left to rejoin and nobody is ready for the next one yet.
+            _lobby.ReturnToWaiting(room);
         }
 
         private void Register(ClientConnection connection, RegisterRequest request)
@@ -214,16 +216,64 @@ namespace Ironfront.MasterServer.Dispatch
             Send(connection, MspMessageType.LoginResponse, new { ok = true, errorCode = (ushort)ErrorCode.Ok, sessionToken = result.Session.Token, playerId = result.Session.PlayerId, displayName = result.Session.DisplayName, retryAfterSec = 0 });
         }
 
-        private void ListRooms(ClientConnection connection)
+        private void ListRooms(ClientConnection connection, Session session)
         {
             var rooms = new List<object>();
             foreach (Room room in _lobby.Rooms)
+            {
                 // isPrivate is a projection of a value the room has always held, added in P16
                 // 3.2 so the browser can draw the lock and ask for the password BEFORE the join
                 // rather than after WrongRoomPassword. The hash itself is never sent: it is the
                 // credential, and a client that had it would not need to be asked.
-                rooms.Add(new { roomId = room.RoomId, name = room.Name, mapId = room.MapId, players = room.Members.Count, maxPlayers = room.MaxPlayers, state = (byte)room.State, isPrivate = room.IsPrivate });
-            Send(connection, MspMessageType.RoomListResponse, new { rooms });
+                //
+                // canRejoin and rejoinTeam are answered for THIS requester: whether they played
+                // in the room's running match and may go back in, and on which side. Every other
+                // player is told false, which is what keeps a started match closed to them.
+                bool canRejoin = LobbyService.CanRejoin(session.PlayerId, room);
+                byte rejoinTeam = canRejoin && room.Roster.TryGetValue(session.PlayerId, out byte team) ? team : (byte)0;
+                rooms.Add(new
+                {
+                    roomId = room.RoomId, name = room.Name, mapId = room.MapId, players = room.Members.Count,
+                    maxPlayers = room.MaxPlayers, state = (byte)room.State, isPrivate = room.IsPrivate,
+                    canRejoin, rejoinTeam, botCount = room.BotCount,
+                });
+            }
+
+            Send(connection, MspMessageType.RoomListResponse, new { rooms, capacity = CapacityPayload() });
+        }
+
+        /// <summary>
+        /// What the create-room form may offer right now, and why (protocol 13): the most bots a new
+        /// room may have, what is in play already, and which maps have a free game server.
+        /// </summary>
+        /// <remarks>
+        /// Sent with every room list rather than on a request of its own. The create form opens
+        /// from the browser, whose list is at most one refresh old, and the create itself is checked
+        /// against the same numbers (<see cref="LobbyService.CreateRoom"/>), so a stale answer can
+        /// only ever be refused, never exceeded.
+        /// </remarks>
+        private object CapacityPayload()
+        {
+            BotCapacity capacity = _lobby.Capacity;
+            int botsInPlay = 0;
+            foreach (Room room in _lobby.Rooms) botsInPlay += room.BotCount;
+
+            var maps = new List<object>();
+            foreach ((ushort mapId, int servers, int free) in _gameServers.MapAvailability(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
+                maps.Add(new { mapId, servers, free });
+
+            return new
+            {
+                maxBotsForNewRoom = _lobby.MaxBotsForNewRoom(),
+                canCreateRoom = capacity.HasRoomForAnotherMatch(_lobby.Rooms),
+                maxBotsPerMatch = ProtocolConstants.MAX_BOTS,
+                roomsOpen = _lobby.Rooms.Count,
+                botsInPlay,
+                budgetUnits = capacity.BudgetUnits,
+                unitsInUse = capacity.UnitsInUse(_lobby.Rooms),
+                matchCostUnits = capacity.MatchCostUnits,
+                maps,
+            };
         }
 
         private void CreateRoom(ClientConnection connection, Session session, CreateRoomWireRequest request)
@@ -260,15 +310,17 @@ namespace Ironfront.MasterServer.Dispatch
         /// moment. See <c>MasterSession.OnRoomStatePushed</c>.
         /// </para>
         /// <para>
-        /// <b>This is not "reconnect to a running match"</b>, which P16 § 6 puts out of scope.
-        /// That is an OUTSIDER entering a room in <c>InMatch</c>, and
-        /// <see cref="LobbyService.CanJoinRoom"/> still refuses it — the branch below is only
-        /// reached by somebody the roster already holds.
+        /// <b>A running match is re-entered only by the people who played in it</b> (2026-09-30).
+        /// A member asking again takes the refresh arm; a player who LEFT the match -- quit to the
+        /// menu, crashed, dropped -- is on <see cref="Room.Roster"/> and takes the rejoin arm, back
+        /// onto the side they had. An outsider still meets <see cref="LobbyService.CanJoinRoom"/>,
+        /// which refuses a room in <c>InMatch</c>.
         /// </para>
         /// </remarks>
         private void JoinRoom(ClientConnection connection, Session session, JoinRoomRequest request)
         {
             bool alreadyMember = _lobby.IsMember(request.RoomId, session.PlayerId);
+            bool rejoining = false;
             Room? existing = null;
 
             if (alreadyMember)
@@ -281,6 +333,16 @@ namespace Ironfront.MasterServer.Dispatch
                     Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)ErrorCode.RoomNotFound });
                     return;
                 }
+            }
+            else if (_lobby.TryGetRoomById(request.RoomId, out Room? running) && running is not null
+                     && running.Roster.ContainsKey(session.PlayerId) && LobbyService.CanRejoin(session.PlayerId, running))
+            {
+                // A player who played in this room's running match and left it -- quit to the
+                // menu, crashed, or lost the connection -- going back in. CanJoinRoom would answer
+                // MatchAlreadyStarted, which is right for everybody else and was the whole of the
+                // 2026-09-30 report: "we went out to the menu and could not get back in".
+                rejoining = true;
+                existing = running;
             }
             else
             {
@@ -342,7 +404,18 @@ namespace Ironfront.MasterServer.Dispatch
                 return;
             }
 
-            if (!alreadyMember)
+            if (rejoining)
+            {
+                // On the side the roster remembers, which is the side the game server still
+                // holds for them: the slot they left is back in that team's half of the pool.
+                ServiceResult back = _lobby.RejoinRoom(session, request.RoomId);
+                if (!back.Ok || back.Room is null)
+                {
+                    Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)back.ErrorCode });
+                    return;
+                }
+            }
+            else if (!alreadyMember)
             {
                 ServiceResult joined = _lobby.JoinRoom(session, request.RoomId, request.Password);
                 if (!joined.Ok || joined.Room is null)
@@ -403,6 +476,7 @@ namespace Ironfront.MasterServer.Dispatch
                 roomId = room.RoomId,
                 serverId = server.ServerId,
                 team = member.Team,
+                rejoin = rejoining,
             });
 
             // BEFORE the ticket leaves, so the game server holds the room's settings by the time
@@ -436,16 +510,17 @@ namespace Ironfront.MasterServer.Dispatch
             {
                 MasterLog.Warn(
                     $"room {room.RoomId}: no link to game server {server.ServerId} to send its "
-                    + $"{room.BotCount} bots per team; it will release its prefab roster instead");
+                    + $"{room.BotCount} bots; it will release its prefab roster instead");
                 return;
             }
 
+            // A room asks for a TOTAL since protocol 13, always even; each side gets half.
             Send(link, MspMessageType.GsRoomAssigned, new
             {
                 serverId = server.ServerId,
                 roomId = room.RoomId,
                 mapId = room.MapId,
-                botsPerTeam = room.BotCount,
+                botsPerTeam = room.BotCount / 2,
             });
         }
 
@@ -675,6 +750,10 @@ namespace Ironfront.MasterServer.Dispatch
             if (!_gameServers.OwnsRoom(connection.Id, request.ServerId, request.RoomId)) return;
             if (!_lobby.TryGetRoomById(request.RoomId, out Room? room) || room is null) return;
             room.State = RoomLifecycleState.InMatch;
+
+            // Again here, not only at Starting: a room the game server started without the
+            // master's countdown (or a member admitted in between) must still be rejoinable.
+            LobbyService.EnrollRoster(room);
             BroadcastRoom(room);
         }
 
@@ -688,11 +767,15 @@ namespace Ironfront.MasterServer.Dispatch
                     _database.InsertMatchResult(request.RoomId, result.PlayerId, result.Kills, result.Deaths, result.Score, endedAt);
             }
 
-            if (!_lobby.TryGetRoomById(request.RoomId, out Room? room) || room is null) return;
-            _gameServers.Release(request.ServerId, request.RoomId);
-            room.AssignedGameServerId = 0;
-            room.State = RoomLifecycleState.Waiting;
-            BroadcastRoom(room);
+            // The room stays in its match and keeps its game server. A round's end is not the
+            // room's: the game server plays the next round with the same players still connected
+            // (MatchStateMachine resets after PostMatchSeconds), and none of them is back in the
+            // room lobby. Releasing the server here, and putting the room back to Waiting, handed
+            // that server to the next room on the same map while this room's players were still
+            // on it -- the new room's tickets were adopted into their round -- and listed a room
+            // as open whose members could never ready up for it. The room closes when its last
+            // member leaves (RoomRemoved releases the server), as the game server resets its match
+            // when its last player leaves.
         }
 
         private void LeaveRoom(ClientConnection connection, Session session)
@@ -733,7 +816,7 @@ namespace Ironfront.MasterServer.Dispatch
         {
             var members = new List<object>();
             foreach (RoomMember member in room.Members) members.Add(new { playerId = member.PlayerId, name = member.DisplayName, team = member.Team, ready = member.Ready });
-            return new { roomId = room.RoomId, members, state = (byte)room.State };
+            return new { roomId = room.RoomId, members, state = (byte)room.State, mapId = room.MapId, botCount = room.BotCount, maxPlayers = room.MaxPlayers };
         }
 
         private bool TryGetAuthenticatedSession(ClientConnection connection, out Session session)

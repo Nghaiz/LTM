@@ -69,7 +69,8 @@ for label in LABELS:
                 fps.append(float(m.group(1))); p99 = max(p99, float(m.group(3)))
                 mx = max(mx, float(m.group(4))); hitch += int(m.group(5)); ticks.append(float(m.group(6)))
             for key in ("Exception", "no free id", "pool", "full", "refus", "truncat", "too large", "oversize"):
-                if key.lower() in l.lower() and "[frames]" not in l:
+                # [frames] and [bots] are status lines: the commander's census says "full N".
+                if key.lower() in l.lower() and "[frames]" not in l and "[bots]" not in l:
                     errs[key] = errs.get(key, 0) + 1
         port = name.rsplit("-", 1)[1]
         mapname = name.split("-")[1].capitalize()
@@ -86,11 +87,15 @@ for label in LABELS:
             servers_total_mean=statistics.mean(tot_cores), harness_mean=statistics.mean(harness),
             bw_client=int(bw.group(1)) if bw else None,
             held=f"{held.group(1)}/{held.group(2)}" if held else "?",
-            malformed=f"{mal.group(1)}/{mal.group(2)}" if mal else "?", errs=errs))
+            malformed=f"{mal.group(1)}/{mal.group(2)}" if mal else "?",
+            # Over the WHOLE log, not the window: a throw at load or teardown -- a disconnect
+            # with a client still seated, say -- is a defect even though it costs no window time.
+            exc_total=sum(1 for l in info["lines"] if "Exception" in l),
+            errs=errs))
 
 hdr = ["run", "server", "bots", "n", "cores_mean", "cores_p95", "cores_max", "mem_max", "fps_min", "ticks_min",
        "hitches", "frame_max_ms", "p99_max_ms", "vm_busy_mean", "vm_busy_max", "steal_max", "servers_total_mean",
-       "harness_mean", "bw_client", "held", "malformed", "errs"]
+       "harness_mean", "bw_client", "held", "malformed", "exc_total", "errs"]
 print("\t".join(hdr))
 for r in rows:
     if isinstance(r, tuple):

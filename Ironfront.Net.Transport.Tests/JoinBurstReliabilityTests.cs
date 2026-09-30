@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Transport;
@@ -68,6 +69,80 @@ namespace Ironfront.Net.Transport.Tests
         [Fact]
         public void AClientThatCannotPollForSixHundredMillisecondsIsNotDropped()
             => RunJoinBurst(clientCount: 1, runMs: 2500, stallClientForMs: 600);
+
+        /// <summary>
+        /// Every message of a burst larger than the reliable window arrives, in order, even
+        /// while the client cannot answer. Live test 2026-09-30, B1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A 100-bot room announces up to <see cref="ProtocolConstants.MAX_ACTORS"/> actors to a
+        /// client within a few ticks, twice the <see cref="FlowControl.MaxUnackedReliable"/>
+        /// window. <c>Connection.Send</c> used to REFUSE whatever did not fit, the server had
+        /// already marked those spawns sent, and the bots behind them stayed invisible on that
+        /// client for the whole match. The burst here is sent the instant the client is
+        /// accepted and the client does not poll for 400 ms, so no ack can open the window
+        /// while the burst is going out.
+        /// </para>
+        /// <para>
+        /// <b>The queue must actually be used</b>, or this test proves nothing about it: a
+        /// burst that fits the window passes with or without the fix. So the most messages seen
+        /// waiting is asserted too.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void EveryMessageOfABurstLargerThanTheReliableWindowArrivesInOrder()
+        {
+            const int burst = ProtocolConstants.MAX_ACTORS;
+            Assert.True(burst > FlowControl.MaxUnackedReliable, "the burst must outgrow the window");
+
+            using var server = new UdpTransportServer();
+            using var client = new UdpTransportClient();
+            var received = new List<int>();
+            ushort accepted = 0;
+            server.OnValidateTicket += _ => true;
+            server.OnClientConnected += (id, _) => accepted = id;
+            client.OnMessage += payload => received.Add(payload.Span[0] | (payload.Span[1] << 8));
+            server.Start(0, 4);
+            client.Connect("127.0.0.1", server.Port, new byte[ProtocolConstants.JOIN_TICKET_SIZE]);
+
+            var clock = Stopwatch.StartNew();
+            bool sent = false;
+            double stallUntilMs = -1.0;
+            int mostQueued = 0;
+            while (clock.ElapsedMilliseconds < 6000 && received.Count < burst)
+            {
+                server.Poll();
+
+                if (accepted != 0 && !sent)
+                {
+                    sent = true;
+                    var spawn = new byte[48];
+                    for (int n = 0; n < burst; n++)
+                    {
+                        spawn[0] = (byte)n;
+                        spawn[1] = (byte)(n >> 8);
+                        server.Send(accepted, (byte)ChannelId.ReliableOrdered, spawn, reliable: true);
+                    }
+
+                    stallUntilMs = clock.Elapsed.TotalMilliseconds + 400.0;
+                }
+
+                if (sent)
+                    mostQueued = Math.Max(mostQueued, server.GetInfo(accepted).Stats.QueuedReliableCount);
+
+                bool stalled = stallUntilMs > 0 && clock.Elapsed.TotalMilliseconds < stallUntilMs;
+                if (!stalled) client.Poll();
+
+                Thread.Sleep(1);
+            }
+
+            _output.WriteLine($"received {received.Count} of {burst}; most waiting for the window {mostQueued}");
+
+            Assert.True(mostQueued > 0, "the burst never outgrew the window, so the queue was not exercised");
+            Assert.Equal(Enumerable.Range(0, burst), received);
+            Assert.Equal(ConnectionState.Connected, client.State);
+        }
 
         /// <summary>
         /// Drives <paramref name="clientCount"/> real UDP clients against one real UDP server

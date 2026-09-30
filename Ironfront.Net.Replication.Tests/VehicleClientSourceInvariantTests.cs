@@ -308,6 +308,34 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void APilotWithNoSquadGetsANeutralStickBeforeTheSquadIsRead()
+        {
+            // A networked player's body used to go back to the bot brain when its connection
+            // left (a released slot now leaves the match instead), and a player body never has a
+            // squad. Left in a pilot seat it was an ENABLED controller with no squad, which the
+            // X-46 guard above does not cover, and HelicopterInput read squad.AllSeated() on its
+            // next line: 867 NullReferenceExceptions in 14 s, one per physics step, from the
+            // moment a bench's clients disconnected with one of them flying (p29new-i16,
+            // 2026-09-30). Any enabled squadless pilot still gets the neutral stick.
+            // Comments out first: the guard's own remark says "squad." in prose.
+            string body = Regex.Replace(
+                MethodBody(
+                    ReadScript("Assembly-CSharp", "AiActorController.cs"),
+                    "AiActorController.cs", "public override Vector4 HelicopterInput()"),
+                @"//[^\n]*", "");
+
+            var guard = Regex.Match(
+                body, @"if\s*\(\s*!\s*InSquad\(\)\s*\)\s*\{\s*return\s+Vector4\.zero\s*;");
+            Assert.True(guard.Success, "HelicopterInput has no squadless guard returning a neutral stick");
+
+            var firstRead = Regex.Match(body, @"\bsquad\.\w");
+            Assert.True(firstRead.Success, "HelicopterInput no longer reads its squad; this test pins nothing");
+            Assert.True(
+                guard.Index < firstRead.Index,
+                "HelicopterInput reads its squad before checking it has one, so a released player body in a pilot seat throws");
+        }
+
+        [Fact]
         public void TheDriverInputSinkNoLongerReturnsNullForABodyWithNoFpsController()
         {
             // The remark this replaced predicted its own defect in writing -- "a networked PLAYER
