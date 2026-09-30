@@ -222,6 +222,18 @@ public class AiActorController : ActorController
 
 	private bool hasPath;
 
+	/// <summary>
+	/// Walked the whole of its last path and is standing where it was sent (phase P29): waiting
+	/// for the squad's next order, which is not the same thing as having lost its way.
+	/// </summary>
+	/// <remarks>
+	/// The original told the two apart by nothing but a 3 s timeout, so every member that reached
+	/// its spot more than three seconds before its leader reached his was split off as a squad of
+	/// its own (<see cref="CreateRougeSquad"/>). Measured offline on Dustbowl, 16 bots a side:
+	/// 162 such splits in fourteen minutes, and fifteen squads for fifteen bots.
+	/// </remarks>
+	private bool arrivedAtGoto;
+
 	private bool calculatingPath;
 
 	private Seeker seeker;
@@ -1061,7 +1073,7 @@ public class AiActorController : ActorController
 	{
 		List<AiActorController> list = new List<AiActorController>(1);
 		list.Add(this);
-		squad.SplitSquad(list);
+		squad.SplitSquad(list, Squad.SplitReason.Rogue);
 		moveTimeoutAction.Start();
 	}
 
@@ -1076,7 +1088,11 @@ public class AiActorController : ActorController
 				yield return LodSkipWait;
 				continue;
 			}
-			if (!hasPath && ShouldHavePath() && moveTimeoutAction.TrueDone())
+			// A member with no path goes its own way only when it never got where it was sent; one
+			// that arrived waits for its squad (phase P29). A bot alone in its squad has nowhere to
+			// split to: "splitting" it made a new squad of the same one bot, which dropped the
+			// commander's order every few seconds while its search kept failing.
+			if (!hasPath && !arrivedAtGoto && ShouldHavePath() && moveTimeoutAction.TrueDone() && squad.members.Count > 1)
 			{
 				CreateRougeSquad();
 			}
@@ -1623,6 +1639,12 @@ public class AiActorController : ActorController
 		}
 		else
 		{
+			// Free to ask again (phase P29). The original left calculatingPath set, and Goto
+			// refuses to start a path while one is being calculated, so a bot whose search failed
+			// -- "Couldn't find a close node to the start point" -- never walked again until it
+			// died.
+			calculatingPath = false;
+			moveTimeoutAction.Start();
 			Debug.LogError(p.errorLog);
 		}
 	}
@@ -1653,6 +1675,7 @@ public class AiActorController : ActorController
 				graphMask = ((!aquatic) ? 4 : 2);
 			}
 			lastGotoPoint = targetPoint;
+			arrivedAtGoto = false;
 			seeker.StartPath(actor.Position(), targetPoint, null, graphMask);
 			lastWaypoint = base.transform.position;
 		}
@@ -1663,6 +1686,7 @@ public class AiActorController : ActorController
 		calculatingPath = false;
 		path = null;
 		hasPath = false;
+		arrivedAtGoto = false;
 		moveTimeoutAction.Start();
 	}
 
@@ -2000,6 +2024,7 @@ public class AiActorController : ActorController
 
 	private void PathDone()
 	{
+		arrivedAtGoto = true;
 		if (HasCover())
 		{
 			LookDirection(coverFacing);
@@ -2635,6 +2660,10 @@ public class AiActorController : ActorController
 		if (InSquad())
 		{
 			squad.DropMember(this);
+			if (squad.members.Count == 1)
+			{
+				Squad.Census.NoteLeftAlone(actor.team);
+			}
 		}
 
 		squad = null;
@@ -2704,6 +2733,7 @@ public class AiActorController : ActorController
 		sideStepAction.Stop();
 		radiusModifier.enabled = false;
 		recentAntiStuckEvents = 0;
+		arrivedAtGoto = false;
 		ragdollAutokillAction.Start();
 		moveTimeoutAction.Start();
 		StartAiCoroutines();
@@ -2863,6 +2893,30 @@ public class AiActorController : ActorController
 	public bool IsSquadLeader()
 	{
 		return squad.Leader() == this;
+	}
+
+	/// <summary>
+	/// Sends a bot that has just joined <paramref name="joined"/> after the others (phase P29): to
+	/// where its new leader is going, or into cover round him when the squad is holding its ground.
+	/// </summary>
+	public void JoinedSquad(Squad joined)
+	{
+		AiActorController leader = joined.Leader();
+		if (leader == null || leader == this || leader.actor == null || actor.IsSeated() || IsFallingBack())
+		{
+			return;
+		}
+		if (joined.state == Squad.State.DigIn)
+		{
+			FindCoverAtPoint(leader.actor.Position());
+			return;
+		}
+		if (InCover())
+		{
+			LeaveCover();
+		}
+		Vector3 goal = leader.hasPath || leader.calculatingPath ? leader.lastGotoPoint : leader.actor.Position();
+		Goto(goal + Vector3.Scale(UnityEngine.Random.insideUnitSphere, new Vector3(3f, 0f, 3f)));
 	}
 
 	public bool InCover()
