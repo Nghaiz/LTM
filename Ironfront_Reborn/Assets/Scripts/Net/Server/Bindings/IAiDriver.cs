@@ -1,8 +1,8 @@
 namespace Ironfront.Net.Unity.Server
 {
     /// <summary>
-    /// The bot brain steering one replicated body, and the two calls that hand the body to a
-    /// connection and take it back. Phase-3A.
+    /// The bot brain steering one replicated body, and the call that parks it for good when the
+    /// body becomes a player slot. Phase-3A.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -27,23 +27,21 @@ namespace Ironfront.Net.Unity.Server
     /// this the hard way and disabled the controller by reflecting on its type NAME; this
     /// interface is that fix, typed.
     /// </para>
+    /// <para>
+    /// <b>No resume.</b> A resume on release made a leaver's body play on as a bot, and an
+    /// unclaimed slot is announced to no client (X-18), so it played on unseen: the 2026-09-30
+    /// live test. A released slot now leaves the match (<c>NetServerActor.ReturnToPool</c>).
+    /// </para>
     /// </remarks>
     public interface IAiDriver
     {
         /// <summary>False once the controller or its GameObject has been destroyed.</summary>
         bool Exists { get; }
 
-        /// <summary>Stops the bot brain driving. Called when a connection claims the body.</summary>
-        void Suspend();
-
         /// <summary>
-        /// Hands the body back to the bot brain. Called when the claim is released.
+        /// Stops the bot brain driving. Called when the pool builds the body, and again (as a
+        /// no-op) when a connection claims it.
         /// </summary>
-        /// <remarks>
-        /// A slot is reused across a match: without this, every disconnect would leave one more
-        /// inert mannequin standing in the map for the rest of the round, and a server that had
-        /// seen <c>MaxConnections</c> joins and departures would be a map full of them.
-        /// </remarks>
-        void Resume();
+        void Suspend();
     }
 }

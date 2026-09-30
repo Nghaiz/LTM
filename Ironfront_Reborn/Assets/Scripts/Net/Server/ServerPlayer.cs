@@ -606,7 +606,9 @@ namespace Ironfront.Net.Unity.Server
         /// <see cref="ServerPlayer"/> that knows neither. The capsule is also repaired by
         /// <see cref="RestoreLeakedCapsule"/>, but an ignored collision pair cannot be seen from
         /// the body at all — it has to be ended here, by the only object that knows it exists.
-        /// A seated body keeps its capsule off: the bot brain the release resumes goes on driving.
+        /// A seated body keeps its capsule off here: switched on inside the hull it would shove
+        /// the vehicle, and <c>NetServerActor.ReturnToPool</c> takes it out of the seat first and
+        /// switches it back on after.
         /// </remarks>
         public void ReleaseBody()
         {

@@ -135,12 +135,11 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void ParkingABodyHandsItOverAndReleasingItTakesItBackAsABot()
+        public void ParkingABodyHandsItOverAndAReleasedBodyLeavesTheMatch()
         {
             // Disabling the controller parks it and stops nothing else: Unity stops coroutines
             // when a GameObject is deactivated, not when a component is disabled. So a claimed
-            // body stayed on its squad's roster (the commander counted a player as its bot), and
-            // a released one stood in the map with no squad and no running AI (P29).
+            // body stayed on its squad's roster, and the commander counted a player as its bot (P29).
             string driver = MethodBody(
                 ReadUnitySource("Ironfront_Reborn/Assets/Scripts/NetBindings/IronfrontNetBindings.cs"),
                 "internal sealed class AiActorControllerDriver");
@@ -148,19 +147,26 @@ namespace Ironfront.Net.Replication.Tests
             string suspend = MethodBody(driver, "public void Suspend()");
             Assert.Matches(new Regex(@"HandOverToPlayer\(\)\s*;\s*_ai\.enabled\s*=\s*false"), suspend);
 
-            string resume = MethodBody(driver, "public void Resume()");
-            Assert.Matches(new Regex(@"_ai\.enabled\s*=\s*true\s*;\s*_ai\.TakeOverAsBot\(\)"), resume);
-
-            // And what the two do: off the squad and out of the AI on the way in; a squad of its
-            // own, and a fresh start of the AI, on the way out.
             string controller = ReadUnitySource(Controller);
             string handOver = MethodBody(controller, "public void HandOverToPlayer()");
             Assert.Contains("squad.DropMember(this)", handOver, StringComparison.Ordinal);
             Assert.Contains("StopAllCoroutines()", handOver, StringComparison.Ordinal);
 
-            string takeOver = MethodBody(controller, "public void TakeOverAsBot()");
-            Assert.Matches(
-                new Regex(@"aiCoroutinesAwaitSquad\s*=\s*true\s*;\s*Squad\s+\w+\s*=\s*new\s+Squad\("), takeOver);
+            // And nothing hands it back. A resume on release made a leaver's body play on as a
+            // bot, and an unclaimed slot is announced to no client (X-18): on Island on
+            // 2026-09-30 it played on unseen, and asked for a path twice a second for four hours
+            // from off the navgraph. The leave takes the body out of the match instead.
+            Assert.DoesNotContain("Resume()", driver, StringComparison.Ordinal);
+            Assert.DoesNotContain("TakeOverAsBot", controller, StringComparison.Ordinal);
+
+            string registry = ReadUnitySource("Ironfront_Reborn/Assets/Scripts/Net/Server/ServerActorRegistry.cs");
+            string releaseSlot = MethodBody(registry, "public void ReleaseSlot(NetServerActor actor)");
+            Assert.Matches(new Regex(@"actor\.Release\(\)\s*;\s*actor\.ReturnToPool\(\)\s*;"), releaseSlot);
+
+            string body = ReadUnitySource("Ironfront_Reborn/Assets/Scripts/Net/Server/NetServerActor.cs");
+            string returnToPool = MethodBody(body, "internal void ReturnToPool()");
+            Assert.Matches(new Regex(@"Health\s*=\s*0f\s*;\s*IsAlive\s*=\s*false\s*;"), returnToPool);
+            Assert.Contains("Teleport(_poolPosition)", returnToPool, StringComparison.Ordinal);
         }
 
         [Fact]

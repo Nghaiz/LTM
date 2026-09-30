@@ -2417,8 +2417,8 @@ public class AiActorController : ActorController
 		// An enabled pilot with no squad. A player's body left in a pilot seat by a disconnect
 		// was one: the line below threw once per physics step for as long as it sat there, 867
 		// NullReferenceExceptions in 14 s (2026-09-30, Island, run p29new-i16), each aborting
-		// Helicopter.FixedUpdate. Such a body now takes a squad of its own (TakeOverAsBot), so
-		// this is the net under whatever leaves a pilot squadless next: the neutral stick the
+		// Helicopter.FixedUpdate. Such a body now leaves the match with its connection, so this is
+		// the net under whatever leaves a pilot squadless next: the neutral stick the
 		// relay gives a seat with no driver, without reading the relay (an enabled controller is
 		// never steered by the network).
 		if (!InSquad())
@@ -2936,32 +2936,6 @@ public class AiActorController : ActorController
 		StopAllCoroutines();
 		CancelInvoke();
 		aiCoroutinesAwaitSquad = true;
-	}
-
-	/// <summary>
-	/// A body whose connection has left plays on as a bot (phase P29): alive, it starts a squad of
-	/// its own, which runs its AI and puts it under the commander -- a lone bot with orders,
-	/// cover and targets, where it used to stand in the map as an inert mannequin.
-	/// </summary>
-	public void TakeOverAsBot()
-	{
-		// Not a body on its way out: NetServerActor.OnDisable releases one as it is deactivated
-		// or destroyed, and an inactive GameObject can start no coroutine.
-		if (actor == null || actor.dead || InSquad() || !base.isActiveAndEnabled)
-		{
-			return;
-		}
-		// A fresh set of AI coroutines, started by the squad below: whatever idled while the body
-		// was parked goes first, and a player's body never ran SpawnAt, which is what normally
-		// arms the start.
-		StopAllCoroutines();
-		aiCoroutinesAwaitSquad = true;
-		Squad own = new Squad(new List<AiActorController> { this }, 0f);
-		if (actor.IsSeated())
-		{
-			own.SetAlreadyInVehicle(actor.seat.vehicle);
-		}
-		Squad.Census.NoteFormed(actor.team, 1);
 	}
 
 	public void AssignedToSquad(Squad squad)
