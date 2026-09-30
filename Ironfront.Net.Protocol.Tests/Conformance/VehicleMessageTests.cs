@@ -264,6 +264,7 @@ namespace Ironfront.Net.Protocol.Tests
         [Fact]
         public void TheWorstCasePlayerListFitsOneUnfragmentedPayload()
         {
+            // At any MAX_ACTORS: the list is bounded by connections (PlayerListMessage.MaxEntries).
             Assert.Equal(1 + 64 * 18, PlayerListMessage.MaxBodySize);
             Assert.True(PlayerListMessage.MaxBodySize < ProtocolConstants.MAX_CHANNEL_PAYLOAD);
         }

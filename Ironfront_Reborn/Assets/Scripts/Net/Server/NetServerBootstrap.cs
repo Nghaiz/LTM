@@ -440,6 +440,16 @@ namespace Ironfront.Net.Unity.Server
             try
             {
                 Config = defaults.ApplyEnvironment();
+
+                // S_PLAYER_LIST names every connection in one un-fragmented payload, 64 rows at
+                // most. A server taking more would leave the rest unnamed on every scoreboard, so
+                // it refuses to start and says why, as for any other rejected setting.
+                if (Config.MaxConnections > PlayerListMessage.MaxEntries)
+                {
+                    throw new InvalidOperationException(
+                        $"{EnvRegistry.GameServerMaxConnections.Name} ({Config.MaxConnections}) is above "
+                        + $"the {PlayerListMessage.MaxEntries} players S_PLAYER_LIST can name.");
+                }
             }
             catch (InvalidOperationException ex)
             {
