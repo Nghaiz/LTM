@@ -594,5 +594,101 @@ namespace Ironfront.Net.Unity.Server.Tests
                 NetContext.Clear();
             }
         }
+
+        /// <summary>
+        /// A bot below the wire's floor dies, as a player there does (X-75). P30: until now it
+        /// fell alive, drawn by every client clamped to the floor, until a 60-second ragdoll timer.
+        /// </summary>
+        [Test]
+        public void ABotBelowTheWireFloorIsKilled()
+        {
+            NetServerActor actor = CreateBotAt(new Vector3(10f, Ironfront.Net.Protocol.Quantize.POS_MIN - 0.5f, 10f), out FakeGameplayActor gameplay);
+            try
+            {
+                actor.ObserveWorldFloor();
+
+                Assert.IsFalse(actor.IsAlive, "A bot below the wire floor was left alive, falling for ever.");
+                Assert.IsTrue(gameplay.IsDead, "The gameplay actor was not marked dead, so it never respawns.");
+                Assert.AreEqual(0f, gameplay.Health, "A bot killed for leaving the world kept its health.");
+            }
+            finally
+            {
+                NetContext.Clear();
+            }
+        }
+
+        /// <summary>
+        /// A bot falls as a ragdoll, and a ragdoll falls away from the transform, which stays
+        /// where the body tipped over. The pelvis is where the bot is (<c>BotPosition</c>).
+        /// </summary>
+        [Test]
+        public void ABotWhoseRagdollFellBelowTheWireFloorIsKilled()
+        {
+            NetServerActor actor = CreateBotAt(new Vector3(10f, 40f, 10f), out FakeGameplayActor gameplay);
+            try
+            {
+                gameplay.IsRagdolledAlive = true;
+                gameplay.RagdollPelvis = new Vector3(10f, Ironfront.Net.Protocol.Quantize.POS_MIN - 0.5f, 10f);
+
+                actor.ObserveWorldFloor();
+
+                Assert.IsFalse(actor.IsAlive, "A ragdoll below the wire floor was judged by the transform it left behind.");
+            }
+            finally
+            {
+                NetContext.Clear();
+            }
+        }
+
+        [Test]
+        public void ABotOnTheWireFloorIsLeftAlive()
+        {
+            NetServerActor actor = CreateBotAt(new Vector3(10f, Ironfront.Net.Protocol.Quantize.POS_MIN, 10f), out FakeGameplayActor gameplay);
+            try
+            {
+                actor.ObserveWorldFloor();
+
+                Assert.IsTrue(actor.IsAlive, "A bot on the floor itself was killed; the floor is the last position the wire can carry.");
+                Assert.AreEqual(100f, gameplay.Health);
+            }
+            finally
+            {
+                NetContext.Clear();
+            }
+        }
+
+        /// <summary>
+        /// A claimed body is <c>ServerPlayer</c>'s: it judges the session's position, and killing
+        /// the body here as well would report a second death for one fall.
+        /// </summary>
+        [Test]
+        public void AClaimedBodyBelowTheWireFloorIsLeftToServerPlayer()
+        {
+            NetServerActor actor = CreateBotAt(new Vector3(10f, Ironfront.Net.Protocol.Quantize.POS_MIN - 0.5f, 10f), out FakeGameplayActor gameplay);
+            try
+            {
+                actor.Claim();
+
+                actor.ObserveWorldFloor();
+
+                Assert.IsTrue(actor.IsAlive, "A claimed body was killed here as well as by ServerPlayer's X-75 rule.");
+            }
+            finally
+            {
+                NetContext.Clear();
+            }
+        }
+
+        /// <summary>
+        /// A live bot at <paramref name="position"/>, on a server. The caller clears the role.
+        /// </summary>
+        private NetServerActor CreateBotAt(Vector3 position, out FakeGameplayActor gameplay)
+        {
+            NetContext.SetRole(NetRole.Server);
+            gameplay = new FakeGameplayActor { IsDead = false, Health = 100f };
+            NetServerActor actor = CreateActor(gameplay);
+            actor.transform.position = position;
+            return actor;
+        }
     }
 }
