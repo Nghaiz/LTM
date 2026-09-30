@@ -15,6 +15,103 @@ public class Squad
 
 	private const float GROUPED_UP_DISTANCE = 7f;
 
+	/// <summary>Why a squad split: what <see cref="Census"/> counts it under.</summary>
+	public enum SplitReason
+	{
+		/// <summary>A member with no path to its order went its own way (<c>AiActorController.CreateRougeSquad</c>).</summary>
+		Rogue = 0,
+
+		/// <summary>Part of the squad split off to crew a tank (<see cref="SplitCrew"/>).</summary>
+		Crew = 1,
+
+		/// <summary>The squad's vehicle filled up and the members still on foot split off.</summary>
+		VehicleFull = 2
+	}
+
+	/// <summary>
+	/// Where each side's squads come from and how they break up, since the match started (phase
+	/// P29): the commander's log line reports it, so a server log says why a side has as many
+	/// squads as bots instead of leaving it to be guessed.
+	/// </summary>
+	/// <remarks>
+	/// Nothing in the original ever merged two squads -- they only ever split, or shrank as members
+	/// died -- so every one of these counts only goes up until <see cref="Merged"/> takes squads back.
+	/// </remarks>
+	public static class Census
+	{
+		/// <summary>Squads a spawn wave formed.</summary>
+		public static readonly int[] Formed = new int[2];
+
+		/// <summary>Of those, the ones a wave left with a single bot.</summary>
+		public static readonly int[] FormedAlone = new int[2];
+
+		/// <summary>Splits, by <see cref="SplitReason"/>, per side.</summary>
+		public static readonly int[][] Splits = { new int[3], new int[3] };
+
+		/// <summary>Deaths that left one bot on its own in its squad.</summary>
+		public static readonly int[] LeftAlone = new int[2];
+
+		/// <summary>Squads folded into another one.</summary>
+		public static readonly int[] Merged = new int[2];
+
+		/// <summary>Bots a spawn wave sent to reinforce a squad instead of starting one of their own.</summary>
+		public static readonly int[] Reinforced = new int[2];
+
+		public static void Reset()
+		{
+			for (int team = 0; team < 2; team++)
+			{
+				Formed[team] = FormedAlone[team] = LeftAlone[team] = Merged[team] = Reinforced[team] = 0;
+				System.Array.Clear(Splits[team], 0, Splits[team].Length);
+			}
+		}
+
+		public static void NoteFormed(int team, int size)
+		{
+			if ((uint)team >= 2u)
+			{
+				return;
+			}
+			Formed[team]++;
+			if (size == 1)
+			{
+				FormedAlone[team]++;
+			}
+		}
+
+		public static void NoteSplit(int team, SplitReason reason)
+		{
+			if ((uint)team < 2u)
+			{
+				Splits[team][(int)reason]++;
+			}
+		}
+
+		public static void NoteLeftAlone(int team)
+		{
+			if ((uint)team < 2u)
+			{
+				LeftAlone[team]++;
+			}
+		}
+
+		public static void NoteMerged(int team)
+		{
+			if ((uint)team < 2u)
+			{
+				Merged[team]++;
+			}
+		}
+
+		public static void NoteReinforced(int team)
+		{
+			if ((uint)team < 2u)
+			{
+				Reinforced[team]++;
+			}
+		}
+	}
+
 	private static int nextNumber = 1;
 
 	private AiActorController leader;
@@ -126,7 +223,7 @@ public class Squad
 				crew.Add(member);
 			}
 		}
-		return crew.Count > 0 ? SplitSquad(crew) : null;
+		return crew.Count > 0 ? SplitSquad(crew, SplitReason.Crew) : null;
 	}
 
 	/// <summary>
@@ -186,6 +283,77 @@ public class Squad
 	public AiActorController Leader()
 	{
 		return leader;
+	}
+
+	/// <summary>Takes <paramref name="member"/> into the squad and sends it after the others (phase P29).</summary>
+	public void Join(AiActorController member)
+	{
+		if (member == null || members.Contains(member))
+		{
+			return;
+		}
+		members.Add(member);
+		member.AssignedToSquad(this);
+		member.JoinedSquad(this);
+	}
+
+	/// <summary>
+	/// Takes every member of <paramref name="other"/> into this squad and leaves it empty: the
+	/// commander folding a lone bot back in (phase P29, <see cref="SquadRegroup"/>).
+	/// </summary>
+	public void Absorb(Squad other)
+	{
+		if (other == null || other == this || other.members.Count == 0)
+		{
+			return;
+		}
+		AiActorController first = other.members[0];
+		int team = first != null && first.actor != null ? first.actor.team : -1;
+		List<AiActorController> joining = new List<AiActorController>(other.members);
+		foreach (AiActorController member in joining)
+		{
+			other.DropMember(member);
+			Join(member);
+		}
+		Census.NoteMerged(team);
+	}
+
+	/// <summary>
+	/// The squad of <paramref name="team"/> on foot whose leader stands nearest
+	/// <paramref name="point"/>, within <paramref name="radius"/>, with room for
+	/// <paramref name="count"/> more; null when there is none (phase P29).
+	/// </summary>
+	public static Squad NearestWithRoom(int team, Vector3 point, float radius, int count)
+	{
+		Squad best = null;
+		float bestDistance = radius;
+		List<Actor> alive = ActorManager.AliveActorsOnTeam(team);
+		for (int i = 0; i < alive.Count; i++)
+		{
+			Actor actor = alive[i];
+			AiActorController ai = actor != null ? actor.controller as AiActorController : null;
+			Squad squad = ai != null ? ai.squad : null;
+			if (squad == null || squad == best || squad.members.Count == 0 || squad.members.Count + count > SquadRegroup.MaxSize)
+			{
+				continue;
+			}
+			if (squad.HasVehicle() || squad.state == State.EnterVehicle)
+			{
+				continue;
+			}
+			AiActorController squadLeader = squad.Leader();
+			if (squadLeader == null || squadLeader.actor == null)
+			{
+				continue;
+			}
+			float distance = Vector3.Distance(squadLeader.actor.Position(), point);
+			if (distance <= bestDistance)
+			{
+				best = squad;
+				bestDistance = distance;
+			}
+		}
+		return best;
 	}
 
 	public Actor GetTarget()
@@ -606,13 +774,15 @@ public class Squad
 					list.Add(member);
 				}
 			}
-			SplitSquad(list);
+			SplitSquad(list, SplitReason.VehicleFull);
 			state = State.Stationary;
 		}
 	}
 
-	public Squad SplitSquad(List<AiActorController> leavingMembers)
+	public Squad SplitSquad(List<AiActorController> leavingMembers, SplitReason reason)
 	{
+		AiActorController first = leavingMembers.Count > 0 ? leavingMembers[0] : null;
+		Census.NoteSplit(first != null && first.actor != null ? first.actor.team : -1, reason);
 		foreach (AiActorController leavingMember in leavingMembers)
 		{
 			DropMember(leavingMember);

@@ -325,6 +325,12 @@ public class ActorManager : MonoBehaviour
 	/// roster enters the world over the half second the fill takes rather than in one frame.
 	/// A round reset mid-fill stops it: the next round fills its own roster once released.
 	/// </remarks>
+	/// <summary>
+	/// How far from its flag a bot a spawn wave left on its own looks for a squad to reinforce,
+	/// in metres (phase P29): about half the distance between two of Dustbowl's flags.
+	/// </summary>
+	private const float ReinforceRadius = 150f;
+
 	private IEnumerator FillEmptySlotsWithAI(int team0Count, int team1Count)
 	{
 		int generation = rosterGeneration;
@@ -569,6 +575,7 @@ public class ActorManager : MonoBehaviour
 					if (members >= squadSize)
 					{
 						new Squad(aiSquad, squadReadyTime);
+						Squad.Census.NoteFormed(spawnPoint2.owner, aiSquad.Count);
 						squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint2.maxSquadSize + 2));
 						aiSquad = new List<AiActorController>();
 						members = 0;
@@ -578,7 +585,25 @@ public class ActorManager : MonoBehaviour
 			}
 			if (aiSquad.Count > 0)
 			{
-				new Squad(aiSquad, squadReadyTime);
+				// A bot the wave left on its own reinforces a squad short of men near its flag
+				// instead of starting one (phase P29; Killzone 3's commander assigns "each free bot
+				// to the closest squad in need of more bots"). A wave brings back only the few who
+				// died in the last ten seconds, each at a flag of its own choosing, so in one
+				// offline match 48 of the 53 squads waves formed had a single bot.
+				AiActorController alone = aiSquad.Count == 1 ? aiSquad[0] : null;
+				Squad reinforced = alone != null && alone.actor != null
+					? Squad.NearestWithRoom(alone.actor.team, spawnPoint2.transform.position, ReinforceRadius, 1)
+					: null;
+				if (reinforced != null)
+				{
+					reinforced.Join(alone);
+					Squad.Census.NoteReinforced(alone.actor.team);
+				}
+				else
+				{
+					new Squad(aiSquad, squadReadyTime);
+					Squad.Census.NoteFormed(spawnPoint2.owner, aiSquad.Count);
+				}
 			}
 		}
 		spawnBatchHeartbeat = -1;
