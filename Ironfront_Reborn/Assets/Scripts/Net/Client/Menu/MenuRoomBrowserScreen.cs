@@ -59,16 +59,21 @@ namespace Ironfront.Net.Unity.Client.Menu
         public const int RejoinRows = 2;
 
         /// <summary>The y of the table's header strip, in the panel's space. Authored and read here.</summary>
-        public const float TableTop = 112f;
+        /// <remarks>
+        /// 160 since P30's redesign, which put the header block (kicker, heading, search) where the
+        /// other operations screens have theirs and moved the table up 48px with it.
+        /// </remarks>
+        public const float TableTop = 160f;
 
         /// <summary>The distance between two rows' centres.</summary>
         public const float RowPitch = 46f;
 
         /// <summary>
         /// The lowest a row's centre may sit before it would run into the overflow line and the
-        /// buttons under the table.
+        /// buttons under the table: the eighth row's own centre, so the authored table exactly
+        /// fits and a table pushed down by YOUR MATCHES gives up rows rather than the gap.
         /// </summary>
-        private const float LowestRowCentre = -250f;
+        private const float LowestRowCentre = TableTop - 40f - ((Rows - 1) * RowPitch);
 
         [SerializeField] private MenuScreenController? _controller;
 
