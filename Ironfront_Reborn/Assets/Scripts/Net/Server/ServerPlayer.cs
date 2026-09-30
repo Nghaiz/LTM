@@ -555,13 +555,13 @@ namespace Ironfront.Net.Unity.Server
                 return;
 
             Vector3 seat = Actor.transform.position;
-            if (!MovementCore.IsInWater(seat.y + MovementCore.HeightFor(crouching: false) * 0.5f)) return;
+            if (!MovementCore.IsInWater(seat.x, seat.y + MovementCore.HeightFor(crouching: false) * 0.5f, seat.z)) return;
             if (!ServerVehicleRegistry.Instance.TryFind(vehicleId, out IGameplayVehicleSource vehicle)) return;
 
             if (vehicle.TryLeaveSeat(Actor.gameObject))
             {
                 Debug.Log($"[net] actor {Session.ActorId} thrown out of vehicle {vehicleId}: its seat is "
-                          + $"under water at y {seat.y:F1} (surface {MovementCore.WaterHeight:F1}).");
+                          + $"under water at y {seat.y:F1} (surface {MovementCore.SurfaceAt(seat.x, seat.z):F1}).");
             }
         }
 

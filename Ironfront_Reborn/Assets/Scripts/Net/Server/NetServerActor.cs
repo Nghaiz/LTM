@@ -709,7 +709,7 @@ namespace Ironfront.Net.Unity.Server
         /// <c>Actor.inWater</c> is that swim's own test.
         /// </remarks>
         internal bool InWater => Movement != null
-            ? MovementCore.IsInWater(Movement.State.Position.Y)
+            ? MovementCore.IsInWater(Movement.State.Position)
             : Source != null && Source.IsInWater;
 
         /// <summary>

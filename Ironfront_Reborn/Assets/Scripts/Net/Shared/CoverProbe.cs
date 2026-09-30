@@ -241,7 +241,7 @@ namespace Ironfront.Net.Unity
             {
                 return false;
             }
-            if (hit.point.y <= MovementCore.WaterHeight)
+            if (hit.point.y <= MovementCore.SurfaceAt(hit.point.x, hit.point.z))
             {
                 return false;
             }

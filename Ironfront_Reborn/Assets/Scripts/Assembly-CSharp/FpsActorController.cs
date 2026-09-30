@@ -1270,7 +1270,7 @@ public class FpsActorController : ActorController
 			Vector3 at = body.position;
 			body.position = new Vector3(
 				at.x,
-				SwimPresentation.RootHeight(Ironfront.Net.Replication.Movement.MovementCore.WaterHeight, headAboveRoot),
+				SwimPresentation.RootHeight(Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(at.x, at.z), headAboveRoot),
 				at.z);
 		}
 		if (tpCamera.enabled)
@@ -1293,8 +1293,8 @@ public class FpsActorController : ActorController
 	/// </summary>
 	private void KeepSwimCameraAboveTheSurface()
 	{
-		float lowest = Ironfront.Net.Replication.Movement.MovementCore.WaterHeight + SwimCameraAboveSurface;
 		Vector3 at = tpCamera.transform.position;
+		float lowest = Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(at.x, at.z) + SwimCameraAboveSurface;
 		if (at.y < lowest)
 		{
 			tpCamera.transform.position = new Vector3(at.x, lowest, at.z);

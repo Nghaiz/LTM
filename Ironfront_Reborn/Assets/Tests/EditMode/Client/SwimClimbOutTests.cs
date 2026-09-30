@@ -55,7 +55,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             for (int i = 0; i < 30 * 6; i++) swimmer.Tick(in Forward, Dt);
 
             Vector3 at = swimmer.transform.position - Origin;
-            Assert.IsFalse(MovementCore.IsInWater(swimmer.State.Position.Y), $"still in the water at {at}");
+            Assert.IsFalse(MovementCore.IsInWater(swimmer.State.Position), $"still in the water at {at}");
             Assert.Greater(at.z, 2.3f, $"never got onto the beach: {at}");
             Assert.AreEqual(Water + BeachAboveWater + MovementCore.StandHeight * 0.5f, at.y, 0.15f,
                 $"not standing on the beach: {at}");

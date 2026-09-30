@@ -32,20 +32,21 @@ namespace Ironfront.Net.Replication.Tests
         public void Dispose()
         {
             MovementCore.WaterHeight = float.NegativeInfinity;
+            MovementCore.BoundedWater = null;
         }
 
         [Fact]
         public void AMapWithNoWaterHasNobodyInIt()
         {
             MovementCore.WaterHeight = float.NegativeInfinity;
-            Assert.False(MovementCore.IsInWater(-1000f));
+            Assert.False(MovementCore.IsInWater(0f, -1000f, 0f));
         }
 
         [Fact]
         public void ABodyIsInWaterOnceHalfAMetreOverItsCentreIsUnder()
         {
-            Assert.True(MovementCore.IsInWater(Water - MovementCore.SwimSampleAbove));
-            Assert.False(MovementCore.IsInWater(Water - MovementCore.SwimSampleAbove + 0.01f));
+            Assert.True(MovementCore.IsInWater(0f, Water - MovementCore.SwimSampleAbove, 0f));
+            Assert.False(MovementCore.IsInWater(0f, Water - MovementCore.SwimSampleAbove + 0.01f, 0f));
         }
 
         [Fact]
@@ -57,7 +58,7 @@ namespace Ironfront.Net.Replication.Tests
             for (int i = 0; i < 30 * 10; i++) state.Position += MovementCore.Step(ref state, in idle, Dt);
 
             Assert.Equal(Water - MovementCore.SwimFloatDepth, state.Position.Y, 2);
-            Assert.True(MovementCore.IsInWater(state.Position.Y),
+            Assert.True(MovementCore.IsInWater(in state.Position),
                 "a body that floated up stopped swimming: it would fall back in and bob forever");
         }
 
@@ -125,7 +126,7 @@ namespace Ironfront.Net.Replication.Tests
 
             // Out of the water by the swim test, still pushing up the bank: the climb goes on.
             float centre = Water - MovementCore.SwimSampleAbove + 0.3f;
-            Assert.False(MovementCore.IsInWater(centre));
+            Assert.False(MovementCore.IsInWater(0f, centre, 0f));
             MoveState state = MoveState.AtRest(new Vec3(0f, centre, 0f), grounded: false);
             state.IsBlockedSideways = true;
             state.IsClimbingOut = true;
