@@ -4,26 +4,40 @@ using Ironfront.Net.Replication.Movement;
 namespace Ironfront.Net.Replication.Ai
 {
     /// <summary>
-    /// One side's commander: reads the flags and the squads and gives every squad a role -- take
-    /// this flag, hold that one, come at this one from the side. Phase P28, from the owner's report
-    /// of 2026-09-30 ("the bots should count how many of them there are and split up sensibly").
+    /// One side's commander: reads the flags and the squads and gives every squad a job -- take
+    /// this flag, hold that one, come at this one from the side, gather here first. Phase P28, from
+    /// the owner's report of 2026-09-30 ("the bots should count how many of them there are and split
+    /// up sensibly"); phase P29 rebuilt how it decides on the literature (below).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>What it decides, in order.</b> A posture from the flags each side holds and the score.
-    /// Targets: the capturable flags the side does not hold that border one it does, valued by
-    /// what they open up, how far away they are and how hard they are held, and as many of them at
-    /// once as the side's size supports (<see cref="TacticsProfile.BotsPerObjective"/>). Defence:
-    /// the side's frontline flags keep a garrison, more where the enemy is in contact, capped at a
-    /// share of the side. Then every squad gets a job -- the ones already doing a job that still
-    /// makes sense keep it -- and where two or more squads go for one flag, one of them goes round
-    /// the side, quietly.
+    /// <b>How it decides.</b> Every squad scores every job it could do -- each flag the side does not
+    /// hold, and each of its own flags on the front line or under threat -- with one utility: what
+    /// the flag is worth, less how far away it is, plus what the squad adds toward the force the
+    /// flag needs, less what it would add past that, less the deficit if even with it the side would
+    /// be outnumbered there. The best squad-and-job pair of all is settled first, the force the flag
+    /// has is counted, and the rest are scored again: an auction, one lot at a time. Then an assault
+    /// on a defended flag gathers short of it and goes in together, and where two or more squads go
+    /// for one flag, one of them goes round the side, quietly.
     /// </para>
     /// <para>
-    /// <b>Sticky on purpose.</b> A squad keeps its target until the target falls or a clearly better
-    /// one appears (<see cref="TacticsProfile.Stickiness"/>), and a defender keeps its flag while
-    /// the flag still needs defending. Bots that re-decide every tick look indecisive, and the
-    /// owner asked for decisive.
+    /// <b>Where it comes from.</b> One utility per option over several considerations is the utility
+    /// AI of Dave Mark's Infinite Axis Utility System; settling the best pair first and re-pricing
+    /// the rest is market-based task allocation from multi-robot coordination. The force a flag
+    /// needs is Lanchester's attrition law in the form Stanescu, Barriga and Buro fitted to battles
+    /// ("Using Lanchester Attrition Laws for Combat Prediction in StarCraft", AIIDE 2015): E defenders
+    /// worth k attackers each take more than E * k^(1/n) to beat, with the order n and the worth k
+    /// trained rather than assumed. Gathering before an assault is the regroup point Killzone 3's
+    /// commander sends squads to "to form up before attacks" (Straatman et al., Game AI Pro, ch. 29);
+    /// the remembered threat is a one-number influence map per flag (Tozour, Game Programming Gems 2).
+    /// </para>
+    /// <para>
+    /// <b>Why an auction and not a plan.</b> P28 chose N targets for the side and then shared squads
+    /// out over them. Trained, it still lost narrowly to the original squads, which each simply go
+    /// for the nearest flag that needs taking -- and a planner that fixes the targets first cannot
+    /// express that. This one can: with every weight but distance at zero it IS the original, so
+    /// training starts from the baseline and can only be rewarded for doing better than it.
+    /// Reading list: <c>plans/reports/2026-09-30-p29-bot-ai-research.md</c>.
     /// </para>
     /// <para>
     /// <b>Engine-free and allocation-free</b>: fixed scratch arrays, so it is tested here and runs on
@@ -36,20 +50,39 @@ namespace Ironfront.Net.Replication.Ai
         public const int MaxFlags = 64;
         public const int MaxSquads = 128;
 
+        /// <summary>A gathering squad counts as there within this many metres of its rally point.</summary>
+        public const float RallyRadius = 30f;
+
+        /// <summary>
+        /// A fight this close past the rally distance means the assault has already met the
+        /// defenders, so it goes in rather than wait.
+        /// </summary>
+        public const float ContactSlack = 20f;
+
         private readonly TacticsProfile _profile;
 
-        private readonly float[] _value = new float[MaxFlags];
-        private readonly bool[] _candidate = new bool[MaxFlags];
+        // Facts about each flag, for one plan.
+        private readonly bool[] _target = new bool[MaxFlags];
+        private readonly bool[] _retake = new bool[MaxFlags];
+        private readonly bool[] _post = new bool[MaxFlags];
+        private readonly bool[] _borders = new bool[MaxFlags];
+        private readonly int[] _enemyNeighbours = new int[MaxFlags];
+        private readonly float[] _need = new float[MaxFlags];
+        private readonly float[] _friends = new float[MaxFlags];
         private readonly bool[] _chosen = new bool[MaxFlags];
-        private readonly float[] _demand = new float[MaxFlags];
-        private readonly int[] _attackBots = new int[MaxFlags];
-        private readonly float[] _desired = new float[MaxFlags];
-        private readonly bool[] _flanked = new bool[MaxFlags];
         private readonly bool[] _assigned = new bool[MaxSquads];
+        private readonly float[,] _utility = new float[MaxSquads, MaxFlags];
+
+        // What the side remembers from one plan to the next (phase P29).
+        private readonly float[] _threat = new float[MaxFlags];
+        private readonly bool[] _go = new bool[MaxFlags];
+        private readonly float[] _gatheringSince = new float[MaxFlags];
+        private float _lastPlanTime = float.NaN;
 
         public TeamPlanner(TacticsProfile profile)
         {
             _profile = profile ?? throw new ArgumentNullException(nameof(profile));
+            for (int f = 0; f < MaxFlags; f++) _gatheringSince[f] = float.NaN;
         }
 
         public TacticsProfile Profile => _profile;
@@ -63,19 +96,40 @@ namespace Ironfront.Net.Replication.Ai
         /// <summary>How many bots the last plan put on defence.</summary>
         public int LastDefenders { get; private set; }
 
+        /// <summary>How many squads the last plan told to gather short of a defended flag.</summary>
+        public int LastGathering { get; private set; }
+
+        /// <summary>The enemies the side remembers round <paramref name="flag"/>, as of the last plan.</summary>
+        public float RememberedThreat(int flag) => flag >= 0 && flag < MaxFlags ? _threat[flag] : 0f;
+
+        /// <summary>The bots the last plan reckoned <paramref name="flag"/> needs: to take it, or to hold it.</summary>
+        public float Need(int flag) => flag >= 0 && flag < MaxFlags ? _need[flag] : 0f;
+
         /// <summary>
-        /// Plans for <paramref name="team"/>: one order per squad, written to
-        /// <paramref name="orders"/> in the squads' order. Returns how many were written.
+        /// Plans for <paramref name="team"/> with no clock: nothing is remembered from one plan to the
+        /// next and no assault waits to gather. What a test that asks about one plan wants.
+        /// </summary>
+        public int Plan(
+            int team, ReadOnlySpan<FlagInfo> flags, ReadOnlySpan<int> adjacency,
+            ReadOnlySpan<SquadInfo> squads, int score, int enemyScore, Span<SquadOrder> orders)
+            => Plan(team, flags, adjacency, squads, score, enemyScore, orders, float.NaN);
+
+        /// <summary>
+        /// Plans for <paramref name="team"/> at <paramref name="time"/> seconds: one order per squad,
+        /// written to <paramref name="orders"/> in the squads' order. Returns how many were written.
         /// </summary>
         /// <param name="adjacency">Every flag's neighbours, as indices, at its AdjacencyStart.</param>
         public int Plan(
             int team, ReadOnlySpan<FlagInfo> flags, ReadOnlySpan<int> adjacency,
-            ReadOnlySpan<SquadInfo> squads, int score, int enemyScore, Span<SquadOrder> orders)
+            ReadOnlySpan<SquadInfo> squads, int score, int enemyScore, Span<SquadOrder> orders, float time)
         {
             int flagCount = Math.Min(flags.Length, MaxFlags);
             int squadCount = Math.Min(Math.Min(squads.Length, MaxSquads), orders.Length);
             LastObjectives = 0;
             LastDefenders = 0;
+            LastGathering = 0;
+
+            RememberThreats(flags, flagCount, time);
             if (squadCount == 0) return 0;
 
             int bots = 0;
@@ -84,25 +138,15 @@ namespace Ironfront.Net.Replication.Ai
             TeamPosture posture = PostureOf(team, flags, flagCount, score, enemyScore);
             LastPosture = posture;
 
-            int objectives = ChooseTargets(team, flags, flagCount, adjacency, squads, squadCount, bots, posture);
-            LastObjectives = objectives;
-
-            float defenceCap = WeighDefence(team, flags, flagCount, adjacency, bots, posture);
-
             for (int i = 0; i < squadCount; i++)
             {
                 orders[i] = new SquadOrder { SquadIndex = i, Role = SquadRole.None, Flag = -1 };
                 _assigned[i] = false;
             }
 
-            Array.Clear(_attackBots, 0, _attackBots.Length);
-            Array.Clear(_flanked, 0, _flanked.Length);
-
-            int defenders = KeepStickyOrders(team, flags, flagCount, squads, squadCount, orders);
-            defenders = FillDefence(team, flags, flagCount, adjacency, squads, squadCount, orders, defenders, defenceCap);
-            LastDefenders = defenders;
-
-            AssignAttackers(flags, flagCount, squads, squadCount, orders, objectives, team, adjacency);
+            ReadFlags(team, flags, flagCount, adjacency);
+            Auction(team, flags, flagCount, squads, squadCount, orders, bots, posture);
+            Gather(team, flags, flagCount, squads, squadCount, orders, time);
             PickFlankers(flags, flagCount, squads, squadCount, orders, bots);
 
             for (int i = 0; i < squadCount; i++)
@@ -114,6 +158,57 @@ namespace Ironfront.Net.Replication.Ai
             }
 
             return squadCount;
+        }
+
+        // ------------------------------------------------------------------ what the side knows
+
+        /// <summary>
+        /// The enemies round each flag: those in contact now, or fewer and fewer of those seen before
+        /// as <see cref="TacticsProfile.ThreatMemorySeconds"/> passes. With no clock, only the present.
+        /// </summary>
+        private void RememberThreats(ReadOnlySpan<FlagInfo> flags, int flagCount, float time)
+        {
+            float keep = 0f;
+            if (!float.IsNaN(time) && !float.IsNaN(_lastPlanTime) && time >= _lastPlanTime
+                && _profile.ThreatMemorySeconds > 0f)
+            {
+                keep = (float)Math.Exp(-(time - _lastPlanTime) / _profile.ThreatMemorySeconds);
+            }
+
+            for (int f = 0; f < flagCount; f++)
+                _threat[f] = Math.Max(flags[f].EnemiesInContact, _threat[f] * keep);
+            for (int f = flagCount; f < MaxFlags; f++) _threat[f] = 0f;
+
+            _lastPlanTime = time;
+        }
+
+        /// <summary>What one defender in cover is worth in attackers, through the attrition order: k^(1/n).</summary>
+        private double DefenderWorth()
+            => Math.Pow(Math.Max(1f, _profile.DefenderAdvantage), 1.0 / Math.Max(0.5f, _profile.AttritionOrder));
+
+        /// <summary>
+        /// The bots it takes to win a flag held by <paramref name="threat"/> enemies: Lanchester's law
+        /// of order n with defenders worth k attackers each, plus a margin; never fewer than the
+        /// smallest force an objective is given.
+        /// </summary>
+        public float ForceFor(float threat)
+        {
+            float floor = Math.Max(1f, _profile.BotsPerObjective);
+            if (threat <= 0.01f) return floor;
+
+            float needed = (float)Math.Ceiling(threat * DefenderWorth() * (1f + Math.Max(0f, _profile.ForceMargin)));
+            return Math.Max(floor, needed);
+        }
+
+        /// <summary>
+        /// The bots it takes to hold one of the side's flags against <paramref name="threat"/>
+        /// attackers, dug in: the same law from the other side, so fewer than they are; one bot
+        /// watches a quiet front-line flag.
+        /// </summary>
+        public float GuardFor(float threat)
+        {
+            if (threat < 0.5f) return 1f;
+            return Math.Max(1f, (float)Math.Ceiling(threat / DefenderWorth() * (1f + Math.Max(0f, _profile.ForceMargin))));
         }
 
         // ------------------------------------------------------------------ posture
@@ -134,12 +229,14 @@ namespace Ironfront.Net.Replication.Ai
             return TeamPosture.Balanced;
         }
 
-        // ------------------------------------------------------------------ targets
+        // ------------------------------------------------------------------ the jobs on offer
 
-        /// <summary>Values every capturable flag the side does not hold and marks the best ones chosen.</summary>
-        private int ChooseTargets(
-            int team, ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<int> adjacency,
-            ReadOnlySpan<SquadInfo> squads, int squadCount, int bots, TeamPosture posture)
+        /// <summary>
+        /// Which flags are jobs this plan: every capturable flag the side does not hold, or holds with
+        /// an enemy on it, is a target; every other capturable flag it holds on the front line, or
+        /// with an enemy remembered round it, is a post. Each gets the force it needs.
+        /// </summary>
+        private void ReadFlags(int team, ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<int> adjacency)
         {
             bool holdsAny = false;
             bool hasAdjacency = false;
@@ -149,60 +246,53 @@ namespace Ironfront.Net.Replication.Ai
                 if (flags[f].AdjacencyCount > 0) hasAdjacency = true;
             }
 
-            Vec3 squadsCentre = Centre(squads, squadCount);
-            int candidates = 0;
+            for (int f = 0; f < MaxFlags; f++)
+            {
+                _target[f] = false;
+                _retake[f] = false;
+                _post[f] = false;
+                _chosen[f] = false;
+                _friends[f] = 0f;
+                _need[f] = 0f;
+                _enemyNeighbours[f] = 0;
+                _borders[f] = false;
+            }
 
             for (int f = 0; f < flagCount; f++)
             {
-                _candidate[f] = false;
-                _chosen[f] = false;
-                _value[f] = float.NegativeInfinity;
-
                 FlagInfo flag = flags[f];
-                if (!flag.Capturable || flag.Owner == team) continue;
+                if (!flag.Capturable) continue;
 
-                bool borders = !holdsAny || !hasAdjacency || BordersSide(f, team, flags, adjacency);
-                if (!borders) continue;
-
-                int enemyNeighbours = 0;
+                bool own = flag.Owner == team;
+                bool frontline = false;
                 for (int n = 0; n < flag.AdjacencyCount; n++)
                 {
                     int other = Neighbour(flag, n, adjacency, flagCount);
-                    if (other >= 0 && flags[other].Owner >= 0 && flags[other].Owner != team) enemyNeighbours++;
+                    if (other < 0) continue;
+                    if (flags[other].Owner != team) frontline = true;
+                    if (flags[other].Owner >= 0 && flags[other].Owner != team) _enemyNeighbours[f]++;
                 }
 
-                Vec3 from = holdsAny ? NearestHeld(flag.Position, team, flags, flagCount) : squadsCentre;
-                float hundreds = Vec3.Distance(flag.Position, from) / 100f;
-
-                _value[f] = _profile.TargetBase
-                            + (flag.Owner < 0 ? _profile.NeutralBonus : 0f)
-                            - _profile.ThreatWeight * flag.EnemiesInContact
-                            + _profile.LinkWeight * enemyNeighbours
-                            - _profile.DistanceWeight * hundreds;
-                _candidate[f] = true;
-                candidates++;
-            }
-
-            if (candidates == 0) return 0;
-
-            int objectives = (int)Math.Round(bots / Math.Max(1f, _profile.BotsPerObjective));
-            if (posture == TeamPosture.Defensive) objectives--;
-            objectives = Math.Max(1, Math.Min(objectives, Math.Min(_profile.MaxObjectives, candidates)));
-
-            for (int pick = 0; pick < objectives; pick++)
-            {
-                int best = -1;
-                for (int f = 0; f < flagCount; f++)
+                if (own && flag.Contested)
                 {
-                    if (!_candidate[f] || _chosen[f]) continue;
-                    if (best < 0 || _value[f] > _value[best]) best = f;
+                    // Being taken right now: a target like any other, and one that never waits to gather.
+                    _target[f] = true;
+                    _retake[f] = true;
+                    _borders[f] = true;
+                    _need[f] = ForceFor(_threat[f]);
                 }
-
-                if (best < 0) break;
-                _chosen[best] = true;
+                else if (own)
+                {
+                    _post[f] = frontline || _threat[f] >= 0.5f;
+                    _need[f] = GuardFor(_threat[f]);
+                }
+                else
+                {
+                    _target[f] = true;
+                    _borders[f] = !holdsAny || !hasAdjacency || BordersSide(f, team, flags, adjacency);
+                    _need[f] = ForceFor(_threat[f]);
+                }
             }
-
-            return objectives;
         }
 
         private static bool BordersSide(int flag, int team, ReadOnlySpan<FlagInfo> flags, ReadOnlySpan<int> adjacency)
@@ -217,231 +307,256 @@ namespace Ironfront.Net.Replication.Ai
             return false;
         }
 
-        // ------------------------------------------------------------------ defence
+        // ------------------------------------------------------------------ the auction
 
-        /// <summary>How many bots each of the side's flags wants, and the most the side will spare.</summary>
-        private float WeighDefence(
-            int team, ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<int> adjacency,
-            int bots, TeamPosture posture)
+        /// <summary>
+        /// Settles the best squad-and-job pair of all, counts the squad toward its flag, re-prices
+        /// that flag for everyone still free, and repeats until every squad has a job. A side goes
+        /// for at most <see cref="TacticsProfile.MaxObjectives"/> flags at once and puts at most a
+        /// share of itself on posts; a squad with no job left holds the nearest flag of its own.
+        /// </summary>
+        private void Auction(
+            int team, ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<SquadInfo> squads,
+            int squadCount, Span<SquadOrder> orders, int bots, TeamPosture posture)
         {
-            Array.Clear(_demand, 0, _demand.Length);
+            float share = posture == TeamPosture.Aggressive ? _profile.MaxDefendShareAggressive
+                : posture == TeamPosture.Defensive ? _profile.MaxDefendShareDefensive
+                : _profile.MaxDefendShareBalanced;
+            bool anyTarget = false;
+            for (int f = 0; f < flagCount; f++) anyTarget |= _target[f];
 
-            // A small side needs every bot at the front; a lost flag is taken back by the attack.
-            if (bots < _profile.MinBotsToDefend) return 0f;
-
+            // With nothing left to take, every bot holds what the side has; otherwise a share of it.
+            float postCap = !anyTarget ? bots : bots < _profile.MinBotsToDefend ? 0f : bots * share;
             float garrison = posture == TeamPosture.Aggressive ? _profile.GarrisonAggressive
                 : posture == TeamPosture.Defensive ? _profile.GarrisonDefensive
                 : _profile.GarrisonBalanced;
 
-            bool anyTarget = false;
-            for (int f = 0; f < flagCount; f++) if (_chosen[f]) anyTarget = true;
-
-            for (int f = 0; f < flagCount; f++)
-            {
-                FlagInfo flag = flags[f];
-                if (flag.Owner != team || !flag.Capturable) continue;
-
-                bool frontline = false;
-                for (int n = 0; n < flag.AdjacencyCount; n++)
-                {
-                    int other = Neighbour(flag, n, adjacency, flagCount);
-                    if (other >= 0 && flags[other].Owner != team) frontline = true;
-                }
-
-                // With nothing left to take, every bot holds what the side has.
-                float demand = (frontline ? garrison : 0f) + flag.EnemiesInContact * _profile.DefendPerThreat;
-                if (!anyTarget && frontline) demand = Math.Max(demand, bots);
-
-                _demand[f] = demand;
-            }
-
-            float share = posture == TeamPosture.Aggressive ? _profile.MaxDefendShareAggressive
-                : posture == TeamPosture.Defensive ? _profile.MaxDefendShareDefensive
-                : _profile.MaxDefendShareBalanced;
-
-            return anyTarget ? bots * share : bots;
-        }
-
-        // ------------------------------------------------------------------ assignment
-
-        /// <summary>Squads already doing something that still makes sense keep doing it.</summary>
-        private int KeepStickyOrders(
-            int team, ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<SquadInfo> squads,
-            int squadCount, Span<SquadOrder> orders)
-        {
-            float bestValue = float.NegativeInfinity;
-            for (int f = 0; f < flagCount; f++) if (_chosen[f] && _value[f] > bestValue) bestValue = _value[f];
-
-            int defenders = 0;
             for (int i = 0; i < squadCount; i++)
-            {
-                SquadInfo squad = squads[i];
-                int flag = squad.Flag;
-                if (flag < 0 || flag >= flagCount) continue;
-
-                if (squad.Role == SquadRole.Defend)
-                {
-                    if (squad.InVehicle || flags[flag].Owner != team || _demand[flag] <= 0f) continue;
-
-                    Keep(i, squad, orders);
-                    _demand[flag] -= squad.Size;
-                    defenders += squad.Size;
-                    continue;
-                }
-
-                if (squad.Role != SquadRole.Attack && squad.Role != SquadRole.Flank) continue;
-                if (!flags[flag].Capturable || flags[flag].Owner == team || !_candidate[flag]) continue;
-
-                bool stillWorthIt = _chosen[flag] || _value[flag] + _profile.Stickiness >= bestValue;
-                if (!stillWorthIt) continue;
-
-                Keep(i, squad, orders);
-                _attackBots[flag] += squad.Size;
-                if (squad.Role == SquadRole.Flank) _flanked[flag] = true;
-            }
-
-            return defenders;
-        }
-
-        private void Keep(int index, in SquadInfo squad, Span<SquadOrder> orders)
-        {
-            orders[index].Role = squad.Role;
-            orders[index].Flag = squad.Flag;
-            orders[index].Sneak = squad.Role == SquadRole.Flank;
-            _assigned[index] = true;
-        }
-
-        /// <summary>Sends the nearest free squads to the flags that most need defending.</summary>
-        private int FillDefence(
-            int team, ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<int> adjacency,
-            ReadOnlySpan<SquadInfo> squads, int squadCount, Span<SquadOrder> orders, int defenders, float cap)
-        {
-            while (defenders < cap)
-            {
-                int flag = -1;
                 for (int f = 0; f < flagCount; f++)
-                {
-                    if (_demand[f] < 0.5f) continue;
-                    if (flag < 0 || _demand[f] > _demand[flag]) flag = f;
-                }
+                    _utility[i, f] = Utility(squads[i], f, flags, garrison);
 
-                if (flag < 0) break;
-
-                int squad = NearestFree(flags[flag].Position, squads, squadCount, allowVehicles: false);
-                if (squad < 0) break;
-
-                orders[squad].Role = SquadRole.Defend;
-                orders[squad].Flag = flag;
-                _assigned[squad] = true;
-                _demand[flag] -= squads[squad].Size;
-                defenders += squads[squad].Size;
-            }
-
-            return defenders;
-        }
-
-        /// <summary>
-        /// Spreads the free squads over the chosen targets, more where the enemy is in contact,
-        /// each to the target most short of its share, the nearer on a tie.
-        /// </summary>
-        private void AssignAttackers(
-            ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<SquadInfo> squads, int squadCount,
-            Span<SquadOrder> orders, int objectives, int team, ReadOnlySpan<int> adjacency)
-        {
-            if (objectives == 0)
-            {
-                // Nothing to take: whoever is free holds the nearest flag of the side's own.
-                for (int i = 0; i < squadCount; i++)
-                {
-                    if (_assigned[i]) continue;
-                    int held = NearestHeldIndex(squads[i].Position, team, flags, flagCount);
-                    if (held < 0) continue;
-
-                    orders[i].Role = SquadRole.Defend;
-                    orders[i].Flag = held;
-                    _assigned[i] = true;
-                }
-
-                return;
-            }
-
-            int free = 0;
-            for (int i = 0; i < squadCount; i++) if (!_assigned[i]) free += squads[i].Size;
-
-            float weights = 0f;
-            int already = 0;
-            for (int f = 0; f < flagCount; f++)
-            {
-                if (!_chosen[f]) continue;
-                weights += 1f + flags[f].EnemiesInContact;
-                already += _attackBots[f];
-            }
-
-            for (int f = 0; f < flagCount; f++)
-                _desired[f] = _chosen[f] ? (free + already) * (1f + flags[f].EnemiesInContact) / weights : 0f;
-
-            // Nearest pairs first: of every free squad and every objective still short of its share,
-            // the closest pair is joined, then the next closest. The squads nearest an objective take
-            // it, and nobody walks the length of the map past one it could have taken on the way.
-            // (Assigning in list order, as this first did, sent whichever squad came first to the
-            // flag most short -- often the far one; part 4's simulator measured the cost.)
-            while (true)
+            int targets = 0;
+            int onPosts = 0;
+            for (int lot = 0; lot < squadCount; lot++)
             {
                 int bestSquad = -1;
                 int bestFlag = -1;
-                float bestDistance = float.PositiveInfinity;
+                float best = float.NegativeInfinity;
                 for (int i = 0; i < squadCount; i++)
                 {
                     if (_assigned[i]) continue;
                     for (int f = 0; f < flagCount; f++)
                     {
-                        if (!_chosen[f] || _desired[f] - _attackBots[f] <= ShareTolerance) continue;
-                        float distance = Vec3.Distance(squads[i].Position, flags[f].Position);
-                        if (distance >= bestDistance) continue;
-                        bestSquad = i;
-                        bestFlag = f;
-                        bestDistance = distance;
+                        if (_target[f])
+                        {
+                            // Taking back a flag being lost is never held back by the limit on objectives.
+                            if (!_chosen[f] && !_retake[f] && targets >= _profile.MaxObjectives) continue;
+                        }
+                        else if (_post[f])
+                        {
+                            if (squads[i].InVehicle || onPosts + squads[i].Size > postCap) continue;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+
+                        // Strictly greater: on a tie the lower squad and the lower flag win, so a plan
+                        // is the same for the same input.
+                        if (_utility[i, f] > best)
+                        {
+                            best = _utility[i, f];
+                            bestSquad = i;
+                            bestFlag = f;
+                        }
                     }
                 }
+
                 if (bestSquad < 0) break;
-                Attack(bestSquad, bestFlag, squads, orders);
+
+                _assigned[bestSquad] = true;
+                orders[bestSquad].Flag = bestFlag;
+                orders[bestSquad].Role = _target[bestFlag] ? SquadRole.Attack : SquadRole.Defend;
+                orders[bestSquad].Sneak = false;
+
+                // A flank already on its way to this flag stays a flank: turning it into a head-on
+                // attack every plan would re-path the squad every two seconds (PickFlankers then
+                // keeps its side).
+                if (_target[bestFlag] && squads[bestSquad].Flag == bestFlag && squads[bestSquad].Role == SquadRole.Flank)
+                    orders[bestSquad].Role = SquadRole.Flank;
+                _friends[bestFlag] += squads[bestSquad].Size;
+                if (_target[bestFlag])
+                {
+                    if (!_chosen[bestFlag] && !_retake[bestFlag]) targets++;
+                    _chosen[bestFlag] = true;
+                }
+                else
+                {
+                    onPosts += squads[bestSquad].Size;
+                }
+
+                for (int i = 0; i < squadCount; i++)
+                    if (!_assigned[i]) _utility[i, bestFlag] = Utility(squads[i], bestFlag, flags, garrison);
             }
 
-            // Every share met and squads left over: each goes for the chosen flag nearest it.
+            // No job left for it: hold the nearest flag of the side's own. Never in a vehicle, which
+            // does not dig in; it keeps the original squads' own behaviour instead.
             for (int i = 0; i < squadCount; i++)
             {
-                if (_assigned[i]) continue;
-                int nearest = -1;
-                float nearestDistance = float.PositiveInfinity;
-                for (int f = 0; f < flagCount; f++)
+                if (_assigned[i] || squads[i].InVehicle) continue;
+                int held = NearestHeldIndex(squads[i].Position, team, flags, flagCount);
+                if (held < 0) continue;
+
+                orders[i].Role = SquadRole.Defend;
+                orders[i].Flag = held;
+                _assigned[i] = true;
+                onPosts += squads[i].Size;
+            }
+
+            LastObjectives = targets;
+            LastDefenders = onPosts;
+        }
+
+        /// <summary>
+        /// What <paramref name="squad"/> doing flag <paramref name="f"/>'s job is worth, given the
+        /// force already settled on it. Distance is always a cost; the rest depends on the job.
+        /// </summary>
+        private float Utility(in SquadInfo squad, int f, ReadOnlySpan<FlagInfo> flags, float garrison)
+        {
+            float need = Math.Max(1f, _need[f]);
+            float have = _friends[f];
+            float fills = Math.Min(squad.Size, Math.Max(0f, need - have));
+            float over = Math.Max(0f, have + squad.Size - need);
+
+            float value;
+            if (_target[f])
+            {
+                value = _profile.TargetBase
+                        + (flags[f].Owner < 0 ? _profile.NeutralBonus : 0f)
+                        + (_retake[f] ? _profile.RetakeBonus : 0f)
+                        + _profile.LinkWeight * _enemyNeighbours[f]
+                        - _profile.ThreatWeight * _threat[f]
+                        - (_borders[f] ? 0f : _profile.DeepPenalty);
+
+                // Still outnumbered there, even with this squad: Lanchester's deficit, as a share of the need.
+                float deficit = Math.Max(0f, need - have - squad.Size);
+                value -= _profile.DeficitWeight * deficit / need;
+            }
+            else
+            {
+                value = garrison + _profile.DefendPerThreat * _threat[f];
+            }
+
+            value += _profile.ShortWeight * fills / need - _profile.OverWeight * over / need;
+            value -= _profile.DistanceWeight * Vec3.Distance(squad.Position, flags[f].Position) / 100f;
+
+            // Sticky on purpose: a squad keeps its job until another is clearly better, so it commits.
+            if (squad.Role != SquadRole.None && squad.Flag == f) value += _profile.Stickiness;
+
+            return value;
+        }
+
+        // ------------------------------------------------------------------ gathering
+
+        /// <summary>
+        /// An assault on a flag the enemy holds waits short of it until enough of it has arrived --
+        /// <see cref="TacticsProfile.GatherShare"/> of the force the flag costs -- or
+        /// <see cref="TacticsProfile.GatherMaxWait"/> has passed, or it is already in the fight; then
+        /// every squad on it goes in together, and keeps going until the flag falls or is dropped.
+        /// An undefended flag, a vehicle and a squad already fighting never wait.
+        /// </summary>
+        private void Gather(
+            int team, ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<SquadInfo> squads,
+            int squadCount, Span<SquadOrder> orders, float time)
+        {
+            for (int f = 0; f < MaxFlags; f++)
+            {
+                if (f < flagCount && _chosen[f]) continue;
+                _go[f] = false;
+                _gatheringSince[f] = float.NaN;
+            }
+
+            for (int f = 0; f < flagCount; f++)
+            {
+                if (!_chosen[f]) continue;
+
+                bool waits = _profile.GatherShare > 0f && !float.IsNaN(time) && _threat[f] >= 0.5f && !_retake[f];
+                if (!waits) _go[f] = true;
+
+                Vec3 target = flags[f].Position;
+                Vec3 rally = RallyPoint(target, team, flags, flagCount, out float reach);
+
+                if (!_go[f])
                 {
-                    if (!_chosen[f]) continue;
-                    float distance = Vec3.Distance(squads[i].Position, flags[f].Position);
-                    if (distance < nearestDistance)
+                    int there = 0;
+                    bool fighting = false;
+                    for (int i = 0; i < squadCount; i++)
                     {
-                        nearest = f;
-                        nearestDistance = distance;
+                        if (!IsAssault(orders[i].Role) || orders[i].Flag != f || squads[i].InVehicle) continue;
+
+                        float toTarget = Vec3.Distance(squads[i].Position, target);
+                        if (Vec3.Distance(squads[i].Position, rally) <= RallyRadius || toTarget <= reach) there += squads[i].Size;
+                        if (squads[i].Engaged && toTarget <= reach + ContactSlack) fighting = true;
                     }
+
+                    if (float.IsNaN(_gatheringSince[f])) _gatheringSince[f] = time;
+                    if (there >= _profile.GatherShare * _need[f] || fighting || time - _gatheringSince[f] >= _profile.GatherMaxWait)
+                        _go[f] = true;
                 }
-                if (nearest >= 0) Attack(i, nearest, squads, orders);
+
+                for (int i = 0; i < squadCount; i++)
+                {
+                    if (!IsAssault(orders[i].Role) || orders[i].Flag != f) continue;
+
+                    if (_go[f] || squads[i].InVehicle || squads[i].Engaged)
+                    {
+                        if (orders[i].Role == SquadRole.Assemble)
+                        {
+                            orders[i].Role = SquadRole.Attack;
+                            orders[i].HasWaypoint = false;
+                        }
+                        continue;
+                    }
+
+                    orders[i].Role = SquadRole.Assemble;
+                    orders[i].Waypoint = rally;
+                    orders[i].HasWaypoint = true;
+                    orders[i].Sneak = false;
+                    LastGathering++;
+                }
             }
         }
 
-        /// <summary>An objective counts as short of its share while it lacks more than this many bots.</summary>
-        private const float ShareTolerance = 0.25f;
+        private static bool IsAssault(SquadRole role)
+            => role == SquadRole.Attack || role == SquadRole.Flank || role == SquadRole.Assemble;
 
-        private void Attack(int squad, int flag, ReadOnlySpan<SquadInfo> squads, Span<SquadOrder> orders)
+        /// <summary>
+        /// Where an assault on <paramref name="target"/> gathers: toward the side's nearest flag from
+        /// it, <see cref="TacticsProfile.GatherDistance"/> out, but never past seven tenths of the way
+        /// home. <paramref name="reach"/> is how far out that is.
+        /// </summary>
+        private Vec3 RallyPoint(in Vec3 target, int team, ReadOnlySpan<FlagInfo> flags, int flagCount, out float reach)
         {
-            orders[squad].Role = SquadRole.Attack;
-            orders[squad].Flag = flag;
-            _assigned[squad] = true;
-            _attackBots[flag] += squads[squad].Size;
+            Vec3 home = NearestHeld(target, team, flags, flagCount);
+            Vec3 toHome = Flat(home - target);
+            float length = toHome.Magnitude;
+            if (length < 1f)
+            {
+                reach = 0f;
+                return target;
+            }
+
+            reach = Math.Min(_profile.GatherDistance, 0.7f * length);
+            return target + toHome * (reach / length);
         }
+
+        // ------------------------------------------------------------------ flanks
 
         /// <summary>
         /// Where two or more squads on foot go for one flag, the second-nearest of them goes round
         /// the side through a waypoint off the attack axis, quietly, while the nearest goes straight
         /// in. Six or more squads on one flag send a second flank round the other side: a pincer.
+        /// Squads still gathering are left out: a flank leaves with the assault, not before it.
         /// </summary>
         private void PickFlankers(
             ReadOnlySpan<FlagInfo> flags, int flagCount, ReadOnlySpan<SquadInfo> squads, int squadCount,
@@ -599,27 +714,6 @@ namespace Ironfront.Net.Replication.Ai
 
         // ------------------------------------------------------------------ helpers
 
-        private int NearestFree(in Vec3 point, ReadOnlySpan<SquadInfo> squads, int squadCount, bool allowVehicles)
-        {
-            int best = -1;
-            float bestDistance = float.PositiveInfinity;
-
-            for (int i = 0; i < squadCount; i++)
-            {
-                if (_assigned[i]) continue;
-                if (!allowVehicles && squads[i].InVehicle) continue;
-
-                float distance = Vec3.Distance(point, squads[i].Position);
-                if (distance < bestDistance)
-                {
-                    best = i;
-                    bestDistance = distance;
-                }
-            }
-
-            return best;
-        }
-
         private static int NearestHeldIndex(in Vec3 point, int team, ReadOnlySpan<FlagInfo> flags, int flagCount)
         {
             int best = -1;
@@ -658,15 +752,6 @@ namespace Ironfront.Net.Replication.Ai
             }
 
             return best;
-        }
-
-        private static Vec3 Centre(ReadOnlySpan<SquadInfo> squads, int squadCount)
-        {
-            if (squadCount == 0) return Vec3.Zero;
-
-            Vec3 sum = Vec3.Zero;
-            for (int i = 0; i < squadCount; i++) sum = sum + squads[i].Position;
-            return sum * (1f / squadCount);
         }
 
         private static int Neighbour(in FlagInfo flag, int n, ReadOnlySpan<int> adjacency, int flagCount)

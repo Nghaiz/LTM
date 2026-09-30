@@ -84,7 +84,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             SquadMerge[] merges = Plan(
                 Squad(1, 0f, 0f, 1),
-                Squad(2, SquadRegroup.JoinRadius + 1f, 0f, 2));
+                Squad(2, SquadRegroup.DefaultJoinRadius + 1f, 0f, 2));
 
             Assert.Empty(merges);
         }
@@ -101,6 +101,16 @@ namespace Ironfront.Net.Replication.Tests
                 Squad(2, 5f, 0f, 2, engaged: true));
             Assert.Single(merges);
             Assert.Equal(1, merges[0].Into);
+        }
+
+        [Fact]
+        public void TheCommandersRadius_ReplacesTheDefault()
+        {
+            var squads = new[] { Squad(1, 0f, 0f, 1), Squad(2, 30f, 0f, 2) };
+            var merges = new SquadMerge[2];
+
+            Assert.Equal(1, new SquadRegroup().Plan(squads, merges, joinRadius: 40f));
+            Assert.Equal(0, new SquadRegroup().Plan(squads, merges, joinRadius: 20f));
         }
 
         [Fact]

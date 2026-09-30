@@ -29,7 +29,7 @@ namespace Ironfront.Net.Replication.Ai
     /// <para>
     /// <b>What it will not do.</b> Pull a bot out of a fight (an engaged squad is never the one that
     /// moves), touch a squad in or boarding a vehicle, or grow a squad past <see cref="MaxSize"/>,
-    /// the largest a spawn wave forms. A lone bot with nobody within <see cref="JoinRadius"/> stays
+    /// the largest a spawn wave forms. A lone bot with nobody within the join radius stays
     /// alone until it comes near somebody.
     /// </para>
     /// <para>Engine-free and allocation-free, like <see cref="TeamPlanner"/>.</para>
@@ -46,10 +46,13 @@ namespace Ironfront.Net.Replication.Ai
         public const int MaxSize = 4;
 
         /// <summary>
-        /// How far a lone bot walks to join a squad, in metres: under half the distance between two
-        /// of Dustbowl's flags, so it never crosses the map to do it.
+        /// How far a lone bot walks to join a squad, in metres, when no profile says: under half the
+        /// distance between two of Dustbowl's flags, so it never crosses the map to do it. The
+        /// commander passes <see cref="TacticsProfile.RegroupRadius"/>, which training sets (phase
+        /// P29): fewer, larger squads fight better and hold fewer flags, and the simulator weighs
+        /// the two.
         /// </summary>
-        public const float JoinRadius = 80f;
+        public const float DefaultJoinRadius = 80f;
 
         /// <summary>
         /// What joining a squad with another job costs, in metres of walk: a bot prefers a squad on
@@ -65,7 +68,7 @@ namespace Ironfront.Net.Replication.Ai
         /// Writes the merges for one side's squads into <paramref name="merges"/> and returns how
         /// many there are. Smallest squads first, ties by id, so a plan is the same every time.
         /// </summary>
-        public int Plan(ReadOnlySpan<SquadInfo> squads, Span<SquadMerge> merges)
+        public int Plan(ReadOnlySpan<SquadInfo> squads, Span<SquadMerge> merges, float joinRadius = DefaultJoinRadius)
         {
             int count = Math.Min(squads.Length, TeamPlanner.MaxSquads);
             for (int i = 0; i < count; i++)
@@ -86,7 +89,7 @@ namespace Ironfront.Net.Replication.Ai
                 SquadInfo lone = squads[from];
                 if (lone.InVehicle || lone.Engaged) continue;
 
-                int into = BestSquadFor(from, squads, count);
+                int into = BestSquadFor(from, squads, count, joinRadius);
                 if (into < 0) continue;
 
                 _size[into] += _size[from];
@@ -99,7 +102,7 @@ namespace Ironfront.Net.Replication.Ai
         }
 
         /// <summary>The nearest squad with room, on foot, preferring one on the same job.</summary>
-        private int BestSquadFor(int from, ReadOnlySpan<SquadInfo> squads, int count)
+        private int BestSquadFor(int from, ReadOnlySpan<SquadInfo> squads, int count, float joinRadius)
         {
             SquadInfo lone = squads[from];
             int best = -1;
@@ -113,7 +116,7 @@ namespace Ironfront.Net.Replication.Ai
                 if (other.InVehicle || _size[i] + _size[from] > MaxSize) continue;
 
                 float distance = Flat(other.Position - lone.Position).Magnitude;
-                if (distance > JoinRadius) continue;
+                if (distance > joinRadius) continue;
 
                 bool sameJob = lone.Role == other.Role && lone.Flag == other.Flag;
                 float cost = distance + (sameJob ? 0f : OtherJobPenalty);

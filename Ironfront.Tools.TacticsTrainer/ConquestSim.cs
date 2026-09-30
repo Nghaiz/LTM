@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Ironfront.Net.Replication.Ai;
 
 namespace Ironfront.Tools.TacticsTrainer
 {
@@ -70,6 +71,20 @@ namespace Ironfront.Tools.TacticsTrainer
 
         public int Score(int team) => _score[team];
 
+        /// <summary>
+        /// Whether a side keeps its squads whole the way the game has since phase P29: a lone bot a
+        /// wave brings back reinforces a squad near its flag, and the commander folds lone bots into
+        /// squads near them (<see cref="Regroup"/>). The original game did neither; a commander
+        /// policy switches it on for its side.
+        /// </summary>
+        public bool[] SquadUpkeep { get; } = { false, false };
+
+        /// <summary>
+        /// How far from its flag a lone arrival looks for a squad to reinforce, per side: the
+        /// commander's <see cref="TacticsProfile.ReinforceRadius"/>, as ActorManager.SpawnWave reads it.
+        /// </summary>
+        public float[] ReinforceRadius { get; } = { 150f, 150f };
+
         /// <summary>Each side's deaths so far, and its flag-seconds held: for diagnosis.</summary>
         public int[] Deaths { get; } = new int[2];
 
@@ -101,6 +116,7 @@ namespace Ironfront.Tools.TacticsTrainer
                 _policies[0].Tick(this, 0);
                 _policies[1].Tick(this, 1);
                 Behave();
+                MergeJoiners();
                 Fight();
                 if (Time >= _nextCapture)
                 {
@@ -166,10 +182,68 @@ namespace Ironfront.Tools.TacticsTrainer
                     };
                     squad.TargetX = squad.X;
                     squad.TargetZ = squad.Z;
+                    if (size == 1 && SquadUpkeep[team]) squad.JoinId = SquadWithRoomNear(team, squad.X, squad.Z, ReinforceRadius[team], squad.Id);
                     Squads.Add(squad);
                 }
             }
         }
+
+        /// <summary>
+        /// The id of the squad of <paramref name="team"/> nearest (<paramref name="x"/>, <paramref name="z"/>)
+        /// within <paramref name="radius"/> with room for one more, not itself joining one; -1 for none.
+        /// </summary>
+        private int SquadWithRoomNear(int team, float x, float z, float radius, int except)
+        {
+            int best = -1;
+            float bestD = radius * radius;
+            foreach (SimSquad s in Squads)
+            {
+                if (s.Team != team || s.Id == except || s.JoinId >= 0 || s.Size + 1 > SquadRegroup.MaxSize) continue;
+                float dx = s.X - x, dz = s.Z - z;
+                float d = dx * dx + dz * dz;
+                if (d <= bestD)
+                {
+                    bestD = d;
+                    best = s.Id;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// The commander's squad upkeep for <paramref name="team"/>, as BotCommander.Regroup does it
+        /// before every plan: lone squads are told to walk over and join the squad
+        /// <paramref name="regroup"/> picks for them.
+        /// </summary>
+        public void Regroup(int team, SquadRegroup regroup, float joinRadius = SquadRegroup.DefaultJoinRadius)
+        {
+            _regroupSquads.Clear();
+            foreach (SimSquad s in Squads)
+                if (s.Team == team && s.JoinId < 0 && _regroupSquads.Count < TeamPlanner.MaxSquads) _regroupSquads.Add(s);
+
+            int count = _regroupSquads.Count;
+            if (count == 0) return;
+            for (int i = 0; i < count; i++)
+            {
+                SimSquad s = _regroupSquads[i];
+                _regroupInfo[i] = new SquadInfo
+                {
+                    Id = s.Id,
+                    Position = new Ironfront.Net.Replication.Movement.Vec3(s.X, 0f, s.Z),
+                    Size = s.Size,
+                    Engaged = s.Engaged,
+                    Role = s.Role,
+                    Flag = s.CommandFlag,
+                };
+            }
+            int merges = regroup.Plan(new ReadOnlySpan<SquadInfo>(_regroupInfo, 0, count), _regroupMerges, joinRadius);
+            for (int m = 0; m < merges; m++)
+                _regroupSquads[_regroupMerges[m].From].JoinId = _regroupSquads[_regroupMerges[m].Into].Id;
+        }
+
+        private readonly List<SimSquad> _regroupSquads = new List<SimSquad>();
+        private readonly SquadInfo[] _regroupInfo = new SquadInfo[TeamPlanner.MaxSquads];
+        private readonly SquadMerge[] _regroupMerges = new SquadMerge[TeamPlanner.MaxSquads];
 
         /// <summary>AiActorController.SelectedSpawnPoint: 70% a frontline flag, 30% any flag held.</summary>
         private int SpawnFlag(int team)

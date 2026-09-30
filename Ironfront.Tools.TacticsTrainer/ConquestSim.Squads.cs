@@ -21,6 +21,12 @@ namespace Ironfront.Tools.TacticsTrainer
         {
             foreach (SimSquad s in Squads)
             {
+                if (s.JoinId >= 0 && Joining(s))
+                {
+                    Step(s);
+                    continue;
+                }
+
                 int closest = ClosestFlag(s.X, s.Z);
                 switch (s.Role)
                 {
@@ -32,6 +38,9 @@ namespace Ironfront.Tools.TacticsTrainer
                     break;
                 case SquadRole.Flank:
                     Flank(s, closest);
+                    break;
+                case SquadRole.Assemble:
+                    HoldAt(s);
                     break;
                 default:
                     Original(s, closest);
@@ -92,7 +101,13 @@ namespace Ironfront.Tools.TacticsTrainer
         }
 
         /// <summary>A defence: to its spot by the flag, dug in facing the way the enemy comes.</summary>
-        private void Defend(SimSquad s)
+        private void Defend(SimSquad s) => HoldAt(s);
+
+        /// <summary>
+        /// To the order's waypoint -- a defence's spot, an assault's rally point -- and dug in there
+        /// (Squad.MoveToAndDigIn).
+        /// </summary>
+        private void HoldAt(SimSquad s)
         {
             if (s.Flag != s.CommandFlag || !s.HasWaypoint || s.TargetX != s.WaypointX || s.TargetZ != s.WaypointZ)
             {
@@ -161,6 +176,12 @@ namespace Ironfront.Tools.TacticsTrainer
                 fx = s.X - Map.Flags[s.Flag].X;
                 fz = s.Z - Map.Flags[s.Flag].Z;
             }
+            else if (s.Role == SquadRole.Assemble && s.Flag >= 0)
+            {
+                // A rally point faces the flag the assault is about to go for.
+                fx = Map.Flags[s.Flag].X - s.X;
+                fz = Map.Flags[s.Flag].Z - s.Z;
+            }
             else
             {
                 int enemy = NearestFlagOwnedBy(1 - s.Team, s.X, s.Z);
@@ -170,6 +191,54 @@ namespace Ironfront.Tools.TacticsTrainer
             float length = MathF.Sqrt(fx * fx + fz * fz);
             s.FaceX = length > 0.01f ? fx / length : 0f;
             s.FaceZ = length > 0.01f ? fz / length : 0f;
+        }
+
+        // ------------------------------------------------------------------ joining
+
+        /// <summary>
+        /// Walks to where the squad it is joining is going -- AiActorController.JoinedSquad sends a
+        /// joiner to its new leader's destination, not after the leader -- and merges once it is
+        /// beside the squad; false once that squad is gone.
+        /// </summary>
+        private bool Joining(SimSquad s)
+        {
+            SimSquad? target = SquadById(s.JoinId);
+            if (target == null)
+            {
+                s.JoinId = -1;
+                return false;
+            }
+            s.Flag = target.Flag;
+            s.TargetX = target.TargetX;
+            s.TargetZ = target.TargetZ;
+            return true;
+        }
+
+        /// <summary>Folds every joiner that has reached its squad into it.</summary>
+        private void MergeJoiners()
+        {
+            bool merged = false;
+            foreach (SimSquad s in Squads)
+            {
+                if (s.JoinId < 0 || s.Size <= 0) continue;
+                SimSquad? target = SquadById(s.JoinId);
+                if (target == null || target.Size <= 0) continue;
+                if (Distance(s, target.X, target.Z) > JoinDistance) continue;
+                target.Size += s.Size;
+                target.Wounds += s.Wounds;
+                s.Size = 0;
+                merged = true;
+            }
+            if (merged) Squads.RemoveAll(q => q.Size <= 0);
+        }
+
+        /// <summary>A joiner is in its new squad once this close to it.</summary>
+        private const float JoinDistance = 6f;
+
+        private SimSquad? SquadById(int id)
+        {
+            foreach (SimSquad s in Squads) if (s.Id == id) return s;
+            return null;
         }
 
         // ------------------------------------------------------------------ fighting

@@ -15,6 +15,9 @@ public class Squad
 
 	private const float GROUPED_UP_DISTANCE = 7f;
 
+	/// <summary>A gathering squad dug in this close to its rally point stays put instead of moving again.</summary>
+	private const float RallyHoldDistance = TeamPlanner.RallyRadius;
+
 	/// <summary>Why a squad split: what <see cref="Census"/> counts it under.</summary>
 	public enum SplitReason
 	{
@@ -477,6 +480,21 @@ public class Squad
 				return;
 			}
 			break;
+		case SquadRole.Assemble:
+			// Gathering short of a defended flag (phase P29): into cover at the rally point, facing
+			// the flag, until the commander sends the whole assault in.
+			if (HasVehicle())
+			{
+				AttackSpawnPoint(commandTarget);
+				return;
+			}
+			if (state == State.DigIn && leader != null && Vector3.Distance(leader.actor.Position(), commandPoint) < RallyHoldDistance)
+			{
+				return;
+			}
+			targetSpawnPoint = commandTarget;
+			MoveToAndDigIn(commandPoint);
+			return;
 		}
 
 		// The flag has fallen to this side: hold it until the commander hands out the next one.
@@ -533,6 +551,7 @@ public class Squad
 			return leader != null && Vector3.Distance(leader.actor.Position(), spawnPoint.transform.position) < spawnPoint.GotoRadius() + BotCommander.Profile.AttackDivertRange;
 		}
 		case SquadRole.Flank:
+		case SquadRole.Assemble:
 			return false;
 		default:
 			return false;
