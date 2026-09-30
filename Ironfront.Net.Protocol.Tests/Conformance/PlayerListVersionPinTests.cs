@@ -57,11 +57,15 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             // The 16-character bound MSP already enforces on a username.
             Assert.Equal(16, PlayerListMessage.MaxNameBytes);
 
+            // A row per connected human, 64 at most (2026-09-30): bounded by connections, not by
+            // MAX_ACTORS, because the list names people and never bots.
+            Assert.Equal(64, PlayerListMessage.MaxEntries);
+
             // Derived rather than restated: a hand-written 1153 here would go on passing after
-            // MAX_ACTORS moved, and the symptom would be a truncated broadcast on a full server.
+            // the bound moved, and the symptom would be a truncated broadcast on a full server.
             Assert.Equal(
                 PlayerListMessage.HeaderSize
-                    + ProtocolConstants.MAX_ACTORS
+                    + PlayerListMessage.MaxEntries
                         * (PlayerListMessage.EntryHeaderSize + PlayerListMessage.MaxNameBytes),
                 PlayerListMessage.MaxBodySize);
 

@@ -60,11 +60,24 @@ namespace Ironfront.Net.Protocol
         public const int EntryHeaderSize = 2;
 
         /// <summary>
-        /// Worst case: every actor named at the full length. 1 + 64 x 18 = 1153, which still
-        /// fits one un-fragmented channel-2 payload.
+        /// The most rows one list carries: a row per connected human, and a server takes no more
+        /// connections than this (<c>NetServerBootstrap</c> refuses to start above it).
+        /// </summary>
+        /// <remarks>
+        /// Bounded by connections rather than by <see cref="ProtocolConstants.MAX_ACTORS"/>
+        /// (2026-09-30): the list names people, never bots, and a bound on the actor space made a
+        /// larger bot roster break a message bots are not in -- at 128 actors the worst case was
+        /// 2,305 B against a 1,181 B payload. 64 rows of 18 B is 1153 B, the size it has always
+        /// had, so nothing on the wire changes.
+        /// </remarks>
+        public const int MaxEntries = 64;
+
+        /// <summary>
+        /// Worst case: every row named at the full length. 1 + 64 x 18 = 1153, which still fits
+        /// one un-fragmented channel-2 payload, whatever MAX_ACTORS is.
         /// </summary>
         public const int MaxBodySize =
-            HeaderSize + ProtocolConstants.MAX_ACTORS * (EntryHeaderSize + MaxNameBytes);
+            HeaderSize + MaxEntries * (EntryHeaderSize + MaxNameBytes);
 
         /// <summary>Encoded size of a player list with these entries.</summary>
         public static int SizeFor(ReadOnlySpan<PlayerListEntry> entries)

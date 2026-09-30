@@ -52,6 +52,30 @@ namespace Ironfront.Net.Replication.Tests
                 emit);
         }
 
+        /// <summary>
+        /// The name half of the scoreboard: a server takes no more connections than S_PLAYER_LIST
+        /// can name (2026-09-30), now that the list is bounded by connections instead of by
+        /// MAX_ACTORS. Above it, the extra players would play unnamed; the bootstrap refuses to
+        /// start instead, on the same path as every other rejected setting.
+        /// </summary>
+        [Fact]
+        public void TheServerRefusesMoreConnectionsThanTheNameListCanName()
+        {
+            string resolve = MethodBody(
+                ReadScript("Net", "Server", "NetServerBootstrap.cs"), "NetServerBootstrap.cs",
+                "private void ResolveConfiguration()");
+
+            Assert.Matches(
+                new System.Text.RegularExpressions.Regex(
+                    @"try\s*\{[\s\S]*?if\s*\(\s*Config\.MaxConnections\s*>\s*PlayerListMessage\.MaxEntries\s*\)"
+                    + @"\s*\{\s*throw\s+new\s+InvalidOperationException\("),
+                resolve);
+            Assert.Contains("catch (InvalidOperationException ex)", resolve, StringComparison.Ordinal);
+
+            string loop = ReadScript("Net", "Server", "ServerTickLoop.cs");
+            Assert.Contains("new PlayerListEntry[PlayerListMessage.MaxEntries]", loop, StringComparison.Ordinal);
+        }
+
         [Fact]
         public void AParkedPlayerSlotHasNoRow()
         {

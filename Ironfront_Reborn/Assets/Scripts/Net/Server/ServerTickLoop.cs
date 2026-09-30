@@ -44,9 +44,9 @@ namespace Ironfront.Net.Unity.Server
     [DisallowMultipleComponent]
     public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender, IShotAnnouncer
     {
-        /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the protocol ceiling.</summary>
+        /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the list's own ceiling, a row per connection.</summary>
         private readonly PlayerListEntry[] _playerListEntries =
-            new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+            new PlayerListEntry[PlayerListMessage.MaxEntries];
 
         /// <summary>The variable-length body S_PLAYER_LIST is framed from. Never a stackalloc.</summary>
         private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
