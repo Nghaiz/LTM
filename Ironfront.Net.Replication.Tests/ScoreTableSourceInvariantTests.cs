@@ -33,6 +33,25 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("FillScoreRows(", emit, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Every page of the table goes out, each as its own broadcast (2026-09-30). One write of
+        /// the whole table did not frame past 87 rows, and the scoreboard stopped.
+        /// </summary>
+        [Fact]
+        public void TheBroadcastSendsEveryPageOfTheTable()
+        {
+            string emit = MethodBody(
+                ReadScript("Net", "Server", "ServerTickLoop.cs"), "ServerTickLoop.cs",
+                "private void EmitPlayerScores()");
+
+            Assert.Contains("PlayerScoresMessage.PageCountFor(count)", emit, StringComparison.Ordinal);
+            Assert.Matches(
+                new System.Text.RegularExpressions.Regex(
+                    @"for\s*\(\s*int\s+page\s*=\s*0\s*;\s*page\s*<\s*pages\s*;\s*page\+\+\s*\)\s*\{"
+                    + @"[\s\S]*?WritePlayerScores\([^)]*,\s*page\)[\s\S]*?BroadcastReliable\("),
+                emit);
+        }
+
         [Fact]
         public void AParkedPlayerSlotHasNoRow()
         {

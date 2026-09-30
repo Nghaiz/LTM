@@ -188,18 +188,33 @@ namespace Ironfront.Net.Replication.Server
         /// </para>
         /// <para>
         /// <paramref name="bodyScratch"/> is the caller's rather than a <c>stackalloc</c>, the
-        /// same way both variable-length writers on this class take one. It is far smaller here
-        /// (<see cref="PlayerScoresMessage.MaxBodySize"/>, 321 B), and it is the caller's anyway
-        /// so that the three read alike and the buffer is sized once at construction.
+        /// same way both variable-length writers on this class take one, sized once at
+        /// construction to <see cref="PlayerScoresMessage.MaxBodySize"/> -- one page.
+        /// </para>
+        /// <para>
+        /// <b>One page of the table per call</b> (2026-09-30): <paramref name="entries"/> is the
+        /// whole table, <paramref name="pageIndex"/> picks the
+        /// <see cref="PlayerScoresMessage.RowsPerPage"/> rows this message carries, and the
+        /// caller sends <see cref="PlayerScoresMessage.PageCountFor"/> of them in order. A table
+        /// that fits one page is page 0 of 1 and carries no page tail. Before pages, a table of
+        /// 88 rows or more did not frame at all and the scoreboard stopped.
         /// </para>
         /// </remarks>
         public static int WritePlayerScores(
             Span<byte> destination,
             Span<byte> bodyScratch,
-            ReadOnlySpan<PlayerScoreEntry> entries)
+            ReadOnlySpan<PlayerScoreEntry> entries,
+            int pageIndex = 0)
         {
+            int pageCount = PlayerScoresMessage.PageCountFor(entries.Length);
+            if (pageIndex < 0 || pageIndex >= pageCount) return -1;
+
+            int from = pageIndex * PlayerScoresMessage.RowsPerPage;
+            int rows = Math.Min(PlayerScoresMessage.RowsPerPage, entries.Length - from);
+
             // Always with the stats tail: a client from before it reads the rows and stops.
-            int bodyLength = PlayerScoresMessage.Write(bodyScratch, entries, includeStats: true);
+            int bodyLength = PlayerScoresMessage.Write(
+                bodyScratch, entries.Slice(from, rows), includeStats: true, pageIndex, pageCount);
             return bodyLength < 0
                 ? -1
                 : Frame(

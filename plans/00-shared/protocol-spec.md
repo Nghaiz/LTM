@@ -1143,10 +1143,26 @@ repeat playerCount times, in the rows' order:
     u8   bestStreak           the longest streak this match, clamped at 255
     u16  points               what this actor's enemy kills put on its side's score
     u16  pingMs               a connected human's smoothed round trip; 0 for a bot
+--- page tail, 2026-09-30 onward (only on a table longer than one page, after the stats tail) ---
+u8   pageVersion              1; a tail of any other version is left unread
+u8   pageIndex                0-based, < pageCount
+u8   pageCount                the table's messages, ≥ 2
 ```
 
 Worst case without the tail `1 + 64 × 6 = 385 B`; with it `385 + 1 + 64 × 8 = 898 B`, still inside
-one un-fragmented channel-2 payload (1181).
+one un-fragmented channel-2 payload (1181). A page adds 3: **901 B**, the worst case of any one
+message whatever `MAX_ACTORS` is.
+
+**Pages (2026-09-30, ahead of rooms of more than 64 actors).** With the stats tail a row is 14 B, so
+a table of 88 rows no longer fits one un-fragmented payload — the P29 capacity bench, running
+`MAX_ACTORS` 128 with 100 bots and 14 players, saw every table fail to frame and the scoreboard stop.
+A table longer than `RowsPerPage` (64) now goes as `pageCount` messages of at most 64 rows each,
+back to back on the reliable ordered channel; the client gathers them and shows the table once the
+last page is in, and drops a table whose pages arrive out of sequence rather than showing half of it.
+**A table of one page carries no page tail**, so it is byte for byte what a server before pages sent,
+and a client from before pages, which stops reading after the stats tail, reads any page as a table.
+Pages keep the un-fragmented guarantee per message instead of trading it for fragments at the
+cadence of every death.
 
 **The stats tail (2026-09-30, the owner's Tab-board report).** Everything the board shows beyond
 kills and deaths. It comes after every row, so a client from before it reads the count and the rows
@@ -1733,6 +1749,7 @@ Added at v3.0.0:
 | **11.0.2** | 2026-09-28 | the master-server track | **A room's bot count reaches its game server.** New MSP opcode `GS_ROOM_ASSIGNED` (0x0107, M→G, § 11) carrying `{serverId, roomId, mapId, botsPerTeam}`, sent with every ticket the master issues; `ROOM_CREATE_REQ.botCount` is now defined as bots **per team** (owner ruling 2026-09-28) and bounded by the new `MAX_BOTS_PER_TEAM` = 16, with `DEFAULT_BOTS_PER_TEAM` = 16 for an empty field and for matchmaking (§ 1). Until now the field was validated, sent and stored, and read by no game server: every match released the prefab's 16 per team, so a room created with 0 bots got 32 | **No** — nothing on the UDP wire moved. MSP bodies are JSON and this is a new frame on the master ↔ game-server link, which a game server that predates it ignores (it keeps its prefab roster); the precedent is `RoomTeamRequest` (0x0019), which § 11 records the same way | (this change) |
 | **11.0.3** | 2026-09-28 | the replication track | **A living body can lie as a ragdoll, and the water bit has a producer.** `stateFlags` bit 6 (IsRagdoll) is now also set **with IsAlive** for a bot knocked over or swimming — the original game swims a body as a buoyant active ragdoll — and while it is set the entry's position is the server ragdoll's pelvis, because the actor's transform stays where it fell. Bit 5 (IsInWater) is set from `Actor.inWater`; it was decoded and drawn from the start and never produced. Hitscan boxes for such a body come from its physical ragdoll (§ 4.3) | **No** — no byte moved, and the combination IsAlive + IsRagdoll decodes on every shipped client: `RemoteActorVisualState` already carries both, `CanPlayCosmetics` already goes false on it, and `RemoteActorView` already turns the ragdoll on at the rising edge and back off at the falling one. A client older than this change therefore draws the knocked-over bot as a limp ragdoll that neither follows the server nor floats, and restores it when the bot gets up — a degraded picture, never a wrong game state — which is the § 15 test for leaving `PROTOCOL_VERSION` alone | (this change) |
 | **12.0.0** | 2026-09-29 | the client track | **Team chat.** `C_CHAT` and `S_CHAT` gain a `u8 channel` (`ChatChannel`: `All` = 0, `Team` = 1) ahead of `textLength` (§ 4.12); worst-case bodies grow by one byte, to 122 and 123 B. The server sends a `Team` line only to the speaker and to connections whose actor is on the speaker's side (`ChatAudience`), filtered per recipient so an enemy's machine never receives it. An unknown channel is malformed in both directions rather than read as `All`. Owner request 2026-09-29: *Shift+Enter opens team chat, and enemies must never see it* | **Yes** — the channel sits where a v11 decoder expects `textLength`: a v11 client would read a team line's `1` as a one-byte line and drop the rest, and a v11 server would take every v12 line's channel for its length. The peers must refuse the mismatch (`CONNECT_DENIED` code 2, and the master's 1004 at login), not guess | (this change) |
+| **12.0.1** | 2026-09-30 | the replication track | **`S_PLAYER_SCORES` goes in pages.** A table longer than `RowsPerPage` (64) is sent as several messages of at most 64 rows, each followed, after the stats tail, by a page tail `u8 pageVersion (1), u8 pageIndex, u8 pageCount` (§ 4.13); the client gathers the pages and shows the table once. With 14 B rows a table of 88 did not fit one un-fragmented payload, and the P29 capacity bench (`MAX_ACTORS` 128, 100 bots and 14 players) logged every table as unframeable. Worst case of one message: 901 B at any `MAX_ACTORS` | **No** — a table of one page, which is every table while `MAX_ACTORS` is 64, is byte for byte unchanged; the page tail only exists past 64 rows, and a client that stops after the stats tail reads each page as a table. Hex sample `PlayerScoresPage_Serializes_ToTheExpectedBytes_AndParsesBack` | (this PR) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

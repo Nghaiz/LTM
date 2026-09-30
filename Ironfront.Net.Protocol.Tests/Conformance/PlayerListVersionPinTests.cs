@@ -91,12 +91,19 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             Assert.Equal(1, PlayerScoresMessage.StatsTailVersion);
             Assert.Equal(8, PlayerScoresMessage.StatsEntrySize);
 
-            // Derived rather than restated, for MaxBodySize's reason one test up: a hand-written
-            // 898 would go on passing after MAX_ACTORS moved.
+            // The page tail (2026-09-30): after the stats tail, u8 version, u8 page, u8 pages, on
+            // a table longer than one page of 64 rows. A table that fits one page has none.
+            Assert.Equal(64, PlayerScoresMessage.RowsPerPage);
+            Assert.Equal(1, PlayerScoresMessage.PageTailVersion);
+            Assert.Equal(3, PlayerScoresMessage.PageTailSize);
+
+            // Derived rather than restated, for MaxBodySize's reason one test up: one full page
+            // with both tails, 901, whatever MAX_ACTORS is.
             Assert.Equal(
                 PlayerScoresMessage.HeaderSize
-                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize
-                    + 1 + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.StatsEntrySize,
+                    + PlayerScoresMessage.RowsPerPage * PlayerScoresMessage.EntrySize
+                    + 1 + PlayerScoresMessage.RowsPerPage * PlayerScoresMessage.StatsEntrySize
+                    + PlayerScoresMessage.PageTailSize,
                 PlayerScoresMessage.MaxBodySize);
 
             Assert.Equal(0x51, (byte)ServerMessageType.PlayerScores);
