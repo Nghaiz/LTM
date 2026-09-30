@@ -731,13 +731,15 @@ namespace Ironfront.MasterServer.Dispatch
                     _database.InsertMatchResult(request.RoomId, result.PlayerId, result.Kills, result.Deaths, result.Score, endedAt);
             }
 
-            if (!_lobby.TryGetRoomById(request.RoomId, out Room? room) || room is null) return;
-            _gameServers.Release(request.ServerId, request.RoomId);
-            room.AssignedGameServerId = 0;
-
-            // Raises RoomChanged, which broadcasts it. Clears the ready marks too, or the next
-            // Tick would find everyone ready and start a match nobody is in the lobby to join.
-            _lobby.ReturnToWaiting(room);
+            // The room stays in its match and keeps its game server. A round's end is not the
+            // room's: the game server plays the next round with the same players still connected
+            // (MatchStateMachine resets after PostMatchSeconds), and none of them is back in the
+            // room lobby. Releasing the server here, and putting the room back to Waiting, handed
+            // that server to the next room on the same map while this room's players were still
+            // on it -- the new room's tickets were adopted into their round -- and listed a room
+            // as open whose members could never ready up for it. The room closes when its last
+            // member leaves (RoomRemoved releases the server), as the game server resets its match
+            // when its last player leaves.
         }
 
         private void LeaveRoom(ClientConnection connection, Session session)
