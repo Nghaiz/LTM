@@ -948,7 +948,8 @@ namespace Ironfront.Net.Unity.Server
                 ClientSession session = _players[i].Session;
 
                 AnnounceNewActors(session);
-                AnnounceNewVehicles(session);
+                AnnounceNewVehicles(session, warnIfEmpty: !_players[i].VehicleTableChecked);
+                _players[i].VehicleTableChecked = true;
 
                 // Interest management picks which actors this client is sent and how often. The
                 // per-client view is what the encoder files as its baseline, so a client can
@@ -1306,7 +1307,7 @@ namespace Ironfront.Net.Unity.Server
         /// the frozen-copy symptom X-64 is named after.
         /// </para>
         /// </remarks>
-        private void AnnounceNewVehicles(ClientSession session)
+        private void AnnounceNewVehicles(ClientSession session, bool warnIfEmpty)
         {
             ServerVehicleRegistry vehicles = ServerVehicleRegistry.Instance;
             if (vehicles == null || Transport == null) return;
@@ -1328,8 +1329,10 @@ namespace Ironfront.Net.Unity.Server
             // both client logs contain the word "vehicle" zero times, which proves the absence
             // and says nothing about the cause -- and the server's log, which would have, was not
             // kept. This line is what makes the next occurrence decidable, and it is logged per
-            // join rather than once per process because a join is already a rare event.
-            if (liveCount == 0)
+            // join rather than once per process because a join is already a rare event -- per
+            // join, not per call: this runs every snapshot, and a round reset empties the table
+            // for every client at once (ServerPlayer.VehicleTableChecked).
+            if (liveCount == 0 && warnIfEmpty)
             {
                 Debug.LogWarning(
                     "[net] a client joined while the replicated vehicle table is EMPTY. No "

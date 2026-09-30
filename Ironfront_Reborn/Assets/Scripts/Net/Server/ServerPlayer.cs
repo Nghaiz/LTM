@@ -206,6 +206,18 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public bool AwaitingFirstDeploy { get; set; } = true;
 
+        /// <summary>
+        /// Whether this connection's first vehicle catch-up has run, so the empty-table warning
+        /// is only ever about a join.
+        /// </summary>
+        /// <remarks>
+        /// <c>ServerTickLoop.AnnounceNewVehicles</c> runs for every client on every snapshot, and
+        /// a round reset empties the vehicle table for a moment. The warning, whose own remark
+        /// says it is logged per join, fired every tick for every client in that window: hundreds
+        /// of lines in one second at the 2026-09-30 reset (B4), none of them about a join.
+        /// </remarks>
+        public bool VehicleTableChecked { get; set; }
+
         /// <summary>Seeds the session from wherever the claimed actor currently stands.</summary>
         public void SyncFromActor()
         {

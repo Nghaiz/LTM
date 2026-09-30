@@ -70,6 +70,10 @@ public class ScopedWeapon : Weapon
 		}
 	}
 
+	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
+	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
+	// lines in one 100-bot match (B4, 2026-09-30).
+#if !UNITY_SERVER
 	private void OnGUI()
 	{
 		if (HasActiveAnimator() && !blackoutAction.TrueDone() && showingScope)
@@ -80,4 +84,5 @@ public class ScopedWeapon : Weapon
 			GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), blackoutTexture);
 		}
 	}
+#endif
 }
