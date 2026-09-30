@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7155ec83a5b669f4194dc44fa5d45604
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 259547
+  packageName: ForestLake
+  packageVersion: 1.5
+  assetPath: Assets/ForestLake/Meshes/Forest/Pines/Materials/MI_SmallPine_01_Bark.mat
+  uploadId: 925456
