@@ -172,6 +172,9 @@ namespace Ironfront.MasterServer.Lobby
         public ServiceResult CreateRoom(Session session, RoomCreateRequest request)
         {
             if (_playerToRoom.ContainsKey(session.PlayerId)) return Fail(ErrorCode.AlreadyInAnotherRoom);
+            // A room on a map its own creator cannot load would put that creator in the wrong
+            // world (MapSupport); every later joiner is checked the same way in CanJoinRoom.
+            if (!session.Maps.CanLoad(request.MapId)) return Fail(ErrorCode.MapNotInstalled);
             if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 48 || request.MaxPlayers < 2 || request.MaxPlayers > ProtocolConstants.MAX_PLAYERS)
                 return Fail(ErrorCode.InternalServerError);
 
@@ -219,6 +222,7 @@ namespace Ironfront.MasterServer.Lobby
         {
             if (!_rooms.TryGetValue(roomId, out Room? room)) return Fail(ErrorCode.RoomNotFound);
             if (_playerToRoom.ContainsKey(session.PlayerId)) return Fail(ErrorCode.AlreadyInAnotherRoom);
+            if (!session.Maps.CanLoad(room.MapId)) return Fail(ErrorCode.MapNotInstalled);
             if (room.Members.Count >= room.MaxPlayers) return Fail(ErrorCode.RoomFull);
             if (room.State != RoomLifecycleState.Waiting) return Fail(ErrorCode.MatchAlreadyStarted);
             if (room.IsPrivate && (!AuthService.IsValidSha256(passwordHash) || !BCrypt.Net.BCrypt.Verify(passwordHash, room.PasswordHash)))
@@ -605,14 +609,19 @@ namespace Ironfront.MasterServer.Lobby
             return _playerToRoom.TryGetValue(playerId, out int roomId) && _rooms.TryGetValue(roomId, out room);
         }
 
-        public Room? FindJoinableRoom(ushort mapId)
+        /// <summary>
+        /// An open public room on <paramref name="mapId"/> (0: any map) that a client able to load
+        /// <paramref name="maps"/> can play.
+        /// </summary>
+        public Room? FindJoinableRoom(ushort mapId, MapSupport maps)
         {
             foreach (Room room in _rooms.Values)
             {
                 if (room.State == RoomLifecycleState.Waiting &&
                     !room.IsPrivate &&
                     room.Members.Count < room.MaxPlayers &&
-                    (mapId == 0 || room.MapId == mapId))
+                    (mapId == 0 || room.MapId == mapId) &&
+                    maps.CanLoad(room.MapId))
                     return room;
             }
             return null;

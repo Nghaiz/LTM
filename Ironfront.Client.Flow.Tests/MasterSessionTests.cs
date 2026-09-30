@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -80,6 +81,22 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Equal("Tester", h.Session.DisplayName);
             Assert.True(h.Session.IsLoggedIn);
             Assert.Equal(string.Empty, h.Session.LastError);
+        }
+
+        [Fact]
+        public async Task LoginNamesEveryMapThisBuildCanLoad()
+        {
+            // P30: the master only lists, joins and matchmakes a client into rooms on maps it
+            // named here. A login that named none would be taken for a v3.0.0 client and never be
+            // shown a map added since.
+            var h = new Harness().AtLoginScreen();
+
+            await h.Session.LoginAsync("tester", "hunter2");
+
+            Assert.NotNull(h.Master.LastLoadableMapIds);
+            Assert.Equal(
+                Ironfront.Net.Configuration.MapCatalog.All.Select(entry => entry.Id),
+                h.Master.LastLoadableMapIds!);
         }
 
         [Fact]

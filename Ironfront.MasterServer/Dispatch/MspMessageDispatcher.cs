@@ -197,6 +197,9 @@ namespace Ironfront.MasterServer.Dispatch
                 Send(connection, MspMessageType.LoginResponse, new { ok = false, errorCode = (ushort)result.ErrorCode, sessionToken = string.Empty, playerId = 0, displayName = string.Empty, retryAfterSec = result.RetryAfterSeconds });
                 return;
             }
+            // What this client can load, so it is never listed, joined, created or matchmade into
+            // a room on a map it lacks (MapSupport). Absent on every client before P30.
+            result.Session.Maps = MapSupport.FromLogin(request.Maps);
             connection.SetSession(result.Session);
             _connectionsByPlayer[result.Session.PlayerId] = connection;
             Logins.Increment();
@@ -211,6 +214,7 @@ namespace Ironfront.MasterServer.Dispatch
                 playerId = result.Session.PlayerId,
                 ip = connection.RemoteAddress.ToString(),
                 tls = connection.IsTls,
+                maps = result.Session.Maps.ToString(),
             });
 
             Send(connection, MspMessageType.LoginResponse, new { ok = true, errorCode = (ushort)ErrorCode.Ok, sessionToken = result.Session.Token, playerId = result.Session.PlayerId, displayName = result.Session.DisplayName, retryAfterSec = 0 });
@@ -230,6 +234,15 @@ namespace Ironfront.MasterServer.Dispatch
                 // in the room's running match and may go back in, and on which side. Every other
                 // player is told false, which is what keeps a started match closed to them.
                 bool canRejoin = LobbyService.CanRejoin(session.PlayerId, room);
+
+                // A room on a map this client cannot load is not shown to it at all (MapSupport):
+                // a v3.0.0 client would draw it as "map 3" and could only be refused on joining.
+                // Its own room and a match it may go back into are always shown; neither can be on
+                // such a map, since both were entered through the same check.
+                if (!session.Maps.CanLoad(room.MapId) && !canRejoin
+                    && !room.Members.Exists(member => member.PlayerId == session.PlayerId))
+                    continue;
+
                 byte rejoinTeam = canRejoin && room.Roster.TryGetValue(session.PlayerId, out byte team) ? team : (byte)0;
                 rooms.Add(new
                 {
@@ -239,7 +252,7 @@ namespace Ironfront.MasterServer.Dispatch
                 });
             }
 
-            Send(connection, MspMessageType.RoomListResponse, new { rooms, capacity = CapacityPayload() });
+            Send(connection, MspMessageType.RoomListResponse, new { rooms, capacity = CapacityPayload(session) });
         }
 
         /// <summary>
@@ -252,7 +265,7 @@ namespace Ironfront.MasterServer.Dispatch
         /// against the same numbers (<see cref="LobbyService.CreateRoom"/>), so a stale answer can
         /// only ever be refused, never exceeded.
         /// </remarks>
-        private object CapacityPayload()
+        private object CapacityPayload(Session session)
         {
             BotCapacity capacity = _lobby.Capacity;
             int botsInPlay = 0;
@@ -260,7 +273,10 @@ namespace Ironfront.MasterServer.Dispatch
 
             var maps = new List<object>();
             foreach ((ushort mapId, int servers, int free) in _gameServers.MapAvailability(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
-                maps.Add(new { mapId, servers, free });
+            {
+                // Only maps this client could create a room on (MapSupport).
+                if (session.Maps.CanLoad(mapId)) maps.Add(new { mapId, servers, free });
+            }
 
             return new
             {
@@ -847,7 +863,7 @@ namespace Ironfront.MasterServer.Dispatch
         private void Send(ClientConnection connection, MspMessageType type, object response)
             => connection.Send(type, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response, _json)));
 
-        private sealed class LoginRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public int ClientVersion { get; set; } }
+        private sealed class LoginRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public int ClientVersion { get; set; } public ushort[]? Maps { get; set; } }
         private sealed class RegisterRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public string? DisplayName { get; set; } }
         private sealed class CreateRoomWireRequest { public string? Name { get; set; } public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? Password { get; set; } }
         private sealed class JoinRoomRequest { public int RoomId { get; set; } public string? Password { get; set; } }
