@@ -412,37 +412,6 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
-        /// A vehicle dying on a client only takes the local body out of its seat, and nothing on
-        /// a client knocks the local body over.
-        /// </summary>
-        /// <remarks>
-        /// 2026-09-30 playtest: all three open-seat vehicle deaths dropped their driver through the
-        /// world at 100 HP. <c>Vehicle.Die</c> ran the offline <c>Damage(0, 200)</c> on the local
-        /// occupant, its balance hit reached <c>KnockOver</c>, and <c>FallOver</c> switched input
-        /// and the capsule off beside a ragdoll that never came to rest, so it never stood up and
-        /// the living body could not respawn. The server never knocks a player's body over, and it
-        /// kept that body standing beside the wreck the whole time.
-        /// </remarks>
-        [Fact]
-        public void AVehicleDyingOnAClientOnlyTakesTheLocalBodyOutOfItsSeat()
-        {
-            string die = MethodBody(
-                ReadScript("Assembly-CSharp", "Vehicle.cs"), "Vehicle.cs", "public virtual void Die()");
-
-            string clientBranch = MethodBody(die, "Vehicle.Die", "if (Ironfront.Net.Unity.NetContext.IsClient)");
-            Assert.Contains("occupant.LeaveSeat(drawWeapon: !seat.enclosed)", clientBranch, StringComparison.Ordinal);
-            Assert.DoesNotContain("Damage(", clientBranch, StringComparison.Ordinal);
-
-            // The server and offline game keep the original's two outcomes.
-            Assert.Contains("occupant.Damage(200f, 200f", die, StringComparison.Ordinal);
-            Assert.Contains("occupant.Damage(0f, 200f", die, StringComparison.Ordinal);
-
-            string damage = MethodBody(
-                ReadScript("Assembly-CSharp", "Actor.cs"), "Actor.cs", "public bool DamageAttributed(");
-            Assert.Contains("else if (balance < 0f && !IsNetworkDrivenLocalBody())", damage, StringComparison.Ordinal);
-        }
-
-        /// <summary>
         /// A body entering a seat on the server leaves the physics world in the same step that
         /// welds it into the hull.
         /// </summary>

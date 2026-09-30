@@ -71,21 +71,48 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void AWreckOnAClientLeavesItsEnclosedCrewToTheServersDeath()
+        public void AWreckOnAClientLeavesEveryOccupantToTheServer()
         {
-            // The snapshot that flags a wreck Dead runs Vehicle.Die on a client, where Damage
-            // cannot kill. The enclosed crew leaves the seat drawing nothing, and is not damaged
-            // here: S_DEATH fells it.
+            // The snapshot that flags a wreck Dead runs Vehicle.Die on a client, and it only takes
+            // the body out of its seat -- drawing nothing from an enclosed seat, whose crew S_DEATH
+            // is about to fell. It damages nobody: the 2026-09-30 playtest dropped all three
+            // open-seat drivers through the map because the offline Damage(0, 200) knocked the
+            // local body over while the server kept it standing.
             MethodDeclarationSyntax die = Methods(Parse("Assembly-CSharp/Vehicle.cs"), "Die").Single();
 
             IfStatementSyntax clientBranch = die.DescendantNodes().OfType<IfStatementSyntax>()
                 .Single(s => Normalized(s.Condition).Contains("NetContext.IsClient", StringComparison.Ordinal));
-            Assert.Contains("seat.enclosed", Normalized(clientBranch.Condition), StringComparison.Ordinal);
+            Assert.Equal("Ironfront.Net.Unity.NetContext.IsClient", Normalized(clientBranch.Condition));
 
             List<InvocationExpressionSyntax> leaves = Invocations(clientBranch.Statement, "LeaveSeat");
             Assert.Single(leaves);
-            Assert.Equal("occupant.LeaveSeat(drawWeapon:false)", Normalized(leaves[0]));
+            Assert.Equal("occupant.LeaveSeat(drawWeapon:!seat.enclosed)", Normalized(leaves[0]));
             Assert.Empty(Invocations(clientBranch.Statement, "Damage"));
+
+            // The server and the offline game keep the original's two outcomes.
+            Assert.NotNull(clientBranch.Else);
+            List<string> damages = Invocations(clientBranch.Else!.Statement, "Damage").Select(Normalized).ToList();
+            Assert.Contains(damages, d => d.StartsWith("occupant.Damage(200f,200f,", StringComparison.Ordinal));
+            Assert.Contains(damages, d => d.StartsWith("occupant.Damage(0f,200f,", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void NothingOnAClientKnocksTheLocalBodyOver()
+        {
+            // The one balance knock-over in Actor.DamageAttributed is gated on the body not being
+            // the network-driven local player: the server owns that body's stance and never
+            // knocks a player over. FellBody's death ragdoll calls KnockOver directly and is
+            // unaffected.
+            MethodDeclarationSyntax damage = Methods(Parse("Assembly-CSharp/Actor.cs"), "DamageAttributed").Single();
+
+            List<InvocationExpressionSyntax> knocks = Invocations(damage, "KnockOver");
+            Assert.Single(knocks);
+
+            IfStatementSyntax gate = knocks[0].Ancestors().OfType<IfStatementSyntax>().First();
+            Assert.Equal("balance<0f&&!IsNetworkDrivenLocalBody()", Normalized(gate.Condition));
+
+            MethodDeclarationSyntax fell = Methods(Parse("NetBindings/LocalPlayerRigBinding.cs"), "FellBody").Single();
+            Assert.Single(Invocations(fell, "KnockOver"));
         }
 
         [Fact]
