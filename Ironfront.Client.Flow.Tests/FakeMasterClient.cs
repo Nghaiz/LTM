@@ -30,6 +30,9 @@ namespace Ironfront.Client.Flow.Tests
         };
         public RoomInfo[] NextRooms { get; set; } = Array.Empty<RoomInfo>();
 
+        /// <summary>The capacity the next room list answers with. Null is an older master's list.</summary>
+        public RoomCapacity? NextCapacity { get; set; }
+
         /// <summary>A wire-legal 64-byte ticket, as the master would issue.</summary>
         private static byte[] DefaultTicket()
         {
@@ -80,6 +83,12 @@ namespace Ironfront.Client.Flow.Tests
         {
             Throw();
             return Task.FromResult(NextRooms);
+        }
+
+        public Task<RoomList> GetRoomListAsync(CancellationToken ct = default)
+        {
+            Throw();
+            return Task.FromResult(new RoomList { Rooms = NextRooms, Capacity = NextCapacity });
         }
 
         /// <summary>How many joins were asked for. P16 counts these, not just the last one.</summary>

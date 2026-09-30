@@ -114,6 +114,9 @@ namespace Ironfront.MasterClient
         public Task<RoomInfo[]> GetRoomsAsync(CancellationToken ct = default)
             => RequestAsync(MspMessageType.RoomListRequest, new { }, MspMessageType.RoomListResponse, response => response.Rooms ?? Array.Empty<RoomInfo>(), ct);
 
+        public Task<RoomList> GetRoomListAsync(CancellationToken ct = default)
+            => RequestAsync(MspMessageType.RoomListRequest, new { }, MspMessageType.RoomListResponse, response => new RoomList { Rooms = response.Rooms ?? Array.Empty<RoomInfo>(), Capacity = response.Capacity }, ct);
+
         public Task<CreateRoomResult> CreateRoomAsync(CreateRoomRequest request, CancellationToken ct = default)
             => RequestAsync(MspMessageType.RoomCreateRequest, new { name = request.Name, mapId = request.MapId, maxPlayers = request.MaxPlayers, botCount = request.BotCount, isPrivate = request.IsPrivate, password = request.PasswordHash }, MspMessageType.RoomCreateResponse, response => new CreateRoomResult(response.Ok, response.RoomId, response.ErrorCode), ct);
 
@@ -282,6 +285,9 @@ namespace Ironfront.MasterClient
                     RoomId  = response.RoomId,
                     Members = response.Members ?? Array.Empty<RoomMember>(),
                     State   = response.State,
+                    MapId      = response.MapId,
+                    BotCount   = response.BotCount,
+                    MaxPlayers = response.MaxPlayers,
                 });
                 return;
             }
@@ -350,6 +356,9 @@ namespace Ironfront.MasterClient
             public int RoomId { get; set; }
             public int EstimatedWaitSec { get; set; }
             public RoomInfo[]? Rooms { get; set; }
+
+            /// <summary>Beside <see cref="Rooms"/> since protocol 13; null from an older master.</summary>
+            public RoomCapacity? Capacity { get; set; }
             public string? GameServerIp { get; set; }
             public int GameServerPort { get; set; }
             public string? JoinTicket { get; set; }
@@ -360,6 +369,9 @@ namespace Ironfront.MasterClient
             // to use, and that is how the original bug survived.
             public RoomMember[]? Members { get; set; }
             public byte State { get; set; }
+            public ushort MapId { get; set; }
+            public byte BotCount { get; set; }
+            public byte MaxPlayers { get; set; }
             public byte Channel { get; set; }
             public int FromPlayerId { get; set; }
             public string? FromName { get; set; }

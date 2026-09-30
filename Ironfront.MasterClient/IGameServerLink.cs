@@ -64,7 +64,7 @@ namespace Ironfront.MasterClient
         public ushort MapId { get; set; }
 
         /// <summary>
-        /// Bots per team the room asked for, 0 to <c>ProtocolConstants.MAX_BOTS_PER_TEAM</c>.
+        /// Bots per team: half the room's total, 0 to <c>ProtocolConstants.MAX_BOTS_PER_TEAM</c>.
         /// </summary>
         public int BotsPerTeam { get; set; }
     }

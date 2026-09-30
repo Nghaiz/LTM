@@ -336,6 +336,13 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>The newest room list. Empty until <see cref="OpenRoomBrowserAsync"/> runs.</summary>
         public RoomInfo[] Rooms { get; private set; } = Array.Empty<RoomInfo>();
 
+        /// <summary>
+        /// What the game-server host can still take, from the same answer as <see cref="Rooms"/>
+        /// (protocol 13), or null before the first list. The create-room form reads its bot
+        /// ceiling here.
+        /// </summary>
+        public RoomCapacity? Capacity { get; private set; }
+
         /// <summary>The address and ticket from the last successful join.</summary>
         public PendingJoin PendingJoin { get; private set; } = PendingJoin.None;
 
@@ -668,7 +675,9 @@ namespace Ironfront.Net.Unity.Client
             try
             {
                 long startedTicks = Stopwatch.GetTimestamp();
-                Rooms = await _master.GetRoomsAsync().ConfigureAwait(false) ?? Array.Empty<RoomInfo>();
+                RoomList list = await _master.GetRoomListAsync().ConfigureAwait(false) ?? new RoomList();
+                Rooms = list.Rooms ?? Array.Empty<RoomInfo>();
+                Capacity = list.Capacity;
                 NoteMasterAnswered();
 
                 // Measured around the request the browser was making anyway (P16 3.2). Rounded

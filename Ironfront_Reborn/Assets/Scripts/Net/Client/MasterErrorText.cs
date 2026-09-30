@@ -144,11 +144,16 @@ namespace Ironfront.Net.Unity.Client
                     // -- not for the room to fill, which is the opposite reading.
                     return "That side is full. Wait for a slot on it, or stay where you are.";
 
-                // ----- game servers (3000-3001)
+                // ----- game servers (3000-3002)
                 case ErrorCode.NoGameServerAvailable:
                     return "No game server is free right now. Try again in a moment.";
                 case ErrorCode.GameServerNotResponding:
                     return "The game server is not responding. Try another room.";
+                case ErrorCode.ServerAtBotCapacity:
+                    // The fix is in the player's hands twice over: fewer bots, or a wait for a
+                    // match to end. The form's slider already shows the ceiling; this is the
+                    // refusal for a form that was one refresh too old.
+                    return "The servers cannot take that many bots right now. Lower the bot count, or wait for a match to end.";
 
                 // ----- chat (4000-4003)
                 case ErrorCode.ChatMessageTooLong:

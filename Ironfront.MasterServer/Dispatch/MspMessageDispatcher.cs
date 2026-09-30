@@ -235,10 +235,45 @@ namespace Ironfront.MasterServer.Dispatch
                 {
                     roomId = room.RoomId, name = room.Name, mapId = room.MapId, players = room.Members.Count,
                     maxPlayers = room.MaxPlayers, state = (byte)room.State, isPrivate = room.IsPrivate,
-                    canRejoin, rejoinTeam,
+                    canRejoin, rejoinTeam, botCount = room.BotCount,
                 });
             }
-            Send(connection, MspMessageType.RoomListResponse, new { rooms });
+
+            Send(connection, MspMessageType.RoomListResponse, new { rooms, capacity = CapacityPayload() });
+        }
+
+        /// <summary>
+        /// What the create-room form may offer right now, and why (protocol 13): the most bots a new
+        /// room may have, what is in play already, and which maps have a free game server.
+        /// </summary>
+        /// <remarks>
+        /// Sent with every room list rather than on a request of its own. The create form opens
+        /// from the browser, whose list is at most one refresh old, and the create itself is checked
+        /// against the same numbers (<see cref="LobbyService.CreateRoom"/>), so a stale answer can
+        /// only ever be refused, never exceeded.
+        /// </remarks>
+        private object CapacityPayload()
+        {
+            BotCapacity capacity = _lobby.Capacity;
+            int botsInPlay = 0;
+            foreach (Room room in _lobby.Rooms) botsInPlay += room.BotCount;
+
+            var maps = new List<object>();
+            foreach ((ushort mapId, int servers, int free) in _gameServers.MapAvailability(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
+                maps.Add(new { mapId, servers, free });
+
+            return new
+            {
+                maxBotsForNewRoom = _lobby.MaxBotsForNewRoom(),
+                canCreateRoom = capacity.HasRoomForAnotherMatch(_lobby.Rooms),
+                maxBotsPerMatch = ProtocolConstants.MAX_BOTS,
+                roomsOpen = _lobby.Rooms.Count,
+                botsInPlay,
+                budgetUnits = capacity.BudgetUnits,
+                unitsInUse = capacity.UnitsInUse(_lobby.Rooms),
+                matchCostUnits = capacity.MatchCostUnits,
+                maps,
+            };
         }
 
         private void CreateRoom(ClientConnection connection, Session session, CreateRoomWireRequest request)
@@ -475,16 +510,17 @@ namespace Ironfront.MasterServer.Dispatch
             {
                 MasterLog.Warn(
                     $"room {room.RoomId}: no link to game server {server.ServerId} to send its "
-                    + $"{room.BotCount} bots per team; it will release its prefab roster instead");
+                    + $"{room.BotCount} bots; it will release its prefab roster instead");
                 return;
             }
 
+            // A room asks for a TOTAL since protocol 13, always even; each side gets half.
             Send(link, MspMessageType.GsRoomAssigned, new
             {
                 serverId = server.ServerId,
                 roomId = room.RoomId,
                 mapId = room.MapId,
-                botsPerTeam = room.BotCount,
+                botsPerTeam = room.BotCount / 2,
             });
         }
 
@@ -780,7 +816,7 @@ namespace Ironfront.MasterServer.Dispatch
         {
             var members = new List<object>();
             foreach (RoomMember member in room.Members) members.Add(new { playerId = member.PlayerId, name = member.DisplayName, team = member.Team, ready = member.Ready });
-            return new { roomId = room.RoomId, members, state = (byte)room.State };
+            return new { roomId = room.RoomId, members, state = (byte)room.State, mapId = room.MapId, botCount = room.BotCount, maxPlayers = room.MaxPlayers };
         }
 
         private bool TryGetAuthenticatedSession(ClientConnection connection, out Session session)

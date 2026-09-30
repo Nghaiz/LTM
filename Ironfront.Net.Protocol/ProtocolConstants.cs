@@ -13,7 +13,7 @@ namespace Ironfront.Net.Protocol
     public static class ProtocolConstants
     {
         public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-        public const byte   PROTOCOL_VERSION  = 12;
+        public const byte   PROTOCOL_VERSION  = 13;
 
         public const int    MTU_SAFE          = 1200;    // safe through any router
         public const int    GSP_HEADER_SIZE   = 16;
@@ -51,22 +51,40 @@ namespace Ironfront.Net.Protocol
         public const int    HITBOX_HISTORY_MS = 1000;
 
         public const int    MAX_PLAYERS       = 16;
-        public const int    MAX_BOTS          = 32;
-        public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
 
         /// <summary>
-        /// The most bots one side of a room may ask for. The create-room form's Bots field,
-        /// <c>ROOM_CREATE_REQ.botCount</c> and <c>GS_ROOM_ASSIGNED.botsPerTeam</c> all count
-        /// bots PER TEAM (owner ruling, 2026-09-28), so a match holds at most twice this.
+        /// The most bots one match may field, both sides together: the create-room slider's top
+        /// end and <c>ROOM_CREATE_REQ.botCount</c>'s bound. 100 since protocol 13 (owner,
+        /// 2026-09-30), measured on the P29 AI: one game server holds 100 bots at 60 fps.
+        /// </summary>
+        public const int    MAX_BOTS          = 100;
+
+        /// <summary>
+        /// Actor ids, players and bots in one space. 16 players and 100 bots are 116 at once;
+        /// the rest absorbs the id quarantine. A client built against 64 dropped every id past
+        /// it, which is why this moved with <see cref="PROTOCOL_VERSION"/> 13.
+        /// </summary>
+        public const int    MAX_ACTORS        = 128;     // = MAX_PLAYERS + MAX_BOTS + headroom
+
+        /// <summary>
+        /// The most bots one side may field. A room asks for a TOTAL (<c>ROOM_CREATE_REQ.botCount</c>,
+        /// since protocol 13) and the master splits it evenly; <c>GS_ROOM_ASSIGNED.botsPerTeam</c>
+        /// is that half.
         /// </summary>
         public const int    MAX_BOTS_PER_TEAM = MAX_BOTS / 2;
 
         /// <summary>
-        /// Bots per team for a room nobody asked a number of: an empty Bots field, or a room
-        /// matchmaking made. The design roster, both sides full, which is also what
-        /// <c>_Managers.prefab</c> authors for a server the master never told anything.
+        /// Bots per team on a game server the master never told a room: <c>_Managers.prefab</c>'s
+        /// design roster, which lane runs and a master-less server field.
         /// </summary>
-        public const int    DEFAULT_BOTS_PER_TEAM = MAX_BOTS_PER_TEAM;
+        public const int    DEFAULT_BOTS_PER_TEAM = 16;
+
+        /// <summary>
+        /// Bots in a room nobody chose a number for -- where the create-room slider starts, and
+        /// what a matchmade room gets, capacity allowing. 50, the original game's own menu default
+        /// (owner, 2026-09-29: matches felt slow next to it at 32).
+        /// </summary>
+        public const int    DEFAULT_ROOM_BOTS = 50;
 
         /// <summary>
         /// Concurrent vehicles the world may hold. A SEPARATE u16 id space from

@@ -96,6 +96,12 @@ namespace Ironfront.MasterServer.Configuration
         /// </summary>
         public static readonly string LoginRatePerMinuteVariable = EnvRegistry.LoginRatePerMinute.Name;
 
+        /// <summary>The bot budget, in units. See <see cref="Lobby.BotCapacity"/>.</summary>
+        public static readonly string BotBudgetVariable = EnvRegistry.BotBudgetUnits.Name;
+
+        /// <summary>A match's cost before its bots, in units. See <see cref="Lobby.BotCapacity"/>.</summary>
+        public static readonly string MatchCostVariable = EnvRegistry.MatchCostUnits.Name;
+
         /// <summary>
         /// A 32-byte HMAC-SHA256 key base64-encodes to 44 characters, so 32 is a floor rather
         /// than a target. It is the number the phase 00 plan names, and it is high enough to
@@ -137,8 +143,12 @@ namespace Ironfront.MasterServer.Configuration
             bool structuredLog,
             int maxConnectionsPerIp,
             int maxTotalConnections,
-            int loginRatePerMinute)
+            int loginRatePerMinute,
+            int botBudgetUnits,
+            int matchCostUnits)
         {
+            BotBudgetUnits            = botBudgetUnits;
+            MatchCostUnits            = matchCostUnits;
             MaxConnectionsPerIp       = maxConnectionsPerIp;
             MaxTotalConnections       = maxTotalConnections;
             LoginRatePerMinute        = loginRatePerMinute;
@@ -205,6 +215,12 @@ namespace Ironfront.MasterServer.Configuration
 
         /// <summary>Per-IP login attempts per minute.</summary>
         public int LoginRatePerMinute { get; }
+
+        /// <summary>What the game-server host carries, in bot units. See <see cref="Lobby.BotCapacity"/>.</summary>
+        public int BotBudgetUnits { get; }
+
+        /// <summary>One match's cost before its bots, in bot units.</summary>
+        public int MatchCostUnits { get; }
 
         /// <summary>
         /// Reads the process environment. Throws <see cref="InvalidOperationException"/> with
@@ -283,11 +299,16 @@ namespace Ironfront.MasterServer.Configuration
             int loginRate = EnvParse.PositiveInt(
                 read(LoginRatePerMinuteVariable), AuthService.DefaultRatePerMinute, LoginRatePerMinuteVariable);
 
+            int botBudget = EnvParse.PositiveInt(
+                read(BotBudgetVariable), Lobby.BotCapacity.DefaultBudgetUnits, BotBudgetVariable);
+            int matchCost = EnvParse.NonNegativeInt(
+                read(MatchCostVariable), Lobby.BotCapacity.DefaultMatchCostUnits, MatchCostVariable);
+
             return new MasterServerConfig(
                 secret, port, databasePath, logLevel,
                 certificatePath, certificatePassword,
                 metricsPort, metricsBind, csvPath, csvInterval, structuredLog,
-                maxPerIp, maxTotal, loginRate);
+                maxPerIp, maxTotal, loginRate, botBudget, matchCost);
         }
 
         // The parsers themselves now live in Ironfront.Net.Configuration.EnvParse, shared with

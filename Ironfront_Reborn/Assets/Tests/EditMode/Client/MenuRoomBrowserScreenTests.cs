@@ -39,6 +39,17 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void MapCell_ShowsTheRoomsBotsBesideItsMap()
+        {
+            var crowded = new RoomInfo { Name = "Crowded", MapId = 1, MaxPlayers = 8, BotCount = 100 };
+            var quiet = new RoomInfo { Name = "Quiet", MapId = 1, MaxPlayers = 8, BotCount = 0 };
+
+            StringAssert.StartsWith(MenuRoomBrowserScreen.MapLabel(crowded), MenuRoomBrowserScreen.MapCell(crowded));
+            StringAssert.EndsWith("100 bots", MenuRoomBrowserScreen.MapCell(crowded));
+            StringAssert.EndsWith("no bots", MenuRoomBrowserScreen.MapCell(quiet));
+        }
+
+        [Test]
         public void PlayerLabel_ReadsAsAOccupancyOverCapacity()
         {
             var room = new RoomInfo { Name = "Squad Alpha", MapId = 0, Players = 3, MaxPlayers = 8 };

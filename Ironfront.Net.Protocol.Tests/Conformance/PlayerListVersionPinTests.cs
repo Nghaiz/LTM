@@ -42,7 +42,9 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
         [Fact]
         public void ProtocolVersionIsWhereTheChangelogSaysItIs()
         {
-            Assert.Equal(12, ProtocolConstants.PROTOCOL_VERSION);
+            // 13: MAX_ACTORS 64 -> 128 and the room's bot count became a total (§ 15). Neither
+            // layout below moved; a v12 client drops actor ids at or above 64.
+            Assert.Equal(13, ProtocolConstants.PROTOCOL_VERSION);
         }
 
         [Fact]

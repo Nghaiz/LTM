@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront: Reborn
 
-**Version: 12.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 12`
+**Version: 13.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 13`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 12;
+    public const byte   PROTOCOL_VERSION  = 13;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -72,10 +72,11 @@ public static class ProtocolConstants
     public const int    HITBOX_HISTORY_MS = 1000;
 
     public const int    MAX_PLAYERS       = 16;
-    public const int    MAX_BOTS          = 32;
-    public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
-    public const int    MAX_BOTS_PER_TEAM = MAX_BOTS / 2;      // a room's botCount is PER TEAM, § 11
-    public const int    DEFAULT_BOTS_PER_TEAM = MAX_BOTS_PER_TEAM;  // empty Bots field, matchmaking
+    public const int    MAX_BOTS          = 100;     // one match, both sides: a room's botCount is a TOTAL, § 11
+    public const int    MAX_ACTORS        = 128;     // = MAX_PLAYERS + MAX_BOTS + headroom
+    public const int    MAX_BOTS_PER_TEAM = MAX_BOTS / 2;      // GS_ROOM_ASSIGNED.botsPerTeam, § 11
+    public const int    DEFAULT_BOTS_PER_TEAM = 16;            // _Managers.prefab: a server told no room
+    public const int    DEFAULT_ROOM_BOTS = 50;                // create-form start, matchmaking
 
     public const int    MAX_VEHICLES      = 24;     // separate u16 id space, see § 4.10
     public const int    VEHICLE_ID_QUARANTINE_TICKS = 150;   // 5 s, same rule as actorId
@@ -436,7 +437,7 @@ Settled at the freeze; these three rules are the contract, not suggestions.
 |---|---|---|
 | **Do bots and players share one id space?** | **Yes.** One `u16` space, 0…`MAX_ACTORS - 1`, allocated by the server with no player/bot partition | The client renders both through the same `NetworkActorController` and never needs to care which is which. A split space would mean two allocators, two lookup tables, and a bug class where a bot id is read as a player id |
 | **Is an id reused as soon as an actor dies?** | **No — quarantine for 5 seconds** (150 ticks) before an id returns to the pool | Snapshots and events for the dead actor are still in flight for up to one interpolation buffer plus retransmits. Reusing the id immediately makes the client apply a dead actor's tail packets to the new one: a freshly spawned player briefly teleports to where the corpse was, or takes damage attributed to the wrong actor. 5 s is far beyond `TIMEOUT_MS`-scale in-flight time |
-| **Is `MAX_ACTORS = 64` enough?** | **Yes.** 16 players + 32 bots = 48 concurrent, with 16 spare | The spare 16 absorbs the quarantine window above: at worst every one of 48 actors dies at once and their ids are still cooling while replacements spawn. 64 also keeps `actorCount` inside its `u8` and the full snapshot inside 2 fragments |
+| **Is `MAX_ACTORS = 128` enough?** | **Yes.** 16 players + 100 bots = 116 concurrent, with 12 spare (was 64 for 16 + 32 until 13.0.0, § 15) | The spare absorbs the quarantine window above. A bot keeps its id through death and respawn (its body is reused), so bot ids churn only at a round reset, and the next roster is held back by the bot-release gate far longer than the 5 s quarantine. 128 still keeps `actorCount` inside its `u8`; a full snapshot of every actor spans more fragments than at 64, and interest management (§ 7) is what keeps each client's share of it bounded |
 
 **Is an 8-bit `changeMask` enough?** **No longer — all 8 bits are used and populated as of
 v3.0.0.** Bit 7 (`seatInfo`) was described here as a spare through the whole of v1 and v2 because
@@ -1505,13 +1506,13 @@ compatibility.
 | `0x0003` | `REGISTER_REQ` | C→M | `{username, passwordHash, displayName}` |
 | `0x0004` | `REGISTER_RES` | M→C | `{ok, errorCode}` |
 | `0x0010` | `ROOM_LIST_REQ` | C→M | `{}` |
-| `0x0011` | `ROOM_LIST_RES` | M→C | `{rooms:[{roomId, name, mapId, players, maxPlayers, state}]}` |
-| `0x0012` | `ROOM_CREATE_REQ` | C→M | `{name, mapId, maxPlayers, botCount, isPrivate, password}` — `botCount` is bots **per team**, 0…`MAX_BOTS_PER_TEAM` |
+| `0x0011` | `ROOM_LIST_RES` | M→C | `{rooms:[{roomId, name, mapId, players, maxPlayers, state, isPrivate, canRejoin, rejoinTeam, botCount}], capacity}` — `capacity` is § 11.3; `canRejoin`/`rejoinTeam` are answered for the requester only |
+| `0x0012` | `ROOM_CREATE_REQ` | C→M | `{name, mapId, maxPlayers, botCount, isPrivate, password}` — `botCount` is the match's **total**, even, 0…`MAX_BOTS`, and at most `capacity.maxBotsForNewRoom` (§ 11.3) |
 | `0x0013` | `ROOM_CREATE_RES` | M→C | `{ok, roomId, errorCode}` |
 | `0x0014` | `ROOM_JOIN_REQ` | C→M | `{roomId, password}` |
 | `0x0015` | `ROOM_JOIN_RES` | M→C | `{ok, gameServerIp, gameServerPort, joinTicket, errorCode}` |
 | `0x0016` | `ROOM_LEAVE_REQ` | C→M | `{}` |
-| `0x0017` | `ROOM_STATE_PUSH` | M→C | `{roomId, members:[{playerId, name, team, ready}], state}` |
+| `0x0017` | `ROOM_STATE_PUSH` | M→C | `{roomId, members:[{playerId, name, team, ready}], state, mapId, botCount, maxPlayers}` |
 | `0x0018` | `ROOM_READY_REQ` | C→M | `{ready}` |
 | `0x0020` | `CHAT_SEND` | C→M | `{channel, text}` — see § 11.1 |
 | `0x0021` | `CHAT_PUSH` | M→C | `{channel, fromPlayerId, fromName, text, timestamp}` |
@@ -1558,6 +1559,36 @@ does not help. It is populated for `9001` (the per-address login budget's window
 (an account lockout, 15 min), and is `0` for every other code. A master that predates the field
 sends nothing and the client reads `0`, so an old master degrades to the wordless message rather
 than to "retry now".
+
+## 11.3 Bot capacity
+
+The game servers share one host, and the owner measured what it carries (2026-09-29/30, P29 AI):
+**two matches of 100 bots, or three of 50**. Both are one budget if a match costs a fixed share
+before its first bot: `2 × (50 + 100) = 3 × (50 + 50) = 300`. The master keeps that budget
+(`IRONFRONT_MASTER_BOT_BUDGET`, default 300; `IRONFRONT_MASTER_MATCH_COST`, default 50) and every
+room counts against it from the moment it is created until it closes, whatever its state.
+
+`ROOM_CREATE_REQ` is refused with `3002` when the room would not fit: no share left for another
+match at all, or `botCount` above `maxBotsForNewRoom`. An odd or oversized `botCount` is malformed
+(`9000`), as an out-of-range seat count already is. A matchmade room gets `DEFAULT_ROOM_BOTS` (50),
+lowered to what is left.
+
+`ROOM_LIST_RES.capacity` tells the create form what it may offer, so a player sees the ceiling
+before pressing Create instead of learning it from a refusal:
+
+| Field | Meaning |
+|---|---|
+| `maxBotsForNewRoom` | The most bots a room created now may have: even, 0…`MAX_BOTS` |
+| `canCreateRoom` | Whether another room fits at all. `false` refuses any create; `maxBotsForNewRoom = 0` with `true` is "a room, but no bots" |
+| `maxBotsPerMatch` | `MAX_BOTS` |
+| `roomsOpen`, `botsInPlay` | What already exists, for the form's "in play" line |
+| `budgetUnits`, `unitsInUse`, `matchCostUnits` | The budget itself; the form shows it as a load percentage |
+| `maps:[{mapId, servers, free}]` | Per map a healthy game server plays: its servers and how many hold no room |
+
+The list can be one refresh old by the time the player presses Create; the master checks the
+create against the same numbers, so a stale form is refused (`3002`), never over the host.
+
+`GS_ROOM_ASSIGNED.botsPerTeam` is **half the room's total**: the game server fields it on each side.
 
 **Game Server ↔ Master**
 
@@ -1657,6 +1688,7 @@ expires after 60 seconds and only works for one specific server.
 | 2005 | The side change would leave the two sides differing by more than one |
 | 3000 | No game server available |
 | 3001 | Game server not responding |
+| 3002 | The game-server host cannot take another room with that many bots (§ 11.3) |
 | 4000 | Chat message longer than 200 characters (§ 11.1) |
 | 4001 | Chat message empty after trimming and control-character stripping |
 | 4002 | Chat channel is not one this master defines (§ 11.1) |
@@ -1757,6 +1789,8 @@ Added at v3.0.0:
 | **12.0.0** | 2026-09-29 | the client track | **Team chat.** `C_CHAT` and `S_CHAT` gain a `u8 channel` (`ChatChannel`: `All` = 0, `Team` = 1) ahead of `textLength` (§ 4.12); worst-case bodies grow by one byte, to 122 and 123 B. The server sends a `Team` line only to the speaker and to connections whose actor is on the speaker's side (`ChatAudience`), filtered per recipient so an enemy's machine never receives it. An unknown channel is malformed in both directions rather than read as `All`. Owner request 2026-09-29: *Shift+Enter opens team chat, and enemies must never see it* | **Yes** — the channel sits where a v11 decoder expects `textLength`: a v11 client would read a team line's `1` as a one-byte line and drop the rest, and a v11 server would take every v12 line's channel for its length. The peers must refuse the mismatch (`CONNECT_DENIED` code 2, and the master's 1004 at login), not guess | (this change) |
 | **12.0.1** | 2026-09-30 | the replication track | **`S_PLAYER_SCORES` goes in pages.** A table longer than `RowsPerPage` (64) is sent as several messages of at most 64 rows, each followed, after the stats tail, by a page tail `u8 pageVersion (1), u8 pageIndex, u8 pageCount` (§ 4.13); the client gathers the pages and shows the table once. With 14 B rows a table of 88 did not fit one un-fragmented payload, and the P29 capacity bench (`MAX_ACTORS` 128, 100 bots and 14 players) logged every table as unframeable. Worst case of one message: 901 B at any `MAX_ACTORS` | **No** — a table of one page, which is every table while `MAX_ACTORS` is 64, is byte for byte unchanged; the page tail only exists past 64 rows, and a client that stops after the stats tail reads each page as a table. Hex sample `PlayerScoresPage_Serializes_ToTheExpectedBytes_AndParsesBack` | (this PR) |
 | **12.0.2** | 2026-09-30 | the replication track | **`S_PLAYER_LIST` is bounded by connections, not by `MAX_ACTORS`.** `PlayerListMessage.MaxEntries` = 64 rows, one per connected human (§ 4.11); a game server refuses to start with `IRONFRONT_GAMESERVER_MAX_CONNECTIONS` above it. The worst case stays 1153 B, and a larger bot roster no longer grows a message no bot is in (128 actors read 2,305 B against a 1,181 B payload) | **No** — the same bytes for every list a server can send | (this PR) |
+
+| **13.0.0** | 2026-09-30 | the master-server track | **Up to 100 bots a match, and a host that is never overfilled.** `MAX_BOTS` 32 → **100** and `MAX_ACTORS` 64 → **128** (§ 1): the actor-id pool is `MAX_ACTORS - 1`, and 16 players with 100 bots would overrun 63. `ROOM_CREATE_REQ.botCount` becomes the match's **total**, even, 0…`MAX_BOTS` (owner, 2026-09-30: a 0-100 slider), with `DEFAULT_ROOM_BOTS` = 50 for matchmaking; `GS_ROOM_ASSIGNED.botsPerTeam` carries half of it. New § 11.3: the master budgets the shared game-server host (2 × 100 or 3 × 50 bots, measured), refuses a room that does not fit with new error `3002`, and sends `capacity` with every `ROOM_LIST_RES`. `ROOM_LIST_RES` rows gain `botCount` (and the table now lists `isPrivate`, `canRejoin`, `rejoinTeam`, sent since P16 and 2026-09-30); `ROOM_STATE_PUSH` gains `mapId`, `botCount`, `maxPlayers` | **Yes** — a v12 client drops every actor id at or above 64, so it would never see most of a 100-bot match; and the same `botCount` means a total to a v13 master and a per-team count to a v12 client. `CONNECT_DENIED` code 2 and the master's `1004` refuse the mismatch | (this change) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

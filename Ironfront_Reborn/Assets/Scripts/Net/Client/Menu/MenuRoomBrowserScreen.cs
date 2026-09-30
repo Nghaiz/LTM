@@ -341,7 +341,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
                 RoomInfo room = rejoins[i];
                 if (row.Name != null) row.Name.text = room.Name;
-                if (row.Map != null) row.Map.text = MapLabel(room);
+                if (row.Map != null) row.Map.text = MapCell(room);
                 if (row.Players != null) row.Players.text = PlayerLabel(room);
                 if (row.Status != null) row.Status.text = RejoinStatusLabel(room);
             }
@@ -370,7 +370,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
                 RoomInfo room = rooms[i];
                 if (row.Name != null) row.Name.text = room.Name;
-                if (row.Map != null) row.Map.text = MapLabel(room);
+                if (row.Map != null) row.Map.text = MapCell(room);
                 if (row.Players != null) row.Players.text = PlayerLabel(room);
                 if (row.Status != null) row.Status.text = StatusLabel(room);
             }
@@ -461,6 +461,15 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// </remarks>
         internal static string MapLabel(RoomInfo room)
             => MapCatalog.TryGetScene(room.MapId, out string scene) ? scene : $"map {room.MapId}";
+
+        /// <summary>
+        /// The MAP cell: the map, and the room's bots beside it (protocol 13), so a 100-bot room
+        /// reads as one before anybody joins it.
+        /// </summary>
+        internal static string MapCell(RoomInfo room)
+            => room.BotCount > 0
+                ? $"{MapLabel(room)}  ·  {room.BotCount} bots"
+                : $"{MapLabel(room)}  ·  no bots";
 
         /// <summary>The PLAYERS cell.</summary>
         internal static string PlayerLabel(RoomInfo room) => $"{room.Players}/{room.MaxPlayers}";

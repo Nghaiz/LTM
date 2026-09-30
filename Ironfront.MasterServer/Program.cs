@@ -201,7 +201,13 @@ namespace Ironfront.MasterServer
 
             using var database = new SqliteDatabase(config.DatabasePath);
             var auth = new AuthService(database, config.LoginRatePerMinute);
-            var lobby = new LobbyService();
+            var lobby = new LobbyService
+            {
+                Capacity = new BotCapacity(config.BotBudgetUnits, config.MatchCostUnits),
+            };
+            MasterLog.Warn(
+                $"bot capacity: {config.BotBudgetUnits} units, {config.MatchCostUnits} per match "
+                + $"before its bots (a new room may ask for up to {lobby.MaxBotsForNewRoom()})");
             var gameServers = new GameServerRegistry(config.SharedSecret);
             var dispatcher = new MspMessageDispatcher(auth, lobby, gameServers, database, config.SharedSecret);
             var options = new TcpListenerHostOptions
