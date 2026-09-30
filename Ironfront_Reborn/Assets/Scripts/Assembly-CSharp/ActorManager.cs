@@ -325,12 +325,6 @@ public class ActorManager : MonoBehaviour
 	/// roster enters the world over the half second the fill takes rather than in one frame.
 	/// A round reset mid-fill stops it: the next round fills its own roster once released.
 	/// </remarks>
-	/// <summary>
-	/// How far from its flag a bot a spawn wave left on its own looks for a squad to reinforce,
-	/// in metres (phase P29): about half the distance between two of Dustbowl's flags.
-	/// </summary>
-	private const float ReinforceRadius = 150f;
-
 	private IEnumerator FillEmptySlotsWithAI(int team0Count, int team1Count)
 	{
 		int generation = rosterGeneration;
@@ -592,7 +586,7 @@ public class ActorManager : MonoBehaviour
 				// offline match 48 of the 53 squads waves formed had a single bot.
 				AiActorController alone = aiSquad.Count == 1 ? aiSquad[0] : null;
 				Squad reinforced = alone != null && alone.actor != null
-					? Squad.NearestWithRoom(alone.actor.team, spawnPoint2.transform.position, ReinforceRadius, 1)
+					? Squad.NearestWithRoom(alone.actor.team, spawnPoint2.transform.position, BotCommander.Profile.ReinforceRadius, 1)
 					: null;
 				if (reinforced != null)
 				{

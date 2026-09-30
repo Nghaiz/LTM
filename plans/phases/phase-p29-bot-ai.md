@@ -2,8 +2,9 @@
 
 **Source:** the owner's message of 2026-09-30 (morning): finish every open item and everything still
 broken, and for the bot AI "tìm hiểu thêm các bài báo, paper, tìm các thuật toán tối ưu và hiện đại
-hơn trên mạng để áp dụng được cho dự án này". **Status:** in progress, one PR per part, each merged
-into `develop` before the next starts. Single-threaded, no subagents (owner rule).
+hơn trên mạng để áp dụng được cho dự án này". **Status:** parts 1-4 merged; part 5 (ship, and the bench
+the owner asked for on the new AI) in progress. One PR per part, each merged into `develop` before
+the next starts. Single-threaded, no subagents (owner rule).
 
 ## What was open when the phase started
 
@@ -31,13 +32,40 @@ into `develop` before the next starts. Single-threaded, no subagents (owner rule
    member waits for its squad; a lone respawn reinforces a squad with room within 150 m of its flag;
    `SquadRegroup` (engine-free, tested) folds lone bots into the nearest squad with room within 80 m
    before every plan; a failed search frees the bot to ask again; a lone bot is never split.
+   **DONE, #395.** Same run afterwards, ten minutes in: 16 bots in 10 and 6 squads (was 15 and 13),
+   6 and 4 rogue splits (was 93 and 101); the lone bots left were mostly drivers or in a fight.
 2. **Local CI 3h.** Review every line the record now reports, restore anything lost by accident,
-   and re-record the rest with the reason.
+   and re-record the rest with the reason. **DONE, #396:** 167 lines, each traced with `git log -S`
+   to a deliberate change of its PR; nothing lost by accident.
 3. **Research** — `plans/reports/2026-09-30-p29-bot-ai-research.md`: what the literature and shipped
    games do for team-based FPS bots, and which of it fits this game's server budget.
 4. **Commander v2, trained again.** The chosen techniques in `TeamPlanner`, the simulator taught the
    same squad upkeep, and a stronger optimiser (CMA-ES) trained against a league rather than one
    opponent; results on held-out rounds, stated whether they are good or not.
+
+   **What the simulator showed on the way, in order.** (a) The P28 commander, measured again with the
+   squad upkeep of #395, fell from -0.07 to -0.11 against the original squads -- and so did the
+   original squads themselves when given the upkeep (-0.11 to -0.14 against their own unmerged
+   selves): fewer, larger squads win fights (kill ratio up) but hold fewer flags, and a flag
+   multiplies every kill's points. So the join radii became trained weights. (b) A first v2 that
+   kept P28's shape (pick N targets, then share squads out) and added Lanchester, gathering and
+   memory lost 0.53 at its hand-set weights; switching gathering and memory off only got it to
+   -0.21. A planner that fixes targets first cannot say "each squad takes the nearest flag that
+   needs taking", which is what the original does and what training kept rediscovering. (c) So the
+   targets and squads are now settled together by an auction over one utility per squad and job,
+   which contains the original as a special case; the original also treats its own contested flag
+   as a target, and v2 now does too (`FlagInfo.Contested`).
+
+   **Trained** (`train --seed 2026093001 --generations 150 --population 32`, 24 minutes): on 320
+   held-out rounds the shipped profile beats the original squads 124 to 30 (mean margin +0.42) and
+   the P28 commander 159 to 19 (+0.54); ahead at every side size from 8 to 50, level at 1 to 4 a
+   side where one or two squads leave nothing to choose. It wins by holding more flags (3.35 on
+   average against 2.71), not by out-fighting (kill ratio 0.98). Training switched off gathering
+   and flanking. (d) **Flanks, on the owner's question.** Measured back on, flanking at 16 to 24
+   bots a side cost the lead over the original squads about 0.2 (to about level at 32 and 50 a
+   side); a run trained with flanks forced on reached only +0.13; flanking only defended flags
+   recovered part of it (+0.31) and was not kept. The owner chose the best result: flanks off.
+   Report: `plans/reports/2026-09-30-p29-commander-training.md`. **DONE, #397.**
 5. **Ship**: game servers redeployed from `develop`; a client release only if client code changed.
 
 ## Constraints

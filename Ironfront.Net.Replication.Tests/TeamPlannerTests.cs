@@ -257,8 +257,9 @@ namespace Ironfront.Net.Replication.Tests
         {
             Map map = Line(out _, out _, out int b, out _, out _);
 
-            // Nobody kept at home, so both squads go for B and the flank is the only split.
-            var planner = new TeamPlanner(new TacticsProfile { GarrisonBalanced = 0f });
+            // Nobody kept at home and no cost for crowding, so both squads go for B and the flank is
+            // the only split.
+            var planner = new TeamPlanner(new TacticsProfile { GarrisonBalanced = 0f, MinBotsToDefend = 100, OverWeight = 0f });
 
             SquadOrder[] orders = Plan(planner, Blue, map, new[] { Squad(1, 0f, 160f, 5), Squad(2, 10f, 150f, 5) });
 
@@ -280,7 +281,7 @@ namespace Ironfront.Net.Replication.Tests
         public void ABigPushOnOneFlag_FlanksRoundBothSides()
         {
             Map map = Line(out _, out _, out int b, out _, out _);
-            var planner = new TeamPlanner(new TacticsProfile { GarrisonBalanced = 0f });
+            var planner = new TeamPlanner(new TacticsProfile { GarrisonBalanced = 0f, MinBotsToDefend = 100, OverWeight = 0f });
 
             var squads = new SquadInfo[7];
             for (int i = 0; i < squads.Length; i++) squads[i] = Squad(i + 1, i * 2f, 150f + i, 4);
@@ -293,6 +294,30 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(Math.Sign(flanks[0].Waypoint.X) == -Math.Sign(flanks[1].Waypoint.X),
                         "the two flanks go round opposite sides");
             Assert.Equal(5, Array.FindAll(orders, o => o.Role == SquadRole.Attack).Length);
+        }
+
+        [Fact]
+        public void AFlankUnderWay_StaysAFlank_PlanAfterPlan()
+        {
+            Map map = Line(out _, out _, out int b, out _, out _);
+            var planner = new TeamPlanner(new TacticsProfile { GarrisonBalanced = 0f, MinBotsToDefend = 100, OverWeight = 0f });
+            var squads = new[] { Squad(1, 0f, 160f, 5), Squad(2, 10f, 150f, 5) };
+
+            SquadOrder[] first = Plan(planner, Blue, map, squads);
+            int flanker = Array.FindIndex(first, o => o.Role == SquadRole.Flank);
+            Assert.True(flanker >= 0);
+
+            // The squads report back what they were told, and the flank has got round nearer the flag
+            // than the head-on squad: it must stay the flank, not swap jobs with it.
+            for (int i = 0; i < squads.Length; i++)
+            {
+                bool flanking = i == flanker;
+                squads[i] = Squad(squads[i].Id, flanking ? 45f : 0f, flanking ? 280f : 200f, 5, first[i].Role, first[i].Flag);
+            }
+            SquadOrder[] second = Plan(planner, Blue, map, squads);
+
+            Assert.Equal((SquadRole.Flank, b), (second[flanker].Role, second[flanker].Flag));
+            Assert.All(second, o => Assert.False(o.Changed));
         }
 
         [Fact]
@@ -390,6 +415,230 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Equal((SquadRole.Attack, d), (orders[0].Role, orders[0].Flag));
             Assert.Equal((SquadRole.Attack, c), (orders[1].Role, orders[1].Flag));
+        }
+
+        // ------------------------------------------------------------------ phase P29
+
+        [Fact]
+        public void TheForceAFlagCosts_FollowsLanchester()
+        {
+            // k = 2, n = 2: a defender is worth sqrt(2) attackers; a quarter more for the margin.
+            var planner = new TeamPlanner(new TacticsProfile { DefenderAdvantage = 2f, AttritionOrder = 2f, ForceMargin = 0.25f, BotsPerObjective = 2f });
+
+            Assert.Equal(2f, planner.ForceFor(0f));                                                 // an empty flag: the floor
+            Assert.Equal((float)Math.Ceiling(4 * Math.Sqrt(2) * 1.25), planner.ForceFor(4f));      // 8
+            Assert.True(planner.ForceFor(8f) > planner.ForceFor(4f));
+
+            // The linear law (n = 1) makes the same defenders cost more: numbers count once, not twice.
+            var linear = new TeamPlanner(new TacticsProfile { DefenderAdvantage = 2f, AttritionOrder = 1f, ForceMargin = 0.25f });
+            Assert.True(linear.ForceFor(4f) > planner.ForceFor(4f));
+        }
+
+        [Fact]
+        public void HoldingAFlag_TakesFewerThanTheAttackers()
+        {
+            var planner = new TeamPlanner(new TacticsProfile { DefenderAdvantage = 2f, AttritionOrder = 2f, ForceMargin = 0.25f });
+
+            Assert.Equal(1f, planner.GuardFor(0f));                                                // a quiet flag: one sentry
+            Assert.True(planner.GuardFor(4f) < planner.ForceFor(4f));                              // 4 against 8
+
+            // With no margin, three dug in hold four attackers: 4 / sqrt(2) = 2.83.
+            var exact = new TeamPlanner(new TacticsProfile { DefenderAdvantage = 2f, AttritionOrder = 2f, ForceMargin = 0f });
+            Assert.Equal(3f, exact.GuardFor(4f));
+        }
+
+        [Fact]
+        public void TheThreatIsRemembered_AndFades()
+        {
+            Map map = Line(out _, out _, out int b, out _, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            var planner = new TeamPlanner(new TacticsProfile { ThreatMemorySeconds = 20f });
+            var squads = new[] { Squad(1, 0f, 150f) };
+            var orders = new SquadOrder[1];
+
+            flags[b].EnemiesInContact = 4;
+            planner.Plan(Blue, flags, adjacency, squads, 0, 0, orders, time: 0f);
+            Assert.Equal(4f, planner.RememberedThreat(b));
+
+            flags[b].EnemiesInContact = 0;
+            planner.Plan(Blue, flags, adjacency, squads, 0, 0, orders, time: 20f);
+            Assert.InRange(planner.RememberedThreat(b), 4f / MathF.E - 0.01f, 4f / MathF.E + 0.01f);
+
+            planner.Plan(Blue, flags, adjacency, squads, 0, 0, orders, time: 200f);
+            Assert.True(planner.RememberedThreat(b) < 0.01f);
+        }
+
+        [Fact]
+        public void WithoutAClock_NothingIsRemembered()
+        {
+            Map map = Line(out _, out _, out int b, out _, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            var planner = new TeamPlanner(new TacticsProfile { ThreatMemorySeconds = 60f });
+            var squads = new[] { Squad(1, 0f, 150f) };
+            var orders = new SquadOrder[1];
+
+            flags[b].EnemiesInContact = 4;
+            planner.Plan(Blue, flags, adjacency, squads, 0, 0, orders);
+            flags[b].EnemiesInContact = 0;
+            planner.Plan(Blue, flags, adjacency, squads, 0, 0, orders);
+
+            Assert.Equal(0f, planner.RememberedThreat(b));
+        }
+
+        /// <summary>Blue holds A; B, up the line, is held by three enemies.</summary>
+        private static (FlagInfo[] Flags, int[] Adjacency, int B) DefendedB()
+        {
+            Map map = Line(out _, out _, out int b, out _, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            flags[b].EnemiesInContact = 3;
+            return (flags, adjacency, b);
+        }
+
+        private static TacticsProfile Gathering() => new TacticsProfile
+        {
+            GatherShare = 0.8f, GatherDistance = 80f, GatherMaxWait = 30f, MinBotsToDefend = 100, MinBotsToFlank = 100,
+        };
+
+        [Fact]
+        public void AnAssaultOnADefendedFlag_GathersFirst_ThenGoesInTogether()
+        {
+            (FlagInfo[] flags, int[] adjacency, int b) = DefendedB();
+            var planner = new TeamPlanner(Gathering());
+            var orders = new SquadOrder[3];
+
+            // Three squads still at A, 150 m short of B: the assault gathers, 80 m out toward home.
+            var atHome = new[] { Squad(1, 0f, 150f), Squad(2, 5f, 150f), Squad(3, -5f, 150f) };
+            planner.Plan(Blue, flags, adjacency, atHome, 0, 0, orders, time: 0f);
+            Assert.All(orders, o => Assert.Equal((SquadRole.Assemble, b), (o.Role, o.Flag)));
+            Assert.All(orders, o => Assert.InRange(o.Waypoint.Z, 219f, 221f));
+            Assert.Equal(3, planner.LastGathering);
+
+            // All of them at the rally point: it goes in, every squad at once.
+            var gathered = new[]
+            {
+                Squad(1, 0f, 220f, role: SquadRole.Assemble, flag: b),
+                Squad(2, 5f, 222f, role: SquadRole.Assemble, flag: b),
+                Squad(3, -5f, 218f, role: SquadRole.Assemble, flag: b),
+            };
+            planner.Plan(Blue, flags, adjacency, gathered, 0, 0, orders, time: 10f);
+            Assert.All(orders, o => Assert.Equal((SquadRole.Attack, b), (o.Role, o.Flag)));
+            Assert.All(orders, o => Assert.True(o.Changed));
+        }
+
+        [Fact]
+        public void AGatheringAssault_GoesInAnyway_AfterTheLongestWait()
+        {
+            (FlagInfo[] flags, int[] adjacency, int b) = DefendedB();
+            var planner = new TeamPlanner(Gathering());
+            var orders = new SquadOrder[1];
+            var one = new[] { Squad(1, 0f, 150f) };
+
+            planner.Plan(Blue, flags, adjacency, one, 0, 0, orders, time: 0f);
+            Assert.Equal(SquadRole.Assemble, orders[0].Role);
+
+            one[0] = Squad(1, 0f, 150f, role: SquadRole.Assemble, flag: b);
+            planner.Plan(Blue, flags, adjacency, one, 0, 0, orders, time: 29f);
+            Assert.Equal(SquadRole.Assemble, orders[0].Role);
+
+            planner.Plan(Blue, flags, adjacency, one, 0, 0, orders, time: 31f);
+            Assert.Equal(SquadRole.Attack, orders[0].Role);
+        }
+
+        [Fact]
+        public void AnUndefendedFlag_IsNeverWaitedFor()
+        {
+            Map map = Line(out _, out _, out int b, out _, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            var planner = new TeamPlanner(Gathering());
+            var orders = new SquadOrder[2];
+
+            planner.Plan(Blue, flags, adjacency, new[] { Squad(1, 0f, 150f), Squad(2, 5f, 150f) }, 0, 0, orders, time: 0f);
+
+            Assert.All(orders, o => Assert.Equal((SquadRole.Attack, b), (o.Role, o.Flag)));
+            Assert.Equal(0, planner.LastGathering);
+        }
+
+        [Fact]
+        public void AContestedFlagOfOurOwn_IsTakenBack_AtOnce()
+        {
+            Map map = Line(out _, out int a, out _, out _, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            flags[a].Contested = true;
+            flags[a].EnemiesInContact = 2;
+            var planner = new TeamPlanner(Gathering());
+            var orders = new SquadOrder[1];
+
+            planner.Plan(Blue, flags, adjacency, new[] { Squad(1, 0f, 60f) }, 0, 0, orders, time: 0f);
+
+            // An attack on its own flag, straight in: the enemy is taking it now.
+            Assert.Equal((SquadRole.Attack, a), (orders[0].Role, orders[0].Flag));
+        }
+
+        [Fact]
+        public void AContestedFlagOfOurOwn_IsTakenBack_EvenWithTheObjectivesUsedUp()
+        {
+            Map map = Line(out _, out int a, out int b, out _, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            flags[a].Contested = true;
+            flags[a].EnemiesInContact = 2;
+            var planner = new TeamPlanner(new TacticsProfile { MaxObjectives = 1, MinBotsToDefend = 100, MinBotsToFlank = 100 });
+            var orders = new SquadOrder[2];
+
+            // The squad at B's feet is settled first and takes the side's one objective; the other,
+            // 90 m short of A, still goes back for it.
+            planner.Plan(Blue, flags, adjacency, new[] { Squad(1, 0f, 290f), Squad(2, 0f, 60f) }, 0, 0, orders);
+
+            Assert.Equal((SquadRole.Attack, b), (orders[0].Role, orders[0].Flag));
+            Assert.Equal((SquadRole.Attack, a), (orders[1].Role, orders[1].Flag));
+        }
+
+        [Fact]
+        public void AFlagWithTheForceItNeeds_SendsTheNextSquadElsewhere()
+        {
+            Map map = TwoLanes(out _, out _, out int c, out int d, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            // Nobody on posts; C is a little nearer than D for both squads.
+            var planner = new TeamPlanner(new TacticsProfile { MinBotsToDefend = 100, MinBotsToFlank = 100, BotsPerObjective = 4f });
+            var squads = new[] { Squad(1, -60f, 200f, 4), Squad(2, -50f, 200f, 4) };
+            var orders = new SquadOrder[2];
+
+            planner.Plan(Blue, flags, adjacency, squads, 0, 0, orders);
+
+            Assert.Contains(orders, o => o.Flag == c);
+            Assert.Contains(orders, o => o.Flag == d);
+        }
+
+        [Fact]
+        public void BotsPastTheForceAFlagNeeds_CostTheSquadThatWouldAddThem()
+        {
+            Map map = TwoLanes(out _, out _, out int c, out int d, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            // Nothing earned for filling a need, so only the cost of crowding can move the second squad.
+            var crowding = new TacticsProfile { MinBotsToDefend = 100, MinBotsToFlank = 100, BotsPerObjective = 4f, ShortWeight = 0f, OverWeight = 1f };
+            var squads = new[] { Squad(1, -60f, 200f, 4), Squad(2, -50f, 200f, 4) };
+            var orders = new SquadOrder[2];
+
+            new TeamPlanner(crowding).Plan(Blue, flags, adjacency, squads, 0, 0, orders);
+            Assert.Contains(orders, o => o.Flag == d);
+
+            // Without that cost both take the nearer flag.
+            crowding.OverWeight = 0f;
+            new TeamPlanner(crowding).Plan(Blue, flags, adjacency, squads, 0, 0, orders);
+            Assert.All(orders, o => Assert.Equal(c, o.Flag));
+        }
+
+        [Fact]
+        public void OutnumberedEverywhere_TheSideStillAttacks()
+        {
+            Map map = Line(out _, out _, out int b, out _, out _);
+            (FlagInfo[] flags, int[] adjacency) = map.Build();
+            flags[b].EnemiesInContact = 30;
+            var planner = new TeamPlanner(new TacticsProfile { MinBotsToDefend = 100 });
+            var orders = new SquadOrder[1];
+
+            planner.Plan(Blue, flags, adjacency, new[] { Squad(1, 0f, 150f, 2) }, 0, 0, orders);
+
+            Assert.Equal(SquadRole.Attack, orders[0].Role);
         }
 
         [Fact]

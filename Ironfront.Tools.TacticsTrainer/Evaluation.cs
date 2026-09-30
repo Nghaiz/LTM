@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Ironfront.Net.Replication.Ai;
+using Ironfront.Tools.TacticsTrainer.Baselines;
 
 namespace Ironfront.Tools.TacticsTrainer
 {
@@ -101,6 +102,14 @@ namespace Ironfront.Tools.TacticsTrainer
                 : () => new CommanderPolicy(opponent.Clone());
             return Score(rounds, tested, other);
         }
+
+        /// <summary>The P28 commander on <paramref name="v1"/> against the original squads.</summary>
+        public static EvaluationScore ScoreV1(IReadOnlyList<MatchSpec> rounds, TacticsProfileV1 v1)
+            => Score(rounds, () => new CommanderPolicyV1(v1.Clone()), () => new OriginalPolicy());
+
+        /// <summary>The commander on <paramref name="profile"/> against the P28 commander on <paramref name="v1"/>.</summary>
+        public static EvaluationScore ScoreAgainstV1(IReadOnlyList<MatchSpec> rounds, TacticsProfile profile, TacticsProfileV1 v1)
+            => Score(rounds, () => new CommanderPolicy(profile.Clone()), () => new CommanderPolicyV1(v1.Clone()));
 
         public static EvaluationScore Score(IReadOnlyList<MatchSpec> rounds, Func<ISidePolicy> tested, Func<ISidePolicy> opponent)
         {

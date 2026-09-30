@@ -1,36 +1,32 @@
+// FROZEN BASELINE (the planner it drives) -- do not use in the game. This adapter is the one part
+// kept current: it gives the old planner the squad upkeep the game has had since phase P29, so a
+// v1-against-v2 round compares the two commanders, not two ages of squad handling.
+//
+// The team commander exactly as it shipped in v2.1.0 (develop 3b51041, phases P28 parts 1-4),
+// copied here when phase P29 rewrote TeamPlanner. It exists only so the simulator can play the new
+// commander against the old one: without it "v2 beats v1" would be a claim nobody could re-check.
+// The game never loads it -- it lives in the trainer, which does not ship.
+
 using System;
 using System.Collections.Generic;
 using Ironfront.Net.Replication.Ai;
 using Ironfront.Net.Replication.Movement;
 
-namespace Ironfront.Tools.TacticsTrainer
+namespace Ironfront.Tools.TacticsTrainer.Baselines
 {
     /// <summary>
-    /// The original game: no commander. Every squad keeps role None and does what the original
-    /// squads do (<see cref="ConquestSim"/>'s Original: the nearest flag not safely its own, else
-    /// NewAttackOrder). The baseline the commander is trained against.
-    /// </summary>
-    public sealed class OriginalPolicy : ISidePolicy
-    {
-        public void Tick(ConquestSim sim, int team)
-        {
-        }
-    }
-
-    /// <summary>
-    /// A side under the team commander: the server's own <see cref="TeamPlanner"/>, fed the way
+    /// A side under the team commander: the server's own <see cref="TeamPlannerV1"/>, fed the way
     /// <c>BotCommander</c> feeds it and on its cadence, its orders applied as they come.
     /// </summary>
-    public sealed class CommanderPolicy : ISidePolicy
+    public sealed class CommanderPolicyV1 : ISidePolicy
     {
-        private readonly TeamPlanner _planner;
-        private readonly TacticsProfile _profile;
+        private readonly TeamPlannerV1 _planner;
         private readonly float _divertRange;
         private readonly List<SimSquad> _mine = new List<SimSquad>();
         private FlagInfo[] _flags = Array.Empty<FlagInfo>();
         private int[] _adjacency = Array.Empty<int>();
-        private SquadInfo[] _info = new SquadInfo[TeamPlanner.MaxSquads];
-        private SquadOrder[] _orders = new SquadOrder[TeamPlanner.MaxSquads];
+        private SquadInfo[] _info = new SquadInfo[TeamPlannerV1.MaxSquads];
+        private SquadOrder[] _orders = new SquadOrder[TeamPlannerV1.MaxSquads];
         private float _nextPlan = -1f;
         private readonly SquadRegroup _regroup = new SquadRegroup();
         private readonly bool _upkeep;
@@ -39,11 +35,10 @@ namespace Ironfront.Tools.TacticsTrainer
         /// Keep the side's squads whole as the game has since phase P29 (the default); false plays
         /// the squad handling the game had before, which P28 part 4's numbers were measured on.
         /// </param>
-        public CommanderPolicy(TacticsProfile profile, bool upkeep = true)
+        public CommanderPolicyV1(TacticsProfileV1 profile, bool upkeep = true)
         {
             _upkeep = upkeep;
-            _planner = new TeamPlanner(profile);
-            _profile = profile;
+            _planner = new TeamPlannerV1(profile);
             _divertRange = profile.AttackDivertRange;
         }
 
@@ -59,7 +54,6 @@ namespace Ironfront.Tools.TacticsTrainer
                 sim.DivertRange[team] = _divertRange;
                 // The game keeps its squads whole since phase P29, whichever commander plans.
                 sim.SquadUpkeep[team] = _upkeep;
-                sim.ReinforceRadius[team] = _profile.ReinforceRadius;
                 BuildFlags(sim.Map);
                 // BotCommander: the first plan 3 s in, then the sides alternate once a second.
                 _nextPlan = 3f + team;
@@ -70,12 +64,12 @@ namespace Ironfront.Tools.TacticsTrainer
             }
             _nextPlan += SimRules.PlanPeriod;
 
-            if (_upkeep) sim.Regroup(team, _regroup, _profile.RegroupRadius);
+            if (_upkeep) sim.Regroup(team, _regroup);
             _mine.Clear();
             foreach (SimSquad s in sim.Squads)
             {
                 // A squad walking over to join another takes no orders of its own on the way.
-                if (s.Team == team && s.JoinId < 0 && _mine.Count < TeamPlanner.MaxSquads) _mine.Add(s);
+                if (s.Team == team && s.JoinId < 0 && _mine.Count < TeamPlannerV1.MaxSquads) _mine.Add(s);
             }
             if (_mine.Count == 0)
             {
@@ -102,12 +96,12 @@ namespace Ironfront.Tools.TacticsTrainer
                 team, _flags, _adjacency,
                 new ReadOnlySpan<SquadInfo>(_info, 0, _mine.Count),
                 sim.Score(team), sim.Score(1 - team),
-                new Span<SquadOrder>(_orders, 0, _mine.Count), sim.Time);
+                new Span<SquadOrder>(_orders, 0, _mine.Count));
 
             if (Log != null && sim.Time < LogUntil)
             {
                 var line = new System.Text.StringBuilder();
-                line.Append(System.FormattableString.Invariant($"t={sim.Time:0} team {team} {_planner.LastPosture} obj {_planner.LastObjectives} def {_planner.LastDefenders} gather {_planner.LastGathering}:"));
+                line.Append(System.FormattableString.Invariant($"t={sim.Time:0} team {team} {_planner.LastPosture} obj {_planner.LastObjectives} def {_planner.LastDefenders}:"));
                 for (int i = 0; i < written; i++)
                 {
                     SimSquad s = _mine[_orders[i].SquadIndex];
@@ -155,8 +149,6 @@ namespace Ironfront.Tools.TacticsTrainer
             {
                 _flags[f].Owner = sim.Owner[f];
                 _flags[f].EnemiesInContact = 0;
-                // Contested as the map shows it: an enemy stood inside the capture range lately.
-                _flags[f].Contested = !sim.Safe(f);
             }
             float threat = SimRules.ThreatRadius * SimRules.ThreatRadius;
             float contact = SimRules.ContactRadius * SimRules.ContactRadius;
