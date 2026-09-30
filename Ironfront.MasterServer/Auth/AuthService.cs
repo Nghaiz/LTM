@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using Ironfront.MasterServer.Data;
+using Ironfront.MasterServer.Lobby;
 using Ironfront.Net.Protocol;
 
 namespace Ironfront.MasterServer.Auth
@@ -13,6 +14,12 @@ namespace Ironfront.MasterServer.Auth
         public required string DisplayName { get; init; }
         public required uint Ip { get; init; }
         public required long ExpiresAt { get; init; }
+
+        /// <summary>
+        /// The maps this login's client can load (<c>LOGIN_REQ.maps</c>); the old catalog when it
+        /// named none. Rooms on any other map are not listed, joined, created or matchmade for it.
+        /// </summary>
+        public MapSupport Maps { get; set; } = MapSupport.Legacy;
     }
 
     public readonly struct AuthResult

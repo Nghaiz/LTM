@@ -1501,7 +1501,7 @@ compatibility.
 
 | Value | Name | Direction | Body |
 |---|---|---|---|
-| `0x0001` | `LOGIN_REQ` | C→M | `{username, passwordHash, clientVersion}` |
+| `0x0001` | `LOGIN_REQ` | C→M | `{username, passwordHash, clientVersion, maps}` — `maps` (13.0.1, optional) lists the map ids this client can load; **absent means 1 and 2**, the catalog of every client before it. The master lists, joins, creates and matchmakes the client only into rooms on those maps (error 2006 otherwise), because a client handed a map id it lacks loads the default map instead |
 | `0x0002` | `LOGIN_RES` | M→C | `{ok, errorCode, sessionToken, playerId, displayName, retryAfterSec}` |
 | `0x0003` | `REGISTER_REQ` | C→M | `{username, passwordHash, displayName}` |
 | `0x0004` | `REGISTER_RES` | M→C | `{ok, errorCode}` |
@@ -1686,6 +1686,7 @@ expires after 60 seconds and only works for one specific server.
 | 2003 | Match already started |
 | 2004 | Already in another room |
 | 2005 | The side change would leave the two sides differing by more than one |
+| 2006 | The room is on a map this client cannot load: not in its `LOGIN_REQ.maps`, or not 1 or 2 for a client that sent none |
 | 3000 | No game server available |
 | 3001 | Game server not responding |
 | 3002 | The game-server host cannot take another room with that many bots (§ 11.3) |
@@ -1791,6 +1792,7 @@ Added at v3.0.0:
 | **12.0.2** | 2026-09-30 | the replication track | **`S_PLAYER_LIST` is bounded by connections, not by `MAX_ACTORS`.** `PlayerListMessage.MaxEntries` = 64 rows, one per connected human (§ 4.11); a game server refuses to start with `IRONFRONT_GAMESERVER_MAX_CONNECTIONS` above it. The worst case stays 1153 B, and a larger bot roster no longer grows a message no bot is in (128 actors read 2,305 B against a 1,181 B payload) | **No** — the same bytes for every list a server can send | (this PR) |
 
 | **13.0.0** | 2026-09-30 | the master-server track | **Up to 100 bots a match, and a host that is never overfilled.** `MAX_BOTS` 32 → **100** and `MAX_ACTORS` 64 → **128** (§ 1): the actor-id pool is `MAX_ACTORS - 1`, and 16 players with 100 bots would overrun 63. `ROOM_CREATE_REQ.botCount` becomes the match's **total**, even, 0…`MAX_BOTS` (owner, 2026-09-30: a 0-100 slider), with `DEFAULT_ROOM_BOTS` = 50 for matchmaking; `GS_ROOM_ASSIGNED.botsPerTeam` carries half of it. New § 11.3: the master budgets the shared game-server host (2 × 100 or 3 × 50 bots, measured), refuses a room that does not fit with new error `3002`, and sends `capacity` with every `ROOM_LIST_RES`. `ROOM_LIST_RES` rows gain `botCount` (and the table now lists `isPrivate`, `canRejoin`, `rejoinTeam`, sent since P16 and 2026-09-30); `ROOM_STATE_PUSH` gains `mapId`, `botCount`, `maxPlayers` | **Yes** — a v12 client drops every actor id at or above 64, so it would never see most of a 100-bot match; and the same `botCount` means a total to a v13 master and a per-team count to a v12 client. `CONNECT_DENIED` code 2 and the master's `1004` refuse the mismatch | (this change) |
+| **13.0.1** | 2026-09-30 | the master-server track | **A client is only put in a room on a map it can load.** `LOGIN_REQ` gains an optional `maps` (the map ids the client's catalog names); a login without it is taken to load Dustbowl (1) and Island (2), the catalog of every build before it. The master hides rooms on other maps from `ROOM_LIST_RES` and from `capacity.maps`, refuses `ROOM_CREATE_REQ`, `ROOM_JOIN_REQ` and `MATCHMAKE_REQ` on them with new error **2006**, and never matchmakes a waiting player into a group on a map it lacks. Why: `MapCatalog.SceneOrDefault` loads the default map for an id the client does not know, so a v3.0.0 client in a Forest Lake room (map 3) would stand in Dustbowl while the server simulated Forest Lake | **No** — an added optional MSP field and an error code no v13 client can meet through its own screens; `PROTOCOL_VERSION` stays 13, so v3.0.0 keeps playing Dustbowl and Island | (this change) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

@@ -43,7 +43,12 @@ namespace Ironfront.MasterServer.Lobby
             if (_queued.ContainsKey(session.PlayerId) || _lobby.TryGetRoom(session.PlayerId, out _))
                 return new MatchmakeResult(false, ErrorCode.AlreadyInAnotherRoom, session.PlayerId, 0, 0);
 
-            Room? room = _lobby.FindJoinableRoom(preferredMapId);
+            // Asking for a map this client cannot load is answered now rather than by a room it
+            // would be refused from later (MapSupport).
+            if (!session.Maps.CanLoad(preferredMapId))
+                return new MatchmakeResult(false, ErrorCode.MapNotInstalled, session.PlayerId, 0, 0);
+
+            Room? room = _lobby.FindJoinableRoom(preferredMapId, session.Maps);
             if (room is not null)
             {
                 ServiceResult joined = _lobby.JoinRoom(session, room.RoomId, null);
@@ -123,30 +128,65 @@ namespace Ironfront.MasterServer.Lobby
                 return;
             }
 
-            foreach (QueueEntry entry in relaxed) FullestGroup(grouped).Add(entry);
+            foreach (QueueEntry entry in relaxed)
+            {
+                // Only into a group whose map this client can load (MapSupport): a relaxed v3.0.0
+                // client must not be carried into a Forest Lake room just because it is fullest.
+                List<QueueEntry>? group = FullestGroup(grouped, entry.Session.Maps);
+                if (group is not null)
+                {
+                    group.Add(entry);
+                    continue;
+                }
+
+                if (!grouped.TryGetValue(entry.PreferredMapId, out List<QueueEntry>? own))
+                {
+                    own = new List<QueueEntry>();
+                    grouped.Add(entry.PreferredMapId, own);
+                }
+                own.Add(entry);
+            }
         }
 
-        /// <summary>Ties break on the lower map id, so a tick is reproducible.</summary>
-        private static List<QueueEntry> FullestGroup(Dictionary<ushort, List<QueueEntry>> grouped)
+        /// <summary>
+        /// The fullest group on a map <paramref name="maps"/> can load, or null when there is none.
+        /// Ties break on the lower map id, so a tick is reproducible.
+        /// </summary>
+        private static List<QueueEntry>? FullestGroup(Dictionary<ushort, List<QueueEntry>> grouped, MapSupport maps)
         {
             List<QueueEntry>? best = null;
             ushort bestMapId = 0;
             foreach (KeyValuePair<ushort, List<QueueEntry>> group in grouped)
             {
+                if (!maps.CanLoad(group.Key)) continue;
                 if (best is not null && group.Value.Count <= best.Count && (group.Value.Count != best.Count || group.Key >= bestMapId)) continue;
                 best = group.Value;
                 bestMapId = group.Key;
             }
 
-            return best!;
+            return best;
         }
 
+        /// <summary>
+        /// The lowest map any entry asked for that EVERY entry can load, or 0 (any map) when no
+        /// such map was asked for -- a room on a map one member cannot load would put that member
+        /// in the wrong world (MapSupport).
+        /// </summary>
         private static ushort SelectRelaxedMap(List<QueueEntry> entries)
         {
-            ushort mapId = entries[0].PreferredMapId;
-            foreach (QueueEntry entry in entries)
-                if (entry.PreferredMapId < mapId) mapId = entry.PreferredMapId;
-            return mapId;
+            ushort best = 0;
+            bool found = false;
+            foreach (QueueEntry candidate in entries)
+            {
+                ushort mapId = candidate.PreferredMapId;
+                if (found && mapId >= best) continue;
+                if (entries.TrueForAll(entry => entry.Session.Maps.CanLoad(mapId)))
+                {
+                    best = mapId;
+                    found = true;
+                }
+            }
+            return found ? best : (ushort)0;
         }
 
         private sealed class QueueEntry
