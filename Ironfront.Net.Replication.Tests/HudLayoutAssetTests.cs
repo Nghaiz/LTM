@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
-using RegexMatch = System.Text.RegularExpressions.Match;
 using Xunit;
+using RegexMatch = System.Text.RegularExpressions.Match;
 
 namespace Ironfront.Net.Replication.Tests
 {
