@@ -1,6 +1,13 @@
+using System.Linq;
 using Ironfront.MasterClient;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Unity.Client.Menu;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client.Tests
 {
@@ -69,6 +76,110 @@ namespace Ironfront.Net.Unity.Client.Tests
 
             string unknown = MenuRoomBrowserScreen.MapLabel(Room("Squad Alpha", ushort.MaxValue));
             Assert.AreEqual($"map {ushort.MaxValue}", unknown);
+        }
+            // ------------------------------------------------------------ YOUR MATCHES (2026-09-30)
+
+        private static RoomInfo Listed(string name, RoomLifecycleState state, bool canRejoin = false, byte team = 0)
+            => new RoomInfo { Name = name, MapId = 1, MaxPlayers = 8, State = (byte)state, CanRejoin = canRejoin, RejoinTeam = team };
+
+        /// <summary>
+        /// A running match is listed only to the people who played in it; everybody else sees
+        /// nothing of it, and the open list holds only rooms somebody can still walk into.
+        /// </summary>
+        [Test]
+        public void Split_PutsYourRunningMatchesApartAndHidesEveryoneElses()
+        {
+            RoomInfo waiting = Listed("Waiting", RoomLifecycleState.Waiting);
+            RoomInfo mine = Listed("Mine", RoomLifecycleState.InMatch, canRejoin: true);
+            RoomInfo theirs = Listed("Theirs", RoomLifecycleState.InMatch);
+            RoomInfo starting = Listed("Starting", RoomLifecycleState.Starting);
+            RoomInfo ending = Listed("Ending", RoomLifecycleState.Ending);
+
+            MenuRoomBrowserScreen.Split(
+                new[] { waiting, mine, theirs, starting, ending }, string.Empty,
+                out RoomInfo[] rejoins, out RoomInfo[] open);
+
+            CollectionAssert.AreEqual(new[] { mine }, rejoins);
+            CollectionAssert.AreEqual(new[] { waiting, starting }, open);
+        }
+
+        [Test]
+        public void Split_TheSearchBoxNeverHidesTheWayBackIntoYourOwnMatch()
+        {
+            RoomInfo mine = Listed("Sunday squad", RoomLifecycleState.InMatch, canRejoin: true);
+            RoomInfo other = Listed("Friday night", RoomLifecycleState.Waiting);
+
+            MenuRoomBrowserScreen.Split(new[] { mine, other }, "tank", out RoomInfo[] rejoins, out RoomInfo[] open);
+
+            CollectionAssert.AreEqual(new[] { mine }, rejoins);
+            Assert.IsEmpty(open);
+        }
+
+        /// <summary>
+        /// The section moves the open table down, and the table gives up the rows it covers
+        /// rather than running into the buttons under it.
+        /// </summary>
+        [Test]
+        public void YourMatches_PushesTheOpenTableDownAndCostsItRows()
+        {
+            Assert.AreEqual(0f, MenuRoomBrowserScreen.RejoinSectionHeight(0));
+            Assert.AreEqual(MenuRoomBrowserScreen.Rows, MenuRoomBrowserScreen.OpenRowCapacity(0f),
+                "the authored layout must still fit all of its rows");
+
+            int one = MenuRoomBrowserScreen.OpenRowCapacity(MenuRoomBrowserScreen.RejoinSectionHeight(1));
+            int two = MenuRoomBrowserScreen.OpenRowCapacity(MenuRoomBrowserScreen.RejoinSectionHeight(2));
+
+            Assert.AreEqual(6, one);
+            Assert.AreEqual(5, two);
+        }
+
+        [Test]
+        public void RejoinStatus_SaysWhereTheMatchIsAndWhichSideYouGoBackTo()
+        {
+            string blue = MenuRoomBrowserScreen.RejoinStatusLabel(Listed("m", RoomLifecycleState.InMatch, true, 0));
+            string red = MenuRoomBrowserScreen.RejoinStatusLabel(Listed("m", RoomLifecycleState.Starting, true, 1));
+
+            StringAssert.StartsWith("IN MATCH", blue);
+            StringAssert.Contains("BLUE", blue);
+            StringAssert.StartsWith("STARTING", red);
+            StringAssert.Contains("RED", red);
+        }
+
+        [Test]
+        public void Overflow_NamesWhatDidNotFitInEitherSection()
+        {
+            Assert.AreEqual(string.Empty, MenuRoomBrowserScreen.OverflowLabel(0, 0));
+            Assert.AreEqual("3 more room(s) not shown.", MenuRoomBrowserScreen.OverflowLabel(3, 0));
+            Assert.AreEqual("1 more of your matches not shown.", MenuRoomBrowserScreen.OverflowLabel(0, 1));
+            Assert.AreEqual("2 more room(s) and 1 of your matches not shown.", MenuRoomBrowserScreen.OverflowLabel(2, 1));
+        }
+
+        /// <summary>
+        /// The builder wired the section into the scene: two REJOIN rows, hidden until there is a
+        /// match to go back to, and a table the screen can move.
+        /// </summary>
+        [Test]
+        public void TheRoomsScreenCarriesAWiredYourMatchesSection()
+        {
+            Scene scene = EditorSceneManager.OpenScene("Assets/Scenes/Menu.unity", OpenSceneMode.Single);
+            GameObject root = scene.GetRootGameObjects().Single(item => item.name == "Multiplayer Menu");
+            var screen = root.transform.Find("Rooms").GetComponent<MenuRoomBrowserScreen>();
+            var so = new SerializedObject(screen);
+
+            var section = (GameObject)so.FindProperty("_rejoinSection").objectReferenceValue;
+            Assert.NotNull(section, "_rejoinSection is not wired");
+            Assert.IsFalse(section.activeSelf, "YOUR MATCHES must be hidden until there is a match to rejoin");
+            Assert.NotNull(so.FindProperty("_openRoomsTable").objectReferenceValue, "_openRoomsTable is not wired");
+
+            SerializedProperty rows = so.FindProperty("_rejoinRows");
+            Assert.AreEqual(MenuRoomBrowserScreen.RejoinRows, rows.arraySize);
+            for (int i = 0; i < rows.arraySize; i++)
+            {
+                var join = (Button)rows.GetArrayElementAtIndex(i).FindPropertyRelative("Join").objectReferenceValue;
+                Assert.NotNull(join, $"rejoin row {i} has no button");
+                Assert.AreEqual("REJOIN", join.GetComponentInChildren<Text>(true).text);
+                Assert.IsTrue(join.transform.IsChildOf(section.transform), $"rejoin row {i} is outside its section");
+            }
         }
     }
 }

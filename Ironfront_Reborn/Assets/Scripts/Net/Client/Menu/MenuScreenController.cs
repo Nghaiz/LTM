@@ -526,6 +526,24 @@ namespace Ironfront.Net.Unity.Client.Menu
             Submit(JoinAsync(roomId, password));
         }
 
+        /// <summary>
+        /// Goes back into a running match this player left: the browser's REJOIN.
+        /// </summary>
+        /// <remarks>
+        /// Only rooms the master listed with <c>CanRejoin</c> reach this; the master decides the
+        /// side, and the session dials the game server as soon as it answers.
+        /// </remarks>
+        public void RejoinMatch(int roomId)
+        {
+            if (_session == null || _flow == null) return;
+            if (_flow.State != GameFlowState.RoomBrowser) return;
+
+            _roomHeading = HeadingFor(roomId);
+            ClearChat();
+            ClearError();
+            Submit(RejoinAsync(roomId));
+        }
+
         /// <summary>Creates a room from the form and lands in its lobby. P16 3.3.</summary>
         public void SubmitCreateRoom(
             string name, ushort mapId, byte maxPlayers, byte botCount, string? password)
@@ -642,6 +660,17 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_session == null) return false;
 
             if (await _session.JoinRoomAsync(roomId, password)) return true;
+
+            _roomHeading = string.Empty;
+            return false;
+        }
+
+        /// <summary>Rejoins, and drops the heading again if the master refused.</summary>
+        private async Task<bool> RejoinAsync(int roomId)
+        {
+            if (_session == null) return false;
+
+            if (await _session.RejoinMatchAsync(roomId)) return true;
 
             _roomHeading = string.Empty;
             return false;

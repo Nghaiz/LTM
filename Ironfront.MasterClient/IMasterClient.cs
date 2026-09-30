@@ -70,6 +70,19 @@ namespace Ironfront.MasterClient
         public bool IsJoinable
             => Lifecycle == Ironfront.Net.Protocol.RoomLifecycleState.Waiting
                && Players < MaxPlayers;
+
+        /// <summary>
+        /// This player played in the room's running match and may go back in.
+        /// </summary>
+        /// <remarks>
+        /// Answered by the master for the player who asked for the list, and false for everybody
+        /// else: a started match stays closed to anyone who was never in it. A master older than
+        /// this field leaves it false, which is exactly what it would have allowed.
+        /// </remarks>
+        public bool CanRejoin { get; set; }
+
+        /// <summary>The side a rejoin puts this player on. Meaningless unless <see cref="CanRejoin"/>.</summary>
+        public byte RejoinTeam { get; set; }
     }
     public sealed class CreateRoomRequest { public string Name { get; set; } = string.Empty; public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? PasswordHash { get; set; } }
     public readonly struct CreateRoomResult { public CreateRoomResult(bool ok, int roomId, int errorCode) { Ok = ok; RoomId = roomId; ErrorCode = errorCode; } public bool Ok { get; } public int RoomId { get; } public int ErrorCode { get; } }

@@ -853,7 +853,17 @@ namespace Ironfront.Net.Unity.EditorTools
             Button region = PackButton(panel, "RegionFilter", "ALL REGIONS", new Vector2(330f, 150f),
                 new Vector2(230f, 48f), "secondary");
 
-            RoomTableHeader(panel, new Vector2(0f, 112f));
+            // The open rooms live in their own full-size container so the screen can move the whole
+            // table down, header and rows together, when the YOUR MATCHES section is showing.
+            GameObject openTable = new GameObject("OpenRooms", typeof(RectTransform));
+            openTable.transform.SetParent(panel.transform, worldPositionStays: false);
+            Stretch(openTable.GetComponent<RectTransform>());
+
+            RoomTableHeader(openTable, new Vector2(0f, MenuRoomBrowserScreen.TableTop));
+
+            // The first column names the section, so the split reads without a second heading.
+            Transform roomHead = openTable.transform.Find("RoomTableHead/HeadROOM");
+            if (roomHead != null) roomHead.GetComponent<Text>().text = "OPEN ROOMS";
 
             int rows = MenuRoomBrowserScreen.Rows;
             var joins = new Object[rows];
@@ -864,9 +874,9 @@ namespace Ironfront.Net.Unity.EditorTools
 
             for (int i = 0; i < rows; i++)
             {
-                float y = 72f - (i * 46f);
+                float y = MenuRoomBrowserScreen.TableTop - 40f - (i * MenuRoomBrowserScreen.RowPitch);
                 (Button Join, Text Name, Text Map, Text Players, Text Status) row =
-                    MakeRoomRow(panel, i, new Vector2(0f, y));
+                    MakeRoomRow(openTable, i, new Vector2(0f, y));
 
                 joins[i] = row.Join;
                 names[i] = row.Name;
@@ -874,6 +884,58 @@ namespace Ironfront.Net.Unity.EditorTools
                 players[i] = row.Players;
                 statuses[i] = row.Status;
             }
+
+            // YOUR MATCHES: matches this player left while they were still running, drawn above
+            // the open rooms and only when there is one (the owner's rule, 2026-09-30: a player
+            // who was never in a match sees nothing here at all). Orange, the game's own call to
+            // action, so a way back into a live match is the first thing on the screen.
+            GameObject yourMatches = new GameObject("YourMatches", typeof(RectTransform));
+            yourMatches.transform.SetParent(panel.transform, worldPositionStays: false);
+            Stretch(yourMatches.GetComponent<RectTransform>());
+
+            AngularPanel matchesHead = Angular(yourMatches, "YourMatchesHead",
+                new Vector2(0f, MenuRoomBrowserScreen.TableTop), new Vector2(1400f, 26f),
+                0f, Hex("2A1A0B"), AngularEdge.All, 0f, Color.clear);
+            matchesHead.raycastTarget = false;
+            Text matchesTitle = Label(matchesHead.gameObject, "Title", "YOUR MATCHES", 12,
+                new Vector2(-590f, 0f), new Vector2(200f, 24f));
+            matchesTitle.alignment = TextAnchor.MiddleLeft;
+            matchesTitle.fontStyle = FontStyle.Bold;
+            matchesTitle.color = Orange;
+            matchesTitle.resizeTextForBestFit = false;
+            matchesTitle.raycastTarget = false;
+            Text matchesNote = Label(matchesHead.gameObject, "Note",
+                "Still running. Rejoin on the side you played.", 12,
+                new Vector2(-170f, 0f), new Vector2(620f, 24f));
+            matchesNote.alignment = TextAnchor.MiddleLeft;
+            matchesNote.color = Hex("C9A27A");
+            matchesNote.resizeTextForBestFit = false;
+            matchesNote.raycastTarget = false;
+
+            int rejoinRows = MenuRoomBrowserScreen.RejoinRows;
+            var rejoinJoins = new Object[rejoinRows];
+            var rejoinNames = new Object[rejoinRows];
+            var rejoinMaps = new Object[rejoinRows];
+            var rejoinPlayers = new Object[rejoinRows];
+            var rejoinStatuses = new Object[rejoinRows];
+
+            for (int i = 0; i < rejoinRows; i++)
+            {
+                float y = MenuRoomBrowserScreen.TableTop - 40f - (i * MenuRoomBrowserScreen.RowPitch);
+                (Button Join, Text Name, Text Map, Text Players, Text Status) row =
+                    MakeRoomRow(yourMatches, i, new Vector2(0f, y), "REJOIN", "primary");
+                row.Join.transform.parent.name = "RejoinRow" + i;
+                row.Join.transform.parent.GetComponent<Image>().color = new Color(42f / 255f, 24f / 255f, 8f / 255f, 0.78f);
+                row.Status.color = Orange;
+
+                rejoinJoins[i] = row.Join;
+                rejoinNames[i] = row.Name;
+                rejoinMaps[i] = row.Map;
+                rejoinPlayers[i] = row.Players;
+                rejoinStatuses[i] = row.Status;
+            }
+
+            yourMatches.SetActive(false);
 
             Text overflow = Label(
                 panel, "Overflow", string.Empty, 14, new Vector2(-260f, -275f), new Vector2(520f, 26f));
@@ -894,7 +956,11 @@ namespace Ironfront.Net.Unity.EditorTools
             MenuRoomBrowserScreen screen = panel.AddComponent<MenuRoomBrowserScreen>();
             var so = new SerializedObject(screen);
             Assign(so, "_controller", controller);
-            AssignRoomRows(so, "_rows", joins, names, maps, players, statuses);            Assign(so, "_searchField", search);
+            AssignRoomRows(so, "_rows", joins, names, maps, players, statuses);
+            AssignRoomRows(so, "_rejoinRows", rejoinJoins, rejoinNames, rejoinMaps, rejoinPlayers, rejoinStatuses);
+            Assign(so, "_rejoinSection", yourMatches);
+            Assign(so, "_openRoomsTable", openTable.GetComponent<RectTransform>());
+            Assign(so, "_searchField", search);
             Assign(so, "_refreshButton", refresh);
             Assign(so, "_createRoomButton", create);
             Assign(so, "_pingText", ping);
@@ -1855,7 +1921,8 @@ namespace Ironfront.Net.Unity.EditorTools
         /// so an unused row costs nothing and no cell can outlive its row.
         /// </remarks>
         private static (Button Join, Text Name, Text Map, Text Players, Text Status) MakeRoomRow(
-            GameObject parent, int index, Vector2 position)
+            GameObject parent, int index, Vector2 position, string joinCaption = "JOIN",
+            string joinKind = "command")
         {
             const float rowWidth = 1400f;
 
@@ -1885,8 +1952,8 @@ namespace Ironfront.Net.Unity.EditorTools
             cells[0].color = Hex("EAF6FF");
             for (int i = 1; i < cells.Length; i++) cells[i].color = Hex("9DBAD0");
 
-            Button join = PackButton(go, "JoinButton", "JOIN", new Vector2(632f, 0f),
-                new Vector2(130f, 34f), "command");
+            Button join = PackButton(go, "JoinButton", joinCaption, new Vector2(632f, 0f),
+                new Vector2(130f, 34f), joinKind);
 
             return (join, cells[0], cells[1], cells[2], cells[3]);
         }
