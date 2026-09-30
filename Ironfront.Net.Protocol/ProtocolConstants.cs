@@ -51,8 +51,8 @@ namespace Ironfront.Net.Protocol
         public const int    HITBOX_HISTORY_MS = 1000;
 
         public const int    MAX_PLAYERS       = 16;
-        public const int    MAX_BOTS          = 32;
-        public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
+        public const int    MAX_BOTS          = 100;   // BENCH ONLY (bench/bot-capacity): 32 on develop
+        public const int    MAX_ACTORS        = 128;     // BENCH ONLY: 64 on develop
 
         /// <summary>
         /// The most bots one side of a room may ask for. The create-room form's Bots field,
