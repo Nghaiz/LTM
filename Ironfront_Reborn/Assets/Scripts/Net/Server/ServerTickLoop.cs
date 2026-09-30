@@ -2073,6 +2073,13 @@ namespace Ironfront.Net.Unity.Server
             _respawnGate.ResetForNewRound(
                 _stillDeadPlayers, CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
+            // The bots of the new round. The world reset that ran just before this despawned the
+            // last round's and re-armed the release gate; the gate opens 30 s after a player body
+            // ENTERS the world, which only a deploy reports. Players still alive are carried into
+            // this round without deploying, so they are this round's anchor. B2, live test
+            // 2026-09-30: without it the second round released no bots at all.
+            NetBotRelease.NotifyPlayersCarriedIntoRound(CountPlayersCarriedAlive(_players));
+
             // Beside the respawn gate, because the two are stamped from the same death edge: a
             // corpse record surviving into the next round would report a body that no longer
             // exists as blocking a pad, forever.
@@ -2102,6 +2109,25 @@ namespace Ironfront.Net.Unity.Server
 
                 _players[i].Session.ResetWeapon();
             }
+        }
+
+        /// <summary>
+        /// Players whose body is in the world and alive: deployed at least once, not dead.
+        /// </summary>
+        /// <remarks>
+        /// The complement of the <c>_stillDeadPlayers</c> rule above, and for the same reason:
+        /// a player who never deployed has no body in the world yet, whatever its flags say.
+        /// </remarks>
+        internal static int CountPlayersCarriedAlive(IReadOnlyList<ServerPlayer> players)
+        {
+            int alive = 0;
+            for (int i = 0; i < players.Count; i++)
+            {
+                NetServerActor body = players[i].Actor;
+                if (body != null && body.IsAlive && !players[i].AwaitingFirstDeploy) alive++;
+            }
+
+            return alive;
         }
 
         /// <summary>
