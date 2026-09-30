@@ -104,11 +104,15 @@ namespace Ironfront.Net.Unity.Client.Hud
             }
         }
 
+        /// <summary>How far toward white the HUD lifts a side's colour for type.</summary>
+        public const float TeamInkLift = 0.2f;
+
         /// <summary>
         /// A side's colour for a name or number drawn on a dark pane: the palette's, lifted a
-        /// little toward white so a dark blue stays readable on near-black.
+        /// little toward white so a dark blue stays readable on near-black. Less than the menu's
+        /// lift (<see cref="Client.TeamInk.Lift"/>), whose navy glass needs more.
         /// </summary>
-        public static Color TeamInk(Color team) => Color.Lerp(team, Color.white, 0.2f);
+        public static Color TeamInk(Color team) => Client.TeamInk.Lifted(team, TeamInkLift);
 
         /// <summary>
         /// Shows <paramref name="picture"/> at <paramref name="height"/>, as wide as its own shape

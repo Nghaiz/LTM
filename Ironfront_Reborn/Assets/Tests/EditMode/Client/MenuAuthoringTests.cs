@@ -51,6 +51,27 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         /// <summary>
+        /// Every field on the menu draws a caret the player can see.
+        /// </summary>
+        /// <remarks>
+        /// An InputField's caret is one canvas unit wide unless something says otherwise, and the
+        /// menu canvas scales with the window — in a 940×528 playtest window that unit is half a
+        /// pixel, and the fields took typing with no cursor at all.
+        /// </remarks>
+        [Test]
+        public void EveryMenuFieldKeepsAVisibleCaret()
+        {
+            Scene scene = EditorSceneManager.OpenScene("Assets/Scenes/Menu.unity", OpenSceneMode.Single);
+            GameObject root = scene.GetRootGameObjects().Single(item => item.name == "Multiplayer Menu");
+
+            InputField[] fields = root.GetComponentsInChildren<InputField>(true);
+            Assert.Greater(fields.Length, 0);
+            foreach (InputField field in fields)
+                Assert.NotNull(field.GetComponent<MenuFieldCaret>(),
+                    $"'{field.name}' draws its caret one canvas unit wide, under a pixel in a small window.");
+        }
+
+        /// <summary>
         /// Every screen is built from the pack's own artwork, not from flat rectangles.
         /// </summary>
         /// <remarks>

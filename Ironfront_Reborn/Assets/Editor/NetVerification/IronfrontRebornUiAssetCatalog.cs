@@ -16,8 +16,10 @@ namespace Ironfront.Net.Unity.EditorTools
         /// </summary>
         /// <remarks>
         /// <para>
-        /// PNG menu art is imported without mipmaps or lossy compression. SVG files remain in the
-        /// repository only as source masters and are deliberately ignored by the runtime catalogue.
+        /// PNG menu art is imported with a sharpened trilinear mip chain; line art is left
+        /// uncompressed and the painted backgrounds are compressed at high quality. SVG files
+        /// remain in the repository only as source masters and are deliberately ignored by the
+        /// runtime catalogue.
         /// </para>
         /// </remarks>
         internal static string ConfigureImporters()
@@ -34,21 +36,26 @@ namespace Ironfront.Net.Unity.EditorTools
                 {
                     texture.textureType = TextureImporterType.Sprite;
                     texture.spriteImportMode = SpriteImportMode.Single;
-                    texture.filterMode = FilterMode.Bilinear;
-                    // Mipmaps ON, which is the opposite of the usual advice for UI art.
-                    //
-                    // The usual advice assumes a sprite drawn at its own size, where mip 0 is used
-                    // and the chain is dead weight. This pack is not that: the icons are 96px and
-                    // the menu draws them at 22 to 28, so every one of them is minified three to
-                    // four times over. With no mip chain that minification is a bilinear average of
-                    // four texels -- the mushy, shimmery look the icons had, and worse the smaller
-                    // the window, because the canvas scaler shrinks the draw size while the
-                    // texture stays 96px.
-                    texture.mipmapEnabled = true;
+                    // The backgrounds are authored for a 2560-wide canvas; the default 2048 cap
+                    // would quietly downscale them again.
+                    texture.maxTextureSize = 4096;
+                    // Mipmaps ON (SharpenUiTexture below), which is the opposite of the usual
+                    // advice for UI art. The usual advice assumes a sprite drawn at its own size,
+                    // where mip 0 is used and the chain is dead weight. This pack is not that: the
+                    // icons are 96px and the menu draws them at 22 to 28, and the 1040px wordmark
+                    // ~190px wide in the top bar, so everything is minified several times over.
+                    // With no mip chain that minification is a bilinear average of four texels --
+                    // the mushy, shimmery look the icons had.
                     texture.alphaIsTransparency = true;
                     texture.wrapMode = TextureWrapMode.Clamp;
                     texture.npotScale = TextureImporterNPOTScale.None;
-                    texture.textureCompression = TextureImporterCompression.Uncompressed;
+                    // Line art stays uncompressed. The three painted backgrounds are photographs in
+                    // all but name, and at 2560x1440 uncompressed they would hold ~20 MB of video
+                    // memory each for the menu alone; high-quality compression (BC7 on desktop) is
+                    // visually indistinguishable on them at a quarter of that.
+                    IronfrontUiKit.SharpenUiTexture(texture, path.Contains("/backgrounds/")
+                        ? TextureImporterCompression.CompressedHQ
+                        : TextureImporterCompression.Uncompressed);
                     var settings = new TextureImporterSettings();
                     texture.ReadTextureSettings(settings);
                     settings.spriteMeshType = SpriteMeshType.FullRect;
@@ -62,7 +69,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
 
-            report.Append(textures).Append(" uncompressed PNG texture(s), ")
+            report.Append(textures).Append(" PNG texture(s) configured, ")
                 .Append(sourceMasters).Append(" non-raster source master(s) ignored");
             return report.ToString();
         }
