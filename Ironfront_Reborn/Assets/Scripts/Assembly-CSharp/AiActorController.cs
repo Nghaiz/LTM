@@ -3227,6 +3227,10 @@ public class AiActorController : ActorController
 		}
 	}
 
+	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
+	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
+	// lines in one 100-bot match (B4, 2026-09-30).
+#if !UNITY_SERVER
 	private void OnGUI()
 	{
 		if (!ActorManager.instance.debug || actor.dead || !(Camera.main != null))
@@ -3249,6 +3253,7 @@ public class AiActorController : ActorController
 			}
 		}
 	}
+#endif
 
 	public override bool IsGroupedUp()
 	{

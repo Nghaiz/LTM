@@ -1392,6 +1392,10 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		return !stuck && !IsFull() && !burning && !dead && HasUnclaimedSeats() && takingFireAction.TrueDone() && !WaterLevel.InWater(base.transform.position);
 	}
 
+	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
+	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
+	// lines in one 100-bot match (B4, 2026-09-30).
+#if !UNITY_SERVER
 	private void OnGUI()
 	{
 		// instance was dereferenced BEFORE the Camera.main guard on the same line, so a
@@ -1410,4 +1414,5 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 			}
 		}
 	}
+#endif
 }
