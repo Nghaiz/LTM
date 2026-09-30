@@ -234,6 +234,12 @@ public class AiActorController : ActorController
 	/// </remarks>
 	private bool arrivedAtGoto;
 
+	/// <summary>
+	/// Said once already that this body is walking a path with no squad (<see cref="Velocity"/>);
+	/// cleared when a squad takes it.
+	/// </summary>
+	private bool reportedPathWithoutSquad;
+
 	private bool calculatingPath;
 
 	private Seeker seeker;
@@ -2083,7 +2089,20 @@ public class AiActorController : ActorController
 				num = 2f;
 			}
 			fatigue = Mathf.Clamp01(fatigue + num * 0.04f * Time.deltaTime);
-			return (GetWaypointDeltaBlockable().ToGround().normalized + LocalAvoidanceVelocity() * 0.4f).normalized * num;
+			// Keeping clear of squadmates needs a squad. A bot walking with none -- what a squad
+			// roster left behind by a death that never left it produced, P29 capacity bench:
+			// 4,966 NullReferenceExceptions in 43 s from LocalAvoidanceVelocity -- walks on
+			// without the nudge, and the line says it happened, once.
+			Vector3 avoidance = Vector3.zero;
+			if (InSquad())
+			{
+				avoidance = LocalAvoidanceVelocity() * 0.4f;
+			}
+			else
+			{
+				ReportPathWithoutSquad();
+			}
+			return (GetWaypointDeltaBlockable().ToGround().normalized + avoidance).normalized * num;
 		}
 		// A side-step in the open (phase P28), checked clear by UpdateOpenGround before it began.
 		if (!sideStepAction.TrueDone())
@@ -2395,14 +2414,13 @@ public class AiActorController : ActorController
 		{
 			return NetVehicleAxisRelay.HelicopterAxesFor(this);
 		}
-		// A networked player's body goes back to the bot brain when its connection leaves
-		// (NetServerActor.Release resumes it), and a player body never has a squad. Left in a
-		// pilot seat it is an enabled controller with no squad, and the line below threw once
-		// per physics step for as long as it sat there: 867 NullReferenceExceptions in the 14 s
-		// between a bench's clients disconnecting and the server stopping (2026-09-30, Island,
-		// run p29new-i16), each one aborting Helicopter.FixedUpdate. Nobody is flying it, so it
-		// gets the neutral stick the relay gives a seat with no driver, without reading the
-		// relay (an enabled controller is never steered by the network).
+		// An enabled pilot with no squad. A player's body left in a pilot seat by a disconnect
+		// was one: the line below threw once per physics step for as long as it sat there, 867
+		// NullReferenceExceptions in 14 s (2026-09-30, Island, run p29new-i16), each aborting
+		// Helicopter.FixedUpdate. Such a body now takes a squad of its own (TakeOverAsBot), so
+		// this is the net under whatever leaves a pilot squadless next: the neutral stick the
+		// relay gives a seat with no driver, without reading the relay (an enabled controller is
+		// never steered by the network).
 		if (!InSquad())
 		{
 			return Vector4.zero;
@@ -2885,9 +2903,71 @@ public class AiActorController : ActorController
 		return squad != null;
 	}
 
+	/// <summary>The one line <see cref="Velocity"/> writes for a body walking a path with no squad.</summary>
+	private void ReportPathWithoutSquad()
+	{
+		if (reportedPathWithoutSquad)
+		{
+			return;
+		}
+		reportedPathWithoutSquad = true;
+		Debug.LogWarning("[ai] " + base.name + " (team " + actor.team + ") is walking a path with no squad: aiControlled "
+			+ actor.aiControlled + ", seated " + actor.IsSeated() + ", dead " + actor.dead + ", at " + actor.Position());
+	}
+
+	/// <summary>
+	/// A body a connection has just claimed leaves the bot side of the game: off its squad, its
+	/// cover and its path, its AI stopped until a squad takes it again (phase P29).
+	/// </summary>
+	/// <remarks>
+	/// Parking the brain (<c>enabled = false</c>) stops Unity's callbacks and not the running
+	/// coroutines, which only idle. A body a bot had been using still sat on its squad's roster,
+	/// so the commander counted and ordered a player as one of its bots.
+	/// </remarks>
+	public void HandOverToPlayer()
+	{
+		LeaveCover();
+		CancelPath();
+		if (InSquad())
+		{
+			squad.DropMember(this);
+		}
+		squad = null;
+		StopAllCoroutines();
+		CancelInvoke();
+		aiCoroutinesAwaitSquad = true;
+	}
+
+	/// <summary>
+	/// A body whose connection has left plays on as a bot (phase P29): alive, it starts a squad of
+	/// its own, which runs its AI and puts it under the commander -- a lone bot with orders,
+	/// cover and targets, where it used to stand in the map as an inert mannequin.
+	/// </summary>
+	public void TakeOverAsBot()
+	{
+		// Not a body on its way out: NetServerActor.OnDisable releases one as it is deactivated
+		// or destroyed, and an inactive GameObject can start no coroutine.
+		if (actor == null || actor.dead || InSquad() || !base.isActiveAndEnabled)
+		{
+			return;
+		}
+		// A fresh set of AI coroutines, started by the squad below: whatever idled while the body
+		// was parked goes first, and a player's body never ran SpawnAt, which is what normally
+		// arms the start.
+		StopAllCoroutines();
+		aiCoroutinesAwaitSquad = true;
+		Squad own = new Squad(new List<AiActorController> { this }, 0f);
+		if (actor.IsSeated())
+		{
+			own.SetAlreadyInVehicle(actor.seat.vehicle);
+		}
+		Squad.Census.NoteFormed(actor.team, 1);
+	}
+
 	public void AssignedToSquad(Squad squad)
 	{
 		this.squad = squad;
+		reportedPathWithoutSquad = false;
 		if (IsSquadLeader())
 		{
 			EmoteRegroup();

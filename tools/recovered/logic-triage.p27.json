@@ -4,7 +4,7 @@
   "scope": {
     "commonFiles": 322,
     "filesWithCandidates": 77,
-    "candidates": 687,
+    "candidates": 688,
     "outrightDeletions": 139,
     "skippedAsP24": [
       "AstarPath.cs",
@@ -1702,7 +1702,7 @@
     "AiActorController.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/AiActorController.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AiActorController.cs",
-      "survivors": 45,
+      "survivors": 46,
       "outrightDeletions": 7,
       "candidates": [
         {
@@ -1949,6 +1949,13 @@
           "recovered": "LookDirection(cover.transform.forward);",
           "nearestLineInOurs": "LookDirection(coverFacing);",
           "similarity": 0.7
+        },
+        {
+          "line": 1423,
+          "recoveredMember": "Velocity",
+          "recovered": "return (GetWaypointDeltaBlockable().ToGround().normalized + LocalAvoidanceVelocity() * 0.4f).normalized * num;",
+          "nearestLineInOurs": "return (GetWaypointDeltaBlockable().ToGround().normalized + avoidance).normalized * num;",
+          "similarity": 0.89
         },
         {
           "line": 1554,

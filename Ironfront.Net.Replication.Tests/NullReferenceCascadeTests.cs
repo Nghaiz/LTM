@@ -135,7 +135,20 @@ namespace Ironfront.Net.Replication.Tests
             string controller = ReadUnitySource(
                 "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AiActorController.cs");
 
-            Assert.Equal(2, Regex.Matches(controller, @"squad\.DropMember\(this\)").Count);
+            // By identity, not by count: a count of two was also satisfied by deleting one hook
+            // and adding another. P29 added a third leaver -- a body a connection claims
+            // (HandOverToPlayer) -- and each is asserted where it lives.
+            foreach (string leaver in new[]
+                     {
+                         "public override void Die()",
+                         "private void OnDestroy()",
+                         "public void HandOverToPlayer()",
+                     })
+            {
+                Assert.Contains("squad.DropMember(this)", MethodBody(controller, leaver), StringComparison.Ordinal);
+            }
+
+            Assert.Equal(3, Regex.Matches(controller, @"squad\.DropMember\(this\)").Count);
         }
 
         [Fact]

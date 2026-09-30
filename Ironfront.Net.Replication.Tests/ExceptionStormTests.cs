@@ -80,6 +80,38 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// The same seam's other half: a death written through it runs what <c>Actor.Die</c>
+        /// runs for the brain and the respawn clock (phase P29).
+        /// </summary>
+        /// <remarks>
+        /// The authority's kills -- a player's hitscan, a drowning -- never call <c>Actor.Die</c>,
+        /// so every bot a player killed kept its squad, its cover and its running AI, and its
+        /// <c>deathTimestamp</c> stayed stale: the dead bot stayed on its squad's roster (56 a
+        /// side counted against 50 in the capacity bench), a later respawn left one walking a
+        /// squad's orders with no squad of its own (4,966 exceptions in 43 s), and the wave's
+        /// six-second grace let a bot a player shot straight back.
+        /// </remarks>
+        [Fact]
+        public void ADeathWrittenThroughTheNetSeamRunsTheBrainsDeathAndStampsTheClock()
+        {
+            string bindings = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/NetBindings/IronfrontNetBindings.cs");
+            string source = MethodBody(bindings, "internal sealed class ActorGameplaySource");
+            string body = MethodBody(source, "public bool IsDead");
+
+            Assert.Matches(new Regex(@"_actor\.deathTimestamp\s*=\s*Time\.time"), body);
+            Assert.Matches(
+                new Regex(@"_actor\.controller\s+is\s+AiActorController\s+(\w+)\s*\)\s*\{\s*\1\.Die\(\)"), body);
+
+            // Before the dead flag, in Actor.Die's order, and only on the way down: a respawn
+            // written through here must not run a death.
+            int die = body.IndexOf(".Die()", StringComparison.Ordinal);
+            int flag = Regex.Match(body, @"_actor\.dead\s*=\s*value").Index;
+            Assert.True(die < flag, "the brain's Die runs after the dead flag is written");
+            Assert.Matches(new Regex(@"if\s*\(\s*value\s*\)\s*\{[\s\S]*?\.Die\(\)"), body);
+        }
+
+        /// <summary>
         /// Nothing outside those four files writes the alive register, so the enumeration above
         /// is the whole enumeration.
         /// </summary>
