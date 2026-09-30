@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
 using Ironfront.Net.Protocol;
@@ -51,6 +52,66 @@ namespace Ironfront.Net.Transport
         private int _connectAttempts;
         private bool _disposed;
         private TransportStats _stats;
+
+        /// <summary>
+        /// Reliable messages <see cref="Send"/> accepted while the window was full, oldest first.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A full window used to REFUSE the message, and every caller dropped it.</b>
+        /// <see cref="Send"/> returned false once <see cref="FlowControl.MaxUnackedReliable"/>
+        /// reliable packets were unacked, and no caller in the repository checked: the
+        /// interface promises "Queues a payload". Protocol 13's 100-bot rooms made it common --
+        /// the release announces up to 128 actors to every client within a few ticks, and on a
+        /// 250 ms link the first 64 spawns fill the window. The rest were refused, the server
+        /// had already marked them sent, and those bots stayed invisible on that client for
+        /// the whole match, named "actor 77" in its killfeed (live test 2026-09-30, B1).
+        /// </para>
+        /// <para>
+        /// <b>Ordered by construction.</b> A message's channel sequence is assigned when it
+        /// leaves (<see cref="SendNow"/>), not when it is queued, and a new reliable message goes
+        /// behind anything already waiting, so the ordered channel sees them in call order.
+        /// Unreliable messages never wait here: a snapshot delivered late is worse than none.
+        /// </para>
+        /// </remarks>
+        private readonly Queue<QueuedReliable> _reliableBacklog = new Queue<QueuedReliable>();
+
+        private bool _warnedBacklogFull;
+
+        /// <summary>
+        /// The most reliable messages held for a full window before <see cref="Send"/> refuses.
+        /// </summary>
+        /// <remarks>
+        /// Thirty-two join bursts' worth (a full 128-actor world is about 130 messages); a peer
+        /// that lets this many pile up has stopped acknowledging and is on its way to the
+        /// timeout, and a bounded queue keeps it from holding memory until then.
+        /// </remarks>
+        public const int MaxQueuedReliable = 4096;
+
+        /// <summary>Reliable messages waiting for the window right now.</summary>
+        public int QueuedReliableCount => _reliableBacklog.Count;
+
+        /// <summary>Reliable messages that had to wait for the window, since connect.</summary>
+        public long ReliableMessagesQueued { get; private set; }
+
+        /// <summary>Reliable messages refused because <see cref="MaxQueuedReliable"/> were already waiting.</summary>
+        public long ReliableMessagesRefused { get; private set; }
+
+        private readonly struct QueuedReliable
+        {
+            public QueuedReliable(byte channelId, byte[] payload, bool reliable)
+            {
+                ChannelId = channelId;
+                Payload = payload;
+                Reliable = reliable;
+            }
+
+            public byte ChannelId { get; }
+
+            public byte[] Payload { get; }
+
+            public bool Reliable { get; }
+        }
 
         public Connection(
             EndPoint remoteEndPoint,
@@ -405,6 +466,10 @@ namespace Ironfront.Net.Transport
 
             _reliability.Update(nowMs, _resendCallback);
 
+            // Acks read since the last update may have opened the window; whatever was waiting
+            // for it leaves now, in order.
+            FlushReliableBacklog(nowMs);
+
             // A reliable packet that ran out of retransmissions is a hole the ordered channel
             // can never fill: the receiver's next-expected sequence is stuck on it forever, so
             // every spawn, death, hit confirmation and chat message after it is dropped for the
@@ -424,6 +489,7 @@ namespace Ironfront.Net.Transport
             _stats.SmoothedRttMs = SmoothedRttMs;
             _stats.JitterMs = JitterMs;
             _stats.PendingReliableCount = _reliability.PendingReliableCount;
+            _stats.QueuedReliableCount = _reliableBacklog.Count;
             _stats.PacketsLost = _reliability.PacketsLost;
             UpdateLossWindow(nowMs);
             _stats.PacketLossPercentSent = _windowReliableSent <= 0
@@ -444,12 +510,82 @@ namespace Ironfront.Net.Transport
         /// the caller requested unreliable delivery, because an incomplete logical message is
         /// never useful.
         /// </summary>
+        /// <returns>
+        /// True when the payload was sent or, for a reliable one, queued behind a full window
+        /// (<see cref="_reliableBacklog"/>). False only when it can never be delivered: not
+        /// connected, an unknown channel, too large for <see cref="ProtocolConstants.MAX_FRAGMENTS"/>,
+        /// <see cref="MaxQueuedReliable"/> already waiting, or an unreliable payload whose
+        /// fragments do not fit the window.
+        /// </returns>
         public bool Send(byte channelId, ReadOnlySpan<byte> payload, bool reliable, double nowMs)
         {
             ThrowIfDisposed();
             if (State != ConnectionState.Connected) return false;
             if (channelId > (byte)ChannelId.InputSequenced) return false;
 
+            bool ordered = channelId == (byte)ChannelId.ReliableOrdered;
+            bool mustBeReliable = reliable || ordered;
+            if (mustBeReliable && (_reliableBacklog.Count > 0 || !HasReliableRoomFor(payload.Length)))
+                return QueueReliable(channelId, payload, reliable);
+
+            return SendNow(channelId, payload, reliable, nowMs);
+        }
+
+        /// <summary>Whether a reliable payload of this length fits the window now, fragments and all.</summary>
+        private bool HasReliableRoomFor(int payloadLength)
+        {
+            if (!CanSendReliable) return false;
+
+            int envelopeLength = ChannelEnvelope.Size + payloadLength;
+            if (envelopeLength <= ProtocolConstants.MAX_PAYLOAD) return true;
+
+            int fragments = Fragmenter.FragmentCount(envelopeLength);
+            return fragments > 0
+                && _reliability.PendingReliableCount + fragments <= FlowControl.MaxUnackedReliable;
+        }
+
+        /// <summary>Holds a reliable payload until the window opens. See <see cref="_reliableBacklog"/>.</summary>
+        private bool QueueReliable(byte channelId, ReadOnlySpan<byte> payload, bool reliable)
+        {
+            int fragments = Fragmenter.FragmentCount(ChannelEnvelope.Size + payload.Length);
+            if (fragments <= 0) return false;
+
+            if (_reliableBacklog.Count >= MaxQueuedReliable)
+            {
+                ReliableMessagesRefused++;
+                if (!_warnedBacklogFull)
+                {
+                    _warnedBacklogFull = true;
+                    NetLog.Warn(
+                        $"connection {ConnectionId}: {MaxQueuedReliable} reliable messages are waiting "
+                        + "for a window the peer is not opening; refusing more until it acknowledges");
+                }
+
+                return false;
+            }
+
+            _reliableBacklog.Enqueue(new QueuedReliable(channelId, payload.ToArray(), reliable));
+            ReliableMessagesQueued++;
+            return true;
+        }
+
+        /// <summary>Sends what waited for the window, oldest first, for as long as it fits.</summary>
+        private void FlushReliableBacklog(double nowMs)
+        {
+            while (_reliableBacklog.Count > 0 && State == ConnectionState.Connected)
+            {
+                QueuedReliable next = _reliableBacklog.Peek();
+                if (!HasReliableRoomFor(next.Payload.Length)) return;
+
+                _reliableBacklog.Dequeue();
+                SendNow(next.ChannelId, next.Payload, next.Reliable, nowMs);
+            }
+
+            if (_reliableBacklog.Count == 0) _warnedBacklogFull = false;
+        }
+
+        private bool SendNow(byte channelId, ReadOnlySpan<byte> payload, bool reliable, double nowMs)
+        {
             bool ordered = channelId == (byte)ChannelId.ReliableOrdered;
             bool mustBeReliable = reliable || ordered;
             if (mustBeReliable && !CanSendReliable) return false;
@@ -537,6 +673,7 @@ namespace Ironfront.Net.Transport
             _reliability.Clear();
             _channels.Clear();
             _fragments.Clear();
+            _reliableBacklog.Clear();
             State = ConnectionState.Disconnected;
         }
 
@@ -829,6 +966,7 @@ namespace Ironfront.Net.Transport
             _reliability.Clear();
             _channels.Clear();
             _fragments.Clear();
+            _reliableBacklog.Clear();
             if (notify) Disconnected?.Invoke(reason);
         }
 

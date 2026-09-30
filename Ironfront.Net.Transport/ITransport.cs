@@ -210,6 +210,9 @@ namespace Ironfront.Net.Transport
         public long PacketsSent, PacketsReceived, PacketsLost, PacketsResent;
         public float SmoothedRttMs, JitterMs;
         public int PendingReliableCount;
+
+        /// <summary>Reliable messages waiting behind a full window (<c>Connection.QueuedReliableCount</c>).</summary>
+        public int QueuedReliableCount;
         public float BytesPerSecondSent, BytesPerSecondReceived;
         public float PacketLossPercentSent, PacketLossPercentReceived;
         public int CongestionMode;
