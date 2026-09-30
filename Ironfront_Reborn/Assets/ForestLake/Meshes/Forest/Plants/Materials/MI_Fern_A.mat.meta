@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a6aaf7e914d3fb845b91783cd3fe0eaa
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 259547
+  packageName: ForestLake
+  packageVersion: 1.5
+  assetPath: Assets/ForestLake/Meshes/Forest/Plants/Materials/MI_Fern_A.mat
+  uploadId: 925456

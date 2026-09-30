@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 688b5d8c6a1b7a74fb20003e76c7c585
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 259547
+  packageName: ForestLake
+  packageVersion: 1.5
+  assetPath: Assets/ForestLake/Meshes/Forest/Plants/Materials/MI_Blueberry_A1.mat
+  uploadId: 925456

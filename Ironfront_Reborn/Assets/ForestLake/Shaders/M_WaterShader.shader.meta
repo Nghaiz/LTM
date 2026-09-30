@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 5af1cb6629bfcc64cb64274e4e22229e
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _Normal2: {fileID: 2800000, guid: abc00000000009576515129225354041, type: 3}
+  - _WaterNormal: {fileID: 2800000, guid: abc00000000004831255687537903438, type: 3}
+  nonModifiableTextures: []
+  preprocessorOverride: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 259547
+  packageName: ForestLake
+  packageVersion: 1.5
+  assetPath: Assets/ForestLake/Shaders/M_WaterShader.shader
+  uploadId: 925456
