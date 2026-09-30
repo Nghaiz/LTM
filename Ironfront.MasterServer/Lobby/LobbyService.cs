@@ -89,6 +89,26 @@ namespace Ironfront.MasterServer.Lobby
         public bool IsCountingDown => StartDeadlineUnixMs != 0;
 
         public List<RoomMember> Members { get; } = new List<RoomMember>();
+
+        /// <summary>
+        /// Everybody who has played in this room's current match, by player id, with the side
+        /// they played on. Filled when the room starts and cleared when it returns to
+        /// <see cref="RoomLifecycleState.Waiting"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Membership alone cannot carry a way back.</b> A player whose client crashed, or who
+        /// quit the game, leaves <see cref="Members"/> when the master connection drops, and a
+        /// room in a match admits no one (<see cref="LobbyService.CanJoinRoom"/>). So in the
+        /// 2026-09-30 playtest a player who fell out of the world and restarted could only watch
+        /// their own match listed as "In match" with no way in, while their teammate played on.
+        /// </para>
+        /// <para>
+        /// <b>Only people on this list may come back</b>, and on the side they had: the owner's
+        /// rule is that a running match stays closed to anyone who was never in it.
+        /// </para>
+        /// </remarks>
+        public Dictionary<int, byte> Roster { get; } = new Dictionary<int, byte>();
     }
 
     public readonly struct RoomCreateRequest
@@ -189,6 +209,82 @@ namespace Ironfront.MasterServer.Lobby
             if (room.IsPrivate && (!AuthService.IsValidSha256(passwordHash) || !BCrypt.Net.BCrypt.Verify(passwordHash, room.PasswordHash)))
                 return Fail(ErrorCode.WrongRoomPassword);
             return new ServiceResult(true, ErrorCode.Ok, room);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="playerId"/> may return to <paramref name="room"/>'s running
+        /// match: they played in it (<see cref="Room.Roster"/>) or are still one of its members,
+        /// and the match is starting or under way.
+        /// </summary>
+        public static bool CanRejoin(int playerId, Room room)
+            => (room.State == RoomLifecycleState.Starting || room.State == RoomLifecycleState.InMatch)
+               && (room.Roster.ContainsKey(playerId) || room.Members.Exists(member => member.PlayerId == playerId));
+
+        /// <summary>
+        /// Puts a player who left a running match back into its room, on the side they played.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The admission <see cref="CanJoinRoom"/> refuses on purpose -- a started match is closed
+        /// -- opened for exactly the people on <see cref="Room.Roster"/>. No password: they were
+        /// admitted once already, and a returning player who never typed it (the creator of a
+        /// private room) could not answer it.
+        /// </para>
+        /// <para>
+        /// <b>Ready, because they are going straight back into the match.</b> The flag only feeds
+        /// the start countdown, which a room in a match does not run, and
+        /// <see cref="ReturnToWaiting"/> clears it with the roster when the match ends.
+        /// </para>
+        /// </remarks>
+        public ServiceResult RejoinRoom(Session session, int roomId)
+        {
+            if (!_rooms.TryGetValue(roomId, out Room? room)) return Fail(ErrorCode.RoomNotFound);
+            if (_playerToRoom.TryGetValue(session.PlayerId, out int current))
+                return current == roomId ? new ServiceResult(true, ErrorCode.Ok, room) : Fail(ErrorCode.AlreadyInAnotherRoom);
+            if (!CanRejoin(session.PlayerId, room) || !room.Roster.TryGetValue(session.PlayerId, out byte team))
+                return Fail(ErrorCode.MatchAlreadyStarted);
+            if (room.Members.Count >= room.MaxPlayers) return Fail(ErrorCode.RoomFull);
+
+            room.Members.Add(new RoomMember
+            {
+                PlayerId = session.PlayerId, DisplayName = session.DisplayName, Team = team, Ready = true,
+            });
+            _playerToRoom.Add(session.PlayerId, room.RoomId);
+
+            MasterLog.Warn($"room {room.RoomId}: player {session.PlayerId} rejoined its match on team {team}");
+            RoomChanged?.Invoke(room);
+            return new ServiceResult(true, ErrorCode.Ok, room);
+        }
+
+        /// <summary>Writes every current member onto <see cref="Room.Roster"/>, with their side.</summary>
+        /// <remarks>
+        /// Called when the room starts and again when its game server reports the match under way,
+        /// so a member who was admitted in between is not left off. Never removes anybody: a
+        /// player who has left is exactly who the roster is for.
+        /// </remarks>
+        public static void EnrollRoster(Room room)
+        {
+            foreach (RoomMember member in room.Members) room.Roster[member.PlayerId] = member.Team;
+        }
+
+        /// <summary>
+        /// Takes a room back to <see cref="RoomLifecycleState.Waiting"/> after its match: the
+        /// roster is closed, and every member has to ready up again.
+        /// </summary>
+        /// <remarks>
+        /// <b>The ready marks are cleared, and that is the fix, not tidiness.</b> They were left
+        /// set, so the next <see cref="Tick"/> found every member of a room whose match had just
+        /// ended "ready", armed the countdown and pushed the room back to <c>Starting</c> ten
+        /// seconds later -- with its players no longer in the room lobby to answer it, so it sat
+        /// in <c>Starting</c> for good, admitting nobody and holding its members in place.
+        /// </remarks>
+        public void ReturnToWaiting(Room room)
+        {
+            room.State = RoomLifecycleState.Waiting;
+            room.StartDeadlineUnixMs = 0;
+            room.Roster.Clear();
+            foreach (RoomMember member in room.Members) member.Ready = false;
+            RoomChanged?.Invoke(room);
         }
 
         public ServiceResult LeaveRoom(int playerId)
@@ -356,6 +452,7 @@ namespace Ironfront.MasterServer.Lobby
 
                 room.StartDeadlineUnixMs = 0;
                 room.State = RoomLifecycleState.Starting;
+                EnrollRoster(room);
                 _startedThisTick.Add(room);
 
                 MasterLog.Warn(
@@ -464,8 +561,13 @@ namespace Ironfront.MasterServer.Lobby
             // The cancel half of decision 4. A room already pushed to Starting is pulled back,
             // because its clients are dialling a game server for a match a member has just
             // withdrawn from — and CanJoinRoom refuses joiners while a room is not Waiting, so
-            // leaving it in Starting would strand the room as well as the match.
-            if (room.State == RoomLifecycleState.Starting) room.State = RoomLifecycleState.Waiting;
+            // leaving it in Starting would strand the room as well as the match. The roster goes
+            // with it: the match it listed never started, so nobody has anything to return to.
+            if (room.State == RoomLifecycleState.Starting)
+            {
+                room.State = RoomLifecycleState.Waiting;
+                room.Roster.Clear();
+            }
         }
 
         private static bool ShouldStart(Room room)
