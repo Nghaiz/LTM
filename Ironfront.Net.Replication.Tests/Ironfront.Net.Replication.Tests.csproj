@@ -24,6 +24,21 @@
   </PropertyGroup>
 
   <!--
+    Background GC off, for the four tests that assert a hot path allocates nothing
+    (ClientEventConsumptionTests, DeployableTests, ObjectiveAuthorityTests, VehicleCaptureTests).
+    A background collection empties every thread's allocation buffer without retiring its unused
+    bytes, so GC.GetAllocatedBytesForCurrentThread on a thread that allocated nothing jumps by
+    whatever was left in the buffer (dotnet/runtime#134724; the fix, #134855, is not shipped).
+    Measured 2026-10-01, three copies of this project at once: the zero-allocation test read
+    192 to 7,640 B in 11 of 330 runs. A thread repeating the same calls read about 8 KB in 590 of
+    the 591 windows a background collection overlapped, and 0 of 262 with this setting.
+    AllocationCounterTests fails if it stops reaching the test host.
+  -->
+  <PropertyGroup>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <!--
     No Version attributes: Central Package Management is on (Directory.Packages.props), and
     CentralPackageVersionOverrideEnabled=false makes an inline version an NU1008 error on
     purpose. Versions live in Directory.Packages.props.

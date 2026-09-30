@@ -303,6 +303,11 @@ namespace Ironfront.Net.Replication.Tests
             var deliberate = new byte[4096];
             long controlDelta = GC.GetAllocatedBytesForCurrentThread() - beforeControl;
 
+            // Used after the second read, or optimised code may drop the array, read 0 and fail
+            // this guard on a counter that works. Without this line, with tiered compilation off
+            // (so this method is optimised from its first call), it did: 30 runs out of 30.
+            GC.KeepAlive(deliberate);
+
             Assert.True(
                 controlDelta >= deliberate.Length,
                 "the allocation counter is not reporting; the zero above proves nothing.");
