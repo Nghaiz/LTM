@@ -253,9 +253,31 @@ public class Squad
 		leader = this.members[0];
 		foreach (AiActorController member in this.members)
 		{
+			TakeOffOtherRoster(member);
 			member.AssignedToSquad(this);
 		}
 		readyTime = Time.time + timeUntilReady;
+	}
+
+	/// <summary>
+	/// Takes <paramref name="member"/> off the roster of the squad it names, if that is another
+	/// squad (phase P29): a bot is on exactly one roster, the one its <c>squad</c> field names.
+	/// </summary>
+	/// <remarks>
+	/// Nothing kept that true. A roster a bot was never taken off counted it twice -- 56 bots a
+	/// side against 50 in the capacity bench -- and when it came back and was asked to join that
+	/// squad, <see cref="Join"/> found it already listed and left without giving it the squad:
+	/// the squad went on ordering a bot with no squad of its own, which threw every frame. The
+	/// cause was a death path that never left the squad (see <c>ActorGameplaySource.IsDead</c>);
+	/// this makes every way onto a roster a move, so the next such path cannot repeat it.
+	/// </remarks>
+	private void TakeOffOtherRoster(AiActorController member)
+	{
+		Squad previous = member.squad;
+		if (previous != null && previous != this && previous.members.Contains(member))
+		{
+			previous.DropMember(member);
+		}
 	}
 
 	public bool Ready()
@@ -289,13 +311,21 @@ public class Squad
 	}
 
 	/// <summary>Takes <paramref name="member"/> into the squad and sends it after the others (phase P29).</summary>
+	/// <remarks>
+	/// A move, not an add: off any other roster first, and given this squad even when this roster
+	/// already lists it, which is the case that used to return early and leave it squadless.
+	/// </remarks>
 	public void Join(AiActorController member)
 	{
-		if (member == null || members.Contains(member))
+		if (member == null)
 		{
 			return;
 		}
-		members.Add(member);
+		TakeOffOtherRoster(member);
+		if (!members.Contains(member))
+		{
+			members.Add(member);
+		}
 		member.AssignedToSquad(this);
 		member.JoinedSquad(this);
 	}

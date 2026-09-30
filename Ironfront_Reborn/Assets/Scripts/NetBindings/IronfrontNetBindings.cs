@@ -838,6 +838,19 @@ namespace Ironfront.Net.Unity.Bindings
         /// pairing being honest rather than a separate feature, and it is named here because no
         /// existing measurement would have reported it.
         /// </para>
+        /// <para>
+        /// <b>The brain dies here too (phase P29).</b> <c>Actor.Die</c> also stamps
+        /// <c>deathTimestamp</c> and runs the controller's <c>Die</c>, and this path did neither,
+        /// so every bot a PLAYER killed kept its squad, its cover spot and its running AI:
+        /// dead, it stayed on its squad's roster; respawned, the wave filed it into a second
+        /// squad while the first still listed it, and the side counted more bots than it had
+        /// (56 against 50 in the capacity bench); once it had died again by a bot's hand, a
+        /// respawn that joined the squad still listing it left it walking that squad's orders
+        /// with no squad of its own -- 4,966 NullReferenceExceptions in 43 s. And with no
+        /// timestamp the wave's six-second grace read a stale one, so a bot a player shot came
+        /// straight back. Only an <c>AiActorController</c> is asked: every server body is one,
+        /// and an <c>FpsActorController.Die</c> would open a loadout screen.
+        /// </para>
         /// </remarks>
         public bool IsDead
         {
@@ -846,15 +859,24 @@ namespace Ironfront.Net.Unity.Bindings
             {
                 if (_actor.dead == value) return;
 
-                if (value && _actor.IsSeated())
+                if (value)
                 {
-                    // Out of the seat, as Actor.Die does, and in its order: LeaveSeat first, the
-                    // dead flag after. The authority's kills (a hitscan through
-                    // ServerActorDamageSink, a drowning) set this flag and never call Die, so a
-                    // body killed in an open seat used to stay booked in it: every snapshot kept
-                    // reporting a seated corpse, the seat refused everybody else, and the respawn
-                    // teleported a body that was still welded to the vehicle.
-                    _actor.LeaveSeat();
+                    if (_actor.IsSeated())
+                    {
+                        // Out of the seat, as Actor.Die does, and in its order: LeaveSeat first,
+                        // the dead flag after. The authority's kills (a hitscan through
+                        // ServerActorDamageSink, a drowning) set this flag and never call Die, so
+                        // a body killed in an open seat used to stay booked in it: every snapshot
+                        // kept reporting a seated corpse, the seat refused everybody else, and the
+                        // respawn teleported a body that was still welded to the vehicle.
+                        _actor.LeaveSeat();
+                    }
+
+                    _actor.deathTimestamp = Time.time;
+                    if (_actor.controller is AiActorController brain)
+                    {
+                        brain.Die();
+                    }
                 }
 
                 _actor.dead = value;
@@ -1286,9 +1308,12 @@ namespace Ironfront.Net.Unity.Bindings
     /// <c>ActorController</c> (V5-D7), one layer over.
     /// </para>
     /// <para>
-    /// <b>The eight coroutines stop with the component.</b> Disabling a <c>MonoBehaviour</c>
-    /// halts its running coroutines, which is what actually stops the bot steering; a flag the
-    /// controller checked itself would leave every coroutine running and merely idle.
+    /// <b>Disabling parks the brain; it does not stop it.</b> Unity stops a <c>MonoBehaviour</c>'s
+    /// coroutines when it is destroyed or its GameObject is deactivated, not when the component
+    /// is disabled: the eight AI coroutines go on running and only idle, because each checks
+    /// <c>AiWorkAllowed</c>, which reads <c>enabled</c>. So parking alone left a claimed body on
+    /// its old squad's roster, and a released one with no squad and no running AI. Suspend now
+    /// hands the body over properly and Resume takes it back as a bot (phase P29).
     /// </para>
     /// </remarks>
     internal sealed class AiActorControllerDriver : IAiDriver
@@ -1305,12 +1330,16 @@ namespace Ironfront.Net.Unity.Bindings
 
         public void Suspend()
         {
-            if (_ai != null) _ai.enabled = false;
+            if (_ai == null) return;
+            _ai.HandOverToPlayer();
+            _ai.enabled = false;
         }
 
         public void Resume()
         {
-            if (_ai != null) _ai.enabled = true;
+            if (_ai == null) return;
+            _ai.enabled = true;
+            _ai.TakeOverAsBot();
         }
     }
 }
