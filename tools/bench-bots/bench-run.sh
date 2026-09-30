@@ -6,8 +6,12 @@
 # bench-sample.sh and the harness published as ~/ironfront/bench-harness (linux-x64). The image
 # ironfront-game-server:bench-bots is built from branch bench/bot-capacity: that is what reads
 # IRONFRONT_BENCH_BOTS_PER_TEAM and lifts MAX_ACTORS to 128. Analyse with analyse_bench.py.
+# BENCH_IMAGE and BENCH_HARNESS pick another image and harness, so two builds can be measured in
+# one sitting (P29 re-ran the 2026-09-29 bench on the new bot AI beside the old image).
 set -u
 label=$1; secs=$2; shift 2; specs=("$@")
+image=${BENCH_IMAGE:-ironfront-game-server:bench-bots}
+harness=${BENCH_HARNESS:-./bench-harness}
 mkdir -p ~/bench; cd ~/ironfront
 secret=$(grep -E '^IRONFRONT_SHARED_SECRET=' .env | cut -d= -f2-)
 names=()
@@ -22,7 +26,7 @@ for spec in "${specs[@]}"; do
     -e IRONFRONT_GAMESERVER_MAX_PLAYERS=16 -e IRONFRONT_GAMESERVER_MAX_CONNECTIONS=16 \
     -e IRONFRONT_LOG_LEVEL=Info -e IRONFRONT_STRUCTURED_LOG=1 -e IRONFRONT_LOG_FRAMES=1 \
     -e IRONFRONT_BENCH_BOTS_PER_TEAM="$bots" \
-    ironfront-game-server:bench-bots -job-worker-count 2 >/dev/null
+    "$image" -job-worker-count 2 >/dev/null
 done
 # Wait for every server to finish loading its scene (first [frames] line), at most 120 s.
 for n in "${names[@]}"; do
@@ -33,7 +37,7 @@ sampler=$!
 pids=()
 for spec in "${specs[@]}"; do
   IFS=: read -r map bots clients port <<< "$spec"
-  ./bench-harness --host 127.0.0.1 --port "$port" --clients "$clients" --behavior combat \
+  "$harness" --host 127.0.0.1 --port "$port" --clients "$clients" --behavior combat \
     --seconds "$secs" --label "$label-$map-$bots" --report ~/bench/$label.$map-$port.json \
     > ~/bench/$label.$map-$port.harness.txt 2>&1 &
   pids+=($!)
