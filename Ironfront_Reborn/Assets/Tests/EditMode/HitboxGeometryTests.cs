@@ -261,7 +261,7 @@ namespace Ironfront.Net.Unity.Server.Tests
                     + $"{head.center.y:F2} m over the ground it stands on; every client draws it at "
                     + $"{headCentre:F2} m.");
 
-                // Handed back to the bot brain as the prefab authored it.
+                // Released, the model goes back where the prefab authored it.
                 Transform model = animator.transform;
                 replicated.Release();
                 Assert.AreEqual(0f, model.localPosition.y, 1e-4f,

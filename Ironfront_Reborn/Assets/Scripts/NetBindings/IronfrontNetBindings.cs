@@ -1312,8 +1312,8 @@ namespace Ironfront.Net.Unity.Bindings
     /// coroutines when it is destroyed or its GameObject is deactivated, not when the component
     /// is disabled: the eight AI coroutines go on running and only idle, because each checks
     /// <c>AiWorkAllowed</c>, which reads <c>enabled</c>. So parking alone left a claimed body on
-    /// its old squad's roster, and a released one with no squad and no running AI. Suspend now
-    /// hands the body over properly and Resume takes it back as a bot (phase P29).
+    /// its old squad's roster. Suspend now hands the body over properly (phase P29). Nothing
+    /// takes it back: a released slot leaves the match (<c>NetServerActor.ReturnToPool</c>).
     /// </para>
     /// </remarks>
     internal sealed class AiActorControllerDriver : IAiDriver
@@ -1333,13 +1333,6 @@ namespace Ironfront.Net.Unity.Bindings
             if (_ai == null) return;
             _ai.HandOverToPlayer();
             _ai.enabled = false;
-        }
-
-        public void Resume()
-        {
-            if (_ai == null) return;
-            _ai.enabled = true;
-            _ai.TakeOverAsBot();
         }
     }
 }
