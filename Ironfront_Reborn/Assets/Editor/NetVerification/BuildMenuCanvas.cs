@@ -1044,23 +1044,15 @@ namespace Ironfront.Net.Unity.EditorTools
             Button mode = MakeButton(panel, "Mode", "GAME MODE // IN DEVELOPMENT",
                 new Vector2(rightHalf, 206f), new Vector2(half, 56f));
 
-            // `.three-col`: region, maximum players and bots.
-            float third = (leftWidth - 28f) / 3f;
-            float firstThird = leftCentre - third - 14f;
-            float thirdThird = leftCentre + third + 14f;
-            Button region = MakeButton(panel, "Region", "REGION // IN DEVELOPMENT",
-                new Vector2(firstThird, 130f), new Vector2(third, 56f));
+            // Seats and region share a row; the bots moved to a card of their own below
+            // (protocol 13: a slider of the match's total, bounded by the servers).
             InputField maxPlayers = PackField(panel, "MaxPlayers",
                 "Players (even, 2-" + ProtocolConstants.MAX_PLAYERS + ")",
-                new Vector2(leftCentre, 130f), new Vector2(third, 56f),
+                new Vector2(leftHalf, 130f), new Vector2(half, 56f),
                 password: false);
             maxPlayers.contentType = InputField.ContentType.IntegerNumber;
-
-            InputField bots = PackField(panel, "BotCount",
-                "Bots per team (0-" + ProtocolConstants.MAX_BOTS_PER_TEAM + ")",
-                new Vector2(thirdThird, 130f), new Vector2(third, 56f),
-                password: false);
-            bots.contentType = InputField.ContentType.IntegerNumber;
+            Button region = MakeButton(panel, "Region", "REGION // IN DEVELOPMENT",
+                new Vector2(rightHalf, 130f), new Vector2(half, 56f));
 
             Toggle isPrivate = MakeSwitch(panel, "Private", "PRIVATE ROOM",
                 new Vector2(leftHalf, 54f), new Vector2(half, 65f));
@@ -1068,6 +1060,9 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(rightHalf, 54f), new Vector2(half, 65f));
             InputField password = PackField(panel, "Password", "Room password",
                 new Vector2(leftCentre, -26f), fieldSize, password: true);
+
+            MenuBotSlider bots = BuildBotSlider(panel, new Vector2(leftCentre, -182f),
+                new Vector2(leftWidth, 226f), out Slider botTrack);
 
             // `.map-preview`: a card with the multiplayer backdrop as its art, the map's own name,
             // and three stat cells under a rule. The title is bound to the dropdown rather than
@@ -1123,9 +1118,15 @@ namespace Ironfront.Net.Unity.EditorTools
                 previewValues[i] = value;
             }
 
+            MenuHostCapacityCard capacity = BuildCapacityCard(panel, new Vector2(rightCentre, -226f),
+                new Vector2(457f, 138f));
+
+            // Beside the buttons, under the rule: the bot card took the line the error used to
+            // have, and a refusal is read next to the button that caused it anyway.
             Text error = Label(
-                panel, "Error", string.Empty, 20, new Vector2(leftCentre, -250f),
-                new Vector2(leftWidth, 70f));
+                panel, "Error", string.Empty, 18, new Vector2(-285f, -375f),
+                new Vector2(830f, 60f));
+            error.alignment = TextAnchor.MiddleLeft;
             error.color = ErrorInk;
 
             // `.form-footer`: right-aligned, under a rule.
@@ -1144,7 +1145,8 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_nameField", name);
             Assign(so, "_mapDropdown", map);
             Assign(so, "_maxPlayersField", maxPlayers);
-            Assign(so, "_botCountField", bots);
+            Assign(so, "_botSlider", bots);
+            Assign(so, "_capacityCard", capacity);
             Assign(so, "_privateToggle", isPrivate);
             Assign(so, "_passwordField", password);
             Assign(so, "_createButton", create);
@@ -1157,11 +1159,259 @@ namespace Ironfront.Net.Unity.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
             panel.AddComponent<MenuDevelopmentControls>().Configure(toast, mode, region, balance);
             ConfigureKeyboard(panel,
-                new Selectable[] { name, map, maxPlayers, bots, isPrivate, password, create, back },
+                new Selectable[] { name, map, maxPlayers, isPrivate, password, botTrack, create, back },
                 create, back);
 
             log.AppendLine("create room: criterion 8's even-seats check renders on its error line.");
+            log.AppendLine("create room: bots are a 0-" + ProtocolConstants.MAX_BOTS
+                           + " slider bounded by the servers' capacity (protocol 13).");
             return panel;
+        }
+
+        /// <summary>
+        /// The BOTS IN THIS MATCH card: readout, tier chip, a 0-100 track with a notch every ten
+        /// and the servers' ceiling shaded on it, one-press presets, and the ceiling in words.
+        /// </summary>
+        /// <remarks>
+        /// Everything the runtime changes is handed to <see cref="MenuBotSlider"/> by reference;
+        /// what it may choose and how it is worded are <see cref="RoomBotChoice"/>'s.
+        /// </remarks>
+        private static MenuBotSlider BuildBotSlider(GameObject parent, Vector2 position, Vector2 size,
+            out Slider slider)
+        {
+            AngularPanel card = Angular(parent, "BotCard", position, size, CutCard, Hex("061522"),
+                AngularEdge.All, 1f, Hex("3F6986"));
+            GameObject root = card.gameObject;
+            float inner = size.x - 40f;
+            float left = -inner * 0.5f;
+            float top = size.y * 0.5f;
+
+            Text kicker = Label(root, "Kicker", "BOTS IN THIS MATCH", 12,
+                new Vector2(left + 150f, top - 24f), new Vector2(300f, 20f));
+            kicker.alignment = TextAnchor.MiddleLeft;
+            kicker.fontStyle = FontStyle.Bold;
+            kicker.color = Orange;
+            kicker.resizeTextForBestFit = false;
+
+            Text value = Label(root, "Value", "50  BOTS", 20,
+                new Vector2(left + 170f, top - 62f), new Vector2(340f, 56f));
+            value.alignment = TextAnchor.MiddleLeft;
+            value.resizeTextForBestFit = false;
+            value.supportRichText = true;
+
+            Image chip = Plain(root, "TierChip", new Vector2(-left - 80f, top - 30f),
+                new Vector2(160f, 28f), new Color(0.21f, 0.71f, 1f, 0.22f));
+            Text tier = Label(chip.gameObject, "Tier", "BATTLE", 13, Vector2.zero,
+                new Vector2(150f, 26f));
+            tier.fontStyle = FontStyle.Bold;
+            tier.resizeTextForBestFit = false;
+
+            Text perSide = Label(root, "PerSide", "25 per side, 25 vs 25", 14,
+                new Vector2(-left - 160f, top - 64f), new Vector2(320f, 24f));
+            perSide.alignment = TextAnchor.MiddleRight;
+            perSide.color = Hex("A9C2D3");
+            perSide.resizeTextForBestFit = false;
+
+            // The track: a Slider over 0..50 steps of two, so an odd total cannot be picked.
+            float trackY = top - 112f;
+            var trackObject = new GameObject("Track", typeof(RectTransform), typeof(Image), typeof(Slider));
+            trackObject.transform.SetParent(root.transform, false);
+            Centre(trackObject.GetComponent<RectTransform>(), new Vector2(0f, trackY), new Vector2(inner, 34f));
+            Image trackBed = trackObject.GetComponent<Image>();
+            trackBed.color = new Color(0f, 0f, 0f, 0f);
+
+            Image groove = Plain(trackObject, "Groove", Vector2.zero, new Vector2(inner, 12f), Hex("0E2A40"));
+
+            var capZone = new GameObject("CapZone", typeof(RectTransform), typeof(Image));
+            capZone.transform.SetParent(groove.transform, false);
+            RectTransform capZoneRect = capZone.GetComponent<RectTransform>();
+            capZoneRect.anchorMin = new Vector2(0.52f, 0f);
+            capZoneRect.anchorMax = Vector2.one;
+            capZoneRect.offsetMin = Vector2.zero;
+            capZoneRect.offsetMax = Vector2.zero;
+            Image capZoneImage = capZone.GetComponent<Image>();
+            capZoneImage.color = new Color(1f, 0.32f, 0.40f, 0.30f);
+            capZoneImage.raycastTarget = false;
+
+            var fillArea = new GameObject("Fill Area", typeof(RectTransform));
+            fillArea.transform.SetParent(trackObject.transform, false);
+            Centre(fillArea.GetComponent<RectTransform>(), Vector2.zero, new Vector2(inner, 12f));
+            var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+            fill.transform.SetParent(fillArea.transform, false);
+            Stretch(fill.GetComponent<RectTransform>());
+            Image fillImage = fill.GetComponent<Image>();
+            fillImage.color = Cyan;
+            fillImage.raycastTarget = false;
+
+            var capMarker = new GameObject("CapMarker", typeof(RectTransform), typeof(Image));
+            capMarker.transform.SetParent(groove.transform, false);
+            RectTransform capMarkerRect = capMarker.GetComponent<RectTransform>();
+            capMarkerRect.anchorMin = new Vector2(0.52f, 0.5f);
+            capMarkerRect.anchorMax = new Vector2(0.52f, 0.5f);
+            capMarkerRect.sizeDelta = new Vector2(3f, 34f);
+            capMarkerRect.anchoredPosition = Vector2.zero;
+            Image capMarkerImage = capMarker.GetComponent<Image>();
+            capMarkerImage.color = ErrorInk;
+            capMarkerImage.raycastTarget = false;
+
+            var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
+            handleArea.transform.SetParent(trackObject.transform, false);
+            Centre(handleArea.GetComponent<RectTransform>(), Vector2.zero, new Vector2(inner, 34f));
+            var handle = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+            handle.transform.SetParent(handleArea.transform, false);
+            Centre(handle.GetComponent<RectTransform>(), Vector2.zero, new Vector2(16f, 34f));
+            Image handleImage = handle.GetComponent<Image>();
+            handleImage.color = Ink;
+
+            slider = trackObject.GetComponent<Slider>();
+            slider.fillRect = fill.GetComponent<RectTransform>();
+            slider.handleRect = handle.GetComponent<RectTransform>();
+            slider.targetGraphic = handleImage;
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.wholeNumbers = true;
+            slider.minValue = 0f;
+            slider.maxValue = ProtocolConstants.MAX_BOTS / RoomBotChoice.Step;
+            slider.value = ProtocolConstants.DEFAULT_ROOM_BOTS / RoomBotChoice.Step;
+
+            // A notch and a number every ten, under the track.
+            int notches = ProtocolConstants.MAX_BOTS / RoomBotChoice.TickEvery + 1;
+            var tickLabels = new Text[notches];
+            var tickMarks = new Image[notches];
+            for (int i = 0; i < notches; i++)
+            {
+                float x = left + (inner * i / (notches - 1));
+                tickMarks[i] = Plain(root, "Notch" + (i * RoomBotChoice.TickEvery),
+                    new Vector2(x, trackY - 24f), new Vector2(2f, i % 5 == 0 ? 12f : 8f), Hex("8DA8BA"));
+                Text number = Label(root, "NotchLabel" + (i * RoomBotChoice.TickEvery),
+                    (i * RoomBotChoice.TickEvery).ToString(), 12, new Vector2(x, trackY - 40f),
+                    new Vector2(40f, 18f));
+                number.resizeTextForBestFit = false;
+                number.color = Hex("8DA8BA");
+                tickLabels[i] = number;
+            }
+
+            // One-press presets, left to right, the owner's benchmark counts among them.
+            int presets = RoomBotChoice.Presets.Length;
+            float chipWidth = 88f;
+            float chipGap = 8f;
+            float presetsY = trackY - 76f;
+            var presetButtons = new Button[presets];
+            for (int i = 0; i < presets; i++)
+            {
+                int count = RoomBotChoice.Presets[i];
+                float x = left + (chipWidth * 0.5f) + (i * (chipWidth + chipGap));
+                var chipObject = new GameObject("Preset" + count, typeof(RectTransform), typeof(Image), typeof(Button));
+                chipObject.transform.SetParent(root.transform, false);
+                Centre(chipObject.GetComponent<RectTransform>(), new Vector2(x, presetsY), new Vector2(chipWidth, 30f));
+                Image face = chipObject.GetComponent<Image>();
+                face.color = new Color(0.04f, 0.13f, 0.20f, 0.95f);
+                Button button = chipObject.GetComponent<Button>();
+                button.targetGraphic = face;
+                Text caption = Label(chipObject, "Caption", count == 0 ? "NONE" : count.ToString(), 14,
+                    Vector2.zero, new Vector2(chipWidth - 8f, 26f));
+                caption.fontStyle = FontStyle.Bold;
+                caption.resizeTextForBestFit = false;
+                presetButtons[i] = button;
+            }
+
+            float presetsRight = left + (presets * (chipWidth + chipGap)) - chipGap;
+            Text ceiling = Label(root, "Ceiling", string.Empty, 13,
+                new Vector2((presetsRight + 16f + (-left)) * 0.5f, presetsY),
+                new Vector2((-left) - presetsRight - 16f, 36f));
+            ceiling.alignment = TextAnchor.MiddleRight;
+            ceiling.resizeTextForBestFit = true;
+            ceiling.resizeTextMinSize = 10;
+            ceiling.resizeTextMaxSize = 13;
+
+            MenuBotSlider component = root.AddComponent<MenuBotSlider>();
+            var so = new SerializedObject(component);
+            Assign(so, "_slider", slider);
+            Assign(so, "_fill", fillImage);
+            Assign(so, "_handle", handleImage);
+            Assign(so, "_capZone", capZoneRect);
+            Assign(so, "_capMarker", capMarkerRect);
+            Assign(so, "_valueText", value);
+            Assign(so, "_perSideText", perSide);
+            Assign(so, "_tierChip", chip);
+            Assign(so, "_tierText", tier);
+            Assign(so, "_ceilingText", ceiling);
+            AssignArray(so, "_tickLabels", tickLabels);
+            AssignArray(so, "_tickMarks", tickMarks);
+            AssignArray(so, "_presetButtons", presetButtons);
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return component;
+        }
+
+        /// <summary>
+        /// The SERVER CAPACITY card under the map preview: the host's load now and with this room,
+        /// what is running, and whether the chosen map's server is free.
+        /// </summary>
+        private static MenuHostCapacityCard BuildCapacityCard(GameObject parent, Vector2 position, Vector2 size)
+        {
+            AngularPanel card = Angular(parent, "CapacityCard", position, size, CutCard, Hex("061522"),
+                AngularEdge.All, 1f, Hex("3F6986"));
+            GameObject root = card.gameObject;
+            float inner = size.x - 40f;
+            float top = size.y * 0.5f;
+
+            Text title = Label(root, "Title", "SERVER CAPACITY", 11,
+                new Vector2(-inner * 0.5f + 110f, top - 20f), new Vector2(220f, 20f));
+            title.alignment = TextAnchor.MiddleLeft;
+            title.fontStyle = FontStyle.Bold;
+            title.color = Orange;
+            title.resizeTextForBestFit = false;
+
+            Text inPlay = Label(root, "InPlay", string.Empty, 12,
+                new Vector2(inner * 0.5f - 110f, top - 20f), new Vector2(220f, 20f));
+            inPlay.alignment = TextAnchor.MiddleRight;
+            inPlay.color = Hex("8DA8BA");
+            inPlay.resizeTextForBestFit = false;
+
+            Image bed = Plain(root, "LoadBed", new Vector2(0f, top - 48f), new Vector2(inner, 14f), Hex("0E2A40"));
+
+            var now = new GameObject("LoadNow", typeof(RectTransform), typeof(Image));
+            now.transform.SetParent(bed.transform, false);
+            RectTransform nowRect = now.GetComponent<RectTransform>();
+            nowRect.anchorMin = Vector2.zero;
+            nowRect.anchorMax = new Vector2(0.4f, 1f);
+            nowRect.offsetMin = Vector2.zero;
+            nowRect.offsetMax = Vector2.zero;
+            Image nowImage = now.GetComponent<Image>();
+            nowImage.color = Hex("5C7A90");
+            nowImage.raycastTarget = false;
+
+            var share = new GameObject("LoadThisRoom", typeof(RectTransform), typeof(Image));
+            share.transform.SetParent(bed.transform, false);
+            RectTransform shareRect = share.GetComponent<RectTransform>();
+            shareRect.anchorMin = new Vector2(0.4f, 0f);
+            shareRect.anchorMax = new Vector2(0.7f, 1f);
+            shareRect.offsetMin = Vector2.zero;
+            shareRect.offsetMax = Vector2.zero;
+            Image shareImage = share.GetComponent<Image>();
+            shareImage.color = Cyan;
+            shareImage.raycastTarget = false;
+
+            Text load = Label(root, "Load", string.Empty, 13,
+                new Vector2(0f, top - 76f), new Vector2(inner, 22f));
+            load.alignment = TextAnchor.MiddleLeft;
+            load.resizeTextForBestFit = false;
+
+            Text map = Label(root, "Map", string.Empty, 13,
+                new Vector2(0f, top - 106f), new Vector2(inner, 34f));
+            map.alignment = TextAnchor.MiddleLeft;
+            map.resizeTextForBestFit = true;
+            map.resizeTextMinSize = 10;
+            map.resizeTextMaxSize = 13;
+
+            MenuHostCapacityCard component = root.AddComponent<MenuHostCapacityCard>();
+            var so = new SerializedObject(component);
+            Assign(so, "_loadNow", nowRect);
+            Assign(so, "_loadThisRoom", shareImage);
+            Assign(so, "_loadText", load);
+            Assign(so, "_inPlayText", inPlay);
+            Assign(so, "_mapText", map);
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return component;
         }
 
         /// <summary>The room: two roster columns, side, ready, chat, leave.</summary>

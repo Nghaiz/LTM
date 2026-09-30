@@ -302,8 +302,8 @@ namespace Ironfront.Net.Unity.Client.Menu
             switch (room.Lifecycle)
             {
                 case RoomLifecycleState.Waiting:
-                    return $"{room.Members.Length} in the room. The match starts when everybody "
-                           + "is ready.";
+                    return $"{room.Members.Length} in the room, {BotsPhrase(room.BotCount)}. "
+                           + "The match starts when everybody is ready.";
                 case RoomLifecycleState.Starting:
                     return "Everybody is ready. Starting...";
                 case RoomLifecycleState.InMatch:
@@ -314,5 +314,9 @@ namespace Ironfront.Net.Unity.Client.Menu
                     return $"Room state {room.State}.";
             }
         }
+
+        /// <summary>The room's bots in the status line: the total and how it splits (protocol 13).</summary>
+        internal static string BotsPhrase(int bots)
+            => bots <= 0 ? "no bots" : $"{bots} bots ({bots / 2} per side)";
     }
 }

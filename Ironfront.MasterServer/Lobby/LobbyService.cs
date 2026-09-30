@@ -55,8 +55,10 @@ namespace Ironfront.MasterServer.Lobby
         public required byte MaxPlayers { get; set; }
 
         /// <summary>
-        /// Bots PER TEAM this room asked for, 0 to <see cref="ProtocolConstants.MAX_BOTS_PER_TEAM"/>.
-        /// Sent to the allocated game server with every ticket (<c>GS_ROOM_ASSIGNED</c>).
+        /// Bots in this room's match, both sides together: 0 to <see cref="ProtocolConstants.MAX_BOTS"/>,
+        /// even (protocol 13). Half of it goes to each side, sent to the allocated game server with
+        /// every ticket (<c>GS_ROOM_ASSIGNED.botsPerTeam</c>), and all of it counts against
+        /// <see cref="BotCapacity"/> while the room exists.
         /// </summary>
         public required byte BotCount { get; init; }
         public required bool IsPrivate { get; init; }
@@ -159,6 +161,12 @@ namespace Ironfront.MasterServer.Lobby
         /// <summary>The countdown length this service arms. Settable so a test can shorten it.</summary>
         public long StartCountdownMs { get; set; } = DefaultStartCountdownMs;
 
+        /// <summary>The game-server host's bot budget. Settable so the master's config and a test can size it.</summary>
+        public BotCapacity Capacity { get; set; } = new BotCapacity();
+
+        /// <summary>The most bots a room created now may have. See <see cref="BotCapacity"/>.</summary>
+        public int MaxBotsForNewRoom() => Capacity.MaxBotsForNewRoom(_rooms.Values);
+
         public IReadOnlyCollection<Room> Rooms => _rooms.Values;
 
         public ServiceResult CreateRoom(Session session, RoomCreateRequest request)
@@ -167,9 +175,16 @@ namespace Ironfront.MasterServer.Lobby
             if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 48 || request.MaxPlayers < 2 || request.MaxPlayers > ProtocolConstants.MAX_PLAYERS)
                 return Fail(ErrorCode.InternalServerError);
 
-            // Per team, and no game server can field more than half of MAX_BOTS on a side. The
-            // form refuses it first; this is for a client that skipped the form.
-            if (request.BotCount > ProtocolConstants.MAX_BOTS_PER_TEAM) return Fail(ErrorCode.InternalServerError);
+            // A total, even so the sides split it evenly. The form refuses anything else first;
+            // this is for a client that skipped the form.
+            if (request.BotCount > ProtocolConstants.MAX_BOTS || request.BotCount % 2 != 0)
+                return Fail(ErrorCode.InternalServerError);
+
+            // What the game-server host can still carry beside the rooms that already exist. The
+            // form never offers more (the room list carries the same number); this answers a
+            // creator who raced somebody else to the last of it.
+            if (!Capacity.HasRoomForAnotherMatch(_rooms.Values) || request.BotCount > MaxBotsForNewRoom())
+                return Fail(ErrorCode.ServerAtBotCapacity);
             if (request.IsPrivate && !AuthService.IsValidSha256(request.PasswordHash)) return Fail(ErrorCode.WrongRoomPassword);
 
             var room = new Room

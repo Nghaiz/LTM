@@ -186,6 +186,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         public Ironfront.MasterClient.RoomInfo[] Rooms
             => _session != null ? _session.Rooms : System.Array.Empty<Ironfront.MasterClient.RoomInfo>();
 
+        /// <summary>What the game-server host can still take, from the last refresh, or null.</summary>
+        public Ironfront.MasterClient.RoomCapacity? Capacity => _session != null ? _session.Capacity : null;
+
         /// <summary>Round trip to the MASTER on the last refresh, or -1. P16 3.2.</summary>
         public int MasterPingMs => _session != null ? _session.MasterPingMs : -1;
 
@@ -487,6 +490,15 @@ namespace Ironfront.Net.Unity.Client.Menu
             Submit(_session.RefreshRoomsAsync());
         }
 
+        /// <summary>
+        /// Opens the create form, and re-lists the rooms so its bot ceiling is the host's NOW.
+        /// </summary>
+        /// <remarks>
+        /// The ceiling comes with the room list (protocol 13), which is as old as the browser's
+        /// last refresh; another player may have made a 100-bot room since. The create is checked
+        /// by the master either way, but a form that offers what it will then refuse is the thing
+        /// the slider's limit exists to prevent.
+        /// </remarks>
         public void ShowCreateRoom()
         {
             if (_flow == null || _flow.State != GameFlowState.RoomBrowser) return;
@@ -494,6 +506,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearError();
             _createRequested = true;
             _dirty = true;
+            if (_session != null) Submit(_session.RefreshRoomsAsync());
         }
 
         public void HideCreateRoom()

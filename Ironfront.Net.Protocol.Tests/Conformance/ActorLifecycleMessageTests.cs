@@ -303,7 +303,9 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //       remain untouched even though peers must reject the behavioral mismatch.
             //   v12 C_CHAT and S_CHAT gained a u8 channel (team chat, § 4.12). Chat is not an
             //       actor lifecycle message, so these three layouts are still untouched.
-            Assert.Equal(12, ProtocolConstants.PROTOCOL_VERSION);
+            //   v13 MAX_ACTORS 64 -> 128 for 100-bot matches (§ 1, § 15). The actor id was
+            //       already a u16 in all three layouts; only the range of ids in use widened.
+            Assert.Equal(13, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

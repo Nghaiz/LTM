@@ -83,6 +83,82 @@ namespace Ironfront.MasterClient
 
         /// <summary>The side a rejoin puts this player on. Meaningless unless <see cref="CanRejoin"/>.</summary>
         public byte RejoinTeam { get; set; }
+
+        /// <summary>
+        /// Bots in the room's match, both sides together (protocol 13). A master older than the
+        /// field leaves it 0.
+        /// </summary>
+        public byte BotCount { get; set; }
+    }
+
+    /// <summary>
+    /// What the game-server host can still take, as the master answered it with the room list
+    /// (protocol 13).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The master decides; this only shows it.</b> Every room costs the host a fixed share
+    /// (<see cref="MatchCostUnits"/>) plus one unit per bot, out of <see cref="BudgetUnits"/>, and
+    /// <c>ROOM_CREATE_REQ</c> is checked against the same numbers, so a form that is one refresh
+    /// stale can only ever be refused (<c>ServerAtBotCapacity</c>), never exceed the host.
+    /// </para>
+    /// <para>
+    /// The units are the master's bookkeeping. A player is shown bots and a load percentage, not
+    /// units: <c>RoomBotChoice</c> turns these into words.
+    /// </para>
+    /// </remarks>
+    public sealed class RoomCapacity
+    {
+        /// <summary>The most bots a room created now may have: even, 0 to <see cref="MaxBotsPerMatch"/>.</summary>
+        public int MaxBotsForNewRoom { get; set; }
+
+        /// <summary>
+        /// Whether another room fits at all. False means the create would be refused whatever its
+        /// bot count; <see cref="MaxBotsForNewRoom"/> 0 with this true means "a room, but no bots".
+        /// </summary>
+        public bool CanCreateRoom { get; set; }
+
+        /// <summary>The protocol's ceiling for one match, <c>ProtocolConstants.MAX_BOTS</c>.</summary>
+        public int MaxBotsPerMatch { get; set; }
+
+        /// <summary>Rooms that exist on the master, in any state.</summary>
+        public int RoomsOpen { get; set; }
+
+        /// <summary>Bots those rooms have, together.</summary>
+        public int BotsInPlay { get; set; }
+
+        /// <summary>What the host carries in all, in the master's units.</summary>
+        public int BudgetUnits { get; set; }
+
+        /// <summary>What the rooms that exist already take, in the master's units.</summary>
+        public int UnitsInUse { get; set; }
+
+        /// <summary>What one room costs before its first bot, in the master's units.</summary>
+        public int MatchCostUnits { get; set; }
+
+        /// <summary>For every map a healthy game server plays: its servers, and how many are free.</summary>
+        public MapAvailability[] Maps { get; set; } = Array.Empty<MapAvailability>();
+    }
+
+    /// <summary>One map's game servers, as <see cref="RoomCapacity.Maps"/> lists them.</summary>
+    public sealed class MapAvailability
+    {
+        public ushort MapId { get; set; }
+
+        /// <summary>Healthy game servers that play the map.</summary>
+        public int Servers { get; set; }
+
+        /// <summary>Those of them that hold no room.</summary>
+        public int Free { get; set; }
+    }
+
+    /// <summary>The room list together with the host's capacity. See <see cref="IMasterClient.GetRoomListAsync"/>.</summary>
+    public sealed class RoomList
+    {
+        public RoomInfo[] Rooms { get; set; } = Array.Empty<RoomInfo>();
+
+        /// <summary>Null from a master that predates protocol 13.</summary>
+        public RoomCapacity? Capacity { get; set; }
     }
     public sealed class CreateRoomRequest { public string Name { get; set; } = string.Empty; public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? PasswordHash { get; set; } }
     public readonly struct CreateRoomResult { public CreateRoomResult(bool ok, int roomId, int errorCode) { Ok = ok; RoomId = roomId; ErrorCode = errorCode; } public bool Ok { get; } public int RoomId { get; } public int ErrorCode { get; } }
@@ -112,6 +188,15 @@ namespace Ironfront.MasterClient
         /// </remarks>
         public Ironfront.Net.Protocol.RoomLifecycleState Lifecycle
             => (Ironfront.Net.Protocol.RoomLifecycleState)State;
+
+        /// <summary>The room's map (protocol 13). 0 from an older master.</summary>
+        public ushort MapId { get; set; }
+
+        /// <summary>Bots in the room's match, both sides together (protocol 13). 0 from an older master.</summary>
+        public byte BotCount { get; set; }
+
+        /// <summary>The room's seats (protocol 13). 0 from an older master.</summary>
+        public byte MaxPlayers { get; set; }
     }
     public sealed class ChatMessage { public byte Channel { get; set; } public int FromPlayerId { get; set; } public string FromName { get; set; } = string.Empty; public string Text { get; set; } = string.Empty; public long Timestamp { get; set; } }
 
@@ -127,6 +212,12 @@ namespace Ironfront.MasterClient
         Task<LoginResult> LoginAsync(string username, string passwordHash, CancellationToken ct = default);
         Task<RegisterResult> RegisterAsync(string username, string passwordHash, string displayName, CancellationToken ct = default);
         Task<RoomInfo[]> GetRoomsAsync(CancellationToken ct = default);
+
+        /// <summary>
+        /// The same request as <see cref="GetRoomsAsync"/>, answered with the host's capacity as
+        /// well: what the create-room form may offer (protocol 13).
+        /// </summary>
+        Task<RoomList> GetRoomListAsync(CancellationToken ct = default);
         Task<CreateRoomResult> CreateRoomAsync(CreateRoomRequest request, CancellationToken ct = default);
         Task<JoinResult> JoinRoomAsync(int roomId, string? passwordHash, CancellationToken ct = default);
         Task LeaveRoomAsync(CancellationToken ct = default);

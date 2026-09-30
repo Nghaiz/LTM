@@ -448,6 +448,26 @@ namespace Ironfront.Net.Configuration
             "5",
             summary: "login attempts per source IP; raise it on a test rig");
 
+        /// <summary>What the game servers can carry, in bot units. See <see cref="MatchCostUnits"/>.</summary>
+        public static readonly EnvVar BotBudgetUnits = new EnvVar(
+            "IRONFRONT_MASTER_BOT_BUDGET", "Limits", "master server",
+            "How many bots the game-server host can carry across every room at once, in units: a\n" +
+            "room costs IRONFRONT_MASTER_MATCH_COST plus one unit per bot. The create-room form\n" +
+            "offers what is left, and the master refuses a room that would pass it. 300 with a\n" +
+            "match cost of 50 is the Azure B2as_v2 measured on 2026-09-29/30: two matches of 100\n" +
+            "bots, or three of 50. Raise both with a bigger host.",
+            "300",
+            summary: "bot units the game-server host carries; see MATCH_COST");
+
+        /// <summary>What one match costs before its bots, in bot units.</summary>
+        public static readonly EnvVar MatchCostUnits = new EnvVar(
+            "IRONFRONT_MASTER_MATCH_COST", "Limits", "master server",
+            "What one room's match costs the host before its bots, in bot units: its players,\n" +
+            "its vehicles, the simulation itself. 50 makes 2 x 100 bots and 3 x 50 bots cost the\n" +
+            "same, which is what the capacity bench measured.",
+            "50",
+            summary: "a match's cost before its bots, in bot units");
+
         // ---- Diagnostics ---------------------------------------------------------------
 
         /// <summary>Packet capture path.</summary>
@@ -543,6 +563,7 @@ namespace Ironfront.Net.Configuration
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,
             MaxConnectionsPerIp, MaxTotalConnections, LoginRatePerMinute,
+            BotBudgetUnits, MatchCostUnits,
             PacketCapturePath, Simulator, SimulatorSeed,
             InstallRoot, RemoteRoot, BackupDir, BackupRetentionDays,
             AlertWebhook, AlertErrorsPerMinute, AlertRssGrowthPercent, AlertStatePath,

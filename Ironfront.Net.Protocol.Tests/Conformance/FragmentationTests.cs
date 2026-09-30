@@ -50,26 +50,28 @@ namespace Ironfront.Net.Protocol.Tests
         {
             byte[] snapshot = BuildFullSnapshot();
 
-            // 13 header + 64 actors * 23 bytes = 1485, over the 1184-byte payload limit.
-            Assert.Equal(13 + 64 * 23, snapshot.Length);
-            Assert.Equal(1485, snapshot.Length);
+            // 13 header + 128 actors * 23 bytes = 2957, over the 1184-byte payload limit. It was
+            // 64 actors and 1485 bytes until protocol 13 (100-bot matches).
+            Assert.Equal(13 + 128 * 23, snapshot.Length);
+            Assert.Equal(2957, snapshot.Length);
             Assert.True(Fragmenter.NeedsFragmentation(snapshot.Length));
 
-            // The same 64 actors with a seat each — the worst case a join baseline can be,
-            // and still two fragments rather than three.
+            // The same 128 actors with a seat each — the worst case a join baseline can be,
+            // and still three fragments, far inside MAX_FRAGMENTS.
             int seated = SnapshotHeader.Size
                        + ProtocolConstants.MAX_ACTORS * SnapshotMessage.EntrySize(SnapshotField.Full);
-            Assert.Equal(1677, seated);
+            Assert.Equal(3341, seated);
             Assert.True(Fragmenter.NeedsFragmentation(seated));
+            Assert.Equal(3, Fragmenter.FragmentCount(seated));
         }
 
         [Fact]
-        public void AFullSnapshotSplitsIntoTwoFragments()
+        public void AFullSnapshotSplitsIntoThreeFragments()
         {
             byte[] snapshot = BuildFullSnapshot();
 
             Assert.Equal(1180, FragmentHeader.PayloadCapacity);
-            Assert.Equal(2, Fragmenter.FragmentCount(snapshot.Length));
+            Assert.Equal(3, Fragmenter.FragmentCount(snapshot.Length));
         }
 
         /// <summary>The checklist item itself: split, reassemble, compare bit-for-bit.</summary>

@@ -84,12 +84,13 @@ namespace Ironfront.MasterServer.Lobby
                 List<QueueEntry> entries = group.Value;
                 if (entries.Count < MinimumPlayers) continue;
                 ushort mapId = group.Key == 0 ? SelectRelaxedMap(entries) : group.Key;
-                // Nobody chose a bot count for a matchmade room, so it gets the design roster --
-                // the number it has always actually had, before a room's count reached a game
-                // server at all.
+                // Nobody chose a bot count for a matchmade room, so it gets the room default,
+                // as much of it as the game-server host has left. A host with no room for another
+                // match refuses the create below, and the group simply waits for the next tick.
+                int bots = Math.Min(ProtocolConstants.DEFAULT_ROOM_BOTS, _lobby.MaxBotsForNewRoom());
                 ServiceResult created = _lobby.CreateRoom(entries[0].Session,
                     new RoomCreateRequest("Matchmaking", mapId, ProtocolConstants.MAX_PLAYERS,
-                        ProtocolConstants.DEFAULT_BOTS_PER_TEAM, false, null));
+                        (byte)bots, false, null));
                 if (!created.Ok || created.Room is null) continue;
 
                 _queued.Remove(entries[0].Session.PlayerId);

@@ -234,15 +234,15 @@ namespace Ironfront.Net.Replication.Tests
         /// Appending <c>RejectedLockedOut</c> did not move a byte: <c>S_SEAT_CHANGE</c> is still 6
         /// bytes and <c>result</c> is still a <c>u8</c>, which is why
         /// the protocol version did not move <em>for this enum append</em>. The current version
-        /// is 12: weapon-state bit 1 later gained pending-release semantics (11), and the chat
-        /// bodies gained a channel byte (12).
+        /// is 13: weapon-state bit 1 later gained pending-release semantics (11), the chat
+        /// bodies gained a channel byte (12), and actor ids reach 127 for 100-bot matches (13).
         /// </summary>
         [Fact]
         public void TheNewRefusalCodeDidNotChangeTheMessageWidth()
         {
             Assert.Equal(6, SeatChangeMessage.Size);
             Assert.Equal(7, (byte)SeatChangeResult.RejectedLockedOut);
-            Assert.Equal(12, ProtocolConstants.PROTOCOL_VERSION);
+            Assert.Equal(13, ProtocolConstants.PROTOCOL_VERSION);
         }
 
         // ---------------------------------------------------------------- budget split

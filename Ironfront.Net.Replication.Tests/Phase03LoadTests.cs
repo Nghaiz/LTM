@@ -18,8 +18,8 @@ namespace Ironfront.Net.Replication.Tests
     public sealed class Phase03LoadTests
     {
         private const int Humans = ProtocolConstants.MAX_PLAYERS;   // 16
-        private const int Bots = ProtocolConstants.MAX_BOTS;        // 32
-        private const int Actors = Humans + Bots;                   // 48
+        private const int Bots = ProtocolConstants.MAX_BOTS;        // 100 since protocol 13 (was 32)
+        private const int Actors = Humans + Bots;                   // 116
         private const int MeasuredSeconds = 30;
 
         /// <summary>Dustbowl's measured playable extent (protocol-spec.md section 4.4).</summary>

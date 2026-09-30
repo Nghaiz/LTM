@@ -50,8 +50,9 @@ namespace Ironfront.Net.Replication.Match
     /// <see cref="BotRosterSize.Reason"/> names which case it was.
     /// </para>
     /// <para>
-    /// <b>Per team, both teams alike</b> (owner ruling, 2026-09-28): the field is "bots per
-    /// team", so a room asking for N gets N on each side.
+    /// <b>Per team, both teams alike.</b> The room's count is the match's total since protocol
+    /// 13 (owner, 2026-09-30: a 0-100 slider), and the master pushes half of it, so a room of N
+    /// bots gets N/2 on each side.
     /// </para>
     /// </remarks>
     public sealed class RoomBotPlan

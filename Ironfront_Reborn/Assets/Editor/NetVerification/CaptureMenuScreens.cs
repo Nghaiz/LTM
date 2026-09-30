@@ -40,7 +40,9 @@ namespace Ironfront.Net.Unity.EditorTools
                 Capture("Rooms", panel => FillRoomBrowser(panel, 0, 4), "rooms.png"),
                 Capture("Rooms", panel => FillRoomBrowser(panel, 1, 4), "rooms-rejoin.png"),
                 Capture("Rooms", panel => FillRoomBrowser(panel, 3, 9), "rooms-rejoin-overflow.png"),
-                Capture("Create Room", null, "create-room.png"),
+                Capture("Create Room", panel => FillCreateRoom(panel, Capacity(100, true, 0, 0, 0), 50, 2), "create-room.png"),
+                Capture("Create Room", panel => FillCreateRoom(panel, Capacity(52, true, 3, 48, 198), 64, 1), "create-room-limited.png"),
+                Capture("Create Room", panel => FillCreateRoom(panel, Capacity(0, false, 2, 200, 300), 0, 2), "create-room-full.png"),
             };
             return string.Join(", ", written);
         }
@@ -163,7 +165,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 rooms.Add(new RoomInfo
                 {
                     RoomId = 1 + i, Name = names[i % names.Length], MapId = (ushort)(1 + (i % 2)),
-                    Players = 1 + (i % 5), MaxPlayers = 16,
+                    Players = 1 + (i % 5), MaxPlayers = 16, BotCount = (byte)(i % 3 == 0 ? 100 : i % 3 == 1 ? 32 : 0),
                     State = (byte)(i == 3 ? Ironfront.Net.Protocol.RoomLifecycleState.Starting : Ironfront.Net.Protocol.RoomLifecycleState.Waiting),
                     IsPrivate = i == 1,
                 });
@@ -171,5 +173,51 @@ namespace Ironfront.Net.Unity.EditorTools
 
             panel.GetComponent<MenuRoomBrowserScreen>().Draw(mine.ToArray(), rooms.ToArray(), busy: false);
         }
+
+        /// <summary>
+        /// The create form as the servers' <paramref name="capacity"/> would draw it, with the slider
+        /// asked for <paramref name="bots"/> (and held under the ceiling, as it is in the game).
+        /// </summary>
+        private static void FillCreateRoom(GameObject panel, RoomCapacity capacity, int bots, ushort mapId)
+        {
+            string mapName = mapId == 2 ? "Island" : "Dustbowl";
+
+            MenuBotSlider slider = panel.GetComponentInChildren<MenuBotSlider>(true);
+            slider.SetCapacity(capacity);
+            slider.Select(bots);
+
+            panel.GetComponentInChildren<MenuHostCapacityCard>(true).Show(capacity, slider.Value, mapId, mapName);
+
+            // Awake does not run on an edit-mode copy, so the fields the screen fills itself are
+            // written here with the same words.
+            foreach (Text text in panel.GetComponentsInChildren<Text>(true))
+            {
+                if (text.name == "PreviewTitle") text.text = mapName;
+                if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat0") text.text = "8";
+                if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat1") text.text = RoomBotChoice.Preview(slider.Value);
+                if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat2") text.text = "PUBLIC";
+            }
+
+            Dropdown map = panel.GetComponentInChildren<Dropdown>(true);
+            if (map != null && map.captionText != null) map.captionText.text = mapName;
+        }
+
+        private static RoomCapacity Capacity(int maxBots, bool canCreate, int roomsOpen, int botsInPlay, int unitsInUse)
+            => new RoomCapacity
+            {
+                MaxBotsForNewRoom = maxBots,
+                CanCreateRoom = canCreate,
+                MaxBotsPerMatch = Ironfront.Net.Protocol.ProtocolConstants.MAX_BOTS,
+                RoomsOpen = roomsOpen,
+                BotsInPlay = botsInPlay,
+                BudgetUnits = 300,
+                UnitsInUse = unitsInUse,
+                MatchCostUnits = 50,
+                Maps = new[]
+                {
+                    new MapAvailability { MapId = 1, Servers = 1, Free = roomsOpen >= 1 ? 0 : 1 },
+                    new MapAvailability { MapId = 2, Servers = 1, Free = roomsOpen >= 2 ? 0 : 1 },
+                },
+            };
     }
 }

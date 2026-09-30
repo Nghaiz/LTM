@@ -323,8 +323,12 @@ namespace Ironfront.Tools.ClientWiringGate
                 ("_maxPlayersField",
                  "the seat count reads as empty, so criterion 8's even-number check has no "
                  + "input to refuse and no screenshot to be graded on"),
-                ("_botCountField",
-                 "the bot count is always the default, so the field silently is not one"),
+                ("_botSlider",
+                 "the bot count is always the default and the servers' ceiling is never shown, "
+                 + "so a room over it is learnt only from the master's refusal"),
+                ("_capacityCard",
+                 "the servers' load and the chosen map's server go unshown, so a full host or a "
+                 + "busy map reads as a working form"),
                 ("_privateToggle",
                  "no room can be made private, so criterion 7 has no private room to join"),
                 ("_passwordField",
@@ -387,6 +391,46 @@ namespace Ironfront.Tools.ClientWiringGate
                  "nothing can be typed, so criterion 6 has no message to send"),
                 ("_chatSendButton",
                  "no listener is added, so lobby chat cannot be sent at all")),
+
+            // Protocol 13: the create form's bots are a slider bounded by the servers' capacity.
+            new Screen(
+                "MenuBotSlider", "Scripts/Net/Client/Menu/MenuBotSlider.cs",
+                ("_slider",
+                 "the track cannot be dragged, so every room is made with the default count"),
+                ("_fill",
+                 "the track shows no fill, so the chosen count is read only off the number"),
+                ("_handle",
+                 "the handle is uncoloured and unbound, so the drag point is invisible"),
+                ("_capZone",
+                 "the counts past the servers' ceiling are not shaded, so the limit is invisible "
+                 + "until the handle stops at it"),
+                ("_capMarker",
+                 "the ceiling has no marker on the track"),
+                ("_valueText",
+                 "the chosen total is never written, so the player drags blind"),
+                ("_perSideText",
+                 "how the total splits between the sides is never said"),
+                ("_tierChip",
+                 "the tier chip keeps its authored colour whatever the count"),
+                ("_tierText",
+                 "the tier name never changes, so SKIRMISH reads the same as TOTAL WAR"),
+                ("_ceilingText",
+                 "what the servers can still take is never said, which is the one thing the "
+                 + "owner asked this form to show")),
+
+            new Screen(
+                "MenuHostCapacityCard", "Scripts/Net/Client/Menu/MenuHostCapacityCard.cs",
+                ("_loadNow",
+                 "the load bar never moves, so a busy host looks idle"),
+                ("_loadThisRoom",
+                 "what this room would add to the host is never drawn"),
+                ("_loadText",
+                 "the load is never put into words"),
+                ("_inPlayText",
+                 "the rooms and bots already running go unsaid"),
+                ("_mapText",
+                 "a map whose server is busy reads as ready, and the room made on it waits with "
+                 + "no explanation")),
         };
 
         /// <summary>

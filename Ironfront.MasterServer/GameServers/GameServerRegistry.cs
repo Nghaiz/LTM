@@ -148,6 +148,35 @@ namespace Ironfront.MasterServer.GameServers
             return healthy;
         }
 
+        /// <summary>
+        /// For every map a healthy server plays: how many such servers there are, and how many of
+        /// them hold no room. What the create-room form shows beside the map it offers.
+        /// </summary>
+        /// <remarks>
+        /// A server playing two maps is counted under both, because either could be allocated to
+        /// it; that is the question the form is asking.
+        /// </remarks>
+        public List<(ushort MapId, int Servers, int Free)> MapAvailability(long now)
+        {
+            var byMap = new SortedDictionary<ushort, (int Servers, int Free)>();
+            foreach (GameServerRecord server in _servers.Values)
+            {
+                if (!server.IsHealthy(now)) continue;
+                foreach (ushort mapId in server.MapIds)
+                {
+                    byMap.TryGetValue(mapId, out (int Servers, int Free) counts);
+                    counts.Servers++;
+                    if (server.AssignedRoomId == 0) counts.Free++;
+                    byMap[mapId] = counts;
+                }
+            }
+
+            var result = new List<(ushort, int, int)>(byMap.Count);
+            foreach (KeyValuePair<ushort, (int Servers, int Free)> map in byMap)
+                result.Add((map.Key, map.Value.Servers, map.Value.Free));
+            return result;
+        }
+
         /// <summary>Servers currently holding a room.</summary>
         public int CountAllocated()
         {

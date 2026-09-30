@@ -95,8 +95,8 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Theory]
-        [InlineData(17, 16)]
-        [InlineData(255, 16)]
+        [InlineData(51, 50)]
+        [InlineData(255, 50)]
         [InlineData(-3, 0)]
         public void AnOutOfRangeCountIsClampedAndTheReasonSaysSo(int requested, int released)
         {

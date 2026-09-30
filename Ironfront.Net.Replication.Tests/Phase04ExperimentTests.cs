@@ -24,7 +24,11 @@ namespace Ironfront.Net.Replication.Tests
     public sealed class Phase04ExperimentTests
     {
         private const int Humans = ProtocolConstants.MAX_PLAYERS;   // 16
-        private const int Bots = ProtocolConstants.MAX_BOTS;        // 32
+
+        // The roster the phase-04 report was measured at: MAX_BOTS until protocol 13 raised it
+        // to 100. Pinned rather than read from the constant, because every table below restates
+        // a measurement, and the experimental codec's buffers were sized for that world.
+        private const int Bots = 32;
         private const int Actors = Humans + Bots;                   // 48
         private const int MeasuredSeconds = 300;                    // the 5 minutes task 1 asks for
         private const float MapSpread = 1700f;                      // Dustbowl
