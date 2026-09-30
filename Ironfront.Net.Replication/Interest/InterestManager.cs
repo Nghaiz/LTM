@@ -505,68 +505,140 @@ namespace Ironfront.Net.Replication.Interest
             Emit(viewerActorId, world, viewerIndex, InterestLevel.Near, snapshotIndex,
                  destination, ref remaining);
 
-            int cursor = session?.ShedCursor ?? 0;
+            var near = new BucketPass(session?.ShedCursor ?? 0, _nearCount);
+            var mid = new BucketPass(session?.MidShedCursor ?? 0, _midCount);
+            var far = new BucketPass(session?.FarShedCursor ?? 0, _farCount);
 
-            int admitted = EmitBucket(
-                viewerActorId, world, _nearBucket, _nearCount, InterestLevel.Near,
-                snapshotIndex, destination, cursor, ref remaining);
+            // A crowd inside NearRadius must not take EVERY slot. Near first is the rule (D6),
+            // and it used to be absolute: once the Near bucket alone filled the budget, the Mid
+            // and Far buckets were shed whole on every snapshot, for as long as the crowd stood
+            // there. With 100 bots on Island that is the ordinary case at a base or a contested
+            // flag, and every body further out froze where it was last sent, legs still running
+            // (live test 2026-09-30). So when Near would fill the budget on its own, each lower
+            // level is first given a small floor of slots, and Near takes everything after.
+            if (byteBudget > 0)
+            {
+                int slots = remaining / MaxEntrySize;
+                if (_nearCount >= slots)
+                {
+                    int floor = Math.Max(1, slots / LowerLevelFloorDivisor);
+                    EmitFloor(viewerActorId, world, _midBucket, InterestLevel.Mid, snapshotIndex,
+                              destination, ref mid, _midCount > 0 ? floor : 0, ref remaining);
+                    EmitFloor(viewerActorId, world, _farBucket, InterestLevel.Far, snapshotIndex,
+                              destination, ref far, _farCount > 0 ? floor : 0, ref remaining);
+                }
+            }
 
-            admitted += EmitBucket(
-                viewerActorId, world, _midBucket, _midCount, InterestLevel.Mid,
-                snapshotIndex, destination, cursor, ref remaining);
+            EmitBucket(viewerActorId, world, _nearBucket, InterestLevel.Near,
+                       snapshotIndex, destination, ref near, ref remaining);
+            EmitBucket(viewerActorId, world, _midBucket, InterestLevel.Mid,
+                       snapshotIndex, destination, ref mid, ref remaining);
+            EmitBucket(viewerActorId, world, _farBucket, InterestLevel.Far,
+                       snapshotIndex, destination, ref far, ref remaining);
 
-            admitted += EmitBucket(
-                viewerActorId, world, _farBucket, _farCount, InterestLevel.Far,
-                snapshotIndex, destination, cursor, ref remaining);
+            // Whatever a bucket never reached was shed.
+            int shed = near.Unreached + mid.Unreached + far.Unreached;
+            LastViewShedCount = shed;
+            EntriesShed += shed;
 
-            // The cursor only moves when something was actually shed, and it moves by however
-            // many actors got through. That slides the admission window forward each snapshot,
-            // so the actors that lost this round are at the front of the next one — which is
-            // what turns "some actors are dropped" into "every actor arrives within a bounded
-            // number of snapshots" (D6). Advancing unconditionally would rotate a view that
-            // fits comfortably, re-ordering entries for no reason.
-            if (session != null && LastViewShedCount > 0)
-                session.ShedCursor = cursor + (admitted > 0 ? admitted : 1);
+            // Each bucket's cursor only moves when that bucket shed something, and it moves past
+            // everything it reached. That slides the admission window forward each snapshot, so
+            // the actors that lost this round are at the front of the next one — which is what
+            // turns "some actors are dropped" into "every actor arrives within a bounded number
+            // of snapshots" (D6). One cursor per bucket, not one for all three: a shared cursor
+            // advanced by the total admitted rotates each bucket by an unrelated amount, and a
+            // step that divides a bucket's size admits the same few actors every time.
+            if (session != null)
+            {
+                if (near.Unreached > 0) session.ShedCursor = near.NextCursor;
+                if (mid.Unreached > 0) session.MidShedCursor = mid.NextCursor;
+                if (far.Unreached > 0) session.FarShedCursor = far.NextCursor;
+            }
 
             return true;
         }
 
         /// <summary>
-        /// Emits one bucket, starting <paramref name="cursor"/> entries in and wrapping.
+        /// The share of a full budget each lower level is guaranteed when the Near bucket alone
+        /// would take all of it: one slot in eight each, so Near keeps three quarters.
         /// </summary>
-        /// <returns>How many actors were admitted.</returns>
-        private int EmitBucket(
-            ushort viewerActorId, WorldSnapshot world, int[] bucket, int count,
-            InterestLevel level, uint snapshotIndex, WorldSnapshot destination,
-            int cursor, ref int remaining)
+        /// <remarks>
+        /// At the 44-entry budget that is five slots each for Mid and Far. Far actors are due one
+        /// snapshot in five, so five slots refresh twenty-five of them a second -- every Far body
+        /// a 100-bot room can hold arrives within about half a second, instead of never.
+        /// </remarks>
+        public const int LowerLevelFloorDivisor = 8;
+
+        /// <summary>
+        /// One bucket's progress through its rotation in the current snapshot. A bucket can be
+        /// visited twice (its floor, then whatever Near leaves), so the position is carried.
+        /// </summary>
+        private struct BucketPass
         {
-            if (count == 0) return 0;
-
-            int start = ((cursor % count) + count) % count;   // negative-safe
-            int admitted = 0;
-
-            for (int k = 0; k < count; k++)
+            public BucketPass(int cursor, int count)
             {
-                int index = bucket[(start + k) % count];
+                Count = count;
+                Start = count > 0 ? ((cursor % count) + count) % count : 0;   // negative-safe
+                Reached = 0;
+            }
 
+            public int Count { get; }
+
+            public int Start { get; }
+
+            /// <summary>Entries taken off the rotation this snapshot: sent, or not yet due.</summary>
+            public int Reached { get; set; }
+
+            public int Unreached => Count - Reached;
+
+            public int NextCursor => Start + (Reached > 0 ? Reached : 1);
+        }
+
+        /// <summary>
+        /// Emits a bucket from where its rotation stands, wrapping, until it is done or the
+        /// budget runs out.
+        /// </summary>
+        private void EmitBucket(
+            ushort viewerActorId, WorldSnapshot world, int[] bucket,
+            InterestLevel level, uint snapshotIndex, WorldSnapshot destination,
+            ref BucketPass pass, ref int remaining)
+        {
+            while (pass.Reached < pass.Count)
+            {
                 // Budget checked BEFORE due-ness, and that ordering is the anti-starvation
                 // property. Asking ShouldSend first would record a send for an actor that is
                 // then shed, so it would wait a further full period on top of losing this
                 // round. Every entry costs the same worst-case width, so once one does not fit
-                // none will — everything left in this bucket, and in every lower one, is shed.
-                if (remaining < MaxEntrySize)
-                {
-                    LastViewShedCount += count - k;
-                    EntriesShed += count - k;
-                    return admitted;
-                }
+                // none will — everything this bucket has not reached is shed.
+                if (remaining < MaxEntrySize) return;
 
-                if (Emit(viewerActorId, world, index, level, snapshotIndex, destination,
-                         ref remaining))
-                    admitted++;
+                int index = bucket[(pass.Start + pass.Reached) % pass.Count];
+                pass.Reached++;
+
+                Emit(viewerActorId, world, index, level, snapshotIndex, destination, ref remaining);
             }
+        }
 
-            return admitted;
+        /// <summary>
+        /// Emits up to <paramref name="slots"/> actors of a lower level ahead of Near. See the
+        /// floor in <c>BuildViewCore</c>.
+        /// </summary>
+        /// <remarks>
+        /// Only an actor actually SENT uses a slot: one that is not due yet is passed over free,
+        /// exactly as in <see cref="EmitBucket"/>, so the floor buys refreshes rather than turns.
+        /// </remarks>
+        private void EmitFloor(
+            ushort viewerActorId, WorldSnapshot world, int[] bucket,
+            InterestLevel level, uint snapshotIndex, WorldSnapshot destination,
+            ref BucketPass pass, int slots, ref int remaining)
+        {
+            if (slots <= 0) return;
+
+            int floorBudget = Math.Min(remaining, slots * MaxEntrySize);
+            int before = floorBudget;
+            EmitBucket(viewerActorId, world, bucket, level, snapshotIndex, destination,
+                       ref pass, ref floorBudget);
+            remaining -= before - floorBudget;
         }
 
         /// <summary>Whether <paramref name="target"/> fights on <paramref name="viewer"/>'s side.</summary>

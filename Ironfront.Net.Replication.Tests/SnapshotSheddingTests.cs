@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Interest;
@@ -167,6 +168,77 @@ namespace Ironfront.Net.Replication.Tests
                     $"near actor {100 + i} was shed while distant actors survived");
         }
 
+        /// <summary>
+        /// A crowd inside NearRadius does not starve everything further out. Live test 2026-09-30.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Near first used to be absolute: once the Near bucket alone filled the 44-entry budget,
+        /// the Mid and Far buckets were shed whole on EVERY snapshot. With 100 bots on Island that
+        /// is the ordinary case at a base or a contested flag, and the owner watched bots further
+        /// out freeze where they were last sent, legs still running.
+        /// </para>
+        /// <para>
+        /// Sixty bodies within 20 m of the viewer, twenty at 80 m (Mid) and twenty enemies at
+        /// 300 m (Far; enemies, so the teammate floor does not lift them to Mid). Over three
+        /// seconds every one of them must be refreshed, a Far body within a second of the last
+        /// time, and the crowd must still keep most of the budget.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void ACrowdWithinNearRangeDoesNotStarveTheActorsFurtherOut()
+        {
+            var interest = new InterestManager();
+            var session = new ClientSession(connectionId: 1, actorId: Viewer);
+            var view = new WorldSnapshot();
+
+            var world = new WorldSnapshot { ServerTick = 1 };
+            world.Add(Actor(Viewer, Vec3.Zero));
+            for (int i = 0; i < 60; i++)
+                world.Add(Actor((ushort)(100 + i), new Vec3(i % 10 * 2f, 0f, i / 10 * 2f)));
+            for (int i = 0; i < 20; i++)
+                world.Add(Actor((ushort)(200 + i), new Vec3(80f, 0f, i * 2f)));
+            for (int i = 0; i < 20; i++)
+                world.Add(Actor((ushort)(300 + i), new Vec3(-300f, 0f, i * 5f), team: 1));
+
+            const uint Snapshots = 60;   // three seconds at 20 Hz
+            var lastSent = new Dictionary<ushort, uint>();
+            var worstGap = new Dictionary<ushort, uint>();
+
+            for (uint snapshot = 1; snapshot <= Snapshots; snapshot++)
+            {
+                interest.BeginSnapshot();
+                interest.BuildView(session, world, snapshot, view, null, Budget);
+
+                for (int i = 0; i < view.ActorCount; i++)
+                {
+                    ushort id = view.Actors[i].ActorId;
+                    uint gap = snapshot - (lastSent.TryGetValue(id, out uint previous) ? previous : 0u);
+                    if (!worstGap.TryGetValue(id, out uint worst) || gap > worst) worstGap[id] = gap;
+                    lastSent[id] = snapshot;
+                }
+            }
+
+            // The tail counts too: a body sent early and never again is starved, not refreshed.
+            uint GapOf(ushort id) => Math.Max(worstGap[id], Snapshots + 1 - lastSent[id]);
+
+            for (int i = 0; i < 20; i++)
+            {
+                var midId = (ushort)(200 + i);
+                var farId = (ushort)(300 + i);
+                Assert.True(lastSent.ContainsKey(midId), $"Mid actor {midId} was never sent");
+                Assert.True(lastSent.ContainsKey(farId), $"Far actor {farId} was never sent");
+                Assert.True(GapOf(midId) <= 10, $"Mid actor {midId} went {GapOf(midId)} snapshots unsent");
+                Assert.True(GapOf(farId) <= 20, $"Far actor {farId} went {GapOf(farId)} snapshots unsent");
+            }
+
+            for (int i = 0; i < 60; i++)
+            {
+                var nearId = (ushort)(100 + i);
+                Assert.True(GapOf(nearId) <= 3, $"Near actor {nearId} went {GapOf(nearId)} snapshots unsent");
+            }
+        }
+
         [Fact]
         public void AFortyEightActorWorldNowShedsDownToTheV10Ceiling()
         {
@@ -229,12 +301,12 @@ namespace Ironfront.Net.Replication.Tests
             return world;
         }
 
-        private static ActorSnapshotEntry Actor(ushort id, Vec3 position)
+        private static ActorSnapshotEntry Actor(ushort id, Vec3 position, byte team = 0)
         {
             ActorSnapshotEntry entry = SnapshotBuilder.Capture(
                 id, position, yawDegrees: 0f, pitchDegrees: 0f, velocity: Vec3.Zero,
                 stateFlags: ActorStateFlags.IsAlive, health: 100f, weaponId: 1, ammoInClip: 30,
-                team: 0);
+                team: team);
 
             return entry;
         }
