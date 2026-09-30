@@ -286,6 +286,12 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			base.transform.position = position;
 		}
+		// The movement clock starts again with the body. Update returns before stamping it while
+		// the actor is dead, so the first step after a respawn used to be as long as the time
+		// spent dead: measured on Forest Lake (P30), bots stepped 19.7-34.6 m in one update
+		// (dt 6.1-6.3 s) straight out of their spawn point, at spawn height, and into the hill
+		// beside it. The original game's SpawnAt has the same gap.
+		lastUpdate = Time.time;
 		SpawnLoadoutWeapons();
 		if (seat != null)
 		{
@@ -950,7 +956,15 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		Vector3 vector4 = rigidbody.position + vector * dt;
 		if (controller.ProjectToGround())
 		{
-			Ray ray = new Ray(vector4 + Vector3.up * 1.5f, Vector3.down);
+			// The probe starts 1.5 m above the new position's feet -- or above the terrain there,
+			// when the terrain is higher. A terrain collider stops what comes down onto it and
+			// nothing already underneath, so a probe that began inside a hillside passed straight
+			// through the surface it was looking for: a bot one long step up a steep slope (a 5 Hz
+			// low-quality update, or a slow frame) was put down on a rock buried under the hill, or
+			// fell through the world. Measured on Forest Lake (P30): 191 probes in one 900-second
+			// offline match began up to 5.9 m inside the terrain. It also lifts a body that is
+			// already under the terrain back onto it at its next step. See TerrainSurface for holes.
+			Ray ray = new Ray(Ironfront.Net.Unity.TerrainSurface.AtOrAbove(vector4) + Vector3.up * 1.5f, Vector3.down);
 			RaycastHit hitInfo;
 			if (Physics.SphereCast(ray, 0.3f, out hitInfo, 15f, 1))
 			{
@@ -1241,6 +1255,28 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			InstantGetUp();
 		}
+	}
+
+	/// <summary>
+	/// Gets a living bot whose ragdoll went through the terrain back up, standing on the terrain
+	/// where it fell over.
+	/// </summary>
+	/// <remarks>
+	/// Where it fell over can be under the terrain itself -- a step that ended inside a hillside
+	/// falls over right there -- and a body getting up under a lake bed reads as swimming, which
+	/// ragdolls it again in the same frame, for ever. So it is put on the surface first.
+	/// </remarks>
+	public void RecoverFromFallThroughTerrain()
+	{
+		if (dead || !fallenOver)
+		{
+			return;
+		}
+		if (autoMoveActor)
+		{
+			base.transform.position = Ironfront.Net.Unity.TerrainSurface.AtOrAbove(base.transform.position);
+		}
+		InstantGetUp();
 	}
 
 	private void Die(Vector3 impactForce)

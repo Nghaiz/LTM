@@ -1702,6 +1702,22 @@ public class AiActorController : ActorController
 		return acquireTargetOffset * (1f - Mathf.Pow(f, 2f));
 	}
 
+	/// <summary>
+	/// How far below the terrain surface a ragdoll must be before it has fallen through rather
+	/// than clipped it. A limb dipping under a slope for a frame is ordinary and comes back up on
+	/// its own; the pelvis three metres under the surface does not.
+	/// </summary>
+	private const float FallenThroughTerrainDepth = 3f;
+
+	/// <summary>
+	/// Whether this bot's ragdoll has gone through the terrain, where no amount of waiting lets it
+	/// settle. False where there is no terrain or it has a hole (<c>TerrainSurface</c>).
+	/// </summary>
+	private bool HasFallenThroughTerrain()
+	{
+		return Ironfront.Net.Unity.TerrainSurface.IsUnder(actor.Position(), FallenThroughTerrainDepth);
+	}
+
 	private void Update()
 	{
 		// Ahead of the dead check, not after it: a skipped tick must cost nothing at all.
@@ -1715,6 +1731,14 @@ public class AiActorController : ActorController
 		}
 		if (!actor.fallenOver)
 		{
+			ragdollAutokillAction.Start();
+		}
+		else if (HasFallenThroughTerrain())
+		{
+			// A ragdoll under the terrain never settles, so waiting out the 60 s below only
+			// keeps the bot out of the match -- falling, on a server, or dead for nothing
+			// offline, with a point to the enemy. It gets up on the terrain where it fell over.
+			actor.RecoverFromFallThroughTerrain();
 			ragdollAutokillAction.Start();
 		}
 		else if (ragdollAutokillAction.TrueDone())
