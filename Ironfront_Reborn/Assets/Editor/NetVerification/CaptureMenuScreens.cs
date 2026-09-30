@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using Ironfront.MasterClient;
+using Ironfront.Net.Configuration;
 using Ironfront.Net.Unity.Client.Menu;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -180,7 +181,13 @@ namespace Ironfront.Net.Unity.EditorTools
         /// </summary>
         private static void FillCreateRoom(GameObject panel, RoomCapacity capacity, int bots, ushort mapId)
         {
-            string mapName = mapId == 2 ? "Island" : "Dustbowl";
+            // The catalog's display name, as the screen's own dropdown labels it: an id check here
+            // called every map that is not Island "Dustbowl", Forest Lake included.
+            string mapName = $"map {mapId}";
+            foreach (MapCatalog.MapEntry entry in MapCatalog.All)
+            {
+                if (entry.Id == mapId) mapName = entry.DisplayName;
+            }
 
             MenuBotSlider slider = panel.GetComponentInChildren<MenuBotSlider>(true);
             slider.SetCapacity(capacity);
