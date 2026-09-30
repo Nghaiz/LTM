@@ -73,6 +73,9 @@ namespace Ironfront.Net.Unity.Client.Hud
         [Tooltip("Names the local team, blank until the first snapshot answers.")]
         [SerializeField] private Text _teamReadoutText;
 
+        [Tooltip("Optional. The chip the readout sits on, shown only while there is a team to name.")]
+        [SerializeField] private GameObject _teamReadoutRoot;
+
         [Header("Killfeed (3.3, rebuilt for feature 2)")]
         [Tooltip("The rows a kill is drawn in; the builder authors KillfeedRows of them. A row "
                  + "follows its kill as newer kills push it down, so these are not in screen order.")]
@@ -184,7 +187,7 @@ namespace Ironfront.Net.Unity.Client.Hud
                 // over the bot match is the X-48 failure one screen over.
                 if (_deployRoot != null) _deployRoot.SetActive(false);
                 if (_scoreboard != null) _scoreboard.HideImmediately();
-                if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
+                ClearTeamReadout();
                 ClearKillfeed();
 
                 enabled = false;
@@ -193,7 +196,7 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             if (_deployRoot != null) _deployRoot.SetActive(false);
             if (_scoreboard != null) _scoreboard.HideImmediately();
-            if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
+            ClearTeamReadout();
             ClearKillfeed();
         }
 
@@ -276,12 +279,23 @@ namespace Ironfront.Net.Unity.Client.Hud
                 // one would be a fabricated zero -- ScoreUi's own rule for a human count that
                 // has not arrived. This element exists to make a wrong team visible; it cannot,
                 // if the unknown state is drawn as a side.
-                _teamReadoutText.text = string.Empty;
+                ClearTeamReadout();
                 return;
             }
 
             _teamReadoutText.text = TeamLabel(team);
-            _teamReadoutText.color = TeamColour(team);
+            _teamReadoutText.color = TeamInk.FromRgb(NetClientBindings.TeamColourRgb(team));
+            if (_teamReadoutRoot != null) _teamReadoutRoot.SetActive(true);
+        }
+
+        /// <summary>
+        /// Blanks the readout, and puts its chip away with it: an empty chip would be a second
+        /// way of drawing the unknown state as something.
+        /// </summary>
+        private void ClearTeamReadout()
+        {
+            if (_teamReadoutText != null) _teamReadoutText.text = string.Empty;
+            if (_teamReadoutRoot != null) _teamReadoutRoot.SetActive(false);
         }
 
         /// <inheritdoc/>
@@ -547,28 +561,24 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// </summary>
         /// <remarks>
         /// A transform of <see cref="TeamColour"/>, not a second mapping: re-theming a side still
-        /// happens in one place.
+        /// happens in one place, and the lift is <see cref="HudStyle.TeamInk"/>'s.
         /// </remarks>
-        private static Color TextInk(int team) => Color.Lerp(TeamColour(team), Color.white, 0.2f);
+        private static Color TextInk(int team) => HudStyle.TeamInk(TeamColour(team));
+
 
         /// <summary>
-        /// The palette's answer for <paramref name="team"/>, as an engine colour.
+        /// The palette's answer for <paramref name="team"/>, as an engine colour: the world's
+        /// colour, unlifted.
         /// </summary>
         /// <remarks>
-        /// The unpack is <c>MenuRoomLobbyScreen.TeamColour</c>'s, and it is repeated rather than
-        /// shared because sharing it means a helper in <c>Net/Shared</c> that returns a
-        /// <c>UnityEngine.Color</c> -- which is exactly the widening <see cref="ITeamPalette"/>
-        /// refuses, for the alpha and colour-space reasons its own remark gives. Four lines of
-        /// shifting is the cheaper of the two.
+        /// The unpack is <see cref="TeamInk.Palette"/>'s, shared with the room lobby now that it
+        /// lives in this assembly rather than <c>Net/Shared</c>, where a helper returning a
+        /// <c>UnityEngine.Color</c> would be exactly the widening <see cref="ITeamPalette"/>
+        /// refuses. Unlifted on purpose: the killfeed, the nameplates and the Tab board read it
+        /// and apply their own lift (<see cref="TextInk"/>); only the team chip draws the menu's
+        /// stronger one.
         /// </remarks>
         private static Color TeamColour(int team)
-        {
-            int rgb = NetClientBindings.TeamColourRgb(team);
-
-            return new Color(
-                ((rgb >> 16) & 0xFF) / 255f,
-                ((rgb >> 8) & 0xFF) / 255f,
-                (rgb & 0xFF) / 255f);
-        }
+            => TeamInk.Palette(NetClientBindings.TeamColourRgb(team));
     }
 }

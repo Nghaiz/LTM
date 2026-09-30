@@ -25,15 +25,16 @@ namespace Ironfront.Net.Unity.Client
         public const float Lift = 0.45f;
 
         /// <summary>The type colour for a palette answer in <c>0xRRGGBB</c>.</summary>
-        public static Color FromRgb(int rgb)
-        {
-            var colour = new Color(
-                ((rgb >> 16) & 0xFF) / 255f,
-                ((rgb >> 8) & 0xFF) / 255f,
-                (rgb & 0xFF) / 255f);
+        public static Color FromRgb(int rgb) => Lifted(Palette(rgb), Lift);
 
-            return Lifted(colour, Lift);
-        }
+        /// <summary>
+        /// A palette answer in <c>0xRRGGBB</c> as an engine colour, unlifted: the world's colour.
+        /// The one unpack; the in-match HUD reads it and lifts it itself.
+        /// </summary>
+        public static Color Palette(int rgb) => new Color(
+            ((rgb >> 16) & 0xFF) / 255f,
+            ((rgb >> 8) & 0xFF) / 255f,
+            (rgb & 0xFF) / 255f);
 
         /// <summary>
         /// <paramref name="team"/> lifted <paramref name="lift"/> of the way to white. The one
