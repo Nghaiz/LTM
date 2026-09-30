@@ -2,9 +2,8 @@
 
 **Source:** the owner's message of 2026-09-30 (morning): finish every open item and everything still
 broken, and for the bot AI "tìm hiểu thêm các bài báo, paper, tìm các thuật toán tối ưu và hiện đại
-hơn trên mạng để áp dụng được cho dự án này". **Status:** parts 1-4 merged; part 5 (ship, and the bench
-the owner asked for on the new AI) in progress. One PR per part, each merged into `develop` before
-the next starts. Single-threaded, no subagents (owner rule).
+hơn trên mạng để áp dụng được cho dự án này". **Status:** done, parts 1-5 merged (#395-#404). One PR per
+part, each merged into `develop` before the next started. Single-threaded, no subagents (owner rule).
 
 ## What was open when the phase started
 
@@ -66,7 +65,20 @@ the next starts. Single-threaded, no subagents (owner rule).
    side); a run trained with flanks forced on reached only +0.13; flanking only defended flags
    recovered part of it (+0.31) and was not kept. The owner chose the best result: flanks off.
    Report: `plans/reports/2026-09-30-p29-commander-training.md`. **DONE, #397.**
-5. **Ship**: game servers redeployed from `develop`; a client release only if client code changed.
+5. **Ship, and the capacity bench the owner asked for.** Game servers redeployed from `develop`
+   (ca0fde7, then e423873 with the fixes below). The 2026-09-29 matrix re-run on the new AI, 0 to 100
+   bots a match (`plans/reports/2026-09-30-p29-bot-capacity-bench.md`): one server carries 100 bots
+   at 60 fps, about a tenth dearer than the old AI; two maps at 100 and three servers at 50 behave as
+   on 09-29. The bench found four defects, all fixed before the 100-bot upgrade: a player who
+   disconnects mid-flight left the server throwing every physics step (#400); bots a player killed
+   never ran their brain's death, so they kept squad, cover and running AI and came straight back --
+   the root of a 56-against-50 census and 4,966 exceptions (#401); a scoreboard of 88 rows or more
+   stopped (#402, pages); the name list was sized by actors instead of connections (#403); and the
+   original maps' spawn heights were logged as scene defects (#404). Re-run on the fixed build:
+   the census matches the roster, no exceptions, the scoreboard frames at 100 bots, same CPU. The owner
+   also ruled that a bot may go alone as long as it has tactics: a released player body now plays on
+   as a lone bot with a squad of its own. No client release is required for online play; offline
+   practice gets the new AI with the next one. **DONE.**
 
 ## Constraints
 
