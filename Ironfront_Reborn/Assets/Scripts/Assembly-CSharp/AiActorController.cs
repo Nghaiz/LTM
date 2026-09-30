@@ -2395,6 +2395,18 @@ public class AiActorController : ActorController
 		{
 			return NetVehicleAxisRelay.HelicopterAxesFor(this);
 		}
+		// A networked player's body goes back to the bot brain when its connection leaves
+		// (NetServerActor.Release resumes it), and a player body never has a squad. Left in a
+		// pilot seat it is an enabled controller with no squad, and the line below threw once
+		// per physics step for as long as it sat there: 867 NullReferenceExceptions in the 14 s
+		// between a bench's clients disconnecting and the server stopping (2026-09-30, Island,
+		// run p29new-i16), each one aborting Helicopter.FixedUpdate. Nobody is flying it, so it
+		// gets the neutral stick the relay gives a seat with no driver, without reading the
+		// relay (an enabled controller is never steered by the network).
+		if (!InSquad())
+		{
+			return Vector4.zero;
+		}
 		if (!squad.AllSeated() || !helicopterTakeoffAction.TrueDone())
 		{
 			return new Vector4(0f, -1f + helicopterTakeoffAction.Ratio() * 1.5f, 0f, 0f);
