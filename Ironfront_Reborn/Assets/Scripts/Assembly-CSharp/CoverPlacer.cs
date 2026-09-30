@@ -40,16 +40,14 @@ public class CoverPlacer : MonoBehaviour
 
 	public bool drawWidgets;
 
-	private float waterHeight;
+	private WaterLevel[] waters;
 
 	public void Generate()
 	{
-		WaterLevel waterLevel = Object.FindObjectOfType<WaterLevel>();
-		if (waterLevel != null)
-		{
-			waterHeight = waterLevel.transform.position.y;
-		}
-		Debug.Log(waterHeight);
+		// Every body, not the first one found: a map may hold lakes at several heights, and a
+		// single height would mark dry valleys lower than a lake as underwater.
+		waters = Object.FindObjectsByType<WaterLevel>(FindObjectsSortMode.None);
+		Debug.Log("Water bodies: " + waters.Length);
 		nFlat = 0;
 		nNotFlat = 0;
 		newCoverPoints = new List<CoverPoint>();
@@ -119,7 +117,7 @@ public class CoverPlacer : MonoBehaviour
 		bool flag = false;
 		for (int i = 0; i < vertexCount; i++)
 		{
-			if (((Vector3)meshNode.GetVertex(i)).y < waterHeight)
+			if (Underwater((Vector3)meshNode.GetVertex(i)))
 			{
 				flag = true;
 			}
@@ -141,6 +139,18 @@ public class CoverPlacer : MonoBehaviour
 			nUnderWater++;
 		}
 		return true;
+	}
+
+	private bool Underwater(Vector3 point)
+	{
+		for (int i = 0; i < waters.Length; i++)
+		{
+			if (waters[i].Contains(point))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void FindCoverPoints(Vector3 v1, Vector3 v2, Vector3 center)

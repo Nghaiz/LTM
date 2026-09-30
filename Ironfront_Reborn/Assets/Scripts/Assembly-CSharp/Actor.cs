@@ -619,6 +619,13 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		}
 	}
 
+	// A networked player's capsule, tested as its movement, breath and server all test it: against the
+	// water over that spot, sea or lake (MovementCore.SurfaceAt).
+	private static bool IsCapsuleInWater(Vector3 capsule)
+	{
+		return Ironfront.Net.Replication.Movement.MovementCore.IsInWater(capsule.x, capsule.y, capsule.z);
+	}
+
 	public virtual void Update()
 	{
 		Vector3 position = CenterPosition();
@@ -629,7 +636,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		// capsule's -- the one its movement, its breath and its server all use.
 		FpsActorController localNetworkBody = IsNetworkDrivenLocalBody() ? controller as FpsActorController : null;
 		inWater = localNetworkBody != null
-			? Ironfront.Net.Replication.Movement.MovementCore.IsInWater(localNetworkBody.transform.position.y)
+			? IsCapsuleInWater(localNetworkBody.transform.position)
 			: WaterLevel.InWater(position);
 		if (dead)
 		{
