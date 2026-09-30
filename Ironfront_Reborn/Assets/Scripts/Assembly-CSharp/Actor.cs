@@ -1392,7 +1392,14 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			ApplyRigidbodyForce(impactForce);
 		}
-		else if (balance < 0f)
+		// Never the local player's own body on a networked client: that body stands, falls and
+		// gets up on the server's word, and the server never knocks a player's body over
+		// (IsServerClaimedBody). A local knock-over switched input and the capsule off, so the
+		// client stopped sending movement, and the ragdoll it enabled only stands up again once
+		// it comes to rest; one that fell under the map never did (2026-09-30 playtest, a
+		// vehicle destroyed under its driver). The flinch below still plays. X-86 is the same
+		// loop through water.
+		else if (balance < 0f && !IsNetworkDrivenLocalBody())
 		{
 			KnockOver(Vector3.up * 100f + impactForce);
 		}
