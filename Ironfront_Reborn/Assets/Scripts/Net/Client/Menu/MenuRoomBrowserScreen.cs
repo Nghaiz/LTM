@@ -51,11 +51,40 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// </remarks>
         public const int Rows = 8;
 
+        /// <summary>
+        /// How many of this player's running matches the YOUR MATCHES section can show. Two, not
+        /// more: a player can leave a running match only by walking out of it, and a second one
+        /// is already unusual. A third is counted in the overflow line rather than dropped.
+        /// </summary>
+        public const int RejoinRows = 2;
+
+        /// <summary>The y of the table's header strip, in the panel's space. Authored and read here.</summary>
+        public const float TableTop = 112f;
+
+        /// <summary>The distance between two rows' centres.</summary>
+        public const float RowPitch = 46f;
+
+        /// <summary>
+        /// The lowest a row's centre may sit before it would run into the overflow line and the
+        /// buttons under the table.
+        /// </summary>
+        private const float LowestRowCentre = -250f;
+
         [SerializeField] private MenuScreenController? _controller;
 
         [Header("Rows")]
         [Tooltip("One row per visible room. Length must be MenuRoomBrowserScreen.Rows.")]
         [SerializeField] private RoomRow[] _rows = new RoomRow[Rows];
+
+        [Header("Your matches")]
+        [Tooltip("Running matches this player left and may rejoin. Length must be RejoinRows.")]
+        [SerializeField] private RoomRow[] _rejoinRows = new RoomRow[RejoinRows];
+
+        [Tooltip("The YOUR MATCHES section. Shown only while there is a match to go back to.")]
+        [SerializeField] private GameObject? _rejoinSection;
+
+        [Tooltip("The open-rooms table, header and rows, moved down under YOUR MATCHES.")]
+        [SerializeField] private RectTransform? _openRoomsTable;
 
         /// <summary>
         /// One visible room, as the cells the prototype's <c>.room-row</c> draws.
@@ -107,6 +136,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         private int _promptRoomId;
 
         private RoomInfo[] _visibleRooms = Array.Empty<RoomInfo>();
+        private RoomInfo[] _visibleRejoins = Array.Empty<RoomInfo>();
 
         private void Awake()
         {
@@ -117,6 +147,13 @@ namespace Ironfront.Net.Unity.Client.Menu
                 int row = i;
                 Button button = _rows[i].Join;
                 if (button != null) button.onClick.AddListener(() => OnRoomClicked(row));
+            }
+
+            for (int i = 0; i < _rejoinRows.Length; i++)
+            {
+                int row = i;
+                Button button = _rejoinRows[i].Join;
+                if (button != null) button.onClick.AddListener(() => OnRejoinClicked(row));
             }
 
             if (_refreshButton != null) _refreshButton.onClick.AddListener(OnRefresh);
@@ -194,6 +231,18 @@ namespace Ironfront.Net.Unity.Client.Menu
             _controller.JoinRoom(room.RoomId, null);
         }
 
+        /// <summary>A YOUR MATCHES row was pressed: go back into that running match.</summary>
+        private void OnRejoinClicked(int row)
+        {
+            if (_controller == null) return;
+
+            RoomInfo[] rooms = _visibleRejoins;
+            if (row < 0 || row >= rooms.Length) return;
+
+            ClosePrompt();
+            _controller.RejoinMatch(rooms[row].RoomId);
+        }
+
         private void OpenPrompt(RoomInfo room)
         {
             _promptRoomId = room.RoomId;
@@ -249,19 +298,64 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void DrawRooms(MenuScreenController controller)
         {
-            RoomInfo[] allRooms = controller.Rooms;
             string query = _searchField != null ? _searchField.text : string.Empty;
-            var filtered = new List<RoomInfo>(allRooms.Length);
-            foreach (RoomInfo room in allRooms)
-                if (room != null && MatchesSearch(room, query)) filtered.Add(room);
+            Split(controller.Rooms, query, out RoomInfo[] rejoins, out RoomInfo[] rooms);
 
-            RoomInfo[] rooms = filtered.ToArray();
+            Draw(rejoins, rooms, controller.IsBusy);
+
+            if (_pingText != null)
+                _pingText.text = controller.MasterPingMs < 0
+                    ? "master --"
+                    : $"master {controller.MasterPingMs} ms";
+
+            if (_refreshButton != null) _refreshButton.interactable = !controller.IsBusy;
+            if (_createRoomButton != null) _createRoomButton.interactable = !controller.IsBusy;
+            if (_passwordJoinButton != null) _passwordJoinButton.interactable = !controller.IsBusy;
+        }
+
+        /// <summary>
+        /// Draws both sections from lists already split by <see cref="Split"/>. Also what the menu
+        /// capture tool calls, so a screenshot is laid out by this code and not by a copy of it.
+        /// </summary>
+        internal void Draw(RoomInfo[] rejoins, RoomInfo[] rooms, bool busy)
+        {
+            // YOUR MATCHES first: it moves the open table, so it decides how many open rows fit.
+            int shownRejoins = Math.Min(rejoins.Length, _rejoinRows.Length);
+            _visibleRejoins = rejoins;
+            if (_rejoinSection != null) _rejoinSection.SetActive(shownRejoins > 0);
+
+            for (int i = 0; i < _rejoinRows.Length; i++)
+            {
+                RoomRow row = _rejoinRows[i];
+                bool used = i < shownRejoins;
+                if (row.Join != null)
+                {
+                    GameObject rowObject = row.Join.transform.parent != null
+                        ? row.Join.transform.parent.gameObject
+                        : row.Join.gameObject;
+                    rowObject.SetActive(used);
+                    row.Join.interactable = used && !busy;
+                }
+
+                if (!used) continue;
+
+                RoomInfo room = rejoins[i];
+                if (row.Name != null) row.Name.text = room.Name;
+                if (row.Map != null) row.Map.text = MapLabel(room);
+                if (row.Players != null) row.Players.text = PlayerLabel(room);
+                if (row.Status != null) row.Status.text = RejoinStatusLabel(room);
+            }
+
+            float shift = RejoinSectionHeight(shownRejoins);
+            if (_openRoomsTable != null) _openRoomsTable.anchoredPosition = new Vector2(0f, -shift);
+            int openRows = Math.Min(_rows.Length, OpenRowCapacity(shift));
+
             _visibleRooms = rooms;
 
             for (int i = 0; i < _rows.Length; i++)
             {
                 RoomRow row = _rows[i];
-                bool used = i < rooms.Length;
+                bool used = i < rooms.Length && i < openRows;
 
                 if (row.Join != null)
                 {
@@ -269,7 +363,7 @@ namespace Ironfront.Net.Unity.Client.Menu
                         ? row.Join.transform.parent.gameObject
                         : row.Join.gameObject;
                     rowObject.SetActive(used);
-                    row.Join.interactable = used && !controller.IsBusy && rooms[i].IsJoinable;
+                    row.Join.interactable = used && !busy && rooms[i].IsJoinable;
                 }
 
                 if (!used) continue;
@@ -282,18 +376,82 @@ namespace Ironfront.Net.Unity.Client.Menu
             }
 
             if (_overflowText != null)
-                _overflowText.text = rooms.Length > _rows.Length
-                    ? $"{rooms.Length - _rows.Length} more room(s) not shown."
-                    : string.Empty;
+                _overflowText.text = OverflowLabel(
+                    Math.Max(0, rooms.Length - openRows), Math.Max(0, rejoins.Length - shownRejoins));
+        }
 
-            if (_pingText != null)
-                _pingText.text = controller.MasterPingMs < 0
-                    ? "master --"
-                    : $"master {controller.MasterPingMs} ms";
+        /// <summary>
+        /// Splits the master's list into this player's running matches and the rooms anyone may
+        /// look at, the second filtered by the search box.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A running match is listed only to the people who played in it</b> (owner, 2026-09-30):
+        /// "những người chưa từng vào cái phòng này thì sẽ không hiện gì ở phía họ". The master
+        /// already refuses everyone else, so a row that could only ever say "That match has
+        /// already started" is not drawn.
+        /// </para>
+        /// <para>
+        /// The search box filters the open rooms only. YOUR MATCHES is at most a couple of rows,
+        /// and hiding the way back into your own match behind a search term is the one filter
+        /// result nobody wants.
+        /// </para>
+        /// </remarks>
+        internal static void Split(RoomInfo[]? all, string query, out RoomInfo[] rejoins, out RoomInfo[] open)
+        {
+            var mine = new List<RoomInfo>();
+            var others = new List<RoomInfo>();
 
-            if (_refreshButton != null) _refreshButton.interactable = !controller.IsBusy;
-            if (_createRoomButton != null) _createRoomButton.interactable = !controller.IsBusy;
-            if (_passwordJoinButton != null) _passwordJoinButton.interactable = !controller.IsBusy;
+            if (all != null)
+            {
+                foreach (RoomInfo room in all)
+                {
+                    if (room == null) continue;
+                    if (room.CanRejoin) mine.Add(room);
+                    else if (IsOpenRoom(room) && MatchesSearch(room, query)) others.Add(room);
+                }
+            }
+
+            rejoins = mine.ToArray();
+            open = others.ToArray();
+        }
+
+        /// <summary>A room the open list draws: gathering players, or about to start.</summary>
+        internal static bool IsOpenRoom(RoomInfo room)
+            => room.Lifecycle == RoomLifecycleState.Waiting || room.Lifecycle == RoomLifecycleState.Starting;
+
+        /// <summary>
+        /// How far YOUR MATCHES pushes the open table down: its header strip, its rows and a gap.
+        /// Zero when it is hidden, which is the authored layout.
+        /// </summary>
+        internal static float RejoinSectionHeight(int rows) => rows <= 0 ? 0f : 38f + (rows * RowPitch);
+
+        /// <summary>How many open rows fit once the table has moved down by <paramref name="shift"/>.</summary>
+        internal static int OpenRowCapacity(float shift)
+        {
+            float firstRow = TableTop - 40f - shift;
+            if (firstRow < LowestRowCentre) return 0;
+            return (int)Math.Floor((firstRow - LowestRowCentre) / RowPitch) + 1;
+        }
+
+        /// <summary>The line under the table, naming what did not fit in either section.</summary>
+        internal static string OverflowLabel(int hiddenRooms, int hiddenMatches)
+        {
+            if (hiddenRooms == 0 && hiddenMatches == 0) return string.Empty;
+            if (hiddenMatches == 0) return $"{hiddenRooms} more room(s) not shown.";
+            if (hiddenRooms == 0) return $"{hiddenMatches} more of your matches not shown.";
+            return $"{hiddenRooms} more room(s) and {hiddenMatches} of your matches not shown.";
+        }
+
+        /// <summary>
+        /// The STATUS cell of a YOUR MATCHES row: where the match is, and the side a rejoin puts
+        /// the player on. Blue is team 0 and red team 1, as on the in-match HUD.
+        /// </summary>
+        internal static string RejoinStatusLabel(RoomInfo room)
+        {
+            string phase = room.Lifecycle == RoomLifecycleState.Starting ? "STARTING" : "IN MATCH";
+            string side = room.RejoinTeam == 1 ? "<color=#FF6B6B>RED</color>" : "<color=#6FA8FF>BLUE</color>";
+            return $"{phase} · {side}";
         }
 
         /// <summary>The MAP cell: the scene this build plays for the room's map id.</summary>
