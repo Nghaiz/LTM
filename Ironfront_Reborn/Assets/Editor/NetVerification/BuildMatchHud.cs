@@ -1,8 +1,10 @@
 using System.Text;
 using Ironfront.Net.Unity.Client.Hud;
+using Ironfront.Net.Unity.Client.Menu;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using static Ironfront.Net.Unity.EditorTools.IronfrontUiKit;
 
 namespace Ironfront.Net.Unity.EditorTools
 {
@@ -66,6 +68,9 @@ namespace Ironfront.Net.Unity.EditorTools
 
         private static readonly Color Ink = HudStyle.Ink;
         private static readonly Color Backdrop = new Color(0.04f, 0.05f, 0.07f, 0.82f);
+
+        /// <summary><c>.eliminated-overlay</c>'s <c>#020A12D9</c>: the fight is not what to look at.</summary>
+        private static readonly Color Eliminated = new Color(2f / 255f, 10f / 255f, 18f / 255f, 0.85f);
 
         /// <summary>
         /// The original HUD's flag capture indicator, whose bottom edge the team readout sits
@@ -134,7 +139,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
                 // First, so everything else on this Canvas draws over the plates.
                 NameplateLayer nameplates = BuildNameplates(root, log);
-                Text team = BuildTeamReadout(root, FlagIndicatorBottom(contents), log);
+                Text team = BuildTeamReadout(root, FlagIndicatorBottom(contents), out GameObject teamChip, log);
                 KillfeedRowView[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
                     root, out Text killer, out Text timer, out Button deployButton, log);
@@ -142,6 +147,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
                 var so = new SerializedObject(hud);
                 Assign(so, "_teamReadoutText", team);
+                Assign(so, "_teamReadoutRoot", teamChip);
                 AssignArray(so, "_killfeedRows", killfeed);
                 Assign(so, "_deployRoot", deploy);
                 Assign(so, "_deployKillerText", killer);
@@ -162,6 +168,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 // authored visible is ledger X-48's failure, one screen over.
                 deploy.SetActive(false);
                 scoreboard.gameObject.SetActive(false);
+                teamChip.SetActive(false);
 
                 PrefabUtility.SaveAsPrefabAsset(contents, PrefabPath);
                 log.AppendLine("saved: " + PrefabPath);
@@ -192,8 +199,9 @@ namespace Ironfront.Net.Unity.EditorTools
 
         // ------------------------------------------------------------------ the elements
 
-        /// <summary>3.1 — which side you are on, top-left, under the flag capture indicator.</summary>
+        /// <summary>3.1 — which side you are on: a chip, top-left, under the flag capture indicator.</summary>
         /// <remarks>
+        /// <para>
         /// <b>Under the flag, not at the corner.</b> The original HUD's capture indicator
         /// (<c>IngameUi.flagIndicatorParent</c>, "Flag Capture Indicator Edge") owns the top-left
         /// corner: anchored from 85% to the top of the screen, 107 px wide, on a constant-pixel
@@ -201,33 +209,37 @@ namespace Ironfront.Net.Unity.EditorTools
         /// so standing in a capture zone drew the flag over "BLUE TEAM" (live test 2026-09-30).
         /// Anchored to the same 85% line, it sits under the indicator at every resolution, which
         /// no fixed offset on a Canvas that scales differently could do.
+        /// </para>
+        /// <para>
+        /// <b>A chip that comes and goes with the answer</b> (P30, from the NewMap redesign):
+        /// <c>MatchHud</c> shows it when a snapshot names a side and puts it away otherwise, so
+        /// there is never an empty frame on screen. Its <see cref="CanvasGroup"/> is how the Tab
+        /// board hides it.
+        /// </para>
         /// </remarks>
-        private static Text BuildTeamReadout(GameObject root, float flagIndicatorBottom, StringBuilder log)
+        private static Text BuildTeamReadout(
+            GameObject root, float flagIndicatorBottom, out GameObject chip, StringBuilder log)
         {
-            // Backdrop, the same way BuildDeployScreen and BuildScoreboard back their own text —
-            // a bare Text over the killfeed and minimap underneath it was unreadable at a glance.
-            var panel = new GameObject(
-                "Team Readout", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
-            panel.transform.SetParent(root.transform, worldPositionStays: false);
+            AngularPanel panel = Angular(root, "Team Readout", Vector2.zero, Vector2.zero, CutAction,
+                WithAlpha(Surface, 0.86f));
+            Place(panel, new Vector2(0f, flagIndicatorBottom), new Vector2(0f, 1f), new Vector2(12f, -8f),
+                new Vector2(220f, 62f));
+            chip = panel.gameObject;
+            chip.AddComponent<CanvasGroup>();
 
-            RectTransform panelRect = panel.GetComponent<RectTransform>();
-            panelRect.anchorMin = new Vector2(0f, flagIndicatorBottom);
-            panelRect.anchorMax = new Vector2(0f, flagIndicatorBottom);
-            panelRect.pivot = new Vector2(0f, 1f);
-            panelRect.anchoredPosition = new Vector2(12f, -8f);
-            panelRect.sizeDelta = new Vector2(320f, 44f);
+            Text kicker = Label(chip, "Kicker", "YOUR SIDE", 11, TextAnchor.MiddleLeft, bold: true);
+            kicker.color = CyanSoft;
+            Place(kicker, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -9f),
+                new Vector2(190f, 16f));
 
-            var backdrop = panel.GetComponent<Image>();
-            backdrop.color = Backdrop;
-            backdrop.raycastTarget = false;
-
-            Text label = Label(panel, "Text", string.Empty, 26, TextAnchor.UpperLeft);
-            Stretch(label.GetComponent<RectTransform>());
+            Text label = Label(chip, "Text", string.Empty, 24, TextAnchor.MiddleLeft, bold: true);
+            Place(label, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -25f),
+                new Vector2(190f, 30f));
 
             // Authored EMPTY, deliberately. Criterion 2 is graded on a screenshot at join, and a
             // placeholder string would render as an answer for however long the first snapshot
             // takes -- the fabricated zero ScoreUi refuses, wearing a different label.
-            log.AppendLine("team readout: authored blank; MatchHud.SetLocalTeam writes it.");
+            log.AppendLine("team readout: authored blank and put away; MatchHud.SetLocalTeam writes and shows it.");
             log.AppendLine($"team readout: under the flag capture indicator, at {flagIndicatorBottom:0.##} of the screen height.");
             return label;
         }
@@ -877,34 +889,66 @@ namespace Ironfront.Net.Unity.EditorTools
             return part;
         }
 
-        /// <summary>3.2 — the deploy screen.</summary>
+        /// <summary>
+        /// 3.2 — the deploy screen: the world dimmed almost to black, a column of type, and the
+        /// orange DEPLOY.
+        /// </summary>
+        /// <remarks>
+        /// The HUD pack's <c>.eliminated-overlay</c>: no card, a red kicker, a display heading
+        /// and <c>buttons/deploy.svg</c> — the action the loadout screen deploys with, so the
+        /// button that returns a player to the fight is the same wherever it is. The killer and
+        /// the countdown sit between the heading and the action.
+        /// </remarks>
         private static GameObject BuildDeployScreen(
             GameObject root, out Text killer, out Text timer, out Button deploy, StringBuilder log)
         {
-            var panel = new GameObject("Deploy Screen", typeof(RectTransform), typeof(Image));
-            panel.transform.SetParent(root.transform, worldPositionStays: false);
-            Stretch(panel.GetComponent<RectTransform>());
+            var screen = new GameObject("Deploy Screen", typeof(RectTransform), typeof(Image));
+            screen.transform.SetParent(root.transform, worldPositionStays: false);
+            Stretch(screen.GetComponent<RectTransform>());
 
-            var backdrop = panel.GetComponent<Image>();
-            backdrop.color = Backdrop;
+            var backdrop = screen.GetComponent<Image>();
+            backdrop.color = Eliminated;
 
             // Raycast target ON, and that is the point: the overlay swallows clicks meant for the
             // loadout and minimap Canvases underneath it, which are still live while dead.
             backdrop.raycastTarget = true;
 
-            Text heading = Label(panel, "Heading", "YOU WERE KILLED", 56, TextAnchor.MiddleCenter);
-            Centre(heading.GetComponent<RectTransform>(), new Vector2(0f, 160f), new Vector2(900f, 80f));
+            Text kicker = Label(screen, "Kicker", "OPERATIVE DOWN", 15, TextAnchor.MiddleCenter, bold: true);
+            kicker.color = Hex("FF7769");
+            Centre(kicker.rectTransform, new Vector2(0f, 132f), new Vector2(640f, 22f));
 
-            killer = Label(panel, "Killer", string.Empty, 36, TextAnchor.MiddleCenter);
-            Centre(killer.GetComponent<RectTransform>(), new Vector2(0f, 80f), new Vector2(900f, 56f));
+            Text heading = Label(screen, "Heading", "YOU WERE KILLED", 54, TextAnchor.MiddleCenter, bold: true);
+            Centre(heading.rectTransform, new Vector2(0f, 84f), new Vector2(960f, 68f));
 
-            timer = Label(panel, "Timer", string.Empty, 34, TextAnchor.MiddleCenter);
-            Centre(timer.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(900f, 52f));
+            killer = Label(screen, "Killer", string.Empty, 24, TextAnchor.MiddleCenter, bold: true);
+            Centre(killer.rectTransform, new Vector2(0f, 28f), new Vector2(960f, 34f));
 
-            deploy = MakeButton(panel, "Deploy", "DEPLOY", new Vector2(0f, -100f), new Vector2(400f, 84f));
+            timer = Label(screen, "Timer", string.Empty, 18, TextAnchor.MiddleCenter, bold: false);
+            timer.color = Muted;
+            Centre(timer.rectTransform, new Vector2(0f, -10f), new Vector2(960f, 28f));
 
-            log.AppendLine("deploy screen: heading, killer, countdown and one button.");
-            return panel;
+            deploy = MakeDeployButton(screen, new Vector2(0f, -88f), new Vector2(320f, 64f));
+
+            log.AppendLine("deploy screen: kicker, heading, killer, countdown and the orange DEPLOY on a dark overlay.");
+            return screen;
+        }
+
+        /// <summary><c>buttons/deploy.svg</c> as a button, from <see cref="IronfrontUiKit"/>.</summary>
+        private static Button MakeDeployButton(GameObject parent, Vector2 position, Vector2 size)
+        {
+            AngularPanel face = Angular(parent, "Deploy", position, size, 15f, Color.clear);
+            StyleDeployFace(face);
+
+            Button button = face.gameObject.AddComponent<Button>();
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = ButtonColours(button.colors, "primary");
+
+            Text text = Label(face.gameObject, "Text", DeployCaption, 26, TextAnchor.MiddleCenter, bold: true);
+            text.color = DeployInk;
+            Stretch(text.rectTransform);
+
+            return button;
         }
 
         /// <summary>
@@ -1489,13 +1533,13 @@ namespace Ironfront.Net.Unity.EditorTools
         // ------------------------------------------------------------------ helpers
 
         private static Text Label(
-            GameObject parent, string name, string content, int size, TextAnchor anchor)
+            GameObject parent, string name, string content, int size, TextAnchor anchor, bool bold)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent.transform, worldPositionStays: false);
 
             Text text = go.AddComponent<Text>();
-            text.font = DefaultFont();
+            text.font = bold ? BoldFont() : RegularFont();
             text.fontSize = size;
             text.text = content;
             text.color = Ink;
@@ -1505,25 +1549,6 @@ namespace Ironfront.Net.Unity.EditorTools
             text.raycastTarget = false;
 
             return text;
-        }
-
-        private static Button MakeButton(
-            GameObject parent, string name, string caption, Vector2 position, Vector2 size)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent.transform, worldPositionStays: false);
-            Centre(go.GetComponent<RectTransform>(), position, size);
-
-            var background = go.GetComponent<Image>();
-            background.color = new Color(0.16f, 0.19f, 0.24f, 1f);
-
-            Button button = go.AddComponent<Button>();
-            button.targetGraphic = background;
-
-            Text text = Label(go, "Text", caption, 34, TextAnchor.MiddleCenter);
-            Stretch(text.GetComponent<RectTransform>());
-
-            return button;
         }
 
         private static void Stretch(RectTransform rect)
@@ -1541,21 +1566,6 @@ namespace Ironfront.Net.Unity.EditorTools
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = position;
             rect.sizeDelta = size;
-        }
-
-        /// <summary>
-        /// The built-in font every legacy <c>Text</c> in this project already uses.
-        /// </summary>
-        /// <remarks>
-        /// <c>LegacyRuntime.ttf</c> is where Unity moved Arial. A null font renders nothing at all
-        /// — no error, no warning, an empty rect — which on a screenshot-graded phase reads as an
-        /// unassigned label and sends the reader after the wrong fault.
-        /// </remarks>
-        private static Font DefaultFont()
-        {
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            return font;
         }
 
         private static void Assign(SerializedObject so, string field, Object value)

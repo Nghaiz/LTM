@@ -61,6 +61,16 @@ public class MinimapUi : MonoBehaviour
 	/// <summary>How dark <see cref="ingameBackdrop"/> gets with the map fully open.</summary>
 	private const float BACKDROP_OPACITY = 0.45f;
 
+	/// <summary>
+	/// How much further than one height down the closed map sits, in its container's heights.
+	/// </summary>
+	/// <remarks>
+	/// The container starts 1% of the screen up from the bottom and the frame overhangs the map by
+	/// 6px, so a closed map at exactly one height down left a 17px strip of it along the bottom of
+	/// every screen at 1080p (P30). 3% of the container clears both at every resolution.
+	/// </remarks>
+	private const float CLOSED_CLEARANCE = 0.03f;
+
 	/// <summary>How often markers whose subject was destroyed without a RemoveMarker are swept.</summary>
 	private const float PRUNE_SECONDS = 2f;
 
@@ -159,8 +169,8 @@ public class MinimapUi : MonoBehaviour
 			|| (HoldSource != null && HoldSource());
 		float target = (!held) ? 0f : 1f;
 		minimapOpenness = Mathf.MoveTowards(minimapOpenness, target, Time.deltaTime * 20f);
-		ingameParent.anchorMin = new Vector2(0f, Mathf.Lerp(-1f, 0f, minimapOpenness));
-		ingameParent.anchorMax = new Vector2(1f, Mathf.Lerp(0f, 1f, minimapOpenness));
+		ingameParent.anchorMin = new Vector2(0f, Mathf.Lerp(-1f - CLOSED_CLEARANCE, 0f, minimapOpenness));
+		ingameParent.anchorMax = new Vector2(1f, Mathf.Lerp(-CLOSED_CLEARANCE, 1f, minimapOpenness));
 		if (ingameBackdrop != null)
 		{
 			Color veil = ingameBackdrop.color;
