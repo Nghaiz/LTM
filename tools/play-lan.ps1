@@ -72,9 +72,10 @@ param(
 
     [string] $Name = "",
 
-    # Built by tools/build-player.ps1. There is no separate shipping client target yet; this is
-    # the same binary as the game server, launched without a harness role so LaneBHarness stays
-    # inert.
+    # Built by tools/build-player.ps1: the release player by default (IL2CPP, no diagnostics),
+    # or with -Development the development player, which also carries LaneBHarness -- inert here
+    # because this script sets no harness role. -LogFrames needs one of the builds that keeps
+    # Net/Diagnostics (-Development or -KeepDiagnostics).
     [string] $PlayerPath = "build/windows/Ironfront.exe",
 
     # Where the client writes its log. Read this first when a join does not happen.

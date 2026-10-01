@@ -8,13 +8,19 @@
 # into a match. So everything this script adds is the README and the checks below.
 #
 # THE CHECKS, and why each one refuses rather than warns:
+#   - the build must be the release player: IL2CPP, not a Development build, Net/Diagnostics
+#     compiled out. Until v3.1.1 every zip was the lane-B harness's Development build on Mono, with
+#     "Development Build" printed on every screen and the harness's scripted aim and input inside,
+#     reachable through environment variables. tools/build-player.ps1 builds the release player
+#     by default since 2026-10-02.
 #   - the build's stamp must name the commit being released. A zip whose DLLs say another SHA is
 #     the "MIXED BUILD FOLDER" failure one level up, and nobody downloading it can tell.
 #   - no .env, key, certificate or log file may be in the folder. The repo's .env carries
 #     IRONFRONT_SHARED_SECRET, which signs match tickets; a copy in a public zip lets anyone mint
 #     one. A client never needs it (EnvRegistry lists it for master and game server only).
-#   - the *_DoNotShip Burst debug folder is dropped. Unity names it that for a reason, and it is
-#     most of the unneeded size.
+#   - the *_DoNotShip Burst debug folder and IL2CPP's *_BackUpThisFolder_ButDontShipItWithYourGame
+#     (generated C++ and symbols) are dropped. Unity names them that for a reason, and they are most
+#     of the unneeded size.
 #
 # Usage:
 #   pwsh tools/build-player.ps1                                   # first, from a clean checkout
@@ -58,19 +64,42 @@ function Resolve-RepoPath([string] $path) {
 $buildDir = Resolve-RepoPath $BuildDirectory
 $outDir   = Resolve-RepoPath $OutputDirectory
 $exe      = Join-Path $buildDir "Ironfront.exe"
-$sharedDll = Join-Path $buildDir "Ironfront_Data/Managed/Ironfront.Net.Unity.Shared.dll"
+$metadata = Join-Path $buildDir "Ironfront_Data/il2cpp_data/Metadata/global-metadata.dat"
 
-if (-not (Test-Path $exe))       { throw "No player at $exe. Run tools/build-player.ps1 first." }
-if (-not (Test-Path $sharedDll)) { throw "No ${sharedDll}: this folder is not a complete player build." }
+if (-not (Test-Path $exe)) { throw "No player at $exe. Run tools/build-player.ps1 first." }
+
+# --- release player --------------------------------------------------------------------------
+# IL2CPP compiles every assembly into GameAssembly.dll and keeps the string literals and type
+# names in global-metadata.dat; a Mono player has Ironfront_Data/Managed/ instead.
+if (-not (Test-Path (Join-Path $buildDir "GameAssembly.dll")) -or -not (Test-Path $metadata)) {
+    throw ("$BuildDirectory is not an IL2CPP player (no GameAssembly.dll / global-metadata.dat). " +
+           "Build the release player with tools/build-player.ps1, without -Development.")
+}
+if (Test-Path (Join-Path $buildDir "Ironfront_Data/Managed")) {
+    throw "$BuildDirectory also holds a Mono player's Managed/ folder; rebuild it into an empty folder."
+}
+
+# A development player listens for the profiler; the release player has no player connection.
+$bootConfig = Join-Path $buildDir "Ironfront_Data/boot.config"
+if ((Test-Path $bootConfig) -and (Select-String -LiteralPath $bootConfig -Pattern '^player-connection-' -Quiet)) {
+    throw "$BuildDirectory is a Development build (boot.config has player-connection settings). Rebuild without -Development."
+}
+
+# Latin-1 maps every byte to one char, so ASCII names and literals are found where they are.
+$metadataText = [System.Text.Encoding]::Latin1.GetString([System.IO.File]::ReadAllBytes($metadata))
+if ($metadataText.Contains("LaneBHarness")) {
+    throw ("$BuildDirectory still contains Net/Diagnostics (LaneBHarness). That is a -KeepDiagnostics " +
+           "measuring build; rebuild with plain tools/build-player.ps1.")
+}
+Write-Host "[release] IL2CPP release player, diagnostics compiled out"
 
 # --- stamp -----------------------------------------------------------------------------------
 if (-not $Commit) { $Commit = (& git -C $repoRoot rev-parse --short HEAD).Trim() }
 if (-not $Commit) { throw "Could not read the commit to release." }
 
-# The stamp is a C# string literal, so it sits in the assembly as UTF-16. Reading it as ASCII
-# finds nothing, which would look exactly like an unstamped build.
-$dllText = [System.Text.Encoding]::Unicode.GetString([System.IO.File]::ReadAllBytes($sharedDll))
-if (-not $dllText.Contains($Commit)) {
+# IL2CPP stores string literals in global-metadata.dat as UTF-8, so the ASCII commit is found as
+# bytes. (A Mono assembly keeps them as UTF-16, which is why the Mono-era check decoded Unicode.)
+if (-not $metadataText.Contains($Commit)) {
     throw ("The build in $BuildDirectory is not stamped with $Commit. Rebuild it with " +
            "tools/build-player.ps1 from that commit, or pass -Commit with the one it was built from.")
 }
@@ -96,7 +125,7 @@ if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
 
 Write-Host "[release] staging $name"
-robocopy $buildDir $staging /E /NFL /NDL /NJH /NJS /NP /XD "*_DoNotShip" | Out-Null
+robocopy $buildDir $staging /E /NFL /NDL /NJH /NJS /NP /XD "*_DoNotShip" "*_ButDontShipItWithYourGame" | Out-Null
 # robocopy: 0-7 are success codes (1 = files copied), 8+ is a failure.
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE." }
 $global:LASTEXITCODE = 0

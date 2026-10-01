@@ -15,8 +15,21 @@
 # BuildPlayer refuses to start during. This script checks for a live Editor and says so, rather
 # than letting Unity fail forty seconds in with a lock message buried in a log file.
 #
+# WHAT IT BUILDS (since 2026-10-02). By default the player people download: a RELEASE build on
+# IL2CPP with Net/Diagnostics compiled out. Every release before that was the lane-B harness's
+# Development build on Mono -- "Development Build" in the corner of every screen, profiler hooks
+# compiled in, and the harness's scripted aim and input reachable through environment variables.
+#   -Development      the old development player on Mono, with diagnostics: what the Unity
+#                     Profiler attaches to, and the fast build for a quick playtest.
+#   -KeepDiagnostics  release + IL2CPP, but Net/Diagnostics kept, so IRONFRONT_LOG_FRAMES=1 can
+#                     measure the release player. Never package it.
+# IL2CPP needs the "Windows Build Support (IL2CPP)" module, installed through Unity Hub, and the
+# Visual Studio Build Tools C++ workload (MSVC). The first IL2CPP build spends several minutes in
+# the C++ compiler; later ones reuse Library/Bee and are much faster.
+#
 # Usage:
 #   pwsh tools/build-player.ps1
+#   pwsh tools/build-player.ps1 -Development
 #   pwsh tools/build-player.ps1 -UnityPath "D:\UnityEditor\6000.3.21f1\Editor\Unity.exe"
 #   pwsh tools/build-player.ps1 -OutputDirectory build/windows -LogFile tmp/build-player.log
 
@@ -39,8 +52,18 @@ param(
 
     # Skip the "is an Editor running" refusal. For the case where the process found is somebody
     # else's Unity on another project -- the check cannot tell them apart.
-    [switch] $Force
+    [switch] $Force,
+
+    # The development player on Mono, diagnostics included. See the header.
+    [switch] $Development,
+
+    # Release + IL2CPP with Net/Diagnostics kept, for measuring. See the header.
+    [switch] $KeepDiagnostics
 )
+
+if ($Development -and $KeepDiagnostics) {
+    throw "-KeepDiagnostics only applies to a release build; a -Development build always keeps them."
+}
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -129,7 +152,10 @@ $UnityPath = (Resolve-Path -LiteralPath $UnityPath).Path
 # own failure for that case is a batchmode exit with the reason in the log rather than on
 # stdout. Refusing here costs a second; discovering it there costs the length of a licence
 # check plus an asset scan.
-$editors = @(Get-Process Unity -ErrorAction SilentlyContinue)
+# Editors only, by path: Unity Hub runs its own helper called unity.exe ("resources\unity.exe serve"),
+# and matching on the process name alone refused every build while the Hub was open.
+$editors = @(Get-Process Unity -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path -like '*\Editor\Unity.exe' })
 if ($editors.Count -gt 0 -and -not $Force) {
     throw ("a Unity Editor is running (pid $($editors.Id -join ', ')). Close it first -- " +
            "BuildPlayer cannot start while the project is locked, and this build strips " +
@@ -144,13 +170,27 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $LogFile) | Out-Nu
 $buildOut = Join-Path $repoRoot $OutputDirectory
 New-Item -ItemType Directory -Force -Path $buildOut | Out-Null
 
+# A folder that holds the OTHER scripting backend's player is emptied first. Unity does not clean
+# what it does not write: a release build into a Mono folder would leave MonoBleedingEdge/ and
+# Ironfront_Data/Managed/ beside GameAssembly.dll, package-release.ps1 would ship both, and anybody
+# dating the build by a Managed DLL would read the previous build's timestamp.
+$holdsMono   = (Test-Path (Join-Path $buildOut "MonoBleedingEdge")) -or
+               (Test-Path (Join-Path $buildOut "Ironfront_Data/Managed"))
+$holdsIl2cpp = Test-Path (Join-Path $buildOut "GameAssembly.dll")
+if (($Development -and $holdsIl2cpp) -or (-not $Development -and $holdsMono)) {
+    Write-Host "[build] $buildOut holds the other scripting backend's player; emptying it first"
+    Get-ChildItem -LiteralPath $buildOut -Force | Remove-Item -Recurse -Force
+}
+
 $exe = Join-Path $buildOut "Ironfront.exe"
 $before = if (Test-Path $exe) { (Get-Item $exe).LastWriteTime } else { $null }
 
 Write-Host "[build] Unity : $UnityPath"
 Write-Host "[build] output: $buildOut"
 Write-Host "[build] log   : $LogFile"
-Write-Host "[build] this takes roughly ten minutes. Nothing is printed until it ends."
+Write-Host ("[build] this takes roughly ten minutes" +
+            $(if ($Development) { "" } else { ", longer on the first IL2CPP build" }) +
+            ". Nothing is printed until it ends.")
 
 # STAMP THE BUILD WITH THE COMMIT IT CAME FROM, then put the sources back.
 #
@@ -179,6 +219,13 @@ $buildArgs = @(
     "-buildOutput", $buildOut,
     "-logFile", $LogFile
 )
+if (-not $Development) { $buildArgs += "-release" }
+if (-not $Development -and -not $KeepDiagnostics) { $buildArgs += "-noDiagnostics" }
+
+$flavour = if ($Development) { "development, Mono, diagnostics" }
+           elseif ($KeepDiagnostics) { "release, IL2CPP, diagnostics KEPT (measuring only -- never package)" }
+           else { "release, IL2CPP, no diagnostics" }
+Write-Host "[build] flavour: $flavour"
 
 $started = Get-Date
 $unityExitCode = $null
@@ -235,17 +282,18 @@ if (-not (Test-Path $exe)) {
     throw "the build reported success but there is no $exe. See $LogFile."
 }
 
-# Unity keeps the executable and rewrites the managed DLLs, so Ironfront.exe's own timestamp is
-# NOT evidence that anything was rebuilt -- a green build routinely leaves it untouched. The
-# managed assemblies are what moved.
+# Unity keeps the executable and rewrites the code, so Ironfront.exe's own timestamp is NOT
+# evidence that anything was rebuilt -- a green build routinely leaves it untouched. The code is
+# what moved: the managed assemblies on Mono, GameAssembly.dll on IL2CPP.
 $after = (Get-Item $exe).LastWriteTime
-$asm   = Join-Path $buildOut "Ironfront_Data/Managed/Assembly-CSharp.dll"
-$asmStamp = if (Test-Path $asm) { (Get-Item $asm).LastWriteTime } else { "MISSING" }
+$code = if ($Development) { Join-Path $buildOut "Ironfront_Data/Managed/Assembly-CSharp.dll" }
+        else { Join-Path $buildOut "GameAssembly.dll" }
+$codeStamp = if (Test-Path $code) { (Get-Item $code).LastWriteTime } else { "MISSING" }
 
 Write-Host ""
-Write-Host "[build] OK in ${elapsed}s"
+Write-Host "[build] OK in ${elapsed}s ($flavour)"
 Write-Host "[build] $exe"
 Write-Host "[build]   exe  last written $after$(if ($before -eq $after) { '  (unchanged -- expected)' })"
-Write-Host "[build]   Assembly-CSharp.dll last written $asmStamp  <- judge the build by this"
+Write-Host "[build]   $(Split-Path -Leaf $code) last written $codeStamp  <- judge the build by this"
 Write-Host ""
 Write-Host "[build] next: pwsh tools/play-lan.ps1 -PlayerId <id>   (joins the live fly master)"
