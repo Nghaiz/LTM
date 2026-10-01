@@ -942,7 +942,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			return;
 		}
-		Vector3 vector = controller.Velocity();
+		Vector3 vector = WadingVelocity(controller.Velocity());
 		Vector3 vector2 = Vector3.Scale(vector, removeY);
 		bool flag = vector2.magnitude > 0.1f;
 		animator.SetBool("moving", flag);
@@ -1023,6 +1023,32 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			rigidbody.position = vector4;
 		}
 		UpdateOffset(dt);
+	}
+
+	/// <summary>
+	/// A walking body's velocity with the water over its feet taken into account: a player's
+	/// numbers (<c>MovementCore.WadingSpeed</c>), so a bot wades as slowly as a player beside it.
+	/// </summary>
+	/// <remarks>
+	/// The root is at the feet for every body that walks here, so the water over them is
+	/// <see cref="WaterLevel.Depth"/> at the root. A networked player never reaches this method:
+	/// its movement is <c>MovementCore</c>'s own.
+	/// </remarks>
+	private Vector3 WadingVelocity(Vector3 velocity)
+	{
+		float depth = WaterLevel.Depth(rigidbody.position);
+		if (!(depth > Ironfront.Net.Replication.Movement.MovementCore.WadeStartDepth))
+		{
+			return velocity;
+		}
+		Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+		float speed = flat.magnitude;
+		if (speed < 0.001f)
+		{
+			return velocity;
+		}
+		float waded = Ironfront.Net.Replication.Movement.MovementCore.WadingSpeed(speed, depth);
+		return new Vector3(flat.x / speed * waded, velocity.y, flat.z / speed * waded);
 	}
 
 	private void UpdateOffset(float dt)
