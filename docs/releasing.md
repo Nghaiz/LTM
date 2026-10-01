@@ -41,9 +41,24 @@ From a clean checkout of the commit you mean to ship (normally `develop` after m
 git switch develop; git pull --ff-only
 git status --short                               # must be empty
 pwsh .claude/scripts/unity-editor.ps1 close       # the build needs the Editor closed
-pwsh tools/build-player.ps1                      # ~10 min; prints "[build] stamp : <sha> ..."
+pwsh tools/build-player.ps1                      # release player; prints "[build] stamp : <sha> ..."
 pwsh tools/package-release.ps1 -Version v1.1.0   # zip into artifacts/release/
 ```
+
+**The release player (since 2026-10-02).** `build-player.ps1` builds, by default, a release build
+(no `BuildOptions.Development`) on **IL2CPP** with `Net/Diagnostics` compiled out. Every zip up to
+v3.1.1 was the lane-B harness's Development build on Mono: "Development Build" printed on every
+screen, profiler hooks compiled in, and the harness's scripted aim and input inside. It needs two
+things on the build machine, both one-time installs:
+
+- the **Windows Build Support (IL2CPP)** module for the project's Unity version, added through
+  Unity Hub (Installs → Manage → Manage modules), never by running the module installer directly;
+- the **Visual Studio Build Tools** with the C++ workload (MSVC), which IL2CPP compiles with.
+
+The first IL2CPP build spends several extra minutes in the C++ compiler; later builds reuse
+`Library/Bee`. `-Development` still builds the old development player on Mono (what the Unity
+Profiler attaches to); `-KeepDiagnostics` builds the release player with diagnostics kept, for
+measuring it with `IRONFRONT_LOG_FRAMES=1`, and `package-release.ps1` refuses to package it.
 
 `build-player.ps1` rebuilds the tracked plugin DLLs, which leaves them modified in the working
 tree with new PE identities and no source change. Discard them afterwards
@@ -51,12 +66,16 @@ tree with new PE identities and no source change. Discard them afterwards
 
 `package-release.ps1`:
 
-1. checks the build is stamped with the commit being released (`-Commit`, default `HEAD`),
-2. refuses `.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `*.log` and `credentials*` anywhere in
+1. refuses anything but the release player: it must be IL2CPP (`GameAssembly.dll`), not a
+   Development build (no `player-connection-*` in `boot.config`), with `Net/Diagnostics` compiled
+   out (no `LaneBHarness` in `global-metadata.dat`),
+2. checks the build is stamped with the commit being released (`-Commit`, default `HEAD`),
+3. refuses `.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `*.log` and `credentials*` anywhere in
    the build folder,
-3. copies the build without `*_BurstDebugInformation_DoNotShip`,
-4. adds `README.txt` with the version and commit filled in,
-5. writes `artifacts/release/IronfrontReborn-<version>-windows-x64.zip` and prints its size and
+4. copies the build without `*_BurstDebugInformation_DoNotShip` and IL2CPP's
+   `*_BackUpThisFolder_ButDontShipItWithYourGame` (generated C++ and symbols),
+5. adds `README.txt` with the version and commit filled in,
+6. writes `artifacts/release/IronfrontReborn-<version>-windows-x64.zip` and prints its size and
    SHA-256.
 
 ---
