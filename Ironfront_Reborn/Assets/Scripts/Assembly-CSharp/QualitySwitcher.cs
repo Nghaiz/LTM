@@ -14,7 +14,9 @@ public class QualitySwitcher : MonoBehaviour
 
 	private void Awake()
 	{
-		bool flag = QualitySettings.GetQualityLevel() >= hqLevel;
+		// hqLevel is authored against the original's six levels (5 = Fantastic in every scene and
+		// prefab); the game ships four since 2026-10-02, so it is read through the same mapping.
+		bool flag = QualitySettings.GetQualityLevel() >= Ironfront.Net.Unity.GraphicsPresetRules.FromLegacyLevel(hqLevel);
 		hqObject.SetActive(flag);
 		if (lqObject != null)
 		{

@@ -82,12 +82,10 @@ public class DecalManager : MonoBehaviour
 
 	private void Awake()
 	{
+		// Low replaces the original's Fastest (800) and Fast (8000) levels, and takes Fast's budget.
 		switch (QualitySettings.GetQualityLevel())
 		{
-		case 0:
-			maxVerts = 800;
-			break;
-		case 1:
+		case Ironfront.Net.Unity.GraphicsPresetRules.Low:
 			maxVerts = 8000;
 			break;
 		default:
