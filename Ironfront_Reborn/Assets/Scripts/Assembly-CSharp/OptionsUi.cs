@@ -169,7 +169,8 @@ public class OptionsUi : MonoBehaviour
 
 	public static bool IsFastQuality()
 	{
-		return QualitySettings.GetQualityLevel() <= 1;
+		// The original's Fastest and Fast (0, 1) are this game's Low since 2026-10-02.
+		return QualitySettings.GetQualityLevel() <= Ironfront.Net.Unity.GraphicsPresetRules.Low;
 	}
 
 	public static void Show()

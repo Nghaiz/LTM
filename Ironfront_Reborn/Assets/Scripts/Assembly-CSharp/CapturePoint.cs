@@ -135,7 +135,8 @@ public class CapturePoint : SpawnPoint
 			}
 			ClearContestedSpawnpointSafeFlags();
 		}
-		if (QualitySettings.GetQualityLevel() >= 5)
+		// The original's Fantastic (5); its six levels are this game's four since 2026-10-02.
+		if (QualitySettings.GetQualityLevel() >= Ironfront.Net.Unity.GraphicsPresetRules.FromLegacyLevel(5))
 		{
 			lqFlag.SetActive(false);
 			hqFlag.SetActive(true);

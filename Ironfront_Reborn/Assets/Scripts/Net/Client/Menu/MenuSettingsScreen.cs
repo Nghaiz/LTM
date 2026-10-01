@@ -105,11 +105,13 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         public void ResetToDefaults()
         {
+            // The preset this machine suits, not the highest there is: Reset chose Unity's
+            // "Fantastic" until 2026-10-02, the level that made Forest Lake stutter.
             var defaults = new MenuSettingsData(
                 Screen.currentResolution.width,
                 Screen.currentResolution.height,
                 1,
-                Mathf.Max(0, QualitySettings.names.Length - 1),
+                GraphicsSettingsBoot.Recommended(),
                 1,
                 1f,
                 90f,
