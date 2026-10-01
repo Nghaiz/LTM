@@ -543,6 +543,14 @@ public class Squad
 		// The flag has fallen to this side: hold it until the commander hands out the next one.
 		if (commandTarget.owner == team && commandTarget.IsSafe())
 		{
+			// A squad aboard, or boarding, holds from where it is. DigIn cannot put a crew in cover
+			// and said so on every order tick ("Squad dig in while in vehicle, ignore."); the
+			// Defend and Assemble cases above already keep a vehicle squad out of it.
+			if (HasVehicle())
+			{
+				hasAssignedOrder = true;
+				return;
+			}
 			DigIn();
 			return;
 		}

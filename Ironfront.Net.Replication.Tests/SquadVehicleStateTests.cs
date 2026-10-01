@@ -67,6 +67,24 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A squad aboard, or boarding, holds a flag it has taken from where it is. It used to be
+        /// told to dig in, which a crew cannot, and logged "Squad dig in while in vehicle, ignore."
+        /// on every order tick: 24, 11 and 6 times in ten minutes on the three maps.
+        /// </summary>
+        [Fact]
+        public void AMountedSquadHoldsATakenFlagWithoutDiggingIn()
+        {
+            string body = Method("FollowCommand").Body!.ToString();
+            int hold = body.IndexOf("commandTarget.owner == team && commandTarget.IsSafe()", StringComparison.Ordinal);
+            Assert.True(hold >= 0, "the hold-the-taken-flag branch is gone");
+
+            string branch = body.Substring(hold);
+            int vehicleCheck = branch.IndexOf("HasVehicle()", StringComparison.Ordinal);
+            int digIn = branch.IndexOf("DigIn()", StringComparison.Ordinal);
+            Assert.True(vehicleCheck >= 0 && vehicleCheck < digIn, "DigIn is reached before asking whether the squad is mounted");
+        }
+
+        /// <summary>
         /// A member that reached the spot a vehicle was sent to it from goes to where it is now. It
         /// used to need to be within 4 m of the vehicle where it stood, and stood still otherwise.
         /// </summary>
