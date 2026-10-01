@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Ironfront.Net.Replication.Projectiles;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Ironfront.Net.Unity.Bindings
 {
@@ -20,6 +21,9 @@ namespace Ironfront.Net.Unity.Bindings
 
         private bool _scanned;
 
+        /// <summary>The scene the map was scanned in; a different active scene rescans.</summary>
+        private int _scannedScene;
+
         /// <inheritdoc/>
         /// <remarks>
         /// <para>
@@ -30,14 +34,25 @@ namespace Ironfront.Net.Unity.Bindings
         /// once the scan has run AND found something, a miss is final and answers false.
         /// </para>
         /// <para>
-        /// State is per-instance, and one instance is registered for the process. A scene change
-        /// therefore keeps a stale map — which is exactly what the old field-on-the-registry did,
-        /// since the registry lived on the client bootstrap object and outlived map loads too.
-        /// Changing that here would be a behaviour change smuggled into a refactor.
+        /// <b>Per map, not per process.</b> One instance is registered for the process, and it
+        /// used to keep the first map's prefabs for every later one. The maps do not all field
+        /// the same vehicles: only Island has the RHIB (network id 3), so a client that played
+        /// Dustbowl or Forest Lake first answered "unknown prefab" for every boat on Island and
+        /// drew none of them, while the server and every other client had them (v3.1.0 release
+        /// test, 2026-10-01: Forest Lake, Dustbowl, then Island in one session). A different
+        /// active scene now throws the map away and scans again.
         /// </para>
         /// </remarks>
         public bool TryGetPrefab(byte networkTypeId, out GameObject prefab)
         {
+            int scene = SceneManager.GetActiveScene().handle;
+            if (scene != _scannedScene)
+            {
+                _prefabsByNetworkId.Clear();
+                _scanned = false;
+                _scannedScene = scene;
+            }
+
             if (_prefabsByNetworkId.TryGetValue(networkTypeId, out prefab)) return true;
 
             if (_scanned && _prefabsByNetworkId.Count > 0) return false;
