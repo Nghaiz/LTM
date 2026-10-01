@@ -7,7 +7,9 @@ upgraded bots understand and play the new map; bench the servers and test the cl
 feature `NewMap` never had (killfeed, Tab board, name plates, bots, lobby, animation, ...); deploy the
 result to the master and game servers at the end. Single-threaded, no subagents (owner rule).
 
-**Status:** in progress. One PR per part below, in order.
+**Status:** done 2026-10-01. Seventeen PRs, #417 to #433; the master and three game servers run
+the result, and v3.1.0 is released. Report, deploy versions and rollbacks:
+`plans/reports/2026-10-01-p30-newmap-integration.md`.
 
 ## What `NewMap` is
 
