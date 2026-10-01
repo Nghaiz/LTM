@@ -488,6 +488,11 @@ public class AstarPath : MonoBehaviour
 
 	private void LogPathResults(Path p)
 	{
+		// Abandoned by its seeker on purpose: no result, and no failure either.
+		if (p.canceled)
+		{
+			return;
+		}
 		if (logPathResults != 0 && (logPathResults != PathLog.OnlyErrors || p.error))
 		{
 			string message = p.DebugString(logPathResults);
