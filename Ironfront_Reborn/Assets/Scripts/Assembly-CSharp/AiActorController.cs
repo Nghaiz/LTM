@@ -1690,7 +1690,23 @@ public class AiActorController : ActorController
 			}
 			lastGotoPoint = targetPoint;
 			arrivedAtGoto = false;
-			seeker.StartPath(actor.Position(), targetPoint, null, graphMask);
+			if (aquatic && actor.IsDriver())
+			{
+				// A boat's goal is usually ashore: a flag the squad finishes on foot. The search for
+				// the goal's node gave up beyond maxNearestNodeDistance (100 m) of water, so a flag
+				// further inland failed outright -- "Couldn't find a close node to the end point",
+				// the bot soak's Island boat sent to Farm -- and the boat never moved. Without the
+				// limit the path ends at the water nearest the goal; StartSeated's exact end point
+				// carries it on to the goal itself, so the boat runs aground there and AiVehicle's
+				// stuck-boat branch puts the squad ashore to walk the rest.
+				ABPath boatPath = ABPath.Construct(actor.Position(), targetPoint, null);
+				boatPath.nnConstraint.constrainDistance = false;
+				seeker.StartPath(boatPath, null, graphMask);
+			}
+			else
+			{
+				seeker.StartPath(actor.Position(), targetPoint, null, graphMask);
+			}
 			lastWaypoint = base.transform.position;
 		}
 	}
