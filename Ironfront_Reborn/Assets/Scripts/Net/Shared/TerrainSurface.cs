@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Ironfront.Net.Unity
 {
@@ -23,6 +23,17 @@ namespace Ironfront.Net.Unity
     /// tunnels emptied onto the hilltop.
     /// </para>
     /// <para>
+    /// <b>Read from the terrain's collider, not its renderer.</b> The collider is what holds a
+    /// body up, and a dedicated server build turns every <see cref="Terrain"/> component off
+    /// (<c>ServerBuildSceneStrip</c>): it only draws, and bringing it up on a process with no
+    /// shaders logged three warnings per map load. <see cref="Terrain.GetActiveTerrains"/> lists
+    /// only enabled terrains, so read through it the server would have found no ground at all.
+    /// Every shipping map has one terrain with its collider on the same object and the same
+    /// <see cref="TerrainData"/>, and that data's <see cref="TerrainData.GetInterpolatedHeight"/>
+    /// is the surface <see cref="Terrain.SampleHeight"/> reports and the collider holds: within
+    /// 0.8 mm of both at 4000 points on each of Dustbowl, Island and Forest Lake (2026-10-01).
+    /// </para>
+    /// <para>
     /// <b>Here rather than beside the callers</b> for the reason <see cref="GroundSnap"/> is:
     /// they live in <c>Assembly-CSharp</c>, which no test assembly can reference.
     /// </para>
@@ -30,10 +41,14 @@ namespace Ironfront.Net.Unity
     public static class TerrainSurface
     {
         /// <summary>
-        /// Reused on every call: bots ask for the ground up to sixty times a second each, and
-        /// <see cref="Terrain.activeTerrains"/> allocates a new array for every read.
+        /// The terrain colliders of the loaded scenes. Searched for again only when the scenes
+        /// change, one of them is destroyed, or none was found: bots ask for the ground up to sixty
+        /// times a second each, and a search walks every object of the type.
         /// </summary>
-        private static readonly List<Terrain> _terrains = new List<Terrain>();
+        private static TerrainCollider[] _colliders = new TerrainCollider[0];
+
+        /// <summary>The loaded scenes <see cref="_colliders"/> was searched in. See <see cref="ScenesStamp"/>.</summary>
+        private static int _collidersScenes;
 
         /// <summary>
         /// The highest terrain surface under <paramref name="point"/>, in world space.
@@ -41,25 +56,25 @@ namespace Ironfront.Net.Unity
         /// <param name="point">Only X and Z are read.</param>
         /// <param name="height">The surface's world Y, or negative infinity when there is none.</param>
         /// <returns>
-        /// False when no active terrain covers the point, or every terrain that does has a hole
-        /// there. False means "nothing to stand on here that belongs to a terrain", never "the
-        /// ground is low".
+        /// False when no enabled terrain collider covers the point, or every one that does has a
+        /// hole there. False means "nothing to stand on here that belongs to a terrain", never
+        /// "the ground is low".
         /// </returns>
         public static bool TryGetHeight(Vector3 point, out float height)
         {
             height = float.NegativeInfinity;
             bool found = false;
 
-            Terrain.GetActiveTerrains(_terrains);
-            for (int i = 0; i < _terrains.Count; i++)
+            TerrainCollider[] colliders = Colliders();
+            for (int i = 0; i < colliders.Length; i++)
             {
-                Terrain terrain = _terrains[i];
-                if (terrain == null) continue;
+                TerrainCollider collider = colliders[i];
+                if (!collider.enabled || !collider.gameObject.activeInHierarchy) continue;
 
-                TerrainData data = terrain.terrainData;
+                TerrainData data = collider.terrainData;
                 if (data == null) continue;
 
-                Vector3 origin = terrain.GetPosition();
+                Vector3 origin = collider.transform.position;
                 Vector3 size = data.size;
                 float u = (point.x - origin.x) / size.x;
                 float v = (point.z - origin.z) / size.z;
@@ -71,7 +86,7 @@ namespace Ironfront.Net.Unity
                     continue;
                 }
 
-                float surface = terrain.SampleHeight(point) + origin.y;
+                float surface = data.GetInterpolatedHeight(u, v) + origin.y;
                 if (!found || surface > height)
                 {
                     height = surface;
@@ -106,5 +121,44 @@ namespace Ironfront.Net.Unity
         /// </summary>
         public static bool IsUnder(Vector3 point, float depthMetres)
             => TryGetHeight(point, out float surface) && point.y < surface - depthMetres;
+
+        /// <summary>
+        /// <see cref="_colliders"/>, searched for again when it can no longer be right.
+        /// </summary>
+        /// <remarks>
+        /// An empty result is searched again on every call rather than kept: while a map loads,
+        /// its scene is counted before its objects exist, and a kept "no terrain" would leave
+        /// the map without ground until the next scene change.
+        /// </remarks>
+        private static TerrainCollider[] Colliders()
+        {
+            int scenes = ScenesStamp();
+            bool stale = scenes != _collidersScenes || _colliders.Length == 0;
+            for (int i = 0; !stale && i < _colliders.Length; i++)
+            {
+                stale = _colliders[i] == null;
+            }
+
+            if (stale)
+            {
+                _colliders = Object.FindObjectsByType<TerrainCollider>(FindObjectsSortMode.None);
+                _collidersScenes = scenes;
+            }
+
+            return _colliders;
+        }
+
+        /// <summary>Changes whenever a scene is loaded or unloaded.</summary>
+        private static int ScenesStamp()
+        {
+            int count = SceneManager.sceneCount;
+            int stamp = count;
+            for (int i = 0; i < count; i++)
+            {
+                stamp = stamp * 31 + SceneManager.GetSceneAt(i).handle;
+            }
+
+            return stamp;
+        }
     }
 }
