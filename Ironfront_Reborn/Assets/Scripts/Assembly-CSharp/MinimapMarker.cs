@@ -179,6 +179,17 @@ public class MinimapMarker : MonoBehaviour
 		}
 
 		Vector3 position = subject.position;
+		if (!MinimapUi.IsShowing)
+		{
+			// Nobody sees the map: the icon stays put and only its trail keeps its history, so the
+			// trail is there the moment the map opens. The vehicle's speed is measured afresh then.
+			if (trail != null)
+			{
+				trail.Record(position, Time.time);
+			}
+			hasLastPosition = false;
+			return;
+		}
 		Vector3 viewport = minimapCamera.camera.WorldToViewportPoint(position);
 
 		// Behind the minimap camera (a helicopter above it, say), a perspective projection comes
