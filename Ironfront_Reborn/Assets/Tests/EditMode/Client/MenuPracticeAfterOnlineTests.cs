@@ -52,8 +52,8 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.AreEqual("Dustbowl", practice.Launched, "the practice map was not launched");
             Assert.IsFalse(practice.DeclaredClientAtLaunch,
                 "the practice map loaded with the process still declared a client: its server declines to start");
-            Assert.AreEqual(NetRole.Offline, practice.RoleAtLaunch,
-                "the practice map loaded with the online match's role still set");
+            Assert.AreEqual(NetRole.Server, practice.RoleAtLaunch,
+                "practice is the local authority, declared rather than left to the map's Awake order");
         }
 
         private sealed class RecordingPractice : IPracticeLauncher
