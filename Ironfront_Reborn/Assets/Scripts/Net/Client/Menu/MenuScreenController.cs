@@ -405,8 +405,11 @@ namespace Ironfront.Net.Unity.Client.Menu
             // process a declared client: ClientFlowBootstrap declares one before every join and
             // nothing undid it. The practice map's NetServerBootstrap then declined to start, so
             // there was no local authority, and VehicleSpawner, which stands down on a client,
-            // spawned nothing. Cleared, the map comes up as it does on a fresh launch.
+            // spawned nothing. Cleared, then declared the local authority it is: what the Awake
+            // race between the map's two bootstraps settled on before, in every shipped map
+            // (NetServer sits above NetClient in each), said rather than left to that order.
             NetContext.Clear();
+            NetContext.SetRole(NetRole.Server);
             practice.LaunchMap(sceneName);
         }
 
