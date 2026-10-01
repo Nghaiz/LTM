@@ -432,6 +432,17 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void OnSnapshotApplied(uint serverTick, uint lastProcessedInputTick)
         {
+            // The server's clock as this client last heard it, which is what NetContext.CurrentTick
+            // promises ("published ... by the client's reconciliation"). Until 2026-10-02 only
+            // OnConnected wrote it, so every client reader measured against the tick it CONNECTED
+            // at. ClientProjectileTracker takes a 16-bit distance from that, and 2^15 ticks (18.2
+            // minutes at 30 Hz) into a session every launch read as eighteen minutes old and was
+            // dropped: v3.1.1 logged "grenade N ... Ignore, age 32640 ticks" from minute 18 of both
+            // long matches on 2026-10-01, every grenade invisible from then on. A grenade's own fuse
+            // (GrenadeProjectile) never reached its tick either, so its mesh lay on the ground
+            // through the whole report after the server's blast.
+            if (serverTick > NetContext.CurrentTick) NetContext.CurrentTick = serverTick;
+
             // Apply identity-bearing state at the same boundary that made it authoritative.
             // The old per-frame presenter poll proved too indirect in a real player build: the
             // recorder could read snapshot team 1 for the whole match while Actor.team stayed
