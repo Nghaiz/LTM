@@ -26,10 +26,11 @@ public enum MinimapMarkerKind
 /// <c>ActorBlip</c> with half its fields unused.
 /// </para>
 /// <para>
-/// <b>It anchors rather than moves.</b> Everything else on this minimap positions itself by
-/// setting <c>anchorMin</c>/<c>anchorMax</c> from a viewport point, so a marker that used
-/// <c>anchoredPosition</c> would drift against the spawn buttons the moment the minimap was
-/// resized or re-parented between the loadout and ingame containers.
+/// <b>It moves inside fixed anchors, re-placed every frame from the map's current size</b>
+/// (<see cref="MinimapUi.Place"/>). Until 2026-10-02 it re-anchored itself every frame, which
+/// rebuilt its mesh every frame; recomputing the position from the parent's size still keeps it on
+/// the spawn buttons, which are anchored, when the minimap is resized or re-parented between the
+/// loadout and ingame containers.
 /// </para>
 /// <para>
 /// <b>A subject that is destroyed hides the marker rather than throwing.</b> A capture point is
@@ -120,8 +121,21 @@ public class MinimapMarker : MonoBehaviour
 				kind == MinimapMarkerKind.Vehicle ? VehicleTrailLength : BodyTrailLength);
 		}
 
+		// The Body kind borrows the actorBlipPrefab, which carries an ActorBlip. Left alive it runs
+		// its own LateUpdate against a null Actor and hides the graphic EVERY frame, and this marker
+		// shows it again: an OnDisable and an OnEnable per icon per frame, each re-registering the
+		// graphic with the canvas. #381 dropped these lines; in a 100-bot match that was ~50 of each
+		// every frame (v3.1.1 profile, 2026-10-02). Same reasoning as the Button above: a borrowed
+		// prefab's own behaviour has to be switched off, not merely ignored.
+		ActorBlip blip = GetComponent<ActorBlip>();
+		if (blip != null)
+		{
+			Object.Destroy(blip);
+		}
+
 		RectTransform rect = (RectTransform)base.transform;
 		rect.anchoredPosition = Vector2.zero;
+		rect.localScale = Vector3.one;
 
 		SetColor(color);
 	}
@@ -183,7 +197,7 @@ public class MinimapMarker : MonoBehaviour
 		{
 			// Not pinned: a flag off a zoomed view is simply off it, and the map's mask clips it.
 			float flag = MinimapIconLayout.SoldierPixels(MinimapUi.MapWidth) * MinimapIconLayout.FlagScale;
-			rect.sizeDelta = new Vector2(flag, flag);
+			MinimapUi.SetSquareSize(rect, flag);
 		}
 		else
 		{
@@ -202,16 +216,14 @@ public class MinimapMarker : MonoBehaviour
 			forward.y = 0f;
 			if (forward.sqrMagnitude > 1e-6f)
 			{
-				float heading = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
-				rect.rotation = Quaternion.Euler(0f, 0f, 0f - heading);
+				MinimapUi.SetHeading(rect, Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg);
 			}
 
 			float soldier = MinimapIconLayout.SoldierPixels(MinimapUi.MapWidth);
 			float size = kind == MinimapMarkerKind.Vehicle
 				? soldier * MinimapIconLayout.VehicleScale
 				: (isHuman ? soldier * MinimapIconLayout.HumanScale : soldier);
-			rect.sizeDelta = new Vector2(size, size);
-			rect.localScale = Vector3.one;
+			MinimapUi.SetSquareSize(rect, size);
 			if (kind == MinimapMarkerKind.Vehicle)
 			{
 				TrackVelocity(position);
@@ -227,8 +239,7 @@ public class MinimapMarker : MonoBehaviour
 				trail.Draw(minimapCamera.camera, color, dot, true, now);
 			}
 		}
-		rect.anchorMin = anchor;
-		rect.anchorMax = anchor;
+		MinimapUi.Place(rect, anchor);
 		SetVisible(true);
 	}
 

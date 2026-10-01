@@ -100,16 +100,24 @@ public sealed class MinimapTrail
 					return;
 				}
 			}
+			// Placed, scaled and faded without touching the dot's mesh: a moved transform, a scale
+			// and a CanvasRenderer alpha only re-batch the canvas, where a new anchor, size or
+			// colour regenerated every dot of every trail every frame (MinimapUi.Place). The colour
+			// is written only when the icon's own colour changes.
 			RectTransform rect = dot.rectTransform;
-			Vector2 anchor = new Vector2(viewport.x, viewport.y);
-			rect.anchorMin = anchor;
-			rect.anchorMax = anchor;
-			float size = dotPixels * (0.45f + 0.55f * fade);
-			rect.sizeDelta = new Vector2(size, size);
-			Color tinted = color;
-			tinted.a *= 0.9f * fade;
-			dot.color = tinted;
-			dot.enabled = true;
+			MinimapUi.Place(rect, new Vector2(viewport.x, viewport.y));
+			MinimapUi.SetSquareSize(rect, dotPixels);
+			float scale = 0.45f + 0.55f * fade;
+			rect.localScale = new Vector3(scale, scale, 1f);
+			if (dot.color != color)
+			{
+				dot.color = color;
+			}
+			dot.canvasRenderer.SetAlpha(0.9f * fade);
+			if (!dot.enabled)
+			{
+				dot.enabled = true;
+			}
 		}
 	}
 
