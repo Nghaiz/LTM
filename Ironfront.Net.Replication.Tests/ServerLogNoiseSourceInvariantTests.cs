@@ -100,6 +100,15 @@ namespace Ironfront.Net.Replication.Tests
                 MethodBody(source, "AiActorController.cs", "public override void ReceivedDamage("),
                 "direction != Vector3.zero",
                 "ReceivedDamage must not turn for damage with no direction: the offline ragdoll timeout deals it at the bot's own position.");
+
+            // The last line of defence, and the one that covers every caller at once: v3.1.1 still
+            // logged it 22 times on 2026-10-01, from a member hailing a leader who was released
+            // onto the same authored spawn child (reproduced offline on Forest Lake).
+            string look = MethodBody(source, "AiActorController.cs", "private void LookDirection(Vector3 direction)");
+            int guard = look.IndexOf("if (direction.sqrMagnitude < 1e-8f)", StringComparison.Ordinal);
+            int rotation = look.IndexOf("Quaternion.LookRotation(direction)", StringComparison.Ordinal);
+            Assert.True(guard >= 0 && rotation > guard,
+                "LookDirection must keep the bot's facing for a zero direction before calling Quaternion.LookRotation.");
         }
 
         /// <summary>

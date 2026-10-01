@@ -1634,6 +1634,17 @@ public class AiActorController : ActorController
 
 	private void LookDirection(Vector3 direction)
 	{
+		// A bot asked to face the point it stands on keeps the facing it has. Bots released
+		// together are placed on a capture point's authored spawn children, picked at random, so
+		// two of them can stand on the same one; a member hailing its leader there (#433 closed
+		// only the leader hailing itself) turned to world north and Unity logged "Look rotation
+		// viewing vector is zero" -- 22 times on the three v3.1.1 servers on 2026-10-01, nearly
+		// every one within seconds of a bot release. Reproduced offline on Forest Lake from
+		// EmoteHailLeader.
+		if (direction.sqrMagnitude < 1e-8f)
+		{
+			return;
+		}
 		targetFacingDirection = Quaternion.LookRotation(direction);
 	}
 
