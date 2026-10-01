@@ -504,6 +504,7 @@ namespace Ironfront.Net.Unity.Client
             // four. Update keeps polling until the map's NetClientBootstrap takes the socket over,
             // and the session's queue holds what arrives meanwhile.
             _loadStartedAt = Time.realtimeSinceStartup;
+            BackgroundFrameCap.SetLoadingMap(true);
             SceneManager.LoadSceneAsync(scene);
         }
 
@@ -514,6 +515,7 @@ namespace Ironfront.Net.Unity.Client
             MatchTransportHandoff.Clear();
             _loadingMatch = false;
             _loadingScene = string.Empty;
+            BackgroundFrameCap.SetLoadingMap(false);
 
             if (_verbose) Debug.Log($"[flow] junction failed: {reason}");
         }
@@ -524,6 +526,8 @@ namespace Ironfront.Net.Unity.Client
             // OnFlowStateChanged's handover and the reason it does not re-subscribe itself.
             if (string.Equals(scene.name, MenuScene, StringComparison.Ordinal))
             {
+                // A load abandoned on the way back to the shell must not leave the menu capped.
+                BackgroundFrameCap.SetLoadingMap(false);
                 ResumeHolding();
 
                 // The Menu scene brings a NEW menu with it, and only Awake ever bound one: every
@@ -540,6 +544,7 @@ namespace Ironfront.Net.Unity.Client
 
             _loadingMatch = false;
             _loadingScene = string.Empty;
+            BackgroundFrameCap.SetLoadingMap(false);
 
             // NetClientBootstrap's Awake has run by now -- Unity raises sceneLoaded after every
             // object in the scene has woken -- so it has already adopted the transport and
