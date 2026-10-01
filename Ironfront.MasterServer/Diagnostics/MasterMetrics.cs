@@ -31,6 +31,7 @@ namespace Ironfront.MasterServer.Diagnostics
         public long FramesReceived { get; init; }
         public long TlsHandshakeFailures { get; init; }
         public bool TlsEnabled { get; init; }
+        public long ProxyHeaderRejections { get; init; }
 
         public int AccountsTotal { get; init; }
         public int AccountsOnlineNow { get; init; }
@@ -107,6 +108,7 @@ namespace Ironfront.MasterServer.Diagnostics
                 writer.WriteBoolean("tls", TlsEnabled);
                 writer.WriteNumber("framesReceived", FramesReceived);
                 writer.WriteNumber("tlsHandshakeFailures", TlsHandshakeFailures);
+                writer.WriteNumber("proxyHeaderRejections", ProxyHeaderRejections);
                 writer.WriteEndObject();
 
                 writer.WriteStartObject("accounts");
@@ -273,6 +275,7 @@ namespace Ironfront.MasterServer.Diagnostics
                 FramesReceived       = _host.TotalFramesReceived,
                 TlsHandshakeFailures = _host.TotalTlsHandshakeFailures,
                 TlsEnabled           = _host.TlsEnabled,
+                ProxyHeaderRejections = _host.TotalProxyHeaderRejections,
 
                 AccountsTotal    = _database.CountAccounts(),
                 AccountsOnlineNow = _auth.ActiveSessionCount,

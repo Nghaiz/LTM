@@ -34,6 +34,20 @@ namespace Ironfront.MasterServer.Net
         public int MaxConnectionsPerIp { get; set; } = 5;
 
         /// <summary>
+        /// Every connection starts with a PROXY protocol header, and the client address it
+        /// names is the one the per-IP limit and the login rate count. False by default.
+        /// </summary>
+        /// <remarks>
+        /// For a master behind a proxy that sends the header, which is what fly's
+        /// <c>proxy_proto</c> handler does. Without it every connection arrives from the proxy's
+        /// own address and the per-IP limit counts all players as one. A connection without a
+        /// valid header is closed, which is also what keeps a client from naming its own
+        /// address: the proxy's header always comes first. Only safe where clients cannot reach
+        /// the listener except through that proxy.
+        /// </remarks>
+        public bool TrustProxyProtocol { get; set; }
+
+        /// <summary>
         /// Total accepted connections held at once, across every address. 0 disables the cap.
         /// </summary>
         /// <remarks>

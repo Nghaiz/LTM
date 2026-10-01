@@ -448,6 +448,18 @@ namespace Ironfront.Net.Configuration
             "5",
             summary: "login attempts per source IP; raise it on a test rig");
 
+        /// <summary>Take each client's address from a PROXY protocol header.</summary>
+        public static readonly EnvVar MasterProxyProtocol = new EnvVar(
+            "IRONFRONT_MASTER_PROXY_PROTOCOL", "Limits", "master server",
+            "1 when the master sits behind a proxy that sends a PROXY protocol header (v1 or v2)\n" +
+            "ahead of every connection, as fly's proxy_proto handler does. The per-IP connection\n" +
+            "cap and login rate above then count each client's own address. Without it they count\n" +
+            "the proxy's, which is every player at once. A connection that does not open with a\n" +
+            "valid header is closed, so leave this unset wherever clients connect directly. Cannot\n" +
+            "be combined with IRONFRONT_TLS_CERT_PATH: the header arrives in the clear.",
+            "",
+            summary: "1 behind fly's proxy_proto: per-IP limits see real clients");
+
         /// <summary>What the game servers can carry, in bot units. See <see cref="MatchCostUnits"/>.</summary>
         public static readonly EnvVar BotBudgetUnits = new EnvVar(
             "IRONFRONT_MASTER_BOT_BUDGET", "Limits", "master server",
@@ -562,7 +574,7 @@ namespace Ironfront.Net.Configuration
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,
-            MaxConnectionsPerIp, MaxTotalConnections, LoginRatePerMinute,
+            MaxConnectionsPerIp, MaxTotalConnections, LoginRatePerMinute, MasterProxyProtocol,
             BotBudgetUnits, MatchCostUnits,
             PacketCapturePath, Simulator, SimulatorSeed,
             InstallRoot, RemoteRoot, BackupDir, BackupRetentionDays,
