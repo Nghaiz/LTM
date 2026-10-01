@@ -465,7 +465,17 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// newer master can send, and the number is what makes it reportable.
         /// </remarks>
         internal static string MapLabel(RoomInfo room)
-            => MapCatalog.TryGetScene(room.MapId, out string scene) ? scene : $"map {room.MapId}";
+        {
+            // The catalog's display name, as the create and practice screens show it. The scene
+            // name read the same for Dustbowl and Island, so nothing showed the difference until
+            // Forest Lake listed as "ForestLake".
+            for (int i = 0; i < MapCatalog.All.Count; i++)
+            {
+                if (MapCatalog.All[i].Id == room.MapId) return MapCatalog.All[i].DisplayName;
+            }
+
+            return $"map {room.MapId}";
+        }
 
         /// <summary>
         /// The MAP cell: the map, and the room's bots beside it (protocol 13), so a 100-bot room
