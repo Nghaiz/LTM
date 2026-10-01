@@ -69,7 +69,14 @@ public class VehicleSpawner : MonoBehaviour
 
 	private bool lastSpawnedVehicleHasBeenUsed;
 
-	private float collisionCheckRadius;
+	/// <summary>
+	/// The box this pad's vehicle fills, in the pad's own space: every solid collider of the
+	/// prefab, plus <see cref="SpawnClearance"/> on each side. See <see cref="SpawnIsBlocked"/>.
+	/// </summary>
+	private Bounds spawnFootprint;
+
+	/// <summary>Kept clear around the footprint, so a vehicle never appears touching another.</summary>
+	private const float SpawnClearance = 0.5f;
 
 	private VehicleSpawnScheduler scheduler;
 
@@ -249,7 +256,8 @@ public class VehicleSpawner : MonoBehaviour
 		{
 			marker.enabled = false;
 		}
-		collisionCheckRadius = prefab.GetComponent<Vehicle>().avoidanceSize.magnitude;
+		spawnFootprint = ColliderFootprint(prefab);
+		spawnFootprint.Expand(2f * SpawnClearance);
 
 		spawnIsBlocked = SpawnIsBlocked;
 		scheduler = new VehicleSpawnScheduler((VehicleRespawnType)respawnType, spawnTime);
@@ -532,6 +540,83 @@ public class VehicleSpawner : MonoBehaviour
 		return netId;
 	}
 
+	/// <summary>
+	/// The box the prefab's solid colliders fill, in the prefab root's space.
+	/// </summary>
+	/// <remarks>
+	/// Read off the collider shapes rather than <c>Collider.bounds</c>, which a prefab asset
+	/// that is not in a scene does not have. A vehicle without one is a broken prefab; it is
+	/// said so, once, and its avoidance size stands in.
+	/// </remarks>
+	private static Bounds ColliderFootprint(GameObject vehiclePrefab)
+	{
+		Matrix4x4 toRoot = vehiclePrefab.transform.worldToLocalMatrix;
+		bool found = false;
+		Bounds footprint = default(Bounds);
+		foreach (Collider collider in vehiclePrefab.GetComponentsInChildren<Collider>(true))
+		{
+			if (collider.isTrigger || !TryGetLocalBounds(collider, out Bounds local)) continue;
+
+			Matrix4x4 toPrefab = toRoot * collider.transform.localToWorldMatrix;
+			for (int corner = 0; corner < 8; corner++)
+			{
+				Vector3 offset = new Vector3(
+					(corner & 1) == 0 ? -local.extents.x : local.extents.x,
+					(corner & 2) == 0 ? -local.extents.y : local.extents.y,
+					(corner & 4) == 0 ? -local.extents.z : local.extents.z);
+				Vector3 point = toPrefab.MultiplyPoint3x4(local.center + offset);
+				if (found)
+				{
+					footprint.Encapsulate(point);
+				}
+				else
+				{
+					footprint = new Bounds(point, Vector3.zero);
+					found = true;
+				}
+			}
+		}
+
+		if (!found)
+		{
+			Vector2 avoidance = vehiclePrefab.GetComponent<Vehicle>().avoidanceSize;
+			Debug.LogError(
+				$"[net] vehicle prefab '{vehiclePrefab.name}' has no solid collider, so its spawn "
+				+ "pad is checked against its avoidance size instead.");
+			footprint = new Bounds(Vector3.zero, new Vector3(avoidance.x, 2f, avoidance.y));
+		}
+
+		return footprint;
+	}
+
+	/// <summary>A collider's shape as a box in its own transform's space.</summary>
+	private static bool TryGetLocalBounds(Collider collider, out Bounds local)
+	{
+		switch (collider)
+		{
+			case BoxCollider box:
+				local = new Bounds(box.center, box.size);
+				return true;
+			case SphereCollider sphere:
+				local = new Bounds(sphere.center, Vector3.one * (2f * sphere.radius));
+				return true;
+			case CapsuleCollider capsule:
+				Vector3 size = Vector3.one * (2f * capsule.radius);
+				size[capsule.direction] = Mathf.Max(capsule.height, 2f * capsule.radius);
+				local = new Bounds(capsule.center, size);
+				return true;
+			case MeshCollider mesh when mesh.sharedMesh != null:
+				local = mesh.sharedMesh.bounds;
+				return true;
+			case WheelCollider wheel:
+				local = new Bounds(wheel.center, new Vector3(wheel.radius, 2f * wheel.radius, 2f * wheel.radius));
+				return true;
+			default:
+				local = default(Bounds);
+				return false;
+		}
+	}
+
 	private bool SpawnIsBlocked()
 	{
 		// X-70's capacity half, and it is a BLOCK rather than a refusal on purpose: deferring
@@ -561,9 +646,19 @@ public class VehicleSpawner : MonoBehaviour
 
 		// SPAWN_BLOCK_MASK, not the literal 5376 a second time. The constant was declared and
 		// the call site re-spelled it, so the two could drift with nothing to notice.
+		//
+		// The space the vehicle will fill, not a sphere of avoidanceSize.magnitude around the
+		// pad. That sphere was far wider than the vehicle -- 10.1 m for a helicopter 5.8 m wide
+		// -- and on Island it reached the hull of the tank parked on the next pad, 12.4 m
+		// away: the helicopter never came back while the tank sat where it spawns, which is
+		// where an unused tank sits. With every vehicle of every map parked on its own pad, no
+		// footprint overlaps another vehicle (measured 2026-10-01); the sphere blocked that one.
+		// Rotated, not scaled: Instantiate places the prefab at the pad's position and rotation
+		// at the prefab's own scale.
 		lastProbeRan = true;
-		int hits = Physics.OverlapSphereNonAlloc(
-			base.transform.position, collisionCheckRadius, spawnCollisions, SPAWN_BLOCK_MASK);
+		int hits = Physics.OverlapBoxNonAlloc(
+			base.transform.position + base.transform.rotation * spawnFootprint.center,
+			spawnFootprint.extents, spawnCollisions, base.transform.rotation, SPAWN_BLOCK_MASK);
 
 		// Copied out of the shared scratch now, while it is certainly this pad's answer.
 		lastProbeBlocker = hits > 0 ? spawnCollisions[0] : null;

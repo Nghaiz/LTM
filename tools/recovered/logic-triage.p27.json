@@ -4,8 +4,8 @@
   "scope": {
     "commonFiles": 322,
     "filesWithCandidates": 80,
-    "candidates": 711,
-    "outrightDeletions": 143,
+    "candidates": 713,
+    "outrightDeletions": 145,
     "skippedAsP24": [
       "AstarPath.cs",
       "EuclideanEmbedding.cs",
@@ -2838,6 +2838,154 @@
         }
       ]
     },
+    "VehicleSpawner.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/VehicleSpawner.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/VehicleSpawner.cs",
+      "survivors": 20,
+      "outrightDeletions": 9,
+      "candidates": [
+        {
+          "line": 1,
+          "recoveredMember": null,
+          "recovered": "using System.Collections;",
+          "nearestLineInOurs": "using System.Collections.Generic;",
+          "similarity": 0.86
+        },
+        {
+          "line": 27,
+          "recoveredMember": null,
+          "recovered": "private float collisionCheckRadius;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 29,
+          "recoveredMember": null,
+          "recovered": "private bool spawningQueued;",
+          "nearestLineInOurs": "private ushort spawnerId;",
+          "similarity": 0.68
+        },
+        {
+          "line": 33,
+          "recoveredMember": "Awake",
+          "recovered": "GetComponent<Renderer>().enabled = false;",
+          "nearestLineInOurs": "marker.enabled = false;",
+          "similarity": 0.62
+        },
+        {
+          "line": 34,
+          "recoveredMember": "Awake",
+          "recovered": "collisionCheckRadius = prefab.GetComponent<Vehicle>().avoidanceSize.magnitude;",
+          "nearestLineInOurs": "Vector2 avoidance = vehiclePrefab.GetComponent<Vehicle>().avoidanceSize;",
+          "similarity": 0.68
+        },
+        {
+          "line": 42,
+          "recoveredMember": "StartSpawnCountdown",
+          "recovered": "private void StartSpawnCountdown()",
+          "nearestLineInOurs": "private void Start()",
+          "similarity": 0.74
+        },
+        {
+          "line": 44,
+          "recoveredMember": "StartSpawnCountdown",
+          "recovered": "Invoke(\"SpawnVehicle\", spawnTime);",
+          "nearestLineInOurs": "lastSpawnedVehicle = spawned;",
+          "similarity": 0.63
+        },
+        {
+          "line": 49,
+          "recoveredMember": "SpawnVehicle",
+          "recovered": "if (!GameManager.instance.noVehicles)",
+          "nearestLineInOurs": "return GameManager.instance != null && GameManager.instance.noVehicles;",
+          "similarity": 0.63
+        },
+        {
+          "line": 51,
+          "recoveredMember": "SpawnVehicle",
+          "recovered": "StartCoroutine(SpawnCoroutine());",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 55,
+          "recoveredMember": "SpawnCoroutine",
+          "recovered": "private IEnumerator SpawnCoroutine()",
+          "nearestLineInOurs": "private void SpawnVehicle()",
+          "similarity": 0.6
+        },
+        {
+          "line": 57,
+          "recoveredMember": "SpawnCoroutine",
+          "recovered": "while (SpawnIsBlocked())",
+          "nearestLineInOurs": "private bool SpawnIsBlocked()",
+          "similarity": 0.72
+        },
+        {
+          "line": 59,
+          "recoveredMember": "SpawnCoroutine",
+          "recovered": "yield return new WaitForSeconds(1f);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 61,
+          "recoveredMember": "SpawnCoroutine",
+          "recovered": "lastSpawnedVehicle = ((GameObject)Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
+          "nearestLineInOurs": "Vehicle spawned = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
+          "similarity": 0.89
+        },
+        {
+          "line": 68,
+          "recoveredMember": "SpawnIsBlocked",
+          "recovered": "return Physics.OverlapSphereNonAlloc(base.transform.position, collisionCheckRadius, spawnCollisions, 5376) > 0;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 73,
+          "recoveredMember": "VehicleDied",
+          "recovered": "if (respawnType == RespawnType.AfterDestroyed)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 75,
+          "recoveredMember": "VehicleDied",
+          "recovered": "StartSpawnCountdown();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 77,
+          "recoveredMember": "VehicleDied",
+          "recovered": "else if (respawnType == RespawnType.AfterMoved && vehicle == lastSpawnedVehicle && !lastSpawnedVehicleHasBeenUsed)",
+          "nearestLineInOurs": "scheduler.ReportVehicleDied(vehicle == lastSpawnedVehicle, lastSpawnedVehicleHasBeenUsed);",
+          "similarity": 0.7
+        },
+        {
+          "line": 79,
+          "recoveredMember": "VehicleDied",
+          "recovered": "StartSpawnCountdown();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 88,
+          "recoveredMember": "FirstDriverEntered",
+          "recovered": "if (respawnType == RespawnType.AfterMoved)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 90,
+          "recoveredMember": "FirstDriverEntered",
+          "recovered": "StartSpawnCountdown();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        }
+      ]
+    },
     "ProceduralWorld.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/ProceduralWorld.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ProceduralWorld.cs",
@@ -2976,140 +3124,6 @@
           "recovered": "GameObject ob2 = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
           "nearestLineInOurs": "GameObject ob = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
           "similarity": 1.0
-        }
-      ]
-    },
-    "VehicleSpawner.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/VehicleSpawner.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/VehicleSpawner.cs",
-      "survivors": 18,
-      "outrightDeletions": 7,
-      "candidates": [
-        {
-          "line": 1,
-          "recoveredMember": null,
-          "recovered": "using System.Collections;",
-          "nearestLineInOurs": "using System.Collections.Generic;",
-          "similarity": 0.86
-        },
-        {
-          "line": 29,
-          "recoveredMember": null,
-          "recovered": "private bool spawningQueued;",
-          "nearestLineInOurs": "private ushort spawnerId;",
-          "similarity": 0.68
-        },
-        {
-          "line": 33,
-          "recoveredMember": "Awake",
-          "recovered": "GetComponent<Renderer>().enabled = false;",
-          "nearestLineInOurs": "marker.enabled = false;",
-          "similarity": 0.62
-        },
-        {
-          "line": 42,
-          "recoveredMember": "StartSpawnCountdown",
-          "recovered": "private void StartSpawnCountdown()",
-          "nearestLineInOurs": "private void Start()",
-          "similarity": 0.74
-        },
-        {
-          "line": 44,
-          "recoveredMember": "StartSpawnCountdown",
-          "recovered": "Invoke(\"SpawnVehicle\", spawnTime);",
-          "nearestLineInOurs": "lastSpawnedVehicle = spawned;",
-          "similarity": 0.63
-        },
-        {
-          "line": 49,
-          "recoveredMember": "SpawnVehicle",
-          "recovered": "if (!GameManager.instance.noVehicles)",
-          "nearestLineInOurs": "return GameManager.instance != null && GameManager.instance.noVehicles;",
-          "similarity": 0.63
-        },
-        {
-          "line": 51,
-          "recoveredMember": "SpawnVehicle",
-          "recovered": "StartCoroutine(SpawnCoroutine());",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 55,
-          "recoveredMember": "SpawnCoroutine",
-          "recovered": "private IEnumerator SpawnCoroutine()",
-          "nearestLineInOurs": "private void SpawnVehicle()",
-          "similarity": 0.6
-        },
-        {
-          "line": 57,
-          "recoveredMember": "SpawnCoroutine",
-          "recovered": "while (SpawnIsBlocked())",
-          "nearestLineInOurs": "private bool SpawnIsBlocked()",
-          "similarity": 0.72
-        },
-        {
-          "line": 59,
-          "recoveredMember": "SpawnCoroutine",
-          "recovered": "yield return new WaitForSeconds(1f);",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 61,
-          "recoveredMember": "SpawnCoroutine",
-          "recovered": "lastSpawnedVehicle = ((GameObject)Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
-          "nearestLineInOurs": "Vehicle spawned = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
-          "similarity": 0.89
-        },
-        {
-          "line": 68,
-          "recoveredMember": "SpawnIsBlocked",
-          "recovered": "return Physics.OverlapSphereNonAlloc(base.transform.position, collisionCheckRadius, spawnCollisions, 5376) > 0;",
-          "nearestLineInOurs": "base.transform.position, collisionCheckRadius, spawnCollisions, SPAWN_BLOCK_MASK);",
-          "similarity": 0.68
-        },
-        {
-          "line": 73,
-          "recoveredMember": "VehicleDied",
-          "recovered": "if (respawnType == RespawnType.AfterDestroyed)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 75,
-          "recoveredMember": "VehicleDied",
-          "recovered": "StartSpawnCountdown();",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 77,
-          "recoveredMember": "VehicleDied",
-          "recovered": "else if (respawnType == RespawnType.AfterMoved && vehicle == lastSpawnedVehicle && !lastSpawnedVehicleHasBeenUsed)",
-          "nearestLineInOurs": "scheduler.ReportVehicleDied(vehicle == lastSpawnedVehicle, lastSpawnedVehicleHasBeenUsed);",
-          "similarity": 0.7
-        },
-        {
-          "line": 79,
-          "recoveredMember": "VehicleDied",
-          "recovered": "StartSpawnCountdown();",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 88,
-          "recoveredMember": "FirstDriverEntered",
-          "recovered": "if (respawnType == RespawnType.AfterMoved)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 90,
-          "recoveredMember": "FirstDriverEntered",
-          "recovered": "StartSpawnCountdown();",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
         }
       ]
     },
