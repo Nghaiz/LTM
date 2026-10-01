@@ -81,9 +81,10 @@ param(
     # Where the client writes its log. Read this first when a join does not happen.
     [string] $LogFile = "",
 
-    # IRONFRONT_LOG_FRAMES=1: a [frames] line every five seconds and a [hitch] line naming the
-    # heaviest PlayerLoop systems of every frame over 50 ms, in this client's log. For a
-    # playtest that is chasing stutter; off otherwise.
+    # IRONFRONT_LOG_FRAMES=1: a [frames] and a [loop] line every five seconds (the [loop] line
+    # splits the average frame by PlayerLoop system) and a [hitch] line naming the heaviest
+    # systems of every frame over 50 ms, in this client's log. For a playtest that is chasing
+    # stutter; off otherwise.
     [switch] $LogFrames
 )
 

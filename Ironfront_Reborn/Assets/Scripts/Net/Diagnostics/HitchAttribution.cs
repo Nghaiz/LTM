@@ -13,7 +13,8 @@ namespace Ironfront.Net.Unity.Diagnostics
 {
     /// <summary>
     /// Names the PlayerLoop systems that spent a long frame, one <c>[hitch]</c> line per frame
-    /// over <see cref="FrameTimeLog.HitchMilliseconds"/>, when <c>IRONFRONT_LOG_FRAMES=1</c>.
+    /// over <see cref="FrameTimeLog.HitchMilliseconds"/>, and where an ordinary frame's time
+    /// went, one <c>[loop]</c> line per window, when <c>IRONFRONT_LOG_FRAMES=1</c>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -36,6 +37,12 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// <b>Rate-limited per window</b>, so a machine that is hitching every frame writes a
     /// bounded number of lines rather than drowning the log it is trying to explain.
     /// </para>
+    /// <para>
+    /// <b>The <c>[loop]</c> line</b> is the steady cost: each system's share of the window's
+    /// average frame. A client held at 25 fps by 40 ms frames that never cross the hitch line
+    /// prints no <c>[hitch]</c> at all, and the release player is exactly the build the Profiler
+    /// cannot attach to.
+    /// </para>
     /// </remarks>
     public static class HitchAttribution
     {
@@ -43,8 +50,18 @@ namespace Ironfront.Net.Unity.Diagnostics
         private const int SystemsPerLine = 5;
         private const float WindowSeconds = FrameTimeLog.WindowSeconds;
 
+        // How many systems a [loop] line names: enough to cover a frame's whole budget.
+        private const int SystemsPerWindowLine = 8;
+
         private static readonly List<string> Names = new List<string>();
         private static double[] _elapsedMs = Array.Empty<double>();
+
+        // The whole window's time per system, for the [loop] line: where an ORDINARY frame goes,
+        // which the hitch lines never say. A release player cannot carry the Unity Profiler, so
+        // this is how a release build is broken down (2026-10-02).
+        private static double[] _windowMs = Array.Empty<double>();
+        private static int _windowFrames;
+        private static double _windowFrameMs;
         private static int[] _calls = Array.Empty<int>();
         private static long[] _startedAt = Array.Empty<long>();
 
@@ -90,6 +107,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             }
 
             _elapsedMs = new double[Names.Count];
+            _windowMs = new double[Names.Count];
             _calls = new int[Names.Count];
             _startedAt = new long[Names.Count];
 
@@ -121,11 +139,19 @@ namespace Ironfront.Net.Unity.Diagnostics
             double frameMs = (now - _frameStartedAt) * TicksToMs;
             int gc = GC.CollectionCount(0);
 
+            for (int i = 0; i < _elapsedMs.Length; i++) _windowMs[i] += _elapsedMs[i];
+            _windowFrames++;
+            _windowFrameMs += frameMs;
+
             if (Time.realtimeSinceStartup - _windowStartedAt >= WindowSeconds)
             {
                 if (_suppressedThisWindow > 0)
                     Debug.Log($"[hitch] {_suppressedThisWindow} more long frame(s) in the last "
                               + $"{WindowSeconds:F0} s were not itemised");
+                Debug.Log(DescribeWindow());
+                Array.Clear(_windowMs, 0, _windowMs.Length);
+                _windowFrames = 0;
+                _windowFrameMs = 0;
                 _windowStartedAt = Time.realtimeSinceStartup;
                 _linesThisWindow = 0;
                 _suppressedThisWindow = 0;
@@ -148,6 +174,39 @@ namespace Ironfront.Net.Unity.Diagnostics
             Array.Clear(_calls, 0, _calls.Length);
             _frameStartedAt = now;
             _gcAtFrameStart = gc;
+        }
+
+        /// <summary>
+        /// "[loop] 172 frames, frame 29.1 ms, loop 27.9 ms: Phase.System=avg ..." -- the heaviest
+        /// systems of the window, as milliseconds per average frame.
+        /// </summary>
+        private static string DescribeWindow()
+        {
+            int frames = Math.Max(1, _windowFrames);
+            double loop = 0;
+            for (int i = 0; i < _windowMs.Length; i++) loop += _windowMs[i];
+
+            var line = new StringBuilder(384);
+            line.Append("[loop] ").Append(_windowFrames).Append(" frames, frame ")
+                .Append((_windowFrameMs / frames).ToString("F1")).Append(" ms, loop ")
+                .Append((loop / frames).ToString("F1")).Append(" ms:");
+
+            var taken = new bool[_windowMs.Length];
+            for (int n = 0; n < SystemsPerWindowLine; n++)
+            {
+                int best = -1;
+                for (int i = 0; i < _windowMs.Length; i++)
+                {
+                    if (taken[i]) continue;
+                    if (best < 0 || _windowMs[i] > _windowMs[best]) best = i;
+                }
+
+                if (best < 0 || _windowMs[best] / frames < 0.1) break;
+                taken[best] = true;
+                line.Append(' ').Append(Names[best]).Append('=').Append((_windowMs[best] / frames).ToString("F2"));
+            }
+
+            return line.ToString();
         }
 
         private static string Describe(double frameMs, int collections)
