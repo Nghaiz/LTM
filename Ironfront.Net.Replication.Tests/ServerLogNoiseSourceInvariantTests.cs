@@ -16,19 +16,23 @@ namespace Ironfront.Net.Replication.Tests
     public sealed class ServerLogNoiseSourceInvariantTests
     {
         /// <summary>
-        /// The per-instance <c>OnGUI</c> methods are not compiled into the dedicated server.
+        /// The <c>OnGUI</c> methods of the components a map brings up are not compiled into the
+        /// dedicated server.
         /// </summary>
         /// <remarks>
         /// IMGUI is stripped from the server build, and Unity then logs "OnGUI function detected
         /// on MonoBehaviour, but not called" once per instance: 402 lines in one 100-bot match,
-        /// because every bot carries an <c>AiActorController</c>. These three are on every bot,
-        /// every scoped weapon and every vehicle; scene singletons log once and are left alone.
+        /// because every bot carries an <c>AiActorController</c>. The first three are on every
+        /// bot, every scoped weapon and every vehicle. <c>AstarPath</c> is the scene singleton
+        /// every map carries, and after those three it was the line's only source: one per map
+        /// load (a server build of 2026-10-01 logged none once it was guarded).
         /// </remarks>
         [Theory]
         [InlineData("AiActorController.cs")]
         [InlineData("ScopedWeapon.cs")]
         [InlineData("Vehicle.cs")]
-        public void PerInstanceOnGuiIsNotCompiledIntoTheServer(string file)
+        [InlineData("AstarPath.cs")]
+        public void OnGuiIsNotCompiledIntoTheServer(string file)
         {
             string source = ReadScript("Assembly-CSharp", file);
 
