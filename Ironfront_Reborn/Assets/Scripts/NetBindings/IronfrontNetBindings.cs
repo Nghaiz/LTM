@@ -431,6 +431,8 @@ namespace Ironfront.Net.Unity.Bindings
 
         public bool CrashSkipsBurn => _vehicle.crashSkipsBurn;
 
+        public bool IsFlooded => _vehicle.IsFlooded;
+
         public bool IsBurning => _vehicle.burning;
 
         public bool IsDead => _vehicle.dead;

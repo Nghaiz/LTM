@@ -102,7 +102,9 @@ namespace Ironfront.Net.Unity.Server
             //
             // Both paths still go through the burn clock, so the despawn is announced from one
             // place — two death paths is how a wreck ends up announced twice or not at all.
-            if (source != null && source.CrashSkipsBurn)
+            // A hull the water drowned (Vehicle.IsFlooded) does not catch fire either: it dies here,
+            // and every client draws it settling where it sank, without a blast.
+            if (source != null && (source.CrashSkipsBurn || source.IsFlooded))
             {
                 _burnClock.KillImmediately(vehicleId);
                 return new VehicleDamageOutcome(0f, startedBurning: false, died: true);

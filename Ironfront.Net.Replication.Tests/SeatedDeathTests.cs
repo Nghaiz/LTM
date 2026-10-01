@@ -102,9 +102,11 @@ namespace Ironfront.Net.Replication.Tests
                 .Single(s => Normalized(s.Condition).Contains("NetContext.IsClient", StringComparison.Ordinal));
             Assert.Equal("Ironfront.Net.Unity.NetContext.IsClient", Normalized(clientBranch.Condition));
 
+            // An enclosed seat's crew is felled by S_DEATH -- except from a hull the water drowned,
+            // which kills nobody (Vehicle.IsFlooded, 2026-10-02), so that crew swims away armed.
             List<InvocationExpressionSyntax> leaves = Invocations(clientBranch.Statement, "LeaveSeat");
             Assert.Single(leaves);
-            Assert.Equal("occupant.LeaveSeat(drawWeapon:!seat.enclosed)", Normalized(leaves[0]));
+            Assert.Equal("occupant.LeaveSeat(drawWeapon:!seat.enclosed||drowned)", Normalized(leaves[0]));
             Assert.Empty(Invocations(clientBranch.Statement, "Damage"));
 
             // The server and the offline game keep the original's two outcomes.
