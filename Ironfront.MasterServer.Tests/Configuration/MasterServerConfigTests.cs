@@ -130,5 +130,48 @@ namespace Ironfront.MasterServer.Tests.Configuration
 
             Assert.Equal("/var/lib/ironfront.db", MasterServerConfig.FromEnvironment(read).DatabasePath);
         }
+
+        [Theory]
+        [InlineData(null, false)]
+        [InlineData("", false)]
+        [InlineData("1", true)]
+        [InlineData("true", true)]
+        [InlineData("0", false)]
+        [InlineData("off", false)]
+        public void TheProxyProtocolFlagIsRead(string? value, bool expected)
+        {
+            Func<string, string?> read = Env(
+                (MasterServerConfig.SharedSecretVariable, ValidSecret),
+                (MasterServerConfig.ProxyProtocolVariable, value));
+
+            Assert.Equal(expected, MasterServerConfig.FromEnvironment(read).TrustProxyProtocol);
+        }
+
+        /// <summary>
+        /// Unlike the diagnostic flags, a typo here is refused at boot: behind fly's edge it would
+        /// otherwise leave every connection unreadable while the setting looks configured.
+        /// </summary>
+        [Fact]
+        public void AProxyProtocolTypoIsRefusedAtBoot()
+        {
+            Func<string, string?> read = Env(
+                (MasterServerConfig.SharedSecretVariable, ValidSecret),
+                (MasterServerConfig.ProxyProtocolVariable, "yse"));
+
+            var ex = Assert.Throws<InvalidOperationException>(() => MasterServerConfig.FromEnvironment(read));
+            Assert.Contains(MasterServerConfig.ProxyProtocolVariable, ex.Message);
+        }
+
+        [Fact]
+        public void ProxyProtocolAndInAppTlsAreRefusedTogether()
+        {
+            Func<string, string?> read = Env(
+                (MasterServerConfig.SharedSecretVariable, ValidSecret),
+                (MasterServerConfig.ProxyProtocolVariable, "1"),
+                (MasterServerConfig.TlsCertificatePathVariable, "/certs/master.pfx"));
+
+            var ex = Assert.Throws<InvalidOperationException>(() => MasterServerConfig.FromEnvironment(read));
+            Assert.Contains(MasterServerConfig.TlsCertificatePathVariable, ex.Message);
+        }
     }
 }

@@ -97,6 +97,7 @@ namespace Ironfront.MasterServer.Net
         private long _totalHeartbeats;
         private long _totalUnhandledFrames;
         private long _totalTlsHandshakeFailures;
+        private long _totalProxyHeaderRejections;
         private int _connectionCount;
         private int _peakConnectionCount;
 
@@ -131,7 +132,11 @@ namespace Ironfront.MasterServer.Net
         /// <summary>Connections currently held. Safe to read from any thread.</summary>
         public int ConnectionCount => Volatile.Read(ref _connectionCount);
 
-        /// <summary>Connections accepted since start, excluding those refused by the per-IP limit.</summary>
+        /// <summary>
+        /// Connections accepted since start, excluding those refused by the per-IP limit at
+        /// accept. Behind a trusted proxy that check runs after accept, once the PROXY header has
+        /// named the client, so those refusals are counted here as well.
+        /// </summary>
         public long TotalAccepted => Interlocked.Read(ref _totalAccepted);
 
         /// <summary>Connections refused because their IP was already at the limit.</summary>
@@ -171,6 +176,13 @@ namespace Ironfront.MasterServer.Net
         /// </summary>
         public long TotalTlsHandshakeFailures => Interlocked.Read(ref _totalTlsHandshakeFailures);
 
+        /// <summary>
+        /// Connections closed for not opening with a valid PROXY header, when
+        /// <see cref="TcpListenerHostOptions.TrustProxyProtocol"/> is on. Non-zero means something
+        /// reaches the listener without the proxy, or the proxy stopped sending the header.
+        /// </summary>
+        public long TotalProxyHeaderRejections => Interlocked.Read(ref _totalProxyHeaderRejections);
+
         /// <summary>True when a certificate is configured, so connections are encrypted.</summary>
         public bool TlsEnabled => _options.ServerCertificate is not null;
 
@@ -195,7 +207,8 @@ namespace Ironfront.MasterServer.Net
 
             MasterLog.Warn($"listening on {_options.BindAddress}:{Port} " +
                            $"({(TlsEnabled ? "TLS" : "PLAINTEXT")}, " +
-                           $"max {_options.MaxConnectionsPerIp} connections/IP)");
+                           $"max {_options.MaxConnectionsPerIp} connections/IP" +
+                           (_options.TrustProxyProtocol ? ", client addresses from PROXY headers" : "") + ")");
 
             // Loud, because a server that quietly runs without TLS on a public address is the
             // failure this warning exists to prevent — everything works, and every password
@@ -386,7 +399,9 @@ namespace Ironfront.MasterServer.Net
                 return;
             }
 
-            if (ConnectionsForIpUnsafe(ipKey) >= _options.MaxConnectionsPerIp)
+            // Behind a trusted proxy the socket's address is the proxy's, the same for everyone,
+            // so the per-IP check waits for the header to name the client (HandleProxyHeader).
+            if (!_options.TrustProxyProtocol && ConnectionsForIpUnsafe(ipKey) >= _options.MaxConnectionsPerIp)
             {
                 // Refused BEFORE the counter is touched, so a flood cannot inflate the count
                 // it is being measured against.
@@ -404,10 +419,11 @@ namespace Ironfront.MasterServer.Net
             int id = ++_nextConnectionId;
             var connection = new ClientConnection(
                 id, socket, ipKey, address, endPoint, PostToLogicThread, HandleFrame, HandleClosed,
-                _options.Clock, _options.ServerCertificate);
+                _options.Clock, _options.ServerCertificate,
+                _options.TrustProxyProtocol ? HandleProxyHeader : null);
 
             _connections[id] = connection;
-            _connectionsPerIp[ipKey] = ConnectionsForIpUnsafe(ipKey) + 1;
+            if (!_options.TrustProxyProtocol) TakeIpSlot(connection);
             Volatile.Write(ref _connectionCount, _connections.Count);
             if (_connections.Count > _peakConnectionCount)
                 Volatile.Write(ref _peakConnectionCount, _connections.Count);
@@ -533,6 +549,41 @@ namespace Ironfront.MasterServer.Net
             => Disconnect(connection, reason);
 
         /// <summary>
+        /// Counts a connection on the address its PROXY header named, or refuses it when that
+        /// address is already at the per-IP limit. Logic thread only; runs before any frame of
+        /// the connection is handled, so the login rate and the session checks see the client's
+        /// address and never the proxy's.
+        /// </summary>
+        private void HandleProxyHeader(ClientConnection connection, IPEndPoint? client)
+        {
+            if (!_connections.ContainsKey(connection.Id)) return;   // closed while it was read
+
+            // A header without an address (LOCAL, UNKNOWN) is the proxy speaking for itself,
+            // such as a health check, and is counted on the proxy's own address.
+            if (client is not null) connection.AdoptClientAddress(client);
+
+            if (ConnectionsForIpUnsafe(connection.RemoteIpKey) >= _options.MaxConnectionsPerIp)
+            {
+                Interlocked.Increment(ref _totalRejectedByIpLimit);
+                MasterLog.Warn(
+                    $"refused {connection.RemoteEndPoint}: already at {_options.MaxConnectionsPerIp} connections for this IP");
+                Disconnect(connection, "per-IP limit");
+                return;
+            }
+
+            TakeIpSlot(connection);
+
+            if (MasterLog.DebugEnabled)
+                MasterLog.Debug($"conn #{connection.Id} is {connection.RemoteEndPoint}");
+        }
+
+        private void TakeIpSlot(ClientConnection connection)
+        {
+            _connectionsPerIp[connection.RemoteIpKey] = ConnectionsForIpUnsafe(connection.RemoteIpKey) + 1;
+            connection.HoldsIpSlot = true;
+        }
+
+        /// <summary>
         /// Removes, releases and disposes a connection. Logic thread only, and idempotent.
         /// </summary>
         /// <remarks>
@@ -549,10 +600,19 @@ namespace Ironfront.MasterServer.Net
         {
             if (!_connections.Remove(connection.Id)) return;
 
-            ReleaseIpSlot(connection.RemoteIpKey);
+            // Only a slot it took: behind a trusted proxy a connection holds none until its
+            // header names the client, and releasing one anyway would hand out a slot that
+            // another connection on the same address is still using.
+            if (connection.HoldsIpSlot)
+            {
+                ReleaseIpSlot(connection.RemoteIpKey);
+                connection.HoldsIpSlot = false;
+            }
+
             Volatile.Write(ref _connectionCount, _connections.Count);
             Interlocked.Increment(ref _totalDisconnected);
             if (connection.TlsHandshakeFailed) Interlocked.Increment(ref _totalTlsHandshakeFailures);
+            if (connection.ProxyHeaderRejected) Interlocked.Increment(ref _totalProxyHeaderRejections);
 
             _dispatcher?.OnDisconnected(connection);
             connection.ClearSession();
