@@ -327,7 +327,9 @@ namespace Ironfront.Editor.Verification
 
         static void OnLog(string message, string stackTrace, LogType type)
         {
-            if (type == LogType.Log)
+            // A* reports a failed search as a plain log line ("Path Failed : ..."), so it is kept
+            // with the warnings rather than dropped with the rest of the info lines.
+            if (type == LogType.Log && !message.StartsWith("Path Failed", StringComparison.Ordinal))
             {
                 if (message.StartsWith("[bots]", StringComparison.Ordinal))
                 {

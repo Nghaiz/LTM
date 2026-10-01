@@ -1689,6 +1689,12 @@ public class AiActorController : ActorController
 
 	public void CancelPath()
 	{
+		// The search still running is dropped too. Left alone it was delivered when it finished,
+		// so a bot that cancelled its order -- to board a vehicle, or on dying -- got that order
+		// back as a fresh path, and a bot that cancelled and asked again (falling back to cover,
+		// a stuck car re-planning) made the seeker cancel it noisily: "Canceled path because a
+		// new one was requested" and "Path Failed" in every long server log.
+		seeker.CancelCurrentPathRequest();
 		calculatingPath = false;
 		path = null;
 		hasPath = false;
