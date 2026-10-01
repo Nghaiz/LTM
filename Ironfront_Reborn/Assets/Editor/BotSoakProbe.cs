@@ -83,6 +83,7 @@ namespace Ironfront.Editor.Verification
         static int _pathsCanceled;
         static readonly Dictionary<Actor, BotTrack> Tracks = new Dictionary<Actor, BotTrack>();
         static int[] _lastOwners;
+        static readonly Dictionary<Squad, float> BoardingSince = new Dictionary<Squad, float>();
 
         static readonly FieldInfo HasPath = AiField("hasPath");
         static readonly FieldInfo CalculatingPath = AiField("calculatingPath");
@@ -248,6 +249,7 @@ namespace Ironfront.Editor.Verification
             _pathsDone = 0;
             _pathsCanceled = 0;
             Tracks.Clear();
+            BoardingSince.Clear();
             _lastOwners = null;
 
             Application.logMessageReceivedThreaded -= OnLog;
@@ -490,11 +492,39 @@ namespace Ironfront.Editor.Verification
                 }
             }
 
+            SampleBoarding(now);
             _result.gameSeconds = now - _releasedAt;
             _result.peakAlive = Mathf.Max(_result.peakAlive, alive);
             _result.peakSwimming = Mathf.Max(_result.peakSwimming, swimming);
             _result.peakSeated = Mathf.Max(_result.peakSeated, seated);
             SampleFlags();
+        }
+
+        /// <summary>
+        /// How long squads take to get into a vehicle: from the first sample that sees a squad in
+        /// EnterVehicle to the first that sees it out of that state, every member seated or not.
+        /// Resolution is <see cref="SampleEvery"/>.
+        /// </summary>
+        static void SampleBoarding(float now)
+        {
+            var seen = new HashSet<Squad>();
+            List<Actor> actors = ActorManager.instance.actors;
+            foreach (Actor actor in actors)
+            {
+                if (actor == null || !actor.aiControlled || actor.dead) continue;
+                Squad squad = (actor.controller as AiActorController)?.squad;
+                if (squad == null || !seen.Add(squad)) continue;
+                if (squad.state == Squad.State.EnterVehicle)
+                {
+                    if (!BoardingSince.ContainsKey(squad)) BoardingSince.Add(squad, now);
+                }
+                else if (BoardingSince.TryGetValue(squad, out float since))
+                {
+                    BoardingSince.Remove(squad);
+                    bool allSeated = squad.members.TrueForAll(m => m != null && m.actor != null && m.actor.IsSeated());
+                    (allSeated ? _result.boardedSeconds : _result.notBoardedSeconds).Add(Mathf.Round(now - since));
+                }
+            }
         }
 
         static void SampleFlags()
@@ -676,6 +706,8 @@ namespace Ironfront.Editor.Verification
         public List<BotSoakBotEvent> longSwims = new List<BotSoakBotEvent>();
         public int underTerrainCount;
         public List<BotSoakBotEvent> underTerrain = new List<BotSoakBotEvent>();
+        public List<float> boardedSeconds = new List<float>();
+        public List<float> notBoardedSeconds = new List<float>();
         public List<string> flagChanges = new List<string>();
         public string finalOwners;
         public List<string> commanderLines = new List<string>();

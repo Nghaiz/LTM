@@ -165,6 +165,19 @@ public class Squad
 	/// <summary>When the squad last dug in (phase P28): how long it has held its cover.</summary>
 	private float digInTime;
 
+	/// <summary>When the squad set out to board <see cref="squadVehicle"/>.</summary>
+	private float enterVehicleTime;
+
+	/// <summary>
+	/// How long a squad may take to get into a vehicle before it gives up on it.
+	/// </summary>
+	/// <remarks>
+	/// Measured with no limit (bot soak, ten minutes on each map, 50 bots): 69 squads got in, in
+	/// 5 s to 10 s as a rule and 46 s at the longest (Island); the ones that never would waited up
+	/// to 107 s. A minute keeps every boarding that was going to happen.
+	/// </remarks>
+	private const float BoardingTimeoutSeconds = 60f;
+
 	/// <summary>
 	/// Whether a dug-in squad stays in its cover this tick: while any member still has an enemy
 	/// in its sights, up to <see cref="CombatRules.HoldCoverSeconds"/> (phase P28).
@@ -695,6 +708,7 @@ public class Squad
 			return;
 		}
 		state = State.EnterVehicle;
+		enterVehicleTime = Time.time;
 		hasSquadVehicle = true;
 		squadVehicle = vehicle;
 		vehicle.ownerTeam = Leader().actor.team;
@@ -707,6 +721,89 @@ public class Squad
 				members[i].EmoteMoveOrder(vehicle.transform.position);
 			}
 		}
+	}
+
+	/// <summary>
+	/// Whether the vehicle this squad set out to board is no longer one it can board: wrecked, taken
+	/// by someone outside the squad, or not boarded in <see cref="BoardingTimeoutSeconds"/>.
+	/// </summary>
+	/// <remarks>
+	/// The original gave up on a WRECKED vehicle only (<c>AiActorController.AiOrders</c>), and no
+	/// other order reaches a squad in <see cref="State.EnterVehicle"/>. So a squad whose vehicle
+	/// another squad drove off, or left two hundred metres away, stood on the spot where it had
+	/// been until it died. The bot soak found such squads waiting more than a minute 1, 5 and 3
+	/// times in ten minutes on Dustbowl, Island and Forest Lake: a jeep 648 m away with another
+	/// squad at the wheel, a helicopter 363 m away, quadbikes 198 and 231 m away with no driver.
+	/// </remarks>
+	public bool BoardingFailed()
+	{
+		if (state != State.EnterVehicle)
+		{
+			return false;
+		}
+		if (squadVehicle == null || squadVehicle.dead)
+		{
+			return true;
+		}
+		Actor driver = squadVehicle.HasDriver() ? squadVehicle.Driver() : null;
+		if (driver != null && !IsMember(driver))
+		{
+			return true;
+		}
+		return Time.time - enterVehicleTime > BoardingTimeoutSeconds;
+	}
+
+	/// <summary>
+	/// Gives up on boarding. Nobody aboard: the squad stands down where it is. Some aboard: they
+	/// keep their seats and the rest go on foot as a squad of their own, the way a full vehicle
+	/// already splits a squad (<see cref="UpdateVehicleStatus"/>).
+	/// </summary>
+	public void GiveUpBoarding()
+	{
+		List<AiActorController> onFoot = new List<AiActorController>();
+		int aboard = 0;
+		foreach (AiActorController member in members)
+		{
+			if (member == null)
+			{
+				continue;
+			}
+			Actor body = member.actor;
+			if (body != null && body.IsSeated() && body.seat.vehicle == squadVehicle)
+			{
+				aboard++;
+			}
+			else
+			{
+				onFoot.Add(member);
+			}
+		}
+		if (aboard == 0)
+		{
+			ExitVehicle();
+			return;
+		}
+		foreach (AiActorController member in onFoot)
+		{
+			member.LeaveVehicle();
+		}
+		state = State.Stationary;
+		if (onFoot.Count > 0)
+		{
+			SplitSquad(onFoot, SplitReason.VehicleFull);
+		}
+	}
+
+	private bool IsMember(Actor actor)
+	{
+		foreach (AiActorController member in members)
+		{
+			if (member != null && member.actor == actor)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public void ExitVehicle()

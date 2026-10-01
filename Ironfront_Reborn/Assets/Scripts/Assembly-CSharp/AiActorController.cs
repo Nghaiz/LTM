@@ -992,6 +992,13 @@ public class AiActorController : ActorController
 					actor.EnterSeat(targetVehicle.GetEmptySeat());
 				}
 			}
+			else if (HasTargetVehicle() && !actor.IsSeated() && !hasPath && !calculatingPath)
+			{
+				// Arrived where the vehicle was, and it has moved since -- driven a few metres by
+				// the squad's own driver, rolled, pushed. Go to where it is now. The member used to
+				// stand on the old spot for good; Squad.BoardingFailed decides when to stop chasing.
+				Goto(targetVehicle.transform.position);
+			}
 			yield return new WaitForSeconds(0.5f);
 		}
 	}
@@ -1123,8 +1130,9 @@ public class AiActorController : ActorController
 			}
 			if (IsSquadLeader() && squad.Ready())
 			{
-				if (squad.state == Squad.State.EnterVehicle && squad.squadVehicle.dead)
+				if (squad.BoardingFailed())
 				{
+					squad.GiveUpBoarding();
 					squad.NewAttackOrder();
 				}
 				if (!squad.HasVehicle() && squad.state == Squad.State.Moving && FpsActorController.instance != null)
