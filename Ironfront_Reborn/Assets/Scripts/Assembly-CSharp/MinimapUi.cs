@@ -562,6 +562,28 @@ public class MinimapUi : MonoBehaviour
 	/// </summary>
 	public static bool OwnsScrollWheel => instance != null && instance.minimapOpenness > 0.5f;
 
+	/// <summary>
+	/// Whether anybody can see the map right now: pinned to an open deploy screen, or the in-match
+	/// overlay at least part way out.
+	/// </summary>
+	/// <remarks>
+	/// Most of a match the overlay is closed, parked below the screen, yet every icon and every
+	/// trail dot still moved every frame: 2.6 ms of script and the canvases' rebuild of what nobody
+	/// saw, in a 100-bot Forest Lake match (development build profile, 2026-10-02). Icons ask this
+	/// first and only keep their trail's history while it is false.
+	/// </remarks>
+	public static bool IsShowing
+	{
+		get
+		{
+			if (instance == null || instance.minimap == null || !instance.minimap.gameObject.activeInHierarchy)
+			{
+				return false;
+			}
+			return instance.minimap.rectTransform.parent == instance.loadoutParent || instance.minimapOpenness > 0f;
+		}
+	}
+
 	// The wheel zooms the in-match map while M is held, around the player. The deploy screen's
 	// copy always shows the whole map: that is where a player picks a flag anywhere on it.
 	private void UpdateZoom(bool held)

@@ -143,6 +143,15 @@ public class ActorBlip : MonoBehaviour
 
 		RectTransform rectTransform = (RectTransform)base.transform;
 		Vector3 position = actor.Position();
+		if (!MinimapUi.IsShowing)
+		{
+			// Nobody sees the map: keep the trail's history and nothing else (MinimapUi.IsShowing).
+			if (trail != null)
+			{
+				trail.Record(position, Time.time);
+			}
+			return;
+		}
 		Vector2 onMap = MinimapUi.ToMap(minimapCamera.camera.WorldToViewportPoint(position));
 		// Zoomed in, a soldier out of view is hidden rather than pinned to the edge; the player's
 		// own arrow is always in view, since the zoom is centred on it.

@@ -59,6 +59,36 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("MinimapUi.Place(", Normalized(body.Body!), StringComparison.Ordinal);
         }
 
+        [Theory]
+        [InlineData("MinimapMarker.cs")]
+        [InlineData("ActorBlip.cs")]
+        public void IconsStayPutWhileNobodySeesTheMap(string file)
+        {
+            string lateUpdate = Normalized(Method(Parse(file), "LateUpdate").Body!);
+
+            int gate = lateUpdate.IndexOf("if(!MinimapUi.IsShowing){", StringComparison.Ordinal);
+            int project = lateUpdate.IndexOf("WorldToViewportPoint(", StringComparison.Ordinal);
+            int place = lateUpdate.IndexOf("MinimapUi.Place(", StringComparison.Ordinal);
+            Assert.True(gate >= 0 && project > gate && place > gate,
+                $"{file} LateUpdate must ask MinimapUi.IsShowing before it projects or moves anything: "
+                + "most of a match the overlay is closed.");
+
+            string hidden = lateUpdate.Substring(gate, lateUpdate.IndexOf("return;", gate, StringComparison.Ordinal) - gate);
+            Assert.Contains("trail.Record(", hidden, StringComparison.Ordinal);
+            Assert.DoesNotContain("trail.Draw(", hidden, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void TheMapShowsOnAnOpenDeployScreenOrAnOverlayThatIsOut()
+        {
+            PropertyDeclarationSyntax showing = Parse("MinimapUi.cs").DescendantNodes().OfType<PropertyDeclarationSyntax>()
+                .Single(p => p.Identifier.ValueText == "IsShowing");
+            string body = Normalized(showing);
+
+            Assert.Contains("!instance.minimap.gameObject.activeInHierarchy", body, StringComparison.Ordinal);
+            Assert.Contains("instance.minimap.rectTransform.parent==instance.loadoutParent||instance.minimapOpenness>0f", body, StringComparison.Ordinal);
+        }
+
         [Fact]
         public void PlaceKeepsTheAnchorsAndMovesFromTheParentsCurrentSize()
         {
