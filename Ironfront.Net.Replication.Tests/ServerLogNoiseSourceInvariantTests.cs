@@ -128,6 +128,30 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(offenders.Count == 0, "components with no script: " + string.Join(", ", offenders));
         }
 
+        /// <summary>
+        /// A dedicated server build switches the terrain's renderer off, so the ground bots stand
+        /// on must not come from the list of enabled terrains.
+        /// </summary>
+        /// <remarks>
+        /// Bringing a <c>Terrain</c> up on the server logged three "Trying to access a shader"
+        /// lines per map load, so <c>ServerBuildSceneStrip</c> turns it off in server builds.
+        /// <c>Terrain.GetActiveTerrains</c> lists only enabled terrains: a <c>TerrainSurface</c>
+        /// reading it would find no ground on the server, and a bot that fell into a hillside
+        /// would no longer be stood back on it. Its EditMode tests say the same, but those do not
+        /// run in CI; this does. Neither half may change without the other.
+        /// </remarks>
+        [Fact]
+        public void ServerTerrainsHaveNoRendererAndBotsReadTheirCollider()
+        {
+            string strip = ReadScript("..", "Editor", "ServerBuildSceneStrip.cs");
+            Assert.Contains("terrain.enabled = false", strip, StringComparison.Ordinal);
+
+            string surface = ReadScript("Net", "Shared", "TerrainSurface.cs");
+            Assert.DoesNotContain("GetActiveTerrains(", surface, StringComparison.Ordinal);
+            Assert.DoesNotContain("Terrain.activeTerrain", surface, StringComparison.Ordinal);
+            Assert.Contains("FindObjectsByType<TerrainCollider>", surface, StringComparison.Ordinal);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static void AssertGuardedLook(string body, string guard, string message)
