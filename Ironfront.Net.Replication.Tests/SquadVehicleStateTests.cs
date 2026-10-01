@@ -46,8 +46,44 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("DropSeatClaim", body);
         }
 
+        /// <summary>
+        /// A squad gives up on a vehicle it can no longer board: wrecked, driven by someone outside
+        /// it, or not boarded in time. The original gave up on a wrecked one only, and no other order
+        /// reaches a squad in EnterVehicle, so the bot soak found squads standing for over a minute
+        /// where a vehicle had been, while another squad drove it 648 m away.
+        /// </summary>
+        [Fact]
+        public void ASquadGivesUpOnAVehicleItCanNoLongerBoard()
+        {
+            string failed = Method("BoardingFailed").Body!.ToString();
+            Assert.Contains("State.EnterVehicle", failed);
+            Assert.Contains("squadVehicle.dead", failed);
+            Assert.Contains("IsMember(driver)", failed);
+            Assert.Contains("BoardingTimeoutSeconds", failed);
+
+            string orders = AiMethod("AiOrders").Body!.ToString();
+            Assert.Contains("squad.BoardingFailed()", orders);
+            Assert.Contains("squad.GiveUpBoarding()", orders);
+        }
+
+        /// <summary>
+        /// A member that reached the spot a vehicle was sent to it from goes to where it is now. It
+        /// used to need to be within 4 m of the vehicle where it stood, and stood still otherwise.
+        /// </summary>
+        [Fact]
+        public void AMemberFollowsAVehicleThatHasMoved()
+        {
+            string loop = AiMethod("AiVehicle").Body!.ToString();
+
+            Assert.Contains("Goto(targetVehicle.transform.position)", loop);
+        }
+
         private static MethodDeclarationSyntax Method(string name) =>
             Parse("Assembly-CSharp/Squad.cs").DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Single(m => m.Identifier.Text == name && m.ParameterList.Parameters.Count == 0);
+
+        private static MethodDeclarationSyntax AiMethod(string name) =>
+            Parse("Assembly-CSharp/AiActorController.cs").DescendantNodes().OfType<MethodDeclarationSyntax>()
                 .Single(m => m.Identifier.Text == name && m.ParameterList.Parameters.Count == 0);
 
         private static SyntaxNode Parse(string relativePath)

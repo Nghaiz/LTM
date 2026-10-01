@@ -4,7 +4,7 @@
   "scope": {
     "commonFiles": 322,
     "filesWithCandidates": 80,
-    "candidates": 710,
+    "candidates": 711,
     "outrightDeletions": 143,
     "skippedAsP24": [
       "AstarPath.cs",
@@ -1716,7 +1716,7 @@
     "AiActorController.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/AiActorController.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AiActorController.cs",
-      "survivors": 48,
+      "survivors": 49,
       "outrightDeletions": 7,
       "candidates": [
         {
@@ -1809,6 +1809,13 @@
           "recovered": "if (!hasPath && ShouldHavePath() && moveTimeoutAction.TrueDone())",
           "nearestLineInOurs": "if (!hasPath && !arrivedAtGoto && ShouldHavePath() && moveTimeoutAction.TrueDone() && squad.members.Count > 1)",
           "similarity": 0.74
+        },
+        {
+          "line": 603,
+          "recoveredMember": "AiOrders",
+          "recovered": "if (squad.state == Squad.State.EnterVehicle && squad.squadVehicle.dead)",
+          "nearestLineInOurs": "if (squad.HasVehicle() && squad.squadVehicle.burning)",
+          "similarity": 0.68
         },
         {
           "line": 607,
