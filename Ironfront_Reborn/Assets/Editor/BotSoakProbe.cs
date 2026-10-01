@@ -9,8 +9,10 @@
 //         stack trace;
 //       - every failed path search (not the ones a seeker cancelled on purpose): its reason, where
 //         it started and where it was going, the bot asking and the nearest flag to the goal;
-//       - bots stuck (a path, and under StuckRadius of travel for StuckAfter), idle (no path, no
-//         target, no cover for IdleAfter), swimming for LongSwim, or under the terrain;
+//       - bots stuck (walking a path for StuckAfter and under StuckRadius of travel), idle (no path, no
+//         target, no cover for IdleAfter), swimming for LongSwim, or under the terrain -- measured
+//         with a physics ray onto the terrain's collider, never with TerrainSurface, which the
+//         bots stand on and so could not be seen failing;
 //       - flag captures, and the commander's own [bots] lines.
 //
 // HOW A MAP IS PLAYED
@@ -33,6 +35,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Ironfront.EditorTools;
 using Ironfront.Net.Unity;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -52,6 +55,7 @@ namespace Ironfront.Editor.Verification
         const string ScaleKey = "Ironfront.BotSoak.TimeScale";
         const string BotsKey = "Ironfront.BotSoak.BotsPerTeam";
         const string ReturnKey = "Ironfront.BotSoak.ReturnScene";
+        const string AsServerKey = "Ironfront.BotSoak.AsServer";
 
         /// <summary>Frames the scene gets to come up before the bots are released.</summary>
         const int SettleFrames = 60;
@@ -66,6 +70,9 @@ namespace Ironfront.Editor.Verification
         const float LongSwim = 20f;
         const float UnderTerrainDepth = 3f;
         const int SamplesKept = 60;
+
+        /// <summary>Samples of each bot's whereabouts kept for its first failed path: two minutes.</summary>
+        const int TrailKept = 24;
 
         enum SoakPhase { Settle, Releasing, Released }
 
@@ -84,6 +91,7 @@ namespace Ironfront.Editor.Verification
         static readonly Dictionary<Actor, BotTrack> Tracks = new Dictionary<Actor, BotTrack>();
         static int[] _lastOwners;
         static readonly Dictionary<Squad, float> BoardingSince = new Dictionary<Squad, float>();
+        static TerrainCollider[] _terrainColliders = new TerrainCollider[0];
 
         static readonly FieldInfo HasPath = AiField("hasPath");
         static readonly FieldInfo CalculatingPath = AiField("calculatingPath");
@@ -104,7 +112,10 @@ namespace Ironfront.Editor.Verification
             public float AnchoredAt;
             public float IdleSince = -1f;
             public float SwimSince = -1f;
-            public bool StuckNoted, IdleNoted, SwimNoted, UnderNoted;
+            public bool StuckNoted, IdleNoted, SwimNoted, UnderNoted, TrailNoted;
+
+            /// <summary>Where the bot was at its last <see cref="TrailKept"/> samples, and in what.</summary>
+            public readonly Queue<string> Trail = new Queue<string>();
         }
 
         static BotSoakProbe()
@@ -122,8 +133,18 @@ namespace Ironfront.Editor.Verification
             Run(Maps, 600f, 4f, 25, DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
         }
 
+        [MenuItem("Ironfront/Verification/Bot soak as the server builds the maps (all maps, 10 min each)")]
+        public static void RunAllAsServerMenu()
+        {
+            Run(Maps, 600f, 4f, 25, DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-server", asServer: true);
+        }
+
         /// <summary>Plays <paramref name="maps"/> in turn for <paramref name="gameSeconds"/> of match each.</summary>
-        public static void Run(string[] maps, float gameSeconds, float timeScale, int botsPerTeam, string label)
+        /// <param name="asServer">
+        /// Changes each map as a dedicated server build does before playing it
+        /// (<see cref="ServerBuildSceneStrip.Strip"/>): what the server's bots run on, not the Editor's.
+        /// </param>
+        public static void Run(string[] maps, float gameSeconds, float timeScale, int botsPerTeam, string label, bool asServer = false)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
             {
@@ -134,6 +155,7 @@ namespace Ironfront.Editor.Verification
             SessionState.SetFloat(SecondsKey, gameSeconds);
             SessionState.SetFloat(ScaleKey, timeScale);
             SessionState.SetInt(BotsKey, botsPerTeam);
+            SessionState.SetBool(AsServerKey, asServer);
             SessionState.SetString(ReturnKey, EditorSceneManager.GetActiveScene().path);
             Advance();
         }
@@ -178,6 +200,12 @@ namespace Ironfront.Editor.Verification
             SessionState.SetString(SceneKey, next);
 
             EditorSceneManager.OpenScene("Assets/Scenes/" + next + ".unity", OpenSceneMode.Single);
+            if (SessionState.GetBool(AsServerKey, false))
+            {
+                ServerBuildSceneStrip.Strip(EditorSceneManager.GetActiveScene(), out int probes, out int terrains);
+                Debug.Log("[soak] " + next + ": as the server builds it, " + probes + " reflection probe(s) and "
+                    + terrains + " terrain renderer(s) off in memory");
+            }
             int off = DeactivateNetRoots();
             Debug.Log("[soak] " + next + ": deactivated " + off + " net bootstrap object(s) in memory; role stays Offline");
             EditorApplication.EnterPlaymode();
@@ -190,6 +218,7 @@ namespace Ironfront.Editor.Verification
             SessionState.EraseString(LabelKey);
             SessionState.EraseString(SceneKey);
             SessionState.EraseString(ReturnKey);
+            SessionState.EraseBool(AsServerKey);
             if (!string.IsNullOrEmpty(back) && File.Exists(back))
             {
                 EditorSceneManager.OpenScene(back, OpenSceneMode.Single);
@@ -243,7 +272,12 @@ namespace Ironfront.Editor.Verification
         {
             _phase = SoakPhase.Settle;
             _phaseFrame = Time.frameCount;
-            _result = new BotSoakMapResult { map = _map, role = NetContext.Role.ToString() };
+            _result = new BotSoakMapResult
+            {
+                map = _map,
+                role = NetContext.Role.ToString(),
+                asServer = SessionState.GetBool(AsServerKey, false),
+            };
             lock (LogGate) LogsByKey.Clear();
             while (PathFailures.TryDequeue(out _)) { }
             _pathsDone = 0;
@@ -304,6 +338,7 @@ namespace Ironfront.Editor.Verification
                 // NetBotRelease holds them for DelaySeconds after the first player spawn.
                 if (!NetBotRelease.IsReleased) return;
                 _releasedAt = Time.time;
+                _terrainColliders = UnityEngine.Object.FindObjectsByType<TerrainCollider>(FindObjectsSortMode.None);
                 _nextSample = Time.time + SampleEvery;
                 _phase = SoakPhase.Released;
                 return;
@@ -397,6 +432,11 @@ namespace Ironfront.Editor.Verification
                     failure.team = asker.team;
                     failure.seated = asker.IsSeated();
                     failure.squadState = ai != null && ai.squad != null ? ai.squad.state.ToString() : "none";
+                    if (Tracks.TryGetValue(asker, out BotTrack track) && !track.TrailNoted)
+                    {
+                        track.TrailNoted = true;
+                        failure.trail = track.Trail.ToList();
+                    }
                 }
                 SpawnPoint flag = NearestFlag(failure.to, out float distance);
                 failure.nearestFlag = flag != null ? flag.name : "";
@@ -434,20 +474,27 @@ namespace Ironfront.Editor.Verification
                 }
 
                 bool isSeated = actor.IsSeated();
+                track.Trail.Enqueue("[" + (now - _releasedAt).ToString("F0", CultureInfo.InvariantCulture) + "s] "
+                    + position.ToString("F0") + (isSeated ? " in " + actor.seat.vehicle.name : " on foot")
+                    + (ai.squad != null ? ", squad " + ai.squad.state : ""));
+                while (track.Trail.Count > TrailKept) track.Trail.Dequeue();
                 bool hasPath = (bool)HasPath.GetValue(ai);
                 bool calculating = (bool)CalculatingPath.GetValue(ai);
                 bool inCover = (bool)InCover.GetValue(ai);
                 bool fighting = ai.target != null;
                 if (isSeated) seated++;
 
-                if (Vector3.Distance(position, track.Anchor) > StuckRadius)
+                // The clock runs only while the bot should be walking. It used to keep running
+                // through a wait -- digging in, in cover, fighting, seated -- so a bot that held a
+                // flag for 30 s and was then given a path read as stuck at the first sample after.
+                bool shouldBeWalking = hasPath && !isSeated && !inCover && !fighting && !actor.fallenOver;
+                if (!shouldBeWalking || Vector3.Distance(position, track.Anchor) > StuckRadius)
                 {
                     track.Anchor = position;
                     track.AnchoredAt = now;
                     track.StuckNoted = false;
                 }
-                else if (!track.StuckNoted && hasPath && !isSeated && !inCover && !fighting && !actor.fallenOver
-                         && now - track.AnchoredAt >= StuckAfter)
+                else if (!track.StuckNoted && now - track.AnchoredAt >= StuckAfter)
                 {
                     track.StuckNoted = true;
                     Note(_result.stuck, ref _result.stuckCount, actor, ai, now - track.AnchoredAt);
@@ -485,7 +532,7 @@ namespace Ironfront.Editor.Verification
                     }
                 }
 
-                if (!track.UnderNoted && !isSeated && TerrainSurface.IsUnder(position, UnderTerrainDepth))
+                if (!track.UnderNoted && !isSeated && IsUnderATerrainCollider(position))
                 {
                     track.UnderNoted = true;
                     Note(_result.underTerrain, ref _result.underTerrainCount, actor, ai, 0f);
@@ -505,6 +552,30 @@ namespace Ironfront.Editor.Verification
         /// EnterVehicle to the first that sees it out of that state, every member seated or not.
         /// Resolution is <see cref="SampleEvery"/>.
         /// </summary>
+        /// <summary>
+        /// Whether <paramref name="position"/> is more than <see cref="UnderTerrainDepth"/> under
+        /// a terrain collider's surface, found with a ray straight down onto the collider alone.
+        /// </summary>
+        /// <remarks>
+        /// Physics rather than <c>TerrainSurface.IsUnder</c>: the bots' ground probes stand on
+        /// what TerrainSurface reports, so a soak counted with it could not see it fail. A hole
+        /// has no collider, so the ray misses there as TerrainSurface does.
+        /// </remarks>
+        static bool IsUnderATerrainCollider(Vector3 position)
+        {
+            var ray = new Ray(new Vector3(position.x, 10000f, position.z), Vector3.down);
+            foreach (TerrainCollider collider in _terrainColliders)
+            {
+                if (collider == null || !collider.enabled) continue;
+                if (collider.Raycast(ray, out RaycastHit hit, 20000f) && position.y < hit.point.y - UnderTerrainDepth)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         static void SampleBoarding(float now)
         {
             var seen = new HashSet<Squad>();
@@ -565,7 +636,25 @@ namespace Ironfront.Editor.Verification
                 nearestFlagDistance = distance,
                 path = DescribePath(ai, actor.Position()),
                 vehicle = DescribeSquadVehicle(ai, actor.Position()),
+                state = DescribeState(actor, ai),
+                trail = Tracks.TryGetValue(actor, out BotTrack track) ? track.Trail.ToList() : null,
             });
+        }
+
+        /// <summary>
+        /// What can keep a bot with a path from walking it: down as a ragdoll, its brain switched
+        /// off or skipped by LOD, in cover, or busy fighting.
+        /// </summary>
+        static string DescribeState(Actor actor, AiActorController ai)
+        {
+            var parts = new List<string>();
+            if (actor.fallenOver) parts.Add("fallen over");
+            if (!ai.enabled) parts.Add("brain off");
+            if (actor.IsLowQuality()) parts.Add("low quality");
+            if ((bool)InCover.GetValue(ai)) parts.Add("in cover");
+            if ((bool)CalculatingPath.GetValue(ai)) parts.Add("calculating a path");
+            if (ai.target != null) parts.Add("fighting");
+            return parts.Count == 0 ? "walking" : string.Join(", ", parts);
         }
 
         /// <summary>Where the bot is along its path: waypoints left and the distance to the next.</summary>
@@ -686,6 +775,7 @@ namespace Ironfront.Editor.Verification
     {
         public string map;
         public string role;
+        public bool asServer;
         public bool startedByProbe;
         public int botsPerTeam;
         public float timeScale;
@@ -738,6 +828,9 @@ namespace Ironfront.Editor.Verification
         public string squadState;
         public string nearestFlag;
         public float nearestFlagDistance;
+
+        /// <summary>The asking bot's last samples, on its first failed path only.</summary>
+        public List<string> trail;
     }
 
     [Serializable]
@@ -756,5 +849,7 @@ namespace Ironfront.Editor.Verification
         public float nearestFlagDistance;
         public string path;
         public string vehicle;
+        public string state;
+        public List<string> trail;
     }
 }

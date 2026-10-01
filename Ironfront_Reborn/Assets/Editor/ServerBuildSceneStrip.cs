@@ -52,8 +52,21 @@ namespace Ironfront.EditorTools
             if (report == null) return;
             if (report.summary.GetSubtarget<StandaloneBuildSubtarget>() != StandaloneBuildSubtarget.Server) return;
 
-            int probes = 0;
-            int terrains = 0;
+            Strip(scene, out int probes, out int terrains);
+            if (probes + terrains > 0)
+            {
+                Debug.Log($"[build] server scene '{scene.name}': {probes} reflection probe(s) and {terrains} terrain renderer(s) off");
+            }
+        }
+
+        /// <summary>
+        /// Makes in <paramref name="scene"/> the changes a dedicated server build makes. Also how
+        /// <c>BotSoakProbe</c> plays a map the way the server runs it.
+        /// </summary>
+        public static void Strip(Scene scene, out int probes, out int terrains)
+        {
+            probes = 0;
+            terrains = 0;
             foreach (GameObject root in scene.GetRootGameObjects())
             {
                 foreach (ReflectionProbe probe in root.GetComponentsInChildren<ReflectionProbe>(true))
@@ -68,11 +81,6 @@ namespace Ironfront.EditorTools
                     terrain.enabled = false;
                     terrains++;
                 }
-            }
-
-            if (probes + terrains > 0)
-            {
-                Debug.Log($"[build] server scene '{scene.name}': {probes} reflection probe(s) and {terrains} terrain renderer(s) off");
             }
         }
     }
