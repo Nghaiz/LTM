@@ -65,6 +65,7 @@ public class ActorBlip : MonoBehaviour
 		infantryBlip = image.texture;
 		image.raycastTarget = false;
 		image.rectTransform.anchoredPosition = Vector2.zero;
+		image.rectTransform.localScale = Vector3.one;
 	}
 
 	public void SetActor(Actor actor, bool isSelf)
@@ -153,21 +154,20 @@ public class ActorBlip : MonoBehaviour
 		// Pinned to the edge rather than clipped: the minimap frames the ground, and a boat or
 		// helicopter out over the sea beyond it would otherwise vanish from the map.
 		Vector2 anchor = new Vector2(Mathf.Clamp01(onMap.x), Mathf.Clamp01(onMap.y));
-		rectTransform.anchorMin = anchor;
-		rectTransform.anchorMax = anchor;
+		// Moved, not re-anchored, and resized and turned only on a change: see MinimapUi.Place.
+		MinimapUi.Place(rectTransform, anchor);
 
 		float soldier = MinimapIconLayout.SoldierPixels(MinimapUi.MapWidth);
 		float size = isSelf
 			? soldier * MinimapIconLayout.SelfScale
 			: (actor.aiControlled ? soldier : soldier * MinimapIconLayout.HumanScale);
-		rectTransform.sizeDelta = new Vector2(size, size);
-		rectTransform.localScale = Vector3.one;
+		MinimapUi.SetSquareSize(rectTransform, size);
 
 		Camera look = isSelf ? LookCamera() : null;
 		float heading;
 		if (TryHeading(look, out heading))
 		{
-			rectTransform.rotation = Quaternion.Euler(0f, 0f, 0f - heading);
+			MinimapUi.SetHeading(rectTransform, heading);
 		}
 		image.enabled = true;
 
@@ -186,25 +186,24 @@ public class ActorBlip : MonoBehaviour
 
 	private void DrawSelfDecoration(Vector2 anchor, float soldier, float heading, Camera look)
 	{
-		selfDecoration.gameObject.SetActive(true);
-		selfDecoration.anchorMin = anchor;
-		selfDecoration.anchorMax = anchor;
+		if (!selfDecoration.gameObject.activeSelf)
+		{
+			selfDecoration.gameObject.SetActive(true);
+		}
+		MinimapUi.Place(selfDecoration, anchor);
 		float reach = soldier * MinimapIconLayout.ViewConeReachScale;
-		selfDecoration.sizeDelta = new Vector2(reach * 2f, reach * 2f);
-		selfDecoration.rotation = Quaternion.Euler(0f, 0f, 0f - heading);
+		MinimapUi.SetSquareSize(selfDecoration, reach * 2f);
+		MinimapUi.SetHeading(selfDecoration, heading);
 		if (viewCone != null)
 		{
 			viewCone.FieldOfViewDegrees = MinimapIconLayout.HorizontalFieldOfView(look);
 		}
 		if (halo != null)
 		{
-			float ring = soldier * MinimapIconLayout.HaloScale;
-			RectTransform haloRect = halo.rectTransform;
-			haloRect.sizeDelta = new Vector2(ring, ring);
-			Color shade = halo.color;
+			MinimapUi.SetSquareSize(halo.rectTransform, soldier * MinimapIconLayout.HaloScale);
 			// A slow pulse: enough to catch the eye on a busy map, too slow to read as an alert.
-			shade.a = Mathf.Lerp(0.45f, 0.95f, Mathf.PingPong(Time.unscaledTime * 1.2f, 1f));
-			halo.color = shade;
+			// Through the CanvasRenderer, which fades without rebuilding the ring's mesh.
+			halo.canvasRenderer.SetAlpha(Mathf.Lerp(0.45f, 0.95f, Mathf.PingPong(Time.unscaledTime * 1.2f, 1f)));
 		}
 	}
 
