@@ -254,6 +254,13 @@ $ClientBaseline = @(
     @{ Type = 'Boat'                    ; Kind = 'not-a-reference'; Retires = 'never'
        Reason = 'KillfeedGlyph.Boat, an enum MEMBER beside KillfeedGlyph.Tank above, for the ' +
                 'same picture choice. The legacy Boat MonoBehaviour is never referenced' }
+    # Found by P30's bounded water (2026-09-30), which gave WaterLevel a nested Coverage enum.
+    @{ Type = 'Coverage'                ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'HudSprites.Coverage(float), a private static METHOD in HudSprites.cs (the ' +
+                'anti-aliased edge weight every procedural HUD sprite is drawn with), called from ' +
+                'HudSprites.Board.cs and HudSprites.Killfeed.cs. It collides with WaterLevel.Coverage, ' +
+                'an enum NESTED inside WaterLevel in Assembly-CSharp, which this assembly cannot ' +
+                'reference -- the green compile is the proof' }
 )
 
 # RULE 7's allow-list: the legacy names Net/Diagnostics still contains, one row per NAME.

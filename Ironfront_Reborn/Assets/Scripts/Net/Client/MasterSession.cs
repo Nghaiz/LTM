@@ -1,11 +1,13 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
+using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Transport;
 
@@ -528,6 +530,19 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>
+        /// Every map id this build's catalog names, in catalog order: what <see cref="LoginAsync"/>
+        /// tells the master this client can load.
+        /// </summary>
+        internal static IReadOnlyList<ushort> LoadableMapIds { get; } = CatalogMapIds();
+
+        private static ushort[] CatalogMapIds()
+        {
+            var ids = new ushort[MapCatalog.All.Count];
+            for (int i = 0; i < ids.Length; i++) ids[i] = MapCatalog.All[i].Id;
+            return ids;
+        }
+
+        /// <summary>
         /// Logs in, hashing the password before it leaves the machine. phase-03 traps 1 and 2.
         /// </summary>
         /// <remarks>
@@ -537,12 +552,16 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         public async Task<bool> LoginAsync(string username, string password)
         {
+            // The maps this build can load go with every login (P30): the master then never lists,
+            // joins, creates or matchmakes this client into a room on any other map, which is the
+            // only thing standing between an older build and a map it would silently replace with
+            // the default one (MapCatalog.SceneOrDefault).
             _flow.Transition(GameFlowState.Authenticating);
 
             try
             {
                 string hash = PasswordHasher.Hash(password, username);
-                LoginResult result = await _master.LoginAsync(username, hash).ConfigureAwait(false);
+                LoginResult result = await _master.LoginAsync(username, hash, LoadableMapIds).ConfigureAwait(false);
                 NoteMasterAnswered();
 
                 if (!result.Ok)

@@ -28,6 +28,12 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>No stroke.</summary>
         None,
+
+        /// <summary>
+        /// A bar down the right edge, inset above the bottom-right cut: <c>border-right: 3px</c>
+        /// on the in-match weapon readout. Last, because the members are serialized by value.
+        /// </summary>
+        Right,
     }
 
     /// <summary>
@@ -46,23 +52,29 @@ namespace Ironfront.Net.Unity.Client.Menu
     /// </para>
     /// <para>
     /// <b>It is also the only option that works with this pack.</b> The supplied panels and buttons
-    /// are SVGs imported by Unity's scripted SVG importer, which writes
-    /// <c>SpriteBorder: {x: 0, y: 0, z: 0, w: 0}</c> — there is no nine-slice region to slice, so
-    /// <see cref="Image.Type.Sliced"/> on one of them renders identically to
-    /// <see cref="Image.Type.Simple"/> and stretches the artwork instead. The spec anticipates
-    /// this: <i>"Angular surfaces and state changes described by CSS may be reproduced with Unity
-    /// UI geometry and colors rather than new art."</i>
+    /// are rasterised SVGs with <c>SpriteBorder: {x: 0, y: 0, z: 0, w: 0}</c> — there is no
+    /// nine-slice region to slice, so <see cref="Image.Type.Sliced"/> on one of them renders
+    /// identically to <see cref="Image.Type.Simple"/> and stretches the artwork, softening its
+    /// one-pixel stroke into a blur. The spec anticipates this: <i>"Angular surfaces and state
+    /// changes described by CSS may be reproduced with Unity UI geometry and colors rather than
+    /// new art."</i>
     /// </para>
     /// <para>
-    /// <b>The cut is in reference pixels and scales with the panel.</b> <c>clip-path</c> uses
-    /// <c>px</c> against a viewport the browser does not scale, but this canvas uses a
-    /// <see cref="CanvasScaler"/> at 1920×1080, so a fixed pixel cut would shrink relative to the
-    /// artwork on a larger display. <see cref="ScaleWithCanvas"/> reproduces the CSS behaviour by
-    /// scaling the cut with the canvas, and the authoring tool leaves it off so the numbers stay
-    /// the ones written in the stylesheet.
+    /// <b>The cut and the stroke are in reference pixels</b>, so they scale with the canvas like
+    /// everything else on it. The cut edges are anti-aliased (see <see cref="AngularGeometry"/>);
+    /// the straight edges are left on the pixel grid.
+    /// </para>
+    /// <para>
+    /// <b>It requires its CanvasRenderer itself</b>, as UGUI's own Image, RawImage and Text do:
+    /// <see cref="Graphic"/> only requires a RectTransform. Without the attribute a panel was
+    /// created with no CanvasRenderer, and <see cref="Graphic.canvasRenderer"/>'s fallback only
+    /// adds one when <c>GetComponent</c> returns a true null — which a player does, but the Editor
+    /// returns its placeholder "missing component" object instead. Every angular surface was
+    /// therefore invisible in the Editor, in edit and play mode alike, while builds drew them.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
+    [RequireComponent(typeof(CanvasRenderer))]
     public sealed class AngularPanel : MaskableGraphic
     {
         [SerializeField] private float _cut = 14f;
@@ -146,15 +158,43 @@ namespace Ironfront.Net.Unity.Client.Menu
             // Half the shorter side is the point at which two opposite cuts meet and the shape
             // stops being a hexagon, so a cut past it is a request the geometry cannot honour.
             float cut = Mathf.Clamp(_cut, 0f, Mathf.Min(rect.width, rect.height) * 0.5f);
+            Vector2[] outline = AngularGeometry.CutRectangle(rect, cut);
+            Vector2 centre = AngularGeometry.Centre(outline);
+            float pixel = AngularGeometry.PixelSize(this);
 
-            // The stroke is drawn as a filled hexagon UNDER the fill rather than as a ring of
-            // quads. It is one shape fewer to compute and it makes the stroke follow the cut
-            // corners for free -- a ring would need its own six mitred corners.
-            if (_edge == AngularEdge.All && _edgeWidth > 0f && _edgeColour.a > 0f)
-                AddPolygon(vh, rect, Hexagon(rect, cut), _edgeColour, default, 0f, false);
+            // The stroke is a RING between the outline and the outline inset by the stroke width,
+            // and the fill covers only what the ring encloses. It used to be a full-size polygon
+            // drawn under a full-size fill: an opaque fill hid it completely and a translucent one
+            // was merely tinted by it, so no bordered surface in the menu showed its border.
+            bool ring = _edge == AngularEdge.All && _edgeWidth > 0f && _edgeColour.a > 0f;
+            float strokeWidth = Mathf.Min(_edgeWidth, Mathf.Min(rect.width, rect.height) * 0.5f - 0.01f);
+            Vector2[] body = ring ? AngularGeometry.Inset(outline, strokeWidth) : outline;
 
             if (color.a > 0f)
-                AddPolygon(vh, rect, Hexagon(rect, cut), color, _gradientTo, _gradientAngle, _gradient);
+                AddPolygon(vh, rect, body, color, _gradientTo, _gradientAngle, _gradient);
+
+            if (ring)
+            {
+                AngularGeometry.AddRing(vh, outline, body, _edgeColour);
+                // Smooth the two cuts: outward into the background, and inward over the fill.
+                AngularGeometry.AddFringes(vh, outline, centre, pixel, _edgeColour);
+                for (int i = 0; i < body.Length; i++)
+                {
+                    int j = (i + 1) % body.Length;
+                    AngularGeometry.AddFringe(vh, body[i], body[j], (outline[i] + outline[j]) * 0.5f,
+                        pixel, _edgeColour, _edgeColour);
+                }
+            }
+            else if (color.a > 0f)
+            {
+                for (int i = 0; i < outline.Length; i++)
+                {
+                    Vector2 a = outline[i], b = outline[(i + 1) % outline.Length];
+                    AngularGeometry.AddFringe(vh, a, b, centre, pixel,
+                        Stop(rect, a, color, _gradientTo, _gradientAngle, _gradient),
+                        Stop(rect, b, color, _gradientTo, _gradientAngle, _gradient));
+                }
+            }
 
             // A single edge is a plain rectangle clipped to the part of the hexagon it can occupy,
             // because a bar that ran the full height would stick out past the cut.
@@ -172,24 +212,13 @@ namespace Ironfront.Net.Unity.Client.Menu
                     new Rect(rect.xMin, rect.yMin, rect.width - cut, _edgeWidth),
                     _edgeColour);
             }
+            else if (_edge == AngularEdge.Right)
+            {
+                AddQuad(vh,
+                    new Rect(rect.xMax - _edgeWidth, rect.yMin + cut, _edgeWidth, rect.height - cut),
+                    _edgeColour);
+            }
         }
-
-        /// <summary>
-        /// The six points of the cut rectangle, in the stylesheet's own order.
-        /// </summary>
-        /// <remarks>
-        /// Clockwise from the first point of the CSS <c>polygon()</c>, so the shape here can be
-        /// read against the stylesheet line for line.
-        /// </remarks>
-        private static Vector2[] Hexagon(Rect rect, float cut) => new[]
-        {
-            new Vector2(rect.xMin + cut, rect.yMax),
-            new Vector2(rect.xMax, rect.yMax),
-            new Vector2(rect.xMax, rect.yMin + cut),
-            new Vector2(rect.xMax - cut, rect.yMin),
-            new Vector2(rect.xMin, rect.yMin),
-            new Vector2(rect.xMin, rect.yMax - cut),
-        };
 
         /// <summary>
         /// Adds a convex polygon as a triangle fan around its centroid.

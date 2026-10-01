@@ -91,6 +91,12 @@ namespace Ironfront.MasterServer.Configuration
         public static readonly string MaxTotalConnectionsVariable = EnvRegistry.MaxTotalConnections.Name;
 
         /// <summary>
+        /// 1 to take each client's address from a PROXY protocol header. See
+        /// <see cref="Net.TcpListenerHostOptions.TrustProxyProtocol"/>.
+        /// </summary>
+        public static readonly string ProxyProtocolVariable = EnvRegistry.MasterProxyProtocol.Name;
+
+        /// <summary>
         /// Overrides the per-IP login rate limit. See
         /// <see cref="Auth.AuthService(Data.SqliteDatabase, int)"/> for why it is a knob.
         /// </summary>
@@ -144,9 +150,11 @@ namespace Ironfront.MasterServer.Configuration
             int maxConnectionsPerIp,
             int maxTotalConnections,
             int loginRatePerMinute,
+            bool trustProxyProtocol,
             int botBudgetUnits,
             int matchCostUnits)
         {
+            TrustProxyProtocol        = trustProxyProtocol;
             BotBudgetUnits            = botBudgetUnits;
             MatchCostUnits            = matchCostUnits;
             MaxConnectionsPerIp       = maxConnectionsPerIp;
@@ -215,6 +223,9 @@ namespace Ironfront.MasterServer.Configuration
 
         /// <summary>Per-IP login attempts per minute.</summary>
         public int LoginRatePerMinute { get; }
+
+        /// <summary>Whether client addresses come from PROXY headers. See <see cref="ProxyProtocolVariable"/>.</summary>
+        public bool TrustProxyProtocol { get; }
 
         /// <summary>What the game-server host carries, in bot units. See <see cref="Lobby.BotCapacity"/>.</summary>
         public int BotBudgetUnits { get; }
@@ -299,6 +310,17 @@ namespace Ironfront.MasterServer.Configuration
             int loginRate = EnvParse.PositiveInt(
                 read(LoginRatePerMinuteVariable), AuthService.DefaultRatePerMinute, LoginRatePerMinuteVariable);
 
+            bool trustProxyProtocol = ParseProxyProtocol(read(ProxyProtocolVariable));
+            if (trustProxyProtocol && certificatePath.Length > 0)
+            {
+                // The header arrives in the clear ahead of everything else. That works where an
+                // edge terminates TLS and the master serves plaintext, as on fly, and cannot work
+                // where the master terminates TLS itself: the client would be the one sending it.
+                throw new InvalidOperationException(
+                    $"{ProxyProtocolVariable} and {TlsCertificatePathVariable} cannot both be set: a PROXY " +
+                    "header comes from an edge that terminates TLS, so the master must not terminate it too.");
+            }
+
             int botBudget = EnvParse.PositiveInt(
                 read(BotBudgetVariable), Lobby.BotCapacity.DefaultBudgetUnits, BotBudgetVariable);
             int matchCost = EnvParse.NonNegativeInt(
@@ -308,7 +330,29 @@ namespace Ironfront.MasterServer.Configuration
                 secret, port, databasePath, logLevel,
                 certificatePath, certificatePassword,
                 metricsPort, metricsBind, csvPath, csvInterval, structuredLog,
-                maxPerIp, maxTotal, loginRate, botBudget, matchCost);
+                maxPerIp, maxTotal, loginRate, trustProxyProtocol, botBudget, matchCost);
+        }
+
+        /// <summary>
+        /// A flag that refuses a value it does not recognise, unlike <see cref="EnvParse.Flag"/>.
+        /// </summary>
+        /// <remarks>
+        /// EnvParse.Flag falls back to off on a typo, which is right for a diagnostic switch. It
+        /// is wrong here: behind a proxy that sends headers, "off" by typo leaves every
+        /// connection unreadable while the setting looks configured, and "on" by accident closes
+        /// every direct connection. Either way the operator should hear about it at boot.
+        /// </remarks>
+        private static bool ParseProxyProtocol(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+            switch (raw.Trim().ToLowerInvariant())
+            {
+                case "1": case "true": case "yes": case "on": return true;
+                case "0": case "false": case "no": case "off": return false;
+                default:
+                    throw new InvalidOperationException(
+                        $"{ProxyProtocolVariable}='{raw}' is not a flag: use 1 or 0.");
+            }
         }
 
         // The parsers themselves now live in Ironfront.Net.Configuration.EnvParse, shared with

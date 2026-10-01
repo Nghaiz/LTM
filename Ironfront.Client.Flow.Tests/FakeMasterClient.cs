@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
@@ -71,7 +72,24 @@ namespace Ironfront.Client.Flow.Tests
             return ConnectAsync(host, port, ct);
         }
 
+        /// <summary>The map list the last login named, or null when it named none.</summary>
+        public IReadOnlyList<ushort>? LastLoadableMapIds { get; private set; }
+
+        public Task<LoginResult> LoginAsync(string username, string passwordHash, IReadOnlyList<ushort> loadableMapIds, CancellationToken ct = default)
+        {
+            Task<LoginResult> result = Login(username, passwordHash);
+            LastLoadableMapIds = loadableMapIds;
+            return result;
+        }
+
         public Task<LoginResult> LoginAsync(string username, string passwordHash, CancellationToken ct = default)
+        {
+            Task<LoginResult> result = Login(username, passwordHash);
+            LastLoadableMapIds = null;
+            return result;
+        }
+
+        private Task<LoginResult> Login(string username, string passwordHash)
         {
             Throw();
             LastUsername = username;

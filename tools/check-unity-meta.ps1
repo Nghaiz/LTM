@@ -58,12 +58,21 @@ function Test-UnityIgnoredPath {
 }
 
 Push-Location $repoRoot
+$previousOutputEncoding = [Console]::OutputEncoding
 try {
     # The tracked set, not the working tree: the question this gate answers is "what will another
     # developer get when they pull", and untracked local scratch files are not part of that.
-    $tracked = @(git ls-files -- "$assetsRel" 2>$null)
+    #
+    # NUL-separated and unquoted, read as UTF-8. With git's default core.quotepath a name outside
+    # ASCII comes back quoted and octal-escaped ("...\320\241.png"), and its .meta as a different
+    # string, so the pair never matched and BOTH were reported missing -- P30 hit it on two Forest
+    # Lake textures whose names carry a Cyrillic С. -z output needs no unquoting at all.
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $listing = (git -c core.quotepath=off ls-files -z -- "$assetsRel" 2>$null) -join ''
+    $tracked = @($listing -split "`0" | Where-Object { $_ })
 }
 finally {
+    [Console]::OutputEncoding = $previousOutputEncoding
     Pop-Location
 }
 

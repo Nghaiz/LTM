@@ -143,6 +143,10 @@ namespace Ironfront.Net.Unity.Client
                     // splits its seats in half, and the wait is for somebody to leave that side
                     // -- not for the room to fill, which is the opposite reading.
                     return "That side is full. Wait for a slot on it, or stay where you are.";
+                case ErrorCode.MapNotInstalled:
+                    // The only fix is a newer build: the room is on a map this one does not carry,
+                    // and joining anyway would load the wrong world.
+                    return "That room is on a map this version of the game does not have. Update the game to join it.";
 
                 // ----- game servers (3000-3002)
                 case ErrorCode.NoGameServerAvailable:

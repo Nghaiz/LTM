@@ -490,13 +490,21 @@ namespace Ironfront.MasterServer.Tests
             return database.FindAccount(username)!.PlayerId;
         }
 
+        /// <remarks>
+        /// These tests are about the queue, and name map ids freely (3, 7): their players stand for
+        /// clients that can load every one of them. What a client that names no maps may be
+        /// matched into is <see cref="MapSupportTests"/>' subject.
+        /// </remarks>
+        private static readonly MapSupport AnyTestMap = MapSupport.FromLogin(new ushort[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+
         private static Session SessionFor(int playerId, string name) => new Session
         {
             Token = Guid.NewGuid().ToString("N"),
             PlayerId = playerId,
             DisplayName = name,
             Ip = 1,
-            ExpiresAt = long.MaxValue
+            ExpiresAt = long.MaxValue,
+            Maps = AnyTestMap,
         };
     }
 }

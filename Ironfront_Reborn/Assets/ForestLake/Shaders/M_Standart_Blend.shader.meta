@@ -1,0 +1,28 @@
+fileFormatVersion: 2
+guid: e76cbf4d939c5ef459b44f0094fd915d
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _Normal_A: {fileID: 2800000, guid: c8c245ed52054eb429927574439d1d8b, type: 3}
+  - _Normal_B: {fileID: 2800000, guid: c8c245ed52054eb429927574439d1d8b, type: 3}
+  - _Mask: {fileID: 2800000, guid: abc00000000000149353655522420383, type: 3}
+  - _NormalTexture: {fileID: 2800000, guid: c8c245ed52054eb429927574439d1d8b, type: 3}
+  - _Albedo_A: {fileID: 2800000, guid: abc00000000007045897824049021830, type: 3}
+  - _Albedo_B: {fileID: 2800000, guid: abc00000000005219264639637305418, type: 3}
+  - _MaskTexture: {fileID: 2800000, guid: abc00000000009428763281507424020, type: 3}
+  - _Metallic_A: {fileID: 2800000, guid: abc00000000009428763281507424020, type: 3}
+  - _Metallic_B: {fileID: 2800000, guid: abc00000000009428763281507424020, type: 3}
+  - _Roughness_A: {fileID: 2800000, guid: abc00000000009428763281507424020, type: 3}
+  - _Roughness_B: {fileID: 2800000, guid: abc00000000009428763281507424020, type: 3}
+  nonModifiableTextures: []
+  preprocessorOverride: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 259547
+  packageName: ForestLake
+  packageVersion: 1.5
+  assetPath: Assets/ForestLake/Shaders/M_Standart_Blend.shader
+  uploadId: 925456

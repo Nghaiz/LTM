@@ -1,11 +1,11 @@
 #!/usr/bin/env pwsh
-# tools/deploy-gameservers-azure.ps1 -- put a game-server image on the Azure VM and run both maps
+# tools/deploy-gameservers-azure.ps1 -- put a game-server image on the Azure VM and run every map
 # there with infra/docker/gameservers.compose.yml, registered with the fly master.
 #
 # THE HOST (since 2026-09-28). Azure VM "ironfront-game", Standard_B2as_v2 in Southeast Asia
 # (Singapore, the same city as the fly master: TCP connect 2-3 ms). Its network security group
-# admits UDP 27015/27016 only (27115/27116 are dropped at the Azure edge), so this runs the compose
-# file on 27015/27016 and advertises the VM's public address. Log in as irondev with the key below; irondev has passwordless sudo.
+# admits UDP 27015-27017 (27018-27020 and 27115/27116 are dropped at the Azure edge), so this runs
+# the compose file on 27015/27016/27017 and advertises the VM's public address. Log in as irondev with the key below; irondev has passwordless sudo.
 #
 # WHAT IT DOES, in order:
 #   1. Ships the image only if the VM lacks that exact image id. `docker save` is piped straight
@@ -14,7 +14,7 @@
 #   2. Copies the compose file and writes ~/ironfront/.env (mode 600) with the shared secret from
 #      this repo's .env -- the secret the fly master signs tickets with -- plus the image, ports
 #      and advertised address. The secret is never echoed.
-#   3. `docker compose up -d`, then waits until BOTH containers log
+#   3. `docker compose up -d`, then waits until EVERY container logs
 #      "[net] master link: registered as server N". A server that binds its port and never
 #      registers answers every join NoGameServerAvailable, so a port check would be a false green.
 #
@@ -36,6 +36,7 @@ param(
     [string] $KeyPath = (Join-Path $HOME ".ssh/nghaiz_ed25519_ctf"),
     [int] $DustbowlPort = 27015,
     [int] $IslandPort = 27016,
+    [int] $ForestLakePort = 27017,
     [int] $RegisterTimeoutSec = 180
 )
 
@@ -45,7 +46,7 @@ $compose = Join-Path $repo "infra/docker/gameservers.compose.yml"
 $sshArgs = @("-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-i", $KeyPath)
 $target = "$User@$VmHost"
 $remoteCompose = "cd ~/ironfront && sudo docker compose --env-file .env -f gameservers.compose.yml"
-$containers = @("ironfront-gs-dustbowl", "ironfront-gs-island")
+$containers = @("ironfront-gs-dustbowl", "ironfront-gs-island", "ironfront-gs-forestlake")
 
 function Invoke-Remote([string] $command) {
     $output = & ssh @sshArgs $target $command
@@ -101,7 +102,8 @@ $envBody = @(
     "IRONFRONT_GAMESERVER_IMAGE=$Image",
     "IRONFRONT_GAMESERVER_PUBLIC_IP_ADVERTISED=$VmHost",
     "IRONFRONT_GS_DUSTBOWL_PORT=$DustbowlPort",
-    "IRONFRONT_GS_ISLAND_PORT=$IslandPort"
+    "IRONFRONT_GS_ISLAND_PORT=$IslandPort",
+    "IRONFRONT_GS_FORESTLAKE_PORT=$ForestLakePort"
 ) -join "`n"
 $envBody + "`n" | & ssh @sshArgs $target "umask 077; cat > ~/ironfront/.env"
 if ($LASTEXITCODE -ne 0) { throw "writing the VM .env failed ($LASTEXITCODE)" }
@@ -130,4 +132,4 @@ if ($registered.Count -lt $containers.Count) {
     exit 1
 }
 
-Write-Host "[azure] both maps registered; players dial ${VmHost}:$DustbowlPort (Dustbowl) and ${VmHost}:$IslandPort (Island)."
+Write-Host "[azure] every map registered; players dial ${VmHost}:$DustbowlPort (Dustbowl), ${VmHost}:$IslandPort (Island) and ${VmHost}:$ForestLakePort (Forest Lake)."

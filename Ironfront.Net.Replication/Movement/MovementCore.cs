@@ -186,7 +186,7 @@ namespace Ironfront.Net.Replication.Movement
         /// </param>
         public static Vec3 Step(ref MoveState state, in MoveInput input, float dt)
         {
-            bool inWater = IsInWater(state.Position.Y);
+            bool inWater = IsInWater(in state.Position);
             state.IsClimbingOut = (inWater || state.IsClimbingOut) && CanClimbOut(in state, in input);
             if (inWater || state.IsClimbingOut) return Swim(ref state, in input, dt);
 
@@ -240,7 +240,7 @@ namespace Ironfront.Net.Replication.Movement
         // ===== Water =====
 
         /// <summary>
-        /// The surface of the loaded map's water, or negative infinity on a map with none.
+        /// The surface of the loaded map's sea, or negative infinity on a map with none.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -254,8 +254,37 @@ namespace Ironfront.Net.Replication.Movement
         /// which is what lets this be a single value rather than an input every call site has to
         /// thread through.
         /// </para>
+        /// <para>
+        /// <b>A sea only.</b> Water that covers part of the map (a lake) is
+        /// <see cref="BoundedWater"/>; ask <see cref="SurfaceAt"/> for the water over a point.
+        /// </para>
         /// </remarks>
         public static float WaterHeight { get; set; } = float.NegativeInfinity;
+
+        /// <summary>
+        /// The loaded map's bounded water (lakes, rivers), or null on a map with none.
+        /// </summary>
+        /// <remarks>
+        /// Set by the map on both sides, like <see cref="WaterHeight"/>; see <see cref="IBoundedWater"/>.
+        /// Dustbowl and Island have none, so their swim is the sea's alone, exactly as before.
+        /// </remarks>
+        public static IBoundedWater? BoundedWater { get; set; }
+
+        /// <summary>
+        /// The water surface over (<paramref name="x"/>, <paramref name="z"/>): the sea's, or a
+        /// bounded body's where one lies higher there; negative infinity where there is no water.
+        /// </summary>
+        public static float SurfaceAt(float x, float z)
+        {
+            float surface = WaterHeight;
+            IBoundedWater? bounded = BoundedWater;
+            if (bounded != null)
+            {
+                float local = bounded.SurfaceAt(x, z);
+                if (local > surface) surface = local;
+            }
+            return surface;
+        }
 
         /// <summary>
         /// How far above the capsule's centre the swim test samples: the original's
@@ -306,13 +335,23 @@ namespace Ironfront.Net.Replication.Movement
         private static bool CanClimbOut(in MoveState state, in MoveInput input)
             => state.IsBlockedSideways
                && (input.MoveX != 0f || input.MoveZ != 0f)
-               && state.Position.Y - StandHeight * 0.5f <= WaterHeight + ClimbOutLip;
+               && state.Position.Y - StandHeight * 0.5f
+                  <= SurfaceAt(state.Position.X, state.Position.Z) + ClimbOutLip;
 
         /// <summary>
-        /// Whether a body whose capsule centre is at <paramref name="centreY"/> is in water: the
-        /// same half metre over the centre the original tests, against <see cref="WaterHeight"/>.
+        /// Whether a body whose capsule centre is at (<paramref name="x"/>,
+        /// <paramref name="centreY"/>, <paramref name="z"/>) is in water: the same half metre over
+        /// the centre the original tests, against the surface over that spot (<see cref="SurfaceAt"/>).
         /// </summary>
-        public static bool IsInWater(float centreY) => centreY + SwimSampleAbove <= WaterHeight;
+        /// <remarks>
+        /// There is deliberately no height-only overload any more. One existed while the sea was the
+        /// only water, and every caller that kept using it would have gone on ignoring lakes.
+        /// </remarks>
+        public static bool IsInWater(float x, float centreY, float z)
+            => centreY + SwimSampleAbove <= SurfaceAt(x, z);
+
+        /// <inheritdoc cref="IsInWater(float, float, float)"/>
+        public static bool IsInWater(in Vec3 centre) => IsInWater(centre.X, centre.Y, centre.Z);
 
         /// <summary>
         /// A tick in water: no gravity and no jump; the body floats up to
@@ -344,7 +383,7 @@ namespace Ironfront.Net.Replication.Movement
             Vec3 right   = new Vec3(forward.Z, 0f, -forward.X);
             Vec3 wish    = (forward * input.MoveZ + right * input.MoveX).Normalized;
 
-            float gap = WaterHeight - SwimFloatDepth - state.Position.Y;
+            float gap = SurfaceAt(state.Position.X, state.Position.Z) - SwimFloatDepth - state.Position.Y;
             float rise = gap * SwimLiftRate;
             if (rise > MaxSwimVerticalSpeed) rise = MaxSwimVerticalSpeed;
             else if (rise < -MaxSwimVerticalSpeed) rise = -MaxSwimVerticalSpeed;

@@ -59,16 +59,21 @@ namespace Ironfront.Net.Unity.Client.Menu
         public const int RejoinRows = 2;
 
         /// <summary>The y of the table's header strip, in the panel's space. Authored and read here.</summary>
-        public const float TableTop = 112f;
+        /// <remarks>
+        /// 160 since P30's redesign, which put the header block (kicker, heading, search) where the
+        /// other operations screens have theirs and moved the table up 48px with it.
+        /// </remarks>
+        public const float TableTop = 160f;
 
         /// <summary>The distance between two rows' centres.</summary>
         public const float RowPitch = 46f;
 
         /// <summary>
         /// The lowest a row's centre may sit before it would run into the overflow line and the
-        /// buttons under the table.
+        /// buttons under the table: the eighth row's own centre, so the authored table exactly
+        /// fits and a table pushed down by YOUR MATCHES gives up rows rather than the gap.
         /// </summary>
-        private const float LowestRowCentre = -250f;
+        private const float LowestRowCentre = TableTop - 40f - ((Rows - 1) * RowPitch);
 
         [SerializeField] private MenuScreenController? _controller;
 
@@ -460,7 +465,17 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// newer master can send, and the number is what makes it reportable.
         /// </remarks>
         internal static string MapLabel(RoomInfo room)
-            => MapCatalog.TryGetScene(room.MapId, out string scene) ? scene : $"map {room.MapId}";
+        {
+            // The catalog's display name, as the create and practice screens show it. The scene
+            // name read the same for Dustbowl and Island, so nothing showed the difference until
+            // Forest Lake listed as "ForestLake".
+            for (int i = 0; i < MapCatalog.All.Count; i++)
+            {
+                if (MapCatalog.All[i].Id == room.MapId) return MapCatalog.All[i].DisplayName;
+            }
+
+            return $"map {room.MapId}";
+        }
 
         /// <summary>
         /// The MAP cell: the map, and the room's bots beside it (protocol 13), so a 100-bot room

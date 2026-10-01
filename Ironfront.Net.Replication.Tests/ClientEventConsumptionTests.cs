@@ -495,10 +495,11 @@ namespace Ironfront.Net.Replication.Tests
             }
 
             // Warm the whole loop first, every call in it, not one call each: the claim is the
-            // steady state. Warming only some calls measured the first-ever run of two others
-            // (SecondsRemaining, DirtySinceLastRead) and of the loop itself, and under a loaded
-            // full CI run of 2026-09-30 that measured 2,520 B once -- never when run alone, and
-            // never on a second thousand.
+            // steady state. The 2,520 B a loaded full CI run of 2026-09-30 measured once, and
+            // the 192 to 7,640 B of later loaded runs, were not a cold call, though: the warm-up
+            // never stopped them. They were a background GC charging this thread with the unused
+            // end of its allocation buffer, which is why this project runs with background GC
+            // off (see the .csproj and AllocationCounterTests).
             RunThousand(0);
 
             long before = GC.GetAllocatedBytesForCurrentThread();

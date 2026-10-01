@@ -66,6 +66,13 @@ namespace Ironfront.MasterServer.Net
         private readonly Action<Action> _postToLogicThread;
         private readonly MspFrameHandler _onFrame;
         private readonly Action<ClientConnection, string> _onClosed;
+
+        /// <summary>
+        /// Set when the host trusts PROXY protocol headers: the receive loop reads one before
+        /// anything else and hands the client's address here, on the logic thread, before any
+        /// frame of this connection is handled. Null otherwise.
+        /// </summary>
+        private readonly Action<ClientConnection, IPEndPoint?>? _onProxyHeader;
         private readonly MspFrameReader _reader = new MspFrameReader();
         private readonly ConcurrentQueue<byte[]> _sendQueue = new ConcurrentQueue<byte[]>();
         private readonly X509Certificate2? _serverCertificate;
@@ -98,7 +105,8 @@ namespace Ironfront.MasterServer.Net
             MspFrameHandler onFrame,
             Action<ClientConnection, string> onClosed,
             TimeProvider clock,
-            X509Certificate2? serverCertificate = null)
+            X509Certificate2? serverCertificate = null,
+            Action<ClientConnection, IPEndPoint?>? onProxyHeader = null)
         {
             Id                 = id;
             _socket            = socket;
@@ -108,6 +116,7 @@ namespace Ironfront.MasterServer.Net
             _postToLogicThread = postToLogicThread;
             _onFrame           = onFrame;
             _onClosed          = onClosed;
+            _onProxyHeader     = onProxyHeader;
             _clock             = clock;
             _serverCertificate = serverCertificate;
             ConnectedAtMs      = clock.NowMs();
@@ -122,13 +131,43 @@ namespace Ironfront.MasterServer.Net
         /// The remote IPv4 address as a big-endian <c>u32</c>, which is the key the host's
         /// per-IP connection limit counts on.
         /// </summary>
-        public uint RemoteIpKey { get; }
+        /// <remarks>
+        /// Behind a proxy whose PROXY headers the host trusts, this is the proxy's address until
+        /// the header is read and the client's afterwards (<see cref="AdoptClientAddress"/>).
+        /// No frame is handled in between, so nothing that keys on it sees the proxy's.
+        /// </remarks>
+        public uint RemoteIpKey { get; private set; }
 
-        public IPAddress RemoteAddress { get; }
+        public IPAddress RemoteAddress { get; private set; }
 
         /// <summary>Human-readable <c>ip:port</c>, captured at accept time because the socket
         /// stops being able to report it once it is closed.</summary>
-        public string RemoteEndPoint { get; }
+        public string RemoteEndPoint { get; private set; }
+
+        /// <summary>
+        /// True once this connection is counted in one of the host's per-IP slots, so that
+        /// closing it releases exactly the slot it took. Logic thread only.
+        /// </summary>
+        internal bool HoldsIpSlot { get; set; }
+
+        /// <summary>
+        /// True when the connection was closed because it did not start with a valid PROXY
+        /// header. Read once by the host, like <see cref="TlsHandshakeFailed"/>.
+        /// </summary>
+        public bool ProxyHeaderRejected { get; private set; }
+
+        /// <summary>
+        /// Takes on the client address a PROXY header named. Logic thread only, and only before
+        /// the connection holds a per-IP slot.
+        /// </summary>
+        internal void AdoptClientAddress(IPEndPoint client)
+        {
+            if (HoldsIpSlot) throw new InvalidOperationException("The address is already counted in a per-IP slot.");
+            IPAddress address = client.Address.IsIPv4MappedToIPv6 ? client.Address.MapToIPv4() : client.Address;
+            RemoteAddress  = address;
+            RemoteIpKey    = ToIpKey(address);
+            RemoteEndPoint = $"{new IPEndPoint(address, client.Port)} via {RemoteEndPoint}";
+        }
 
         /// <summary>
         /// False for the whole of phase 00 — there is no <c>AuthService</c> until phase 01.
@@ -315,6 +354,16 @@ namespace Ironfront.MasterServer.Net
 
             try
             {
+                if (_onProxyHeader is not null)
+                {
+                    string? refused = await ReadProxyHeaderAsync(transport, ct).ConfigureAwait(false);
+                    if (refused is not null)
+                    {
+                        _postToLogicThread(() => _onClosed(this, refused));
+                        return;
+                    }
+                }
+
                 while (!ct.IsCancellationRequested)
                 {
                     byte[] buffer = ArrayPool<byte>.Shared.Rent(ReceiveChunkSize);
@@ -381,6 +430,56 @@ namespace Ironfront.MasterServer.Net
             }
 
             _postToLogicThread(() => _onClosed(this, reason));
+        }
+
+        /// <summary>
+        /// Reads the PROXY header that must open the connection, then hands the client's address
+        /// and any bytes that came after the header to the logic thread, in that order.
+        /// </summary>
+        /// <returns>Null when a header was read; otherwise why the connection is closed.</returns>
+        /// <remarks>
+        /// A peer that never finishes its header is closed by the same unauthenticated deadline
+        /// as one that never finishes a frame, so there is no separate timeout here.
+        /// </remarks>
+        private async Task<string?> ReadProxyHeaderAsync(Stream transport, CancellationToken ct)
+        {
+            byte[] buffer = new byte[ProxyProtocolHeader.MaxLength];
+            int filled = 0;
+
+            while (true)
+            {
+                int received = await transport.ReadAsync(buffer.AsMemory(filled), ct).ConfigureAwait(false);
+
+                // A health check connects and leaves without a byte. Not worth a warning.
+                if (received == 0) return "remote closed before its PROXY header";
+                filled += received;
+
+                ProxyHeaderParse result = ProxyProtocolHeader.TryParse(
+                    buffer.AsSpan(0, filled), out int consumed, out IPEndPoint? client);
+                if (result == ProxyHeaderParse.NeedMoreData && filled < buffer.Length) continue;
+
+                if (result != ProxyHeaderParse.Complete)
+                {
+                    ProxyHeaderRejected = true;
+                    MasterLog.Warn($"conn #{Id} {RemoteEndPoint}: no valid PROXY header in its first {filled} byte(s) — closing");
+                    return "no valid PROXY header";
+                }
+
+                _postToLogicThread(() => _onProxyHeader!(this, client));
+
+                // The same receive often carries the first frame behind the header.
+                int rest = filled - consumed;
+                if (rest > 0)
+                {
+                    byte[] following = buffer.AsSpan(consumed, rest).ToArray();
+                    _postToLogicThread(() =>
+                    {
+                        if (!IsDisposed) Ingest(following, following.Length);
+                    });
+                }
+
+                return null;
+            }
         }
 
         /// <summary>
@@ -534,9 +633,9 @@ namespace Ironfront.MasterServer.Net
                     return Endian.ReadU32BE(octets, 0);
             }
 
-            // A real IPv6 peer. GetHashCode is stable for the lifetime of the process, which
-            // is all the per-IP counter needs, and IPv6 is not a deployment target before
-            // phase 03.
+            // A real IPv6 peer, which a PROXY header can name: fly's edge accepts IPv6 clients.
+            // GetHashCode is stable for the lifetime of the process, which is all the per-IP
+            // counter and the login rate need.
             return unchecked((uint)normalized.GetHashCode());
         }
     }

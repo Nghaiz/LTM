@@ -1702,6 +1702,22 @@ public class AiActorController : ActorController
 		return acquireTargetOffset * (1f - Mathf.Pow(f, 2f));
 	}
 
+	/// <summary>
+	/// How far below the terrain surface a ragdoll must be before it has fallen through rather
+	/// than clipped it. A limb dipping under a slope for a frame is ordinary and comes back up on
+	/// its own; the pelvis three metres under the surface does not.
+	/// </summary>
+	private const float FallenThroughTerrainDepth = 3f;
+
+	/// <summary>
+	/// Whether this bot's ragdoll has gone through the terrain, where no amount of waiting lets it
+	/// settle. False where there is no terrain or it has a hole (<c>TerrainSurface</c>).
+	/// </summary>
+	private bool HasFallenThroughTerrain()
+	{
+		return Ironfront.Net.Unity.TerrainSurface.IsUnder(actor.Position(), FallenThroughTerrainDepth);
+	}
+
 	private void Update()
 	{
 		// Ahead of the dead check, not after it: a skipped tick must cost nothing at all.
@@ -1715,6 +1731,14 @@ public class AiActorController : ActorController
 		}
 		if (!actor.fallenOver)
 		{
+			ragdollAutokillAction.Start();
+		}
+		else if (HasFallenThroughTerrain())
+		{
+			// A ragdoll under the terrain never settles, so waiting out the 60 s below only
+			// keeps the bot out of the match -- falling, on a server, or dead for nothing
+			// offline, with a point to the enemy. It gets up on the terrain where it fell over.
+			actor.RecoverFromFallThroughTerrain();
 			ragdollAutokillAction.Start();
 		}
 		else if (ragdollAutokillAction.TrueDone())
@@ -2506,7 +2530,9 @@ public class AiActorController : ActorController
 
 	public override void ReceivedDamage(float damage, float balanceDamage, Vector3 point, Vector3 direction, Vector3 force)
 	{
-		if (!HasTarget())
+		// Damage with no direction has no source to turn towards. The offline ragdoll timeout
+		// deals it at the bot's own position, and looking there turned the bot to world north.
+		if (!HasTarget() && direction != Vector3.zero)
 		{
 			LookAt(point - direction * 10f);
 		}
@@ -3017,7 +3043,11 @@ public class AiActorController : ActorController
 
 	public void EmoteHailLeader()
 	{
-		if (!HasTarget())
+		// This runs 0.6-1.5 s after the bot joined (EmoteHailLeaderSlow), and by then the bot can
+		// lead the squad itself: a rogue split leaves it alone in a squad of one. Hailing itself
+		// was a LookAt of its own position, which turned it to face world north and made Unity log
+		// "Look rotation viewing vector is zero".
+		if (!HasTarget() && !IsSquadLeader())
 		{
 			LookAt(squad.Leader().transform.position);
 			actor.EmoteHail();

@@ -2,14 +2,23 @@
 %TAG !u! tag:unity3d.com,2011:
 --- !u!1045 &1
 EditorBuildSettings:
-  serializedVersion: 2
   m_ObjectHideFlags: 0
+  serializedVersion: 2
   m_Scenes:
   - enabled: 1
     path: Assets/Scenes/Splash.unity
+    guid: eb1a3a6f65e9f8c489895b3bdfff52b8
   - enabled: 1
     path: Assets/Scenes/Menu.unity
+    guid: 4fd08908eeeafc548818994c5eeffc0d
   - enabled: 1
     path: Assets/Scenes/Island.unity
+    guid: f6af5edf4c944d64c8885a34552cb47f
   - enabled: 1
     path: Assets/Scenes/Dustbowl.unity
+    guid: 324e58af7af183e4eb948b876dc25791
+  - enabled: 1
+    path: Assets/Scenes/ForestLake.unity
+    guid: 106e76f37d56cec4a9b0123eb0f81ebd
+  m_configObjects: {}
+  m_UseUCBPForAssetBundles: 0

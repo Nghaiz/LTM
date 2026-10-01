@@ -133,14 +133,24 @@ try {
     # a green from a machine without the tree means only that the tree is absent. It is wired
     # here rather than left unwired because an unrun --check is decoration (see 3d), and skipped
     # LOUDLY rather than silently for the same reason.
-    if (Test-Path "$repoRoot/tmp/recovered/src/Assembly-CSharp") {
-        Invoke-Step "3h. No line lost against the recovered original" {
-            python "$PSScriptRoot/classify_recovered_diff.py" --check
+    #
+    # The script finds the tree itself (this checkout's tmp/recovered, else the main worktree's,
+    # since a linked worktree never has the gitignored copy) and exits 2 when there is none, so
+    # that rule lives in one place. Testing $repoRoot here skipped the check in every worktree.
+    Write-Host ""
+    Write-Host "=== 3h. No line lost against the recovered original ===" -ForegroundColor Cyan
+    python "$PSScriptRoot/classify_recovered_diff.py" --check
+    switch ($LASTEXITCODE) {
+        0 { Write-Host "PASS: 3h. No line lost against the recovered original" -ForegroundColor Green }
+        2 {
+            Write-Host "SKIPPED: no tmp/recovered/ here or in the main worktree — run tools/extract_recovered.py to enable" `
+                -ForegroundColor Yellow
         }
-    }
-    else {
-        Write-Host "=== 3h. No line lost against the recovered original === SKIPPED " `
-            "(tmp/recovered/ absent — run tools/extract_recovered.py to enable)" -ForegroundColor Yellow
+        default {
+            Write-Host "FAIL: 3h. No line lost against the recovered original — exited with code $LASTEXITCODE" `
+                -ForegroundColor Red
+            $script:failures += "3h. No line lost against the recovered original"
+        }
     }
 
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is

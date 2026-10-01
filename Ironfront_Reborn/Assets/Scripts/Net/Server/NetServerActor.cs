@@ -709,7 +709,7 @@ namespace Ironfront.Net.Unity.Server
         /// <c>Actor.inWater</c> is that swim's own test.
         /// </remarks>
         internal bool InWater => Movement != null
-            ? MovementCore.IsInWater(Movement.State.Position.Y)
+            ? MovementCore.IsInWater(Movement.State.Position)
             : Source != null && Source.IsInWater;
 
         /// <summary>
@@ -795,6 +795,49 @@ namespace Ironfront.Net.Unity.Server
             ServerCombatEvents.ReportDeath(this, Vector3.zero, attacker: null, CauseOfDeath.Drown);
         }
 
+        /// <summary>
+        /// Kills a bot that has fallen below the wire's floor, as ledger <b>X-75</b> kills a
+        /// player there.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The last resort, not the fix.</b> A bot that goes through the terrain is caught
+        /// three metres under it and stood back up on it (<c>AiActorController</c>, P30). What
+        /// reaches here fell where no terrain lies under it -- flung off the map's edge, or into a
+        /// hole -- and nothing below will ever stop it. Until now it fell alive: its snapshot
+        /// position clamped to <c>Quantize.POS_MIN</c> for every client, the flag it was sent to
+        /// held one attacker short, until the 60-second ragdoll timer stood it back up.
+        /// </para>
+        /// <para>
+        /// <b>A player is <c>ServerPlayer</c>'s</b>, which checks the session's position rather than
+        /// this body's, so a claimed actor and any actor with a movement agent are left alone here.
+        /// No slack, for the reason <c>ServerPlayer.FloorDeathSlackMetres</c> gives.
+        /// </para>
+        /// <para>
+        /// <b>Killed the way a drowning kills</b> (<see cref="ApplyBreath"/>): through
+        /// <see cref="IsAlive"/>, whose setter runs the bot's own death, and reported with no
+        /// attacker, so the killfeed says the world and nobody is credited.
+        /// </para>
+        /// </remarks>
+        internal void ObserveWorldFloor()
+        {
+            if (!NetContext.IsServer || IsClaimed || Movement != null || !IsAlive) return;
+
+            IGameplayActorSource source = Source;
+            if (source == null || !source.Exists) return;
+
+            Vector3 below = BotPosition();
+            if (below.y >= Quantize.POS_MIN) return;
+
+            Debug.Log($"[net] actor {_actorId} (bot, team {Team}) killed for leaving the world at "
+                      + $"({below.x:F2}, {below.y:F2}, {below.z:F2}) -- below the wire floor.");
+
+            Health = 0f;
+            IsAlive = false;
+
+            ServerCombatEvents.ReportDeath(this, Vector3.zero, attacker: null, CauseOfDeath.Fall);
+        }
+
         internal void ObserveLifeEdge()
         {
             bool alive = IsAlive;
@@ -875,6 +918,7 @@ namespace Ironfront.Net.Unity.Server
             // See ObserveLifeEdge for why that distinction is the whole guarantee.
             ObserveLifeEdge();
             ObserveBreath();
+            ObserveWorldFloor();
 
             Vec3 position = Movement != null
                 ? Movement.State.Position

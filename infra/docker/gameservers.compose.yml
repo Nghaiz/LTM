@@ -1,4 +1,4 @@
-# infra/docker/gameservers.compose.yml -- the two Linux game servers (Dustbowl, Island) as
+# infra/docker/gameservers.compose.yml -- the three Linux game servers (Dustbowl, Island, Forest Lake) as
 # containers on the Azure VM ironfront-game (20.205.152.66, Standard_B2as_v2, Singapore),
 # registered with the fly master. Deploy with tools/deploy-gameservers-azure.ps1, which ships the
 # image, writes the VM's .env beside this file and runs compose there. Nothing runs locally.
@@ -6,8 +6,9 @@
 # Build the image from the Unity Linux server artifact first:
 #   docker build -f infra/docker/gameserver.Dockerfile -t ironfront-game-server:<rev> build/server
 #
-# PORTS. The VM's network security group admits UDP 27015/27016 only, so those are the defaults;
-# IRONFRONT_GS_DUSTBOWL_PORT / IRONFRONT_GS_ISLAND_PORT override them. The advertised address is
+# PORTS. The VM's network security group admits UDP 27015-27017 (27017 probed open 2026-09-30;
+# 27018-27020 are dropped), so those are the defaults; IRONFRONT_GS_DUSTBOWL_PORT /
+# IRONFRONT_GS_ISLAND_PORT / IRONFRONT_GS_FORESTLAKE_PORT override them. The advertised address is
 # what the master hands players to dial.
 #
 # History: these ran in the VMware DLP VM (starved it), then on the owner's Docker Desktop, until
@@ -49,7 +50,8 @@ services:
       <<: *gameserver-env
       IRONFRONT_GAMESERVER_SCENE: Dustbowl
       IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_DUSTBOWL_PORT:-27015}"
-      # Required: the master refuses a registration with no map ids. Dustbowl is 1, Island is 2.
+      # Required: the master refuses a registration with no map ids. Dustbowl is 1, Island is 2,
+      # Forest Lake is 3 (Ironfront.Net.Configuration/MapCatalog.cs).
       IRONFRONT_GAMESERVER_MAP_IDS: "1"
     ports:
       - "${IRONFRONT_GS_DUSTBOWL_PORT:-27015}:${IRONFRONT_GS_DUSTBOWL_PORT:-27015}/udp"
@@ -64,3 +66,14 @@ services:
       IRONFRONT_GAMESERVER_MAP_IDS: "2"
     ports:
       - "${IRONFRONT_GS_ISLAND_PORT:-27016}:${IRONFRONT_GS_ISLAND_PORT:-27016}/udp"
+
+  game-server-forestlake:
+    <<: *gameserver
+    container_name: ironfront-gs-forestlake
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_SCENE: ForestLake
+      IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_FORESTLAKE_PORT:-27017}"
+      IRONFRONT_GAMESERVER_MAP_IDS: "3"
+    ports:
+      - "${IRONFRONT_GS_FORESTLAKE_PORT:-27017}:${IRONFRONT_GS_FORESTLAKE_PORT:-27017}/udp"

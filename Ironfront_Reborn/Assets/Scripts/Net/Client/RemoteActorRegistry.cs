@@ -219,13 +219,14 @@ namespace Ironfront.Net.Unity.Client
                         y -= MovementCore.HeightFor(crouching) * 0.5f;
                     }
                     Quaternion facing = Quaternion.Euler(0f, sample.YawDegrees, 0f);
-                    if (Swims(in sample.State) && !float.IsNegativeInfinity(MovementCore.WaterHeight))
+                    float surface = MovementCore.SurfaceAt(p.X, p.Z);
+                    if (Swims(in sample.State) && !float.IsNegativeInfinity(surface))
                     {
                         // At the surface, by its head: a player's capsule and a bot's buoyant
                         // ragdoll both float there, and the pose last drawn says how far under the
                         // head the root has to be (SwimPresentation.RootHeight).
                         y = SwimPresentation.RootHeight(
-                            MovementCore.WaterHeight,
+                            surface,
                             lying != null ? lying.HeadAboveRoot : SwimPresentation.IdleHeadAboveRoot);
                         if ((sample.State.StateFlags & ActorStateFlags.IsRagdoll) != 0 && lying != null)
                             facing = SwimmingHeading(pair.Value.rotation, lying.PlanarVelocity, Time.deltaTime);

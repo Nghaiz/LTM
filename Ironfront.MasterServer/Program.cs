@@ -216,6 +216,7 @@ namespace Ironfront.MasterServer
                 ServerCertificate   = certificate,
                 MaxConnectionsPerIp = config.MaxConnectionsPerIp,
                 MaxTotalConnections = config.MaxTotalConnections,
+                TrustProxyProtocol  = config.TrustProxyProtocol,
             };
             using var host = new TcpListenerHost(options, dispatcher);
 

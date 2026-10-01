@@ -168,7 +168,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             DrawColumn(_teamOneRows, _teamOneReadyBadges, _teamOneHeading, 1, room,
                 controller.PlayerId);
 
-            if (_chatLog != null) _chatLog.text = controller.ChatLog;
+            if (_chatLog != null) _chatLog.text = NewestThatFit(_chatLog, controller.ChatLog);
 
             bool waiting = room != null && room.Lifecycle == RoomLifecycleState.Waiting;
             bool known = room != null && TryGetSelf(room, out _);
@@ -248,23 +248,53 @@ namespace Ironfront.Net.Unity.Client.Menu
         }
 
         /// <summary>
-        /// The team's colour, through the registry seam. Criterion 10.
+        /// The tail of <paramref name="log"/> that <paramref name="label"/> shows whole.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why new messages stopped appearing.</b> The controller keeps
+        /// <see cref="MenuScreenController.ChatLines"/> lines, and the log label holds fewer —
+        /// how many depends on its width and on how many messages wrap. Text's
+        /// <see cref="VerticalWrapMode.Truncate"/> resolves that overflow by dropping the BOTTOM
+        /// lines, which in a log are the newest, so once a room had said more than the label
+        /// holds, every new message landed in the part nobody could see.
+        /// </para>
+        /// <para>
+        /// Lines are dropped here instead, oldest first, and measured with the label's own
+        /// generator and settings — the same measure as <see cref="Text.preferredHeight"/> — so
+        /// wrapping and the canvas scale are accounted for rather than assumed. A single line
+        /// taller than the label is kept: it is the newest thing said.
+        /// </para>
+        /// </remarks>
+        internal static string NewestThatFit(Text label, string log)
+        {
+            Rect rect = label.rectTransform.rect;
+            TextGenerationSettings settings = label.GetGenerationSettings(new Vector2(rect.width, 0f));
+            TextGenerator generator = label.cachedTextGeneratorForLayout;
+
+            string shown = log;
+            while (generator.GetPreferredHeight(shown, settings) / label.pixelsPerUnit > rect.height)
+            {
+                int newline = shown.IndexOf('\n');
+                if (newline < 0) break;
+                shown = shown.Substring(newline + 1);
+            }
+
+            return shown;
+        }
+
+        /// <summary>
+        /// The team's colour, through the registry seam, as type. Criterion 10.
         /// </summary>
         /// <remarks>
         /// <c>NetClientBindings.TeamColourRgb</c> falls back to a neutral grey when no palette is
         /// installed, which is the documented degraded case rather than a silent black — and a
         /// grey roster in a screenshot is a visible, diagnosable "the binding did not install"
-        /// rather than text that has disappeared into the backdrop.
+        /// rather than text that has disappeared into the backdrop. <see cref="TeamInk"/> lifts
+        /// the answer so the palette's pure blue can be read on the team card's navy.
         /// </remarks>
         private static Color TeamColour(byte team)
-        {
-            int rgb = NetClientBindings.TeamColourRgb(team);
-
-            return new Color(
-                ((rgb >> 16) & 0xFF) / 255f,
-                ((rgb >> 8) & 0xFF) / 255f,
-                (rgb & 0xFF) / 255f);
-        }
+            => TeamInk.FromRgb(NetClientBindings.TeamColourRgb(team));
 
         /// <summary>
         /// This client's own row in the roster, or false when the push has not named it yet.

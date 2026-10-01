@@ -46,7 +46,15 @@ primary_region = "sin"
   IRONFRONT_MAX_CONNECTIONS_PER_IP    = "5"
   IRONFRONT_MAX_TOTAL_CONNECTIONS     = "256"
   IRONFRONT_LOGIN_RATE_PER_MINUTE     = "5"
-  # Empty on purpose: Fly terminates TLS at the edge (handlers = ["tls"] below) and forwards
+  # The two per-IP limits above only mean something because of this. Fly's edge opens its own
+  # connection to the machine, so without a PROXY header every player AND every game server
+  # arrives from the proxy's address (172.16.44.162 on 2026-10-01): five slots for everyone,
+  # which three registered game servers left two of. The proxy_proto handlers below make the
+  # edge send the client's address first, and this makes the master use it. Set both or neither:
+  # with only the handlers the master reads the header as garbage, with only this it closes
+  # every connection for lacking one.
+  IRONFRONT_MASTER_PROXY_PROTOCOL     = "1"
+  # Empty on purpose: Fly terminates TLS at the edge (the "tls" handler below) and forwards
   # plaintext into the container, so the master must not also try to serve TLS itself.
   IRONFRONT_TLS_CERT_PATH             = ""
   IRONFRONT_TLS_CERT_PASSWORD         = ""
@@ -59,7 +67,8 @@ primary_region = "sin"
 
   [[services.ports]]
     port     = 27000
-    handlers = ["tls"]
+    handlers = ["tls", "proxy_proto"]
+    proxy_proto_options = { version = "v2" }
 
   # 443 AS WELL AS 27000, AND IT IS NOT REDUNDANT — it is the only port an IPv4-only client can
   # reach this app on without paying.
@@ -83,7 +92,8 @@ primary_region = "sin"
   # made to care about any of the above.
   [[services.ports]]
     port     = 443
-    handlers = ["tls"]
+    handlers = ["tls", "proxy_proto"]
+    proxy_proto_options = { version = "v2" }
 
   [[services.tcp_checks]]
     interval     = "30s"

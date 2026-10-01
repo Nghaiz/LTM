@@ -114,8 +114,16 @@ public class TimeOfDay : MonoBehaviour
 		RenderSettings.ambientEquatorColor = (1f + extraExposure) * Color.Lerp(atmosphere.equator, target, amount);
 		RenderSettings.ambientGroundColor = (1f + extraExposure) * Color.Lerp(atmosphere.ground, target, amount);
 		RenderSettings.fogColor = Color.Lerp(atmosphere.fog, target, amount);
-		RenderSettings.skybox.SetColor("_SkyTint", Color.Lerp(atmosphere.skyboxMaterial.GetColor("_SkyTint"), target, amount));
-		RenderSettings.skybox.SetFloat("_Exposure", atmosphere.skyboxMaterial.GetFloat("_Exposure") + extraExposure);
+		// Procedural skies tint through _SkyTint; the panoramic, cubemap and six-sided skies through _Tint.
+		string tint = RenderSettings.skybox.HasProperty("_SkyTint") ? "_SkyTint" : "_Tint";
+		if (RenderSettings.skybox.HasProperty(tint))
+		{
+			RenderSettings.skybox.SetColor(tint, Color.Lerp(atmosphere.skyboxMaterial.GetColor(tint), target, amount));
+		}
+		if (RenderSettings.skybox.HasProperty("_Exposure"))
+		{
+			RenderSettings.skybox.SetFloat("_Exposure", atmosphere.skyboxMaterial.GetFloat("_Exposure") + extraExposure);
+		}
 	}
 
 	public void ResetAtmosphere()

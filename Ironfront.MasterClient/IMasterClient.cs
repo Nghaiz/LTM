@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -210,6 +211,14 @@ namespace Ironfront.MasterClient
         // test and the game-server link already use; a null policy is the plaintext LAN path.
         Task ConnectAsync(string host, int port, MasterClientTlsOptions? tls, CancellationToken ct = default);
         Task<LoginResult> LoginAsync(string username, string passwordHash, CancellationToken ct = default);
+
+        /// <summary>
+        /// Logs in naming the maps this client can load (<c>LOGIN_REQ.maps</c>, P30). The master
+        /// then never lists, joins, creates or matchmakes it into a room on any other map. The
+        /// overload without the list is what every client before P30 sends, and the master takes
+        /// it to mean Dustbowl and Island only.
+        /// </summary>
+        Task<LoginResult> LoginAsync(string username, string passwordHash, IReadOnlyList<ushort> loadableMapIds, CancellationToken ct = default);
         Task<RegisterResult> RegisterAsync(string username, string passwordHash, string displayName, CancellationToken ct = default);
         Task<RoomInfo[]> GetRoomsAsync(CancellationToken ct = default);
 

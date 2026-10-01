@@ -39,6 +39,17 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void MapLabel_IsTheMapsDisplayName()
+        {
+            foreach (Ironfront.Net.Configuration.MapCatalog.MapEntry map in Ironfront.Net.Configuration.MapCatalog.All)
+                Assert.AreEqual(map.DisplayName, MenuRoomBrowserScreen.MapLabel(Room("Any", map.Id)));
+
+            // The one whose scene name differs, named outright so a catalog edit cannot hide it.
+            Assert.AreEqual("Forest Lake", MenuRoomBrowserScreen.MapLabel(Room("Any", 3)));
+            Assert.AreEqual("map 99", MenuRoomBrowserScreen.MapLabel(Room("Any", 99)));
+        }
+
+        [Test]
         public void MapCell_ShowsTheRoomsBotsBesideItsMap()
         {
             var crowded = new RoomInfo { Name = "Crowded", MapId = 1, MaxPlayers = 8, BotCount = 100 };

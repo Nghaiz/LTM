@@ -417,6 +417,26 @@ namespace Ironfront.Net.Protocol
         /// </remarks>
         TeamsWouldUnbalance = 2005,
 
+        /// <summary>
+        /// The room is on a map the requesting client cannot load: it did not name that map at
+        /// login, or it is a client from before logins named maps at all (P30).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The alternative was a player in the wrong world.</b> A client handed a map id its
+        /// catalog lacks falls back to the default scene (<c>MapCatalog.SceneOrDefault</c>) while the
+        /// server simulates the real map: bodies standing on nothing, flags nobody can reach, and a
+        /// log that reads like a replication fault. So the master checks before it admits anyone.
+        /// </para>
+        /// <para>
+        /// A client that never lists maps (v3.0.0 and older) is taken to load exactly the catalog it
+        /// shipped with, Dustbowl and Island, and is never shown a room on anything else -- so this
+        /// code only reaches it through a hand-crafted request, and a newer client that meets it can
+        /// tell the player to update.
+        /// </para>
+        /// </remarks>
+        MapNotInstalled = 2006,
+
         NoGameServerAvailable = 3000,
         GameServerNotResponding = 3001,
 
