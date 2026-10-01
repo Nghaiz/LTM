@@ -454,6 +454,11 @@ public class AstarPath : MonoBehaviour
 		return true;
 	}
 
+	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs "OnGUI
+	// function detected on MonoBehaviour, but not called, because IMGUI module is stripped" when a
+	// scene brings one up. Every map carries an AstarPath, the last such component B4 (2026-09-30)
+	// left in the server's scenes.
+#if !UNITY_SERVER
 	private void OnGUI()
 	{
 		if (logPathResults == PathLog.InGame && inGameDebugPath != string.Empty)
@@ -461,6 +466,7 @@ public class AstarPath : MonoBehaviour
 			GUI.Label(new Rect(5f, 5f, 400f, 600f), inGameDebugPath);
 		}
 	}
+#endif
 
 	private static void AstarLog(string s)
 	{
