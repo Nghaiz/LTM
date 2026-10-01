@@ -17,9 +17,10 @@
 x-gameserver: &gameserver
   image: ${IRONFRONT_GAMESERVER_IMAGE:-ironfront-game-server:8d33ed0}
   restart: unless-stopped
-  # Unity sizes its job pool to the machine; NetServerBootstrap.CapJobWorkers caps a headless
-  # server to 2, and the flag says so for images built before that cap.
-  command: ["-job-worker-count", "2"]
+  # No -job-worker-count. Unity allows at most (cores - 1) workers, so on this 2-vCPU host the old
+  # "-job-worker-count 2" opened every server log with "JobSystem: Invalid job-worker-count value 2
+  # must be between 0->1" and "Clamping job-worker-count value 2 to 1". NetServerBootstrap
+  # .CapJobWorkers caps a headless server at 2 on a bigger host and logs the count it kept.
   environment: &gameserver-env
     IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET (pass --env-file .env)}
     IRONFRONT_MASTER_HOST: kien-master-2026.fly.dev
