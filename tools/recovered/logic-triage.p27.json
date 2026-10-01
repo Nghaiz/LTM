@@ -3,9 +3,9 @@
   "readThisFirst": "`nearestLineInOurs` is the most similar line ANYWHERE in our file, not the corresponding line. It is a navigation hint. Two independent readers of this data hit the same trap: a renamed local shifts which line scores highest, so the match lands on a sibling line in another method and fabricates a structural divergence that does not exist -- an inverted condition, a changed loop, a wrong constant. Below a similarity of ~0.8, go read `recoveredMember` in our tree and find the real counterpart. Grade the method, not the row.",
   "scope": {
     "commonFiles": 322,
-    "filesWithCandidates": 77,
-    "candidates": 688,
-    "outrightDeletions": 139,
+    "filesWithCandidates": 80,
+    "candidates": 709,
+    "outrightDeletions": 143,
     "skippedAsP24": [
       "AstarPath.cs",
       "EuclideanEmbedding.cs",
@@ -18,7 +18,7 @@
       "AssemblyInfo.cs",
       "Extensions.cs"
     ],
-    "onlyInOurs": 17,
+    "onlyInOurs": 18,
     "onlyInRecovered": 196
   },
   "files": {
@@ -1344,7 +1344,7 @@
     "Actor.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Actor.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs",
-      "survivors": 50,
+      "survivors": 52,
       "outrightDeletions": 3,
       "candidates": [
         {
@@ -1467,6 +1467,13 @@
           "similarity": 0.88
         },
         {
+          "line": 578,
+          "recoveredMember": "UpdateMovement",
+          "recovered": "Ray ray = new Ray(vector4 + Vector3.up * 1.5f, Vector3.down);",
+          "nearestLineInOurs": "Ray ray = new Ray(Ironfront.Net.Unity.TerrainSurface.AtOrAbove(vector4) + Vector3.up * 1.5f, Vector3.down);",
+          "similarity": 0.72
+        },
+        {
           "line": 721,
           "recoveredMember": "Die",
           "recovered": "ScoreUi.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);",
@@ -1479,6 +1486,13 @@
           "recovered": "if (health <= 0f)",
           "nearestLineInOurs": "if (ownsHealth && health <= 0f)",
           "similarity": 0.7
+        },
+        {
+          "line": 790,
+          "recoveredMember": "Damage",
+          "recovered": "else if (balance < 0f)",
+          "nearestLineInOurs": "else if (!lqUpdate && flag)",
+          "similarity": 0.54
         },
         {
           "line": 798,
@@ -1702,7 +1716,7 @@
     "AiActorController.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/AiActorController.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AiActorController.cs",
-      "survivors": 46,
+      "survivors": 48,
       "outrightDeletions": 7,
       "candidates": [
         {
@@ -1986,6 +2000,13 @@
           "similarity": 0.93
         },
         {
+          "line": 1709,
+          "recoveredMember": "ReceivedDamage",
+          "recovered": "if (!HasTarget())",
+          "nearestLineInOurs": "if (HasTarget())",
+          "similarity": 0.97
+        },
+        {
           "line": 1896,
           "recoveredMember": "FindCoverTowards",
           "recovered": "cover.taken = true;",
@@ -1993,11 +2014,18 @@
           "similarity": 1.0
         },
         {
+          "line": 1970,
+          "recoveredMember": "EmoteHailPlayer",
+          "recovered": "if (!HasTarget())",
+          "nearestLineInOurs": "if (HasTarget())",
+          "similarity": 0.97
+        },
+        {
           "line": 1979,
           "recoveredMember": "EmoteHailLeader",
           "recovered": "if (!HasTarget())",
-          "nearestLineInOurs": "if (!HasTarget())",
-          "similarity": 1.0
+          "nearestLineInOurs": "if (HasTarget())",
+          "similarity": 0.97
         },
         {
           "line": 2051,
@@ -3439,6 +3467,162 @@
         }
       ]
     },
+    "LoadoutUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/LoadoutUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/LoadoutUi.cs",
+      "survivors": 10,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 76,
+          "recoveredMember": "DefaultSlotEntry",
+          "recovered": "int num = PlayerPrefs.GetInt(slot);",
+          "nearestLineInOurs": "int @int = PlayerPrefs.GetInt(slot);",
+          "similarity": 0.93
+        },
+        {
+          "line": 77,
+          "recoveredMember": "DefaultSlotEntry",
+          "recovered": "if (num == -1)",
+          "nearestLineInOurs": "if (@int == -1)",
+          "similarity": 0.83
+        },
+        {
+          "line": 81,
+          "recoveredMember": "DefaultSlotEntry",
+          "recovered": "return WeaponManager.instance.weapons[num];",
+          "nearestLineInOurs": "return WeaponManager.instance.weapons[0];",
+          "similarity": 0.95
+        },
+        {
+          "line": 168,
+          "recoveredMember": "AddArsenalButton",
+          "recovered": "component.FindChild(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "nearestLineInOurs": "component.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "similarity": 0.96
+        },
+        {
+          "line": 309,
+          "recoveredMember": "UpdateLoadoutButton",
+          "recovered": "button.FindChild(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
+          "nearestLineInOurs": "button.Find(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
+          "similarity": 0.96
+        },
+        {
+          "line": 314,
+          "recoveredMember": "UpdateLoadoutButton",
+          "recovered": "button.FindChild(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "nearestLineInOurs": "button.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "similarity": 0.96
+        },
+        {
+          "line": 353,
+          "recoveredMember": "ActivateContainer",
+          "recovered": "if (container.sizeDelta.y > (float)Screen.height)",
+          "nearestLineInOurs": "if (container.sizeDelta.y > ((RectTransform)container.parent).rect.height)",
+          "similarity": 0.69
+        },
+        {
+          "line": 399,
+          "recoveredMember": "OnDeployClick",
+          "recovered": "FpsActorController.instance.CloseLoadout();",
+          "nearestLineInOurs": "FpsActorController.instance.DeployFromLoadout();",
+          "similarity": 0.88
+        },
+        {
+          "line": 404,
+          "recoveredMember": "IsOpen",
+          "recovered": "return instance.uiCanvas.enabled;",
+          "nearestLineInOurs": "return instance != null && instance.uiCanvas.enabled;",
+          "similarity": 0.77
+        },
+        {
+          "line": 419,
+          "recoveredMember": "HasBeenOpen",
+          "recovered": "return instance.hasBeenOpen;",
+          "nearestLineInOurs": "return instance != null && instance.hasBeenOpen;",
+          "similarity": 0.74
+        }
+      ]
+    },
+    "MinimapUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/MinimapUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MinimapUi.cs",
+      "survivors": 10,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 46,
+          "recoveredMember": "Update",
+          "recovered": "float target = ((!Input.GetKey(KeyCode.M)) ? 0f : 1f);",
+          "nearestLineInOurs": "float target = (!held) ? 0f : 1f;",
+          "similarity": 0.71
+        },
+        {
+          "line": 48,
+          "recoveredMember": "Update",
+          "recovered": "ingameParent.anchorMin = new Vector2(0f, Mathf.Lerp(-1f, 0f, minimapOpenness));",
+          "nearestLineInOurs": "ingameParent.anchorMin = new Vector2(0f, Mathf.Lerp(-1f - CLOSED_CLEARANCE, 0f, minimapOpenness));",
+          "similarity": 0.89
+        },
+        {
+          "line": 49,
+          "recoveredMember": "Update",
+          "recovered": "ingameParent.anchorMax = new Vector2(1f, Mathf.Lerp(0f, 1f, minimapOpenness));",
+          "nearestLineInOurs": "ingameParent.anchorMax = new Vector2(1f, Mathf.Lerp(-CLOSED_CLEARANCE, 1f, minimapOpenness));",
+          "similarity": 0.89
+        },
+        {
+          "line": 81,
+          "recoveredMember": "SetupMinimap",
+          "recovered": "Vector2 anchorMax = (rectTransform.anchorMin = new Vector2(vector.x, vector.y));",
+          "nearestLineInOurs": "Vector2 anchorMax = (rectTransform.anchorMin = ToMap(vector));",
+          "similarity": 0.82
+        },
+        {
+          "line": 117,
+          "recoveredMember": "UpdateSpawnPointButtons",
+          "recovered": "int num = 0;",
+          "nearestLineInOurs": "int team = -1;",
+          "similarity": 0.69
+        },
+        {
+          "line": 123,
+          "recoveredMember": "UpdateSpawnPointButtons",
+          "recovered": "Color color = (colors.normalColor = ColorScheme.TeamColor(owner));",
+          "nearestLineInOurs": "Color color2 = (colors.normalColor = ColorScheme.TeamColor(owner));",
+          "similarity": 0.99
+        },
+        {
+          "line": 124,
+          "recoveredMember": "UpdateSpawnPointButtons",
+          "recovered": "colors.highlightedColor = color + new Color(0.2f, 0.2f, 0.2f);",
+          "nearestLineInOurs": "colors.highlightedColor = color2 + new Color(0.2f, 0.2f, 0.2f);",
+          "similarity": 0.99
+        },
+        {
+          "line": 125,
+          "recoveredMember": "UpdateSpawnPointButtons",
+          "recovered": "colors.disabledColor = color * new Color(0.5f, 0.5f, 0.5f);",
+          "nearestLineInOurs": "colors.disabledColor = color2 * new Color(0.5f, 0.5f, 0.5f);",
+          "similarity": 0.99
+        },
+        {
+          "line": 128,
+          "recoveredMember": "UpdateSpawnPointButtons",
+          "recovered": "button.interactable = owner == num;",
+          "nearestLineInOurs": "button.interactable = owner == localTeam;",
+          "similarity": 0.87
+        },
+        {
+          "line": 154,
+          "recoveredMember": "AddActorBlip",
+          "recovered": "ActorBlip component = ((GameObject)Object.Instantiate(instance.actorBlipPrefab, instance.minimap.rectTransform)).GetComponent<ActorBlip>();",
+          "nearestLineInOurs": "ActorBlip component = ((GameObject)Object.Instantiate(instance.actorBlipPrefab, instance.LayerOrMap(instance.soldierLayer))).GetComponent<ActorBlip>();",
+          "similarity": 0.87
+        }
+      ]
+    },
     "Weapon.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Weapon.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs",
@@ -3585,141 +3769,6 @@
           "recovered": "Gizmos.DrawLine(vector, (Vector3)graphNode.position);",
           "nearestLineInOurs": "Gizmos.DrawLine(from, (Vector3)graphNode.position);",
           "similarity": 0.92
-        }
-      ]
-    },
-    "LoadoutUi.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/LoadoutUi.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/LoadoutUi.cs",
-      "survivors": 9,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 76,
-          "recoveredMember": "DefaultSlotEntry",
-          "recovered": "int num = PlayerPrefs.GetInt(slot);",
-          "nearestLineInOurs": "int @int = PlayerPrefs.GetInt(slot);",
-          "similarity": 0.93
-        },
-        {
-          "line": 77,
-          "recoveredMember": "DefaultSlotEntry",
-          "recovered": "if (num == -1)",
-          "nearestLineInOurs": "if (@int == -1)",
-          "similarity": 0.83
-        },
-        {
-          "line": 81,
-          "recoveredMember": "DefaultSlotEntry",
-          "recovered": "return WeaponManager.instance.weapons[num];",
-          "nearestLineInOurs": "return WeaponManager.instance.weapons[0];",
-          "similarity": 0.95
-        },
-        {
-          "line": 168,
-          "recoveredMember": "AddArsenalButton",
-          "recovered": "component.FindChild(\"Image\").GetComponent<Image>().sprite = entry.image;",
-          "nearestLineInOurs": "component.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
-          "similarity": 0.96
-        },
-        {
-          "line": 309,
-          "recoveredMember": "UpdateLoadoutButton",
-          "recovered": "button.FindChild(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
-          "nearestLineInOurs": "button.Find(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
-          "similarity": 0.96
-        },
-        {
-          "line": 314,
-          "recoveredMember": "UpdateLoadoutButton",
-          "recovered": "button.FindChild(\"Image\").GetComponent<Image>().sprite = entry.image;",
-          "nearestLineInOurs": "button.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
-          "similarity": 0.96
-        },
-        {
-          "line": 399,
-          "recoveredMember": "OnDeployClick",
-          "recovered": "FpsActorController.instance.CloseLoadout();",
-          "nearestLineInOurs": "FpsActorController.instance.DeployFromLoadout();",
-          "similarity": 0.88
-        },
-        {
-          "line": 404,
-          "recoveredMember": "IsOpen",
-          "recovered": "return instance.uiCanvas.enabled;",
-          "nearestLineInOurs": "return instance != null && instance.uiCanvas.enabled;",
-          "similarity": 0.77
-        },
-        {
-          "line": 419,
-          "recoveredMember": "HasBeenOpen",
-          "recovered": "return instance.hasBeenOpen;",
-          "nearestLineInOurs": "return instance != null && instance.hasBeenOpen;",
-          "similarity": 0.74
-        }
-      ]
-    },
-    "MinimapUi.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/MinimapUi.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MinimapUi.cs",
-      "survivors": 8,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 46,
-          "recoveredMember": "Update",
-          "recovered": "float target = ((!Input.GetKey(KeyCode.M)) ? 0f : 1f);",
-          "nearestLineInOurs": "float target = (!held) ? 0f : 1f;",
-          "similarity": 0.71
-        },
-        {
-          "line": 81,
-          "recoveredMember": "SetupMinimap",
-          "recovered": "Vector2 anchorMax = (rectTransform.anchorMin = new Vector2(vector.x, vector.y));",
-          "nearestLineInOurs": "Vector2 anchorMax = (rectTransform.anchorMin = ToMap(vector));",
-          "similarity": 0.82
-        },
-        {
-          "line": 117,
-          "recoveredMember": "UpdateSpawnPointButtons",
-          "recovered": "int num = 0;",
-          "nearestLineInOurs": "int team = -1;",
-          "similarity": 0.69
-        },
-        {
-          "line": 123,
-          "recoveredMember": "UpdateSpawnPointButtons",
-          "recovered": "Color color = (colors.normalColor = ColorScheme.TeamColor(owner));",
-          "nearestLineInOurs": "Color color2 = (colors.normalColor = ColorScheme.TeamColor(owner));",
-          "similarity": 0.99
-        },
-        {
-          "line": 124,
-          "recoveredMember": "UpdateSpawnPointButtons",
-          "recovered": "colors.highlightedColor = color + new Color(0.2f, 0.2f, 0.2f);",
-          "nearestLineInOurs": "colors.highlightedColor = color2 + new Color(0.2f, 0.2f, 0.2f);",
-          "similarity": 0.99
-        },
-        {
-          "line": 125,
-          "recoveredMember": "UpdateSpawnPointButtons",
-          "recovered": "colors.disabledColor = color * new Color(0.5f, 0.5f, 0.5f);",
-          "nearestLineInOurs": "colors.disabledColor = color2 * new Color(0.5f, 0.5f, 0.5f);",
-          "similarity": 0.99
-        },
-        {
-          "line": 128,
-          "recoveredMember": "UpdateSpawnPointButtons",
-          "recovered": "button.interactable = owner == num;",
-          "nearestLineInOurs": "button.interactable = owner == localTeam;",
-          "similarity": 0.87
-        },
-        {
-          "line": 154,
-          "recoveredMember": "AddActorBlip",
-          "recovered": "ActorBlip component = ((GameObject)Object.Instantiate(instance.actorBlipPrefab, instance.minimap.rectTransform)).GetComponent<ActorBlip>();",
-          "nearestLineInOurs": "ActorBlip component = ((GameObject)Object.Instantiate(instance.actorBlipPrefab, instance.LayerOrMap(instance.soldierLayer))).GetComponent<ActorBlip>();",
-          "similarity": 0.87
         }
       ]
     },
@@ -4076,6 +4125,56 @@
           "recovered": "JsonReader jsonReader = new JsonReader(input, readerSettings);",
           "nearestLineInOurs": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
           "similarity": 0.94
+        }
+      ]
+    },
+    "CoverPlacer.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/CoverPlacer.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/CoverPlacer.cs",
+      "survivors": 6,
+      "outrightDeletions": 2,
+      "candidates": [
+        {
+          "line": 43,
+          "recoveredMember": null,
+          "recovered": "private float waterHeight;",
+          "nearestLineInOurs": "private WaterLevel[] waters;",
+          "similarity": 0.63
+        },
+        {
+          "line": 47,
+          "recoveredMember": "Generate",
+          "recovered": "WaterLevel waterLevel = Object.FindObjectOfType<WaterLevel>();",
+          "nearestLineInOurs": "waters = Object.FindObjectsByType<WaterLevel>(FindObjectsSortMode.None);",
+          "similarity": 0.66
+        },
+        {
+          "line": 48,
+          "recoveredMember": "Generate",
+          "recovered": "if (waterLevel != null)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 50,
+          "recoveredMember": "Generate",
+          "recovered": "waterHeight = waterLevel.transform.position.y;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 52,
+          "recoveredMember": "Generate",
+          "recovered": "Debug.Log(waterHeight);",
+          "nearestLineInOurs": "Debug.Log(\"Generate complete.\");",
+          "similarity": 0.62
+        },
+        {
+          "line": 122,
+          "recoveredMember": "HandleNodePenalty",
+          "recovered": "if (((Vector3)meshNode.GetVertex(i)).y < waterHeight)",
+          "nearestLineInOurs": "if (Underwater((Vector3)meshNode.GetVertex(i)))",
+          "similarity": 0.74
         }
       ]
     },
@@ -4444,6 +4543,49 @@
         }
       ]
     },
+    "TimeOfDay.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/TimeOfDay.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/TimeOfDay.cs",
+      "survivors": 5,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 70,
+          "recoveredMember": "ApplyDay",
+          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(true);",
+          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(true);",
+          "similarity": 0.96
+        },
+        {
+          "line": 71,
+          "recoveredMember": "ApplyDay",
+          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(false);",
+          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(false);",
+          "similarity": 0.96
+        },
+        {
+          "line": 84,
+          "recoveredMember": "ApplyNight",
+          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(false);",
+          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(false);",
+          "similarity": 0.96
+        },
+        {
+          "line": 85,
+          "recoveredMember": "ApplyNight",
+          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(true);",
+          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(true);",
+          "similarity": 0.96
+        },
+        {
+          "line": 117,
+          "recoveredMember": "BlendAtmosphereColor",
+          "recovered": "RenderSettings.skybox.SetColor(\"_SkyTint\", Color.Lerp(atmosphere.skyboxMaterial.GetColor(\"_SkyTint\"), target, amount));",
+          "nearestLineInOurs": "RenderSettings.skybox.SetColor(tint, Color.Lerp(atmosphere.skyboxMaterial.GetColor(tint), target, amount));",
+          "similarity": 0.93
+        }
+      ]
+    },
     "AlternatingMountedWeapon.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/AlternatingMountedWeapon.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AlternatingMountedWeapon.cs",
@@ -4624,39 +4766,39 @@
         }
       ]
     },
-    "TimeOfDay.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/TimeOfDay.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/TimeOfDay.cs",
+    "ReflectionProber.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ReflectionProber.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ReflectionProber.cs",
       "survivors": 4,
-      "outrightDeletions": 0,
+      "outrightDeletions": 2,
       "candidates": [
         {
-          "line": 70,
-          "recoveredMember": "ApplyDay",
-          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(true);",
-          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(true);",
-          "similarity": 0.96
+          "line": 28,
+          "recoveredMember": "SetupProbesCoroutine",
+          "recovered": "normalProbe.RenderProbe();",
+          "nearestLineInOurs": "int normal = normalProbe.RenderProbe();",
+          "similarity": 0.8
         },
         {
-          "line": 71,
-          "recoveredMember": "ApplyDay",
-          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(false);",
-          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(false);",
-          "similarity": 0.96
+          "line": 29,
+          "recoveredMember": "SetupProbesCoroutine",
+          "recovered": "yield return new WaitForEndOfFrame();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
-          "line": 84,
-          "recoveredMember": "ApplyNight",
-          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(false);",
-          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(false);",
-          "similarity": 0.96
+          "line": 31,
+          "recoveredMember": "SetupProbesCoroutine",
+          "recovered": "nightVisionProbe.RenderProbe();",
+          "nearestLineInOurs": "int nightVision = nightVisionProbe.RenderProbe();",
+          "similarity": 0.78
         },
         {
-          "line": 85,
-          "recoveredMember": "ApplyNight",
-          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(true);",
-          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(true);",
-          "similarity": 0.96
+          "line": 32,
+          "recoveredMember": "SetupProbesCoroutine",
+          "recovered": "yield return new WaitForEndOfFrame();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         }
       ]
     },
@@ -4954,6 +5096,35 @@
           "recovered": "Shoot(Vector3.zero, true);",
           "nearestLineInOurs": null,
           "similarity": 0.0
+        }
+      ]
+    },
+    "WaterLevel.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/WaterLevel.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/WaterLevel.cs",
+      "survivors": 3,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 5,
+          "recoveredMember": null,
+          "recovered": "public static float height;",
+          "nearestLineInOurs": "public static float height = float.NegativeInfinity;",
+          "similarity": 0.68
+        },
+        {
+          "line": 9,
+          "recoveredMember": "InWater",
+          "recovered": "return position.y <= height;",
+          "nearestLineInOurs": "return position.y <= SurfaceHeight(position);",
+          "similarity": 0.74
+        },
+        {
+          "line": 14,
+          "recoveredMember": "Depth",
+          "recovered": "return height - position.y;",
+          "nearestLineInOurs": "float depth = height - position.y;",
+          "similarity": 0.75
         }
       ]
     },
