@@ -317,11 +317,25 @@ public class VehicleSpawner : MonoBehaviour
 			// whether a physics query ran at all, and whether what it found is a living body
 			// (allowed, § 7) or a corpse that kept its colliders (the § 2.4 defect). 'The pad is
 			// obstructed by Bone_002' is true of both, so it sent every reader to check by hand.
-			Debug.LogWarning(
+			string gaveUp =
 				$"[net] vehicle spawner '{name}' (id {spawnerId}) gave up after "
 				+ $"{scheduler.MaxBlockedRetries} blocked attempts. {DescribeBlocker()} "
 				+ "Fast retries are paused; the pad will be checked silently every 10 seconds "
-				+ "and also re-arms on lifecycle events.");
+				+ "and also re-arms on lifecycle events.";
+
+			// Information, not a warning, when the pad is waiting on the match itself: a vehicle
+			// left on it -- bots get out where they stop, and every bot soak of 2026-10-01 logged
+			// it for quadbikes, jeeps, tanks and helicopters -- or a living body standing on it,
+			// which § 7 allows. Neither is a fault, and the pad keeps checking. Scenery, a corpse
+			// that kept its colliders, or an id pool with nothing left are, and stay warnings.
+			if (BlockerIsTheMatchItself())
+			{
+				Debug.Log(gaveUp);
+			}
+			else
+			{
+				Debug.LogWarning(gaveUp);
+			}
 		}
 	}
 
@@ -717,6 +731,22 @@ public class VehicleSpawner : MonoBehaviour
 			: string.Empty;
 
 		return CorpseColliderLedger.DescribePadBlocker(kind, described, actorId);
+	}
+
+	/// <summary>
+	/// Whether the last probe found a vehicle, or a living body, on the pad: the match going on,
+	/// rather than something broken. See the give-up line in <see cref="Update"/>.
+	/// </summary>
+	private bool BlockerIsTheMatchItself()
+	{
+		Collider blocker = lastProbeBlocker;
+		if (!lastProbeRan || blocker == null) return false;
+
+		// The body first: a corpse still seated in a vehicle is the § 2.4 defect, not a parked
+		// vehicle, and the vehicle would answer for it if it were asked first.
+		NetServerActor owner = blocker.GetComponentInParent<NetServerActor>();
+		if (owner != null) return owner.IsAlive;
+		return blocker.GetComponentInParent<Vehicle>() != null;
 	}
 
 	/// <summary>

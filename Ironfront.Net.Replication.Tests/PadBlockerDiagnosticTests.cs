@@ -365,6 +365,35 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A pad waiting on a parked vehicle or a living body gives up as information; anything
+        /// else that blocks it is still a warning.
+        /// </summary>
+        /// <remarks>
+        /// Every bot soak of 2026-10-01 logged the give-up as a warning for quadbikes, jeeps, tanks
+        /// and helicopters the bots had left on pads: the match going on, not a fault, and the pad
+        /// keeps checking. The body is asked before the vehicle, because a corpse still seated in
+        /// a vehicle is the § 2.4 defect and must stay a warning.
+        /// </remarks>
+        [Fact]
+        public void APadWaitingOnTheMatchGivesUpAsInformation()
+        {
+            string source = ReadUnitySource(Spawner);
+            string update = CodeOnly(MethodBody(source, "private void Update()"));
+            string verdict = CodeOnly(MethodBody(source, "private bool BlockerIsTheMatchItself()"));
+
+            int ask = update.IndexOf("if (BlockerIsTheMatchItself())", StringComparison.Ordinal);
+            int info = update.IndexOf("Debug.Log(gaveUp);", StringComparison.Ordinal);
+            int warning = update.IndexOf("Debug.LogWarning(gaveUp);", StringComparison.Ordinal);
+            Assert.True(ask >= 0 && info > ask && warning > info, "the give-up line must choose its level from the blocker");
+
+            int body = verdict.IndexOf("GetComponentInParent<NetServerActor>()", StringComparison.Ordinal);
+            int vehicle = verdict.IndexOf("GetComponentInParent<Vehicle>()", StringComparison.Ordinal);
+            Assert.True(body >= 0 && vehicle > body, "a body must be judged before the vehicle it may sit in");
+            Assert.Contains("owner.IsAlive", verdict, StringComparison.Ordinal);
+            Assert.Contains("lastProbeRan", verdict, StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// The spawner no longer asserts an obstruction in its own words. Every sentence that
         /// claims one now comes from <see cref="CorpseColliderLedger.DescribePadBlocker"/>, on
         /// the branches where it is true.
