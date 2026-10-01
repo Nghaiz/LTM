@@ -55,6 +55,7 @@ namespace Ironfront.MasterServer.Tests
                 gameServer);
             Assert.True(registration.Ok);
             ushort serverId = registration.ServerId;
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId);
 
             using var player = new MasterClient.MasterClient();
             await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);

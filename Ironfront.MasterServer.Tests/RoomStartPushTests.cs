@@ -63,6 +63,7 @@ namespace Ironfront.MasterServer.Tests
                 gameServer);
 
             Assert.True(registered.Ok, "no game server registered, so the join below could never be allocated one");
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, registered.ServerId);
 
             using var alpha = new MasterClient.MasterClient();
             using var beta  = new MasterClient.MasterClient();
@@ -125,7 +126,7 @@ namespace Ironfront.MasterServer.Tests
 
             using var gameServer = new GameServerLink();
             await gameServer.ConnectAsync("127.0.0.1", server.Port);
-            await PumpAsync(
+            GameServerRegistrationResult registered = await PumpAsync(
                 gameServer.RegisterAsync(new GameServerRegistration
                 {
                     ServerSecret = Phase03ServerHarness.SharedSecret,
@@ -135,6 +136,8 @@ namespace Ironfront.MasterServer.Tests
                     MapIds       = new ushort[] { 1 },
                 }),
                 gameServer);
+            Assert.True(registered.Ok, "no game server registered, so the join below could never be allocated one");
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, registered.ServerId);
 
             using var alpha = new MasterClient.MasterClient();
             using var beta  = new MasterClient.MasterClient();
