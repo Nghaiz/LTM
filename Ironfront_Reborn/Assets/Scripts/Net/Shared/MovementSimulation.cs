@@ -88,7 +88,7 @@ namespace Ironfront.Net.Unity
         /// one transcription — including the <c>LoadoutUi.IsOpen()</c> terms that are part of
         /// each button's meaning. Re-reading <c>Input.GetButton("Fire1")</c> here would be a
         /// second transcription of that expression, drifting from the first with nothing
-        /// watching, and <c>InputShadowCompare</c> only guards the original.
+        /// watching.
         /// </para>
         /// <para>
         /// <b>An <see cref="InputButtons"/> mask rather than the <c>IInputSource</c> that
