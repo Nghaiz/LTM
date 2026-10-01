@@ -22,7 +22,7 @@
 
     A `using UnityEngine;` in any file listed below fails the build here rather than
     silently dropping out of coverage, which is the whole reason the Unity-only half
-    (LocalInputSource, InputShadowCompare) is not in the list.
+    (LocalInputSource) is not in the list.
 
     NOTE the two compilers disagree slightly and the linked files must satisfy both:
       - Unity 6000.3 compiles C# 9. LangVersion here is 12 (Directory.Build.props), so

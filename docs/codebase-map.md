@@ -202,7 +202,7 @@ this section. Read the middle column as "this read only matters when…".
 
 > **This table describes the file before `step 02`.**
 > It is kept in that form because it is the substitution list step 02 was built from, and because
-> `InputShadowCompare` names its sites by these line numbers. After step 02, 11 of the 37 lines read
+> `InputShadowCompare` (removed 2026-10-02) named its sites by these line numbers. After step 02, 11 of the 37 lines read
 > `inputSource` instead and 26 remain: the 4 helicopter axes (phase-00 § 5 debt) and 22 edge-triggered
 > UI, debug and weapon/seat-selection keys, which `IInputSource` cannot carry because it reports
 > levels and those are edges.

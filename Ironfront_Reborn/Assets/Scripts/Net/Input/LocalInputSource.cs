@@ -145,9 +145,9 @@ namespace Ironfront.Net.Unity
         /// directly, which is a change of route and not of meaning (C2).
         /// </summary>
         /// <remarks>
-        /// <c>InputShadowCompare</c> re-evaluates those original expressions beside these and
-        /// says so in the Console when the two disagree. That is the only check that exists for
-        /// this transcription, because no gate in this repository compiles Unity code.
+        /// <c>InputShadowCompare</c> re-evaluated those original expressions beside these at
+        /// runtime until 2026-10-02, when six v3.1.1 sessions (311,480 frames) had found no
+        /// disagreement but the deliberate change to the sprint bit, and it was removed.
         /// </remarks>
         public ushort Buttons
         {

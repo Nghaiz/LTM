@@ -344,10 +344,11 @@ public class FpsActorController : ActorController
 				(crouchKey, aimKey, sprintKey) =>
 					!CrouchFrom(crouchKey) && !AimFrom(aimKey) && !IsReloading()
 					&& sprintKey && !actor.IsSeated());
-			// Temporary, and deliberately unconditional: the harness that says whether the
-			// substitution above was correct. Delete both this line and InputShadowCompare.cs
-			// once a playtest has come back quiet.
-			InputShadowCompare.Install(base.gameObject, inputSource);
+			// InputShadowCompare, the temporary harness that checked this substitution against the
+			// expressions it replaced, was removed after the v3.1.1 playtests of 2026-10-01: nine of
+			// its ten sites never diverged over 311,480 frames in six sessions, and the tenth,
+			// Sprint, diverged only because the sprint bit was deliberately changed to mean "is
+			// sprinting" (see LocalInputSource's sprinting parameter) after it was written.
 		}
 		InstallNetworkCombatIntent();
 		ForceEndCrouch();
