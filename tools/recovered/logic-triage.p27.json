@@ -4,7 +4,7 @@
   "scope": {
     "commonFiles": 322,
     "filesWithCandidates": 80,
-    "candidates": 709,
+    "candidates": 710,
     "outrightDeletions": 143,
     "skippedAsP24": [
       "AstarPath.cs",
@@ -4328,6 +4328,56 @@
         }
       ]
     },
+    "Squad.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Squad.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Squad.cs",
+      "survivors": 6,
+      "outrightDeletions": 2,
+      "candidates": [
+        {
+          "line": 64,
+          "recoveredMember": "DropMember",
+          "recovered": "squadVehicle.DropSeatClaim();",
+          "nearestLineInOurs": "squadVehicle.DropSeatClaim(a != null ? a.actor : null);",
+          "similarity": 0.69
+        },
+        {
+          "line": 231,
+          "recoveredMember": "SetAlreadyInVehicle",
+          "recovered": "squadVehicle.ClaimSeat();",
+          "nearestLineInOurs": "squadVehicle = null;",
+          "similarity": 0.62
+        },
+        {
+          "line": 248,
+          "recoveredMember": "EnterVehicle",
+          "recovered": "vehicle.ClaimSeat();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 292,
+          "recoveredMember": "HasVehicle",
+          "recovered": "return squadVehicle != null;",
+          "nearestLineInOurs": "squadVehicle = null;",
+          "similarity": 0.83
+        },
+        {
+          "line": 370,
+          "recoveredMember": "UpdateVehicleStatus",
+          "recovered": "SplitSquad(list);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 375,
+          "recoveredMember": "SplitSquad",
+          "recovered": "public Squad SplitSquad(List<AiActorController> leavingMembers)",
+          "nearestLineInOurs": "public Squad SplitSquad(List<AiActorController> leavingMembers, SplitReason reason)",
+          "similarity": 0.86
+        }
+      ]
+    },
     "Ammobox.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Ammobox.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Ammobox.cs",
@@ -4497,49 +4547,6 @@
           "recovered": "if (item.ResupplyHealth())",
           "nearestLineInOurs": "if (_nearby[i].ResupplyHealth())",
           "similarity": 0.79
-        }
-      ]
-    },
-    "Squad.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Squad.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Squad.cs",
-      "survivors": 5,
-      "outrightDeletions": 2,
-      "candidates": [
-        {
-          "line": 64,
-          "recoveredMember": "DropMember",
-          "recovered": "squadVehicle.DropSeatClaim();",
-          "nearestLineInOurs": "squadVehicle.DropSeatClaim(a != null ? a.actor : null);",
-          "similarity": 0.69
-        },
-        {
-          "line": 231,
-          "recoveredMember": "SetAlreadyInVehicle",
-          "recovered": "squadVehicle.ClaimSeat();",
-          "nearestLineInOurs": "if (!squadVehicle.IsFull())",
-          "similarity": 0.62
-        },
-        {
-          "line": 248,
-          "recoveredMember": "EnterVehicle",
-          "recovered": "vehicle.ClaimSeat();",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 370,
-          "recoveredMember": "UpdateVehicleStatus",
-          "recovered": "SplitSquad(list);",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 375,
-          "recoveredMember": "SplitSquad",
-          "recovered": "public Squad SplitSquad(List<AiActorController> leavingMembers)",
-          "nearestLineInOurs": "public Squad SplitSquad(List<AiActorController> leavingMembers, SplitReason reason)",
-          "similarity": 0.86
         }
       ]
     },
