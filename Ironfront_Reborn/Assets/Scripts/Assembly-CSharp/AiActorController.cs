@@ -2530,7 +2530,9 @@ public class AiActorController : ActorController
 
 	public override void ReceivedDamage(float damage, float balanceDamage, Vector3 point, Vector3 direction, Vector3 force)
 	{
-		if (!HasTarget())
+		// Damage with no direction has no source to turn towards. The offline ragdoll timeout
+		// deals it at the bot's own position, and looking there turned the bot to world north.
+		if (!HasTarget() && direction != Vector3.zero)
 		{
 			LookAt(point - direction * 10f);
 		}
@@ -3041,7 +3043,11 @@ public class AiActorController : ActorController
 
 	public void EmoteHailLeader()
 	{
-		if (!HasTarget())
+		// This runs 0.6-1.5 s after the bot joined (EmoteHailLeaderSlow), and by then the bot can
+		// lead the squad itself: a rogue split leaves it alone in a squad of one. Hailing itself
+		// was a LookAt of its own position, which turned it to face world north and made Unity log
+		// "Look rotation viewing vector is zero".
+		if (!HasTarget() && !IsSquadLeader())
 		{
 			LookAt(squad.Leader().transform.position);
 			actor.EmoteHail();

@@ -60,12 +60,38 @@ import difflib
 import json
 import os
 import re
+import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OURS_ROOT = os.path.join(REPO, "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp")
-REC_ROOTS = [os.path.join(REPO, "tmp/recovered/src/Assembly-CSharp"),
-             os.path.join(REPO, "tmp/recovered/src/Assembly-CSharp-firstpass")]
+# How a recovered file is named in the record and in every message, wherever the tree really is.
+REC_PREFIX = "tmp/recovered/"
+
+
+def recovered_dir():
+    """This checkout's tmp/recovered, else the main worktree's.
+
+    tmp/ is gitignored, so a `git worktree add` checkout never has it. The P30 parts were all
+    built in one, and ci.ps1 printed SKIPPED for every one of them while the tree sat in the main
+    checkout: 18 rewritten lines went unclassified until 2026-10-01.
+    """
+    own = os.path.join(REPO, REC_PREFIX)
+    if os.path.isdir(own):
+        return own
+    try:
+        common = subprocess.run(
+            ["git", "-C", REPO, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return own
+    shared = os.path.join(os.path.dirname(common), REC_PREFIX)
+    return shared if os.path.isdir(shared) else own
+
+
+REC_DIR = recovered_dir()
+REC_ROOTS = [os.path.join(REC_DIR, "src/Assembly-CSharp"),
+             os.path.join(REC_DIR, "src/Assembly-CSharp-firstpass")]
 RECORD = "tools/recovered/logic-triage.p27.json"
 
 # The six A* files P24 already classified. Section 9 of the P27 plan carves them out; the OTHER
@@ -170,13 +196,15 @@ def pair_files():
         if len(ours[name]) > 1 or len(rec[name]) > 1:
             ambiguous.append(name)
         pairs.append((name,
-                      os.path.relpath(rec[name][0], REPO).replace("\\", "/"),
+                      REC_PREFIX + os.path.relpath(rec[name][0], REC_DIR).replace("\\", "/"),
                       os.path.relpath(ours[name][0], REPO).replace("\\", "/")))
     return pairs, ambiguous, sorted(set(ours) - set(rec)), sorted(set(rec) - set(ours))
 
 
 def read(rel):
-    with open(os.path.join(REPO, rel), encoding="utf-8", errors="replace") as f:
+    path = (os.path.join(REC_DIR, rel[len(REC_PREFIX):]) if rel.startswith(REC_PREFIX)
+            else os.path.join(REPO, rel))
+    with open(path, encoding="utf-8", errors="replace") as f:
         return strip_comments(f.read())
 
 

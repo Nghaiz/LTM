@@ -6,7 +6,8 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
-    /// Source invariants for the two game-server log floods the 2026-09-30 live test found (B4).
+    /// Source invariants for game-server log noise found in live tests: the two floods of
+    /// 2026-09-30 (B4) and the zero look direction of 2026-10-01.
     /// </summary>
     /// <remarks>
     /// Both live in Unity code no netstandard test assembly can reference, so they are pinned on
@@ -72,7 +73,67 @@ namespace Ironfront.Net.Replication.Tests
                 "the catch-up must warn only on a player's first pass, then remember it has run");
         }
 
+        /// <summary>
+        /// A bot never turns to look at the point it stands on.
+        /// </summary>
+        /// <remarks>
+        /// <c>LookAt</c> of the bot's own position hands <c>Quaternion.LookRotation</c> a zero
+        /// vector: the bot turns to face world north and Unity logs "Look rotation viewing vector
+        /// is zero". A v3.0.0 Island server logged it 12 times in one match. Stack traces from an
+        /// offline Island match put every one on two callers: a delayed hail that fires after the
+        /// bot has become its squad's leader, and damage that carries no direction.
+        /// </remarks>
+        [Fact]
+        public void BotsDoNotLookAtThePointTheyStandOn()
+        {
+            string source = ReadScript("Assembly-CSharp", "AiActorController.cs");
+
+            AssertGuardedLook(
+                MethodBody(source, "AiActorController.cs", "public void EmoteHailLeader()"),
+                "!IsSquadLeader()",
+                "EmoteHailLeader must not hail when the bot leads its squad: the hail is delayed, and a rogue split can make the bot leader of a squad of one before it fires.");
+            AssertGuardedLook(
+                MethodBody(source, "AiActorController.cs", "public override void ReceivedDamage("),
+                "direction != Vector3.zero",
+                "ReceivedDamage must not turn for damage with no direction: the offline ragdoll timeout deals it at the bot's own position.");
+        }
+
+        /// <summary>
+        /// No scene or prefab carries a component with no script at all.
+        /// </summary>
+        /// <remarks>
+        /// Unity logs "The referenced script on this Behaviour ... is missing!" each time such a
+        /// component loads. Island's "Relevant Graph" carried one from the decompiled import, next
+        /// to the RelevantGraphSurface it really has; the recovered original has only the latter.
+        /// A script deleted later keeps its guid, so this checks only the reference that was
+        /// never a script.
+        /// </remarks>
+        [Fact]
+        public void NoSceneOrPrefabCarriesAComponentWithNoScript()
+        {
+            string assets = Path.Combine(RepoRoot(), "Ironfront_Reborn", "Assets");
+            var offenders = new List<string>();
+            foreach (string path in Directory.EnumerateFiles(assets, "*.*", SearchOption.AllDirectories))
+            {
+                if (!path.EndsWith(".unity", StringComparison.Ordinal) && !path.EndsWith(".prefab", StringComparison.Ordinal))
+                    continue;
+                if (File.ReadAllText(path).Contains("m_Script: {fileID: 0}", StringComparison.Ordinal))
+                    offenders.Add(Path.GetRelativePath(assets, path));
+            }
+
+            Assert.True(offenders.Count == 0, "components with no script: " + string.Join(", ", offenders));
+        }
+
         // ------------------------------------------------------------------ helpers
+
+        private static void AssertGuardedLook(string body, string guard, string message)
+        {
+            int look = body.IndexOf("LookAt(", StringComparison.Ordinal);
+            Assert.True(look >= 0, $"the method no longer calls LookAt; revisit this test. Body: {body}");
+
+            int at = body.IndexOf(guard, StringComparison.Ordinal);
+            Assert.True(at >= 0 && at < look, message);
+        }
 
         private static string ReadScript(params string[] relativeParts)
         {
