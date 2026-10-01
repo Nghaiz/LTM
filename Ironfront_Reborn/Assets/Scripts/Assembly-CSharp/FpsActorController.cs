@@ -290,11 +290,11 @@ public class FpsActorController : ActorController
 		// because it has not arrived yet at Awake and that is the whole defect.
 		//
 		// SetTeam rather than a bare field write: it also recolours the two skinned renderers,
-		// which is what the prefab's authored literal never did.
-		if (NetContext.IsOffline && actor != null && actor.team == UNKNOWN_TEAM)
-		{
-			actor.SetTeam(0);
-		}
+		// which is what the prefab's authored literal never did. Done in Start, not here: the
+		// Actor sits on a child ("Actor Parent") whose Awake runs after this one, so its
+		// renderers were still null and SetTeam threw -- which aborted this Awake before
+		// `controller` was set, and every offline frame after that threw from Velocity() and
+		// the loadout never opened.
 
 		controller = GetComponent<FirstPersonController>();
 		controller.externalMovementAuthority = NetContext.IsClient;
@@ -355,6 +355,11 @@ public class FpsActorController : ActorController
 
 	private void Start()
 	{
+		// See Awake's remark (P12 D-1): offline, the human is always team 0.
+		if (NetContext.IsOffline && actor != null && actor.team == UNKNOWN_TEAM)
+		{
+			actor.SetTeam(0);
+		}
 		SceneryCamera.instance.camera.enabled = true;
 		actorLocalOrigin = actor.transform.localPosition;
 		DisableInput();
