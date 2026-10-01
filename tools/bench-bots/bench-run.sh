@@ -26,7 +26,7 @@ for spec in "${specs[@]}"; do
     -e IRONFRONT_GAMESERVER_MAX_PLAYERS=16 -e IRONFRONT_GAMESERVER_MAX_CONNECTIONS=16 \
     -e IRONFRONT_LOG_LEVEL=Info -e IRONFRONT_STRUCTURED_LOG=1 -e IRONFRONT_LOG_FRAMES=1 \
     -e IRONFRONT_BENCH_BOTS_PER_TEAM="$bots" \
-    "$image" -job-worker-count 2 >/dev/null
+    "$image" >/dev/null
 done
 # Wait for every server to finish loading its scene (first [frames] line), at most 120 s.
 for n in "${names[@]}"; do
