@@ -714,9 +714,16 @@ public class Squad
 		foreach (AiActorController member in members)
 		{
 			member.LeaveVehicle();
+			// By name, as DropMember does: a squad walking away from a vehicle holds no seat in it.
+			if (squadVehicle != null)
+			{
+				squadVehicle.DropSeatClaim(member != null ? member.actor : null);
+			}
 		}
 		state = State.Stationary;
 		hasSquadVehicle = false;
+		// Out, so it no longer has one. See HasVehicle.
+		squadVehicle = null;
 	}
 
 	public bool IsTakingFire()
@@ -743,9 +750,40 @@ public class Squad
 		return true;
 	}
 
+	/// <summary>Whether the squad is in its vehicle, or on its way into it.</summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The original answered "was this squad ever given a vehicle".</b> <see cref="squadVehicle"/>
+	/// is set by <see cref="EnterVehicle"/> and <see cref="SetAlreadyInVehicle"/> and nothing cleared
+	/// it; <see cref="ExitVehicle"/> cleared only <c>hasSquadVehicle</c>, a flag nothing reads. So a
+	/// squad that got out -- shot at, a stuck boat, a burning car, or one that never got in -- went on
+	/// as a mounted squad on foot: it would not dig in at a flag it held ("Squad dig in while in
+	/// vehicle, ignore." on every order tick), did not turn to cover when shot at, never boarded
+	/// another vehicle or merged into a nearby squad, and the commander planned for it as driving.
+	/// </para>
+	/// <para>
+	/// Now: boarding, or with a member in that vehicle's seat, however the others left it.
+	/// </para>
+	/// </remarks>
 	public bool HasVehicle()
 	{
-		return squadVehicle != null;
+		if (squadVehicle == null)
+		{
+			return false;
+		}
+		if (state == State.EnterVehicle)
+		{
+			return true;
+		}
+		foreach (AiActorController member in members)
+		{
+			Actor body = member != null ? member.actor : null;
+			if (body != null && body.IsSeated() && body.seat.vehicle == squadVehicle)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void LeaveAnyCover()
