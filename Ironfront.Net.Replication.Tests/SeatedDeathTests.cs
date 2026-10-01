@@ -71,6 +71,24 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void ADespawnedVehicleGivesTheLocalSeatUpBeforeItIsDestroyed()
+        {
+            // v3.1.1 live, 2026-10-01: the round reset despawned the vehicle the local player was
+            // driving, RemoteVehicleRegistry destroyed it, and the rig -- a child of the seat --
+            // went with it: 17,282 NullReferenceExceptions in 24 s until the player quit. The
+            // stage must hear the despawn itself; its snapshot check lets go a second too late.
+            SyntaxNode stage = Parse("Net/Client/ClientVehicleStage.cs");
+
+            Assert.Contains(Methods(stage, "OnEnable").Single().DescendantNodes().OfType<AssignmentExpressionSyntax>(),
+                a => Normalized(a) == "_client.Router.OnVehicleDespawn+=OnVehicleDespawn");
+            Assert.Contains(Methods(stage, "OnDisable").Single().DescendantNodes().OfType<AssignmentExpressionSyntax>(),
+                a => Normalized(a) == "_client.Router.OnVehicleDespawn-=OnVehicleDespawn");
+
+            MethodDeclarationSyntax despawn = Methods(stage, "OnVehicleDespawn").Single();
+            Assert.Single(Invocations(despawn, "LeaveLocalSeat"));
+        }
+
+        [Fact]
         public void AWreckOnAClientLeavesEveryOccupantToTheServer()
         {
             // The snapshot that flags a wreck Dead runs Vehicle.Die on a client, and it only takes
