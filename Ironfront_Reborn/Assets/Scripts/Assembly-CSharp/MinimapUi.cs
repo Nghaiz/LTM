@@ -191,9 +191,13 @@ public class MinimapUi : MonoBehaviour
 		}
 	}
 
+	/// <summary>Set once <see cref="Start"/> has built the button map, or tried to.</summary>
+	private bool started;
+
 	private void Start()
 	{
 		SetupMinimap();
+		started = true;
 		UpdateSpawnPointButtons();
 	}
 
@@ -306,10 +310,17 @@ public class MinimapUi : MonoBehaviour
 		}
 		if (instance.minimapSpawnPointButton == null)
 		{
-			NetPresenterGate.WarnOnce(
-				"minimap-spawn-buttons-not-ready",
-				"[net] MinimapUi.UpdateSpawnPointButtons ran before SetupMinimap built its "
-				+ "button map. Skipping this update.");
+			// Before Start this is the ordinary order of a map load: a flag or a snapshot arrives
+			// first, and Start applies the owners as they stand once it has built the map. Every
+			// client log carried the warning for it at every map load. After Start it means
+			// SetupMinimap found no minimap camera, and that is worth saying.
+			if (instance.started)
+			{
+				NetPresenterGate.WarnOnce(
+					"minimap-spawn-buttons-not-ready",
+					"[net] MinimapUi.UpdateSpawnPointButtons found no button map after SetupMinimap ran. "
+					+ "Skipping this update.");
+			}
 			return;
 		}
 		foreach (SpawnPoint key in instance.minimapSpawnPointButton.Keys)
