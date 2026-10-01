@@ -931,7 +931,7 @@ public class FpsActorController : ActorController
 		if (swim || networkSwimming)
 		{
 			bool moving = swim && (Mathf.Abs(inputSource.MoveX) > 0.01f || Mathf.Abs(inputSource.MoveZ) > 0.01f);
-			SwimPresentation.Apply(actor.animator, swim, moving);
+			actor.PresentNetworkSwim(swim, moving);
 		}
 		if (swim == networkSwimming)
 		{
