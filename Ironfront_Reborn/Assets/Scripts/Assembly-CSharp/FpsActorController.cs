@@ -913,8 +913,9 @@ public class FpsActorController : ActorController
 	/// <see cref="LateUpdate"/> draws it at the surface.
 	/// </para>
 	/// <para>
-	/// <b>In water is <c>actor.inWater</c></b>, which for this body is the capsule's own test (see
-	/// <c>Actor.Update</c>) -- the one its movement swims by and its breath drains on. Offline play
+	/// <b>In water is the capsule's own test</b> (<see cref="CapsuleInWaterNow"/>, which
+	/// <c>Actor.Update</c> stores in <c>actor.inWater</c> for this body) -- the one its movement swims
+	/// by and its breath drains on, taken where the body is this frame. Offline play
 	/// is untouched: <c>NetContext.IsClient</c> is false there, and the body swims by ragdoll as it
 	/// always has.
 	/// </para>
@@ -925,7 +926,7 @@ public class FpsActorController : ActorController
 	/// </remarks>
 	private void UpdateNetworkSwim()
 	{
-		bool swim = NetContext.IsClient && actor != null && SwimPresentation.Swims(!actor.dead, actor.inWater, actor.IsSeated());
+		bool swim = NetContext.IsClient && actor != null && SwimPresentation.Swims(!actor.dead, CapsuleInWaterNow(), actor.IsSeated());
 		if (swim || networkSwimming)
 		{
 			bool moving = swim && (Mathf.Abs(inputSource.MoveX) > 0.01f || Mathf.Abs(inputSource.MoveZ) > 0.01f);
@@ -950,6 +951,17 @@ public class FpsActorController : ActorController
 		{
 			FirstPersonCamera();
 		}
+	}
+
+	/// <summary>
+	/// The capsule's own water test, where the body is now: the test <c>Actor.Update</c> stores in
+	/// <c>actor.inWater</c> for this body. Taken here rather than read from that field, which may be a
+	/// frame old -- from before a respawn moved the body out of the water.
+	/// </summary>
+	private bool CapsuleInWaterNow()
+	{
+		Vector3 capsule = base.transform.position;
+		return Ironfront.Net.Replication.Movement.MovementCore.IsInWater(capsule.x, capsule.y, capsule.z);
 	}
 
 	private void ThirdPersonCamera()
@@ -1273,10 +1285,15 @@ public class FpsActorController : ActorController
 				? swimHead.position.y - body.position.y
 				: SwimPresentation.IdleHeadAboveRoot;
 			Vector3 at = body.position;
-			body.position = new Vector3(
-				at.x,
-				SwimPresentation.RootHeight(Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(at.x, at.z), headAboveRoot),
-				at.z);
+			float surface = Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(at.x, at.z);
+			// No water over the body at all: it was moved out of the water after this frame's swim
+			// was decided, and "the surface" there is negative infinity. v3.1.1 on Forest Lake,
+			// 2026-10-01: a player who drowned in the lake respawned on the hill, and this assigned
+			// (772, -Infinity, 1467). The next UpdateNetworkSwim ends the swim.
+			if (!float.IsNegativeInfinity(surface))
+			{
+				body.position = new Vector3(at.x, SwimPresentation.RootHeight(surface, headAboveRoot), at.z);
+			}
 		}
 		if (tpCamera.enabled)
 		{
