@@ -169,6 +169,7 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null) return;
             _client.Router.OnSeatChange += OnSeatChange;
             _client.Router.OnVehicleSnapshotApplied += OnVehicleSnapshotApplied;
+            _client.Router.OnVehicleDespawn += OnVehicleDespawn;
             _client.Router.OnDeath += OnDeath;
             _client.Router.OnSnapshotApplied += OnSnapshotApplied;
         }
@@ -178,8 +179,41 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null) return;
             _client.Router.OnSeatChange -= OnSeatChange;
             _client.Router.OnVehicleSnapshotApplied -= OnVehicleSnapshotApplied;
+            _client.Router.OnVehicleDespawn -= OnVehicleDespawn;
             _client.Router.OnDeath -= OnDeath;
             _client.Router.OnSnapshotApplied -= OnSnapshotApplied;
+        }
+
+        /// <summary>
+        /// The local body leaves its seat before the vehicle under it is destroyed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A seated body is a CHILD of its seat</b> (<c>Actor.EnterSeat</c> parents it there), so
+        /// <c>RemoteVehicleRegistry</c> destroying a despawned vehicle took the local player's whole
+        /// rig with it: the actor, both cameras and the weapon parent. The server ejects every
+        /// occupant before the same destroy (<c>VehicleSpawner.OnWorldReset</c>, ledger X-55/X-56);
+        /// this client did not. Live 2026-10-01 on v3.1.1, Dustbowl: the other player had left, the
+        /// match ended with this one driving, the round reset despawned every vehicle, and the
+        /// client threw 17,282 NullReferenceExceptions in 24 seconds from <c>IngameUi</c>,
+        /// <c>FpsActorController</c> and <c>NetPredictionClock</c> until the player quit -- the
+        /// "the game freezes at the end of the match" report. <see cref="OnSnapshotApplied"/> would
+        /// have let the body go a second later, which is after the destroy.
+        /// </para>
+        /// <para>
+        /// Either order with the registry's own handler is safe: <c>Object.Destroy</c> completes at
+        /// the end of the frame, so the body is out of the seat before the hierarchy goes.
+        /// </para>
+        /// </remarks>
+        private void OnVehicleDespawn(VehicleDespawnMessage message)
+        {
+            if (_client == null || _occupiedVehicleId == 0 || message.VehicleId != _occupiedVehicleId) return;
+
+            ushort localActor = _client.LocalActorId;
+            bool alive = _client.Router.Decoder.Current.TryFind(localActor, out ActorSnapshotEntry entry)
+                         && (entry.StateFlags & ActorStateFlags.IsAlive) != 0;
+
+            LeaveLocalSeat(localActor, $"the server despawned it ({message.Reason})", asCorpse: !alive);
         }
 
         /// <summary>
