@@ -3275,7 +3275,13 @@ public class AiActorController : ActorController
 	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
 	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
 	// lines in one 100-bot match (B4, 2026-09-30).
-#if !UNITY_SERVER
+	//
+	// Nor into a release client: it draws only with ActorManager.debug on, yet Unity calls
+	// an OnGUI twice a frame (layout and repaint) for every instance that has one -- every
+	// bot of an offline match. Vehicle.OnGUI is the same overlay and cost a networked client
+	// 0.6 ms a frame on Forest Lake (development build profile, 2026-10-02). The Editor and
+	// development builds keep it.
+#if !UNITY_SERVER && (UNITY_EDITOR || DEVELOPMENT_BUILD)
 	private void OnGUI()
 	{
 		if (!ActorManager.instance.debug || actor.dead || !(Camera.main != null))

@@ -1491,7 +1491,12 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
 	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
 	// lines in one 100-bot match (B4, 2026-09-30).
-#if !UNITY_SERVER
+	//
+	// Nor into a release client: it draws only with ActorManager.debug on, yet Unity calls
+	// an OnGUI twice a frame (layout and repaint) for every instance that has one. With every
+	// vehicle on Forest Lake that was 63 IMGUI passes a frame, 0.6 ms of nothing
+	// (development build profile, 2026-10-02). The Editor and development builds keep it.
+#if !UNITY_SERVER && (UNITY_EDITOR || DEVELOPMENT_BUILD)
 	private void OnGUI()
 	{
 		// instance was dereferenced BEFORE the Camera.main guard on the same line, so a
