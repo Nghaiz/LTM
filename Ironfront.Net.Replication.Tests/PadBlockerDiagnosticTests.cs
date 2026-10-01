@@ -291,8 +291,32 @@ namespace Ironfront.Net.Replication.Tests
         {
             string code = CodeOnly(ReadUnitySource(Spawner));
 
-            Assert.Contains("spawnCollisions, SPAWN_BLOCK_MASK", code, StringComparison.Ordinal);
+            Assert.Matches(@"spawnCollisions,\s*base\.transform\.rotation,\s*SPAWN_BLOCK_MASK\)", code);
             Assert.Single(Regex.Matches(code, @"\b5376\b"));
+        }
+
+        /// <summary>
+        /// A pad is clear when the space its vehicle will fill is clear, not a sphere around it.
+        /// </summary>
+        /// <remarks>
+        /// Source-invariant, because this lives in <c>Assembly-CSharp</c>. The sphere had the
+        /// radius <c>avoidanceSize.magnitude</c>, 10.1 m for a helicopter 5.8 m wide, and on
+        /// Island it reached the tank parked on the next pad 12.4 m away: that helicopter never
+        /// came back while the tank sat where it spawns. Every pad of every map, with every
+        /// vehicle parked on its own pad, was then checked through the real
+        /// <c>SpawnIsBlocked</c>: each is blocked by its own vehicle and none by another.
+        /// </remarks>
+        [Fact]
+        public void APadIsCheckedAgainstTheSpaceItsVehicleWillFill()
+        {
+            string code = CodeOnly(ReadUnitySource(Spawner));
+            string probe = CodeOnly(MethodBody(ReadUnitySource(Spawner), "private bool SpawnIsBlocked()"));
+
+            Assert.Contains("OverlapBoxNonAlloc", probe, StringComparison.Ordinal);
+            Assert.Contains("spawnFootprint", probe, StringComparison.Ordinal);
+            Assert.DoesNotContain("OverlapSphere", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("avoidanceSize.magnitude", code, StringComparison.Ordinal);
+            Assert.Matches(@"spawnFootprint\s*=\s*ColliderFootprint\(prefab\)", code);
         }
 
         // ------------------------------------------------------------- the message, at its site
