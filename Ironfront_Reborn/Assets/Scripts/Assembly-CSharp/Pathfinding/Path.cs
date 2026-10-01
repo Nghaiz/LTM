@@ -93,6 +93,12 @@ namespace Pathfinding
 			}
 		}
 
+		/// <summary>
+		/// Abandoned by its seeker on purpose (<c>Seeker.CancelCurrentPathRequest</c>): failed so
+		/// that no result is delivered, and not a failure worth logging.
+		/// </summary>
+		public bool canceled { get; internal set; }
+
 		public DateTime callTime { get; private set; }
 
 		[Obsolete("Has been renamed to 'pooled' to use more widely underestood terminology")]
@@ -329,6 +335,7 @@ namespace Pathfinding
 			pathHandler = null;
 			callback = null;
 			_errorLog = string.Empty;
+			canceled = false;
 			pathCompleteState = PathCompleteState.NotCalculated;
 			path = ListPool<GraphNode>.Claim();
 			vectorPath = ListPool<Vector3>.Claim();

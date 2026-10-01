@@ -291,8 +291,32 @@ namespace Ironfront.Net.Replication.Tests
         {
             string code = CodeOnly(ReadUnitySource(Spawner));
 
-            Assert.Contains("spawnCollisions, SPAWN_BLOCK_MASK", code, StringComparison.Ordinal);
+            Assert.Matches(@"spawnCollisions,\s*base\.transform\.rotation,\s*SPAWN_BLOCK_MASK\)", code);
             Assert.Single(Regex.Matches(code, @"\b5376\b"));
+        }
+
+        /// <summary>
+        /// A pad is clear when the space its vehicle will fill is clear, not a sphere around it.
+        /// </summary>
+        /// <remarks>
+        /// Source-invariant, because this lives in <c>Assembly-CSharp</c>. The sphere had the
+        /// radius <c>avoidanceSize.magnitude</c>, 10.1 m for a helicopter 5.8 m wide, and on
+        /// Island it reached the tank parked on the next pad 12.4 m away: that helicopter never
+        /// came back while the tank sat where it spawns. Every pad of every map, with every
+        /// vehicle parked on its own pad, was then checked through the real
+        /// <c>SpawnIsBlocked</c>: each is blocked by its own vehicle and none by another.
+        /// </remarks>
+        [Fact]
+        public void APadIsCheckedAgainstTheSpaceItsVehicleWillFill()
+        {
+            string code = CodeOnly(ReadUnitySource(Spawner));
+            string probe = CodeOnly(MethodBody(ReadUnitySource(Spawner), "private bool SpawnIsBlocked()"));
+
+            Assert.Contains("OverlapBoxNonAlloc", probe, StringComparison.Ordinal);
+            Assert.Contains("spawnFootprint", probe, StringComparison.Ordinal);
+            Assert.DoesNotContain("OverlapSphere", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("avoidanceSize.magnitude", code, StringComparison.Ordinal);
+            Assert.Matches(@"spawnFootprint\s*=\s*ColliderFootprint\(prefab\)", code);
         }
 
         // ------------------------------------------------------------- the message, at its site
@@ -338,6 +362,35 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("DescribePadBlocker", body, StringComparison.Ordinal);
             Assert.Contains("IsAlive", body, StringComparison.Ordinal);
             Assert.Contains("CorpseCollidersDisabled", body, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// A pad waiting on a parked vehicle or a living body gives up as information; anything
+        /// else that blocks it is still a warning.
+        /// </summary>
+        /// <remarks>
+        /// Every bot soak of 2026-10-01 logged the give-up as a warning for quadbikes, jeeps, tanks
+        /// and helicopters the bots had left on pads: the match going on, not a fault, and the pad
+        /// keeps checking. The body is asked before the vehicle, because a corpse still seated in
+        /// a vehicle is the § 2.4 defect and must stay a warning.
+        /// </remarks>
+        [Fact]
+        public void APadWaitingOnTheMatchGivesUpAsInformation()
+        {
+            string source = ReadUnitySource(Spawner);
+            string update = CodeOnly(MethodBody(source, "private void Update()"));
+            string verdict = CodeOnly(MethodBody(source, "private bool BlockerIsTheMatchItself()"));
+
+            int ask = update.IndexOf("if (BlockerIsTheMatchItself())", StringComparison.Ordinal);
+            int info = update.IndexOf("Debug.Log(gaveUp);", StringComparison.Ordinal);
+            int warning = update.IndexOf("Debug.LogWarning(gaveUp);", StringComparison.Ordinal);
+            Assert.True(ask >= 0 && info > ask && warning > info, "the give-up line must choose its level from the blocker");
+
+            int body = verdict.IndexOf("GetComponentInParent<NetServerActor>()", StringComparison.Ordinal);
+            int vehicle = verdict.IndexOf("GetComponentInParent<Vehicle>()", StringComparison.Ordinal);
+            Assert.True(body >= 0 && vehicle > body, "a body must be judged before the vehicle it may sit in");
+            Assert.Contains("owner.IsAlive", verdict, StringComparison.Ordinal);
+            Assert.Contains("lastProbeRan", verdict, StringComparison.Ordinal);
         }
 
         /// <summary>

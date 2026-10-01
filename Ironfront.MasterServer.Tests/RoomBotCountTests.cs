@@ -156,6 +156,7 @@ namespace Ironfront.MasterServer.Tests
                 }),
                 gameServer);
             Assert.True(registered.Ok, "no game server registered, so no room could be allocated to it");
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, registered.ServerId);
 
             using var alpha = new MasterClient.MasterClient();
             using var beta  = new MasterClient.MasterClient();

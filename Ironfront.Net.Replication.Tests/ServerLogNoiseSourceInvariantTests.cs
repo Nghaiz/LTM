@@ -16,19 +16,23 @@ namespace Ironfront.Net.Replication.Tests
     public sealed class ServerLogNoiseSourceInvariantTests
     {
         /// <summary>
-        /// The per-instance <c>OnGUI</c> methods are not compiled into the dedicated server.
+        /// The <c>OnGUI</c> methods of the components a map brings up are not compiled into the
+        /// dedicated server.
         /// </summary>
         /// <remarks>
         /// IMGUI is stripped from the server build, and Unity then logs "OnGUI function detected
         /// on MonoBehaviour, but not called" once per instance: 402 lines in one 100-bot match,
-        /// because every bot carries an <c>AiActorController</c>. These three are on every bot,
-        /// every scoped weapon and every vehicle; scene singletons log once and are left alone.
+        /// because every bot carries an <c>AiActorController</c>. The first three are on every
+        /// bot, every scoped weapon and every vehicle. <c>AstarPath</c> is the scene singleton
+        /// every map carries, and after those three it was the line's only source: one per map
+        /// load (a server build of 2026-10-01 logged none once it was guarded).
         /// </remarks>
         [Theory]
         [InlineData("AiActorController.cs")]
         [InlineData("ScopedWeapon.cs")]
         [InlineData("Vehicle.cs")]
-        public void PerInstanceOnGuiIsNotCompiledIntoTheServer(string file)
+        [InlineData("AstarPath.cs")]
+        public void OnGuiIsNotCompiledIntoTheServer(string file)
         {
             string source = ReadScript("Assembly-CSharp", file);
 
@@ -122,6 +126,30 @@ namespace Ironfront.Net.Replication.Tests
             }
 
             Assert.True(offenders.Count == 0, "components with no script: " + string.Join(", ", offenders));
+        }
+
+        /// <summary>
+        /// A dedicated server build switches the terrain's renderer off, so the ground bots stand
+        /// on must not come from the list of enabled terrains.
+        /// </summary>
+        /// <remarks>
+        /// Bringing a <c>Terrain</c> up on the server logged three "Trying to access a shader"
+        /// lines per map load, so <c>ServerBuildSceneStrip</c> turns it off in server builds.
+        /// <c>Terrain.GetActiveTerrains</c> lists only enabled terrains: a <c>TerrainSurface</c>
+        /// reading it would find no ground on the server, and a bot that fell into a hillside
+        /// would no longer be stood back on it. Its EditMode tests say the same, but those do not
+        /// run in CI; this does. Neither half may change without the other.
+        /// </remarks>
+        [Fact]
+        public void ServerTerrainsHaveNoRendererAndBotsReadTheirCollider()
+        {
+            string strip = ReadScript("..", "Editor", "ServerBuildSceneStrip.cs");
+            Assert.Contains("terrain.enabled = false", strip, StringComparison.Ordinal);
+
+            string surface = ReadScript("Net", "Shared", "TerrainSurface.cs");
+            Assert.DoesNotContain("GetActiveTerrains(", surface, StringComparison.Ordinal);
+            Assert.DoesNotContain("Terrain.activeTerrain", surface, StringComparison.Ordinal);
+            Assert.Contains("FindObjectsByType<TerrainCollider>", surface, StringComparison.Ordinal);
         }
 
         // ------------------------------------------------------------------ helpers

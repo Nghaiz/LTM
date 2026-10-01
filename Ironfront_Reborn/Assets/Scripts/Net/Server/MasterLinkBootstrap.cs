@@ -268,19 +268,30 @@ namespace Ironfront.Net.Unity.Server
             // harness finished inside the registry's grace window, so nothing outlived the lie
             // until P14 asked a room to wait ten seconds and then start.
             //
-            // The same order fixes AdoptServerIdOnValidator below. Poll() runs on Unity's main
-            // thread, TrySetResult resumes the continuation on the completing thread, so
-            // FindObjectOfType is reached on the main thread rather than on a pool thread that
-            // would have thrown into a discarded Task.
             _link = reporter;
 
             try
             {
+                // NO ConfigureAwait(false): everything after this await -- SetReporter, the
+                // FindObjectOfType in AdoptServerIdOnValidator -- must run on Unity's main thread,
+                // and the captured UnitySynchronizationContext is what puts it there. This method
+                // is only ever started from Start and Update.
+                //
+                // It used to rely on the response completing the registration from Poll(), on
+                // the main thread, and the continuation running inline there. That holds only
+                // when the response is read AFTER RegisterAsync has reached its await on it.
+                // RegisterAsync first awaits its own send, which completes on a pool thread; with
+                // the fly master 2-3 ms from the VM, the response could be read by the next
+                // Poll() before that pool thread got as far as awaiting it, and then everything
+                // ran on the pool thread instead. The Island server of the 2026-10-01 deploy died
+                // of it on its first start: SIGSEGV in Object.FindObjectsOfType, called from
+                // AdoptServerIdOnValidator on a thread-pool thread. A re-registration after a
+                // lost link runs the same race in the middle of a match.
                 ServerId = await reporter.ConnectAndRegisterAsync(
                     _config.MasterHost,
                     _config.MasterPort,
                     registration,
-                    CreateTlsOptions()).ConfigureAwait(false);
+                    CreateTlsOptions());
             }
             catch (Exception ex)
             {

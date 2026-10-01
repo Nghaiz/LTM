@@ -110,6 +110,48 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.IsFalse(TerrainSurface.IsUnder(new Vector3(70f, -500f, 0f), 3f), "off the terrain counted as under it");
         }
 
+        /// <summary>
+        /// A dedicated server build turns the <see cref="Terrain"/> component off
+        /// (<c>ServerBuildSceneStrip</c>) and keeps the collider: the server's bots must still
+        /// find the ground. <see cref="Terrain.GetActiveTerrains"/> lists no disabled terrain.
+        /// </summary>
+        [Test]
+        public void ATerrainWithItsRendererOffIsStillGround()
+        {
+            _terrain.GetComponent<Terrain>().enabled = false;
+
+            Assert.IsTrue(TerrainSurface.TryGetHeight(new Vector3(0f, -200f, 0f), out float height),
+                "a server-built terrain lost its ground with its renderer");
+            Assert.AreEqual(Surface, height, 0.01f);
+        }
+
+        /// <summary>The collider is what holds a body up; without one there is nothing to stand on.</summary>
+        [Test]
+        public void ATerrainWithNoColliderIsNotGround()
+        {
+            _terrain.GetComponent<TerrainCollider>().enabled = false;
+
+            Assert.IsFalse(TerrainSurface.TryGetHeight(new Vector3(0f, -200f, 0f), out _),
+                "a terrain nothing collides with read as ground");
+        }
+
+        /// <summary>
+        /// The colliders are searched for once and kept, so a terrain that replaces a destroyed
+        /// one -- the next map's -- must still be found.
+        /// </summary>
+        [Test]
+        public void ATerrainThatReplacesADestroyedOneIsFound()
+        {
+            Assert.IsTrue(TerrainSurface.TryGetHeight(Vector3.zero, out _), "the fixture terrain was not found");
+
+            Object.DestroyImmediate(_terrain);
+            _terrain = Terrain.CreateTerrainGameObject(_data);
+            _terrain.transform.position = new Vector3(-50f, 13f, -50f);
+
+            Assert.IsTrue(TerrainSurface.TryGetHeight(Vector3.zero, out float height), "the replacement terrain was not found");
+            Assert.AreEqual(Surface + 10f, height, 0.01f, "the destroyed terrain's height was kept");
+        }
+
         /// <summary>Clears the one hole cell under <paramref name="point"/> (32 cells of 3.125 m).</summary>
         private void PunchHoleUnder(Vector3 point)
         {

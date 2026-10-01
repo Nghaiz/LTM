@@ -992,6 +992,13 @@ public class AiActorController : ActorController
 					actor.EnterSeat(targetVehicle.GetEmptySeat());
 				}
 			}
+			else if (HasTargetVehicle() && !actor.IsSeated() && !hasPath && !calculatingPath)
+			{
+				// Arrived where the vehicle was, and it has moved since -- driven a few metres by
+				// the squad's own driver, rolled, pushed. Go to where it is now. The member used to
+				// stand on the old spot for good; Squad.BoardingFailed decides when to stop chasing.
+				Goto(targetVehicle.transform.position);
+			}
 			yield return new WaitForSeconds(0.5f);
 		}
 	}
@@ -1123,8 +1130,9 @@ public class AiActorController : ActorController
 			}
 			if (IsSquadLeader() && squad.Ready())
 			{
-				if (squad.state == Squad.State.EnterVehicle && squad.squadVehicle.dead)
+				if (squad.BoardingFailed())
 				{
+					squad.GiveUpBoarding();
 					squad.NewAttackOrder();
 				}
 				if (!squad.HasVehicle() && squad.state == Squad.State.Moving && FpsActorController.instance != null)
@@ -1682,13 +1690,35 @@ public class AiActorController : ActorController
 			}
 			lastGotoPoint = targetPoint;
 			arrivedAtGoto = false;
-			seeker.StartPath(actor.Position(), targetPoint, null, graphMask);
+			if (aquatic && actor.IsDriver())
+			{
+				// A boat's goal is usually ashore: a flag the squad finishes on foot. The search for
+				// the goal's node gave up beyond maxNearestNodeDistance (100 m) of water, so a flag
+				// further inland failed outright -- "Couldn't find a close node to the end point",
+				// the bot soak's Island boat sent to Farm -- and the boat never moved. Without the
+				// limit the path ends at the water nearest the goal; StartSeated's exact end point
+				// carries it on to the goal itself, so the boat runs aground there and AiVehicle's
+				// stuck-boat branch puts the squad ashore to walk the rest.
+				ABPath boatPath = ABPath.Construct(actor.Position(), targetPoint, null);
+				boatPath.nnConstraint.constrainDistance = false;
+				seeker.StartPath(boatPath, null, graphMask);
+			}
+			else
+			{
+				seeker.StartPath(actor.Position(), targetPoint, null, graphMask);
+			}
 			lastWaypoint = base.transform.position;
 		}
 	}
 
 	public void CancelPath()
 	{
+		// The search still running is dropped too. Left alone it was delivered when it finished,
+		// so a bot that cancelled its order -- to board a vehicle, or on dying -- got that order
+		// back as a fresh path, and a bot that cancelled and asked again (falling back to cover,
+		// a stuck car re-planning) made the seeker cancel it noisily: "Canceled path because a
+		// new one was requested" and "Path Failed" in every long server log.
+		seeker.CancelCurrentPathRequest();
 		calculatingPath = false;
 		path = null;
 		hasPath = false;

@@ -400,6 +400,16 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (practice == null || !practice.IsAvailable) return;
             _practiceOpen = false;
             _dirty = true;
+
+            // Practice is this process's own match, and an online match before it left the
+            // process a declared client: ClientFlowBootstrap declares one before every join and
+            // nothing undid it. The practice map's NetServerBootstrap then declined to start, so
+            // there was no local authority, and VehicleSpawner, which stands down on a client,
+            // spawned nothing. Cleared, then declared the local authority it is: what the Awake
+            // race between the map's two bootstraps settled on before, in every shipped map
+            // (NetServer sits above NetClient in each), said rather than left to that order.
+            NetContext.Clear();
+            NetContext.SetRole(NetRole.Server);
             practice.LaunchMap(sceneName);
         }
 

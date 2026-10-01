@@ -1,6 +1,8 @@
 using System;
+using System.Linq;
 using Ironfront.Net.Configuration;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Ironfront.Net.Unity
 {
@@ -86,6 +88,16 @@ namespace Ironfront.Net.Unity
             }
 
             if (!NetRoleDeclaration.IsUndeclaredRenderedProcess(resolved, Application.isBatchMode))
+                return;
+
+            // Only a process that STARTS in a map is left to the Awake race. A player starts in
+            // the splash and the menu, and both ways from there into a map declare first: an
+            // online join as a client (ClientFlowBootstrap), practice as the local authority
+            // (MenuScreenController.LaunchPracticeMap). Warning at every player's start put this
+            // line in every client log as a false alarm. The first scene's objects are loaded by
+            // now (BeforeSceneLoad runs before their Awake), so the active scene is that scene.
+            string firstScene = SceneManager.GetActiveScene().name;
+            if (!MapCatalog.All.Any(map => map.SceneName == firstScene))
                 return;
 
             // Once, at startup, before anything can have latched. The role itself is unchanged;

@@ -246,6 +246,30 @@ public class Seeker : MonoBehaviour, ISerializationCallbackReceiver
 		AstarPath.StartPath(path);
 	}
 
+	/// <summary>
+	/// Abandons the path request still being calculated, if any, so its result is never
+	/// delivered and nothing is logged. The A* Pathfinding Project added the same call to this
+	/// type in later versions.
+	/// </summary>
+	/// <remarks>
+	/// The caller has dropped that order on purpose. Without this, the only way to drop one was to
+	/// request another, which <see cref="StartPathInternal"/> answers with "Canceled path because
+	/// a new one was requested" and a "Path Failed" result line; and a request dropped without a
+	/// new one was still delivered when it finished, handing the caller the order it had just
+	/// cancelled.
+	/// </remarks>
+	public void CancelCurrentPathRequest()
+	{
+		if (path == null || path.GetState() > PathState.Processing || lastPathID != path.pathID)
+		{
+			return;
+		}
+		path.canceled = true;
+		path.Error();
+		// No longer the seeker's path, so OnPathComplete drops it like any superseded one.
+		path = null;
+	}
+
 	public MultiTargetPath StartMultiTargetPath(Vector3 start, Vector3[] endPoints, bool pathsForAll, OnPathDelegate callback = null, int graphMask = -1)
 	{
 		MultiTargetPath multiTargetPath = MultiTargetPath.Construct(start, endPoints, null);
