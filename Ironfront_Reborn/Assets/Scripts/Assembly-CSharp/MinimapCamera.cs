@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class MinimapCamera : MonoBehaviour
 {
@@ -30,6 +31,14 @@ public class MinimapCamera : MonoBehaviour
 	{
 		instance = this;
 		camera = GetComponent<Camera>();
+		// Framed even with no graphics device: ActorBlip and MinimapMarker read this camera's
+		// viewport wherever an actor exists. Aspect 1, as the square target below would give it.
+		if (!CanRender)
+		{
+			camera.aspect = 1f;
+			FrameThePlayableArea();
+			return;
+		}
 		minimapRenderTexture = new RenderTexture(RESOLUTION, RESOLUTION, 16);
 		// Mip-mapped: the whole map is drawn at under half its texel size, and without mips the
 		// minified picture shimmers into noise.
@@ -276,8 +285,26 @@ public class MinimapCamera : MonoBehaviour
 		return found;
 	}
 
+	/// <summary>
+	/// Whether this process can draw the map at all.
+	/// </summary>
+	/// <remarks>
+	/// A dedicated server has no graphics device, and rendering this camera there at Start put two
+	/// "Built-in Resource Error: dereference potentially before
+	/// BuiltinResourceManager::InitializeAllResources()" lines and three "Trying to access a shader
+	/// but no shaders were included in the build" lines into every server log (found with
+	/// -stackTraceLogType Full: each came from Camera.Render), behind a 2048x2048 target nobody
+	/// looks at. ReflectionProber makes the same test for the same reason.
+	/// </remarks>
+	private static bool CanRender => SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
+
 	private void Start()
 	{
+		if (!CanRender)
+		{
+			camera.enabled = false;
+			return;
+		}
 		Render();
 	}
 
