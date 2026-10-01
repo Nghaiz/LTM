@@ -190,7 +190,7 @@ namespace Ironfront.Net.Replication.Movement
             state.IsClimbingOut = (inWater || state.IsClimbingOut) && CanClimbOut(in state, in input);
             if (inWater || state.IsClimbingOut) return Swim(ref state, in input, dt);
 
-            float speed = SpeedFor(in input);
+            float speed = WadingSpeed(SpeedFor(in input), WadeDepth(in state.Position, state.IsCrouching));
 
             Vec3 forward = ForwardFromYaw(input.YawDegrees);
             Vec3 right   = new Vec3(forward.Z, 0f, -forward.X);
@@ -284,6 +284,80 @@ namespace Ironfront.Net.Replication.Movement
                 if (local > surface) surface = local;
             }
             return surface;
+        }
+
+        // ===== Wading =====
+
+        /// <summary>
+        /// Water over the feet, in metres, below which a body walks as on dry land: ankle-deep.
+        /// </summary>
+        public const float WadeStartDepth = 0.3f;
+
+        /// <summary>Water over the feet, in metres, from which a body can no longer sprint: waist-deep.</summary>
+        public const float WadeNoSprintDepth = 0.7f;
+
+        /// <summary>
+        /// The fraction of its speed a body keeps at the deepest it still wades, just before it
+        /// swims (<see cref="SwimStartDepth"/>).
+        /// </summary>
+        public const float WadeSlowestFactor = 0.5f;
+
+        /// <summary>
+        /// Water over the feet, in metres, at which a standing body starts to swim: its capsule's
+        /// centre plus <see cref="SwimSampleAbove"/> is then under the surface (<see cref="IsInWater"/>).
+        /// </summary>
+        public const float SwimStartDepth = SwimSampleAbove + StandHeight * 0.5f;
+
+        /// <summary>
+        /// How deep the water is over the feet of a body whose capsule's centre is at
+        /// <paramref name="centre"/>: zero on dry land and anywhere no water covers.
+        /// </summary>
+        public static float WadeDepth(in Vec3 centre, bool crouching)
+        {
+            float surface = SurfaceAt(centre.X, centre.Z);
+            if (float.IsNegativeInfinity(surface)) return 0f;
+
+            float depth = surface - (centre.Y - HeightFor(crouching) * 0.5f);
+            return depth > 0f ? depth : 0f;
+        }
+
+        /// <summary>
+        /// The speed a body walking or running at <paramref name="speed"/> keeps with
+        /// <paramref name="depth"/> metres of water over its feet.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner report 2026-10-01: "wading and swimming have to be told apart".</b> Water up to
+        /// the chest used to be walked through at full speed and sprinted through at 6.5 m/s, and
+        /// the body then switched to a 2.4 m/s swim in one step. Now ankle-deep water costs
+        /// nothing, the water slows a body steadily from there to half speed at the depth it starts
+        /// to swim, and from the waist down nobody sprints: at the deepest wade a body walks at
+        /// 1.75 m/s, slower than it swims, which is the point at which swimming is the way across.
+        /// </para>
+        /// <para>
+        /// <b>In this file, so a player's client predicts it and the server replays it.</b> Bots
+        /// read the same numbers (<c>Actor.UpdateMovement</c>).
+        /// </para>
+        /// </remarks>
+        public static float WadingSpeed(float speed, float depth)
+        {
+            if (depth <= WadeStartDepth) return speed;
+            if (depth > WadeNoSprintDepth && speed > WalkSpeed) speed = WalkSpeed;
+            return speed * WadeSpeedFactor(depth);
+        }
+
+        /// <summary>
+        /// The fraction of its speed a body keeps with <paramref name="depth"/> metres of water over
+        /// its feet: 1 to <see cref="WadeStartDepth"/>, falling linearly to
+        /// <see cref="WadeSlowestFactor"/> at <see cref="SwimStartDepth"/>.
+        /// </summary>
+        public static float WadeSpeedFactor(float depth)
+        {
+            if (depth <= WadeStartDepth) return 1f;
+            if (depth >= SwimStartDepth) return WadeSlowestFactor;
+
+            float t = (depth - WadeStartDepth) / (SwimStartDepth - WadeStartDepth);
+            return 1f + (WadeSlowestFactor - 1f) * t;
         }
 
         /// <summary>
