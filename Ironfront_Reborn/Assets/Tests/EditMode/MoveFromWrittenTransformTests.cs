@@ -1,5 +1,6 @@
 using Ironfront.Net.Unity;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server.Tests
@@ -29,7 +30,17 @@ namespace Ironfront.Net.Unity.Server.Tests
         public void TearDown()
         {
             Physics.autoSyncTransforms = _autoSyncBefore;
+            LeavePhysicsSettingsClean();
             if (_body != null) Object.DestroyImmediate(_body);
+        }
+
+        // Physics.autoSyncTransforms is a project setting: writing it marks DynamicsManager.asset
+        // dirty, and the Editor then re-saves that file on exit in its current format, a diff
+        // nobody made. The value is put back above, so there is nothing to save.
+        private static void LeavePhysicsSettingsClean()
+        {
+            foreach (Object settings in AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/DynamicsManager.asset"))
+                EditorUtility.ClearDirty(settings);
         }
 
         [Test]
