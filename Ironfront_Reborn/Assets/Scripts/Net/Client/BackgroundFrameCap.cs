@@ -57,7 +57,7 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Frames per second while a map loads. See the remarks.</summary>
         public const int LoadingFrameRate = 15;
 
-        private const string HarnessRoleVariable = "IRONFRONT_LANEB_ROLE";
+        internal const string HarnessRoleVariable = "IRONFRONT_LANEB_ROLE";
 
         private static BackgroundFrameCap _installed;
 
