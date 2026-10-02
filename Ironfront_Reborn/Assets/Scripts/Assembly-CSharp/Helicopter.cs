@@ -198,10 +198,11 @@ public class Helicopter : Vehicle
 		// The base call still runs: the ram check and the seat-claim drain are not drive path.
 		if (NetworkDriven)
 		{
-			// isAirborne stays local. It is a downward raycast against this client's own copy
-			// of the map, which is cheap and correct here, and spending a wire bit on it would
-			// buy nothing.
-			isAirborne = !Physics.Raycast(base.transform.position, Vector3.down, 3f);
+			// No ground probe. isAirborne is read only by ShouldBeAvoided, which only the AI asks,
+			// and a network-driven helicopter exists only on a client, where no AI runs. The probe
+			// was not cheap either: the first raycast after a physics step synchronises every
+			// moved transform, 0.7 ms a frame for two helicopters in a 100-bot match
+			// (development profile, 2026-10-02).
 			base.FixedUpdate();
 			return;
 		}
