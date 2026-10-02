@@ -17,7 +17,7 @@ namespace Ironfront.Net.Replication.Tests
     /// <c>NetRoleBootstrap</c> warned at the start of every rendered process that declared no
     /// role, so every player's log opened with it (tmp/diag-clientB2.log, line 52). A player
     /// starts in the splash and the menu, and both ways from there into a map declare first: an
-    /// online join as a client, practice as the local authority. Only a process that starts in a
+    /// online join as a client, practice as offline. Only a process that starts in a
     /// map -- the Editor playing one -- is left to the Awake race the warning describes.
     /// </para>
     /// <para>
@@ -40,16 +40,22 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("SceneManager.GetActiveScene()", body.Substring(0, warning), StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Practice is the offline single-player game. It declared the Server role until the owner's
+        /// report of 2026-10-02: every single-player path reads Server as a headless authority, so
+        /// the player could only walk, the score stayed 1000 - 1000 and the first wave threw on team -1.
+        /// </summary>
         [Fact]
-        public void PracticeDeclaresItselfTheLocalAuthority()
+        public void PracticeDeclaresItselfOffline()
         {
             string body = Method("Net/Client/Menu/MenuScreenController.cs", "LaunchPracticeMap");
 
             int clear = body.IndexOf("NetContext.Clear();", StringComparison.Ordinal);
-            int declare = body.IndexOf("NetContext.SetRole(NetRole.Server);", StringComparison.Ordinal);
+            int declare = body.IndexOf("NetContext.DeclareOfflineProcess();", StringComparison.Ordinal);
             int launch = body.IndexOf("practice.LaunchMap(", StringComparison.Ordinal);
             Assert.True(clear >= 0 && declare > clear && launch > declare,
-                "practice must clear the online client's declaration, then declare the local authority, before the map loads");
+                "practice must clear the online client's declaration, then declare itself offline, before the map loads");
+            Assert.DoesNotContain("SetRole(", body, StringComparison.Ordinal);
         }
 
         private static string Method(string relativePath, string name)

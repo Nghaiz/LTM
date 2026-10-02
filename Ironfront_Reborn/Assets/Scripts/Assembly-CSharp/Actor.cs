@@ -1257,7 +1257,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	/// <remarks>
 	/// The root stays where a swimmer's capsule floats, because that is what its hitboxes are built
 	/// from on a server; only the model under it moves. Seen wherever a bot's own body is drawn --
-	/// Practice runs the server in the player's process -- the head would otherwise sit 0.4-0.75 m
+	/// Practice plays offline, with every bot's own body -- the head would otherwise sit 0.4-0.75 m
 	/// under the water, depending on the stroke (measured on Forest Lake, 2026-10-02).
 	/// </remarks>
 	private void LiftSwimmerToSurface(float surface)
