@@ -740,7 +740,11 @@ namespace Ironfront.Net.Unity.Bindings
             // down in 1.7 m of water, which neither the depth nor the seat explained.
             string rise = ragdolled ? $"{_actor.ragdoll.Velocity().y:F2}m/s" : "n/a";
 
-            return $"feet=({feet.x:F1}, {feet.y:F2}, {feet.z:F1}) water={WaterLevel.height:F2} "
+            // The surface over the feet, lake or sea. The sea's height alone printed -Infinity for
+            // every drowning on Forest Lake, whose water is all lakes (v3.1.1 server log, 2026-10-01).
+            float water = Mathf.Max(WaterLevel.height, WaterLevel.BoundedSurfaceAt(feet.x, feet.z));
+
+            return $"feet=({feet.x:F1}, {feet.y:F2}, {feet.z:F1}) water={water:F2} "
                    + $"crownDepth={WaterLevel.Depth(crown):F2}m "
                    + $"swimSampleDepth={WaterLevel.Depth(sample):F2}m "
                    + $"fallenOver={_actor.fallenOver} ragdoll={ragdolled} rise={rise} "
