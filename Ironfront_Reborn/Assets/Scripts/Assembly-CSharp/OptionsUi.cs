@@ -70,14 +70,7 @@ public class OptionsUi : MonoBehaviour
 			options.hitmarkers = PlayerPrefs.GetInt("hitmarkers2", 1) == 1;
 			options.autoReload = PlayerPrefs.GetInt("auto reload", 0) == 1;
 			options.difficulty = PlayerPrefs.GetInt("difficulty", 1);
-			if (IsFastQuality())
-			{
-				options.vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat("fast vegetation density", 0f));
-			}
-			else
-			{
-				options.vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat("vegetation density", 0.5f));
-			}
+			options.ReadVegetationDensity();
 			options.vegetationDistance = Mathf.Clamp01(PlayerPrefs.GetFloat("vegetation distance", 0.7f));
 			options.masterVolume = Mathf.Clamp01(PlayerPrefs.GetFloat("master volume", 1f));
 			options.toggleAim = PlayerPrefs.GetInt("toggle aim", 0) == 1;
@@ -85,6 +78,24 @@ public class OptionsUi : MonoBehaviour
 			options.fieldOfView = PlayerPrefs.GetFloat("field of view", 90f);
 			return options;
 		}
+
+		/// <summary>
+		/// Reads the density saved for the current preset, Low's and the rest's being kept apart.
+		/// </summary>
+		/// <remarks>
+		/// Low used to default to 0, which is no vegetation at all: integrated graphics start on Low
+		/// since v3.2.0 and lost every tree and blade of grass. See <c>VegetationRules</c>.
+		/// </remarks>
+		internal void ReadVegetationDensity()
+		{
+			vegetationReadAsFast = IsFastQuality();
+			float fallback = Ironfront.Net.Unity.VegetationRules.DefaultDensityFor(QualitySettings.GetQualityLevel());
+			string key = vegetationReadAsFast ? "fast vegetation density" : "vegetation density";
+			vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat(key, fallback));
+		}
+
+		/// <summary>Whether <see cref="vegetationDensity"/> was read under a Low preset.</summary>
+		internal bool vegetationReadAsFast;
 
 		public void Save()
 		{
@@ -207,6 +218,12 @@ public class OptionsUi : MonoBehaviour
 		if (options == null)
 		{
 			options = Options.Load();
+		}
+		else if (options.vegetationReadAsFast != IsFastQuality())
+		{
+			// The preset moved across Low since the options were cached (the menu's Settings
+			// screen), and the two keep separate densities: re-read rather than keep Low's.
+			options.ReadVegetationDensity();
 		}
 		return options;
 	}

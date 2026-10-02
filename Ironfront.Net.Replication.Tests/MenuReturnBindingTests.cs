@@ -52,6 +52,27 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("BindMenuCanvas(", menuBranch.Groups["body"].Value);
         }
 
+        /// <summary>
+        /// Owner report 2026-10-03: kicked from a match, the pointer was gone over the menu every
+        /// time the window took focus, until a restart. The match left it locked and hidden, and
+        /// only the pause menu's way out ever freed it.
+        /// </summary>
+        [Fact]
+        public void TheMenuGetsAFreeVisiblePointerEveryTimeItLoads()
+        {
+            string handler = MethodBody(Read(BootstrapPath), "private void OnSceneLoaded(");
+
+            System.Text.RegularExpressions.Match menuBranch = Regex.Match(
+                handler,
+                @"if \(string\.Equals\(scene\.name, MenuScene, StringComparison\.Ordinal\)\)\s*\{(?<body>.*?)return;",
+                RegexOptions.Singleline);
+
+            Assert.True(menuBranch.Success, "OnSceneLoaded no longer has a Menu-scene branch.");
+            string body = menuBranch.Groups["body"].Value;
+            Assert.Contains("Cursor.lockState = CursorLockMode.None;", body);
+            Assert.Contains("Cursor.visible = true;", body);
+        }
+
         [Fact]
         public void TheFlowOffersTheWayOutOfAMatch()
         {

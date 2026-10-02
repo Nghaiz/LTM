@@ -530,6 +530,15 @@ namespace Ironfront.Net.Unity.Client
                 BackgroundFrameCap.SetLoadingMap(false);
                 ResumeHolding();
 
+                // The menu is driven with the mouse, so the pointer is free and shown here whatever
+                // the match left it as. A match locks and hides it; the pause menu frees it on the
+                // way out, but a kick or a dropped link returns straight from play with it still
+                // locked, and Unity re-applies a lock every time the window regains focus -- the
+                // pointer vanished over the menu until the game was restarted (owner report
+                // 2026-10-03).
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+
                 // The Menu scene brings a NEW menu with it, and only Awake ever bound one: every
                 // return from a match -- its end, a kick, the pause menu's QUIT TO MENU -- landed
                 // on a menu with no flow behind it, whose MULTIPLAYER button did nothing until the
