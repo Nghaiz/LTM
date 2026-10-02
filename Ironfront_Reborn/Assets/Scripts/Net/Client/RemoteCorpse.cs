@@ -101,6 +101,115 @@ namespace Ironfront.Net.Unity.Client
         public bool IsResting => _ragdoll.IsResting;
 
         /// <summary>
+        /// How long after the death, or after the last blast that threw it, a body is left to fall
+        /// before it may be settled.
+        /// </summary>
+        public const float SettleAfterSeconds = 1.5f;
+
+        /// <summary>How long every part must stay within <see cref="StillMetres"/> before the body is settled.</summary>
+        /// <remarks>
+        /// A body in the air can never pass: around the top of a straight toss it still moves 0.3 m
+        /// in a quarter of a second either side, and one settled there would hang in the air until
+        /// something touched it.
+        /// </remarks>
+        public const float StillSeconds = 0.5f;
+
+        /// <summary>
+        /// How far a part may wander in <see cref="StillSeconds"/> and still count as lying still.
+        /// </summary>
+        /// <remarks>
+        /// <b>Distance, not speed.</b> A ragdoll on uneven ground shivers: its parts keep a speed
+        /// well above any threshold while going nowhere. Judged by speed, most corpses of a
+        /// 100-bot Forest Lake match never counted as still -- 145 of 229 corpse bodies awake
+        /// three and a half minutes in (<c>[physics]</c> census, 2026-10-02).
+        /// </remarks>
+        public const float StillMetres = 0.05f;
+
+        /// <summary>
+        /// After this long a body that still creeps -- sliding down a slope, or shoved about by
+        /// the bodies around it -- is settled once no part wanders more than
+        /// <see cref="TwitchMetres"/> in <see cref="StillSeconds"/>.
+        /// </summary>
+        public const float TwitchSettleSeconds = 6f;
+
+        /// <summary>The wander allowed once a body has lain <see cref="TwitchSettleSeconds"/>: a creep, not a fall.</summary>
+        public const float TwitchMetres = 0.15f;
+
+        /// <summary><c>Time.time</c> since every part has been within reach of where it was, or negative.</summary>
+        public float StillSince { get; private set; } = -1f;
+
+        // Where every part was at StillSince: the ragdoll's parts, then the dropped weapon.
+        private readonly Vector3[] _stillAt = new Vector3[RemoteRagdoll.PartCount + 1];
+
+        /// <summary><c>Time.time</c> of the last blast that threw the body, or negative before any.</summary>
+        public float ThrownAt { get; private set; } = -1f;
+
+        /// <summary>Whether no part is moving: every one asleep, or frozen by <see cref="TickSettle"/>.</summary>
+        public bool IsAsleep => _ragdoll.IsAsleep && (_weapon == null || _weapon.isKinematic || _weapon.IsSleeping());
+
+        /// <summary>Whether <see cref="TickSettle"/> has frozen the body and no blast has thrown it since.</summary>
+        public bool IsSettled => _ragdoll.IsSettled;
+
+        /// <summary>
+        /// Settles a body that has lain still long enough: see <see cref="RemoteRagdoll.Settle"/>.
+        /// Called every frame while the body lies; cheap once it is settled.
+        /// </summary>
+        public void TickSettle(float now)
+        {
+            if (SinkStartedAt >= 0f) return;
+
+            float disturbed = Mathf.Max(DiedAt, ThrownAt);
+            if (now - disturbed < SettleAfterSeconds)
+            {
+                StillSince = -1f;
+                return;
+            }
+
+            // Asleep by PhysX's own measure is still too: freeze it before something wakes it.
+            if (IsAsleep)
+            {
+                if (!IsSettled) Settle();
+                return;
+            }
+
+            float reach = now - DiedAt >= TwitchSettleSeconds ? TwitchMetres : StillMetres;
+            if (StillSince < 0f || FarthestMoveSqr() > reach * reach)
+            {
+                StillSince = now;
+                SampleParts();
+                return;
+            }
+
+            if (now - StillSince >= StillSeconds) Settle();
+        }
+
+        private void SampleParts()
+        {
+            _ragdoll.SamplePositions(_stillAt);
+            _stillAt[RemoteRagdoll.PartCount] = _weapon != null ? _weapon.position : Vector3.zero;
+        }
+
+        private float FarthestMoveSqr()
+        {
+            float farthest = _ragdoll.FarthestMoveSqr(_stillAt);
+            if (_weapon != null)
+                farthest = Mathf.Max(farthest, (_weapon.position - _stillAt[RemoteRagdoll.PartCount]).sqrMagnitude);
+            return farthest;
+        }
+
+        private void Settle()
+        {
+            _ragdoll.Settle();
+            if (_weapon != null && !_weapon.isKinematic)
+            {
+                _weapon.interpolation = RigidbodyInterpolation.None;
+                _weapon.isKinematic = true;
+                _weapon.detectCollisions = false;
+            }
+            StillSince = -1f;
+        }
+
+        /// <summary>
         /// Copies <paramref name="source"/>'s body as it stands now, or null when it is not a humanoid
         /// the ragdoll can be built on.
         /// </summary>
@@ -168,12 +277,18 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>A blast rolls the body and knocks the dropped weapon about.</summary>
-        public void ThrowByBlast(float force, Vector3 centre, float radius)
+        public void ThrowByBlast(float force, Vector3 centre, float radius, float now)
         {
             if (SinkStartedAt >= 0f) return;
+            ThrownAt = now;
+            StillSince = -1f;
             _ragdoll.AddExplosionForce(force, centre, radius, 1f);
-            if (_weapon != null && !_weapon.isKinematic)
+            if (_weapon != null)
             {
+                // Frozen with the body when it settled (a sinking body never gets here).
+                _weapon.isKinematic = false;
+                _weapon.detectCollisions = true;
+                _weapon.interpolation = RigidbodyInterpolation.Interpolate;
                 _weapon.AddExplosionForce(force * _weapon.mass, centre, radius, 1f, ForceMode.Impulse);
             }
         }
