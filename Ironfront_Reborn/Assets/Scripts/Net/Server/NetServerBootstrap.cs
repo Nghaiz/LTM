@@ -8,7 +8,6 @@ using Ironfront.Net.Transport;
 using Ironfront.Net.Transport.Loopback;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using JobsUtility = Unity.Jobs.LowLevel.Unsafe.JobsUtility;
 
 namespace Ironfront.Net.Unity.Server
 {
@@ -289,24 +288,7 @@ namespace Ironfront.Net.Unity.Server
         /// as well as in the manifests so a server started any other way gets it too.
         /// </para>
         /// </remarks>
-        private static void CapJobWorkers()
-        {
-            int before = JobsUtility.JobWorkerCount;
-            int maximum = JobsUtility.JobWorkerMaximumCount;
-
-            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-job-worker-count") >= 0)
-            {
-                Debug.Log($"[net] job workers {before} of {maximum}, from -job-worker-count.");
-                return;
-            }
-
-            if (before > HeadlessJobWorkers)
-                JobsUtility.JobWorkerCount = HeadlessJobWorkers;
-
-            Debug.Log(
-                $"[net] job workers {JobsUtility.JobWorkerCount} "
-                + $"of {maximum} (was {before}); pass -job-worker-count to choose another number.");
-        }
+        private static void CapJobWorkers() => JobWorkerCap.Apply(HeadlessJobWorkers);
 
         private void OnDestroy() => StopServer();
 
