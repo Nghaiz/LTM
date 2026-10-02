@@ -203,8 +203,10 @@ param(
     [int] $ClientCount = 3,
 
     # IRONFRONT_LOG_FRAMES=1 for every process: one [frames] and one [loop] line (the average
-    # frame split by PlayerLoop system) per 5 s window in each log, and a [hitch] line naming
-    # the heaviest PlayerLoop systems of every frame over 50 ms.
+    # frame split by PlayerLoop system), one [physics] line (rigidbodies, awake, whose) and one
+    # [render] line (draws, batches, shadow casters, skinned meshes per frame) per 5 s window in
+    # each log, and a [hitch] line naming the heaviest PlayerLoop systems of every frame over
+    # 50 ms.
     #
     # Not the Unity profiler: a -profiler-log-file capture of a 240 fps client is about 10 GB for
     # four minutes (measured 2026-09-27), and only a batchmode Editor can read it back.
