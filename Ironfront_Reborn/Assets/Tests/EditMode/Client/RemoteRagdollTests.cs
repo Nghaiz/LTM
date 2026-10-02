@@ -185,6 +185,89 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.Less(hips.position.y, before - 2f, "a body out of water kept floating");
         }
 
+        /// <summary>
+        /// A knocked-over body far from the camera lands, then stops costing the physics step.
+        /// </summary>
+        [Test]
+        public void AKnockedOverBodyFarFromTheCameraIsFrozenOnceItHasLanded()
+        {
+            RemoteRagdoll ragdoll = FellOnAFloor(out Transform hips);
+            PhysicsScene physics = _scene.GetPhysicsScene();
+
+            float t = 0f;
+            for (; t < RemoteRagdoll.LandSeconds - 0.1f; t += StepSeconds)
+            {
+                ragdoll.SimulateWhereSeen(nearCamera: false, t);
+                ragdoll.Steer(hips.position);
+                physics.Simulate(StepSeconds);
+            }
+            Assert.IsFalse(ragdoll.IsSettled, "a body was frozen before it had landed: a fall far away would stand still");
+
+            for (; t < RemoteRagdoll.LandSeconds + 0.5f; t += StepSeconds)
+            {
+                ragdoll.SimulateWhereSeen(nearCamera: false, t);
+                physics.Simulate(StepSeconds);
+            }
+            Assert.IsTrue(ragdoll.IsSettled, "a landed body far from the camera still costs the physics step every frame");
+            foreach (Rigidbody body in _proxy.GetComponentsInChildren<Rigidbody>())
+            {
+                Assert.IsTrue(body.isKinematic, $"{body.name} is still simulated");
+                Assert.IsFalse(body.detectCollisions, $"{body.name} still collides");
+            }
+        }
+
+        [Test]
+        public void AKnockedOverBodyNearTheCameraKeepsSimulating()
+        {
+            RemoteRagdoll ragdoll = FellOnAFloor(out Transform hips);
+            PhysicsScene physics = _scene.GetPhysicsScene();
+
+            for (float t = 0f; t < RemoteRagdoll.LandSeconds * 3f; t += StepSeconds)
+            {
+                ragdoll.SimulateWhereSeen(nearCamera: true, t);
+                physics.Simulate(StepSeconds);
+            }
+
+            Assert.IsFalse(ragdoll.IsSettled, "a body in front of the camera was frozen");
+        }
+
+        [Test]
+        public void AFrozenBodyIsCarriedAfterThePelvisAndWokenByTheCamera()
+        {
+            RemoteRagdoll ragdoll = FellOnAFloor(out Transform hips);
+            PhysicsScene physics = _scene.GetPhysicsScene();
+            for (float t = 0f; t < RemoteRagdoll.LandSeconds + 0.2f; t += StepSeconds)
+            {
+                ragdoll.SimulateWhereSeen(nearCamera: false, t);
+                physics.Simulate(StepSeconds);
+            }
+            Assert.IsTrue(ragdoll.IsSettled, "Setup: the body was not frozen");
+
+            Vector3 target = hips.position + new Vector3(3f, 0f, 0f);
+            ragdoll.Steer(target);
+            physics.Simulate(StepSeconds);
+            Assert.Less(Vector3.Distance(hips.position, target), 0.2f,
+                "a frozen body stayed where it landed while the server's pelvis moved on");
+
+            ragdoll.SimulateWhereSeen(nearCamera: true, RemoteRagdoll.LandSeconds + 1f);
+            Assert.IsFalse(ragdoll.IsSettled, "the camera came near and the body stayed frozen");
+            foreach (Rigidbody body in _proxy.GetComponentsInChildren<Rigidbody>())
+                Assert.IsFalse(body.isKinematic, $"{body.name} stayed frozen in front of the camera");
+        }
+
+        private RemoteRagdoll FellOnAFloor(out Transform hips)
+        {
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            floor.transform.localScale = new Vector3(10f, 1f, 10f);
+            SceneManager.MoveGameObjectToScene(floor, _scene);
+
+            Animator animator = SpawnProxy(Vector3.zero);
+            RemoteRagdoll ragdoll = RemoteRagdoll.TryCreate(animator);
+            hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips);
+            return ragdoll;
+        }
+
         private Animator SpawnProxy(Vector3 position)
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProxyPath);
