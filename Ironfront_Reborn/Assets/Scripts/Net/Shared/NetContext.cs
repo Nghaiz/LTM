@@ -144,10 +144,47 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         public static void DeclareClientProcess()
         {
+            // An online join after practice: the map it loads must run its client.
+            IsDeclaredOffline = false;
             if (IsDeclaredClient) return;
 
             IsDeclaredClient = true;
             Debug.Log("[net] this process is a client: no local server will be started.");
+        }
+
+        /// <summary>
+        /// Whether the next map this PROCESS loads is played offline: the original single-player
+        /// game, with neither half of the netcode running.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Practice.</b> Every map scene carries an active <c>NetServer</c> and an active
+        /// <c>NetClient</c>. Practice used to declare itself the Server role, which every
+        /// single-player path in the game reads as "a headless authority with nobody at the
+        /// keyboard": <c>FpsActorController</c> handed the player no input source (V5-D9), so only
+        /// walking worked; <c>ScoreUi</c> waited for a match-state message that never came, so
+        /// the score read 1000 - 1000; the player's team was never set, so the first spawn wave
+        /// threw <c>KeyNotFoundException</c> on team -1; and the map's client dialled UDP for a
+        /// server that was listening on the loopback wire (owner report 2026-10-02). Offline is
+        /// the role those paths were written for, and the bot soak plays every map in it.
+        /// </para>
+        /// <para>
+        /// <b>Read it to DECLINE, never to enable</b>, like the two declarations above: its
+        /// consumers are the two bootstraps switching their own objects off.
+        /// </para>
+        /// </remarks>
+        public static bool IsDeclaredOffline { get; private set; }
+
+        /// <summary>
+        /// Declares the next map offline. Call after <see cref="Clear"/> and before the map loads,
+        /// for <see cref="DeclareDedicatedServer"/>'s reason.
+        /// </summary>
+        public static void DeclareOfflineProcess()
+        {
+            if (IsDeclaredOffline) return;
+
+            IsDeclaredOffline = true;
+            Debug.Log("[net] this process plays offline: no server will be started and no client dialled.");
         }
 
         /// <summary>Returns to Offline and rewinds the tick. Called on teardown.</summary>
@@ -157,6 +194,7 @@ namespace Ironfront.Net.Unity
             CurrentTick = 0;
             IsDedicatedServer = false;
             IsDeclaredClient = false;
+            IsDeclaredOffline = false;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -166,6 +204,7 @@ namespace Ironfront.Net.Unity
             CurrentTick = 0;
             IsDedicatedServer = false;
             IsDeclaredClient = false;
+            IsDeclaredOffline = false;
         }
     }
 }

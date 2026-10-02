@@ -424,6 +424,20 @@ public class ScoreUi : MonoBehaviour
 		if (NetContext.IsOffline)
 		{
 			UpdateUi();
+
+			// Offline has no match phase and no clock; only SetAuthoritativeState writes these, so
+			// practice showed the prefab's authored "Playing 0:00", frozen (owner, 2026-10-02).
+			ClearText(phaseText);
+			ClearText(phaseTimerText);
+			ClearText(humanCountText);
+		}
+	}
+
+	private static void ClearText(Text label)
+	{
+		if (label != null)
+		{
+			label.text = string.Empty;
 		}
 	}
 

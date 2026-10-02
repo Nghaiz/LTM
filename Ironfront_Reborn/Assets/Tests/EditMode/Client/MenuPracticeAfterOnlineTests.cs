@@ -7,13 +7,19 @@ using UnityEngine;
 namespace Ironfront.Net.Unity.Client.Tests
 {
     /// <summary>
-    /// Practice after an online match runs its own server, as it does on a fresh launch.
+    /// Practice is the offline single-player game, after an online match as on a fresh launch.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <c>ClientFlowBootstrap</c> declares the process a client before every online join, and
     /// nothing undid it, so a practice map loaded afterwards found <c>IsDeclaredClient</c> still
-    /// set: its <c>NetServerBootstrap</c> declined to start and <c>VehicleSpawner</c>, which
-    /// stands down on a client, spawned nothing.
+    /// set and <c>VehicleSpawner</c>, which stands down on a client, spawned nothing.
+    /// </para>
+    /// <para>
+    /// Practice then declared the Server role, which every single-player path reads as a headless
+    /// authority: the player could only walk, the score stayed 1000 - 1000 and the first spawn wave
+    /// threw on team -1 (owner report 2026-10-02). It is declared offline now.
+    /// </para>
     /// </remarks>
     public sealed class MenuPracticeAfterOnlineTests
     {
@@ -52,14 +58,17 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.AreEqual("Dustbowl", practice.Launched, "the practice map was not launched");
             Assert.IsFalse(practice.DeclaredClientAtLaunch,
                 "the practice map loaded with the process still declared a client: its server declines to start");
-            Assert.AreEqual(NetRole.Server, practice.RoleAtLaunch,
-                "practice is the local authority, declared rather than left to the map's Awake order");
+            Assert.AreEqual(NetRole.Offline, practice.RoleAtLaunch,
+                "practice is the single-player game: at the Server role the player has no input but walking");
+            Assert.IsTrue(practice.DeclaredOfflineAtLaunch,
+                "the practice map loaded undeclared, so its two bootstraps race for the role and dial a server");
         }
 
         private sealed class RecordingPractice : IPracticeLauncher
         {
             public string? Launched;
             public bool DeclaredClientAtLaunch;
+            public bool DeclaredOfflineAtLaunch;
             public NetRole RoleAtLaunch;
 
             public bool IsAvailable => true;
@@ -72,6 +81,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             {
                 Launched = sceneName;
                 DeclaredClientAtLaunch = NetContext.IsDeclaredClient;
+                DeclaredOfflineAtLaunch = NetContext.IsDeclaredOffline;
                 RoleAtLaunch = NetContext.Role;
             }
         }

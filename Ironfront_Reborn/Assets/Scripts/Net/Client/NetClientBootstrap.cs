@@ -143,6 +143,16 @@ namespace Ironfront.Net.Unity.Client
             // Awake logs is already reaching somewhere.
             NetLogUnitySink.Install();
 
+            // Practice (NetContext.IsDeclaredOffline): the object goes, presenters and registry
+            // with it, for NetServerBootstrap's matching guard's reason. Above everything that
+            // claims the role or publishes Current.
+            if (NetContext.IsDeclaredOffline)
+            {
+                Debug.Log("[net] offline: no client will be dialled.");
+                gameObject.SetActive(false);
+                return;
+            }
+
             // A dedicated server loads the same map scene every client does, and that scene
             // carries this component -- so without this guard the server dials ITSELF over
             // loopback and joins its own match as a player: a real body at a real spawn point,
