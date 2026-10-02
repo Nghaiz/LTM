@@ -27,5 +27,10 @@ public class DetailObjectQuality : MonoBehaviour
 		component.drawTreesAndFoliage = true;
 		component.detailObjectDistance = OptionsUi.GetOptions().vegetationDistance * maxDistance;
 		component.detailObjectDensity = num * maxDensity;
+		// One line per apply (a map load, an options save): a player's report of a bare map is
+		// answered by their Player.log rather than by guessing at their preset and saved options.
+		Debug.Log($"[vegetation] '{name}': preset {QualitySettings.names[QualitySettings.GetQualityLevel()]}, "
+			+ $"grass density {component.detailObjectDensity:F2} of {maxDensity:F2}, "
+			+ $"grass distance {component.detailObjectDistance:F0} m, trees and foliage drawn: {component.drawTreesAndFoliage}.");
 	}
 }
