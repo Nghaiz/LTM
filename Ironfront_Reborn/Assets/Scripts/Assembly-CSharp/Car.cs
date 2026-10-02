@@ -252,6 +252,10 @@ public class Car : Vehicle
 
 	private void LateUpdate()
 	{
+		if (!WheelsSimulated())
+		{
+			return;
+		}
 		WheelConfiguration[] array = wheels;
 		foreach (WheelConfiguration wheel in array)
 		{
