@@ -97,6 +97,167 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void ABodyAtRestIsFrozenOutOfTheSimulation()
+        {
+            // A corpse lies for 30 s; awake and interpolated it cost every physics step and every
+            // frame for nothing, and merely put to sleep it was woken by the heap it lay in (Forest
+            // Lake, 100 bots, 2026-10-02). See RemoteRagdoll.Settle.
+            AddFloor();
+            Animator animator = SpawnProxy(Vector3.zero);
+            _corpse = Copy(animator);
+
+            _corpse.Fell(Vector3.forward * 20f, HumanBodyBones.Chest, new Vector3(3f, 0f, 0f), 0.55f);
+            Simulate(6f);
+
+            Assert.IsTrue(_corpse.IsSettled, "a body that came to rest six seconds ago was never settled");
+            Assert.IsTrue(_corpse.IsAsleep);
+            foreach (Rigidbody body in _corpse.Root.GetComponentsInChildren<Rigidbody>())
+            {
+                Assert.IsTrue(body.isKinematic, $"{body.name} is still simulated while it lies still");
+                Assert.IsFalse(body.detectCollisions, $"{body.name} still collides while it lies still");
+                Assert.AreEqual(RigidbodyInterpolation.None, body.interpolation,
+                    $"{body.name} is still interpolated while it lies still");
+            }
+        }
+
+        [Test]
+        public void ABodyKilledStandingStillStillFalls()
+        {
+            // A death a snapshot reported without S_DEATH has no impulse, and a bot standing still
+            // has no momentum to carry: nothing touches the new bodies but gravity.
+            AddFloor();
+            Animator animator = SpawnProxy(Vector3.zero);
+            float standingHips = animator.GetBoneTransform(HumanBodyBones.Hips).position.y;
+            _corpse = Copy(animator);
+            Transform hips = FindCopy(_corpse.Root.transform, animator.GetBoneTransform(HumanBodyBones.Hips).name);
+
+            _corpse.Fell(Vector3.zero, HumanBodyBones.Hips, Vector3.zero, 0.55f);
+            bool asleepAtOnce = _corpse.IsAsleep;
+            Simulate(3f);
+
+            Assert.Less(hips.position.y, standingHips * 0.6f,
+                $"the body never fell: hips at {hips.position.y:F2} m (asleep before the first step: {asleepAtOnce})");
+        }
+
+        [Test]
+        public void ABodyIsNeverSettledInTheAir()
+        {
+            // Every part of a body tossed straight up is still for a moment at the top of the arc.
+            // Settled there, it would hang in the air until something touched it.
+            AddFloor();
+            Animator animator = SpawnProxy(Vector3.zero);
+            _corpse = Copy(animator, diedAt: -10f);
+            Transform hips = FindCopy(_corpse.Root.transform, animator.GetBoneTransform(HumanBodyBones.Hips).name);
+
+            _corpse.Fell(Vector3.zero, HumanBodyBones.Hips, Vector3.up * 8f, 0f);
+            float highest = hips.position.y;
+            float asleepAt = float.NaN;
+            PhysicsScene physics = _scene.GetPhysicsScene();
+            for (float t = 0f; t < 6f && float.IsNaN(asleepAt); t += StepSeconds)
+            {
+                _corpse.TickSettle(t);
+                if (_corpse.IsAsleep) asleepAt = hips.position.y;
+                physics.Simulate(StepSeconds);
+                highest = Mathf.Max(highest, hips.position.y);
+            }
+
+            Assert.Greater(highest, 2f, "Setup: the body was not thrown up at all");
+            Assert.IsFalse(float.IsNaN(asleepAt), "the body never settled after it landed");
+            Assert.Less(asleepAt, 0.6f, $"the body was settled in the air, hips at {asleepAt:F2} m");
+        }
+
+        [Test]
+        public void ABlastWakesASettledBody()
+        {
+            AddFloor();
+            Animator animator = SpawnProxy(Vector3.zero);
+            _corpse = Copy(animator);
+            Transform hips = FindCopy(_corpse.Root.transform, animator.GetBoneTransform(HumanBodyBones.Hips).name);
+            _corpse.Fell(Vector3.zero, HumanBodyBones.Hips, Vector3.zero, 0f);
+            Simulate(6f);
+            Assert.IsTrue(_corpse.IsSettled, "Setup: the body did not settle");
+            Vector3 lying = hips.position;
+
+            _corpse.ThrowByBlast(8f, lying + new Vector3(0.5f, -0.3f, 0f), 6f, 6f);
+
+            Assert.IsFalse(_corpse.IsAsleep, "a blast beside a settled body left it frozen");
+            Assert.IsFalse(_corpse.IsSettled);
+            foreach (Rigidbody body in _corpse.Root.GetComponentsInChildren<Rigidbody>())
+            {
+                Assert.IsFalse(body.isKinematic, $"{body.name} stays frozen after the blast");
+                Assert.IsTrue(body.detectCollisions, $"{body.name} flies through the ground after the blast");
+                Assert.AreEqual(RigidbodyInterpolation.Interpolate, body.interpolation,
+                    $"{body.name} flies uninterpolated after the blast");
+            }
+            PhysicsScene physics = _scene.GetPhysicsScene();
+            for (int i = 0; i < 25; i++) physics.Simulate(StepSeconds);
+            Assert.Greater(Vector3.Distance(hips.position, lying), 0.3f, "the blast did not move the settled body");
+        }
+
+        [Test]
+        public void AShiveringBodyIsSettledThoughItsPartsNeverSlowDown()
+        {
+            // A ragdoll on uneven ground shivers: fast parts going nowhere. Judged by speed, most
+            // corpses of a 100-bot match never came to rest (census, 2026-10-02).
+            AddFloor();
+            Animator animator = SpawnProxy(Vector3.zero);
+            _corpse = Copy(animator);
+            _corpse.Fell(Vector3.zero, HumanBodyBones.Hips, Vector3.zero, 0f);
+            Rigidbody forearm = Part(animator, HumanBodyBones.RightLowerArm);
+
+            float t = RunWhileAwake(8f, step => forearm.linearVelocity = new Vector3(step % 2 == 0 ? 0.8f : -0.8f, 0f, 0f), out _);
+
+            Assert.IsTrue(_corpse.IsAsleep, "a body shivering on the spot was never settled");
+            Assert.Less(t, RemoteCorpse.TwitchSettleSeconds,
+                $"a body shivering on the spot was settled only at {t:F2} s, as a creep rather than as still");
+        }
+
+        [Test]
+        public void ACreepingBodyIsSettledOnceItHasLainLongEnough()
+        {
+            // Sliding down a slope, or shoved by the bodies around it: no fall, but more than a shiver.
+            AddFloor();
+            Animator animator = SpawnProxy(Vector3.zero);
+            _corpse = Copy(animator);
+            _corpse.Fell(Vector3.zero, HumanBodyBones.Hips, Vector3.zero, 0f);
+            Rigidbody[] parts = _corpse.Root.GetComponentsInChildren<Rigidbody>();
+
+            // The whole body, 4 mm a step: 0.1 m in StillSeconds, between StillMetres and
+            // TwitchMetres. Moving one part alone does not creep: its joints pull it straight back.
+            float t = RunWhileAwake(10f, _ =>
+            {
+                foreach (Rigidbody part in parts) part.position += new Vector3(0.004f, 0f, 0f);
+            }, out float firstAsleep);
+
+            Assert.IsTrue(_corpse.IsAsleep, "a creeping body was never settled");
+            Assert.GreaterOrEqual(firstAsleep, RemoteCorpse.TwitchSettleSeconds,
+                $"a creeping body was settled at {firstAsleep:F2} s, before it had lain long");
+            Assert.Less(t, RemoteCorpse.TwitchSettleSeconds + RemoteCorpse.StillSeconds + 0.3f,
+                $"the creeping body was settled only at {t:F2} s");
+        }
+
+        // Steps the scene until the corpse sleeps, calling `nudge` after each step from t = 1 s on:
+        // after the step, so the nudge is what the settle check reads -- set before, the step's own
+        // friction would have taken it out first.
+        private float RunWhileAwake(float seconds, System.Action<int> nudge, out float firstAsleep)
+        {
+            PhysicsScene physics = _scene.GetPhysicsScene();
+            firstAsleep = float.NaN;
+            float t = 0f;
+            for (int step = 0; t < seconds && !_corpse.IsAsleep; step++, t += StepSeconds)
+            {
+                physics.Simulate(StepSeconds);
+                if (t > 1f) nudge(step);
+                _corpse.TickSettle(t);
+                if (_corpse.IsAsleep && float.IsNaN(firstAsleep)) firstAsleep = t;
+            }
+            return t;
+        }
+
+        private Rigidbody Part(Animator animator, HumanBodyBones bone)
+            => FindCopy(_corpse.Root.transform, animator.GetBoneTransform(bone).name).GetComponent<Rigidbody>();
+
+        [Test]
         public void ACorpseOwnsItsMaterials()
         {
             Animator animator = SpawnProxy(Vector3.zero);
@@ -184,9 +345,9 @@ namespace Ironfront.Net.Unity.Client.Tests
             Team       = 1,
         };
 
-        private RemoteCorpse Copy(Animator animator)
+        private RemoteCorpse Copy(Animator animator, float diedAt = 0f)
         {
-            RemoteCorpse corpse = RemoteCorpse.TryCreate(animator, 7, 0, 0f);
+            RemoteCorpse corpse = RemoteCorpse.TryCreate(animator, 7, 0, diedAt);
             Assert.IsNotNull(corpse, "the proxy's body could not be copied into a corpse");
             SceneManager.MoveGameObjectToScene(corpse.Root, _scene);
             return corpse;
@@ -198,6 +359,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             for (float t = 0f; t < seconds; t += StepSeconds)
             {
                 _corpse?.TickCrumple(t);
+                _corpse?.TickSettle(t);
                 physics.Simulate(StepSeconds);
             }
         }

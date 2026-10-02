@@ -110,7 +110,7 @@ namespace Ironfront.Net.Unity.Client
             corpse.Fell(force, hit, view.PlanarVelocity, CrumpleSeconds);
             if (TryRecentBlast(corpse.ChestPosition, out Vector3 centre, out float radius))
             {
-                corpse.ThrowByBlast(BlastSpeedPerMetre * radius, centre, radius * BlastReachScale);
+                corpse.ThrowByBlast(BlastSpeedPerMetre * radius, centre, radius * BlastReachScale, Time.time);
             }
             SprayBlood(corpse, force, hit);
 
@@ -143,7 +143,8 @@ namespace Ironfront.Net.Unity.Client
         public void Explode(Vector3 centre, float radius)
         {
             if (radius <= 0f) return;
-            _blasts.Add(new BlastMemory { Centre = centre, Radius = radius, At = Time.time });
+            float now = Time.time;
+            _blasts.Add(new BlastMemory { Centre = centre, Radius = radius, At = now });
 
             float reach = radius * BlastReachScale;
             float force = BlastSpeedPerMetre * radius;
@@ -152,7 +153,7 @@ namespace Ironfront.Net.Unity.Client
                 RemoteCorpse corpse = _corpses[i];
                 if (corpse.IsGone) continue;
                 if ((corpse.ChestPosition - centre).sqrMagnitude > reach * reach) continue;
-                corpse.ThrowByBlast(force, centre, reach);
+                corpse.ThrowByBlast(force, centre, reach, now);
             }
         }
 
@@ -201,6 +202,7 @@ namespace Ironfront.Net.Unity.Client
                     corpse.TickCrumple(age);
                     Bleed(corpse, age, now);
                     if (age >= LingerSeconds || corpse.Evicted) corpse.BeginSink(now);
+                    else corpse.TickSettle(now);
                     continue;
                 }
 
