@@ -7,6 +7,7 @@ using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Unity;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Ironfront.Net.Unity.Client
 {
@@ -49,6 +50,10 @@ namespace Ironfront.Net.Unity.Client
             new Dictionary<ushort, Transform>(ProtocolConstants.MAX_ACTORS);
 
         private readonly Stack<Transform> _pool = new Stack<Transform>();
+
+        // Every body this registry made, live or pooled: they sit at the scene root (NewPooled),
+        // so they are not destroyed with this object unless destroyed here.
+        private readonly List<GameObject> _made = new List<GameObject>();
 
         // Resolved once per spawn, never per snapshot. GetComponent at 30 Hz x 48 actors is the
         // allocation-free-but-slow trap: it costs nothing the profiler flags as garbage and
@@ -659,11 +664,33 @@ namespace Ironfront.Net.Unity.Client
             _pool.Push(t);
         }
 
+        /// <summary>
+        /// A fresh body for the pool, at the root of this registry's scene.
+        /// </summary>
+        /// <remarks>
+        /// <b>Not under this registry.</b> Unity writes animation results back one transform
+        /// hierarchy at a time, so a hundred animated bodies under one parent are written back in
+        /// series on one thread, and any one of them moving marks the whole hierarchy changed
+        /// (Unity, <i>Optimize your game performance for consoles and PCs</i>, "Separate animating
+        /// hierarchies"). At the root, each body is its own hierarchy.
+        /// </remarks>
         private Transform NewPooled()
         {
-            GameObject go = Instantiate(_remoteActorPrefab, transform);
+            GameObject go = Instantiate(_remoteActorPrefab);
+            SceneManager.MoveGameObjectToScene(go, gameObject.scene);
             go.SetActive(false);
+            _made.Add(go);
             return go.transform;
+        }
+
+        private void OnDestroy()
+        {
+            for (int i = 0; i < _made.Count; i++)
+            {
+                if (_made[i] == null) continue;
+                if (Application.isPlaying) Destroy(_made[i]); else DestroyImmediate(_made[i]);
+            }
+            _made.Clear();
         }
     }
 }

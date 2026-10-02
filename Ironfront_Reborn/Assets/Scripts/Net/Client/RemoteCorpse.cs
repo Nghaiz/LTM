@@ -45,10 +45,11 @@ namespace Ironfront.Net.Unity.Client
         private readonly Transform _head;
         private readonly Rigidbody _weapon;
         private readonly List<Object> _owned;
+        private readonly SkinnedMeshRenderer[] _skins;
 
         private RemoteCorpse(
             GameObject root, RemoteRagdoll ragdoll, Transform chest, Transform head, Rigidbody weapon,
-            List<Object> owned, ushort actorId, int team, float diedAt)
+            List<Object> owned, SkinnedMeshRenderer[] skins, ushort actorId, int team, float diedAt)
         {
             _root = root;
             _ragdoll = ragdoll;
@@ -56,6 +57,7 @@ namespace Ironfront.Net.Unity.Client
             _head = head;
             _weapon = weapon;
             _owned = owned;
+            _skins = skins;
             ActorId = actorId;
             Team = team;
             DiedAt = diedAt;
@@ -206,7 +208,44 @@ namespace Ironfront.Net.Unity.Client
                 _weapon.isKinematic = true;
                 _weapon.detectCollisions = false;
             }
+            for (int i = 0; i < _skins.Length; i++) BoundTheLyingBody(_skins[i]);
             StillSince = -1f;
+        }
+
+        /// <summary>A body's thickness around its bones, in metres, for the bounds of one lying still.</summary>
+        private const float BodyThicknessMetres = 0.4f;
+
+        /// <summary>
+        /// Gives a settled body fixed bounds round the pose it lies in and stops re-bounding it
+        /// every frame.
+        /// </summary>
+        /// <remarks>
+        /// A body in flight needs <c>updateWhenOffscreen</c>: its root stays where it died while its
+        /// bones go wherever the ragdoll throws them, so bounds read off the root would cull it. A
+        /// settled body does not move, and re-bounding it every frame, on screen or off, is up to 32
+        /// skinned meshes of work for nothing (Unity, <i>Optimize your game performance for consoles
+        /// and PCs</i>, "Update only when visible").
+        /// </remarks>
+        private static void BoundTheLyingBody(SkinnedMeshRenderer skin)
+        {
+            if (skin == null) return;
+            Transform space = skin.rootBone != null ? skin.rootBone : skin.transform;
+            Bounds local = default;
+            bool any = false;
+            foreach (Transform bone in skin.bones)
+            {
+                if (bone == null) continue;
+                Vector3 point = space.InverseTransformPoint(bone.position);
+                if (any) local.Encapsulate(point);
+                else local = new Bounds(point, Vector3.zero);
+                any = true;
+            }
+            if (!any) return;
+
+            float scale = Mathf.Max(1e-4f, space.lossyScale.x);
+            local.Expand(2f * BodyThicknessMetres / scale);
+            skin.updateWhenOffscreen = false;
+            skin.localBounds = local;
         }
 
         /// <summary>
@@ -248,7 +287,9 @@ namespace Ironfront.Net.Unity.Client
 
             Transform chest = Resolve(HumanBodyBones.Chest) ?? Resolve(HumanBodyBones.Spine);
             Rigidbody weapon = DetachWeapon(Resolve(HumanBodyBones.RightHand), root.transform);
-            return new RemoteCorpse(root, ragdoll, chest, Resolve(HumanBodyBones.Head), weapon, owned, actorId, team, now);
+            var skins = new SkinnedMeshRenderer[skinned.Count];
+            for (int i = 0; i < skinned.Count; i++) skins[i] = skinned[i].Value;
+            return new RemoteCorpse(root, ragdoll, chest, Resolve(HumanBodyBones.Head), weapon, owned, skins, actorId, team, now);
         }
 
         /// <summary>
@@ -282,6 +323,10 @@ namespace Ironfront.Net.Unity.Client
             if (SinkStartedAt >= 0f) return;
             ThrownAt = now;
             StillSince = -1f;
+            for (int i = 0; i < _skins.Length; i++)
+            {
+                if (_skins[i] != null) _skins[i].updateWhenOffscreen = true;
+            }
             _ragdoll.AddExplosionForce(force, centre, radius, 1f);
             if (_weapon != null)
             {
