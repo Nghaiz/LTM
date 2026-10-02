@@ -82,9 +82,10 @@ param(
     [string] $LogFile = "",
 
     # IRONFRONT_LOG_FRAMES=1: a [frames] and a [loop] line every five seconds (the [loop] line
-    # splits the average frame by PlayerLoop system) and a [hitch] line naming the heaviest
-    # systems of every frame over 50 ms, in this client's log. For a playtest that is chasing
-    # stutter; off otherwise.
+    # splits the average frame by PlayerLoop system), a [physics] line counting the rigidbodies
+    # the step simulates and a [render] line with what an average frame drew, and a [hitch] line
+    # naming the heaviest systems of every frame over 50 ms, in this client's log. For a
+    # playtest that is chasing stutter; off otherwise.
     [switch] $LogFrames
 )
 
