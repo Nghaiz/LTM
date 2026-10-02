@@ -177,6 +177,11 @@ namespace Ironfront.Net.Unity
 
             if (controller != null && controller.enabled)
             {
+                // From where the transform is now: a stance change, a view interpolator or any
+                // script may have written it since physics last looked, and with auto-sync off
+                // (an online client, ClientPhysicsSync) the controller would start from that old
+                // position and write it back over the new one (MoveFromWrittenTransformTests).
+                if (!Physics.autoSyncTransforms) Physics.SyncTransforms();
                 LastCollisionFlags = controller.Move(delta);
                 return transform.position;
             }
