@@ -185,6 +185,7 @@ namespace Ironfront.Net.Unity.Client
         {
             if (IsActive) return;
             IsActive = true;
+            _fellAt = float.NaN;
 
             if (_animator != null) _animator.enabled = false;
             _crumpleSeconds = Mathf.Max(0f, crumpleSeconds);
@@ -378,6 +379,8 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!IsSettled) return;
             IsSettled = false;
+            // A live body thrown again, or seen again, lands again before it may be frozen.
+            _fellAt = float.NaN;
             RigidbodyInterpolation smoothing = InterpolationAt(_bones[0].position, Camera.main);
             for (int i = 0; i < _bodies.Length; i++)
             {
@@ -438,6 +441,18 @@ namespace Ironfront.Net.Unity.Client
             if (hips == null) return;
 
             Vector3 gap = pelvis - hips.position;
+            if (IsSettled)
+            {
+                // Frozen (SimulateWhereSeen): carried after the pelvis whole, as the snap below
+                // carries a live body, once it has drifted far enough to be worth a write.
+                if (gap.sqrMagnitude <= FrozenFollowMetres * FrozenFollowMetres) return;
+                for (int i = 0; i < _bodies.Length; i++)
+                {
+                    if (_bodies[i] != null) _bodies[i].position += gap;
+                }
+                return;
+            }
+
             if (gap.sqrMagnitude > SnapMetres * SnapMetres)
             {
                 // Every body by the same offset, so the joints keep the shape they have.
@@ -452,6 +467,52 @@ namespace Ironfront.Net.Unity.Client
             }
 
             hips.linearVelocity = Vector3.ClampMagnitude(gap / SteerSeconds, MaxSteerSpeed);
+        }
+
+        /// <summary>How near the camera a knocked-over body keeps simulating once it has landed.</summary>
+        internal const float SimulateWithinMetres = 60f;
+
+        /// <summary>How long a knocked-over body simulates before it may be frozen far from the camera.</summary>
+        internal const float LandSeconds = 1.5f;
+
+        /// <summary>How far the pelvis moves from a frozen body before the body is carried after it.</summary>
+        internal const float FrozenFollowMetres = 0.5f;
+
+        // When SimulateWhereSeen first saw this fall; NaN until then.
+        private float _fellAt = float.NaN;
+
+        /// <summary>
+        /// Freezes a knocked-over body that has landed far from the camera, and gives it back to the
+        /// simulation as soon as the camera is near again. A live body only: a corpse settles by its
+        /// own rule (<see cref="RemoteCorpse.TickSettle"/>).
+        /// </summary>
+        /// <param name="nearCamera">Within <see cref="SimulateWithinMetres"/> of the camera.</param>
+        /// <param name="now">Seconds, on any clock that only moves forward.</param>
+        /// <remarks>
+        /// <para>
+        /// <b>Why.</b> A bot knocked over by a blast lies as a ragdoll steered toward the server's
+        /// pelvis every frame, so its eleven bodies never sleep. In a 100-bot Forest Lake match eight
+        /// of them at once were 88 of the 113 awake bodies the client simulated, three physics steps
+        /// a frame, mostly in fights the player could not see (development profile, 2026-10-02).
+        /// </para>
+        /// <para>
+        /// <b>After the fall, not before.</b> For <see cref="LandSeconds"/> the body is thrown and
+        /// lands as it always did, wherever it is, so a fall seen through binoculars is a fall. Once
+        /// frozen it keeps the pose it landed in and is carried after the pelvis
+        /// (<see cref="Steer"/>), and a blast beside it rouses it (<see cref="AddExplosionForce"/>).
+        /// </para>
+        /// </remarks>
+        public void SimulateWhereSeen(bool nearCamera, float now)
+        {
+            if (!IsActive) return;
+            if (float.IsNaN(_fellAt)) _fellAt = now;
+
+            if (nearCamera)
+            {
+                Rouse();
+                return;
+            }
+            if (!IsSettled && now - _fellAt >= LandSeconds) Settle();
         }
 
         /// <summary>
