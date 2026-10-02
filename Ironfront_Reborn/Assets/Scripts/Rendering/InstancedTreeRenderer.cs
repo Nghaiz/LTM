@@ -104,8 +104,8 @@ namespace Ironfront.Rendering
         private ComputeBuffer _args;
         private Command[] _commands;
         private float[] _lodTable;
-        private float[] _lodScratch;
-        private float[] _nearestSquared;
+        private float[][] _lodSquared;
+        private bool[] _reachable;
         private int _bucketCount;
         private Bounds _bounds;
         private float _terrainBias;
@@ -223,8 +223,8 @@ namespace Ironfront.Rendering
             for (int p = 0; p < _catalog.Prototypes.Length; p++)
             {
                 TreeCatalog.Prototype prototype = _catalog.Prototypes[p];
-                TreeLod.SquaredDistances(prototype.Thresholds, prototype.Size, tanHalfFov, lodBias, _lodScratch);
-                System.Array.Copy(_lodScratch, 0, _lodTable, p * TreeCatalog.MaxLods, prototype.Thresholds.Length);
+                TreeLod.SquaredDistances(prototype.Thresholds, prototype.Size, tanHalfFov, lodBias, _lodSquared[p]);
+                System.Array.Copy(_lodSquared[p], 0, _lodTable, p * TreeCatalog.MaxLods, prototype.Thresholds.Length);
             }
             _lodSquaredDistances.SetData(_lodTable);
 
@@ -242,28 +242,11 @@ namespace Ironfront.Rendering
 
         private void Draw(Vector3 eye, float shadowRange)
         {
-            // Only the draws a tree could reach: a prototype's finer LODs need a tree of it near the
-            // camera, its shadows one inside the shadow range. The GPU decides the rest.
-            for (int p = 0; p < _nearestSquared.Length; p++) _nearestSquared[p] = float.PositiveInfinity;
-            foreach (TreeCatalog.Cell cell in _catalog.Cells)
-            {
-                if (cell.Prototypes == 0) continue;
-                float distance2 = cell.Bounds.SqrDistance(eye);
-                for (int p = 0; p < _nearestSquared.Length; p++)
-                {
-                    if ((cell.Prototypes & (1u << p)) != 0 && distance2 < _nearestSquared[p]) _nearestSquared[p] = distance2;
-                }
-            }
-
-            float shadow2 = shadowRange * shadowRange;
+            MarkReachable(eye, shadowRange * shadowRange);
             for (int c = 0; c < _commands.Length; c++)
             {
                 Command command = _commands[c];
-                float nearest2 = _nearestSquared[command.Prototype];
-                if (command.Shadowed && nearest2 > shadow2) continue;
-                float reach2 = _lodTable[command.Prototype * TreeCatalog.MaxLods + command.Lod]
-                               * _catalog.Prototypes[command.Prototype].LargestSquaredScale;
-                if (nearest2 > reach2) continue;
+                if (!_reachable[command.Bucket]) continue;
 
                 TreeCatalog.Part part = command.Part;
                 Graphics.DrawMeshInstancedIndirect(
@@ -272,6 +255,57 @@ namespace Ironfront.Rendering
                     part.ReceiveShadows, part.Layer, null, part.LightProbes);
                 DrawCalls++;
             }
+        }
+
+        /// <summary>
+        /// Marks the buckets a tree of some cell can fall into this frame, so a draw is issued only
+        /// for those: an indirect draw of no instances still costs the render thread a draw call
+        /// in every pass, and the 114 issued a frame took a 100-bot match to 1,600-2,000 batches
+        /// against 600-750 before this renderer.
+        /// </summary>
+        /// <remarks>
+        /// A cell's trees lie between its bounds' nearest and farthest points, and between its
+        /// prototypes' smallest and largest scales, so they can only be on the LODs from the one
+        /// the nearest point picks for the largest tree to the one the farthest picks for the
+        /// smallest. Shadowed buckets need a cell reaching inside the shadow range; unshadowed ones
+        /// a cell reaching past it, in view.
+        /// </remarks>
+        private void MarkReachable(Vector3 eye, float shadow2)
+        {
+            System.Array.Clear(_reachable, 0, _reachable.Length);
+            foreach (TreeCatalog.Cell cell in _catalog.Cells)
+            {
+                if (cell.Prototypes == 0) continue;
+                float near2 = cell.Bounds.SqrDistance(eye);
+                float far2 = FarthestSquared(cell.Bounds, eye);
+                bool shadowed = near2 <= shadow2;
+                bool unshadowed = far2 > shadow2 && GeometryUtility.TestPlanesAABB(_planes, cell.Bounds);
+                if (!shadowed && !unshadowed) continue;
+
+                for (int p = 0; p < _catalog.Prototypes.Length; p++)
+                {
+                    if ((cell.Prototypes & (1u << p)) == 0) continue;
+                    TreeCatalog.Prototype prototype = _catalog.Prototypes[p];
+                    int finest = TreeLod.Select(near2, prototype.LargestSquaredScale, _lodSquared[p]);
+                    if (finest < 0) continue;
+                    int coarsest = TreeLod.Select(far2, prototype.SmallestSquaredScale, _lodSquared[p]);
+                    if (coarsest < 0) coarsest = prototype.Lods.Length - 1;
+                    for (int lod = finest; lod <= coarsest; lod++)
+                    {
+                        if (shadowed) _reachable[Bucket(p, lod, true)] = true;
+                        if (unshadowed) _reachable[Bucket(p, lod, false)] = true;
+                    }
+                }
+            }
+        }
+
+        private static float FarthestSquared(Bounds bounds, Vector3 point)
+        {
+            Vector3 min = bounds.min, max = bounds.max;
+            float x = Mathf.Max(Mathf.Abs(point.x - min.x), Mathf.Abs(point.x - max.x));
+            float y = Mathf.Max(Mathf.Abs(point.y - min.y), Mathf.Abs(point.y - max.y));
+            float z = Mathf.Max(Mathf.Abs(point.z - min.z), Mathf.Abs(point.z - max.z));
+            return x * x + y * y + z * z;
         }
 
         private void Upload()
@@ -300,8 +334,8 @@ namespace Ironfront.Rendering
 
             int prototypes = catalog.Prototypes.Length;
             _lodTable = new float[prototypes * TreeCatalog.MaxLods];
-            _lodScratch = new float[TreeCatalog.MaxLods];
-            _nearestSquared = new float[prototypes];
+            _lodSquared = new float[prototypes][];
+            for (int p = 0; p < prototypes; p++) _lodSquared[p] = new float[catalog.Prototypes[p].Lods.Length];
             _lodSquaredDistances = Structured(_lodTable.Length, sizeof(float));
             var lodCounts = new uint[prototypes];
             for (int p = 0; p < prototypes; p++) lodCounts[p] = (uint)catalog.Prototypes[p].Lods.Length;
@@ -319,6 +353,7 @@ namespace Ironfront.Rendering
                         starts[Bucket(p, lod, s == 1)] = capacity;
                         capacity += (uint)catalog.Prototypes[p].Count;
                     }
+            _reachable = new bool[_bucketCount];
             _bucketStarts = Structured(_bucketCount, sizeof(uint));
             _bucketStarts.SetData(starts);
             _bucketCounts = Structured(_bucketCount, sizeof(uint));
