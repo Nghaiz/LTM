@@ -217,6 +217,7 @@ namespace Ironfront.Net.Unity.Client
             EnsureSeatRequester();
             EnsureLocalCombatDriver();
             EnsureChatSender();
+            EnsurePhysicsSync();
 
             if (_connectOnStart) Connect();
         }
@@ -617,6 +618,20 @@ namespace Ironfront.Net.Unity.Client
         {
             if (GetComponent<ClientChatSender>() == null)
                 gameObject.AddComponent<ClientChatSender>();
+        }
+
+        /// <summary>
+        /// Makes sure an online match pushes moved transforms into physics once a frame rather
+        /// than on every query (<see cref="ClientPhysicsSync"/>).
+        /// </summary>
+        /// <remarks>
+        /// Added in code for <see cref="EnsureVehicleStage"/>'s reason, and only here, past the
+        /// offline and dedicated-server returns: the server and practice keep auto-sync.
+        /// </remarks>
+        private void EnsurePhysicsSync()
+        {
+            if (GetComponent<ClientPhysicsSync>() == null)
+                gameObject.AddComponent<ClientPhysicsSync>();
         }
 
         private void OnSpawnActor(SpawnActorMessage message)
