@@ -797,8 +797,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// <remarks>
 	/// <c>Boat.inWater</c> is the one that matters — it is set from a buoyancy sample the remote
 	/// path no longer takes, and the engine note and wake read it. <c>Helicopter.isAirborne</c>
-	/// comes from a downward raycast, which a client can still afford to do locally against its
-	/// own copy of the map; it is left alone rather than replicated for the sake of it.
+	/// is not sensed on a client at all: only the AI reads it, and no AI runs there.
 	/// </remarks>
 	public virtual void ApplyReplicatedFlags(bool inWater, bool airborne)
 	{
