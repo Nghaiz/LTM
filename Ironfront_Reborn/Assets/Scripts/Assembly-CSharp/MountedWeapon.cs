@@ -56,13 +56,24 @@ public class MountedWeapon : Weapon
 	/// Direction is the muzzle's, like <see cref="Fire"/>: the turret carrying it is aimed on the
 	/// server by <c>TurretAimCore</c> from the same input frames.
 	/// </para>
+	/// <para>
+	/// <b>A draw still running is finished, not a reason to refuse.</b> Sitting down starts the
+	/// engine's own <c>unholsterTime</c> timer (1.2 s on the helicopter's rocket pod), which the
+	/// authority knows nothing about, so a pilot who fired in that window had the shot approved,
+	/// spent and announced to every client while nothing left the pod (Island, v3.1.1 server log
+	/// of 2026-10-01: "NOTHING WAS LAUNCHED"). The carried path settled the same question the same
+	/// way: the session marks a weapon up at once (<see cref="Weapon.MirrorAuthorityState"/>).
+	/// The caller only gets here holding this weapon in the seat the authority stepped, so a
+	/// holstered weapon never reaches this line.
+	/// </para>
 	/// </remarks>
-	/// <returns>False when the weapon is not in the gunner's hands, so the caller can say so.</returns>
+	/// <returns>True: the caller has already checked the weapon is in the gunner's hands.</returns>
 	public bool FireApprovedByServer()
 	{
 		if (!unholstered)
 		{
-			return false;
+			CancelInvoke("UnholsterDone");
+			UnholsterDone();
 		}
 		if (ammo == 0)
 		{
