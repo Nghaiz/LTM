@@ -32,6 +32,30 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>TagManager's "Ragdoll" layer.</summary>
         private const int RagdollLayer = 10;
 
+        /// <summary>How near the camera a ragdoll's parts are drawn interpolated.</summary>
+        internal const float InterpolateWithinMetres = 30f;
+
+        /// <summary>
+        /// Interpolation for a part at <paramref name="at"/>: on near the camera, off past
+        /// <see cref="InterpolateWithinMetres"/>.
+        /// </summary>
+        /// <remarks>
+        /// An interpolated body writes its transform every frame, and with auto-sync on every
+        /// raycast after that pushes the written transforms back into PhysX: in a 100-bot Forest
+        /// Lake match each awake body cost about 0.04 ms a frame in scripts on top of its physics
+        /// step (fit over 365 windows of <c>[loop]</c> and <c>[physics]</c>, 2026-10-02), 146 of
+        /// them at the busiest. Interpolation only shows where a body crosses enough pixels for a
+        /// 60 Hz step to read as a jump, which is close to the camera; most bodies in such a match
+        /// fall far from it.
+        /// </remarks>
+        internal static RigidbodyInterpolation InterpolationAt(Vector3 at, Camera viewer)
+        {
+            if (viewer == null) return RigidbodyInterpolation.None;
+            return (at - viewer.transform.position).sqrMagnitude <= InterpolateWithinMetres * InterpolateWithinMetres
+                ? RigidbodyInterpolation.Interpolate
+                : RigidbodyInterpolation.None;
+        }
+
         private const HumanBodyBones None = HumanBodyBones.LastBone;
 
         private readonly struct PartSpec
@@ -354,13 +378,14 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!IsSettled) return;
             IsSettled = false;
+            RigidbodyInterpolation smoothing = InterpolationAt(_bones[0].position, Camera.main);
             for (int i = 0; i < _bodies.Length; i++)
             {
                 Rigidbody body = _bodies[i];
                 if (body == null) continue;
                 body.isKinematic = false;
                 body.detectCollisions = true;
-                body.interpolation = RigidbodyInterpolation.Interpolate;
+                body.interpolation = smoothing;
             }
         }
 
@@ -486,6 +511,7 @@ namespace Ironfront.Net.Unity.Client
 
         private void Build(bool crumple)
         {
+            RigidbodyInterpolation smoothing = InterpolationAt(_bones[0].position, Camera.main);
             for (int i = 0; i < Specs.Length; i++)
             {
                 Transform bone = _bones[i];
@@ -497,7 +523,7 @@ namespace Ironfront.Net.Unity.Client
                 Rigidbody body = bone.gameObject.AddComponent<Rigidbody>();
                 body.mass = spec.Mass;
                 body.angularDamping = 0.5f;
-                body.interpolation = RigidbodyInterpolation.Interpolate;
+                body.interpolation = smoothing;
                 _bodies[i] = body;
 
                 AddCollider(bone, spec);

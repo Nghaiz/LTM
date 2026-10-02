@@ -218,8 +218,8 @@ namespace Ironfront.Net.Unity.Client.Tests
             {
                 Assert.IsFalse(body.isKinematic, $"{body.name} stays frozen after the blast");
                 Assert.IsTrue(body.detectCollisions, $"{body.name} flies through the ground after the blast");
-                Assert.AreEqual(RigidbodyInterpolation.Interpolate, body.interpolation,
-                    $"{body.name} flies uninterpolated after the blast");
+                Assert.AreEqual(RemoteRagdoll.InterpolationAt(body.position, Camera.main), body.interpolation,
+                    $"{body.name} flies with the interpolation the camera's distance does not call for");
             }
             PhysicsScene physics = _scene.GetPhysicsScene();
             for (int i = 0; i < 25; i++) physics.Simulate(StepSeconds);
