@@ -1,12 +1,13 @@
-using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Unity.Profiling;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Ironfront.Rendering
 {
     /// <summary>
-    /// Draws a terrain's trees with GPU instancing, each on the LOD its LODGroup would pick, in a
-    /// few dozen instanced calls instead of one renderer per tree.
+    /// Draws a terrain's trees on the GPU: a compute pass culls each tree and picks the LOD its
+    /// LODGroup would, and indirect instanced draws read what it kept. The CPU does no work per tree.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -14,8 +15,10 @@ namespace Ironfront.Rendering
     /// draws as a renderer of its own on the main thread, every frame: about 2,900 of them in view
     /// at once, in <c>Terrain.Trees.OnWillRender</c>, <c>LODTreeInstanceRenderer.UpdateWind</c> and
     /// <c>QueuePrepareIntegrateMainThreadObjects</c> -- some 4 ms of a 38 ms frame in a 100-bot
-    /// match (development profile, 2026-10-02). Measured in the Editor from one spot over the
-    /// forest, the trees were 9 of the camera's 11.7 ms.
+    /// match (development profile, 2026-10-02). Drawing them with
+    /// <c>Graphics.RenderMeshInstanced</c> instead still cost the main thread 0.36 us a tree to
+    /// pick and 0.26 us a tree to submit (release IL2CPP player, 2026-10-02), which is why the
+    /// picking and the instance data live on the GPU here.
     /// </para>
     /// <para>
     /// <b>The terrain draws none of them while this runs.</b> Its tree distance does not cull a
@@ -24,18 +27,20 @@ namespace Ironfront.Rendering
     /// takes the terrain's own tree work to nothing. Its colliders are the terrain data's, and stay.
     /// </para>
     /// <para>
-    /// <b>Drawn as the terrain drew them.</b> The LOD is LODGroup's (<see cref="TreeLod"/>) with the
-    /// terrain's own bias, so binoculars and scopes pick finer LODs exactly as before. A tree within
-    /// the shadow distance (stretched by <see cref="ShadowMargin"/> and <see cref="ShadowReachMetres"/>)
-    /// is drawn with its renderer's shadow casting, in batches by cell so each shadow cascade culls
-    /// whole cells, and drawn whether or not it is in view, for the shadow it throws into view. Past
-    /// that it casts none, as before, and is culled against the view. The one difference is the
-    /// dithered cross-fade the far LOD's shader has: an LOD change here is a cut.
+    /// <b>Drawn as the terrain drew them</b> (<c>TreeCulling.compute</c>). The LOD is LODGroup's
+    /// (<see cref="TreeLod"/>) with the terrain's own bias and the camera's field of view, so
+    /// binoculars and scopes pick finer LODs and see farther exactly as before. A tree within the
+    /// shadow distance (stretched by <see cref="ShadowMargin"/> and <see cref="ShadowReachMetres"/>)
+    /// casts its renderer's shadow and is drawn in or out of view, for the shadow it throws into
+    /// view; past that it casts none, as before, and is culled against the view. The one difference
+    /// is the dithered cross-fade the far LOD's shader has: an LOD change here is a cut.
     /// </para>
     /// <para>
     /// Taken over from the second frame: the minimap's one-off snapshot renders in a <c>Start</c>,
     /// with every tree the terrain draws. Without a camera, or with vegetation off
-    /// (<c>Terrain.drawTreesAndFoliage</c>), the terrain gets its trees back.
+    /// (<c>Terrain.drawTreesAndFoliage</c>), the terrain gets its trees back; so does a machine
+    /// without compute shaders, and a terrain whose trees cannot be drawn this way
+    /// (<see cref="TreeCatalog"/>), and each says why once.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
@@ -50,34 +55,62 @@ namespace Ironfront.Rendering
         /// <summary>Added to the stretched shadow distance, for the tallest tree's shadow.</summary>
         internal const float ShadowReachMetres = 20f;
 
-        private static readonly ProfilerMarker FrameMarker = new ProfilerMarker("InstancedTreeRenderer.Frame");
+        private const int ThreadGroupSize = 64;
+        private const int ArgsPerCommand = 5;
 
-        private sealed class Batch
+        private static readonly ProfilerMarker FrameMarker = new ProfilerMarker("InstancedTreeRenderer.Frame");
+        private static readonly int TreesId = Shader.PropertyToID("_Trees");
+        private static readonly int LodSquaredDistancesId = Shader.PropertyToID("_LodSquaredDistances");
+        private static readonly int LodCountsId = Shader.PropertyToID("_LodCounts");
+        private static readonly int BucketStartsId = Shader.PropertyToID("_BucketStarts");
+        private static readonly int BucketCountsId = Shader.PropertyToID("_BucketCounts");
+        private static readonly int VisibleId = Shader.PropertyToID("_Visible");
+        private static readonly int CommandBucketsId = Shader.PropertyToID("_CommandBuckets");
+        private static readonly int ArgsId = Shader.PropertyToID("_Args");
+        private static readonly int TreeCountId = Shader.PropertyToID("_TreeCount");
+        private static readonly int BucketCountId = Shader.PropertyToID("_BucketCount");
+        private static readonly int CommandCountId = Shader.PropertyToID("_CommandCount");
+        private static readonly int EyeId = Shader.PropertyToID("_Eye");
+        private static readonly int ShadowRange2Id = Shader.PropertyToID("_ShadowRange2");
+        private static readonly int PlanesId = Shader.PropertyToID("_Planes");
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct GpuTree
+        {
+            public Vector3 Reference;
+            public float SquaredScale;
+            public float Radius;
+            public uint Prototype;
+        }
+
+        private sealed class Command
         {
             public TreeCatalog.Part Part;
+            public int Prototype;
+            public int Lod;
             public bool Shadowed;
-            public readonly List<Matrix4x4> Matrices = new List<Matrix4x4>();
-            public Bounds Bounds;
+            public int Bucket;
+            public MaterialPropertyBlock Properties;
         }
 
         private readonly Plane[] _planes = new Plane[6];
-        private readonly List<Batch> _used = new List<Batch>();
-        private readonly Dictionary<long, Batch[]> _shadowedBatches = new Dictionary<long, Batch[]>();
-        private Batch[][][] _unshadowedBatches;
+        private readonly Vector4[] _planeVectors = new Vector4[6];
         private Terrain _terrain;
         private TreeCatalog _catalog;
+        private ComputeShader _culling;
+        private int _clearKernel, _cullKernel, _writeArgsKernel;
+        private GraphicsBuffer _trees, _objectToWorld, _worldToObject, _lodSquaredDistances, _lodCounts;
+        private GraphicsBuffer _bucketStarts, _bucketCounts, _visible, _commandBuckets;
+        private ComputeBuffer _args;
+        private Command[] _commands;
+        private float[] _lodTable;
+        private float[] _lodScratch;
+        private float[] _nearestSquared;
+        private int _bucketCount;
+        private Bounds _bounds;
         private float _terrainBias;
         private bool _holding;
         private int _builtFrame = -1;
-
-        /// <summary>Trees drawn here last frame.</summary>
-        internal int Drawn { get; private set; }
-
-        /// <summary>Of <see cref="Drawn"/>, the ones drawn with their shadows.</summary>
-        internal int DrawnShadowed { get; private set; }
-
-        /// <summary>Trees drawn here last frame at each LOD.</summary>
-        internal int[] DrawnAtLod { get; private set; } = new int[0];
 
         internal bool IsBuilt => _catalog != null;
 
@@ -86,12 +119,19 @@ namespace Ironfront.Rendering
         /// <summary>The terrain's own tree LOD bias, given back on release.</summary>
         internal float TerrainBias => _terrainBias;
 
+        /// <summary>Indirect draws issued last frame.</summary>
+        internal int DrawCalls { get; private set; }
+
         private void Start() => Build();
 
         internal void Build()
         {
             _terrain = GetComponent<Terrain>();
-            _catalog = TreeCatalog.TryBuild(_terrain, out string reason);
+            string reason = null;
+            if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsInstancing) reason = "no compute shaders or instancing";
+            else if ((_culling = Resources.Load<ComputeShader>("TreeCulling")) == null) reason = "no TreeCulling compute shader";
+            else _catalog = TreeCatalog.TryBuild(_terrain, out reason);
+
             if (_catalog == null)
             {
                 Debug.Log($"[trees] '{name}': the terrain keeps drawing its trees ({reason}).");
@@ -100,16 +140,9 @@ namespace Ironfront.Rendering
             }
 
             _terrainBias = _terrain.treeLODBiasMultiplier;
-            _unshadowedBatches = new Batch[_catalog.Prototypes.Length][][];
-            for (int p = 0; p < _catalog.Prototypes.Length; p++)
-            {
-                TreeCatalog.Part[][] lods = _catalog.Prototypes[p].Lods;
-                _unshadowedBatches[p] = new Batch[lods.Length][];
-                for (int lod = 0; lod < lods.Length; lod++) _unshadowedBatches[p][lod] = NewBatches(lods[lod], shadowed: false);
-            }
-            DrawnAtLod = new int[_catalog.MaxLods];
+            Upload();
             _builtFrame = Time.frameCount;
-            Debug.Log($"[trees] '{name}': {_catalog.Count} trees in {_catalog.Cells.Length} cells are drawn instanced.");
+            Debug.Log($"[trees] '{name}': {_catalog.Count} trees are culled and drawn on the GPU, in up to {_commands.Length} draws.");
         }
 
         private void LateUpdate()
@@ -120,12 +153,26 @@ namespace Ironfront.Rendering
 
         private void OnDisable() => Release();
 
-        /// <summary>Draws every tree <paramref name="viewer"/> would see, or hands them back.</summary>
+        private void OnDestroy()
+        {
+            _trees?.Dispose();
+            _objectToWorld?.Dispose();
+            _worldToObject?.Dispose();
+            _lodSquaredDistances?.Dispose();
+            _lodCounts?.Dispose();
+            _bucketStarts?.Dispose();
+            _bucketCounts?.Dispose();
+            _visible?.Dispose();
+            _commandBuckets?.Dispose();
+            _args?.Release();
+        }
+
+        /// <summary>Culls and draws every tree <paramref name="viewer"/> would see, or hands them back.</summary>
         internal void Frame(Camera viewer)
         {
             using (FrameMarker.Auto())
             {
-                ClearBatches();
+                DrawCalls = 0;
                 if (_catalog == null || viewer == null || !_terrain.drawTreesAndFoliage)
                 {
                     Release();
@@ -133,10 +180,25 @@ namespace Ironfront.Rendering
                 }
 
                 Hold();
-                Gather(viewer);
-                Draw();
+                Vector3 eye = viewer.transform.position;
+                float shadowRange = QualitySettings.shadows == ShadowQuality.Disable
+                    ? 0f
+                    : QualitySettings.shadowDistance * ShadowMargin + ShadowReachMetres;
+                Cull(viewer, eye, shadowRange);
+                Draw(eye, shadowRange);
             }
         }
+
+        /// <summary>How many trees the last cull kept for one prototype, LOD and shadow. Reads the GPU back.</summary>
+        internal int Kept(int prototype, int lod, bool shadowed)
+        {
+            var counts = new uint[_bucketCount];
+            _bucketCounts.GetData(counts);
+            return (int)counts[Bucket(prototype, lod, shadowed)];
+        }
+
+        private static int Bucket(int prototype, int lod, bool shadowed) =>
+            (prototype * TreeCatalog.MaxLods + lod) * 2 + (shadowed ? 1 : 0);
 
         private void Hold()
         {
@@ -154,111 +216,172 @@ namespace Ironfront.Rendering
             _holding = false;
         }
 
-        private void Gather(Camera viewer)
+        private void Cull(Camera viewer, Vector3 eye, float shadowRange)
         {
             float lodBias = QualitySettings.lodBias * _terrainBias;
             float tanHalfFov = Mathf.Tan(viewer.fieldOfView * 0.5f * Mathf.Deg2Rad);
-            foreach (TreeCatalog.Prototype prototype in _catalog.Prototypes)
-                TreeLod.SquaredDistances(prototype.Thresholds, prototype.Size, tanHalfFov, lodBias, prototype.SquaredDistances);
+            for (int p = 0; p < _catalog.Prototypes.Length; p++)
+            {
+                TreeCatalog.Prototype prototype = _catalog.Prototypes[p];
+                TreeLod.SquaredDistances(prototype.Thresholds, prototype.Size, tanHalfFov, lodBias, _lodScratch);
+                System.Array.Copy(_lodScratch, 0, _lodTable, p * TreeCatalog.MaxLods, prototype.Thresholds.Length);
+            }
+            _lodSquaredDistances.SetData(_lodTable);
 
-            float shadowRange = QualitySettings.shadows == ShadowQuality.Disable
-                ? 0f
-                : QualitySettings.shadowDistance * ShadowMargin + ShadowReachMetres;
-            float shadow2 = shadowRange * shadowRange;
             GeometryUtility.CalculateFrustumPlanes(viewer, _planes);
-            Vector3 eye = viewer.transform.position;
-
-            TreeCatalog.Cell[] cells = _catalog.Cells;
-            for (int c = 0; c < cells.Length; c++)
-            {
-                TreeCatalog.Cell cell = cells[c];
-                if (cell.Count == 0) continue;
-                bool shadowCell = cell.Bounds.SqrDistance(eye) <= shadow2;
-                bool viewCell = GeometryUtility.TestPlanesAABB(_planes, cell.Bounds);
-                if (!shadowCell && !viewCell) continue;
-
-                for (int i = cell.Start, end = cell.Start + cell.Count; i < end; i++)
-                {
-                    Vector3 reference = _catalog.References[i];
-                    float distance2 = (reference - eye).sqrMagnitude;
-                    int prototypeIndex = _catalog.PrototypeOf[i];
-                    int lod = TreeLod.Select(distance2, _catalog.SquaredScales[i], _catalog.Prototypes[prototypeIndex].SquaredDistances);
-                    if (lod < 0) continue;
-
-                    bool shadowed = distance2 <= shadow2;
-                    if (!shadowed && (!viewCell || !InView(reference, _catalog.Sizes[i] * 0.5f))) continue;
-
-                    Batch[] batches = shadowed ? ShadowedBatches(c, prototypeIndex, lod) : _unshadowedBatches[prototypeIndex][lod];
-                    Add(batches, in _catalog.Matrices[i], reference, _catalog.Sizes[i]);
-                    Drawn++;
-                    if (shadowed) DrawnShadowed++;
-                    DrawnAtLod[lod]++;
-                }
-            }
-        }
-
-        private Batch[] ShadowedBatches(int cell, int prototype, int lod)
-        {
-            long key = ((long)cell * _catalog.Prototypes.Length + prototype) * _catalog.MaxLods + lod;
-            if (!_shadowedBatches.TryGetValue(key, out Batch[] batches))
-            {
-                batches = NewBatches(_catalog.Prototypes[prototype].Lods[lod], shadowed: true);
-                _shadowedBatches.Add(key, batches);
-            }
-            return batches;
-        }
-
-        private static Batch[] NewBatches(TreeCatalog.Part[] parts, bool shadowed)
-        {
-            var batches = new Batch[parts.Length];
-            for (int i = 0; i < parts.Length; i++) batches[i] = new Batch { Part = parts[i], Shadowed = shadowed };
-            return batches;
-        }
-
-        private void Add(Batch[] batches, in Matrix4x4 placement, Vector3 reference, float size)
-        {
-            var bounds = new Bounds(reference, new Vector3(size, size, size));
-            foreach (Batch batch in batches)
-            {
-                if (batch.Matrices.Count == 0)
-                {
-                    batch.Bounds = bounds;
-                    _used.Add(batch);
-                }
-                else
-                {
-                    batch.Bounds.Encapsulate(bounds);
-                }
-                batch.Matrices.Add(batch.Part.IdentityLocal ? placement : placement * batch.Part.Local);
-            }
-        }
-
-        private void Draw()
-        {
-            foreach (Batch batch in _used)
-            {
-                RenderParams parameters = batch.Shadowed ? batch.Part.Shadowed : batch.Part.Unshadowed;
-                parameters.worldBounds = batch.Bounds;
-                Graphics.RenderMeshInstanced(parameters, batch.Part.Mesh, batch.Part.Submesh, batch.Matrices);
-            }
-        }
-
-        private void ClearBatches()
-        {
-            foreach (Batch batch in _used) batch.Matrices.Clear();
-            _used.Clear();
-            Drawn = 0;
-            DrawnShadowed = 0;
-            System.Array.Clear(DrawnAtLod, 0, DrawnAtLod.Length);
-        }
-
-        private bool InView(Vector3 centre, float radius)
-        {
             for (int i = 0; i < _planes.Length; i++)
-            {
-                if (_planes[i].GetDistanceToPoint(centre) < -radius) return false;
-            }
-            return true;
+                _planeVectors[i] = new Vector4(_planes[i].normal.x, _planes[i].normal.y, _planes[i].normal.z, _planes[i].distance);
+
+            _culling.SetVector(EyeId, eye);
+            _culling.SetFloat(ShadowRange2Id, shadowRange * shadowRange);
+            _culling.SetVectorArray(PlanesId, _planeVectors);
+            _culling.Dispatch(_clearKernel, Groups(_bucketCount), 1, 1);
+            _culling.Dispatch(_cullKernel, Groups(_catalog.Count), 1, 1);
+            _culling.Dispatch(_writeArgsKernel, Groups(_commands.Length), 1, 1);
         }
+
+        private void Draw(Vector3 eye, float shadowRange)
+        {
+            // Only the draws a tree could reach: a prototype's finer LODs need a tree of it near the
+            // camera, its shadows one inside the shadow range. The GPU decides the rest.
+            for (int p = 0; p < _nearestSquared.Length; p++) _nearestSquared[p] = float.PositiveInfinity;
+            foreach (TreeCatalog.Cell cell in _catalog.Cells)
+            {
+                if (cell.Prototypes == 0) continue;
+                float distance2 = cell.Bounds.SqrDistance(eye);
+                for (int p = 0; p < _nearestSquared.Length; p++)
+                {
+                    if ((cell.Prototypes & (1u << p)) != 0 && distance2 < _nearestSquared[p]) _nearestSquared[p] = distance2;
+                }
+            }
+
+            float shadow2 = shadowRange * shadowRange;
+            for (int c = 0; c < _commands.Length; c++)
+            {
+                Command command = _commands[c];
+                float nearest2 = _nearestSquared[command.Prototype];
+                if (command.Shadowed && nearest2 > shadow2) continue;
+                float reach2 = _lodTable[command.Prototype * TreeCatalog.MaxLods + command.Lod]
+                               * _catalog.Prototypes[command.Prototype].LargestSquaredScale;
+                if (nearest2 > reach2) continue;
+
+                TreeCatalog.Part part = command.Part;
+                Graphics.DrawMeshInstancedIndirect(
+                    part.Mesh, part.Submesh, part.Material, _bounds, _args, c * ArgsPerCommand * sizeof(uint),
+                    command.Properties, command.Shadowed ? part.ShadowCasting : ShadowCastingMode.Off,
+                    part.ReceiveShadows, part.Layer, null, part.LightProbes);
+                DrawCalls++;
+            }
+        }
+
+        private void Upload()
+        {
+            TreeCatalog catalog = _catalog;
+            int count = catalog.Count;
+            var trees = new GpuTree[count];
+            var inverse = new Matrix4x4[count];
+            for (int i = 0; i < count; i++)
+            {
+                trees[i] = new GpuTree
+                {
+                    Reference = catalog.References[i],
+                    SquaredScale = catalog.SquaredScales[i],
+                    Radius = catalog.Radii[i],
+                    Prototype = catalog.PrototypeOf[i],
+                };
+                inverse[i] = catalog.ObjectToWorld[i].inverse;
+            }
+            _trees = Structured(count, Marshal.SizeOf<GpuTree>());
+            _trees.SetData(trees);
+            _objectToWorld = Structured(count, 64);
+            _objectToWorld.SetData(catalog.ObjectToWorld);
+            _worldToObject = Structured(count, 64);
+            _worldToObject.SetData(inverse);
+
+            int prototypes = catalog.Prototypes.Length;
+            _lodTable = new float[prototypes * TreeCatalog.MaxLods];
+            _lodScratch = new float[TreeCatalog.MaxLods];
+            _nearestSquared = new float[prototypes];
+            _lodSquaredDistances = Structured(_lodTable.Length, sizeof(float));
+            var lodCounts = new uint[prototypes];
+            for (int p = 0; p < prototypes; p++) lodCounts[p] = (uint)catalog.Prototypes[p].Lods.Length;
+            _lodCounts = Structured(prototypes, sizeof(uint));
+            _lodCounts.SetData(lodCounts);
+
+            // A bucket per (prototype, LOD, shadowed), each with room for every tree of its prototype.
+            _bucketCount = prototypes * TreeCatalog.MaxLods * 2;
+            var starts = new uint[_bucketCount];
+            uint capacity = 0;
+            for (int p = 0; p < prototypes; p++)
+                for (int lod = 0; lod < catalog.Prototypes[p].Lods.Length; lod++)
+                    for (int s = 0; s < 2; s++)
+                    {
+                        starts[Bucket(p, lod, s == 1)] = capacity;
+                        capacity += (uint)catalog.Prototypes[p].Count;
+                    }
+            _bucketStarts = Structured(_bucketCount, sizeof(uint));
+            _bucketStarts.SetData(starts);
+            _bucketCounts = Structured(_bucketCount, sizeof(uint));
+            _visible = Structured((int)capacity, sizeof(uint));
+
+            var commands = new System.Collections.Generic.List<Command>();
+            var args = new System.Collections.Generic.List<uint>();
+            for (int p = 0; p < prototypes; p++)
+                for (int lod = 0; lod < catalog.Prototypes[p].Lods.Length; lod++)
+                    foreach (TreeCatalog.Part part in catalog.Prototypes[p].Lods[lod])
+                        for (int s = 0; s < 2; s++)
+                        {
+                            bool shadowed = s == 1;
+                            if (shadowed && part.ShadowCasting == ShadowCastingMode.Off) continue;
+                            int bucket = Bucket(p, lod, shadowed);
+                            var properties = new MaterialPropertyBlock();
+                            properties.SetBuffer("_TreeObjectToWorld", _objectToWorld);
+                            properties.SetBuffer("_TreeWorldToObject", _worldToObject);
+                            properties.SetBuffer("_TreeVisible", _visible);
+                            properties.SetFloat("_TreeBucketStart", starts[bucket]);
+                            commands.Add(new Command { Part = part, Prototype = p, Lod = lod, Shadowed = shadowed, Bucket = bucket, Properties = properties });
+                            args.Add(part.Mesh.GetIndexCount(part.Submesh));
+                            args.Add(0);
+                            args.Add(part.Mesh.GetIndexStart(part.Submesh));
+                            args.Add(part.Mesh.GetBaseVertex(part.Submesh));
+                            args.Add(0);
+                        }
+            _commands = commands.ToArray();
+            _args = new ComputeBuffer(args.Count, sizeof(uint), ComputeBufferType.IndirectArguments);
+            _args.SetData(args);
+            var commandBuckets = new uint[_commands.Length];
+            for (int c = 0; c < _commands.Length; c++) commandBuckets[c] = (uint)_commands[c].Bucket;
+            _commandBuckets = Structured(_commands.Length, sizeof(uint));
+            _commandBuckets.SetData(commandBuckets);
+
+            _clearKernel = _culling.FindKernel("Clear");
+            _cullKernel = _culling.FindKernel("Cull");
+            _writeArgsKernel = _culling.FindKernel("WriteArgs");
+            _culling.SetBuffer(_clearKernel, BucketCountsId, _bucketCounts);
+            _culling.SetBuffer(_cullKernel, TreesId, _trees);
+            _culling.SetBuffer(_cullKernel, LodSquaredDistancesId, _lodSquaredDistances);
+            _culling.SetBuffer(_cullKernel, LodCountsId, _lodCounts);
+            _culling.SetBuffer(_cullKernel, BucketStartsId, _bucketStarts);
+            _culling.SetBuffer(_cullKernel, BucketCountsId, _bucketCounts);
+            _culling.SetBuffer(_cullKernel, VisibleId, _visible);
+            _culling.SetBuffer(_writeArgsKernel, BucketCountsId, _bucketCounts);
+            _culling.SetBuffer(_writeArgsKernel, CommandBucketsId, _commandBuckets);
+            _culling.SetBuffer(_writeArgsKernel, ArgsId, _args);
+            _culling.SetInt(TreeCountId, count);
+            _culling.SetInt(BucketCountId, _bucketCount);
+            _culling.SetInt(CommandCountId, _commands.Length);
+
+            Vector3 origin = _terrain.GetPosition();
+            Vector3 size = _terrain.terrainData.size;
+            float tallest = 0f;
+            foreach (TreeCatalog.Prototype prototype in catalog.Prototypes)
+                tallest = Mathf.Max(tallest, prototype.Size * Mathf.Sqrt(prototype.LargestSquaredScale));
+            _bounds = new Bounds(origin + size * 0.5f, size + new Vector3(tallest, tallest, tallest) * 2f);
+        }
+
+        private static GraphicsBuffer Structured(int count, int stride) =>
+            new GraphicsBuffer(GraphicsBuffer.Target.Structured, Mathf.Max(1, count), stride);
+
+        private static int Groups(int count) => Mathf.Max(1, (count + ThreadGroupSize - 1) / ThreadGroupSize);
     }
 }

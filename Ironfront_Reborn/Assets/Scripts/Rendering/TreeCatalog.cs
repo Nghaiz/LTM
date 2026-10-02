@@ -5,30 +5,38 @@ using UnityEngine.Rendering;
 namespace Ironfront.Rendering
 {
     /// <summary>
-    /// A terrain's trees, read once and kept by cell, with every LOD of every prototype ready to
-    /// draw instanced.
+    /// A terrain's trees, read once, with every LOD of every prototype ready to draw by procedural
+    /// instancing (<c>TreeInstancing.cginc</c>).
     /// </summary>
     /// <remarks>
-    /// <b>Only what draws the same instanced is taken.</b> Every prototype must be a prefab with an
-    /// untransformed root and a LODGroup of two or more LODs, each LOD mesh renderers whose
-    /// materials instance; anything else and <see cref="TryBuild"/> refuses the whole terrain, which
-    /// then keeps drawing its trees itself. An instance is placed as the terrain places one: at its
-    /// normalized position over the terrain, turned about Y by its rotation, scaled by its width and
-    /// height scales.
+    /// <b>Only what draws the same that way is taken.</b> Every prototype must be a prefab with an
+    /// untransformed root and a LODGroup of two to <see cref="MaxLods"/> LODs, each LOD mesh
+    /// renderers placed at the root, whose shaders have an instanced copy
+    /// (<see cref="TreeShaderVariants"/>); anything else and <see cref="TryBuild"/> refuses the whole
+    /// terrain, which then keeps drawing its trees itself. An instance is placed as the terrain
+    /// places one: at its normalized position over the terrain, turned about Y by its rotation,
+    /// scaled by its width and height scales.
     /// </remarks>
     internal sealed class TreeCatalog
     {
-        /// <summary>The side of the square cells trees are kept, culled and shadowed in.</summary>
+        /// <summary>LODs a prototype may have; <c>TreeCulling.compute</c>'s <c>MAX_LODS</c>.</summary>
+        internal const int MaxLods = 8;
+
+        /// <summary>Prototypes a terrain may have: one bit each in a cell's mask.</summary>
+        internal const int MaxPrototypes = 32;
+
+        /// <summary>The side of the square cells used to bound where each prototype stands.</summary>
         internal const float CellMetres = 128f;
 
         internal sealed class Part
         {
             public Mesh Mesh;
             public int Submesh;
-            public Matrix4x4 Local;
-            public bool IdentityLocal;
-            public RenderParams Shadowed;
-            public RenderParams Unshadowed;
+            public Material Material;
+            public ShadowCastingMode ShadowCasting;
+            public bool ReceiveShadows;
+            public int Layer;
+            public LightProbeUsage LightProbes;
         }
 
         internal sealed class Prototype
@@ -37,28 +45,23 @@ namespace Ironfront.Rendering
             public float Size;
             public Vector3 Reference;
             public Part[][] Lods;
-
-            /// <summary>Per frame: how far, squared, each LOD lasts for a scale of one.</summary>
-            public float[] SquaredDistances;
+            public int Count;
+            public float LargestSquaredScale;
         }
 
         internal struct Cell
         {
             public Bounds Bounds;
-            public int Start;
-            public int Count;
+            public uint Prototypes;
         }
 
         internal Prototype[] Prototypes;
         internal Cell[] Cells;
-        internal Matrix4x4[] Matrices;
+        internal Matrix4x4[] ObjectToWorld;
         internal Vector3[] References;
-        internal float[] Sizes;
+        internal float[] Radii;
         internal float[] SquaredScales;
-        internal int[] PrototypeOf;
-
-        /// <summary>The largest LOD count of any prototype.</summary>
-        internal int MaxLods;
+        internal uint[] PrototypeOf;
 
         internal int Count => References.Length;
 
@@ -71,13 +74,13 @@ namespace Ironfront.Rendering
             TreePrototype[] sources = data.treePrototypes;
             TreeInstance[] trees = data.treeInstances;
             if (sources.Length == 0 || trees.Length == 0) { reason = "no trees"; return null; }
+            if (sources.Length > MaxPrototypes) { reason = $"{sources.Length} prototypes, more than {MaxPrototypes}"; return null; }
 
             var catalog = new TreeCatalog { Prototypes = new Prototype[sources.Length] };
             for (int i = 0; i < sources.Length; i++)
             {
                 catalog.Prototypes[i] = TryReadPrototype(sources[i].prefab, out reason);
                 if (catalog.Prototypes[i] == null) { reason = $"prototype {i}: {reason}"; return null; }
-                catalog.MaxLods = Mathf.Max(catalog.MaxLods, catalog.Prototypes[i].Lods.Length);
             }
 
             catalog.Place(terrain.GetPosition(), data.size, trees);
@@ -98,7 +101,11 @@ namespace Ironfront.Rendering
 
             LODGroup group = prefab.GetComponent<LODGroup>();
             LOD[] lods = group != null ? group.GetLODs() : null;
-            if (lods == null || lods.Length < 2) { reason = $"'{prefab.name}' has no LODGroup of two or more LODs"; return null; }
+            if (lods == null || lods.Length < 2 || lods.Length > MaxLods)
+            {
+                reason = $"'{prefab.name}' has no LODGroup of 2 to {MaxLods} LODs";
+                return null;
+            }
 
             var prototype = new Prototype
             {
@@ -106,7 +113,6 @@ namespace Ironfront.Rendering
                 Size = group.size,
                 Reference = group.localReferencePoint,
                 Lods = new Part[lods.Length][],
-                SquaredDistances = new float[lods.Length],
             };
             for (int lod = 0; lod < lods.Length; lod++)
             {
@@ -128,34 +134,31 @@ namespace Ironfront.Rendering
                 MeshFilter filter = meshRenderer != null ? meshRenderer.GetComponent<MeshFilter>() : null;
                 Mesh mesh = filter != null ? filter.sharedMesh : null;
                 if (mesh == null) { reason = "a renderer that is not a mesh renderer"; return null; }
+                if (root.worldToLocalMatrix * meshRenderer.transform.localToWorldMatrix != Matrix4x4.identity)
+                {
+                    reason = "a renderer not placed at the prefab's root";
+                    return null;
+                }
 
                 Material[] materials = meshRenderer.sharedMaterials;
-                Matrix4x4 local = root.worldToLocalMatrix * meshRenderer.transform.localToWorldMatrix;
                 for (int submesh = 0; submesh < mesh.subMeshCount; submesh++)
                 {
-                    Material material = materials.Length > 0 ? materials[Mathf.Min(submesh, materials.Length - 1)] : null;
-                    if (material == null || !material.enableInstancing) { reason = "a material that does not instance"; return null; }
-
-                    var shadowed = new RenderParams(material)
+                    Material original = materials.Length > 0 ? materials[Mathf.Min(submesh, materials.Length - 1)] : null;
+                    if (!TreeShaderVariants.TryInstanced(original, out Material material))
                     {
-                        layer = meshRenderer.gameObject.layer,
-                        renderingLayerMask = meshRenderer.renderingLayerMask,
-                        shadowCastingMode = meshRenderer.shadowCastingMode,
-                        receiveShadows = meshRenderer.receiveShadows,
-                        lightProbeUsage = meshRenderer.lightProbeUsage,
-                        reflectionProbeUsage = meshRenderer.reflectionProbeUsage,
-                        motionVectorMode = MotionVectorGenerationMode.ForceNoMotion,
-                    };
-                    RenderParams unshadowed = shadowed;
-                    unshadowed.shadowCastingMode = ShadowCastingMode.Off;
+                        reason = $"material '{(original != null ? original.name : "none")}' has no instanced copy of its shader";
+                        return null;
+                    }
+
                     parts.Add(new Part
                     {
                         Mesh = mesh,
                         Submesh = submesh,
-                        Local = local,
-                        IdentityLocal = local == Matrix4x4.identity,
-                        Shadowed = shadowed,
-                        Unshadowed = unshadowed,
+                        Material = material,
+                        ShadowCasting = meshRenderer.shadowCastingMode,
+                        ReceiveShadows = meshRenderer.receiveShadows,
+                        Layer = meshRenderer.gameObject.layer,
+                        LightProbes = meshRenderer.lightProbeUsage,
                     });
                 }
             }
@@ -168,25 +171,14 @@ namespace Ironfront.Rendering
         {
             int columns = Mathf.Max(1, Mathf.CeilToInt(size.x / CellMetres));
             int rows = Mathf.Max(1, Mathf.CeilToInt(size.z / CellMetres));
-            var cellOf = new int[trees.Length];
-            var counts = new int[columns * rows];
-            for (int i = 0; i < trees.Length; i++)
-            {
-                int column = Mathf.Clamp((int)(trees[i].position.x * columns), 0, columns - 1);
-                int row = Mathf.Clamp((int)(trees[i].position.z * rows), 0, rows - 1);
-                cellOf[i] = row * columns + column;
-                counts[cellOf[i]]++;
-            }
+            Cells = new Cell[columns * rows];
+            var started = new bool[Cells.Length];
 
-            Cells = new Cell[counts.Length];
-            for (int c = 0, start = 0; c < counts.Length; start += counts[c], c++)
-                Cells[c].Start = start;
-
-            Matrices = new Matrix4x4[trees.Length];
+            ObjectToWorld = new Matrix4x4[trees.Length];
             References = new Vector3[trees.Length];
-            Sizes = new float[trees.Length];
+            Radii = new float[trees.Length];
             SquaredScales = new float[trees.Length];
-            PrototypeOf = new int[trees.Length];
+            PrototypeOf = new uint[trees.Length];
             for (int i = 0; i < trees.Length; i++)
             {
                 TreeInstance tree = trees[i];
@@ -196,20 +188,24 @@ namespace Ironfront.Rendering
                     Quaternion.AngleAxis(tree.rotation * Mathf.Rad2Deg, Vector3.up),
                     new Vector3(tree.widthScale, tree.heightScale, tree.widthScale));
                 float scale = Mathf.Max(tree.widthScale, tree.heightScale);
-
-                ref Cell cell = ref Cells[cellOf[i]];
-                int slot = cell.Start + cell.Count;
                 Vector3 reference = placement.MultiplyPoint3x4(prototype.Reference);
                 float treeSize = prototype.Size * scale;
-                var bounds = new Bounds(reference, new Vector3(treeSize, treeSize, treeSize));
-                if (cell.Count == 0) cell.Bounds = bounds; else cell.Bounds.Encapsulate(bounds);
-                cell.Count++;
 
-                Matrices[slot] = placement;
-                References[slot] = reference;
-                Sizes[slot] = treeSize;
-                SquaredScales[slot] = scale * scale;
-                PrototypeOf[slot] = tree.prototypeIndex;
+                ObjectToWorld[i] = placement;
+                References[i] = reference;
+                Radii[i] = treeSize * 0.5f;
+                SquaredScales[i] = scale * scale;
+                PrototypeOf[i] = (uint)tree.prototypeIndex;
+                prototype.Count++;
+                prototype.LargestSquaredScale = Mathf.Max(prototype.LargestSquaredScale, scale * scale);
+
+                int column = Mathf.Clamp((int)(tree.position.x * columns), 0, columns - 1);
+                int row = Mathf.Clamp((int)(tree.position.z * rows), 0, rows - 1);
+                ref Cell cell = ref Cells[row * columns + column];
+                var bounds = new Bounds(reference, new Vector3(treeSize, treeSize, treeSize));
+                if (started[row * columns + column]) cell.Bounds.Encapsulate(bounds); else cell.Bounds = bounds;
+                started[row * columns + column] = true;
+                cell.Prototypes |= 1u << tree.prototypeIndex;
             }
         }
     }

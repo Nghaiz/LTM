@@ -6,8 +6,9 @@ using UnityEngine;
 namespace Ironfront.Rendering.Tests
 {
     /// <summary>
-    /// <see cref="InstancedTreeRenderer"/> draws a terrain's trees on their LODs, shadowed near the
-    /// camera, and the terrain draws none of them meanwhile -- on a terrain of Forest Lake's own pine.
+    /// <see cref="InstancedTreeRenderer"/> keeps a terrain's trees on their LODs, shadowed near the
+    /// camera, culled by the GPU and read back here, and the terrain draws none of them meanwhile --
+    /// on a terrain of Forest Lake's own pine.
     /// </summary>
     /// <remarks>
     /// The camera stands at z = 1000 looking along +z. Pines stand 60 m ahead (LOD 3, inside the
@@ -53,16 +54,17 @@ namespace Ironfront.Rendering.Tests
         }
 
         [Test]
-        public void EveryTreeInViewOrInTheShadowsIsDrawnOnItsLod()
+        public void EveryTreeInViewOrInTheShadowsIsKeptOnItsLod()
         {
             _trees.Frame(_camera);
 
-            Assert.AreEqual(3, _trees.Drawn,
-                "the trees 60 m, 500 m and 1000 m ahead, and only those: not the one under 1% of the view, "
-                + "nor the one behind the camera and past the shadows");
-            Assert.AreEqual(1, _trees.DrawnAtLod[3], "the tree 60 m ahead is not on LOD 3");
-            Assert.AreEqual(2, _trees.DrawnAtLod[4], "the trees 500 m and 1000 m ahead are not on the last LOD");
-            Assert.AreEqual(1, _trees.DrawnShadowed, "only the tree inside the shadow distance casts a shadow");
+            Assert.AreEqual(1, _trees.Kept(0, 3, shadowed: true),
+                "the tree 60 m ahead is not on LOD 3 with its shadow");
+            Assert.AreEqual(2, _trees.Kept(0, 4, shadowed: false),
+                "the trees 500 m and 1000 m ahead are not on the last LOD, unshadowed");
+            Assert.AreEqual(3, KeptInAll(),
+                "a tree under 1% of the view, or behind the camera and past the shadows, was kept");
+            Assert.Greater(_trees.DrawCalls, 0, "nothing was drawn");
         }
 
         [Test]
@@ -79,16 +81,15 @@ namespace Ironfront.Rendering.Tests
         }
 
         [Test]
-        public void ZoomingInDrawsFinerLodsAndFartherTrees()
+        public void ZoomingInKeepsFinerLodsAndFartherTrees()
         {
             _camera.fieldOfView = 10f;
 
             _trees.Frame(_camera);
 
-            Assert.AreEqual(4, _trees.Drawn, "the tree 4000 m ahead, visible through a scope, was not drawn");
-            Assert.AreEqual(1, _trees.DrawnAtLod[0], "the tree 60 m ahead fills a scope and is not on its finest LOD");
-            Assert.GreaterOrEqual(_trees.DrawnAtLod[3], 1, "the tree 500 m ahead, large through a scope, stayed on its last LOD");
-            Assert.AreEqual(3, _trees.DrawnAtLod[3] + _trees.DrawnAtLod[4]);
+            Assert.AreEqual(1, _trees.Kept(0, 0, shadowed: true), "the tree 60 m ahead fills a scope and is not on its finest LOD");
+            Assert.AreEqual(4, KeptInAll(), "the tree 4000 m ahead, visible through a scope, was not kept");
+            Assert.GreaterOrEqual(_trees.Kept(0, 3, shadowed: false), 1, "the tree 500 m ahead, large through a scope, stayed on its last LOD");
         }
 
         [Test]
@@ -101,7 +102,7 @@ namespace Ironfront.Rendering.Tests
 
             Assert.IsFalse(_trees.IsHolding);
             Assert.AreEqual(bias, _terrain.treeLODBiasMultiplier, "the trees are drawn by neither");
-            Assert.AreEqual(0, _trees.Drawn);
+            Assert.AreEqual(0, _trees.DrawCalls);
         }
 
         [Test]
@@ -111,7 +112,7 @@ namespace Ironfront.Rendering.Tests
 
             _trees.Frame(_camera);
 
-            Assert.AreEqual(0, _trees.Drawn, "trees were drawn with vegetation switched off");
+            Assert.AreEqual(0, _trees.DrawCalls, "trees were drawn with vegetation switched off");
             Assert.IsFalse(_trees.IsHolding);
         }
 
@@ -146,6 +147,14 @@ namespace Ironfront.Rendering.Tests
                 Object.DestroyImmediate(bare.gameObject);
                 Object.DestroyImmediate(empty);
             }
+        }
+
+        private int KeptInAll()
+        {
+            int kept = 0;
+            for (int lod = 0; lod < 5; lod++)
+                kept += _trees.Kept(0, lod, shadowed: false) + _trees.Kept(0, lod, shadowed: true);
+            return kept;
         }
 
         private static TreeInstance Tree(float z)

@@ -3,6 +3,7 @@
     "rootNamespace": "Ironfront.Rendering.Tests",
     "references": [
         "Ironfront.Rendering",
+        "Ironfront.Rendering.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
