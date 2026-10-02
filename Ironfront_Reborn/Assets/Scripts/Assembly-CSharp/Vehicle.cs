@@ -723,6 +723,12 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 		NetworkDriven = value;
 
+		// Back under local physics: its wheels carry it from the very next step.
+		if (!value)
+		{
+			ApplyWheelSimulation(simulate: true);
+		}
+
 		if (rigidbody != null)
 		{
 			rigidbody.isKinematic = value;
@@ -736,6 +742,40 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 			$"[net] vehicle '{name}' has no Rigidbody, so it cannot be handed to the replication "
 			+ "layer. Its rendered copy will run local physics against every incoming snapshot "
 			+ "and drift, while the wire reports no fault at all.");
+	}
+
+	private WheelCollider[] simulatedWheels;
+
+	private bool wheelsResting;
+
+	/// <summary>
+	/// Whether this vehicle's wheels are simulated this frame, switching them off or on to match
+	/// (<see cref="Ironfront.Net.Unity.RemoteWheelSimulation"/>). Callers skip the wheel visuals
+	/// when it is false: a resting wheel has no pose to read.
+	/// </summary>
+	protected bool WheelsSimulated()
+	{
+		bool simulate = Ironfront.Net.Unity.RemoteWheelSimulation.IsSimulated(
+			NetworkDriven, base.transform.position, Camera.main);
+		ApplyWheelSimulation(simulate);
+		return simulate;
+	}
+
+	private void ApplyWheelSimulation(bool simulate)
+	{
+		if (simulate != wheelsResting)
+		{
+			return;
+		}
+		wheelsResting = !simulate;
+		simulatedWheels ??= GetComponentsInChildren<WheelCollider>(includeInactive: true);
+		foreach (WheelCollider wheel in simulatedWheels)
+		{
+			if (wheel != null)
+			{
+				wheel.enabled = simulate;
+			}
+		}
 	}
 
 	/// <summary>
