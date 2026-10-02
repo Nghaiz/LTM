@@ -1,5 +1,6 @@
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Client.Tests
@@ -32,6 +33,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             if (_host != null) Object.DestroyImmediate(_host);
             if (_wall != null) Object.DestroyImmediate(_wall);
             Physics.autoSyncTransforms = _autoSyncBefore;
+            LeavePhysicsSettingsClean();
             NetContext.Clear();
         }
 
@@ -76,6 +78,15 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.IsTrue(Physics.autoSyncTransforms, "the server's simulation was written against auto-sync");
             Assert.IsFalse(sync.enabled);
             Assert.IsFalse(sync.IsEngaged);
+        }
+
+        // Physics.autoSyncTransforms is a project setting: writing it marks DynamicsManager.asset
+        // dirty, and the Editor then re-saves that file on exit in its current format, a diff
+        // nobody made. The value is put back above, so there is nothing to save.
+        private static void LeavePhysicsSettingsClean()
+        {
+            foreach (Object settings in AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/DynamicsManager.asset"))
+                EditorUtility.ClearDirty(settings);
         }
 
         private ClientPhysicsSync NewSync()
