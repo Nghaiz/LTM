@@ -42,6 +42,7 @@ public class ScopedWeapon : Weapon
 		}
 		if (aiming)
 		{
+			EnsureBlackout();
 			showingScope = false;
 			blackoutAction.Start();
 			return;
@@ -70,19 +71,35 @@ public class ScopedWeapon : Weapon
 		}
 	}
 
-	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
-	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
-	// lines in one 100-bot match (B4, 2026-09-30).
-#if !UNITY_SERVER
-	private void OnGUI()
+	/// <summary>How opaque the blackout is now: zero unless the scope is coming up in first person.</summary>
+	internal float BlackoutAlpha()
 	{
 		if (HasActiveAnimator() && !blackoutAction.TrueDone() && showingScope)
 		{
-			Color black = Color.black;
-			black.a = Mathf.Clamp01(4f - 4f * blackoutAction.Ratio());
-			GUI.color = black;
-			GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), blackoutTexture);
+			return Mathf.Clamp01(4f - 4f * blackoutAction.Ratio());
 		}
+		return 0f;
 	}
+
+	internal Texture2D BlackoutTexture => blackoutTexture;
+
+	// The blackout's IMGUI draw lives on a component of its own, added here, on the first-person
+	// weapon, the first time it aims: an OnGUI on this class ran on every bot's rifle (ScopeBlackout).
+	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
+	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402 lines in
+	// one 100-bot match (B4, 2026-09-30).
+	private void EnsureBlackout()
+	{
+#if !UNITY_SERVER
+		if (blackout == null)
+		{
+			blackout = base.gameObject.AddComponent<ScopeBlackout>();
+			blackout.weapon = this;
+		}
+#endif
+	}
+
+#if !UNITY_SERVER
+	private ScopeBlackout blackout;
 #endif
 }
