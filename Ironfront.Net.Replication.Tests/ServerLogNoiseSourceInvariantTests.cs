@@ -29,7 +29,7 @@ namespace Ironfront.Net.Replication.Tests
         /// </remarks>
         [Theory]
         [InlineData("AiActorController.cs")]
-        [InlineData("ScopedWeapon.cs")]
+        [InlineData("ScopeBlackout.cs")]
         [InlineData("Vehicle.cs")]
         [InlineData("AstarPath.cs")]
         public void OnGuiIsNotCompiledIntoTheServer(string file)
