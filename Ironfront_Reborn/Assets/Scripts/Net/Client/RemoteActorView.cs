@@ -209,6 +209,12 @@ namespace Ironfront.Net.Unity.Client
         public bool IsRagdollPosed => _ragdoll != null && _ragdoll.IsActive;
 
         /// <summary>
+        /// Whether a camera drew this body last frame, its shadow included. True when there is no
+        /// renderer to ask, so nothing is skipped for a body whose visibility is unknown.
+        /// </summary>
+        public bool IsSeen => _teamRenderer == null || _teamRenderer.isVisible;
+
+        /// <summary>
         /// How far the head bone stands over this body's root in the pose last drawn: what a swimmer
         /// is placed by (<see cref="SwimPresentation.RootHeight"/>).
         /// </summary>
