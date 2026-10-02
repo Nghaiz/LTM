@@ -74,6 +74,11 @@ namespace Ironfront.Net.Unity.Client
         private readonly Dictionary<ushort, Transform> _seatedIn =
             new Dictionary<ushort, Transform>(ProtocolConstants.MAX_ACTORS);
 
+        // How far the ground under each standing body sat from its replicated feet at the last
+        // probe, NaN when there was none within reach. See TryFooting.
+        private readonly Dictionary<ushort, float> _footing =
+            new Dictionary<ushort, float>(ProtocolConstants.MAX_ACTORS);
+
         // Each vehicle's crew team this frame, rebuilt by ApplyVehicleMarkers from _seatedIn.
         private readonly Dictionary<Transform, byte> _crewTeam =
             new Dictionary<Transform, byte>(ProtocolConstants.MAX_VEHICLES);
@@ -238,7 +243,7 @@ namespace Ironfront.Net.Unity.Client
                     }
                     // On the ground, with the soles on it rather than the origin: the idle pose
                     // stands its feet above the body's origin (RemoteActorView.SoleLift).
-                    else if (StandsOnGround(in sample.State, human) && TryGroundUnder(p.X, y, p.Z, out float ground))
+                    else if (StandsOnGround(in sample.State, human) && TryFooting(_footing, pair.Key, lying == null || lying.IsSeen, p.X, y, p.Z, out float ground))
                         y = ground - (lying != null ? lying.SoleLift : RemoteActorView.IdleSoleLiftMetres);
                     pair.Value.SetPositionAndRotation(new Vector3(p.X, y, p.Z), facing);
                 }
@@ -366,6 +371,30 @@ namespace Ironfront.Net.Unity.Client
             }
             groundY = feetY;
             return false;
+        }
+
+        /// <summary>
+        /// The ground under a standing body's feet: probed for a body a camera can see, and for one
+        /// nobody can see, kept at the rise above its replicated feet the last probe found.
+        /// </summary>
+        /// <remarks>
+        /// One raycast a standing body a frame was about 44 a frame in a 100-bot match, each able to
+        /// resynchronise every moved transform first (auto-sync), for bodies mostly out of view. The
+        /// kept rise is what a probe would find on the same ground, so a body walking back into
+        /// view stands where it would have stood; it is a skin width or two of height, nothing more.
+        /// </remarks>
+        internal static bool TryFooting(
+            Dictionary<ushort, float> footing, ushort actorId, bool seen, float x, float feetY, float z, out float ground)
+        {
+            if (!seen && footing.TryGetValue(actorId, out float rise))
+            {
+                ground = feetY + rise;
+                return !float.IsNaN(rise);
+            }
+
+            bool found = TryGroundUnder(x, feetY, z, out ground);
+            footing[actorId] = found ? ground - feetY : float.NaN;
+            return found;
         }
 
         private void OnSpawn(SpawnActorMessage message)
@@ -653,6 +682,7 @@ namespace Ironfront.Net.Unity.Client
             _views.Remove(message.ActorId);
             _centrePivotActors.Remove(message.ActorId);
             _seatedIn.Remove(message.ActorId);
+            _footing.Remove(message.ActorId);
 
             // BEFORE the transform goes back to the pool. The marker is keyed by that
             // transform, and the pool hands the same one to the NEXT actor -- so a marker left
