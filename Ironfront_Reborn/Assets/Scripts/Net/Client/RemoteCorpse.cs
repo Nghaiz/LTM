@@ -333,7 +333,7 @@ namespace Ironfront.Net.Unity.Client
                 // Frozen with the body when it settled (a sinking body never gets here).
                 _weapon.isKinematic = false;
                 _weapon.detectCollisions = true;
-                _weapon.interpolation = RigidbodyInterpolation.Interpolate;
+                _weapon.interpolation = RemoteRagdoll.InterpolationAt(_weapon.position, Camera.main);
                 _weapon.AddExplosionForce(force * _weapon.mass, centre, radius, 1f, ForceMode.Impulse);
             }
         }
@@ -479,7 +479,7 @@ namespace Ironfront.Net.Unity.Client
             box.size = Vector3.Max(local.size, new Vector3(0.05f, 0.05f, 0.05f));
             Rigidbody body = mount.gameObject.AddComponent<Rigidbody>();
             body.mass = WeaponMass;
-            body.interpolation = RigidbodyInterpolation.Interpolate;
+            body.interpolation = RemoteRagdoll.InterpolationAt(mount.position, Camera.main);
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             return body;
         }
