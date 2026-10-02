@@ -3,9 +3,9 @@
   "readThisFirst": "`nearestLineInOurs` is the most similar line ANYWHERE in our file, not the corresponding line. It is a navigation hint. Two independent readers of this data hit the same trap: a renamed local shifts which line scores highest, so the match lands on a sibling line in another method and fabricates a structural divergence that does not exist -- an inverted condition, a changed loop, a wrong constant. Below a similarity of ~0.8, go read `recoveredMember` in our tree and find the real counterpart. Grade the method, not the row.",
   "scope": {
     "commonFiles": 322,
-    "filesWithCandidates": 80,
-    "candidates": 713,
-    "outrightDeletions": 145,
+    "filesWithCandidates": 82,
+    "candidates": 720,
+    "outrightDeletions": 150,
     "skippedAsP24": [
       "AstarPath.cs",
       "EuclideanEmbedding.cs",
@@ -1439,13 +1439,6 @@
           "similarity": 0.93
         },
         {
-          "line": 372,
-          "recoveredMember": "Update",
-          "recovered": "inWater = WaterLevel.InWater(position);",
-          "nearestLineInOurs": ": WaterLevel.InWater(position);",
-          "similarity": 0.86
-        },
-        {
           "line": 377,
           "recoveredMember": "Update",
           "recovered": "if (inWater && !fallenOver)",
@@ -1465,6 +1458,13 @@
           "recovered": "activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection());",
           "nearestLineInOurs": "activeWeapon.Fire(AimDirection(), controller.UseMuzzleDirection());",
           "similarity": 0.88
+        },
+        {
+          "line": 528,
+          "recoveredMember": "UpdateMovement",
+          "recovered": "Vector3 vector = controller.Velocity();",
+          "nearestLineInOurs": "Vector3 vector = WadingVelocity(controller.Velocity());",
+          "similarity": 0.83
         },
         {
           "line": 578,
@@ -2299,8 +2299,8 @@
     "ActorBlip.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/ActorBlip.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActorBlip.cs",
-      "survivors": 29,
-      "outrightDeletions": 2,
+      "survivors": 30,
+      "outrightDeletions": 5,
       "candidates": [
         {
           "line": 6,
@@ -2376,15 +2376,15 @@
           "line": 42,
           "recoveredMember": "SetActor",
           "recovered": "sightCone.rectTransform.anchorMin = vector;",
-          "nearestLineInOurs": "rectTransform.anchorMin = anchor;",
-          "similarity": 0.79
+          "nearestLineInOurs": "image.rectTransform.anchoredPosition = Vector2.zero;",
+          "similarity": 0.74
         },
         {
           "line": 43,
           "recoveredMember": "SetActor",
           "recovered": "sightCone.rectTransform.anchorMax = vector;",
-          "nearestLineInOurs": "rectTransform.anchorMax = anchor;",
-          "similarity": 0.79
+          "nearestLineInOurs": "image.rectTransform.anchoredPosition = Vector2.zero;",
+          "similarity": 0.69
         },
         {
           "line": 44,
@@ -2418,8 +2418,8 @@
           "line": 55,
           "recoveredMember": "LateUpdate",
           "recovered": "rectTransform.anchorMax = anchorMax;",
-          "nearestLineInOurs": "rectTransform.anchorMax = anchor;",
-          "similarity": 0.96
+          "nearestLineInOurs": "image.rectTransform.anchoredPosition = Vector2.zero;",
+          "similarity": 0.61
         },
         {
           "line": 56,
@@ -2432,8 +2432,8 @@
           "line": 58,
           "recoveredMember": "LateUpdate",
           "recovered": "rectTransform.rotation = Quaternion.Euler(0f, 0f, 0f - actor.seat.vehicle.transform.eulerAngles.y);",
-          "nearestLineInOurs": "rectTransform.rotation = Quaternion.Euler(0f, 0f, 0f - heading);",
-          "similarity": 0.75
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
           "line": 59,
@@ -2446,15 +2446,15 @@
           "line": 60,
           "recoveredMember": "LateUpdate",
           "recovered": "rectTransform.localScale = new Vector3(1.5f, 1.5f, 1.5f);",
-          "nearestLineInOurs": "rectTransform.localScale = Vector3.one;",
-          "similarity": 0.77
+          "nearestLineInOurs": "image.rectTransform.localScale = Vector3.one;",
+          "similarity": 0.73
         },
         {
           "line": 64,
           "recoveredMember": "LateUpdate",
           "recovered": "rectTransform.rotation = Quaternion.Euler(0f, 0f, 0f - Quaternion.LookRotation(actor.controller.FacingDirection()).eulerAngles.y);",
-          "nearestLineInOurs": "rectTransform.rotation = Quaternion.Euler(0f, 0f, 0f - heading);",
-          "similarity": 0.62
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
           "line": 65,
@@ -2462,6 +2462,13 @@
           "recovered": "image.texture = infantryBlip;",
           "nearestLineInOurs": "image.texture = selfBlip;",
           "similarity": 0.81
+        },
+        {
+          "line": 66,
+          "recoveredMember": "LateUpdate",
+          "recovered": "rectTransform.localScale = Vector3.one;",
+          "nearestLineInOurs": "image.rectTransform.localScale = Vector3.one;",
+          "similarity": 0.93
         },
         {
           "line": 68,
@@ -2481,8 +2488,8 @@
           "line": 71,
           "recoveredMember": "LateUpdate",
           "recovered": "rectTransform2.rotation = Quaternion.Euler(0f, 0f, 0f - Camera.main.transform.eulerAngles.y);",
-          "nearestLineInOurs": "rectTransform.rotation = Quaternion.Euler(0f, 0f, 0f - heading);",
-          "similarity": 0.77
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
           "line": 72,
@@ -2693,7 +2700,7 @@
     "CapturePoint.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/CapturePoint.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/CapturePoint.cs",
-      "survivors": 20,
+      "survivors": 21,
       "outrightDeletions": 2,
       "candidates": [
         {
@@ -2702,6 +2709,13 @@
           "recovered": "private const float CAPTURE_RATE_PER_PERSON = 0.05f;",
           "nearestLineInOurs": "private const float UPDATE_RATE = 1f;",
           "similarity": 0.74
+        },
+        {
+          "line": 63,
+          "recoveredMember": "Awake",
+          "recovered": "if (QualitySettings.GetQualityLevel() >= 5)",
+          "nearestLineInOurs": "if (QualitySettings.GetQualityLevel() >= Ironfront.Net.Unity.GraphicsPresetRules.FromLegacyLevel(5))",
+          "similarity": 0.6
         },
         {
           "line": 119,
@@ -4485,6 +4499,49 @@
         }
       ]
     },
+    "DecalManager.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/DecalManager.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/DecalManager.cs",
+      "survivors": 5,
+      "outrightDeletions": 2,
+      "candidates": [
+        {
+          "line": 11,
+          "recoveredMember": null,
+          "recovered": "BloodRed",
+          "nearestLineInOurs": "BloodRed = 2,",
+          "similarity": 0.94
+        },
+        {
+          "line": 74,
+          "recoveredMember": "Awake",
+          "recovered": "case 0:",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 75,
+          "recoveredMember": "Awake",
+          "recovered": "maxVerts = 800;",
+          "nearestLineInOurs": "maxVerts = 8000;",
+          "similarity": 0.97
+        },
+        {
+          "line": 77,
+          "recoveredMember": "Awake",
+          "recovered": "case 1:",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 168,
+          "recoveredMember": "Update",
+          "recovered": "decalMeshData[(DecalType)value].UpdateMesh();",
+          "nearestLineInOurs": "decalMeshData.Add((DecalType)value, meshData);",
+          "similarity": 0.75
+        }
+      ]
+    },
     "GridNode.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/GridNode.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/GridNode.cs",
@@ -5178,28 +5235,6 @@
         }
       ]
     },
-    "DecalManager.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/DecalManager.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/DecalManager.cs",
-      "survivors": 2,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 11,
-          "recoveredMember": null,
-          "recovered": "BloodRed",
-          "nearestLineInOurs": "BloodRed = 2,",
-          "similarity": 0.94
-        },
-        {
-          "line": 168,
-          "recoveredMember": "Update",
-          "recovered": "decalMeshData[(DecalType)value].UpdateMesh();",
-          "nearestLineInOurs": "decalMeshData.Add((DecalType)value, meshData);",
-          "similarity": 0.75
-        }
-      ]
-    },
     "HeadingGuide.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/HeadingGuide.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/HeadingGuide.cs",
@@ -5548,6 +5583,21 @@
         }
       ]
     },
+    "OptionsUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/OptionsUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/OptionsUi.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 172,
+          "recoveredMember": "IsFastQuality",
+          "recovered": "return QualitySettings.GetQualityLevel() <= 1;",
+          "nearestLineInOurs": "return QualitySettings.GetQualityLevel() <= Ironfront.Net.Unity.GraphicsPresetRules.Low;",
+          "similarity": 0.67
+        }
+      ]
+    },
     "PathNode.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/PathNode.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/PathNode.cs",
@@ -5560,6 +5610,21 @@
           "recovered": "return flags & 0xFFFFFFF;",
           "nearestLineInOurs": "return flags & 0xFFFFFFFu;",
           "similarity": 0.98
+        }
+      ]
+    },
+    "QualitySwitcher.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/QualitySwitcher.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/QualitySwitcher.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 17,
+          "recoveredMember": "Awake",
+          "recovered": "bool flag = QualitySettings.GetQualityLevel() >= hqLevel;",
+          "nearestLineInOurs": "bool flag = QualitySettings.GetQualityLevel() >= Ironfront.Net.Unity.GraphicsPresetRules.FromLegacyLevel(hqLevel);",
+          "similarity": 0.67
         }
       ]
     },

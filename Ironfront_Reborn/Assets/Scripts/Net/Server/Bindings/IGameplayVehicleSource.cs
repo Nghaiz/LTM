@@ -60,6 +60,12 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Maps to <c>Vehicle.crashSkipsBurn</c>. A crash kills such a vehicle outright.</summary>
         bool CrashSkipsBurn { get; }
 
+        /// <summary>
+        /// Maps to <c>Vehicle.IsFlooded</c>: the water has drowned it, and it dies outright rather
+        /// than burning (2026-10-02).
+        /// </summary>
+        bool IsFlooded => false;
+
         /// <summary>Maps to <c>Vehicle.burning</c>.</summary>
         bool IsBurning { get; }
 

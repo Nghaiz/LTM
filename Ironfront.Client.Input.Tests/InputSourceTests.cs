@@ -14,7 +14,7 @@ namespace Ironfront.Client.Input.Tests
     /// bit produces a client whose reload key aims, on the server only, and nothing anywhere
     /// says so. Every other risk in step 02 is a transcription risk inside
     /// <c>FpsActorController</c>, which no test can reach and which <c>InputShadowCompare</c>
-    /// covers at runtime instead.
+    /// covered at runtime instead, until six v3.1.1 sessions came back clean and it was removed.
     /// </para>
     /// <para>
     /// The bit numbers are never written down here. Asserting <c>Fire == 1 &lt;&lt; 0</c> would

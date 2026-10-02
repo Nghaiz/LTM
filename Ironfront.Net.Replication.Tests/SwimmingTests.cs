@@ -176,8 +176,10 @@ namespace Ironfront.Net.Replication.Tests
 
             Vec3 motion = MovementCore.Step(ref state, in forward, Dt);
 
+            // Walking, held to the bottom -- at the wading speed for a metre of water since
+            // 2026-10-02 (WadingTests), which is still a walk and not a swim.
             Assert.Equal(-MovementCore.StickToGroundForce * Dt, motion.Y, 4);
-            Assert.Equal(MovementCore.WalkSpeed * Dt, motion.Z, 4);
+            Assert.Equal(MovementCore.WalkSpeed * MovementCore.WadeSpeedFactor(1f) * Dt, motion.Z, 4);
         }
     }
 }

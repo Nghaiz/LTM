@@ -1,0 +1,86 @@
+// Culling and LOD for InstancedTreeRenderer, one thread a tree.
+//
+// A tree gets the first LOD whose squared distance (for a scale of one, times its own squared
+// scale) it is within; past the last it is culled. Within the shadow range it is kept whether or
+// not it is in view, for the shadow it throws into view; past it, it must be inside the six view
+// planes. Each kept tree is appended to its bucket, (prototype, LOD, shadowed), and WriteArgs
+// copies every bucket's count into the instance count of the draws that read it.
+
+#pragma kernel Clear
+#pragma kernel Cull
+#pragma kernel WriteArgs
+
+#define MAX_LODS 8
+
+struct Tree
+{
+    float3 reference;
+    float squaredScale;
+    float radius;
+    uint prototype;
+};
+
+StructuredBuffer<Tree> _Trees;
+StructuredBuffer<float> _LodSquaredDistances;
+StructuredBuffer<uint> _LodCounts;
+StructuredBuffer<uint> _BucketStarts;
+RWStructuredBuffer<uint> _BucketCounts;
+RWStructuredBuffer<uint> _Visible;
+StructuredBuffer<uint> _CommandBuckets;
+RWStructuredBuffer<uint> _Args;
+
+uint _TreeCount;
+uint _BucketCount;
+uint _CommandCount;
+float3 _Eye;
+float _ShadowRange2;
+float4 _Planes[6];
+
+[numthreads(64, 1, 1)]
+void Clear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _BucketCount) _BucketCounts[id.x] = 0;
+}
+
+[numthreads(64, 1, 1)]
+void Cull(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _TreeCount) return;
+
+    Tree tree = _Trees[id.x];
+    float3 offset = tree.reference - _Eye;
+    float distance2 = dot(offset, offset);
+
+    uint lodCount = _LodCounts[tree.prototype];
+    int lod = -1;
+    for (uint l = 0; l < lodCount; l++)
+    {
+        if (distance2 <= _LodSquaredDistances[tree.prototype * MAX_LODS + l] * tree.squaredScale)
+        {
+            lod = (int)l;
+            break;
+        }
+    }
+    if (lod < 0) return;
+
+    uint shadowed = distance2 <= _ShadowRange2 ? 1 : 0;
+    if (shadowed == 0)
+    {
+        [unroll]
+        for (int p = 0; p < 6; p++)
+        {
+            if (dot(_Planes[p].xyz, tree.reference) + _Planes[p].w < -tree.radius) return;
+        }
+    }
+
+    uint bucket = (tree.prototype * MAX_LODS + (uint)lod) * 2 + shadowed;
+    uint slot;
+    InterlockedAdd(_BucketCounts[bucket], 1, slot);
+    _Visible[_BucketStarts[bucket] + slot] = id.x;
+}
+
+[numthreads(64, 1, 1)]
+void WriteArgs(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _CommandCount) _Args[id.x * 5 + 1] = _BucketCounts[_CommandBuckets[id.x]];
+}

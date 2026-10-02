@@ -71,6 +71,24 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void ADespawnedVehicleGivesTheLocalSeatUpBeforeItIsDestroyed()
+        {
+            // v3.1.1 live, 2026-10-01: the round reset despawned the vehicle the local player was
+            // driving, RemoteVehicleRegistry destroyed it, and the rig -- a child of the seat --
+            // went with it: 17,282 NullReferenceExceptions in 24 s until the player quit. The
+            // stage must hear the despawn itself; its snapshot check lets go a second too late.
+            SyntaxNode stage = Parse("Net/Client/ClientVehicleStage.cs");
+
+            Assert.Contains(Methods(stage, "OnEnable").Single().DescendantNodes().OfType<AssignmentExpressionSyntax>(),
+                a => Normalized(a) == "_client.Router.OnVehicleDespawn+=OnVehicleDespawn");
+            Assert.Contains(Methods(stage, "OnDisable").Single().DescendantNodes().OfType<AssignmentExpressionSyntax>(),
+                a => Normalized(a) == "_client.Router.OnVehicleDespawn-=OnVehicleDespawn");
+
+            MethodDeclarationSyntax despawn = Methods(stage, "OnVehicleDespawn").Single();
+            Assert.Single(Invocations(despawn, "LeaveLocalSeat"));
+        }
+
+        [Fact]
         public void AWreckOnAClientLeavesEveryOccupantToTheServer()
         {
             // The snapshot that flags a wreck Dead runs Vehicle.Die on a client, and it only takes
@@ -84,9 +102,11 @@ namespace Ironfront.Net.Replication.Tests
                 .Single(s => Normalized(s.Condition).Contains("NetContext.IsClient", StringComparison.Ordinal));
             Assert.Equal("Ironfront.Net.Unity.NetContext.IsClient", Normalized(clientBranch.Condition));
 
+            // An enclosed seat's crew is felled by S_DEATH -- except from a hull the water drowned,
+            // which kills nobody (Vehicle.IsFlooded, 2026-10-02), so that crew swims away armed.
             List<InvocationExpressionSyntax> leaves = Invocations(clientBranch.Statement, "LeaveSeat");
             Assert.Single(leaves);
-            Assert.Equal("occupant.LeaveSeat(drawWeapon:!seat.enclosed)", Normalized(leaves[0]));
+            Assert.Equal("occupant.LeaveSeat(drawWeapon:!seat.enclosed||drowned)", Normalized(leaves[0]));
             Assert.Empty(Invocations(clientBranch.Statement, "Damage"));
 
             // The server and the offline game keep the original's two outcomes.

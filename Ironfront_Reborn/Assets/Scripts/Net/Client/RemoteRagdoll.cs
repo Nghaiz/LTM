@@ -32,6 +32,30 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>TagManager's "Ragdoll" layer.</summary>
         private const int RagdollLayer = 10;
 
+        /// <summary>How near the camera a ragdoll's parts are drawn interpolated.</summary>
+        internal const float InterpolateWithinMetres = 30f;
+
+        /// <summary>
+        /// Interpolation for a part at <paramref name="at"/>: on near the camera, off past
+        /// <see cref="InterpolateWithinMetres"/>.
+        /// </summary>
+        /// <remarks>
+        /// An interpolated body writes its transform every frame, and with auto-sync on every
+        /// raycast after that pushes the written transforms back into PhysX: in a 100-bot Forest
+        /// Lake match each awake body cost about 0.04 ms a frame in scripts on top of its physics
+        /// step (fit over 365 windows of <c>[loop]</c> and <c>[physics]</c>, 2026-10-02), 146 of
+        /// them at the busiest. Interpolation only shows where a body crosses enough pixels for a
+        /// 60 Hz step to read as a jump, which is close to the camera; most bodies in such a match
+        /// fall far from it.
+        /// </remarks>
+        internal static RigidbodyInterpolation InterpolationAt(Vector3 at, Camera viewer)
+        {
+            if (viewer == null) return RigidbodyInterpolation.None;
+            return (at - viewer.transform.position).sqrMagnitude <= InterpolateWithinMetres * InterpolateWithinMetres
+                ? RigidbodyInterpolation.Interpolate
+                : RigidbodyInterpolation.None;
+        }
+
         private const HumanBodyBones None = HumanBodyBones.LastBone;
 
         private readonly struct PartSpec
@@ -161,6 +185,7 @@ namespace Ironfront.Net.Unity.Client
         {
             if (IsActive) return;
             IsActive = true;
+            _fellAt = float.NaN;
 
             if (_animator != null) _animator.enabled = false;
             _crumpleSeconds = Mathf.Max(0f, crumpleSeconds);
@@ -223,6 +248,7 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!IsActive || impulse.sqrMagnitude <= 0f) return;
 
+            Rouse();
             Rigidbody target = _bodies[0];
             for (int i = 0; i < Specs.Length; i++)
             {
@@ -238,6 +264,7 @@ namespace Ironfront.Net.Unity.Client
         public void AddExplosionForce(float force, Vector3 centre, float radius, float upwards)
         {
             if (!IsActive) return;
+            Rouse();
             for (int i = 0; i < _bodies.Length; i++)
             {
                 Rigidbody body = _bodies[i];
@@ -261,6 +288,107 @@ namespace Ironfront.Net.Unity.Client
                     if (body.linearVelocity.sqrMagnitude > 0.04f) return false;
                 }
                 return true;
+            }
+        }
+
+        /// <summary>How many bodies the ragdoll is built from.</summary>
+        public static int PartCount => Specs.Length;
+
+        /// <summary>Writes where every part is now into the first <see cref="PartCount"/> slots of <paramref name="into"/>.</summary>
+        public void SamplePositions(Vector3[] into)
+        {
+            for (int i = 0; i < _bodies.Length; i++)
+            {
+                into[i] = _bodies[i] != null ? _bodies[i].position : Vector3.zero;
+            }
+        }
+
+        /// <summary>
+        /// The squared distance the part that moved most has gone since <see cref="SamplePositions"/>
+        /// wrote <paramref name="from"/>.
+        /// </summary>
+        public float FarthestMoveSqr(Vector3[] from)
+        {
+            float farthest = 0f;
+            for (int i = 0; i < _bodies.Length; i++)
+            {
+                if (_bodies[i] == null) continue;
+                farthest = Mathf.Max(farthest, (_bodies[i].position - from[i]).sqrMagnitude);
+            }
+            return farthest;
+        }
+
+        /// <summary>Whether every part is asleep (or frozen): what <see cref="Settle"/> leaves.</summary>
+        public bool IsAsleep
+        {
+            get
+            {
+                if (!IsActive) return false;
+                for (int i = 0; i < _bodies.Length; i++)
+                {
+                    Rigidbody body = _bodies[i];
+                    if (body == null || body.isKinematic) continue;
+                    if (!body.IsSleeping()) return false;
+                }
+                return true;
+            }
+        }
+
+        /// <summary>Whether <see cref="Settle"/> has frozen the body and nothing has thrown it since.</summary>
+        public bool IsSettled { get; private set; }
+
+        /// <summary>
+        /// Freezes a body that has stopped moving where it lies, out of the simulation, until a
+        /// blast throws it again.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why.</b> A corpse lies on the field for <see cref="RemoteCorpseDirector.LingerSeconds"/>
+        /// as eleven interpolated bodies held together by projected joints, and a ragdoll on uneven
+        /// ground never gets every part under PhysX's sleep threshold by itself. A 100-bot Forest
+        /// Lake match had up to 200 corpse bodies awake at once, none of them visibly moving, and
+        /// every awake body costs twice: about 0.014 ms in each physics step, and about 0.04 ms a
+        /// frame in scripts, where its interpolated transform makes the next raycast resynchronise
+        /// it (fit over 365 five-second windows of <c>[loop]</c> and <c>[physics]</c> lines, release
+        /// player, 2026-10-02).
+        /// </para>
+        /// <para>
+        /// <b>Frozen, not asleep.</b> Put to sleep, a settled body woke the moment anything awake
+        /// touched it, and bodies fall in heaps where the fighting is: in the same match 144 of 260
+        /// corpse bodies were awake again three minutes in. Frozen, it costs nothing and touches
+        /// nothing -- the vehicle this client drives passes through it as it does on the server,
+        /// which has no client corpses to hit, and a body that falls later lies down through it.
+        /// </para>
+        /// </remarks>
+        public void Settle()
+        {
+            for (int i = 0; i < _bodies.Length; i++)
+            {
+                Rigidbody body = _bodies[i];
+                if (body == null || body.isKinematic) continue;
+                body.interpolation = RigidbodyInterpolation.None;
+                body.isKinematic = true;
+                body.detectCollisions = false;
+            }
+            IsSettled = true;
+        }
+
+        // A settled body is about to be thrown: back into the simulation, smoothed again. Nothing
+        // for a body that was never settled -- a live one knocked over, or a corpse sinking.
+        private void Rouse()
+        {
+            if (!IsSettled) return;
+            IsSettled = false;
+            // A live body thrown again, or seen again, lands again before it may be frozen.
+            _fellAt = float.NaN;
+            RigidbodyInterpolation smoothing = InterpolationAt(_bones[0].position, Camera.main);
+            for (int i = 0; i < _bodies.Length; i++)
+            {
+                Rigidbody body = _bodies[i];
+                if (body == null) continue;
+                body.isKinematic = false;
+                body.detectCollisions = true;
+                body.interpolation = smoothing;
             }
         }
 
@@ -313,6 +441,18 @@ namespace Ironfront.Net.Unity.Client
             if (hips == null) return;
 
             Vector3 gap = pelvis - hips.position;
+            if (IsSettled)
+            {
+                // Frozen (SimulateWhereSeen): carried after the pelvis whole, as the snap below
+                // carries a live body, once it has drifted far enough to be worth a write.
+                if (gap.sqrMagnitude <= FrozenFollowMetres * FrozenFollowMetres) return;
+                for (int i = 0; i < _bodies.Length; i++)
+                {
+                    if (_bodies[i] != null) _bodies[i].position += gap;
+                }
+                return;
+            }
+
             if (gap.sqrMagnitude > SnapMetres * SnapMetres)
             {
                 // Every body by the same offset, so the joints keep the shape they have.
@@ -327,6 +467,52 @@ namespace Ironfront.Net.Unity.Client
             }
 
             hips.linearVelocity = Vector3.ClampMagnitude(gap / SteerSeconds, MaxSteerSpeed);
+        }
+
+        /// <summary>How near the camera a knocked-over body keeps simulating once it has landed.</summary>
+        internal const float SimulateWithinMetres = 60f;
+
+        /// <summary>How long a knocked-over body simulates before it may be frozen far from the camera.</summary>
+        internal const float LandSeconds = 1.5f;
+
+        /// <summary>How far the pelvis moves from a frozen body before the body is carried after it.</summary>
+        internal const float FrozenFollowMetres = 0.5f;
+
+        // When SimulateWhereSeen first saw this fall; NaN until then.
+        private float _fellAt = float.NaN;
+
+        /// <summary>
+        /// Freezes a knocked-over body that has landed far from the camera, and gives it back to the
+        /// simulation as soon as the camera is near again. A live body only: a corpse settles by its
+        /// own rule (<see cref="RemoteCorpse.TickSettle"/>).
+        /// </summary>
+        /// <param name="nearCamera">Within <see cref="SimulateWithinMetres"/> of the camera.</param>
+        /// <param name="now">Seconds, on any clock that only moves forward.</param>
+        /// <remarks>
+        /// <para>
+        /// <b>Why.</b> A bot knocked over by a blast lies as a ragdoll steered toward the server's
+        /// pelvis every frame, so its eleven bodies never sleep. In a 100-bot Forest Lake match eight
+        /// of them at once were 88 of the 113 awake bodies the client simulated, three physics steps
+        /// a frame, mostly in fights the player could not see (development profile, 2026-10-02).
+        /// </para>
+        /// <para>
+        /// <b>After the fall, not before.</b> For <see cref="LandSeconds"/> the body is thrown and
+        /// lands as it always did, wherever it is, so a fall seen through binoculars is a fall. Once
+        /// frozen it keeps the pose it landed in and is carried after the pelvis
+        /// (<see cref="Steer"/>), and a blast beside it rouses it (<see cref="AddExplosionForce"/>).
+        /// </para>
+        /// </remarks>
+        public void SimulateWhereSeen(bool nearCamera, float now)
+        {
+            if (!IsActive) return;
+            if (float.IsNaN(_fellAt)) _fellAt = now;
+
+            if (nearCamera)
+            {
+                Rouse();
+                return;
+            }
+            if (!IsSettled && now - _fellAt >= LandSeconds) Settle();
         }
 
         /// <summary>
@@ -351,6 +537,7 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!IsActive) return;
             IsActive = false;
+            IsSettled = false;
             _floating = false;
 
             // Joints before bodies: a joint whose connected body is destroyed first logs a PhysX
@@ -385,6 +572,7 @@ namespace Ironfront.Net.Unity.Client
 
         private void Build(bool crumple)
         {
+            RigidbodyInterpolation smoothing = InterpolationAt(_bones[0].position, Camera.main);
             for (int i = 0; i < Specs.Length; i++)
             {
                 Transform bone = _bones[i];
@@ -396,7 +584,7 @@ namespace Ironfront.Net.Unity.Client
                 Rigidbody body = bone.gameObject.AddComponent<Rigidbody>();
                 body.mass = spec.Mass;
                 body.angularDamping = 0.5f;
-                body.interpolation = RigidbodyInterpolation.Interpolate;
+                body.interpolation = smoothing;
                 _bodies[i] = body;
 
                 AddCollider(bone, spec);

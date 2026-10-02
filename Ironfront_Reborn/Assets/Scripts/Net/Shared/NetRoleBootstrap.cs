@@ -92,7 +92,7 @@ namespace Ironfront.Net.Unity
 
             // Only a process that STARTS in a map is left to the Awake race. A player starts in
             // the splash and the menu, and both ways from there into a map declare first: an
-            // online join as a client (ClientFlowBootstrap), practice as the local authority
+            // online join as a client (ClientFlowBootstrap), practice as offline
             // (MenuScreenController.LaunchPracticeMap). Warning at every player's start put this
             // line in every client log as a false alarm. The first scene's objects are loaded by
             // now (BeforeSceneLoad runs before their Awake), so the active scene is that scene.

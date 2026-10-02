@@ -405,7 +405,81 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 			drainClaimAction.Start();
 		}
 
+		UpdateFlooding();
 		KeepInsideLevelBounds();
+	}
+
+	// ===== Water =====
+
+	/// <summary>
+	/// How far under the surface a land vehicle's centre of mass may go before the water drowns
+	/// it: a jeep or a tank fords a stream, and a lake swallows it.
+	/// </summary>
+	private const float FloodDepth = 0.6f;
+
+	/// <summary>The same for a helicopter: a body that settles into the water has crashed.</summary>
+	private const float AircraftFloodDepth = 0.1f;
+
+	/// <summary>Of its maximum health, how much a flooded vehicle loses per second: about four seconds to die.</summary>
+	private const float FloodDamagePerSecond = 0.25f;
+
+	/// <summary>How hard the water holds a flooded hull back, per second of its speed.</summary>
+	private const float FloodDrag = 1.5f;
+
+	/// <summary>
+	/// Whether the water has drowned this vehicle: its centre of mass under the surface by more than
+	/// it can ford. Never a boat.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Owner report 2026-10-01: "the water logic has to be realistic for vehicles too".</b> A
+	/// jeep, tank, quad bike or helicopter driven into a lake drove on along the bottom, intact,
+	/// and stayed there: its crew was already put out of a seat under water
+	/// (<c>ServerPlayer.EjectFromSunkenSeat</c>, <c>Actor.UpdateAnimatedSwim</c>), but the hull kept
+	/// its id and its pad, which respawns only on a death, never gave the team another.
+	/// </para>
+	/// <para>
+	/// Every role computes it from the hull it holds, so a client draws a drowned wreck the way the
+	/// server killed it, without fire or an explosion (<see cref="Die"/>).
+	/// </para>
+	/// </remarks>
+	public bool IsFlooded
+	{
+		get
+		{
+			if (this is Boat || rigidbody == null)
+			{
+				return false;
+			}
+			float limit = this is Helicopter ? AircraftFloodDepth : FloodDepth;
+			return WaterLevel.Depth(rigidbody.worldCenterOfMass) > limit;
+		}
+	}
+
+	/// <summary>
+	/// Slows a flooded hull, and drowns it: the health drains at <see cref="FloodDamagePerSecond"/>
+	/// through the one damage entry point, so the server's death path takes it from there and
+	/// kills it without a burn (<c>ServerVehicleDamageSink</c>).
+	/// </summary>
+	/// <remarks>
+	/// The drag runs wherever the hull is simulated -- the server, offline, and the client
+	/// predicting the vehicle it drives -- so prediction and authority slow it alike. A client
+	/// never deals the damage: health is the server's (<see cref="Damage(float, int)"/>).
+	/// </remarks>
+	private void UpdateFlooding()
+	{
+		if (dead || !IsFlooded)
+		{
+			return;
+		}
+		if (!rigidbody.isKinematic)
+		{
+			rigidbody.AddForce(-rigidbody.linearVelocity * FloodDrag, ForceMode.Acceleration);
+		}
+		if (!NetContext.IsClient)
+		{
+			Damage(maxHealth * FloodDamagePerSecond * Time.fixedDeltaTime);
+		}
 	}
 
 	/// <summary>
@@ -649,6 +723,12 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 		NetworkDriven = value;
 
+		// Back under local physics: its wheels carry it from the very next step.
+		if (!value)
+		{
+			ApplyWheelSimulation(simulate: true);
+		}
+
 		if (rigidbody != null)
 		{
 			rigidbody.isKinematic = value;
@@ -662,6 +742,40 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 			$"[net] vehicle '{name}' has no Rigidbody, so it cannot be handed to the replication "
 			+ "layer. Its rendered copy will run local physics against every incoming snapshot "
 			+ "and drift, while the wire reports no fault at all.");
+	}
+
+	private WheelCollider[] simulatedWheels;
+
+	private bool wheelsResting;
+
+	/// <summary>
+	/// Whether this vehicle's wheels are simulated this frame, switching them off or on to match
+	/// (<see cref="Ironfront.Net.Unity.RemoteWheelSimulation"/>). Callers skip the wheel visuals
+	/// when it is false: a resting wheel has no pose to read.
+	/// </summary>
+	protected bool WheelsSimulated()
+	{
+		bool simulate = Ironfront.Net.Unity.RemoteWheelSimulation.IsSimulated(
+			NetworkDriven, base.transform.position, Camera.main);
+		ApplyWheelSimulation(simulate);
+		return simulate;
+	}
+
+	private void ApplyWheelSimulation(bool simulate)
+	{
+		if (simulate != wheelsResting)
+		{
+			return;
+		}
+		wheelsResting = !simulate;
+		simulatedWheels ??= GetComponentsInChildren<WheelCollider>(includeInactive: true);
+		foreach (WheelCollider wheel in simulatedWheels)
+		{
+			if (wheel != null)
+			{
+				wheel.enabled = simulate;
+			}
+		}
 	}
 
 	/// <summary>
@@ -683,8 +797,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// <remarks>
 	/// <c>Boat.inWater</c> is the one that matters — it is set from a buoyancy sample the remote
 	/// path no longer takes, and the engine note and wake read it. <c>Helicopter.isAirborne</c>
-	/// comes from a downward raycast, which a client can still afford to do locally against its
-	/// own copy of the map; it is left alone rather than replicated for the sake of it.
+	/// is not sensed on a client at all: only the AI reads it, and no AI runs there.
 	/// </remarks>
 	public virtual void ApplyReplicatedFlags(bool inWater, bool airborne)
 	{
@@ -872,7 +985,19 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		}
 		if (health <= 0f && !dead && !burning)
 		{
-			StartBurning();
+			if (IsFlooded)
+			{
+				// Drowned, not burnt (see IsFlooded). Offline it dies here; a server's sink kills it
+				// outright, and a client hears that death from the server.
+				if (!NetVehicleAuthority.ServerOwnsVehicleDeath && !NetVehicleAuthority.IsClientSuppressed)
+				{
+					Die();
+				}
+			}
+			else
+			{
+				StartBurning();
+			}
 		}
 		bool showDamage = health < 0.5f * maxHealth;
 		if (showDamage != damageParticlesOn)
@@ -1027,6 +1152,8 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	public virtual void Die()
 	{
+		// Read before anything below moves the hull: a vehicle the water killed (IsFlooded).
+		bool drowned = IsFlooded;
 		dead = true;
 		if (fireAlarm != null)
 		{
@@ -1062,22 +1189,26 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 				// knock-over too; this is the call that made it.
 				if (Ironfront.Net.Unity.NetContext.IsClient)
 				{
-					occupant.LeaveSeat(drawWeapon: !seat.enclosed);
+					occupant.LeaveSeat(drawWeapon: !seat.enclosed || drowned);
 				}
 				else
 				{
 					occupant.LeaveSeat();
 					// Dies WITH the vehicle, so the killfeed can say so and credit whoever destroyed
-					// it rather than "The world" (feature 2, 2026-09-29).
-					using (DeathContext.WentDownWith(base.gameObject))
+					// it rather than "The world" (feature 2, 2026-09-29). Not with a drowned hull:
+					// that puts its crew out to swim (IsFlooded), and nobody dies of it.
+					if (!drowned)
 					{
-						if (seat.enclosed)
+						using (DeathContext.WentDownWith(base.gameObject))
 						{
-							occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
-						}
-						else
-						{
-							occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+							if (seat.enclosed)
+							{
+								occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+							}
+							else
+							{
+								occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
+							}
 						}
 					}
 				}
@@ -1087,7 +1218,11 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		rigidbody.WakeUp();
 		base.enabled = false;
 		Invoke("Cleanup", 15f);
-		Invoke("Explode", 0.3f);
+		// A hull the water drowned settles where it sank: no blast under a lake.
+		if (!drowned)
+		{
+			Invoke("Explode", 0.3f);
+		}
 	}
 
 	private static bool? _hitLogging;
@@ -1395,7 +1530,12 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
 	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
 	// lines in one 100-bot match (B4, 2026-09-30).
-#if !UNITY_SERVER
+	//
+	// Nor into a release client: it draws only with ActorManager.debug on, yet Unity calls
+	// an OnGUI twice a frame (layout and repaint) for every instance that has one. With every
+	// vehicle on Forest Lake that was 63 IMGUI passes a frame, 0.6 ms of nothing
+	// (development build profile, 2026-10-02). The Editor and development builds keep it.
+#if !UNITY_SERVER && (UNITY_EDITOR || DEVELOPMENT_BUILD)
 	private void OnGUI()
 	{
 		// instance was dereferenced BEFORE the Camera.main guard on the same line, so a

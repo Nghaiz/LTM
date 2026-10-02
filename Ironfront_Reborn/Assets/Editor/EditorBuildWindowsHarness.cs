@@ -21,8 +21,11 @@ namespace Ironfront
     /// the only channel there is.
     /// </para>
     /// <para>
-    /// <b>This is harness scaffolding, not a shipping target.</b> The product's server is the
-    /// Linux dedicated build and stays so; <see cref="EditorBuild"/> is untouched by this file.
+    /// <b>Harness scaffolding, and since 2026-10-02 the shipping client too.</b>
+    /// <c>tools/build-player.ps1</c> passes <c>-release -noDiagnostics</c>, which is the zip
+    /// players download; without them this is the development player lane B has always used.
+    /// The product's server is the Linux dedicated build and stays so; <see cref="EditorBuild"/>
+    /// is untouched by this file.
     /// What this exists for is that lane B needs three RENDERED clients as separate OS
     /// processes on the machine the work is being done on, and that machine is Windows. A
     /// verdict reached here therefore describes the game, not the deployment target: a
@@ -46,10 +49,26 @@ namespace Ironfront
         // below, which is why that one refuses to run outside batchmode.
         //
         // The flag exists so the guard can be PROVEN rather than asserted: build once without
-        // it and LaneBHarness is in the player, build once with it and it is not. There is no
-        // shipping client target in this repo yet -- when there is, it passes this.
+        // it and LaneBHarness is in the player, build once with it and it is not. Every release
+        // build passes it (tools/build-player.ps1): the harness's scripted aim and input must not
+        // ship in a client anybody can start with environment variables.
         private const string NoDiagnosticsArgument = "-noDiagnostics";
         private const string NoDiagnosticsDefine   = "IRONFRONT_NO_DIAGNOSTICS";
+
+        // The player people download. Until 2026-10-02 every release zip was this harness's
+        // Development build: "Development Build" in the corner of every screen, the profiler and
+        // player-connection hooks compiled in, and Mono. -release builds it without
+        // BuildOptions.Development and on IL2CPP, which compiles the game's C# to native code.
+        //
+        // IL2CPP is switched on for this build only and the project's own backend put back after,
+        // the same way UNITY_MCP_READY is. The lane-B harness and quick playtest builds stay on
+        // Mono because an IL2CPP build spends minutes in the C++ compiler, and they are rebuilt
+        // many times a day. The IL2CPP options that do live in ProjectSettings.asset (compiler
+        // configuration, code generation, stack-trace line numbers) only take effect on a build
+        // that is IL2CPP, so they can stay committed. The Minimal stripping level applies to Mono
+        // builds as well, on purpose: a type that only reflection reaches breaks in the playtest
+        // build first rather than in the release.
+        private const string ReleaseArgument = "-release";
 
         private const string DefaultOutputDirectory = "build/windows";
 
@@ -69,11 +88,12 @@ namespace Ironfront
                 EditorUserBuildSettings.standaloneBuildSubtarget;
 
             string[] previousDefines = null;
+            ScriptingImplementation? previousBackend = null;
             bool succeeded;
 
             try
             {
-                succeeded = Build(ref previousDefines);
+                succeeded = Build(ref previousDefines, ref previousBackend);
             }
             catch (Exception ex)
             {
@@ -84,6 +104,7 @@ namespace Ironfront
             }
             finally
             {
+                RestoreBackend(previousBackend);
                 RestoreDefines(previousDefines);
                 if (!Application.isBatchMode) RestoreBuildTarget(previousTarget, previousSubtarget);
             }
@@ -94,8 +115,9 @@ namespace Ironfront
             if (Application.isBatchMode) EditorApplication.Exit(succeeded ? 0 : 1);
         }
 
-        private static bool Build(ref string[] previousDefines)
+        private static bool Build(ref string[] previousDefines, ref ScriptingImplementation? previousBackend)
         {
+            bool release = HasFlag(ReleaseArgument);
             string outputDirectory = ResolveOutputDirectory();
             Directory.CreateDirectory(outputDirectory);
 
@@ -154,24 +176,29 @@ namespace Ironfront
                 return false;
             }
 
+            if (release)
+            {
+                previousBackend = UseBackend(ScriptingImplementation.IL2CPP);
+            }
+
             var options = new BuildPlayerOptions
             {
                 scenes = scenes,
                 locationPathName = executablePath,
                 target = BuildTarget.StandaloneWindows64,
                 subtarget = (int)StandaloneBuildSubtarget.Player,
-                options = BuildOptions.Development,
-                extraScriptingDefines = HasNoDiagnosticsFlag()
+                options = release ? BuildOptions.None : BuildOptions.Development,
+                extraScriptingDefines = HasFlag(NoDiagnosticsArgument)
                     ? new[] { NoDiagnosticsDefine }
                     : null,
             };
 
-            if (HasNoDiagnosticsFlag())
+            if (HasFlag(NoDiagnosticsArgument))
             {
                 Debug.Log($"[build] {NoDiagnosticsDefine} set: Net/Diagnostics is compiled out.");
             }
 
-            Debug.Log($"[build] lane-B windows player: {scenes.Length} scene(s) -> {executablePath}");
+            Debug.Log($"[build] lane-B windows player ({Describe(release)}): {scenes.Length} scene(s) -> {executablePath}");
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;
@@ -200,8 +227,37 @@ namespace Ironfront
             }
 
             Debug.Log($"[build] lane-B windows player complete -> {executablePath} "
-                      + $"({summary.totalSize} bytes, {summary.totalWarnings} warning(s))");
+                      + $"({summary.totalSize} bytes, {summary.totalWarnings} warning(s), {Describe(release)})");
             return true;
+        }
+
+        private static string Describe(bool release)
+            => release ? "release, IL2CPP" : "development, " + PlayerSettings.GetScriptingBackend(
+                UnityEditor.Build.NamedBuildTarget.Standalone);
+
+        /// <summary>
+        /// Sets the STANDALONE scripting backend for this build and returns the one it replaced,
+        /// or null when nothing had to change.
+        /// </summary>
+        private static ScriptingImplementation? UseBackend(ScriptingImplementation backend)
+        {
+            var target = UnityEditor.Build.NamedBuildTarget.Standalone;
+            ScriptingImplementation current = PlayerSettings.GetScriptingBackend(target);
+            if (current == backend) return null;
+
+            PlayerSettings.SetScriptingBackend(target, backend);
+            Debug.Log($"[build] scripting backend {current} -> {backend} for this build");
+            return current;
+        }
+
+        // Saved explicitly for the reason RestoreDefines gives: BuildPlayer flushes project
+        // settings mid-build, so an in-memory restore alone would leave the committed file on IL2CPP.
+        private static void RestoreBackend(ScriptingImplementation? backend)
+        {
+            if (backend == null) return;
+
+            PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Standalone, backend.Value);
+            AssetDatabase.SaveAssets();
         }
 
         /// <summary>
@@ -249,12 +305,12 @@ namespace Ironfront
             EditorUserBuildSettings.standaloneBuildSubtarget = subtarget;
         }
 
-        /// <summary>True when <c>-noDiagnostics</c> was passed on the command line.</summary>
-        private static bool HasNoDiagnosticsFlag()
+        /// <summary>True when <paramref name="flag"/> was passed on the command line.</summary>
+        private static bool HasFlag(string flag)
         {
             foreach (string arg in Environment.GetCommandLineArgs())
             {
-                if (string.Equals(arg, NoDiagnosticsArgument, StringComparison.Ordinal))
+                if (string.Equals(arg, flag, StringComparison.Ordinal))
                 {
                     return true;
                 }

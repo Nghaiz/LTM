@@ -150,6 +150,16 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	/// </remarks>
 	private bool swimWeaponStowed;
 
+	/// <summary>
+	/// Whether this bot swims the animated way: upright at the surface in the game's swim clips,
+	/// steered along its path, instead of as the original's buoyant ragdoll. See
+	/// <see cref="UpdateAnimatedSwim"/>.
+	/// </summary>
+	private bool animatedSwim;
+
+	/// <summary>Whether this bot is swimming (see <see cref="UpdateAnimatedSwim"/>).</summary>
+	public bool IsAnimatedSwimming => animatedSwim;
+
 	[NonSerialized]
 	public Weapon activeWeapon;
 
@@ -305,6 +315,9 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		ik.weight = 1f;
 		fallenOver = false;
 		animator.enabled = true;
+		// Out of a swim the body may have died in: the swim's layer, bools and state go with it.
+		StopAnimatedSwim(restorePose: false);
+		Ironfront.Net.Unity.SwimPresentation.Apply(animator, swimming: false, moving: false);
 		animator.SetLayerWeight(3, 0f);
 		animator.SetTrigger("reset");
 		ragdoll.SetDrive(700f, 3f);
@@ -641,9 +654,20 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		// would look out of the water and flicker in and out of the swim. So its test is the
 		// capsule's -- the one its movement, its breath and its server all use.
 		FpsActorController localNetworkBody = IsNetworkDrivenLocalBody() ? controller as FpsActorController : null;
-		inWater = localNetworkBody != null
-			? IsCapsuleInWater(localNetworkBody.transform.position)
-			: WaterLevel.InWater(position);
+		if (localNetworkBody != null)
+		{
+			inWater = IsCapsuleInWater(localNetworkBody.transform.position);
+		}
+		else if (SwimsAnimated())
+		{
+			// A bot's in-water is its swim, not the spine sample: drawn at the surface, the spine
+			// rises out of the water and the sample flickered every bot in and out of it.
+			inWater = UpdateAnimatedSwim(position);
+		}
+		else
+		{
+			inWater = WaterLevel.InWater(position);
+		}
 		if (dead)
 		{
 			return;
@@ -661,7 +685,9 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			return;
 		}
-		if (inWater && !fallenOver && !IsNetworkDrivenLocalBody())
+		// The original fells a body in water and swims it as a ragdoll. Only the offline player
+		// still does: a networked player swims by its capsule, and a bot swims animated.
+		if (inWater && !fallenOver && !IsNetworkDrivenLocalBody() && !SwimsAnimated())
 		{
 			if (IsSeated())
 			{
@@ -693,7 +719,12 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			if (!fallenOver)
 			{
-				UpdateFacing();
+				// A swimmer faces where it swims (UpdateSwimMovement), not where it would aim: it
+				// has no weapon out, and turning the body toward a target swam it sideways.
+				if (!animatedSwim)
+				{
+					UpdateFacing();
+				}
 				if (!IsSeated())
 				{
 					UpdateMovement(dt);
@@ -902,11 +933,16 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	private void UpdateMovement(float dt)
 	{
+		if (animatedSwim)
+		{
+			UpdateSwimMovement(dt);
+			return;
+		}
 		if (!controller.OnGround())
 		{
 			return;
 		}
-		Vector3 vector = controller.Velocity();
+		Vector3 vector = WadingVelocity(controller.Velocity());
 		Vector3 vector2 = Vector3.Scale(vector, removeY);
 		bool flag = vector2.magnitude > 0.1f;
 		animator.SetBool("moving", flag);
@@ -989,6 +1025,32 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		UpdateOffset(dt);
 	}
 
+	/// <summary>
+	/// A walking body's velocity with the water over its feet taken into account: a player's
+	/// numbers (<c>MovementCore.WadingSpeed</c>), so a bot wades as slowly as a player beside it.
+	/// </summary>
+	/// <remarks>
+	/// The root is at the feet for every body that walks here, so the water over them is
+	/// <see cref="WaterLevel.Depth"/> at the root. A networked player never reaches this method:
+	/// its movement is <c>MovementCore</c>'s own.
+	/// </remarks>
+	private Vector3 WadingVelocity(Vector3 velocity)
+	{
+		float depth = WaterLevel.Depth(rigidbody.position);
+		if (!(depth > Ironfront.Net.Replication.Movement.MovementCore.WadeStartDepth))
+		{
+			return velocity;
+		}
+		Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+		float speed = flat.magnitude;
+		if (speed < 0.001f)
+		{
+			return velocity;
+		}
+		float waded = Ironfront.Net.Replication.Movement.MovementCore.WadingSpeed(speed, depth);
+		return new Vector3(flat.x / speed * waded, velocity.y, flat.z / speed * waded);
+	}
+
 	private void UpdateOffset(float dt)
 	{
 		if (base.transform.parent != null)
@@ -1014,6 +1076,309 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		else
 		{
 			stopFallAction.Start();
+			// A bot knocked into the water comes up swimming. The getup above waits for dry land,
+			// so in the original it swam on as a ragdoll -- tumbling and spinning, which is what the
+			// v3.1.1 players saw of every bot in the water.
+			if (inWater && fallAction.TrueDone() && ragdoll.IsRagdoll() && SwimsAnimated())
+			{
+				SurfaceIntoSwim();
+			}
+		}
+	}
+
+	// ===== The animated swim (bots) =====
+
+	/// <summary>
+	/// How deep the water over its feet is when a body starts to swim: the depth at which a
+	/// player's capsule starts to (<c>MovementCore.IsInWater</c>, the centre plus
+	/// <c>SwimSampleAbove</c> under the surface), so bots and players leave their feet together.
+	/// </summary>
+	private static float SwimStartDepth => Ironfront.Net.Replication.Movement.MovementCore.SwimSampleAbove
+		+ Ironfront.Net.Replication.Movement.MovementCore.HeightFor(crouching: false) * 0.5f;
+
+	/// <summary>
+	/// How shallow the water must be under a swimmer before it stands up again. Lower than
+	/// <see cref="SwimStartDepth"/>, so a body at the edge does not swim and stand every frame.
+	/// </summary>
+	private static float SwimEndDepth => SwimStartDepth - 0.2f;
+
+	/// <summary>How far over the surface a bank may rise before a swimmer cannot climb onto it.</summary>
+	private const float SwimClimbLip = 0.6f;
+
+	/// <summary>How far under the surface the bottom is looked for. Deeper counts as open water.</summary>
+	private const float SwimFloorProbe = 30f;
+
+	/// <summary>
+	/// Whether this body swims the animated way: a bot -- on a game server or offline -- that is
+	/// not a player's claimed body. The offline player keeps the original's ragdoll swim, and a
+	/// networked player swims by its capsule.
+	/// </summary>
+	private bool SwimsAnimated()
+	{
+		return aiControlled && controller != null && controller.enabled;
+	}
+
+	/// <summary>
+	/// Starts and ends a bot's swim, and answers whether it is in water.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Owner report 2026-10-01 (v3.1.1): "bots tumble and spin in the water, nobody swims".</b>
+	/// The original fells a body in water and swims it as an active ragdoll. On a server that
+	/// ragdoll's pelvis and heading were what every client drew, its in-water bit came from the
+	/// spine of a body bobbing at the surface, and the proxy switched between the swim pose and a
+	/// tumbling ragdoll several times a second. A bot now swims as a networked player does: upright,
+	/// in the swim clips, its feet where a swimmer's capsule would put them.
+	/// </para>
+	/// <para>
+	/// <b>A corpse or a fallen body is untouched</b>: it floats as the original's ragdoll does, on
+	/// the spine sample, and a live one comes up swimming once its fall is over
+	/// (<see cref="SurfaceIntoSwim"/>).
+	/// </para>
+	/// </remarks>
+	private bool UpdateAnimatedSwim(Vector3 spineSample)
+	{
+		if (dead || fallenOver)
+		{
+			StopAnimatedSwim(restorePose: false);
+			return WaterLevel.InWater(spineSample);
+		}
+		if (IsSeated())
+		{
+			// Climbed into a seat from the water (a boat): the swim is over.
+			EndAnimatedSwim();
+			// A seat the water has closed over: the bot gets out and swims. The original fell over
+			// here, which threw the ragdoll out of the vehicle.
+			if (!WaterLevel.InWater(spineSample))
+			{
+				return false;
+			}
+			LeaveSeat();
+			BeginAnimatedSwim();
+			return true;
+		}
+		Vector3 feet = rigidbody.position;
+		float surface = Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(feet.x, feet.z);
+		if (float.IsNegativeInfinity(surface))
+		{
+			EndAnimatedSwim();
+			return false;
+		}
+		if (!animatedSwim)
+		{
+			if (surface - feet.y > SwimStartDepth)
+			{
+				BeginAnimatedSwim();
+			}
+		}
+		else if (SwimFloorAt(feet, surface, out float floor) && surface - floor < SwimEndDepth)
+		{
+			EndAnimatedSwim();
+			if (autoMoveActor)
+			{
+				rigidbody.position = new Vector3(feet.x, floor, feet.z);
+			}
+		}
+		return animatedSwim;
+	}
+
+	/// <summary>
+	/// Poses a networked player's own body for its swim, or takes it out of one: the swim clips, and
+	/// the aim look-at off while they play.
+	/// </summary>
+	/// <remarks>
+	/// <b>Owner report 2026-10-01: "even a player swims stiff, arms and legs barely move".</b> The
+	/// look-at (<see cref="ActorIk"/>, body weight 1) kept turning the spine and head toward the
+	/// rifle's aim point -- 55 m to the right of where the body faces, for the held weapon -- so it
+	/// twisted the stroke the clip was drawing. Called by
+	/// <c>FpsActorController.UpdateNetworkSwim</c> only; the server never poses a player.
+	/// </remarks>
+	public void PresentNetworkSwim(bool swimming, bool moving)
+	{
+		Ironfront.Net.Unity.SwimPresentation.Apply(animator, swimming, moving);
+		if (!fallenOver && !dead)
+		{
+			ik.weight = swimming ? 0f : 1f;
+		}
+	}
+
+	private void BeginAnimatedSwim()
+	{
+		if (animatedSwim)
+		{
+			return;
+		}
+		animatedSwim = true;
+		// The aim look-at would bend the swim toward a rifle's aim point; the crouch would fold it.
+		ik.weight = 0f;
+		if (wasCrouching)
+		{
+			controller.EndCrouch();
+			wasCrouching = false;
+		}
+		animator.SetLayerWeight(2, 0f);
+		animator.SetBool("crouched", false);
+		animator.SetBool("moving", false);
+		animator.SetBool("sprinting", false);
+	}
+
+	private void EndAnimatedSwim()
+	{
+		StopAnimatedSwim(restorePose: true);
+	}
+
+	/// <summary>
+	/// Ends the swim. <paramref name="restorePose"/> false when a ragdoll or a death has already
+	/// taken the pose over, and must keep it.
+	/// </summary>
+	private void StopAnimatedSwim(bool restorePose)
+	{
+		LowerSwimmerModel();
+		if (!animatedSwim)
+		{
+			return;
+		}
+		animatedSwim = false;
+		if (restorePose)
+		{
+			Ironfront.Net.Unity.SwimPresentation.Apply(animator, swimming: false, moving: false);
+			ik.weight = 1f;
+		}
+	}
+
+	// Where the animated model rests under the root, kept while a swim lifts it (LiftSwimmerToSurface).
+	private Vector3 swimModelRest;
+
+	private bool swimModelLifted;
+
+	/// <summary>
+	/// Draws a swimming bot with its head at the surface, as every client draws a swimmer.
+	/// </summary>
+	/// <remarks>
+	/// The root stays where a swimmer's capsule floats, because that is what its hitboxes are built
+	/// from on a server; only the model under it moves. Seen wherever a bot's own body is drawn --
+	/// Practice plays offline, with every bot's own body -- the head would otherwise sit 0.4-0.75 m
+	/// under the water, depending on the stroke (measured on Forest Lake, 2026-10-02).
+	/// </remarks>
+	private void LiftSwimmerToSurface(float surface)
+	{
+		Transform model = animator.transform;
+		if (!swimModelLifted)
+		{
+			swimModelRest = model.localPosition;
+			swimModelLifted = true;
+		}
+		Transform head = animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Head) : null;
+		float headAboveModel = head != null
+			? head.position.y - model.position.y
+			: Ironfront.Net.Unity.SwimPresentation.IdleHeadAboveRoot;
+		Vector3 at = model.position;
+		model.position = new Vector3(at.x, Ironfront.Net.Unity.SwimPresentation.RootHeight(surface, headAboveModel), at.z);
+	}
+
+	private void LowerSwimmerModel()
+	{
+		if (!swimModelLifted)
+		{
+			return;
+		}
+		swimModelLifted = false;
+		animator.transform.localPosition = swimModelRest;
+	}
+
+	/// <summary>
+	/// A bot fallen into the water, its fall over: it comes up where its body floats and swims.
+	/// </summary>
+	private void SurfaceIntoSwim()
+	{
+		Vector3 pelvis = ragdoll.Position();
+		Vector3 forward = ragdoll.PlanarForward();
+		InstantGetUp();
+		if (autoMoveActor)
+		{
+			rigidbody.position = pelvis;
+			if (forward.sqrMagnitude > 0.01f)
+			{
+				rigidbody.rotation = Quaternion.LookRotation(forward);
+			}
+		}
+		BeginAnimatedSwim();
+	}
+
+	/// <summary>
+	/// The bottom under <paramref name="at"/>, cast down from just over the surface: false in open
+	/// water, where it is deeper than <see cref="SwimFloorProbe"/> or there is nothing at all.
+	/// </summary>
+	private static bool SwimFloorAt(Vector3 at, float surface, out float floor)
+	{
+		Ray ray = new Ray(new Vector3(at.x, surface + SwimClimbLip + 1f, at.z), Vector3.down);
+		if (Physics.SphereCast(ray, 0.3f, out RaycastHit hit, SwimClimbLip + 1f + SwimFloorProbe, 1))
+		{
+			floor = hit.point.y;
+			return true;
+		}
+		floor = float.NegativeInfinity;
+		return false;
+	}
+
+	/// <summary>
+	/// One step of a bot's swim: along its path at the swimming speed, its feet where a swimmer's
+	/// capsule floats, facing the way it goes.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The depth is a swimming player's</b> (<c>MovementCore.SwimFloatDepth</c> under the
+	/// surface for the capsule's centre): <c>NetServerActor.CaptureHitboxes</c> builds a bot's boxes
+	/// from its feet, so this puts a swimming bot's head where a swimming player's is, at the
+	/// surface, where every client draws both.
+	/// </para>
+	/// <para>
+	/// <b>It does not swim into a bank it cannot climb.</b> The step is kinematic; a bank higher
+	/// than <see cref="SwimClimbLip"/> over the surface stops it, and its path finds the way round.
+	/// Shallow enough water under it ends the swim (<see cref="UpdateAnimatedSwim"/>), and it walks.
+	/// </para>
+	/// </remarks>
+	private void UpdateSwimMovement(float dt)
+	{
+		Vector3 stroke = controller.SwimInput();
+		stroke.y = 0f;
+		bool moving = stroke.sqrMagnitude > 0.0001f;
+		Vector3 feet = rigidbody.position;
+		float surface = Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(feet.x, feet.z);
+		if (moving)
+		{
+			stroke.Normalize();
+			Vector3 next = feet + stroke * (Ironfront.Net.Replication.Movement.MovementCore.SwimSpeed * dt);
+			// Past the edge of a lake's surface the waterline runs on into the bank.
+			float nextSurface = Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(next.x, next.z);
+			if (float.IsNegativeInfinity(nextSurface))
+			{
+				nextSurface = surface;
+			}
+			bool blocked = !float.IsNegativeInfinity(nextSurface)
+				&& SwimFloorAt(next, nextSurface, out float bank) && bank > nextSurface + SwimClimbLip;
+			if (!blocked)
+			{
+				feet.x = next.x;
+				feet.z = next.z;
+			}
+			rigidbody.MoveRotation(Quaternion.Slerp(base.transform.rotation, Quaternion.LookRotation(stroke), dt * 3f));
+			surface = Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(feet.x, feet.z);
+		}
+		if (!float.IsNegativeInfinity(surface))
+		{
+			float floats = surface - Ironfront.Net.Replication.Movement.MovementCore.SwimFloatDepth
+				- Ironfront.Net.Replication.Movement.MovementCore.HeightFor(crouching: false) * 0.5f;
+			feet.y = Mathf.MoveTowards(feet.y, floats, Ironfront.Net.Replication.Movement.MovementCore.MaxSwimVerticalSpeed * dt);
+		}
+		if (autoMoveActor)
+		{
+			rigidbody.position = feet;
+		}
+		Ironfront.Net.Unity.SwimPresentation.Apply(animator, swimming: true, moving: moving);
+		if (!float.IsNegativeInfinity(surface))
+		{
+			LiftSwimmerToSurface(surface);
 		}
 	}
 
@@ -1212,6 +1577,9 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		animator.SetBool("ragdolled", true);
 		fallenOver = true;
 		ragdoll.Ragdoll(controller.Velocity());
+		// A swimmer knocked over floats as a ragdoll until its fall is over (SurfaceIntoSwim). After
+		// the ragdoll has taken the drawn pose, so the body falls from where it was seen.
+		StopAnimatedSwim(restorePose: false);
 		controller.DisableInput();
 		controller.StartRagdoll();
 		ik.weight = 0f;

@@ -25,9 +25,30 @@ public class ReflectionProber : MonoBehaviour
 	/// </remarks>
 	private const float MaxProbeWaitSeconds = 5f;
 
+	// The two renders, once made, as the scene's default reflection. See AdoptAsDefaultReflection.
+	private RenderTexture normalReflection;
+
+	private RenderTexture nightVisionReflection;
+
+	private bool reflectingThroughDefault;
+
 	private void Awake()
 	{
 		instance = this;
+	}
+
+	private void OnDestroy()
+	{
+		if (normalReflection != null)
+		{
+			normalReflection.Release();
+			Object.Destroy(normalReflection);
+		}
+		if (nightVisionReflection != null)
+		{
+			nightVisionReflection.Release();
+			Object.Destroy(nightVisionReflection);
+		}
 	}
 
 	public void SetupProbes()
@@ -59,10 +80,85 @@ public class ReflectionProber : MonoBehaviour
 		}
 		int normal = normalProbe.RenderProbe();
 		yield return StartCoroutine(WaitForProbe(normalProbe, normal, "day"));
+		// Each render is copied as soon as it is finished and a frame has passed, BEFORE the next
+		// probe renders. Copied at the end, after both, the day copy came out holding the night
+		// vision render (read back in the Editor, 2026-10-02: the day copy's sky 0.26/1.94/0.41,
+		// exactly the night vision probe's, against 0.41/0.54/0.65 for the day probe itself).
+		yield return null;
+		RenderTexture day = normalProbe.IsFinishedRendering(normal) ? CopyOf(normalProbe) : null;
 		TimeOfDay.instance.ApplyNightvision();
 		int nightVision = nightVisionProbe.RenderProbe();
 		yield return StartCoroutine(WaitForProbe(nightVisionProbe, nightVision, "night vision"));
+		yield return null;
+		RenderTexture night = nightVisionProbe.IsFinishedRendering(nightVision) ? CopyOf(nightVisionProbe) : null;
 		TimeOfDay.instance.ResetAtmosphere();
+		AdoptAsDefaultReflection(day, night);
+	}
+
+	/// <summary>
+	/// Hands the two finished renders to <see cref="RenderSettings"/> as the scene's default
+	/// reflection and switches the probes themselves off.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Both probes are rendered once and cover the whole map (<see cref="enabledBounds"/>), so
+	/// every object already reflected exactly the one cubemap -- but finding that out cost Unity a
+	/// probe lookup per drawn object per frame: 2.3 ms of <c>SamplePerObjectReflectionProbes</c>,
+	/// 3,497 calls a frame, in a 100-bot Forest Lake match (development build profile,
+	/// 2026-10-02). As the default reflection the same cubemap reaches every object with no lookup
+	/// at all.
+	/// </para>
+	/// <para>
+	/// Copied out first: a probe's own render texture belongs to the probe, and a switched-off
+	/// probe is free to let it go. The probe's intensity is carried over, because a probe ignores
+	/// the scene's reflection intensity and the default reflection obeys it.
+	/// </para>
+	/// <para>
+	/// A day render that never finished -- realtime probes switched off by the Low preset, or a
+	/// device too slow for the wait -- leaves the probes exactly as they were.
+	/// </para>
+	/// </remarks>
+	private void AdoptAsDefaultReflection(RenderTexture day, RenderTexture night)
+	{
+		if (day == null)
+		{
+			if (night != null)
+			{
+				night.Release();
+				Object.Destroy(night);
+			}
+			return;
+		}
+		normalReflection = day;
+		nightVisionReflection = night;
+		RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
+		RenderSettings.customReflectionTexture = normalReflection;
+		RenderSettings.reflectionIntensity = normalProbe.intensity;
+		normalProbe.enabled = false;
+		nightVisionProbe.enabled = false;
+		reflectingThroughDefault = true;
+	}
+
+	private static RenderTexture CopyOf(ReflectionProbe probe)
+	{
+		RenderTexture source = probe.realtimeTexture;
+		if (source == null || !source.IsCreated() || SystemInfo.copyTextureSupport == CopyTextureSupport.None)
+		{
+			return null;
+		}
+		var copy = new RenderTexture(source.descriptor)
+		{
+			name = probe.name + " (default reflection)",
+		};
+		copy.Create();
+		for (int face = 0; face < 6; face++)
+		{
+			for (int mip = 0; mip < source.mipmapCount; mip++)
+			{
+				Graphics.CopyTexture(source, face, mip, copy, face, mip);
+			}
+		}
+		return copy;
 	}
 
 	private static IEnumerator WaitForProbe(ReflectionProbe probe, int renderId, string label)
@@ -81,12 +177,25 @@ public class ReflectionProber : MonoBehaviour
 
 	public void SwitchToNightVision()
 	{
+		if (reflectingThroughDefault)
+		{
+			if (nightVisionReflection != null)
+			{
+				RenderSettings.customReflectionTexture = nightVisionReflection;
+			}
+			return;
+		}
 		normalProbe.size = disabledBounds;
 		nightVisionProbe.size = enabledBounds;
 	}
 
 	public void Reset()
 	{
+		if (reflectingThroughDefault)
+		{
+			RenderSettings.customReflectionTexture = normalReflection;
+			return;
+		}
 		normalProbe.size = enabledBounds;
 		nightVisionProbe.size = disabledBounds;
 	}

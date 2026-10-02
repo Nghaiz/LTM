@@ -496,6 +496,58 @@ public class MinimapUi : MonoBehaviour
 	}
 
 	/// <summary>
+	/// Puts a minimap icon at <paramref name="point"/>, 0..1 across its parent, by MOVING it inside
+	/// fixed anchors.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Icons, trail dots and the view cone used to set <c>anchorMin</c>/<c>anchorMax</c> to the point
+	/// every frame. That changes the icon's rect, and Unity UI regenerates the mesh of every graphic
+	/// whose rect changed: with 100 bots and their trails, about 800 graphics a frame, which was most
+	/// of the 9 ms the canvases took in a 100-bot Forest Lake match (v3.1.1 profile, 2026-10-02).
+	/// Moving the icon keeps its mesh; the canvas only re-batches.
+	/// </para>
+	/// <para>
+	/// The position is recomputed from the parent's size on every call, so an icon still follows
+	/// the map when it moves between the deploy screen and the in-match overlay -- the reason the
+	/// anchors were used in the first place.
+	/// </para>
+	/// </remarks>
+	public static void Place(RectTransform icon, Vector2 point)
+	{
+		if (icon.anchorMin != Vector2.zero || icon.anchorMax != Vector2.zero)
+		{
+			icon.anchorMin = Vector2.zero;
+			icon.anchorMax = Vector2.zero;
+		}
+		Vector2 size = icon.parent is RectTransform parent ? parent.rect.size : Vector2.zero;
+		icon.anchoredPosition = new Vector2(point.x * size.x, point.y * size.y);
+	}
+
+	/// <summary>
+	/// Gives a square icon <paramref name="size"/> pixels a side, writing only on a change: a size
+	/// change rebuilds the graphic's mesh, and this runs every frame for every icon.
+	/// </summary>
+	public static void SetSquareSize(RectTransform icon, float size)
+	{
+		Vector2 wanted = new Vector2(size, size);
+		if (icon.sizeDelta != wanted)
+		{
+			icon.sizeDelta = wanted;
+		}
+	}
+
+	/// <summary>Turns an icon to <paramref name="heading"/> degrees, writing only on a change.</summary>
+	public static void SetHeading(RectTransform icon, float heading)
+	{
+		Quaternion wanted = Quaternion.Euler(0f, 0f, 0f - heading);
+		if (Quaternion.Angle(icon.rotation, wanted) > 0.05f)
+		{
+			icon.rotation = wanted;
+		}
+	}
+
+	/// <summary>
 	/// True while the in-match map is zoomed in. An icon beyond the view is then hidden: pinning
 	/// every off-screen soldier to the edge of a zoomed map would line its border with icons.
 	/// </summary>
@@ -509,6 +561,28 @@ public class MinimapUi : MonoBehaviour
 	/// weapon in the player's hands (<c>FpsActorController</c> asks).
 	/// </summary>
 	public static bool OwnsScrollWheel => instance != null && instance.minimapOpenness > 0.5f;
+
+	/// <summary>
+	/// Whether anybody can see the map right now: pinned to an open deploy screen, or the in-match
+	/// overlay at least part way out.
+	/// </summary>
+	/// <remarks>
+	/// Most of a match the overlay is closed, parked below the screen, yet every icon and every
+	/// trail dot still moved every frame: 2.6 ms of script and the canvases' rebuild of what nobody
+	/// saw, in a 100-bot Forest Lake match (development build profile, 2026-10-02). Icons ask this
+	/// first and only keep their trail's history while it is false.
+	/// </remarks>
+	public static bool IsShowing
+	{
+		get
+		{
+			if (instance == null || instance.minimap == null || !instance.minimap.gameObject.activeInHierarchy)
+			{
+				return false;
+			}
+			return instance.minimap.rectTransform.parent == instance.loadoutParent || instance.minimapOpenness > 0f;
+		}
+	}
 
 	// The wheel zooms the in-match map while M is held, around the player. The deploy screen's
 	// copy always shows the whole map: that is where a player picks a flag anywhere on it.

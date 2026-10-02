@@ -143,6 +143,16 @@ namespace Ironfront.Net.Unity.Client
             // Awake logs is already reaching somewhere.
             NetLogUnitySink.Install();
 
+            // Practice (NetContext.IsDeclaredOffline): the object goes, presenters and registry
+            // with it, for NetServerBootstrap's matching guard's reason. Above everything that
+            // claims the role or publishes Current.
+            if (NetContext.IsDeclaredOffline)
+            {
+                Debug.Log("[net] offline: no client will be dialled.");
+                gameObject.SetActive(false);
+                return;
+            }
+
             // A dedicated server loads the same map scene every client does, and that scene
             // carries this component -- so without this guard the server dials ITSELF over
             // loopback and joins its own match as a player: a real body at a real spawn point,
@@ -207,6 +217,7 @@ namespace Ironfront.Net.Unity.Client
             EnsureSeatRequester();
             EnsureLocalCombatDriver();
             EnsureChatSender();
+            EnsurePhysicsSync();
 
             if (_connectOnStart) Connect();
         }
@@ -432,6 +443,17 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void OnSnapshotApplied(uint serverTick, uint lastProcessedInputTick)
         {
+            // The server's clock as this client last heard it, which is what NetContext.CurrentTick
+            // promises ("published ... by the client's reconciliation"). Until 2026-10-02 only
+            // OnConnected wrote it, so every client reader measured against the tick it CONNECTED
+            // at. ClientProjectileTracker takes a 16-bit distance from that, and 2^15 ticks (18.2
+            // minutes at 30 Hz) into a session every launch read as eighteen minutes old and was
+            // dropped: v3.1.1 logged "grenade N ... Ignore, age 32640 ticks" from minute 18 of both
+            // long matches on 2026-10-01, every grenade invisible from then on. A grenade's own fuse
+            // (GrenadeProjectile) never reached its tick either, so its mesh lay on the ground
+            // through the whole report after the server's blast.
+            if (serverTick > NetContext.CurrentTick) NetContext.CurrentTick = serverTick;
+
             // Apply identity-bearing state at the same boundary that made it authoritative.
             // The old per-frame presenter poll proved too indirect in a real player build: the
             // recorder could read snapshot team 1 for the whole match while Actor.team stayed
@@ -596,6 +618,20 @@ namespace Ironfront.Net.Unity.Client
         {
             if (GetComponent<ClientChatSender>() == null)
                 gameObject.AddComponent<ClientChatSender>();
+        }
+
+        /// <summary>
+        /// Makes sure an online match pushes moved transforms into physics once a frame rather
+        /// than on every query (<see cref="ClientPhysicsSync"/>).
+        /// </summary>
+        /// <remarks>
+        /// Added in code for <see cref="EnsureVehicleStage"/>'s reason, and only here, past the
+        /// offline and dedicated-server returns: the server and practice keep auto-sync.
+        /// </remarks>
+        private void EnsurePhysicsSync()
+        {
+            if (GetComponent<ClientPhysicsSync>() == null)
+                gameObject.AddComponent<ClientPhysicsSync>();
         }
 
         private void OnSpawnActor(SpawnActorMessage message)

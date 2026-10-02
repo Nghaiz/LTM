@@ -72,16 +72,19 @@ param(
 
     [string] $Name = "",
 
-    # Built by tools/build-player.ps1. There is no separate shipping client target yet; this is
-    # the same binary as the game server, launched without a harness role so LaneBHarness stays
-    # inert.
+    # Built by tools/build-player.ps1: the release player by default (IL2CPP, no diagnostics),
+    # or with -Development the development player, which also carries LaneBHarness -- inert here
+    # because this script sets no harness role. -LogFrames needs one of the builds that keeps
+    # Net/Diagnostics (-Development or -KeepDiagnostics).
     [string] $PlayerPath = "build/windows/Ironfront.exe",
 
     # Where the client writes its log. Read this first when a join does not happen.
     [string] $LogFile = "",
 
-    # IRONFRONT_LOG_FRAMES=1: a [frames] line every five seconds and a [hitch] line naming the
-    # heaviest PlayerLoop systems of every frame over 50 ms, in this client's log. For a
+    # IRONFRONT_LOG_FRAMES=1: a [frames] and a [loop] line every five seconds (the [loop] line
+    # splits the average frame by PlayerLoop system), a [physics] line counting the rigidbodies
+    # the step simulates and a [render] line with what an average frame drew, and a [hitch] line
+    # naming the heaviest systems of every frame over 50 ms, in this client's log. For a
     # playtest that is chasing stutter; off otherwise.
     [switch] $LogFrames
 )

@@ -1634,6 +1634,17 @@ public class AiActorController : ActorController
 
 	private void LookDirection(Vector3 direction)
 	{
+		// A bot asked to face the point it stands on keeps the facing it has. Bots released
+		// together are placed on a capture point's authored spawn children, picked at random, so
+		// two of them can stand on the same one; a member hailing its leader there (#433 closed
+		// only the leader hailing itself) turned to world north and Unity logged "Look rotation
+		// viewing vector is zero" -- 22 times on the three v3.1.1 servers on 2026-10-01, nearly
+		// every one within seconds of a bot release. Reproduced offline on Forest Lake from
+		// EmoteHailLeader.
+		if (direction.sqrMagnitude < 1e-8f)
+		{
+			return;
+		}
 		targetFacingDirection = Quaternion.LookRotation(direction);
 	}
 
@@ -3264,7 +3275,13 @@ public class AiActorController : ActorController
 	// Not compiled into the dedicated server: IMGUI is stripped there, and Unity logs
 	// 'OnGUI function detected ... not called' for every instance -- once per bot, 402
 	// lines in one 100-bot match (B4, 2026-09-30).
-#if !UNITY_SERVER
+	//
+	// Nor into a release client: it draws only with ActorManager.debug on, yet Unity calls
+	// an OnGUI twice a frame (layout and repaint) for every instance that has one -- every
+	// bot of an offline match. Vehicle.OnGUI is the same overlay and cost a networked client
+	// 0.6 ms a frame on Forest Lake (development build profile, 2026-10-02). The Editor and
+	// development builds keep it.
+#if !UNITY_SERVER && (UNITY_EDITOR || DEVELOPMENT_BUILD)
 	private void OnGUI()
 	{
 		if (!ActorManager.instance.debug || actor.dead || !(Camera.main != null))

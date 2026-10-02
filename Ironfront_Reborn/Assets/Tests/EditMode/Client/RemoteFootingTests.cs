@@ -44,6 +44,34 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void ABodyNobodySeesKeepsItsLastFootingWithoutAProbe()
+        {
+            var footing = new System.Collections.Generic.Dictionary<ushort, float>();
+            Assert.IsTrue(RemoteActorRegistry.TryFooting(footing, 7, seen: true, 5000f, 10.15f, 5000f, out _),
+                "Setup: the seen body found no ground");
+
+            // The ground goes, so only a probe could notice; walking on, the body rose 2 m.
+            _ground.transform.position = new Vector3(5000f, 500f, 5000f);
+            Physics.SyncTransforms();
+            Assert.IsTrue(RemoteActorRegistry.TryFooting(footing, 7, seen: false, 5000f, 12.15f, 5000f, out float ground),
+                "a body out of view was probed, and lost its footing on ground a probe could not find");
+            Assert.AreEqual(12f, ground, 1e-3f, "the unseen body did not keep its rise above its feet");
+
+            Assert.IsFalse(RemoteActorRegistry.TryFooting(footing, 7, seen: true, 5000f, 12.15f, 5000f, out _),
+                "a body in view was not probed: it kept a footing on ground that is gone");
+        }
+
+        [Test]
+        public void ABodyNobodyHasProbedYetIsProbed()
+        {
+            var footing = new System.Collections.Generic.Dictionary<ushort, float>();
+
+            Assert.IsTrue(RemoteActorRegistry.TryFooting(footing, 9, seen: false, 5000f, 10.15f, 5000f, out float ground),
+                "a body with no footing yet was left in the air");
+            Assert.AreEqual(10f, ground, 1e-3f);
+        }
+
+        [Test]
         public void ABodyInTheAirStaysInTheAir()
         {
             float midJump = 10f + RemoteActorRegistry.FootingReachMetres + 0.3f;

@@ -71,6 +71,10 @@ public class Tank : Vehicle
 
 	private void Update()
 	{
+		if (!WheelsSimulated())
+		{
+			return;
+		}
 		UpdateTrack(tracksLeft, wheelCollidersLeft, trackOffsetLeft);
 		UpdateTrack(tracksRight, wheelCollidersRight, trackOffsetRight);
 	}

@@ -45,10 +45,11 @@ namespace Ironfront.Net.Unity.Client
         private readonly Transform _head;
         private readonly Rigidbody _weapon;
         private readonly List<Object> _owned;
+        private readonly SkinnedMeshRenderer[] _skins;
 
         private RemoteCorpse(
             GameObject root, RemoteRagdoll ragdoll, Transform chest, Transform head, Rigidbody weapon,
-            List<Object> owned, ushort actorId, int team, float diedAt)
+            List<Object> owned, SkinnedMeshRenderer[] skins, ushort actorId, int team, float diedAt)
         {
             _root = root;
             _ragdoll = ragdoll;
@@ -56,6 +57,7 @@ namespace Ironfront.Net.Unity.Client
             _head = head;
             _weapon = weapon;
             _owned = owned;
+            _skins = skins;
             ActorId = actorId;
             Team = team;
             DiedAt = diedAt;
@@ -101,6 +103,152 @@ namespace Ironfront.Net.Unity.Client
         public bool IsResting => _ragdoll.IsResting;
 
         /// <summary>
+        /// How long after the death, or after the last blast that threw it, a body is left to fall
+        /// before it may be settled.
+        /// </summary>
+        public const float SettleAfterSeconds = 1.5f;
+
+        /// <summary>How long every part must stay within <see cref="StillMetres"/> before the body is settled.</summary>
+        /// <remarks>
+        /// A body in the air can never pass: around the top of a straight toss it still moves 0.3 m
+        /// in a quarter of a second either side, and one settled there would hang in the air until
+        /// something touched it.
+        /// </remarks>
+        public const float StillSeconds = 0.5f;
+
+        /// <summary>
+        /// How far a part may wander in <see cref="StillSeconds"/> and still count as lying still.
+        /// </summary>
+        /// <remarks>
+        /// <b>Distance, not speed.</b> A ragdoll on uneven ground shivers: its parts keep a speed
+        /// well above any threshold while going nowhere. Judged by speed, most corpses of a
+        /// 100-bot Forest Lake match never counted as still -- 145 of 229 corpse bodies awake
+        /// three and a half minutes in (<c>[physics]</c> census, 2026-10-02).
+        /// </remarks>
+        public const float StillMetres = 0.05f;
+
+        /// <summary>
+        /// After this long a body that still creeps -- sliding down a slope, or shoved about by
+        /// the bodies around it -- is settled once no part wanders more than
+        /// <see cref="TwitchMetres"/> in <see cref="StillSeconds"/>.
+        /// </summary>
+        public const float TwitchSettleSeconds = 6f;
+
+        /// <summary>The wander allowed once a body has lain <see cref="TwitchSettleSeconds"/>: a creep, not a fall.</summary>
+        public const float TwitchMetres = 0.15f;
+
+        /// <summary><c>Time.time</c> since every part has been within reach of where it was, or negative.</summary>
+        public float StillSince { get; private set; } = -1f;
+
+        // Where every part was at StillSince: the ragdoll's parts, then the dropped weapon.
+        private readonly Vector3[] _stillAt = new Vector3[RemoteRagdoll.PartCount + 1];
+
+        /// <summary><c>Time.time</c> of the last blast that threw the body, or negative before any.</summary>
+        public float ThrownAt { get; private set; } = -1f;
+
+        /// <summary>Whether no part is moving: every one asleep, or frozen by <see cref="TickSettle"/>.</summary>
+        public bool IsAsleep => _ragdoll.IsAsleep && (_weapon == null || _weapon.isKinematic || _weapon.IsSleeping());
+
+        /// <summary>Whether <see cref="TickSettle"/> has frozen the body and no blast has thrown it since.</summary>
+        public bool IsSettled => _ragdoll.IsSettled;
+
+        /// <summary>
+        /// Settles a body that has lain still long enough: see <see cref="RemoteRagdoll.Settle"/>.
+        /// Called every frame while the body lies; cheap once it is settled.
+        /// </summary>
+        public void TickSettle(float now)
+        {
+            if (SinkStartedAt >= 0f) return;
+
+            float disturbed = Mathf.Max(DiedAt, ThrownAt);
+            if (now - disturbed < SettleAfterSeconds)
+            {
+                StillSince = -1f;
+                return;
+            }
+
+            // Asleep by PhysX's own measure is still too: freeze it before something wakes it.
+            if (IsAsleep)
+            {
+                if (!IsSettled) Settle();
+                return;
+            }
+
+            float reach = now - DiedAt >= TwitchSettleSeconds ? TwitchMetres : StillMetres;
+            if (StillSince < 0f || FarthestMoveSqr() > reach * reach)
+            {
+                StillSince = now;
+                SampleParts();
+                return;
+            }
+
+            if (now - StillSince >= StillSeconds) Settle();
+        }
+
+        private void SampleParts()
+        {
+            _ragdoll.SamplePositions(_stillAt);
+            _stillAt[RemoteRagdoll.PartCount] = _weapon != null ? _weapon.position : Vector3.zero;
+        }
+
+        private float FarthestMoveSqr()
+        {
+            float farthest = _ragdoll.FarthestMoveSqr(_stillAt);
+            if (_weapon != null)
+                farthest = Mathf.Max(farthest, (_weapon.position - _stillAt[RemoteRagdoll.PartCount]).sqrMagnitude);
+            return farthest;
+        }
+
+        private void Settle()
+        {
+            _ragdoll.Settle();
+            if (_weapon != null && !_weapon.isKinematic)
+            {
+                _weapon.interpolation = RigidbodyInterpolation.None;
+                _weapon.isKinematic = true;
+                _weapon.detectCollisions = false;
+            }
+            for (int i = 0; i < _skins.Length; i++) BoundTheLyingBody(_skins[i]);
+            StillSince = -1f;
+        }
+
+        /// <summary>A body's thickness around its bones, in metres, for the bounds of one lying still.</summary>
+        private const float BodyThicknessMetres = 0.4f;
+
+        /// <summary>
+        /// Gives a settled body fixed bounds round the pose it lies in and stops re-bounding it
+        /// every frame.
+        /// </summary>
+        /// <remarks>
+        /// A body in flight needs <c>updateWhenOffscreen</c>: its root stays where it died while its
+        /// bones go wherever the ragdoll throws them, so bounds read off the root would cull it. A
+        /// settled body does not move, and re-bounding it every frame, on screen or off, is up to 32
+        /// skinned meshes of work for nothing (Unity, <i>Optimize your game performance for consoles
+        /// and PCs</i>, "Update only when visible").
+        /// </remarks>
+        private static void BoundTheLyingBody(SkinnedMeshRenderer skin)
+        {
+            if (skin == null) return;
+            Transform space = skin.rootBone != null ? skin.rootBone : skin.transform;
+            Bounds local = default;
+            bool any = false;
+            foreach (Transform bone in skin.bones)
+            {
+                if (bone == null) continue;
+                Vector3 point = space.InverseTransformPoint(bone.position);
+                if (any) local.Encapsulate(point);
+                else local = new Bounds(point, Vector3.zero);
+                any = true;
+            }
+            if (!any) return;
+
+            float scale = Mathf.Max(1e-4f, space.lossyScale.x);
+            local.Expand(2f * BodyThicknessMetres / scale);
+            skin.updateWhenOffscreen = false;
+            skin.localBounds = local;
+        }
+
+        /// <summary>
         /// Copies <paramref name="source"/>'s body as it stands now, or null when it is not a humanoid
         /// the ragdoll can be built on.
         /// </summary>
@@ -139,7 +287,9 @@ namespace Ironfront.Net.Unity.Client
 
             Transform chest = Resolve(HumanBodyBones.Chest) ?? Resolve(HumanBodyBones.Spine);
             Rigidbody weapon = DetachWeapon(Resolve(HumanBodyBones.RightHand), root.transform);
-            return new RemoteCorpse(root, ragdoll, chest, Resolve(HumanBodyBones.Head), weapon, owned, actorId, team, now);
+            var skins = new SkinnedMeshRenderer[skinned.Count];
+            for (int i = 0; i < skinned.Count; i++) skins[i] = skinned[i].Value;
+            return new RemoteCorpse(root, ragdoll, chest, Resolve(HumanBodyBones.Head), weapon, owned, skins, actorId, team, now);
         }
 
         /// <summary>
@@ -168,12 +318,22 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>A blast rolls the body and knocks the dropped weapon about.</summary>
-        public void ThrowByBlast(float force, Vector3 centre, float radius)
+        public void ThrowByBlast(float force, Vector3 centre, float radius, float now)
         {
             if (SinkStartedAt >= 0f) return;
-            _ragdoll.AddExplosionForce(force, centre, radius, 1f);
-            if (_weapon != null && !_weapon.isKinematic)
+            ThrownAt = now;
+            StillSince = -1f;
+            for (int i = 0; i < _skins.Length; i++)
             {
+                if (_skins[i] != null) _skins[i].updateWhenOffscreen = true;
+            }
+            _ragdoll.AddExplosionForce(force, centre, radius, 1f);
+            if (_weapon != null)
+            {
+                // Frozen with the body when it settled (a sinking body never gets here).
+                _weapon.isKinematic = false;
+                _weapon.detectCollisions = true;
+                _weapon.interpolation = RemoteRagdoll.InterpolationAt(_weapon.position, Camera.main);
                 _weapon.AddExplosionForce(force * _weapon.mass, centre, radius, 1f, ForceMode.Impulse);
             }
         }
@@ -319,7 +479,7 @@ namespace Ironfront.Net.Unity.Client
             box.size = Vector3.Max(local.size, new Vector3(0.05f, 0.05f, 0.05f));
             Rigidbody body = mount.gameObject.AddComponent<Rigidbody>();
             body.mass = WeaponMass;
-            body.interpolation = RigidbodyInterpolation.Interpolate;
+            body.interpolation = RemoteRagdoll.InterpolationAt(mount.position, Camera.main);
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             return body;
         }

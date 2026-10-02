@@ -209,6 +209,12 @@ namespace Ironfront.Net.Unity.Client
         public bool IsRagdollPosed => _ragdoll != null && _ragdoll.IsActive;
 
         /// <summary>
+        /// Whether a camera drew this body last frame, its shadow included. True when there is no
+        /// renderer to ask, so nothing is skipped for a body whose visibility is unknown.
+        /// </summary>
+        public bool IsSeen => _teamRenderer == null || _teamRenderer.isVisible;
+
+        /// <summary>
         /// How far the head bone stands over this body's root in the pose last drawn: what a swimmer
         /// is placed by (<see cref="SwimPresentation.RootHeight"/>).
         /// </summary>
@@ -628,7 +634,14 @@ namespace Ironfront.Net.Unity.Client
             if (_ragdoll == null || !_ragdoll.IsActive) return;
 
             _ragdoll.SetFloating(_state.IsInWater);
-            if (_state.IsAlive) _ragdoll.Steer(pelvis);
+            if (!_state.IsAlive) return;
+
+            // No camera, no saving: the body simulates.
+            Camera viewer = Camera.main;
+            float within = RemoteRagdoll.SimulateWithinMetres;
+            bool near = viewer == null || (pelvis - viewer.transform.position).sqrMagnitude <= within * within;
+            _ragdoll.SimulateWhereSeen(near, Time.time);
+            _ragdoll.Steer(pelvis);
         }
 
         /// <summary>Extra drops thrown when a hit kills, on top of the damage's own.</summary>

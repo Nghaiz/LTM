@@ -138,6 +138,17 @@ namespace Ironfront.Net.Unity.Server
             // shipped inside a networking fix.
             Time.maximumDeltaTime = MaxDeltaTime;
 
+            // Practice (NetContext.IsDeclaredOffline). The whole object goes, as the bot soak
+            // switches it off, rather than this component returning early: the tick loop, match
+            // controller and master link beside it are the netcode too, and the role must stay
+            // Offline for the single-player paths to run.
+            if (NetContext.IsDeclaredOffline)
+            {
+                Debug.Log("[net] offline: no server will be started.");
+                gameObject.SetActive(false);
+                return;
+            }
+
             // The mirror of NetClientBootstrap's dedicated-server guard, and the other half of
             // AD-1 ("server-authoritative, no host/listen-server"). X-50 stopped a headless host
             // dialling itself; this stops a rendered process launched to JOIN a match from
