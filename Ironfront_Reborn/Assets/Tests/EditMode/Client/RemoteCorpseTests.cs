@@ -121,6 +121,38 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void ASettledBodyIsBoundedOnceRatherThanEveryFrame()
+        {
+            AddFloor();
+            Animator animator = SpawnProxy(Vector3.zero);
+            _corpse = Copy(animator);
+            _corpse.Fell(Vector3.forward * 20f, HumanBodyBones.Chest, new Vector3(3f, 0f, 0f), 0.55f);
+            SkinnedMeshRenderer[] skins = _corpse.Root.GetComponentsInChildren<SkinnedMeshRenderer>();
+            Assert.IsNotEmpty(skins, "Setup: the corpse copied no skinned body");
+            foreach (SkinnedMeshRenderer skin in skins)
+                Assert.IsTrue(skin.updateWhenOffscreen, "a falling body must be re-bounded as it flies");
+
+            Simulate(6f);
+            Assert.IsTrue(_corpse.IsSettled, "Setup: the body did not settle");
+
+            foreach (SkinnedMeshRenderer skin in skins)
+            {
+                Assert.IsFalse(skin.updateWhenOffscreen, $"{skin.name} is still re-bounded every frame while it lies still");
+                Transform space = skin.rootBone != null ? skin.rootBone : skin.transform;
+                foreach (Transform bone in skin.bones)
+                {
+                    if (bone == null) continue;
+                    Assert.IsTrue(skin.localBounds.Contains(space.InverseTransformPoint(bone.position)),
+                        $"{bone.name} lies outside {skin.name}'s fixed bounds, so the body would be culled while on screen");
+                }
+            }
+
+            _corpse.ThrowByBlast(8f, _corpse.ChestPosition + new Vector3(0.5f, -0.3f, 0f), 6f, 6f);
+            foreach (SkinnedMeshRenderer skin in skins)
+                Assert.IsTrue(skin.updateWhenOffscreen, "a body thrown by a blast must be re-bounded as it flies again");
+        }
+
+        [Test]
         public void ABodyKilledStandingStillStillFalls()
         {
             // A death a snapshot reported without S_DEATH has no impulse, and a bot standing still
