@@ -89,6 +89,8 @@
              Link="Linked\RoomBotChoice.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\GraphicsPresetRules.cs"
              Link="Linked\GraphicsPresetRules.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\VegetationRules.cs"
+             Link="Linked\VegetationRules.cs" />
   </ItemGroup>
 
 </Project>

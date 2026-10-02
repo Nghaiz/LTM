@@ -55,6 +55,9 @@ namespace Ironfront.Rendering
         /// <summary>Added to the stretched shadow distance, for the tallest tree's shadow.</summary>
         internal const float ShadowReachMetres = 20f;
 
+        /// <summary>Structured buffers the instanced tree shaders read per vertex.</summary>
+        internal const int VertexBufferInputs = 3;
+
         private const int ThreadGroupSize = 64;
         private const int ArgsPerCommand = 5;
 
@@ -129,6 +132,10 @@ namespace Ironfront.Rendering
             _terrain = GetComponent<Terrain>();
             string reason = null;
             if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsInstancing) reason = "no compute shaders or instancing";
+            // The tree shaders read three structured buffers in the vertex stage
+            // (TreeInstancing.cginc). A device that reports compute but no vertex-stage buffers
+            // would draw every tree as nothing, with the terrain's own trees already culled.
+            else if (SystemInfo.maxComputeBufferInputsVertex < VertexBufferInputs) reason = $"{SystemInfo.maxComputeBufferInputsVertex} vertex-stage buffers, {VertexBufferInputs} needed";
             else if ((_culling = Resources.Load<ComputeShader>("TreeCulling")) == null) reason = "no TreeCulling compute shader";
             else _catalog = TreeCatalog.TryBuild(_terrain, out reason);
 
