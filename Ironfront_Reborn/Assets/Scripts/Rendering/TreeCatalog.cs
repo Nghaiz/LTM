@@ -47,6 +47,7 @@ namespace Ironfront.Rendering
             public Part[][] Lods;
             public int Count;
             public float LargestSquaredScale;
+            public float SmallestSquaredScale = float.PositiveInfinity;
         }
 
         internal struct Cell
@@ -198,6 +199,7 @@ namespace Ironfront.Rendering
                 PrototypeOf[i] = (uint)tree.prototypeIndex;
                 prototype.Count++;
                 prototype.LargestSquaredScale = Mathf.Max(prototype.LargestSquaredScale, scale * scale);
+                prototype.SmallestSquaredScale = Mathf.Min(prototype.SmallestSquaredScale, scale * scale);
 
                 int column = Mathf.Clamp((int)(tree.position.x * columns), 0, columns - 1);
                 int row = Mathf.Clamp((int)(tree.position.z * rows), 0, rows - 1);

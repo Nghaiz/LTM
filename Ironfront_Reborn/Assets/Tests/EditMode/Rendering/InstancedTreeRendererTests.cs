@@ -68,6 +68,30 @@ namespace Ironfront.Rendering.Tests
         }
 
         [Test]
+        public void OnlyTheLodsATreeIsOnAreDrawn()
+        {
+            _trees.Frame(_camera);
+
+            // One cell a tree here, so the reachable LODs are exactly the kept ones: LOD 3 with its
+            // shadow, and the last LOD without.
+            LOD[] lods = AssetDatabase.LoadAssetAtPath<GameObject>(PinePath).GetComponent<LODGroup>().GetLODs();
+            int expected = Submeshes(lods[3], shadowCastersOnly: true) + Submeshes(lods[4], shadowCastersOnly: false);
+            Assert.AreEqual(expected, _trees.DrawCalls,
+                "draws were issued for LODs and shadows no tree is on: each costs a draw call a pass with no instances");
+        }
+
+        private static int Submeshes(LOD lod, bool shadowCastersOnly)
+        {
+            int count = 0;
+            foreach (Renderer renderer in lod.renderers)
+            {
+                if (shadowCastersOnly && renderer.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off) continue;
+                count += renderer.GetComponent<MeshFilter>().sharedMesh.subMeshCount;
+            }
+            return count;
+        }
+
+        [Test]
         public void TheTerrainDrawsNoTreeMeanwhile()
         {
             float bias = _terrain.treeLODBiasMultiplier;
