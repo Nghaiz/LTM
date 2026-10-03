@@ -203,7 +203,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 if (text.name == "PreviewTitle") text.text = mapName;
                 if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat0") text.text = "8";
                 if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat1") text.text = RoomBotChoice.Preview(slider.Value);
-                if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat2") text.text = RoomSettingsChoice.Describe(RoomSettings.Default);
+                if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat2") text.text = RoomSettingsChoice.DescribeRule(RoomSettings.Default);
                 if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat3") text.text = "PUBLIC";
             }
 

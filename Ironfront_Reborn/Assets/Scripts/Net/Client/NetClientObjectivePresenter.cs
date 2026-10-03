@@ -230,6 +230,11 @@ namespace Ironfront.Net.Unity.Client
 
             MatchStateMessage state = _model.Current;
 
+            // The match's own word on the room's mode (phase P32): covers a client that joined
+            // without a room push (a rejoin, a direct connect), and agrees with it otherwise.
+            NetRoomRules.Assign(NetRoomRules.RoomId,
+                new RoomSettings(state.Mode, state.Rule, state.VictoryPoints, state.NightVisionSeconds));
+
             // -1 sentinel: "no timer this phase" (Playing). The HUD hides
             // the timer element on that value rather than rendering a zero.
             int secondsRemaining = _model.HasTimer

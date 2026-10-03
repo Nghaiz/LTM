@@ -1119,9 +1119,18 @@ namespace Ironfront.Net.Unity.EditorTools
             points.contentType = InputField.ContentType.IntegerNumber;
             points.characterLimit = 4;
             points.text = RoomRules.DefaultMarginPoints.ToString();
+            FieldCaption(points, half, "POINTS");
             const float formBottom = formTop - 360f;
+            // The password and, beside it, Night Mode's night-vision battery (phase P32), which the
+            // screen opens only while Night Mode is chosen.
             InputField password = PackField(panel, "Password", "Room password",
-                new Vector2(leftCentre, formBottom + 28f), fieldSize, password: true);
+                new Vector2(leftHalf, formBottom + 28f), new Vector2(half, 56f), password: true);
+            InputField vision = PackField(panel, "NightVision", RoomSettingsChoice.VisionPlaceholder(),
+                new Vector2(rightHalf, formBottom + 28f), new Vector2(half, 56f), password: false);
+            vision.contentType = InputField.ContentType.IntegerNumber;
+            vision.characterLimit = 3;
+            vision.interactable = false;
+            FieldCaption(vision, half, "SECONDS OF NIGHT VISION");
 
             // `.map-preview`, level with the form column, with three stat cells at its foot. The
             // title is bound to the dropdown rather than authored, so the card cannot name a map
@@ -1218,9 +1227,10 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_modeDropdown", mode);
             Assign(so, "_ruleDropdown", rule);
             Assign(so, "_pointsField", points);
+            Assign(so, "_visionField", vision);
             so.ApplyModifiedPropertiesWithoutUndo();
             ConfigureKeyboard(panel,
-                new Selectable[] { name, map, mode, maxPlayers, rule, isPrivate, points, password, botTrack, create, back },
+                new Selectable[] { name, map, mode, maxPlayers, rule, isPrivate, points, password, vision, botTrack, create, back },
                 create, back);
 
             log.AppendLine("create room: criterion 8's even-seats check renders on its error line.");
@@ -1228,6 +1238,21 @@ namespace Ironfront.Net.Unity.EditorTools
                            + " slider bounded by the servers' capacity (protocol 13).");
             log.AppendLine("create room: mode, victory rule and points are room settings (protocol 14).");
             return panel;
+        }
+
+        /// <summary>
+        /// A small caption at the right end of a number field, so the number still says what it
+        /// is once the placeholder has gone (phase P32: the points and the night-vision battery).
+        /// </summary>
+        private static void FieldCaption(InputField field, float width, string caption)
+        {
+            Text text = Label(field.gameObject, "Caption", caption, 11,
+                new Vector2((width * 0.5f) - 110f, 0f), new Vector2(200f, 20f));
+            text.alignment = TextAnchor.MiddleRight;
+            text.fontStyle = FontStyle.Bold;
+            text.color = Hex("6F8DA3");
+            text.resizeTextForBestFit = false;
+            text.raycastTarget = false;
         }
 
         /// <summary>

@@ -57,6 +57,43 @@ namespace Ironfront.Client.Flow.Tests
             Assert.True(RoomRules.AreValid(ForestLake, night));
         }
 
+        [Theory]
+        [InlineData("", 45)]
+        [InlineData("90", 90)]
+        [InlineData("10", 10)]
+        [InlineData("180", 180)]
+        public void TheNightVisionBatteryIsReadAtNight(string typed, int seconds)
+        {
+            Assert.True(RoomSettingsChoice.TryRead(GameMode.Night, VictoryRule.Margin, "", typed, ForestLake, out RoomSettings night, out _));
+            Assert.Equal(seconds, night.NightVisionSeconds);
+            Assert.True(RoomRules.AreValid(ForestLake, night));
+        }
+
+        [Theory]
+        [InlineData("9", "between 10 and 180")]
+        [InlineData("181", "between 10 and 180")]
+        [InlineData("x", "number of seconds")]
+        public void ABatteryOutOfRangeIsRefusedInWords(string typed, string says)
+        {
+            Assert.False(RoomSettingsChoice.TryRead(GameMode.Night, VictoryRule.Margin, "", typed, ForestLake, out _, out string error));
+            Assert.Contains(says, error);
+        }
+
+        [Fact]
+        public void ByDayTheBatteryFieldIsIgnored()
+        {
+            Assert.True(RoomSettingsChoice.TryRead(GameMode.PointMatch, VictoryRule.Margin, "", "999", Dustbowl, out RoomSettings day, out _));
+            Assert.Equal(0, day.NightVisionSeconds);
+        }
+
+        [Fact]
+        public void TheFormOffersNightMode()
+        {
+            Assert.Contains(GameMode.Night, RoomSettingsChoice.Modes);
+            Assert.Equal("NIGHT MODE", RoomSettingsChoice.ModeOption(GameMode.Night));
+            Assert.Equal("Night vision battery, seconds (10-180)", RoomSettingsChoice.VisionPlaceholder());
+        }
+
         [Fact]
         public void ChangingTheRuleSwapsADefaultButKeepsWhatTheHostTyped()
         {
@@ -80,6 +117,9 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Equal("FIRST TO 500", RoomSettingsChoice.Describe(new RoomSettings(GameMode.PointMatch, VictoryRule.Target, 500, 0)));
             Assert.Equal("NIGHT  ·  FIRST TO 500", RoomSettingsChoice.Describe(new RoomSettings(GameMode.Night, VictoryRule.Target, 500, 45)));
             Assert.Equal("Lead by 200 points to win.", RoomSettingsChoice.Sentence(RoomSettings.Default));
+            Assert.Equal("FIRST TO 500", RoomSettingsChoice.DescribeRule(new RoomSettings(GameMode.Night, VictoryRule.Target, 500, 45)));
+            Assert.Equal("Forest Lake  ·  NIGHT", RoomSettingsChoice.MapTitle("Forest Lake", GameMode.Night));
+            Assert.Equal("Forest Lake", RoomSettingsChoice.MapTitle("Forest Lake", GameMode.PointMatch));
         }
 
         [Fact]

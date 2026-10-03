@@ -32,8 +32,8 @@ last: carrying the mode and its settings to the game server and the HUD changes 
 | 3 | 2 | Vehicle slots at every Forest Lake flag, filled at random each match; random field vehicles | 13 | #515 |
 | 4 | 2 | Random ammo/medical supply crates each match (server deployables, crate visuals on the client) | 13 | #516 |
 | 5 | 3 | Physics: far corpses freeze without the long wait; parked remote vehicles are not rewritten | client | #517 |
-| 6 | 1 | Point Match rules (margin / target) from the lobby to the server and the score bar | 14 | (this PR) |
-| 7 | 1 | Night Mode: lobby, night lighting, pumpkins/candles/flag lights, battery night vision, HUD, sound | 14 | |
+| 6 | 1 | Point Match rules (margin / target) from the lobby to the server and the score bar | 14 | #518 |
+| 7 | 1 | Night Mode: lobby, night lighting, pumpkins/candles/flag lights, battery night vision, HUD, sound | 14 | (this PR) |
 | 8 | 1 | Night tactics for bots | 14 | |
 | 9 | — | Deploy master + servers, release (MAJOR: protocol 14) | | |
 
@@ -115,3 +115,19 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   mode and battery to the score bar, the Tab board and the victory banner. Not deployed yet: a
   protocol-14 master and servers would turn away every v3.4.0 player, so they go out with the
   release at the end of P32.
+- 2026-10-04 — PR 7 (item 1, Night Mode). The lobby offers NIGHT MODE (choosing it takes the form
+  to Forest Lake; another map takes it back to Point Match) with a night-vision battery field,
+  10-180 s. `NightModeDirector` puts the map in the dark from `NetRoomRules` on the game server and
+  every client (offline: the original's `GameManager.nightMode`), using
+  `Resources/NightMode/ForestLake`: exponential-squared fog 0.022 (a thing 45 m away keeps 37% of
+  itself, 70 m 9%), ambient light about a third of the original night's, moonlight 0.08, and the
+  original Halloween ambience. The server's dark matters as much as the clients': the original's
+  bots see by the fog (`CanSeeActor`, exp(-(r*fog)^2)), so they are half-blind too. On clients:
+  carved pumpkins with flickering candles (and plain ones) around every flag, and a lamp on a pole
+  beside each flag in the colour of the side that holds it, all without colliders. Night vision is
+  the original item's effect (green, brighter, camera noise, its clips) with the fog thinned to 35%,
+  on `N`, from a battery that drains while on, refills at a third of that rate, needs 15% to come
+  back on, and is full again each life; a HUD panel above the health readout shows the cells,
+  amber under a quarter, red and blinking when it is nearly out, with a synthesised low beep.
+  `TimeOfDay.SetNight` switches day and night on a running map (a server hosts room after room),
+  and the reflection probes re-render for it.
