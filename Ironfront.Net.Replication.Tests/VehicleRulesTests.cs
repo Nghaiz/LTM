@@ -30,7 +30,25 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData(VehicleKind.Aircraft)]
         [InlineData(VehicleKind.Boat)]
         public void ASquadHoldingAFlag_StaysOnFoot(VehicleKind kind)
-            => Assert.False(VehicleRules.ShouldBoard(kind, SquadRole.Defend, Far, 5f));
+            => Assert.False(VehicleRules.ShouldBoard(kind, SquadRole.Defend, Near, 5f));
+
+        /// <summary>
+        /// Phase P32: a squad respawned at an HQ and sent to hold a flag across the map takes the
+        /// jeep beside it instead of walking. Only standing at (near) the flag keeps it on foot.
+        /// </summary>
+        [Theory]
+        [InlineData(VehicleKind.Transport)]
+        [InlineData(VehicleKind.Armour)]
+        [InlineData(VehicleKind.Aircraft)]
+        public void ASquadSentToHoldAFarFlag_RidesThere(VehicleKind kind)
+            => Assert.True(VehicleRules.ShouldBoard(kind, SquadRole.Defend, Far, 5f));
+
+        [Fact]
+        public void TheDefenceRideLine_IsTheAttackRideLine()
+        {
+            Assert.False(VehicleRules.ShouldBoard(VehicleKind.Transport, SquadRole.Defend, VehicleRules.RideDistance - 1f, 5f));
+            Assert.True(VehicleRules.ShouldBoard(VehicleKind.Transport, SquadRole.Defend, VehicleRules.RideDistance, 5f));
+        }
 
         [Theory]
         [InlineData(VehicleKind.Transport)]

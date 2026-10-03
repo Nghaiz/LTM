@@ -33,6 +33,13 @@ namespace Ironfront.Net.Replication.Ai
     /// half the trip it saves; and a tank with an enemy in its sights inside
     /// <see cref="ArmourStandoff"/> stops and fires from there.
     /// </para>
+    /// <para>
+    /// <b>A squad sent to hold a FAR flag rides there (phase P32).</b> "Holding a flag stays on
+    /// foot" was written for a squad standing at the flag it holds, and refused a squad ordered to
+    /// hold one four hundred metres away just as firmly: bots respawned at an HQ beside a jeep for
+    /// that and walked the whole way. Defending now refuses a vehicle only within
+    /// <see cref="RideDistance"/> of the flag, the same line an attack rides from.
+    /// </para>
     /// </remarks>
     public static class VehicleRules
     {
@@ -55,7 +62,11 @@ namespace Ironfront.Net.Replication.Ai
         /// </summary>
         public static bool ShouldBoard(VehicleKind kind, SquadRole role, float objectiveDistance, float vehicleDistance)
         {
-            if (role == SquadRole.Defend || role == SquadRole.Flank)
+            if (role == SquadRole.Flank)
+            {
+                return false;
+            }
+            if (role == SquadRole.Defend && objectiveDistance < RideDistance)
             {
                 return false;
             }

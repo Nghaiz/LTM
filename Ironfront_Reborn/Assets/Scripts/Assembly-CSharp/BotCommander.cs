@@ -367,7 +367,8 @@ public sealed class BotCommander : MonoBehaviour
 			.Append(splits[(int)Squad.SplitReason.Rogue]).Append(" crew ").Append(splits[(int)Squad.SplitReason.Crew])
 			.Append(" full ").Append(splits[(int)Squad.SplitReason.VehicleFull]).Append(", left alone by a death ")
 			.Append(Squad.Census.LeftAlone[team]).Append(", merged ").Append(Squad.Census.Merged[team])
-			.Append(", reinforced by a spawn ").Append(Squad.Census.Reinforced[team]);
+			.Append(", reinforced by a spawn ").Append(Squad.Census.Reinforced[team])
+			.Append(", respawned for a vehicle ").Append(Squad.Census.SpawnedForVehicle[team]);
 
 		bool changed = summary != _lastSummary[team];
 		if (!changed && Time.time - _lastLogged[team] < QuietLogPeriod)
