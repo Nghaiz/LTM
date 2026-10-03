@@ -492,6 +492,12 @@ public class AstarPath : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// Failed searches, reported as one line a minute by reason rather than one log line each
+	/// (playtest 2026-10-03, item 3f). See <see cref="Ironfront.Net.Unity.PathFailureSummary"/>.
+	/// </summary>
+	public static readonly Ironfront.Net.Unity.PathFailureSummary PathFailures = new Ironfront.Net.Unity.PathFailureSummary();
+
 	private void LogPathResults(Path p)
 	{
 		// Abandoned by its seeker on purpose: no result, and no failure either.
@@ -499,7 +505,18 @@ public class AstarPath : MonoBehaviour
 		{
 			return;
 		}
-		if (logPathResults != 0 && (logPathResults != PathLog.OnlyErrors || p.error))
+		// Counted whatever logPathResults says, and never printed one by one: a failed search is
+		// a bot asking again, not an error anybody can act on. This runs on the pathfinding
+		// thread: no Unity API here (see PathFailureSummary.Record).
+		if (p.error)
+		{
+			if (!Ironfront.Net.Unity.PathFailureSummary.IsCancellation(p.errorLog))
+			{
+				PathFailures.Record(p.errorLog);
+			}
+			return;
+		}
+		if (logPathResults != 0 && logPathResults != PathLog.OnlyErrors)
 		{
 			string message = p.DebugString(logPathResults);
 			if (logPathResults == PathLog.InGame)
@@ -518,6 +535,11 @@ public class AstarPath : MonoBehaviour
 		if (!Application.isPlaying)
 		{
 			return;
+		}
+		string pathFailures = PathFailures.TakeDueSummary(Time.realtimeSinceStartup);
+		if (pathFailures != null)
+		{
+			Debug.Log(pathFailures);
 		}
 		PerformBlockingActions();
 		if (threadEnumerator != null)
