@@ -56,8 +56,9 @@ namespace Ironfront.Net.Unity.Client.Tests
             var quiet = new RoomInfo { Name = "Quiet", MapId = 1, MaxPlayers = 8, BotCount = 0 };
 
             StringAssert.StartsWith(MenuRoomBrowserScreen.MapLabel(crowded), MenuRoomBrowserScreen.MapCell(crowded));
-            StringAssert.EndsWith("100 bots", MenuRoomBrowserScreen.MapCell(crowded));
-            StringAssert.EndsWith("no bots", MenuRoomBrowserScreen.MapCell(quiet));
+            StringAssert.Contains("100 bots", MenuRoomBrowserScreen.MapCell(crowded));
+            StringAssert.Contains("no bots", MenuRoomBrowserScreen.MapCell(quiet));
+            StringAssert.EndsWith("LEAD BY 200", MenuRoomBrowserScreen.MapCell(quiet));
         }
 
         [Test]

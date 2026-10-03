@@ -238,7 +238,7 @@ namespace Ironfront.Net.Unity.Client
 
             NetClientBindings.Objectives?.SetAuthoritativeState(
                 (int)state.Phase, state.Score0, state.Score1, secondsRemaining,
-                state.HumanPlayerCount, state.VictoryPoints);
+                state.HumanPlayerCount, state.VictoryPoints, (int)state.Rule);
         }
 
         private void SetDimmed(bool dimmed)

@@ -76,6 +76,8 @@ namespace Ironfront.Net.Unity.Server
             + "unchanged; THIS is the one place that opts a live server into the protection.")]
         [SerializeField] private float _eliminationDwellSeconds = 5f;
 
+        private MatchRules _rules;
+
         private ServerTickLoop _loop;
         private MatchStateMachine _match;
 
@@ -147,6 +149,12 @@ namespace Ironfront.Net.Unity.Server
                 EliminationGraceSeconds = _eliminationGraceSeconds,
                 EliminationDwellSeconds = _eliminationDwellSeconds,
             };
+
+            // The hosted room's rule and points replace the authored ones (phase P32); offline,
+            // and before the master assigns a room, the authored ones stand.
+            _rules = rules;
+            if (NetRoomRules.RoomId != 0) rules.Apply(NetRoomRules.Current);
+            NetRoomRules.Changed += OnRoomRulesChanged;
 
             _actorIds = new ActorIdPool(
                 ActorIdPool.MaxCapacity, rules.ActorIdQuarantineSeconds);
@@ -267,8 +275,21 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// A room assigned while this server runs: its rule, points, mode and battery take effect
+        /// at once. The master assigns a room before its players arrive, so a round is not decided
+        /// under one rule and continued under another.
+        /// </summary>
+        private void OnRoomRulesChanged(RoomSettings settings)
+        {
+            if (_rules == null) return;
+            _rules.Apply(settings);
+            Debug.Log($"[match] playing room {NetRoomRules.RoomId} by its rules: {settings}.");
+        }
+
         private void OnDestroy()
         {
+            NetRoomRules.Changed -= OnRoomRulesChanged;
             if (_scoreOf != null) MatchScoreFeed.Clear(_scoreOf);
             if (_match == null) return;
             _match.PhaseChanged   -= OnPhaseChanged;

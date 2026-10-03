@@ -333,6 +333,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             {
                 case RoomLifecycleState.Waiting:
                     return $"{room.Members.Length} in the room, {BotsPhrase(room.BotCount)}. "
+                           + RoomSettingsChoice.Sentence(room.Settings) + " "
                            + "The match starts when everybody is ready.";
                 case RoomLifecycleState.Starting:
                     return "Everybody is ready. Starting...";

@@ -54,8 +54,13 @@ namespace Ironfront.Net.Protocol
     /// </remarks>
     public readonly struct MatchStateMessage
     {
-        /// <summary>u8 + u16 + u16 + u16 + u8 + u16 = 10 bytes.</summary>
-        public const int Size = 10;
+        /// <summary>u8 + u16 + u16 + u16 + u8 + u16 + u8 + u8 + u8 = 13 bytes.</summary>
+        /// <remarks>
+        /// <b>v14 (phase P32) appended three bytes</b>: <see cref="Rule"/>, <see cref="Mode"/> and
+        /// <see cref="NightVisionSeconds"/>, the room's settings the HUD needs and a late joiner can
+        /// only learn here. Size 10 -> 13 is a wire change on its own, hence protocol 14.
+        /// </remarks>
+        public const int Size = 13;
 
         public readonly MatchPhase Phase;
 
@@ -80,9 +85,27 @@ namespace Ironfront.Net.Protocol
         /// </summary>
         public readonly ushort VictoryPoints;
 
+        /// <summary>How <see cref="VictoryPoints"/> is read: a lead to build, or a total to reach (v14).</summary>
+        public readonly VictoryRule Rule;
+
+        /// <summary>The room's game mode (v14).</summary>
+        public readonly GameMode Mode;
+
+        /// <summary>Seconds a full night-vision battery holds; 0 by day (v14).</summary>
+        public readonly byte NightVisionSeconds;
+
         public MatchStateMessage(
             MatchPhase phase, ushort score0, ushort score1,
             ushort phaseSecondsRemaining, byte humanPlayerCount, ushort victoryPoints)
+            : this(phase, score0, score1, phaseSecondsRemaining, humanPlayerCount, victoryPoints,
+                   VictoryRule.Margin, GameMode.PointMatch, 0)
+        {
+        }
+
+        public MatchStateMessage(
+            MatchPhase phase, ushort score0, ushort score1,
+            ushort phaseSecondsRemaining, byte humanPlayerCount, ushort victoryPoints,
+            VictoryRule rule, GameMode mode, byte nightVisionSeconds)
         {
             Phase                 = phase;
             Score0                = score0;
@@ -90,6 +113,9 @@ namespace Ironfront.Net.Protocol
             PhaseSecondsRemaining = phaseSecondsRemaining;
             HumanPlayerCount      = humanPlayerCount;
             VictoryPoints         = victoryPoints;
+            Rule                  = rule;
+            Mode                  = mode;
+            NightVisionSeconds    = nightVisionSeconds;
         }
 
         /// <summary>
@@ -110,7 +136,7 @@ namespace Ironfront.Net.Protocol
             {
                 if (Phase != MatchPhase.Ended && Phase != MatchPhase.Resetting)
                     return TeamId.None;
-                return ConquestScoreRule.Decide(Score0, Score1, VictoryPoints);
+                return ConquestScoreRule.Decide(Score0, Score1, VictoryPoints, Rule);
             }
         }
 
@@ -123,6 +149,9 @@ namespace Ironfront.Net.Protocol
             w.WriteU16(PhaseSecondsRemaining);
             w.WriteU8(HumanPlayerCount);
             w.WriteU16(VictoryPoints);
+            w.WriteU8((byte)Rule);
+            w.WriteU8((byte)Mode);
+            w.WriteU8(NightVisionSeconds);
             return w.Ok ? w.Position : -1;
         }
 
@@ -143,11 +172,18 @@ namespace Ironfront.Net.Protocol
             ushort seconds   = r.ReadU16();
             byte humans      = r.ReadU8();
             ushort victory   = r.ReadU16();
+            byte rule        = r.ReadU8();
+            byte mode        = r.ReadU8();
+            byte vision      = r.ReadU8();
             if (!r.Ok) return false;
             if (phase > (byte)MatchPhase.Resetting) return false;
+            // An unknown rule or mode is refused for the phase byte's reason: a HUD switching on a
+            // value nothing handles is harder to diagnose than a dropped message.
+            if (rule > (byte)VictoryRule.Target || mode > (byte)GameMode.Night) return false;
 
             message = new MatchStateMessage(
-                (MatchPhase)phase, score0, score1, seconds, humans, victory);
+                (MatchPhase)phase, score0, score1, seconds, humans, victory,
+                (VictoryRule)rule, (GameMode)mode, vision);
             return true;
         }
     }

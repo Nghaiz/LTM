@@ -54,6 +54,27 @@ namespace Ironfront.Net.Replication.Match
         /// </remarks>
         public int VictoryPoints { get; set; } = 200;
 
+        /// <summary>
+        /// How <see cref="VictoryPoints"/> is read (protocol 14, phase P32): a lead to build, the
+        /// rule the game has always had, or a total to reach first. A room's host chooses it.
+        /// </summary>
+        public Ironfront.Net.Protocol.VictoryRule Rule { get; set; } = Ironfront.Net.Protocol.VictoryRule.Margin;
+
+        /// <summary>The room's game mode (protocol 14): sent to the clients beside the score.</summary>
+        public Ironfront.Net.Protocol.GameMode Mode { get; set; } = Ironfront.Net.Protocol.GameMode.PointMatch;
+
+        /// <summary>Seconds a full night-vision battery holds; 0 by day (protocol 14).</summary>
+        public byte NightVisionSeconds { get; set; }
+
+        /// <summary>Takes a room's settings: its rule, points, mode and battery (phase P32).</summary>
+        public void Apply(in Ironfront.Net.Protocol.RoomSettings settings)
+        {
+            Rule = settings.Rule;
+            VictoryPoints = settings.VictoryPoints;
+            Mode = settings.Mode;
+            NightVisionSeconds = settings.NightVisionSeconds;
+        }
+
         /// <summary>Points a team is awarded when an actor of the OTHER team dies.</summary>
         /// <remarks>
         /// Multiplied by the SCORING team's capture-point count before it lands — see

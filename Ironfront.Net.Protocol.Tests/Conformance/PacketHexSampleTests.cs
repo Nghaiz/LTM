@@ -560,7 +560,7 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(1, (byte)ChatChannel.Team);
         }
 
-        // -------------------------------------------------------- S_MATCH_STATE 0x45 (v5)
+        // -------------------------------------------------- S_MATCH_STATE 0x45 (v5, v14)
 
         // Written out from the layout, not captured from the implementation. Little-endian
         // throughout, and in declaration order:
@@ -571,7 +571,13 @@ namespace Ironfront.Net.Protocol.Tests
         //   phaseSecondsRemaining u16  00 00 = 0          Playing has no clock
         //   humanPlayerCount      u8   0C  = 12
         //   victoryPoints         u16  C8 00 = 200        NEW in v5, appended -> Size 8 -> 10
-        private const string MatchStateHex = "02 8A 00 2C 00 00 00 0C C8 00";
+        //   victoryRule           u8   00  = Margin       NEW in v14, appended -> Size 10 -> 13
+        //   gameMode              u8   00  = PointMatch   NEW in v14
+        //   nightVisionSeconds    u8   00  = 0 (by day)   NEW in v14
+        private const string MatchStateHex = "02 8A 00 2C 00 00 00 0C C8 00 00 00 00";
+
+        // A Night Mode room played first to 1500 (DC 05), with a 60-second (3C) battery.
+        private const string NightTargetMatchStateHex = "02 8A 00 2C 00 00 00 0C DC 05 01 01 3C";
 
         [Fact]
         public void MatchState_Serializes_ToTheExpectedBytes()
@@ -597,11 +603,48 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(0, message.PhaseSecondsRemaining);
             Assert.Equal(12, message.HumanPlayerCount);
             Assert.Equal(200, message.VictoryPoints);
+            Assert.Equal(VictoryRule.Margin, message.Rule);
+            Assert.Equal(GameMode.PointMatch, message.Mode);
+            Assert.Equal(0, message.NightVisionSeconds);
         }
 
         [Fact]
-        public void MatchState_IsTenBytes()
-            => Assert.Equal(10, MatchStateMessage.Size);
+        public void MatchState_NightTargetRoom_RoundTripsTheThreeV14Bytes()
+        {
+            var message = new MatchStateMessage(
+                MatchPhase.Playing, score0: 138, score1: 44,
+                phaseSecondsRemaining: 0, humanPlayerCount: 12, victoryPoints: 1500,
+                VictoryRule.Target, GameMode.Night, nightVisionSeconds: 60);
+
+            Span<byte> buffer = stackalloc byte[MatchStateMessage.Size];
+            Assert.Equal(MatchStateMessage.Size, message.Write(buffer));
+            Assert.Equal(NightTargetMatchStateHex, Hex.ToHex(buffer));
+
+            Assert.True(MatchStateMessage.TryParse(Hex.FromHex(NightTargetMatchStateHex), out MatchStateMessage parsed));
+            Assert.Equal(VictoryRule.Target, parsed.Rule);
+            Assert.Equal(GameMode.Night, parsed.Mode);
+            Assert.Equal(60, parsed.NightVisionSeconds);
+            Assert.Equal(1500, parsed.VictoryPoints);
+        }
+
+        [Fact]
+        public void MatchState_IsThirteenBytes()
+            => Assert.Equal(13, MatchStateMessage.Size);
+
+        /// <summary>
+        /// A v13 server's ten bytes are refused rather than read with a guessed rule: without the
+        /// victory-rule byte a first-to-500 match would draw as a 500-point margin. The version
+        /// gate stops a v13 peer first; this is the parser's half of the same refusal.
+        /// </summary>
+        [Fact]
+        public void MatchState_TenBytesFromAV13SenderAreRefused()
+            => Assert.False(MatchStateMessage.TryParse(Hex.FromHex("02 8A 00 2C 00 00 00 0C C8 00"), out _));
+
+        [Theory]
+        [InlineData("02 8A 00 2C 00 00 00 0C C8 00 02 00 00")]   // victoryRule 2: no such rule
+        [InlineData("02 8A 00 2C 00 00 00 0C C8 00 00 02 00")]   // gameMode 2: no such mode
+        public void MatchState_UnknownRuleOrModeIsRefused(string hex)
+            => Assert.False(MatchStateMessage.TryParse(Hex.FromHex(hex), out _));
 
         /// <summary>
         /// The half of the v5 bump that a size check cannot see. A v4 sender packed its two
@@ -615,8 +658,9 @@ namespace Ironfront.Net.Protocol.Tests
         {
             // A v4 server one second into a round: tickets 199 / 200, DESCENDING. Read as v5
             // those same bytes say team 1 is a point ahead on an ascending score, when in truth
-            // team 1 had just lost somebody.
-            byte[] v4Bytes = Hex.FromHex("02 C7 00 C8 00 00 00 0C C8 00");
+            // team 1 had just lost somebody. (Padded with v14's three trailing bytes: the score
+            // offsets never moved, which is the point.)
+            byte[] v4Bytes = Hex.FromHex("02 C7 00 C8 00 00 00 0C C8 00 00 00 00");
 
             Assert.True(MatchStateMessage.TryParse(v4Bytes, out MatchStateMessage message));
             Assert.Equal(199, message.Score0);

@@ -136,11 +136,12 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             // moved to 2; the vehicle wire (§ 4.10) moved it again to 3; the widened weapon
             // field and the 24-vehicle cap moved it to 10; pending throwable release semantics
             // moved it to 11; the chat channel byte (team chat) moved it to 12; 128 actor ids
-            // and a room's bot count read as a total moved it to 13. Either way a
+            // and a room's bot count read as a total moved it to 13; the lobby's game modes
+            // (S_MATCH_STATE 10 -> 13 bytes) moved it to 14. Either way a
             // client on an older
             // version gets CONNECT_DENIED code 2 rather than a subtly mis-parsed stream,
             // which is the whole reason the number exists.
-            Assert.Equal(13, ProtocolConstants.PROTOCOL_VERSION);
+            Assert.Equal(14, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

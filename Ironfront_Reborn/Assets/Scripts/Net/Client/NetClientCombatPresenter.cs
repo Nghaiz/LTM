@@ -702,13 +702,13 @@ namespace Ironfront.Net.Unity.Client
 
             var header = new ScoreboardMatch(
                 _mapName,
-                ScoreboardWording.SummaryLine(_rosterPlayers, _rosterHumans),
+                ScoreboardWording.SummaryLine(state.Mode, _rosterPlayers, _rosterHumans),
                 state.Score0,
                 state.Score1,
                 ScoreboardWording.Lead(state.Score0, state.Score1, state.VictoryPoints),
                 hasState
                     ? ScoreboardWording.LeadLine(
-                        phase, state.Score0, state.Score1, state.VictoryPoints, key.WinningTeam)
+                        phase, state.Score0, state.Score1, state.VictoryPoints, key.WinningTeam, state.Rule)
                     : string.Empty,
                 ScoreboardWording.Clock(seconds),
                 hasState ? ScoreboardWording.PhaseLabel(phase, seconds >= 0) : string.Empty,
@@ -716,7 +716,7 @@ namespace Ironfront.Net.Unity.Client
                 key.Flags0,
                 key.Flags1,
                 key.WinningTeam,
-                hasState ? ScoreboardWording.Rules(state.VictoryPoints) : string.Empty);
+                hasState ? ScoreboardWording.Rules(state.VictoryPoints, state.Rule) : string.Empty);
 
             hud.SetScoreboardMatch(in header);
         }

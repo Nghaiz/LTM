@@ -331,6 +331,7 @@ namespace Ironfront.MasterClient
                     RoomId      = response.RoomId,
                     MapId       = (ushort)response.MapId,
                     BotsPerTeam = response.BotsPerTeam,
+                    Settings    = Ironfront.Net.Protocol.RoomSettings.FromWire(response.GameMode, response.VictoryRule, response.VictoryPoints, response.NightVisionSeconds),
                 });
                 return;
             }
@@ -362,6 +363,10 @@ namespace Ironfront.MasterClient
             public int RoomId { get; set; }
             public int MapId { get; set; }
             public int BotsPerTeam { get; set; }
+            public byte GameMode { get; set; }
+            public byte VictoryRule { get; set; }
+            public ushort VictoryPoints { get; set; }
+            public byte NightVisionSeconds { get; set; }
         }
     }
 }

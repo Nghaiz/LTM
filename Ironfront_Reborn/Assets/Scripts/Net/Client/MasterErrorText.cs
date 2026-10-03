@@ -147,6 +147,10 @@ namespace Ironfront.Net.Unity.Client
                     // The only fix is a newer build: the room is on a map this one does not carry,
                     // and joining anyway would load the wrong world.
                     return "That room is on a map this version of the game does not have. Update the game to join it.";
+                case ErrorCode.InvalidRoomSettings:
+                    // The form only offers legal values, so this is a form older than the master's
+                    // rules (or Night Mode picked on a map that lacks it).
+                    return "Those match settings are not allowed. Night Mode is Forest Lake only; check the points and the night-vision battery.";
 
                 // ----- game servers (3000-3002)
                 case ErrorCode.NoGameServerAvailable:
