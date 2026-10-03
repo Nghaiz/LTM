@@ -1216,8 +1216,10 @@ public class AiActorController : ActorController
 								}
 								// A tank is crewed by part of the squad instead of standing empty (phase P28):
 								// the original wanted a seat for every member, so a squad of four never took a
-								// tank with fewer. The rest carry on with the squad's order on foot.
-								if (emptySeats > 0 && !vehicle.claimedByPlayer && Squad.KindOf(vehicle) == VehicleKind.Armour)
+								// tank with fewer. The rest carry on with the squad's order on foot. Since P32 a
+								// helicopter is crewed the same way, and a car by two or more: a squad of five
+								// beside a four-seat jeep used to walk past it.
+								if (!vehicle.claimedByPlayer && CrewSplitFits(Squad.KindOf(vehicle), emptySeats))
 								{
 									Squad crew = squad.SplitCrew(emptySeats);
 									if (crew != null)
@@ -3134,6 +3136,14 @@ public class AiActorController : ActorController
 
 	public override SpawnPoint SelectedSpawnPoint()
 	{
+		// Back to a flag where the side has an empty vehicle first (phase P32): picking a random
+		// front-line flag seven times in ten left the HQ jeeps, tanks and helicopters standing
+		// empty for the whole match, so nobody ever drove at an HQ.
+		SpawnPoint forVehicle = ActorManager.SpawnPointForIdleVehicle(actor);
+		if (forVehicle != null)
+		{
+			return forVehicle;
+		}
 		if (UnityEngine.Random.Range(0f, 1f) < 0.3f)
 		{
 			return ActorManager.RandomSpawnPointForTeam(actor.team);
@@ -3163,6 +3173,25 @@ public class AiActorController : ActorController
 		if (actor.IsSeated())
 		{
 			actor.LeaveSeat();
+		}
+	}
+
+	/// <summary>
+	/// Whether part of a squad that does not fit <paramref name="emptySeats"/> takes the vehicle
+	/// anyway: any seat in a tank or a helicopter, two or more in a car. A boat is never boarded
+	/// from here (<see cref="Vehicle.AiShouldEnter"/> refuses anything in water).
+	/// </summary>
+	private static bool CrewSplitFits(VehicleKind kind, int emptySeats)
+	{
+		switch (kind)
+		{
+			case VehicleKind.Armour:
+			case VehicleKind.Aircraft:
+				return emptySeats > 0;
+			case VehicleKind.Transport:
+				return emptySeats >= 2;
+			default:
+				return false;
 		}
 	}
 

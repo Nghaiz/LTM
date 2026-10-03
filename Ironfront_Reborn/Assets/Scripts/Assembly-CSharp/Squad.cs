@@ -60,12 +60,23 @@ public class Squad
 		/// <summary>Bots a spawn wave sent to reinforce a squad instead of starting one of their own.</summary>
 		public static readonly int[] Reinforced = new int[2];
 
+		/// <summary>Bots respawned at a flag because an empty vehicle of the side's stood there (phase P32).</summary>
+		public static readonly int[] SpawnedForVehicle = new int[2];
+
 		public static void Reset()
 		{
 			for (int team = 0; team < 2; team++)
 			{
-				Formed[team] = FormedAlone[team] = LeftAlone[team] = Merged[team] = Reinforced[team] = 0;
+				Formed[team] = FormedAlone[team] = LeftAlone[team] = Merged[team] = Reinforced[team] = SpawnedForVehicle[team] = 0;
 				System.Array.Clear(Splits[team], 0, Splits[team].Length);
+			}
+		}
+
+		public static void NoteSpawnedForVehicle(int team)
+		{
+			if ((uint)team < 2u)
+			{
+				SpawnedForVehicle[team]++;
 			}
 		}
 
@@ -177,6 +188,21 @@ public class Squad
 	/// to 107 s. A minute keeps every boarding that was going to happen.
 	/// </remarks>
 	private const float BoardingTimeoutSeconds = 60f;
+
+	/// <summary>
+	/// How long a crew formed for a vehicle (phase P32) waits in it, seated, for more bots
+	/// respawning for the same vehicle before it sets off with the seats it has.
+	/// </summary>
+	public const float CrewMusterSeconds = 10f;
+
+	/// <summary>Formed from bots sent back for <see cref="squadVehicle"/> (phase P32).</summary>
+	private bool isCrew;
+
+	/// <summary>Marks this squad as a crew sent back for its vehicle: see <see cref="CrewMusterSeconds"/>.</summary>
+	public void MarkCrew()
+	{
+		isCrew = true;
+	}
 
 	/// <summary>
 	/// Whether a dug-in squad stays in its cover this tick: while any member still has an enemy
@@ -328,6 +354,46 @@ public class Squad
 	/// A move, not an add: off any other roster first, and given this squad even when this roster
 	/// already lists it, which is the case that used to return early and leave it squadless.
 	/// </remarks>
+	/// <summary>
+	/// The squad on its way to board <paramref name="vehicle"/> with a seat still unclaimed, or null
+	/// (phase P32: a bot sent back for that vehicle joins its crew).
+	/// </summary>
+	public static Squad BoardingCrewFor(Vehicle vehicle)
+	{
+		if (vehicle == null || vehicle.dead || vehicle.ownerTeam < 0)
+		{
+			return null;
+		}
+		List<Actor> alive = ActorManager.AliveActorsOnTeam(vehicle.ownerTeam);
+		for (int i = 0; i < alive.Count; i++)
+		{
+			AiActorController ai = alive[i] != null ? alive[i].controller as AiActorController : null;
+			Squad squad = ai != null ? ai.squad : null;
+			if (squad != null && squad.state == State.EnterVehicle && squad.squadVehicle == vehicle && vehicle.HasUnclaimedSeats())
+			{
+				return squad;
+			}
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// Takes <paramref name="member"/> into this boarding squad and sends it to a seat of the squad's
+	/// vehicle. False, and nothing changed, once the squad is not boarding or the seats are claimed.
+	/// </summary>
+	public bool JoinCrew(AiActorController member)
+	{
+		if (member == null || state != State.EnterVehicle || squadVehicle == null || squadVehicle.dead
+			|| !squadVehicle.HasUnclaimedSeats() || members.Count >= squadVehicle.seats.Length)
+		{
+			return false;
+		}
+		Join(member);
+		member.GotoAndEnterVehicle(squadVehicle);
+		squadVehicle.ClaimSeat(member.actor);
+		return true;
+	}
+
 	public void Join(AiActorController member)
 	{
 		if (member == null)
@@ -950,6 +1016,12 @@ public class Squad
 		}
 		if (AllSeated())
 		{
+			// A crew sent back for this vehicle waits a little for the next bots respawning for
+			// it, so one bot does not drive off alone in a jeep the next three were sent to.
+			if (isCrew && !squadVehicle.IsFull() && Time.time - enterVehicleTime < CrewMusterSeconds)
+			{
+				return;
+			}
 			state = State.Stationary;
 		}
 		else
