@@ -37,6 +37,20 @@ public class MountedTurret : MountedWeapon
 	// be sampled from a fixed step without dropping or double-counting it.
 	private Vector2 _pendingMouseAim;
 
+	// The authored Euler components the aim does NOT drive, read once in Awake. The pose is
+	// rebuilt from these every frame instead of read back from the transform, because the read
+	// is not an inverse of the write: the tank's gunner mount (Turret_Base) is authored at
+	// X = -90, Euler gimbal lock, where Unity reports the yaw in Y and leaves Z at 0. Writing Z
+	// on top of that read added the yaw again EVERY frame, so any non-zero aim spun the gun and
+	// its camera without end until the player left the seat (playtest 2026-10-03, bug 1).
+	private float _towerRestX;
+
+	private float _towerRestY;
+
+	private float _turretRestY;
+
+	private float _turretRestZ;
+
 	public float Yaw
 	{
 		get { return _aim.Yaw; }
@@ -66,11 +80,17 @@ public class MountedTurret : MountedWeapon
 		// re-read the transform every frame; it runs once now.
 		if (towerTransform != null)
 		{
-			_aim.Yaw = TurretAimCore.WrapDegrees(towerTransform.localEulerAngles.z);
+			Vector3 tower = towerTransform.localEulerAngles;
+			_towerRestX = tower.x;
+			_towerRestY = tower.y;
+			_aim.Yaw = TurretAimCore.WrapDegrees(tower.z);
 		}
 		if (turretTransform != null)
 		{
-			_aim.Pitch = TurretAimCore.ClampPitch(Mathf.DeltaAngle(0f, turretTransform.localEulerAngles.x), aimLimits);
+			Vector3 turret = turretTransform.localEulerAngles;
+			_turretRestY = turret.y;
+			_turretRestZ = turret.z;
+			_aim.Pitch = TurretAimCore.ClampPitch(Mathf.DeltaAngle(0f, turret.x), aimLimits);
 		}
 	}
 
@@ -90,17 +110,20 @@ public class MountedTurret : MountedWeapon
 			return;
 		}
 		AccumulateMouseAim();
+		ApplyAimPose();
+	}
+
+	// Identical to the old read-modify-write wherever the read was faithful, and stable where it
+	// was not: Quaternion.Euler(x, y, z) is exactly what assigning localEulerAngles builds.
+	private void ApplyAimPose()
+	{
 		if (towerTransform != null)
 		{
-			Vector3 localEulerAngles = towerTransform.localEulerAngles;
-			localEulerAngles.z = _aim.Yaw;
-			towerTransform.localEulerAngles = localEulerAngles;
+			towerTransform.localRotation = Quaternion.Euler(_towerRestX, _towerRestY, _aim.Yaw);
 		}
 		if (turretTransform != null)
 		{
-			Vector3 localEulerAngles2 = turretTransform.localEulerAngles;
-			localEulerAngles2.x = _aim.Pitch;
-			turretTransform.localEulerAngles = localEulerAngles2;
+			turretTransform.localRotation = Quaternion.Euler(_aim.Pitch, _turretRestY, _turretRestZ);
 		}
 	}
 
