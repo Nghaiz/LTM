@@ -87,6 +87,8 @@
              Link="Linked\MatchTransportHandoff.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\RoomBotChoice.cs"
              Link="Linked\RoomBotChoice.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\RoomSettingsChoice.cs"
+             Link="Linked\RoomSettingsChoice.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\GraphicsPresetRules.cs"
              Link="Linked\GraphicsPresetRules.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\VegetationRules.cs"

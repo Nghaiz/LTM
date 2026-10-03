@@ -31,8 +31,8 @@ last: carrying the mode and its settings to the game server and the HUD changes 
 | 2 | 2 | Commander values the enemy HQ and spreads over more flags | 13 | #514 |
 | 3 | 2 | Vehicle slots at every Forest Lake flag, filled at random each match; random field vehicles | 13 | #515 |
 | 4 | 2 | Random ammo/medical supply crates each match (server deployables, crate visuals on the client) | 13 | #516 |
-| 5 | 3 | Physics: far corpses freeze without the long wait; parked remote vehicles are not rewritten | client | (this PR) |
-| 6 | 1 | Point Match rules (margin / target) from the lobby to the server and the score bar | 14 | |
+| 5 | 3 | Physics: far corpses freeze without the long wait; parked remote vehicles are not rewritten | client | #517 |
+| 6 | 1 | Point Match rules (margin / target) from the lobby to the server and the score bar | 14 | (this PR) |
 | 7 | 1 | Night Mode: lobby, night lighting, pumpkins/candles/flag lights, battery night vision, HUD, sound | 14 | |
 | 8 | 1 | Night tactics for bots | 14 | |
 | 9 | — | Deploy master + servers, release (MAJOR: protocol 14) | | |
@@ -103,3 +103,15 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   passes, a higher sleep threshold) measured nothing and were dropped. Measuring trap: a
   `dotnet test`, the IDE taking focus, or greps over the scene files on this machine stalled the
   player (frames of 200-2000 ms); those windows were excluded, and the medians are robust to them.
+- 2026-10-04 — PR 6 (item 1, Point Match rules; protocol 14). Contract:
+  `phase-p32-mode-contract.md`. `Ironfront.Net.Protocol.RoomRules` holds the ranges (lead by
+  50-1000 in tens, default 200; first to 100-3000 in fifties, default 500; night vision 10-180 s,
+  default 45, Night Mode on Forest Lake only). The create-room form's GAME MODE / REGION /
+  AUTO-BALANCE placeholders became a mode dropdown (Point Match only until PR 7), a rule dropdown
+  and a points field, with the rule in the preview card; the master stores the settings, lists
+  them in every room row and refuses anything outside the rules with error 2007; the game server
+  takes them from `GS_ROOM_ASSIGNED` (`NetRoomRules`) and `MatchStateMachine` decides by the rule
+  (an elimination under first-to awards the target). `S_MATCH_STATE` 10 -> 13 bytes carries rule,
+  mode and battery to the score bar, the Tab board and the victory banner. Not deployed yet: a
+  protocol-14 master and servers would turn away every v3.4.0 player, so they go out with the
+  release at the end of P32.

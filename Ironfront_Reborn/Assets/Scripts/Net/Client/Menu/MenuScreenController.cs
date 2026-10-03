@@ -568,7 +568,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>Creates a room from the form and lands in its lobby. P16 3.3.</summary>
         public void SubmitCreateRoom(
-            string name, ushort mapId, byte maxPlayers, byte botCount, string? password)
+            string name, ushort mapId, byte maxPlayers, byte botCount, string? password, RoomSettings settings)
         {
             if (_session == null || _flow == null) return;
             if (_flow.State != GameFlowState.RoomBrowser) return;
@@ -577,7 +577,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearChat();
             ClearError();
             _createRequested = false;
-            Submit(_session.CreateRoomAsync(name, mapId, maxPlayers, botCount, password));
+            Submit(_session.CreateRoomAsync(name, mapId, maxPlayers, botCount, password, settings));
         }
 
         /// <summary>Marks this client ready, or not. P16 3.4.</summary>

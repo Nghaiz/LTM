@@ -99,6 +99,11 @@ public class ScoreUi : MonoBehaviour
 	// would leave the bar drawn to the previous round's scale.
 	private int lastVictoryPoints = -1;
 
+	// Protocol 14 (phase P32): 0 lead by victoryPoints, 1 first to them. Offline is always 0.
+	private const int TargetRule = 1;
+
+	private int lastVictoryRule;
+
 	// Ironfront.Net.Protocol.MatchPhase.Ended as the plain int SetAuthoritativeState carries,
 	// the same encoding PhaseLabel switches on.
 	private const int EndedPhase = (int)Ironfront.Net.Protocol.MatchPhase.Ended;
@@ -204,7 +209,7 @@ public class ScoreUi : MonoBehaviour
 	/// </remarks>
 	public static void SetAuthoritativeState(
 		int phase, int score0, int score1, int secondsRemaining, int humanPlayerCount,
-		int victoryPoints)
+		int victoryPoints, int victoryRule)
 	{
 		if (instance == null)
 		{
@@ -216,7 +221,8 @@ public class ScoreUi : MonoBehaviour
 			&& instance.lastTickets1 == score1
 			&& instance.lastSecondsRemaining == secondsRemaining
 			&& instance.lastHumanPlayerCount == humanPlayerCount
-			&& instance.lastVictoryPoints == victoryPoints)
+			&& instance.lastVictoryPoints == victoryPoints
+			&& instance.lastVictoryRule == victoryRule)
 		{
 			return;
 		}
@@ -244,7 +250,8 @@ public class ScoreUi : MonoBehaviour
 		}
 		if (phase == EndedPhase && (!hadState || previousPhase != EndedPhase))
 		{
-			byte winner = Ironfront.Net.Protocol.ConquestScoreRule.Decide(score0, score1, victoryPoints);
+			byte winner = Ironfront.Net.Protocol.ConquestScoreRule.Decide(
+				score0, score1, victoryPoints, (Ironfront.Net.Protocol.VictoryRule)victoryRule);
 			if (winner == Ironfront.Net.Protocol.TeamId.Team0)
 			{
 				instance.OnMatchEnded(true);
@@ -257,6 +264,7 @@ public class ScoreUi : MonoBehaviour
 		instance.lastSecondsRemaining = secondsRemaining;
 		instance.lastHumanPlayerCount = humanPlayerCount;
 		instance.lastVictoryPoints = victoryPoints;
+		instance.lastVictoryRule = victoryRule;
 		if (instance.blueScoreText != null)
 		{
 			instance.blueScoreText.text = score0.ToString();
@@ -270,7 +278,7 @@ public class ScoreUi : MonoBehaviour
 		// UpdateUi, the OFFLINE renderer, so a networked client watched a bar driven by an
 		// offline scoreboard that never scored. Same geometry as the offline path, by
 		// construction -- ApplyScoreBars is the one copy.
-		ApplyScoreBars(instance, score0, score1, victoryPoints);
+		ApplyScoreBars(instance, score0, score1, victoryPoints, victoryRule == TargetRule);
 		if (instance.phaseText != null)
 		{
 			// The count moves OUT of the phase label the moment a dedicated element exists.
@@ -469,7 +477,7 @@ public class ScoreUi : MonoBehaviour
 		redScoreText.text = redScore.ToString();
 		blueFlagsText.text = board.BlueFlags.ToString();
 		redFlagsText.text = board.RedFlags.ToString();
-		ApplyScoreBars(this, blueScore, redScore, victoryPoints);
+		ApplyScoreBars(this, blueScore, redScore, victoryPoints, firstTo: false);
 	}
 
 	/// <summary>
@@ -501,10 +509,19 @@ public class ScoreUi : MonoBehaviour
 	/// the working copy is the specification here.
 	/// </para>
 	/// </remarks>
-	private static void ApplyScoreBars(ScoreUi ui, int blueScore, int redScore, int victoryPoints)
+	private static void ApplyScoreBars(ScoreUi ui, int blueScore, int redScore, int victoryPoints, bool firstTo)
 	{
 		if (ui.blueBar == null || ui.redBar == null || ui.intercept == null)
 		{
+			return;
+		}
+		if (firstTo && victoryPoints > 0)
+		{
+			// First to the points (phase P32): each side fills its own half on the way to the
+			// total, so the bar that reaches the middle is the side that has won.
+			ui.intercept.enabled = false;
+			ui.blueBar.rectTransform.anchorMax = new Vector2(0.5f * Mathf.Clamp01((float)blueScore / victoryPoints), 1f);
+			ui.redBar.rectTransform.anchorMin = new Vector2(1f - 0.5f * Mathf.Clamp01((float)redScore / victoryPoints), 0f);
 			return;
 		}
 		bool flag = blueScore + redScore >= victoryPoints;

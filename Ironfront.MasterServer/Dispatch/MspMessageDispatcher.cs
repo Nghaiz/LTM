@@ -249,6 +249,8 @@ namespace Ironfront.MasterServer.Dispatch
                     roomId = room.RoomId, name = room.Name, mapId = room.MapId, players = room.Members.Count,
                     maxPlayers = room.MaxPlayers, state = (byte)room.State, isPrivate = room.IsPrivate,
                     canRejoin, rejoinTeam, botCount = room.BotCount,
+                    gameMode = (byte)room.Settings.Mode, victoryRule = (byte)room.Settings.Rule,
+                    victoryPoints = room.Settings.VictoryPoints, nightVisionSeconds = room.Settings.NightVisionSeconds,
                 });
             }
 
@@ -294,7 +296,8 @@ namespace Ironfront.MasterServer.Dispatch
 
         private void CreateRoom(ClientConnection connection, Session session, CreateRoomWireRequest request)
         {
-            ServiceResult result = _lobby.CreateRoom(session, new RoomCreateRequest(request.Name ?? string.Empty, request.MapId, request.MaxPlayers, request.BotCount, request.IsPrivate, request.Password));
+            RoomSettings settings = RoomSettings.FromWire(request.GameMode, request.VictoryRule, request.VictoryPoints, request.NightVisionSeconds);
+            ServiceResult result = _lobby.CreateRoom(session, new RoomCreateRequest(request.Name ?? string.Empty, request.MapId, request.MaxPlayers, request.BotCount, request.IsPrivate, request.Password, settings));
             Send(connection, MspMessageType.RoomCreateResponse, new { ok = result.Ok, roomId = result.Room?.RoomId ?? 0, errorCode = (ushort)result.ErrorCode });
         }
 
@@ -537,6 +540,10 @@ namespace Ironfront.MasterServer.Dispatch
                 roomId = room.RoomId,
                 mapId = room.MapId,
                 botsPerTeam = room.BotCount / 2,
+                gameMode = (byte)room.Settings.Mode,
+                victoryRule = (byte)room.Settings.Rule,
+                victoryPoints = room.Settings.VictoryPoints,
+                nightVisionSeconds = room.Settings.NightVisionSeconds,
             });
         }
 
@@ -832,7 +839,12 @@ namespace Ironfront.MasterServer.Dispatch
         {
             var members = new List<object>();
             foreach (RoomMember member in room.Members) members.Add(new { playerId = member.PlayerId, name = member.DisplayName, team = member.Team, ready = member.Ready });
-            return new { roomId = room.RoomId, members, state = (byte)room.State, mapId = room.MapId, botCount = room.BotCount, maxPlayers = room.MaxPlayers };
+            return new
+            {
+                roomId = room.RoomId, members, state = (byte)room.State, mapId = room.MapId, botCount = room.BotCount, maxPlayers = room.MaxPlayers,
+                gameMode = (byte)room.Settings.Mode, victoryRule = (byte)room.Settings.Rule,
+                victoryPoints = room.Settings.VictoryPoints, nightVisionSeconds = room.Settings.NightVisionSeconds,
+            };
         }
 
         private bool TryGetAuthenticatedSession(ClientConnection connection, out Session session)
@@ -865,7 +877,7 @@ namespace Ironfront.MasterServer.Dispatch
 
         private sealed class LoginRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public int ClientVersion { get; set; } public ushort[]? Maps { get; set; } }
         private sealed class RegisterRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public string? DisplayName { get; set; } }
-        private sealed class CreateRoomWireRequest { public string? Name { get; set; } public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? Password { get; set; } }
+        private sealed class CreateRoomWireRequest { public string? Name { get; set; } public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? Password { get; set; } public byte GameMode { get; set; } public byte VictoryRule { get; set; } public ushort VictoryPoints { get; set; } public byte NightVisionSeconds { get; set; } }
         private sealed class JoinRoomRequest { public int RoomId { get; set; } public string? Password { get; set; } }
         private sealed class ReadyRequest { public bool Ready { get; set; } }
         private sealed class TeamRequest { public byte Team { get; set; } }

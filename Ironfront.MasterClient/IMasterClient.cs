@@ -90,6 +90,22 @@ namespace Ironfront.MasterClient
         /// field leaves it 0.
         /// </summary>
         public byte BotCount { get; set; }
+
+        /// <summary>The room's game mode, <c>Ironfront.Net.Protocol.GameMode</c> (protocol 14; 0 from an older master).</summary>
+        public byte GameMode { get; set; }
+
+        /// <summary>The room's victory rule, <c>Ironfront.Net.Protocol.VictoryRule</c> (protocol 14).</summary>
+        public byte VictoryRule { get; set; }
+
+        /// <summary>The points the room plays to (protocol 14; 0 from an older master, meaning the rule's default).</summary>
+        public ushort VictoryPoints { get; set; }
+
+        /// <summary>Seconds a full night-vision battery holds; 0 by day (protocol 14).</summary>
+        public byte NightVisionSeconds { get; set; }
+
+        /// <summary>The four fields above as one value, every missing one read as its default.</summary>
+        public Ironfront.Net.Protocol.RoomSettings Settings
+            => Ironfront.Net.Protocol.RoomSettings.FromWire(GameMode, VictoryRule, VictoryPoints, NightVisionSeconds);
     }
 
     /// <summary>
@@ -161,7 +177,7 @@ namespace Ironfront.MasterClient
         /// <summary>Null from a master that predates protocol 13.</summary>
         public RoomCapacity? Capacity { get; set; }
     }
-    public sealed class CreateRoomRequest { public string Name { get; set; } = string.Empty; public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? PasswordHash { get; set; } }
+    public sealed class CreateRoomRequest { public string Name { get; set; } = string.Empty; public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? PasswordHash { get; set; } public Ironfront.Net.Protocol.RoomSettings Settings { get; set; } = Ironfront.Net.Protocol.RoomSettings.Default; }
     public readonly struct CreateRoomResult { public CreateRoomResult(bool ok, int roomId, int errorCode) { Ok = ok; RoomId = roomId; ErrorCode = errorCode; } public bool Ok { get; } public int RoomId { get; } public int ErrorCode { get; } }
     public readonly struct MatchmakeResult { public MatchmakeResult(bool ok, int roomId, int estimatedWaitSec, int errorCode) { Ok = ok; RoomId = roomId; EstimatedWaitSec = estimatedWaitSec; ErrorCode = errorCode; } public bool Ok { get; } public int RoomId { get; } public int EstimatedWaitSec { get; } public int ErrorCode { get; } }
     public sealed class MasterServerException : Exception { public MasterServerException(int errorCode, string message) : base(message) { ErrorCode = errorCode; } public int ErrorCode { get; } }
@@ -198,6 +214,22 @@ namespace Ironfront.MasterClient
 
         /// <summary>The room's seats (protocol 13). 0 from an older master.</summary>
         public byte MaxPlayers { get; set; }
+
+        /// <summary>The room's game mode, <c>Ironfront.Net.Protocol.GameMode</c> (protocol 14; 0 from an older master).</summary>
+        public byte GameMode { get; set; }
+
+        /// <summary>The room's victory rule, <c>Ironfront.Net.Protocol.VictoryRule</c> (protocol 14).</summary>
+        public byte VictoryRule { get; set; }
+
+        /// <summary>The points the room plays to (protocol 14; 0 from an older master, meaning the rule's default).</summary>
+        public ushort VictoryPoints { get; set; }
+
+        /// <summary>Seconds a full night-vision battery holds; 0 by day (protocol 14).</summary>
+        public byte NightVisionSeconds { get; set; }
+
+        /// <summary>The four fields above as one value, every missing one read as its default.</summary>
+        public Ironfront.Net.Protocol.RoomSettings Settings
+            => Ironfront.Net.Protocol.RoomSettings.FromWire(GameMode, VictoryRule, VictoryPoints, NightVisionSeconds);
     }
     public sealed class ChatMessage { public byte Channel { get; set; } public int FromPlayerId { get; set; } public string FromName { get; set; } = string.Empty; public string Text { get; set; } = string.Empty; public long Timestamp { get; set; } }
 

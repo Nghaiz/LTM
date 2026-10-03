@@ -251,6 +251,10 @@ namespace Ironfront.Net.Unity.Server
             // before 2026-09-28. Raised from Poll() below, so on the main thread.
             reporter.RoomAssigned += NetBotRelease.AssignRoom;
 
+            // The same assignment's game mode, victory rule and points (protocol 14, phase P32),
+            // which MatchController plays by.
+            reporter.RoomSettingsAssigned += NetRoomRules.Assign;
+
             // ASSIGNED BEFORE THE AWAIT, AND THAT ORDER IS THE WHOLE FIX (P14).
             //
             // GameServerLink follows the Poll() contract: ReceiveLoopAsync only ENQUEUES each

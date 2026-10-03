@@ -14,9 +14,9 @@ namespace Ironfront.Net.Unity.Client.Menu
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The first caller <c>RoomCreate</c> has ever had from the game.</b> Its six fields are
+    /// <b>The first caller <c>RoomCreate</c> has ever had from the game.</b> Its fields are
     /// exactly <c>CreateRoomRequest</c>'s, so nothing is invented here and nothing is left
-    /// unsendable.
+    /// unsendable -- the game mode, victory rule and points included since protocol 14.
     /// </para>
     /// <para>
     /// <b>The map list is <c>MapCatalog</c>, not a typed id.</b> The maps that ship are its rows,
@@ -55,6 +55,11 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Toggle? _privateToggle;
         [SerializeField] private InputField? _passwordField;
 
+        /// <summary>The game mode, victory rule and points (phase P32): <see cref="RoomSettingsChoice"/>.</summary>
+        [SerializeField] private Dropdown? _modeDropdown;
+        [SerializeField] private Dropdown? _ruleDropdown;
+        [SerializeField] private InputField? _pointsField;
+
         [Header("Controls")]
         [SerializeField] private Button? _createButton;
         [SerializeField] private Button? _backButton;
@@ -74,6 +79,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Text? _mapPreviewBots;
         [SerializeField] private Text? _mapPreviewSecurity;
 
+        /// <summary>The preview card's victory line: "LEAD BY 200", "FIRST TO 500".</summary>
+        [SerializeField] private Text? _rulePreview;
+
         /// <summary>
         /// The map ids behind the dropdown, in its own option order.
         /// </summary>
@@ -90,6 +98,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         private void Awake()
         {
             PopulateMaps();
+            PopulateModesAndRules();
 
             if (_createButton != null) _createButton.onClick.AddListener(OnCreate);
             if (_backButton != null) _backButton.onClick.AddListener(OnBack);
@@ -97,6 +106,9 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_mapDropdown != null) _mapDropdown.onValueChanged.AddListener(_ => RefreshMapPreview());
             if (_maxPlayersField != null) _maxPlayersField.onValueChanged.AddListener(_ => RefreshPreviewStats());
             if (_botSlider != null) _botSlider.ValueChanged += _ => RefreshPreviewStats();
+            if (_ruleDropdown != null) _ruleDropdown.onValueChanged.AddListener(_ => OnRuleChanged());
+            if (_modeDropdown != null) _modeDropdown.onValueChanged.AddListener(_ => RefreshPreviewStats());
+            if (_pointsField != null) _pointsField.onValueChanged.AddListener(_ => RefreshPreviewStats());
 
             if (_maxPlayersField != null && _maxPlayersField.text.Length == 0)
                 _maxPlayersField.text = DefaultMaxPlayers.ToString();
@@ -140,6 +152,54 @@ namespace Ironfront.Net.Unity.Client.Menu
             _mapDropdown.value = 0;
         }
 
+        /// <summary>Fills the mode and rule dropdowns from <see cref="RoomSettingsChoice"/>, defaults first.</summary>
+        private void PopulateModesAndRules()
+        {
+            if (_modeDropdown != null)
+            {
+                var modes = new List<string>();
+                foreach (GameMode mode in RoomSettingsChoice.Modes) modes.Add(RoomSettingsChoice.ModeOption(mode));
+                _modeDropdown.ClearOptions();
+                _modeDropdown.AddOptions(modes);
+                _modeDropdown.value = 0;
+            }
+
+            if (_ruleDropdown != null)
+            {
+                var rules = new List<string>();
+                foreach (VictoryRule rule in RoomSettingsChoice.Rules) rules.Add(RoomSettingsChoice.RuleOption(rule));
+                _ruleDropdown.ClearOptions();
+                _ruleDropdown.AddOptions(rules);
+                _ruleDropdown.value = 0;
+            }
+
+            OnRuleChanged();
+        }
+
+        private void OnRuleChanged()
+        {
+            VictoryRule rule = SelectedRule();
+            if (_pointsField != null)
+            {
+                _pointsField.text = RoomSettingsChoice.PointsAfterRuleChange(_pointsField.text, rule);
+                if (_pointsField.placeholder is Text placeholder)
+                    placeholder.text = RoomSettingsChoice.PointsPlaceholder(rule);
+            }
+            RefreshPreviewStats();
+        }
+
+        private VictoryRule SelectedRule()
+        {
+            int index = _ruleDropdown != null ? _ruleDropdown.value : 0;
+            return index >= 0 && index < RoomSettingsChoice.Rules.Length ? RoomSettingsChoice.Rules[index] : VictoryRule.Margin;
+        }
+
+        private GameMode SelectedMode()
+        {
+            int index = _modeDropdown != null ? _modeDropdown.value : 0;
+            return index >= 0 && index < RoomSettingsChoice.Modes.Length ? RoomSettingsChoice.Modes[index] : GameMode.PointMatch;
+        }
+
         private void OnPrivateChanged(bool isPrivate)
         {
             if (_passwordField != null) _passwordField.interactable = isPrivate;
@@ -162,6 +222,12 @@ namespace Ironfront.Net.Unity.Client.Menu
                     : "PUBLIC";
             if (_capacityCard != null)
                 _capacityCard.Show(_shownCapacity, ChosenBots(), SelectedMapId(), SelectedMapName());
+            if (_rulePreview != null)
+                _rulePreview.text = RoomSettingsChoice.TryRead(
+                        SelectedMode(), SelectedRule(), _pointsField != null ? _pointsField.text : string.Empty,
+                        SelectedMapId(), out RoomSettings settings, out _)
+                    ? RoomSettingsChoice.Describe(in settings)
+                    : "--";
         }
 
         // Not `?.`: a MenuBotSlider is a UnityEngine.Object, whose null test is the overloaded one.
@@ -258,8 +324,16 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             ushort mapId = SelectedMapId();
 
+            if (!RoomSettingsChoice.TryRead(
+                    SelectedMode(), SelectedRule(), _pointsField != null ? _pointsField.text : string.Empty,
+                    mapId, out RoomSettings settings, out string settingsError))
+            {
+                SetError(settingsError);
+                return;
+            }
+
             _controller.SubmitCreateRoom(
-                name, mapId, (byte)maxPlayers, (byte)botCount, isPrivate ? password : null);
+                name, mapId, (byte)maxPlayers, (byte)botCount, isPrivate ? password : null, settings);
         }
 
         private ushort SelectedMapId()

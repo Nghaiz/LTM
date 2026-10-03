@@ -478,13 +478,14 @@ namespace Ironfront.Net.Unity.Client.Menu
         }
 
         /// <summary>
-        /// The MAP cell: the map, and the room's bots beside it (protocol 13), so a 100-bot room
-        /// reads as one before anybody joins it.
+        /// The MAP cell: the map, the room's bots beside it (protocol 13), so a 100-bot room
+        /// reads as one before anybody joins it, and the rule it is played to (protocol 14).
         /// </summary>
         internal static string MapCell(RoomInfo room)
-            => room.BotCount > 0
-                ? $"{MapLabel(room)}  ·  {room.BotCount} bots"
-                : $"{MapLabel(room)}  ·  no bots";
+            => (room.BotCount > 0
+                   ? $"{MapLabel(room)}  ·  {room.BotCount} bots"
+                   : $"{MapLabel(room)}  ·  no bots")
+               + "  ·  " + RoomSettingsChoice.Describe(room.Settings);
 
         /// <summary>The PLAYERS cell.</summary>
         internal static string PlayerLabel(RoomInfo room) => $"{room.Players}/{room.MaxPlayers}";

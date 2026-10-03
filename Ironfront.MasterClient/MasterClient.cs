@@ -129,7 +129,7 @@ namespace Ironfront.MasterClient
             => RequestAsync(MspMessageType.RoomListRequest, new { }, MspMessageType.RoomListResponse, response => new RoomList { Rooms = response.Rooms ?? Array.Empty<RoomInfo>(), Capacity = response.Capacity }, ct);
 
         public Task<CreateRoomResult> CreateRoomAsync(CreateRoomRequest request, CancellationToken ct = default)
-            => RequestAsync(MspMessageType.RoomCreateRequest, new { name = request.Name, mapId = request.MapId, maxPlayers = request.MaxPlayers, botCount = request.BotCount, isPrivate = request.IsPrivate, password = request.PasswordHash }, MspMessageType.RoomCreateResponse, response => new CreateRoomResult(response.Ok, response.RoomId, response.ErrorCode), ct);
+            => RequestAsync(MspMessageType.RoomCreateRequest, new { name = request.Name, mapId = request.MapId, maxPlayers = request.MaxPlayers, botCount = request.BotCount, isPrivate = request.IsPrivate, password = request.PasswordHash, gameMode = (byte)request.Settings.Mode, victoryRule = (byte)request.Settings.Rule, victoryPoints = request.Settings.VictoryPoints, nightVisionSeconds = request.Settings.NightVisionSeconds }, MspMessageType.RoomCreateResponse, response => new CreateRoomResult(response.Ok, response.RoomId, response.ErrorCode), ct);
 
         public Task<JoinResult> JoinRoomAsync(int roomId, string? passwordHash, CancellationToken ct = default)
             => RequestAsync(MspMessageType.RoomJoinRequest, new { roomId, password = passwordHash }, MspMessageType.RoomJoinResponse, response => new JoinResult { Ok = response.Ok, ErrorCode = response.ErrorCode, GameServerIp = response.GameServerIp ?? string.Empty, GameServerPort = response.GameServerPort, JoinTicket = string.IsNullOrEmpty(response.JoinTicket) ? Array.Empty<byte>() : Convert.FromBase64String(response.JoinTicket) }, ct);
@@ -298,6 +298,10 @@ namespace Ironfront.MasterClient
                     State   = response.State,
                     MapId      = response.MapId,
                     BotCount   = response.BotCount,
+                    GameMode   = response.GameMode,
+                    VictoryRule = response.VictoryRule,
+                    VictoryPoints = response.VictoryPoints,
+                    NightVisionSeconds = response.NightVisionSeconds,
                     MaxPlayers = response.MaxPlayers,
                 });
                 return;
@@ -381,6 +385,10 @@ namespace Ironfront.MasterClient
             public RoomMember[]? Members { get; set; }
             public byte State { get; set; }
             public ushort MapId { get; set; }
+            public byte GameMode { get; set; }
+            public byte VictoryRule { get; set; }
+            public ushort VictoryPoints { get; set; }
+            public byte NightVisionSeconds { get; set; }
             public byte BotCount { get; set; }
             public byte MaxPlayers { get; set; }
             public byte Channel { get; set; }

@@ -206,6 +206,20 @@ u16  victoryPoints         NEW — the margin needed to win
                            Size 8 → 10
 ```
 
+### 2.3 After P32 (protocol 14)
+
+```
+...                        as § 2.2
+u16  victoryPoints         the margin to build, or the total to reach (see victoryRule)
+u8   victoryRule           NEW — 0 Margin, 1 Target
+u8   gameMode              NEW — 0 Point Match, 1 Night Mode
+u8   nightVisionSeconds    NEW — a full night-vision battery, 0 by day
+                           Size 10 → 13
+```
+
+`WinningTeam` becomes `ConquestScoreRule.Decide(Score0, Score1, VictoryPoints, Rule)`. Contract:
+`plans/phases/phase-p32-mode-contract.md`.
+
 `WinningTeam` becomes `ConquestScoreRule.Decide(Score0, Score1, VictoryPoints)` — the same
 function the server ends the match with, so the two can no longer disagree.
 

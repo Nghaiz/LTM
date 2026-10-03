@@ -61,6 +61,10 @@ namespace Ironfront.MasterServer.Lobby
         /// <see cref="BotCapacity"/> while the room exists.
         /// </summary>
         public required byte BotCount { get; init; }
+
+        /// <summary>The room's game mode, victory rule, points and night-vision battery (protocol 14).</summary>
+        public RoomSettings Settings { get; init; } = RoomSettings.Default;
+
         public required bool IsPrivate { get; init; }
         public string? PasswordHash { get; init; }
         public int HostPlayerId { get; set; }
@@ -116,9 +120,17 @@ namespace Ironfront.MasterServer.Lobby
     public readonly struct RoomCreateRequest
     {
         public RoomCreateRequest(string name, ushort mapId, byte maxPlayers, byte botCount, bool isPrivate, string? passwordHash)
+            : this(name, mapId, maxPlayers, botCount, isPrivate, passwordHash, RoomSettings.Default)
         {
-            Name = name; MapId = mapId; MaxPlayers = maxPlayers; BotCount = botCount; IsPrivate = isPrivate; PasswordHash = passwordHash;
         }
+
+        public RoomCreateRequest(string name, ushort mapId, byte maxPlayers, byte botCount, bool isPrivate, string? passwordHash, RoomSettings settings)
+        {
+            Name = name; MapId = mapId; MaxPlayers = maxPlayers; BotCount = botCount; IsPrivate = isPrivate; PasswordHash = passwordHash; Settings = settings;
+        }
+
+        /// <summary>Game mode, victory rule, points and night-vision battery (protocol 14).</summary>
+        public RoomSettings Settings { get; }
         public string Name { get; }
         public ushort MapId { get; }
         public byte MaxPlayers { get; }
@@ -183,6 +195,11 @@ namespace Ironfront.MasterServer.Lobby
             if (request.BotCount > ProtocolConstants.MAX_BOTS || request.BotCount % 2 != 0)
                 return Fail(ErrorCode.InternalServerError);
 
+            // Protocol 14: a mode the map has, a rule with its points in range, a night-vision
+            // battery at night and none by day. The form never sends anything else.
+            if (!RoomRules.AreValid(request.MapId, request.Settings))
+                return Fail(ErrorCode.InvalidRoomSettings);
+
             // What the game-server host can still carry beside the rooms that already exist. The
             // form never offers more (the room list carries the same number); this answers a
             // creator who raced somebody else to the last of it.
@@ -193,7 +210,7 @@ namespace Ironfront.MasterServer.Lobby
             var room = new Room
             {
                 RoomId = ++_nextRoomId, Name = request.Name.Trim(), MapId = request.MapId, MaxPlayers = EvenSeats(request.MaxPlayers),
-                BotCount = request.BotCount, IsPrivate = request.IsPrivate,
+                BotCount = request.BotCount, Settings = request.Settings, IsPrivate = request.IsPrivate,
                 PasswordHash = request.IsPrivate ? BCrypt.Net.BCrypt.HashPassword(request.PasswordHash!, 11) : null,
                 HostPlayerId = session.PlayerId, State = RoomLifecycleState.Waiting
             };
