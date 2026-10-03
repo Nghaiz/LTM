@@ -740,14 +740,15 @@ namespace Ironfront.Net.Unity.Server
         {
             for (byte slot = 0; slot < ActorSpareAmmoPool.SlotsPerActor; slot++)
             {
-                short spare = WeaponCatalog.For(session.LoadoutWeaponAt(slot)).SpareAmmo;
+                byte weapon = session.LoadoutWeaponAt(slot);
+                short spare = WeaponCatalog.For(weapon).SpareAmmo;
 
-                // Resupply per pulse is left at zero: how much one ammo-bag pulse adds is a per
-                // weapon number this catalogue does not carry yet, and a guess here would be a
-                // balance change wearing a netcode commit's clothes. A zero means the bag adds
-                // nothing, which is what happens today.
+                // The prefab's own resupplyNumber. This was zero until 2026-10-03 ("the catalogue
+                // does not carry it yet"), which made every ammo bag and supply cache add nothing
+                // online while the offline game refilled as it always had.
                 _loop.SpareAmmo.SetLoadout(
-                    session.ActorId, slot, spare, spare, resupplyPerPulse: 0);
+                    session.ActorId, slot, spare, spare,
+                    resupplyPerPulse: WeaponCatalog.ResupplyPerPulse(weapon));
             }
         }
 

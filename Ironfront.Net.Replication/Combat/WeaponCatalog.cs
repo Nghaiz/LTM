@@ -141,6 +141,35 @@ namespace Ironfront.Net.Replication.Combat
             return Configs[weaponId];
         }
 
+        /// <summary>
+        /// Rounds one resupply pulse (an ammo bag, a supply cache) adds to a spare slot holding
+        /// this weapon: the prefab's own <c>resupplyNumber</c>. Zero for a weapon no pulse refills.
+        /// </summary>
+        /// <remarks>
+        /// Read off the weapon prefabs (2026-10-03). Before this the server seeded every slot's
+        /// pulse with zero, so online an ammo bag added nothing at all -- the "standing next to it
+        /// refills nothing" report. The offline game always used these numbers through
+        /// <c>Actor.ResupplyAmmo</c>.
+        /// </remarks>
+        public static short ResupplyPerPulse(byte weaponId)
+        {
+            switch (weaponId)
+            {
+                case WeaponIds.RK44: return 15;
+                case WeaponIds.SIND7: return 6;
+                case WeaponIds.SIND7_SUPPRESSED: return 6;
+                case WeaponIds.EAGLE_76: return 6;
+                case WeaponIds.SL_DEFENDER: return 4;
+                case WeaponIds.SIGNAL_DMR: return 10;
+                case WeaponIds.RECON_LRR: return 8;
+                case WeaponIds.BEU_AW1: return 1;
+                case WeaponIds.BIL_SCALPEL: return 1;
+                case WeaponIds.FRAG: return 1;
+                case WeaponIds.SPEARHEAD: return 1;
+                default: return 0;
+            }
+        }
+
         /// <summary>True when the id's numbers came from the registry rather than its class.</summary>
         public static bool IsAuthored(byte weaponId)
         {
