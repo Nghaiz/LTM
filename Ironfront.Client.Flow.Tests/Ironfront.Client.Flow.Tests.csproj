@@ -89,6 +89,8 @@
              Link="Linked\RoomBotChoice.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\RoomSettingsChoice.cs"
              Link="Linked\RoomSettingsChoice.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\NightVisionBattery.cs"
+             Link="Linked\NightVisionBattery.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\GraphicsPresetRules.cs"
              Link="Linked\GraphicsPresetRules.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\VegetationRules.cs"

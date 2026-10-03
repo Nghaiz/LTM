@@ -60,6 +60,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Dropdown? _ruleDropdown;
         [SerializeField] private InputField? _pointsField;
 
+        /// <summary>The night-vision battery in seconds; open only while Night Mode is chosen.</summary>
+        [SerializeField] private InputField? _visionField;
+
         [Header("Controls")]
         [SerializeField] private Button? _createButton;
         [SerializeField] private Button? _backButton;
@@ -103,17 +106,53 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_createButton != null) _createButton.onClick.AddListener(OnCreate);
             if (_backButton != null) _backButton.onClick.AddListener(OnBack);
             if (_privateToggle != null) _privateToggle.onValueChanged.AddListener(OnPrivateChanged);
-            if (_mapDropdown != null) _mapDropdown.onValueChanged.AddListener(_ => RefreshMapPreview());
+            if (_mapDropdown != null) _mapDropdown.onValueChanged.AddListener(_ => OnMapChanged());
             if (_maxPlayersField != null) _maxPlayersField.onValueChanged.AddListener(_ => RefreshPreviewStats());
             if (_botSlider != null) _botSlider.ValueChanged += _ => RefreshPreviewStats();
             if (_ruleDropdown != null) _ruleDropdown.onValueChanged.AddListener(_ => OnRuleChanged());
-            if (_modeDropdown != null) _modeDropdown.onValueChanged.AddListener(_ => RefreshPreviewStats());
+            if (_modeDropdown != null) _modeDropdown.onValueChanged.AddListener(_ => OnModeChanged());
+            if (_visionField != null) _visionField.onValueChanged.AddListener(_ => RefreshPreviewStats());
             if (_pointsField != null) _pointsField.onValueChanged.AddListener(_ => RefreshPreviewStats());
 
             if (_maxPlayersField != null && _maxPlayersField.text.Length == 0)
                 _maxPlayersField.text = DefaultMaxPlayers.ToString();
 
             OnPrivateChanged(_privateToggle != null && _privateToggle.isOn);
+            OnModeChanged();
+            RefreshMapPreview();
+        }
+
+        /// <summary>
+        /// Night Mode is Forest Lake's: choosing it takes the form to Forest Lake, and opens the
+        /// battery field with the default in it.
+        /// </summary>
+        private void OnModeChanged()
+        {
+            bool nightMode = SelectedMode() == GameMode.Night;
+            if (nightMode && SelectedMapId() != RoomRules.NightModeMapId && _mapDropdown != null)
+            {
+                int index = _mapIds.IndexOf(RoomRules.NightModeMapId);
+                if (index >= 0) _mapDropdown.value = index;
+            }
+            if (_visionField != null)
+            {
+                _visionField.interactable = nightMode;
+                if (nightMode && _visionField.text.Trim().Length == 0)
+                    _visionField.text = RoomRules.DefaultNightVisionSeconds.ToString();
+                if (!nightMode) _visionField.text = string.Empty;
+            }
+            RefreshMapPreview();
+            RefreshPreviewStats();
+        }
+
+        /// <summary>A map without Night Mode takes the form back to Point Match.</summary>
+        private void OnMapChanged()
+        {
+            if (SelectedMode() == GameMode.Night
+                && !RoomRules.ModeAllowedOn(GameMode.Night, SelectedMapId()) && _modeDropdown != null)
+            {
+                _modeDropdown.value = System.Array.IndexOf(RoomSettingsChoice.Modes, GameMode.PointMatch);
+            }
             RefreshMapPreview();
         }
 
@@ -128,7 +167,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             }
 
             int index = Mathf.Clamp(_mapDropdown.value, 0, _mapDropdown.options.Count - 1);
-            _mapPreviewTitle.text = _mapDropdown.options[index].text;
+            _mapPreviewTitle.text = RoomSettingsChoice.MapTitle(_mapDropdown.options[index].text, SelectedMode());
             RefreshPreviewStats();
         }
 
@@ -225,8 +264,9 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_rulePreview != null)
                 _rulePreview.text = RoomSettingsChoice.TryRead(
                         SelectedMode(), SelectedRule(), _pointsField != null ? _pointsField.text : string.Empty,
+                        _visionField != null ? _visionField.text : string.Empty,
                         SelectedMapId(), out RoomSettings settings, out _)
-                    ? RoomSettingsChoice.Describe(in settings)
+                    ? RoomSettingsChoice.DescribeRule(in settings)
                     : "--";
         }
 
@@ -326,6 +366,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (!RoomSettingsChoice.TryRead(
                     SelectedMode(), SelectedRule(), _pointsField != null ? _pointsField.text : string.Empty,
+                    _visionField != null ? _visionField.text : string.Empty,
                     mapId, out RoomSettings settings, out string settingsError))
             {
                 SetError(settingsError);

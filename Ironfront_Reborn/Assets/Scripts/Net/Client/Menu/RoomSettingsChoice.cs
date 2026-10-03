@@ -22,7 +22,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         public static readonly VictoryRule[] Rules = { VictoryRule.Margin, VictoryRule.Target };
 
         /// <summary>The modes in the order the form's mode dropdown lists them.</summary>
-        public static readonly GameMode[] Modes = { GameMode.PointMatch };
+        public static readonly GameMode[] Modes = { GameMode.PointMatch, GameMode.Night };
 
         /// <summary>The rule dropdown's option for <paramref name="rule"/>.</summary>
         public static string RuleOption(VictoryRule rule)
@@ -36,6 +36,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         public static string PointsPlaceholder(VictoryRule rule)
             => (rule == VictoryRule.Target ? "Points to reach" : "Points to lead by")
                + $" ({RoomRules.MinPoints(rule)}-{RoomRules.MaxPoints(rule)})";
+
+        /// <summary>The night-vision field's placeholder: what the number is, and its range.</summary>
+        public static string VisionPlaceholder()
+            => $"Night vision battery, seconds ({RoomRules.MinNightVisionSeconds}-{RoomRules.MaxNightVisionSeconds})";
 
         /// <summary>
         /// What the points field should hold after the rule changes: the new rule's default when it
@@ -56,6 +60,15 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// </summary>
         public static bool TryRead(
             GameMode mode, VictoryRule rule, string pointsText, ushort mapId,
+            out RoomSettings settings, out string error)
+            => TryRead(mode, rule, pointsText, string.Empty, mapId, out settings, out error);
+
+        /// <summary>
+        /// <see cref="TryRead(GameMode, VictoryRule, string, ushort, out RoomSettings, out string)"/>
+        /// with the night-vision battery the host typed (Night Mode only; empty is the default).
+        /// </summary>
+        public static bool TryRead(
+            GameMode mode, VictoryRule rule, string pointsText, string visionText, ushort mapId,
             out RoomSettings settings, out string error)
         {
             settings = RoomSettings.Default;
@@ -84,7 +97,24 @@ namespace Ironfront.Net.Unity.Client.Menu
                 return false;
             }
 
-            byte vision = mode == GameMode.Night ? RoomRules.DefaultNightVisionSeconds : (byte)0;
+            byte vision = 0;
+            if (mode == GameMode.Night)
+            {
+                string typed = visionText.Trim();
+                int seconds = RoomRules.DefaultNightVisionSeconds;
+                if (typed.Length > 0 && !int.TryParse(typed, out seconds))
+                {
+                    error = "The night vision battery must be a number of seconds.";
+                    return false;
+                }
+                if (seconds < RoomRules.MinNightVisionSeconds || seconds > RoomRules.MaxNightVisionSeconds)
+                {
+                    error = $"The night vision battery must be between {RoomRules.MinNightVisionSeconds} and {RoomRules.MaxNightVisionSeconds} seconds.";
+                    return false;
+                }
+                vision = (byte)seconds;
+            }
+
             settings = new RoomSettings(mode, rule, (ushort)points, vision);
             return true;
         }
@@ -97,6 +127,14 @@ namespace Ironfront.Net.Unity.Client.Menu
                 : $"Lead by {settings.VictoryPoints} points to win.";
             return settings.Mode == GameMode.Night ? "Night Mode. " + rule : rule;
         }
+
+        /// <summary>The rule alone, for a cell too narrow for the mode: "LEAD BY 200", "FIRST TO 500".</summary>
+        public static string DescribeRule(in RoomSettings settings)
+            => (settings.Rule == VictoryRule.Target ? "FIRST TO " : "LEAD BY ") + settings.VictoryPoints;
+
+        /// <summary>A map's name with the room's mode beside it at night: "Forest Lake  ·  NIGHT".</summary>
+        public static string MapTitle(string mapName, GameMode mode)
+            => mode == GameMode.Night ? mapName + "  ·  NIGHT" : mapName;
 
         /// <summary>A room's rule in words for the browser, the lobby and the match: "LEAD BY 200", "FIRST TO 500".</summary>
         public static string Describe(in RoomSettings settings)
