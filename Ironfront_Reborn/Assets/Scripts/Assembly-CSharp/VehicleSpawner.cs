@@ -874,6 +874,49 @@ public class VehicleSpawner : MonoBehaviour
 		return reclaimNearbyActors.Count > 0;
 	}
 
+	/// <summary>
+	/// A pad that never respawns by itself whose vehicle is now wrecked or gone (phase P32):
+	/// <see cref="FieldSupplyDirector"/> moves such a pad somewhere new and spawns again.
+	/// </summary>
+	public bool IsSpent =>
+		respawnType == RespawnType.Never && scheduler != null && scheduler.Phase == VehicleSpawnPhase.Spawned
+		&& (lastSpawnedVehicle == null || lastSpawnedVehicle.dead);
+
+	/// <summary>
+	/// The box <paramref name="vehiclePrefab"/>'s solid colliders fill in its own space, with the
+	/// clearance every pad keeps round it: what <see cref="FieldSupplyDirector"/> (phase P32)
+	/// tests a parking place against before it moves a pad there.
+	/// </summary>
+	public static Bounds FootprintOf(GameObject vehiclePrefab)
+	{
+		Bounds footprint = ColliderFootprint(vehiclePrefab);
+		footprint.Expand(2f * SpawnClearance);
+		return footprint;
+	}
+
+	/// <summary>
+	/// Moves the pad and, when <paramref name="newPrefab"/> is given, changes what it spawns (phase
+	/// P32). The vehicle already out is left alone; the next one appears here.
+	/// </summary>
+	public void Relocate(Vector3 position, Quaternion rotation, GameObject newPrefab)
+	{
+		base.transform.SetPositionAndRotation(position, rotation);
+		if (newPrefab != null && newPrefab != prefab)
+		{
+			prefab = newPrefab;
+			spawnFootprint = FootprintOf(prefab);
+		}
+	}
+
+	/// <summary>Spawns again here after <see cref="spawnTime"/> (phase P32: a field pad moved on).</summary>
+	public void RespawnLater()
+	{
+		if (!VehiclesAreSuppressed())
+		{
+			scheduler.ScheduleRespawn();
+		}
+	}
+
 	public void VehicleDied(Vehicle vehicle)
 	{
 		// A superseded vehicle -- alive and driven away when this pad respawned. Its id is the

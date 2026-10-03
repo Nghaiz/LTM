@@ -28,7 +28,7 @@ last: carrying the mode and its settings to the game server and the HUD changes 
 | # | Item | What | Wire | Status |
 |---|---|---|---|---|
 | 1 | 2 | Bots respawn where their side has idle vehicles, squads sized to the seats; soak measures vehicle use and HQ pressure | 13 | #513 |
-| 2 | 2 | Commander values the enemy HQ and spreads over more flags | 13 | |
+| 2 | 2 | Commander values the enemy HQ and spreads over more flags | 13 | #514 |
 | 3 | 2 | Vehicle slots at every Forest Lake flag, filled at random each match; random field vehicles | 13 | |
 | 4 | 2 | Random ammo/medical supply crates each match (server deployables, crate visuals on the client) | 13 | |
 | 5+ | 3 | Physics, then animation, rendering, script Update (P31 list), each A/B measured | client | |
@@ -67,3 +67,13 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   samples, 2.5 (`p32-pr2b`) in 12% / 7%, flags held unchanged (about 3.1 / 3.6); 2.5 kept. Neither
   HQ fell in ten minutes. One `[ai] ... walking a path with no squad` warning in `p32-pr2b`; the
   same line is in soaks from before P32 (`board-measure`, `diag-3`), so it is not this change.
+- 2026-10-04 — PR 3. `FieldSupplyDirector` (server and offline only) reads
+  `Resources/FieldSupply/<map>` (`FieldSupplyConfig`; only Forest Lake has one) and, each match,
+  parks a vehicle of a random kind at a random place 34-62 m from every non-HQ flag (a boat on the
+  water when a flag has no dry place), plus two field vehicles at least 110 m from any flag and
+  120 m apart, which move on when wrecked. A place must have the terrain itself under the
+  footprint's five sample points (no rock, wall, bridge or vehicle), a step under 0.7 m, a slope
+  under 11 degrees, no tree within 3.5 m plus the footprint, nothing solid in the body's box, and a
+  walkable node within 5 m. Pads are `Field Vehicle Pad` prefabs saved inactive. Soak `p32-pr3b`:
+  vehicles alive 14.4 -> 21.2 per sample, bots seated 8.2 -> 9.4, an enemy on HQ 0 / 1 in 27% / 13%
+  of samples, no warnings, no pad refused an id (`MAX_VEHICLES` 24).
