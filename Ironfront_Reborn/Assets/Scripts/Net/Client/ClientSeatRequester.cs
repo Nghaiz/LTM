@@ -220,7 +220,7 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            if (!TryFindNearestSeat(standingAt, out ushort vehicleId, out byte seatIndex)) return;
+            if (!TryFindNearestSeat(standingAt, out ushort vehicleId, out byte seatIndex, out _)) return;
 
             Send(vehicleId, seatIndex, SeatAction.Enter);
         }
@@ -252,6 +252,27 @@ namespace Ironfront.Net.Unity.Client
         /// parked near the world origin.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// The vehicle the seat key would ask for right now, for the on-screen prompt: the same
+        /// choice <see cref="Update"/> makes, so the prompt never names a vehicle the key
+        /// would not try.
+        /// </summary>
+        /// <returns>False while seated, dead, waiting on an answer, or with nothing in reach.</returns>
+        internal bool TryGetEnterCandidate(out NetClientVehicle vehicle, out Vector3 seat)
+        {
+            vehicle = null;
+            seat = Vector3.zero;
+            if (!isActiveAndEnabled || _client == null || !_client.IsConnected) return false;
+            if (!LocalBodyIsDeployed() || _pendingVehicleId != 0) return false;
+            if (_stage != null && _stage.OccupiedVehicleId != 0) return false;
+
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (rig == null || !rig.Exists) return false;
+
+            if (!TryFindNearestSeat(rig.Position, out ushort vehicleId, out _, out seat)) return false;
+            return _registry.TryFind(vehicleId, out vehicle);
+        }
+
         private static bool TryReadLocalSeatIntent(bool keyboardPressed, out Vector3 standingAt)
         {
             standingAt = Vector3.zero;
@@ -297,10 +318,11 @@ namespace Ironfront.Net.Unity.Client
         /// key feel broken rather than merely surprising.
         /// </para>
         /// </remarks>
-        private bool TryFindNearestSeat(Vector3 from, out ushort vehicleId, out byte seatIndex)
+        private bool TryFindNearestSeat(Vector3 from, out ushort vehicleId, out byte seatIndex, out Vector3 seatAt)
         {
             vehicleId = 0;
             seatIndex = DriverSeatIndex;
+            seatAt = Vector3.zero;
 
             if (_registry == null || _registry.LiveCount == 0) return false;
 
@@ -330,6 +352,7 @@ namespace Ironfront.Net.Unity.Client
 
                 bestSquared = squared;
                 vehicleId   = ids[i];
+                seatAt      = seat;
             }
 
             return vehicleId != 0;

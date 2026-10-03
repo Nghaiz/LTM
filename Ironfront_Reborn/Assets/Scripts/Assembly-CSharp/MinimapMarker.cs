@@ -141,6 +141,19 @@ public class MinimapMarker : MonoBehaviour
 	}
 
 	/// <summary>A player rather than a bot: drawn a little larger, as well as lighter.</summary>
+	/// <summary>What this icon follows; null once the subject is gone.</summary>
+	public Transform Subject => subject;
+
+	/// <summary>The colour the icon is drawn in right now.</summary>
+	public Color Color => color;
+
+	public MinimapMarkerKind Kind => kind;
+
+	public bool IsHuman => isHuman;
+
+	/// <summary>The picture the icon wears: a vehicle's silhouette, a soldier's arrow, or null.</summary>
+	public Texture Picture => rawImage != null ? rawImage.texture : null;
+
 	public void SetHuman(bool isHuman)
 	{
 		this.isHuman = isHuman;

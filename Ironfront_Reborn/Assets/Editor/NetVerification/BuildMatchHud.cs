@@ -139,7 +139,9 @@ namespace Ironfront.Net.Unity.EditorTools
 
                 // First, so everything else on this Canvas draws over the plates.
                 NameplateLayer nameplates = BuildNameplates(root, log);
-                Text team = BuildTeamReadout(root, FlagIndicatorBottom(contents), out GameObject teamChip, log);
+                PlaceFlagIndicator(contents, log);
+                Text team = BuildTeamReadout(root, out GameObject teamChip, log);
+                BuildSeatPrompt(root, log);
                 KillfeedRowView[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
                     root, out Text killer, out Text timer, out Button deployButton, log);
@@ -199,16 +201,61 @@ namespace Ironfront.Net.Unity.EditorTools
 
         // ------------------------------------------------------------------ the elements
 
-        /// <summary>3.1 — which side you are on: a chip, top-left, under the flag capture indicator.</summary>
+        /// <summary>Canvas units from the top and right screen edges to the top-right cluster.</summary>
+        public const float CornerInset = 24f;
+
+        /// <summary>The cluster's row height: the team chip, and the flag indicator beside it.</summary>
+        public const float CornerRowHeight = 62f;
+
+        /// <summary>Between the team chip and the flag indicator.</summary>
+        private const float CornerGap = 10f;
+
+        /// <summary>
+        /// Moves the original HUD's flag capture indicator to the top-right corner, shrunk to the
+        /// cluster's row height. The one element outside <see cref="RootName"/> this builder
+        /// touches, and only its placement.
+        /// </summary>
+        /// <remarks>
+        /// <b>Owner request 2026-10-03:</b> the top-left corner now holds the round radar
+        /// (<c>CornerMinimap</c>), so the flag and the team chip share one row top-right, above
+        /// the killfeed (which starts <see cref="KillfeedTop"/> down) and clear of it. The
+        /// indicator keeps its logic: <c>IngameUi</c> still shows it only inside a capture zone.
+        /// Its <see cref="AspectRatioFitter"/> is switched off because it sized the circle from
+        /// the screen-height anchors this removes.
+        /// </remarks>
+        private static void PlaceFlagIndicator(GameObject contents, StringBuilder log)
+        {
+            RectTransform flag = null;
+            foreach (RectTransform rect in contents.GetComponentsInChildren<RectTransform>(includeInactive: true))
+                if (rect.name == FlagIndicatorName) flag = rect;
+
+            if (flag == null)
+                throw new System.InvalidOperationException(
+                    $"'{FlagIndicatorName}' is not in {PrefabPath}. The top-right cluster is built around "
+                    + "it; find where the capture indicator went before building anywhere else.");
+
+            if (flag.TryGetComponent(out AspectRatioFitter fitter))
+            {
+                fitter.aspectMode = AspectRatioFitter.AspectMode.None;
+                fitter.enabled = false;
+            }
+
+            flag.anchorMin = Vector2.one;
+            flag.anchorMax = Vector2.one;
+            flag.pivot = Vector2.one;
+            flag.anchoredPosition = new Vector2(-CornerInset, -CornerInset);
+            flag.sizeDelta = new Vector2(CornerRowHeight, CornerRowHeight);
+            log.AppendLine($"flag indicator: top-right, {CornerRowHeight:0} px, {CornerInset:0} px in.");
+        }
+
+        /// <summary>3.1 — which side you are on: a chip, top-right, left of the flag indicator.</summary>
         /// <remarks>
         /// <para>
-        /// <b>Under the flag, not at the corner.</b> The original HUD's capture indicator
-        /// (<c>IngameUi.flagIndicatorParent</c>, "Flag Capture Indicator Edge") owns the top-left
-        /// corner: anchored from 85% to the top of the screen, 107 px wide, on a constant-pixel
-        /// Canvas. This readout used to sit at (36, -36) on this scaled Canvas, right inside it,
-        /// so standing in a capture zone drew the flag over "BLUE TEAM" (live test 2026-09-30).
-        /// Anchored to the same 85% line, it sits under the indicator at every resolution, which
-        /// no fixed offset on a Canvas that scales differently could do.
+        /// <b>One row with the flag.</b> Both sit <see cref="CornerInset"/> below the top edge
+        /// and are <see cref="CornerRowHeight"/> tall, on Canvases with the same scaler, so the row
+        /// holds at every resolution; the chip ends <see cref="CornerGap"/> short of the flag, so
+        /// standing in a capture zone never draws one over the other (the live test of 2026-09-30
+        /// found exactly that overlap, top-left).
         /// </para>
         /// <para>
         /// <b>A chip that comes and goes with the answer</b> (P30, from the NewMap redesign):
@@ -217,45 +264,78 @@ namespace Ironfront.Net.Unity.EditorTools
         /// board hides it.
         /// </para>
         /// </remarks>
-        private static Text BuildTeamReadout(
-            GameObject root, float flagIndicatorBottom, out GameObject chip, StringBuilder log)
+        private static Text BuildTeamReadout(GameObject root, out GameObject chip, StringBuilder log)
         {
             AngularPanel panel = Angular(root, "Team Readout", Vector2.zero, Vector2.zero, CutAction,
                 WithAlpha(Surface, 0.86f));
-            Place(panel, new Vector2(0f, flagIndicatorBottom), new Vector2(0f, 1f), new Vector2(12f, -8f),
-                new Vector2(220f, 62f));
+            Place(panel, Vector2.one, Vector2.one,
+                new Vector2(-(CornerInset + CornerRowHeight + CornerGap), -CornerInset),
+                new Vector2(220f, CornerRowHeight));
             chip = panel.gameObject;
             chip.AddComponent<CanvasGroup>();
 
-            Text kicker = Label(chip, "Kicker", "YOUR SIDE", 11, TextAnchor.MiddleLeft, bold: true);
+            Text kicker = Label(chip, "Kicker", "YOUR SIDE", 11, TextAnchor.MiddleRight, bold: true);
             kicker.color = CyanSoft;
-            Place(kicker, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -9f),
-                new Vector2(190f, 16f));
+            Place(kicker, Vector2.one, Vector2.one, new Vector2(-16f, -9f), new Vector2(190f, 16f));
 
-            Text label = Label(chip, "Text", string.Empty, 24, TextAnchor.MiddleLeft, bold: true);
-            Place(label, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -25f),
-                new Vector2(190f, 30f));
+            Text label = Label(chip, "Text", string.Empty, 24, TextAnchor.MiddleRight, bold: true);
+            Place(label, Vector2.one, Vector2.one, new Vector2(-16f, -25f), new Vector2(190f, 30f));
 
             // Authored EMPTY, deliberately. Criterion 2 is graded on a screenshot at join, and a
             // placeholder string would render as an answer for however long the first snapshot
             // takes -- the fabricated zero ScoreUi refuses, wearing a different label.
             log.AppendLine("team readout: authored blank and put away; MatchHud.SetLocalTeam writes and shows it.");
-            log.AppendLine($"team readout: under the flag capture indicator, at {flagIndicatorBottom:0.##} of the screen height.");
+            log.AppendLine("team readout: top-right, left of the flag capture indicator, one row.");
             return label;
         }
 
         /// <summary>
-        /// The flag capture indicator's bottom edge, as a fraction of the screen height, read off
-        /// the prefab rather than copied here, so moving the indicator moves the readout with it.
+        /// "F  DRIVE THE JEEP": the seat key's prompt, placed every frame by <see cref="SeatPromptView"/>.
         /// </summary>
-        private static float FlagIndicatorBottom(GameObject contents)
+        private static void BuildSeatPrompt(GameObject root, StringBuilder log)
         {
-            foreach (RectTransform rect in contents.GetComponentsInChildren<RectTransform>(includeInactive: true))
-                if (rect.name == FlagIndicatorName) return rect.anchorMin.y;
+            var host = new GameObject("Seat Prompt Layer", typeof(RectTransform));
+            host.transform.SetParent(root.transform, worldPositionStays: false);
+            Stretch((RectTransform)host.transform);
+            SeatPromptView view = host.AddComponent<SeatPromptView>();
 
-            throw new System.InvalidOperationException(
-                $"'{FlagIndicatorName}' is not in {PrefabPath}. The team readout is placed under it; "
-                + "find where the capture indicator went before building the readout anywhere else.");
+            AngularPanel panel = Angular(host, "Seat Prompt", Vector2.zero, new Vector2(400f, 66f), CutAction,
+                WithAlpha(Surface, 0.88f));
+            var panelRect = (RectTransform)panel.transform;
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.zero;
+            var group = panel.gameObject.AddComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            AngularPanel cap = Angular(panel.gameObject, "Key Cap", Vector2.zero, new Vector2(44f, 44f), 6f, Ink);
+            Place(cap, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(12f, 0f), new Vector2(44f, 44f));
+            Text key = Label(cap.gameObject, "Key", "F", 26, TextAnchor.MiddleCenter, bold: true);
+            key.color = Ink900;
+            Stretch(key.rectTransform);
+
+            Text action = Label(panel.gameObject, "Action", string.Empty, 22, TextAnchor.MiddleLeft, bold: true);
+            Place(action, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(68f, 9f), new Vector2(320f, 28f));
+
+            Text detail = Label(panel.gameObject, "Detail", string.Empty, 13, TextAnchor.MiddleLeft, bold: false);
+            detail.color = CyanSoft;
+            Place(detail, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(68f, -15f), new Vector2(320f, 18f));
+
+            Image pointer = Picture(panel.gameObject, "Pointer", Orange);
+            Centre(pointer.rectTransform, Vector2.zero, new Vector2(30f, 17f));
+            pointer.gameObject.SetActive(false);
+
+            var so = new SerializedObject(view);
+            Assign(so, "_panel", panelRect);
+            Assign(so, "_group", group);
+            Assign(so, "_key", key);
+            Assign(so, "_keyCap", cap.gameObject);
+            Assign(so, "_action", action);
+            Assign(so, "_detail", detail);
+            Assign(so, "_pointer", pointer.rectTransform);
+            so.ApplyModifiedPropertiesWithoutUndo();
+            log.AppendLine("seat prompt: built hidden; SeatPromptView places it over the vehicle the seat key would ask for.");
         }
 
         /// <summary>
