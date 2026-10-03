@@ -209,6 +209,9 @@ namespace Ironfront.Net.Transport
         public long BytesSent, BytesReceived;
         public long PacketsSent, PacketsReceived, PacketsLost, PacketsResent;
         public float SmoothedRttMs, JitterMs;
+
+        /// <summary>The smallest round trip sampled, the wire's floor; see <c>ReliabilityLayer.MinRttMs</c>.</summary>
+        public float MinRttMs;
         public int PendingReliableCount;
 
         /// <summary>Reliable messages waiting behind a full window (<c>Connection.QueuedReliableCount</c>).</summary>

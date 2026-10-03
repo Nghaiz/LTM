@@ -141,6 +141,9 @@ namespace Ironfront.Net.Transport
 
         public float SmoothedRttMs => _reliability.SmoothedRttMs;
 
+        /// <inheritdoc cref="ReliabilityLayer.MinRttMs"/>
+        public float MinRttMs => _reliability.MinRttMs;
+
         public float JitterMs => _reliability.JitterMs;
 
         public TransportStats Stats => _stats;
@@ -487,6 +490,7 @@ namespace Ironfront.Net.Transport
             }
 
             _stats.SmoothedRttMs = SmoothedRttMs;
+            _stats.MinRttMs = MinRttMs;
             _stats.JitterMs = JitterMs;
             _stats.PendingReliableCount = _reliability.PendingReliableCount;
             _stats.QueuedReliableCount = _reliableBacklog.Count;

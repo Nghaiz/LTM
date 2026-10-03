@@ -1670,7 +1670,10 @@ public class AiActorController : ActorController
 			// died.
 			calculatingPath = false;
 			moveTimeoutAction.Start();
-			Debug.LogError(p.errorLog);
+
+			// Not logged here: AstarPath counts every failed search and reports them once a
+			// minute (PathFailureSummary). Printing each again as an error put dozens of lines in
+			// a match log for searches the bot simply retries, cancellations included.
 		}
 	}
 
@@ -1701,6 +1704,7 @@ public class AiActorController : ActorController
 			}
 			lastGotoPoint = targetPoint;
 			arrivedAtGoto = false;
+			WaterPathTags.Apply(seeker, steeringBoat: aquatic && actor.IsDriver());
 			if (aquatic && actor.IsDriver())
 			{
 				// A boat's goal is usually ashore: a flag the squad finishes on foot. The search for

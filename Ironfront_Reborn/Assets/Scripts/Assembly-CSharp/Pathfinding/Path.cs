@@ -259,14 +259,11 @@ namespace Pathfinding
 
 		public void LogError(string msg)
 		{
-			if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)
-			{
-				_errorLog += msg;
-			}
-			if (AstarPath.active.logPathResults != 0 && AstarPath.active.logPathResults != PathLog.InGame)
-			{
-				Debug.LogWarning(msg);
-			}
+			// Kept whatever logPathResults says, and not printed: AstarPath.PathFailures counts
+			// every failed search by this reason and reports them once a minute (playtest
+			// 2026-10-03, item 3f). The warning here was the first of up to three lines one
+			// routine failure produced.
+			_errorLog += msg;
 		}
 
 		public void ForceLogError(string msg)

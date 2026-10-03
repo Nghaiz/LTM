@@ -184,18 +184,25 @@ namespace Ironfront.Net.Replication.Tests
             // missing-data one: WeaponConfig describes a hitscan shot and a wrench swing is not
             // one. If a later phase teaches this table about melee, this assertion is the thing
             // that must change with it.
+            //
+            // Since playtest 2026-10-03 (item 3b) they are their own category rather than
+            // placeholders, so the server no longer warns about them at every start. Pinned by
+            // identity in both directions: the unauthored set IS the melee set.
             Assert.Equal(WeaponIds.MAX_ASSIGNED - 2, WeaponCatalog.AuthoredCount);
-            Assert.Equal(2, WeaponCatalog.PlaceholderCount);
+            Assert.Equal(0, WeaponCatalog.PlaceholderCount);
 
-            Assert.True(WeaponCatalog.IsAuthored(WeaponIds.RK44));
-            Assert.True(WeaponCatalog.IsAuthored(WeaponIds.RECON_LRR));
-            Assert.False(WeaponCatalog.IsAuthored(WeaponIds.WRENCH));
-            Assert.False(WeaponCatalog.IsAuthored(WeaponIds.SUPER_WRENCH));
+            for (byte id = 1; id <= WeaponIds.MAX_ASSIGNED; id++)
+            {
+                bool melee = id == WeaponIds.WRENCH || id == WeaponIds.SUPER_WRENCH;
+                Assert.True(melee == WeaponCatalog.IsMelee(id), $"{WeaponIds.NameOf(id)}: melee {melee}");
+                Assert.True(melee != WeaponCatalog.IsAuthored(id),
+                    $"{WeaponIds.NameOf(id)} is {(melee ? "melee yet authored" : "unauthored yet not melee")}");
+            }
 
-            string warning = WeaponCatalog.DescribeUnauthored();
-            Assert.Contains("PLACEHOLDER", warning);
-            Assert.Contains(WeaponIds.NameOf(WeaponIds.WRENCH), warning);
-            Assert.DoesNotContain(WeaponIds.NameOf(WeaponIds.RECON_LRR), warning);
+            string line = WeaponCatalog.DescribeUnauthored();
+            Assert.DoesNotContain("PLACEHOLDER", line);
+            Assert.Contains(WeaponIds.NameOf(WeaponIds.WRENCH), line);
+            Assert.DoesNotContain(WeaponIds.NameOf(WeaponIds.RECON_LRR), line);
         }
 
         [Fact]

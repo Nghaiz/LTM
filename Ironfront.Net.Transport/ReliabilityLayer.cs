@@ -84,6 +84,18 @@ namespace Ironfront.Net.Transport
 
         public float SmoothedRttMs { get; private set; }
 
+        /// <summary>
+        /// The smallest RTT sample seen on this connection, or 0 before the first.
+        /// </summary>
+        /// <remarks>
+        /// The floor of the path's round trip. Scheduling, GC and a busy peer only ever ADD to a
+        /// sample, so the minimum is the honest reading of the wire itself, where the smoothed
+        /// value carries every delay the samples picked up. A loaded Windows CI runner preempted
+        /// the polling thread for a 15.6 ms quantum on most samples and held the smoothed RTT of
+        /// a simulated 20 ms trip at 61 ms (playtest 2026-10-03, item 3e).
+        /// </remarks>
+        public float MinRttMs { get; private set; }
+
         public float JitterMs { get; private set; }
 
         public int PendingReliableCount => _unackedReliableCount;
@@ -400,6 +412,8 @@ namespace Ironfront.Net.Transport
         private void UpdateRtt(double sampleMs)
         {
             if (sampleMs < 0.0) return;
+
+            if (MinRttMs <= 0f || sampleMs < MinRttMs) MinRttMs = (float)sampleMs;
 
             if (SmoothedRttMs <= 0f)
             {
