@@ -259,6 +259,7 @@ public class CornerMinimap : MonoBehaviour
 		}
 
 		used = 0;
+		DrawFlags(camera, centre, halfUv, heading);
 		Dictionary<Transform, MinimapMarker>.ValueCollection markers = MinimapUi.Markers;
 		if (markers != null)
 		{
@@ -297,10 +298,7 @@ public class CornerMinimap : MonoBehaviour
 		switch (marker.Kind)
 		{
 		case MinimapMarkerKind.CapturePoint:
-			if (OnRadar(camera, marker.Subject.position, centre, halfUv, heading, 0.92f, out offset))
-			{
-				Place(flagTexture != null ? flagTexture : Circle(), marker.Color, FlagPixels, offset, null, heading, true, flagTexture != null ? flagUv : FullUv);
-			}
+			// Drawn by DrawFlags from the spawn points themselves.
 			break;
 		case MinimapMarkerKind.Vehicle:
 			if (OnRadar(camera, marker.Subject.position, centre, halfUv, heading, 0.95f, out offset))
@@ -315,6 +313,28 @@ public class CornerMinimap : MonoBehaviour
 				Place(picture != null ? picture : Circle(), marker.Color, marker.IsHuman ? HumanPixels : Soldier, offset, picture != null ? marker.Subject : null, heading, false, FullUv);
 			}
 			break;
+		}
+	}
+
+	// Every flag and HQ, read off the spawn points the M map draws its buttons from, in the owner's
+	// colour. Not from the markers: a point gets its marker from CapturePoint.SetOwner, and the
+	// first SetOwner (at Start) runs before this HUD exists, so a flag that has not changed hands
+	// since the map loaded -- every HQ, every flag at kick-off -- has no marker at all. Seen online
+	// 2026-10-03: standing on a held flag with no flag on the radar.
+	private void DrawFlags(Camera camera, Vector3 centre, float halfUv, float heading)
+	{
+		if (ActorManager.instance == null || ActorManager.instance.spawnPoints == null)
+		{
+			return;
+		}
+		Texture picture = flagTexture != null ? flagTexture : Circle();
+		Rect uv = flagTexture != null ? flagUv : FullUv;
+		foreach (SpawnPoint point in ActorManager.instance.spawnPoints)
+		{
+			if (point != null && OnRadar(camera, point.transform.position, centre, halfUv, heading, 0.92f, out Vector2 offset))
+			{
+				Place(picture, ColorScheme.TeamColor(point.owner), FlagPixels, offset, null, heading, true, uv);
+			}
 		}
 	}
 
