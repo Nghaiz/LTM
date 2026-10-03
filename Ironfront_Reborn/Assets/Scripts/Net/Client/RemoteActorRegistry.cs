@@ -556,6 +556,25 @@ namespace Ironfront.Net.Unity.Client
         /// local body is predicted and never appears among the remote ones.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// How many living remote bodies sit in <paramref name="vehicle"/>, and the side of one of
+        /// them, from the last sampled snapshot. For the seat prompt.
+        /// </summary>
+        internal int CrewCount(Transform vehicle, out byte team)
+        {
+            team = TeamId.None;
+            int count = 0;
+            if (vehicle == null) return 0;
+            foreach (KeyValuePair<ushort, Transform> seat in _seatedIn)
+            {
+                if (seat.Value != vehicle) continue;
+                if (!_views.TryGetValue(seat.Key, out RemoteActorView crew) || crew == null || !crew.IsAlive) continue;
+                team = crew.Team;
+                count++;
+            }
+            return count;
+        }
+
         private void ApplyVehicleMarkers(byte localTeam, bool hasLocalBody, Vector3 localPosition, Transform localVehicle)
         {
             IMinimapMarkers minimap = NetClientBindings.Minimap;

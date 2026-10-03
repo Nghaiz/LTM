@@ -197,6 +197,12 @@ public class IngameUi : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// Whether the in-match HUD is drawn: false before deploying, in the menus, and while the End
+	/// key has it hidden. <see cref="CornerMinimap"/> follows it.
+	/// </summary>
+	public static bool IsShown => instance != null && instance.canvas != null && instance.canvas.enabled;
+
 	public void Hide()
 	{
 		canvas.enabled = false;

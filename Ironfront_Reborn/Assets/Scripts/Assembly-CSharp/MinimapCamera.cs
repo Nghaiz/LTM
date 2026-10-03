@@ -27,6 +27,30 @@ public class MinimapCamera : MonoBehaviour
 	[Range(0f, 0.4f)]
 	public float frameMargin = 0.08f;
 
+	/// <summary>
+	/// A picture of the map drawn ahead of time by <c>Ironfront/Maps/Bake minimap picture</c>, used
+	/// instead of a live render of the scene when it was drawn for this camera's frame.
+	/// </summary>
+	/// <remarks>
+	/// The live render is a camera shot of the level from above: on Forest Lake it showed flat
+	/// sand, no forest (the trees are drawn by the GPU instancer, which a one-off render misses),
+	/// magenta where a shader was missing and snow glare at the edges (owner report 2026-10-03:
+	/// "trông như mặt cắt"). The baked picture is drawn from the terrain, water, trees and
+	/// structures themselves.
+	/// </remarks>
+	public Texture2D bakedPicture;
+
+	/// <summary>The frame <see cref="bakedPicture"/> was drawn for: its centre (x, z)...</summary>
+	public Vector2 bakedCentre;
+
+	/// <summary>...and its half width in metres.</summary>
+	public float bakedHalfSpan;
+
+	/// <summary>Metres a frame may move before a baked picture no longer fits it.</summary>
+	private const float BakedFrameTolerance = 0.5f;
+
+	private bool usingBakedPicture;
+
 	private void Awake()
 	{
 		instance = this;
@@ -38,6 +62,23 @@ public class MinimapCamera : MonoBehaviour
 			camera.aspect = 1f;
 			FrameThePlayableArea();
 			return;
+		}
+		if (bakedPicture != null)
+		{
+			camera.aspect = 1f;
+			FrameThePlayableArea();
+			if (BakedPictureFits())
+			{
+				usingBakedPicture = true;
+				camera.enabled = false;
+				return;
+			}
+			Debug.LogWarning(
+				"[minimap] the baked picture was drawn for a frame centred " + bakedCentre.ToString("F1")
+				+ ", half width " + bakedHalfSpan.ToString("F1") + " m, and the map now frames "
+				+ new Vector2(base.transform.position.x, base.transform.position.z).ToString("F1") + ", "
+				+ camera.orthographicSize.ToString("F1") + " m; drawing it live instead. "
+				+ "Bake it again: Ironfront/Maps/Bake minimap picture.");
 		}
 		minimapRenderTexture = new RenderTexture(RESOLUTION, RESOLUTION, 16);
 		// Mip-mapped: the whole map is drawn at under half its texel size, and without mips the
@@ -206,11 +247,41 @@ public class MinimapCamera : MonoBehaviour
 	/// </remarks>
 	private void FrameTheLevelBounds(Bounds box)
 	{
+		LevelFrame(box, out Vector2 centre, out float halfSpan);
+		base.transform.SetPositionAndRotation(
+			new Vector3(centre.x, box.max.y + LevelBoundsClearance, centre.y),
+			Quaternion.Euler(90f, 0f, 0f));
+
+		camera.orthographic = true;
+		camera.orthographicSize = halfSpan;
+		camera.nearClipPlane = LevelBoundsClearance * 0.5f;
+		camera.farClipPlane = box.size.y + LevelBoundsClearance * 2f;
+	}
+
+	/// <summary>
+	/// The square, in world x and z, that the minimap frames for the scene's
+	/// <see cref="LevelBounds"/>; false for a map without one. What a baked picture is drawn for.
+	/// </summary>
+	public static bool TryGetLevelFrame(out Vector2 centre, out float halfSpan)
+	{
+		LevelBounds levelBounds = FindFirstObjectByType<LevelBounds>();
+		if (levelBounds == null)
+		{
+			centre = Vector2.zero;
+			halfSpan = 0f;
+			return false;
+		}
+		LevelFrame(levelBounds.WorldBox, out centre, out halfSpan);
+		return true;
+	}
+
+	private static void LevelFrame(Bounds box, out Vector2 centre, out float halfSpan)
+	{
 		float minX = box.min.x;
 		float maxX = box.max.x;
 		float minZ = box.min.z;
 		float maxZ = box.max.z;
-		float halfSpan = Mathf.Max(box.size.x, box.size.z) * 0.5f / (1f - 2f * LevelBoundsIconMargin);
+		halfSpan = Mathf.Max(box.size.x, box.size.z) * 0.5f / (1f - 2f * LevelBoundsIconMargin);
 
 		// Only where ground is drawn. Island's play volume is 700 m of which the terrain covers
 		// 540 m, and outside the terrain there is nothing but semi-transparent water over this
@@ -243,14 +314,7 @@ public class MinimapCamera : MonoBehaviour
 			}
 		}
 
-		base.transform.SetPositionAndRotation(
-			new Vector3((minX + maxX) * 0.5f, box.max.y + LevelBoundsClearance, (minZ + maxZ) * 0.5f),
-			Quaternion.Euler(90f, 0f, 0f));
-
-		camera.orthographic = true;
-		camera.orthographicSize = halfSpan;
-		camera.nearClipPlane = LevelBoundsClearance * 0.5f;
-		camera.farClipPlane = box.size.y + LevelBoundsClearance * 2f;
+		centre = new Vector2((minX + maxX) * 0.5f, (minZ + maxZ) * 0.5f);
 	}
 
 	/// <summary>
@@ -300,7 +364,7 @@ public class MinimapCamera : MonoBehaviour
 
 	private void Start()
 	{
-		if (!CanRender)
+		if (!CanRender || usingBakedPicture)
 		{
 			camera.enabled = false;
 			return;
@@ -319,6 +383,16 @@ public class MinimapCamera : MonoBehaviour
 
 	public Texture Minimap()
 	{
-		return minimapRenderTexture;
+		return usingBakedPicture ? bakedPicture : minimapRenderTexture;
+	}
+
+	/// <summary>Whether <see cref="bakedPicture"/> was drawn for the frame this camera now holds.</summary>
+	private bool BakedPictureFits()
+	{
+		Vector3 position = base.transform.position;
+		return camera.orthographic
+			&& Mathf.Abs(position.x - bakedCentre.x) <= BakedFrameTolerance
+			&& Mathf.Abs(position.z - bakedCentre.y) <= BakedFrameTolerance
+			&& Mathf.Abs(camera.orthographicSize - bakedHalfSpan) <= BakedFrameTolerance;
 	}
 }

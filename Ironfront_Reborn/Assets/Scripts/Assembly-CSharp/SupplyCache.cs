@@ -1,0 +1,147 @@
+using System.Collections.Generic;
+using Ironfront.Net.Unity;
+using UnityEngine;
+
+/// <summary>What a <see cref="SupplyCache"/> hands out.</summary>
+public enum SupplyKind
+{
+	Ammo,
+	Medical,
+}
+
+/// <summary>
+/// A fixed ammo dump or medical station at a flag or HQ: every few seconds it refills the spare
+/// ammunition, or heals, every living soldier of the side holding that flag who stands next to it,
+/// player or bot.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why it exists (owner request 2026-10-03).</b> Holding a flag gave a spawn point and a score
+/// multiplier and nothing else, so there was little reason to fight over one. A cache that serves
+/// only the holder makes every flag a resupply point worth taking and denying.
+/// </para>
+/// <para>
+/// <b>Authoritative where health and ammunition are.</b> It pulses offline and on a server, never
+/// on a networked client: the client sees the result through replicated health and spare rounds.
+/// A networked player's spare rounds live in the server's pool, reached through
+/// <see cref="NetResupply"/>; a bot's live on its <see cref="Actor"/>, as offline.
+/// </para>
+/// <para>
+/// <b>Listed for everyone, pulsing only where it may.</b> <see cref="All"/> is kept from Awake to
+/// OnDestroy, so a client's radar can draw the caches and a server's squads can walk to them, while
+/// the pulse itself is switched off on a client.
+/// </para>
+/// </remarks>
+public class SupplyCache : MonoBehaviour
+{
+	public SupplyKind kind;
+
+	/// <summary>The flag whose holder this serves. A neutral flag serves no one.</summary>
+	public SpawnPoint point;
+
+	/// <summary>Metres from the cache a soldier must stand within.</summary>
+	public float range = 6f;
+
+	/// <summary>Seconds between pulses: an ammo bag's rate.</summary>
+	public float interval = 3f;
+
+	private static readonly List<SupplyCache> all = new List<SupplyCache>();
+
+	private static readonly List<Actor> nearby = new List<Actor>();
+
+	private float nextPulse;
+
+	/// <summary>Every cache in the loaded level.</summary>
+	public static IReadOnlyList<SupplyCache> All => all;
+
+	/// <summary>The team this cache serves now, or -1 while its flag is neutral.</summary>
+	public int ServedTeam => point != null ? point.owner : -1;
+
+	/// <summary>
+	/// The nearest cache serving <paramref name="team"/> that hands out what is asked for, within
+	/// <paramref name="maxDistance"/> metres of <paramref name="from"/>; null when there is none.
+	/// </summary>
+	public static SupplyCache Nearest(Vector3 from, int team, bool ammo, bool medical, float maxDistance)
+	{
+		SupplyCache best = null;
+		float bestSquared = maxDistance * maxDistance;
+		for (int i = 0; i < all.Count; i++)
+		{
+			SupplyCache cache = all[i];
+			if (cache == null || cache.ServedTeam != team || team < 0)
+			{
+				continue;
+			}
+			if (!(cache.kind == SupplyKind.Ammo ? ammo : medical))
+			{
+				continue;
+			}
+			float squared = (cache.transform.position - from).sqrMagnitude;
+			if (squared < bestSquared)
+			{
+				bestSquared = squared;
+				best = cache;
+			}
+		}
+		return best;
+	}
+
+	private void Awake()
+	{
+		all.Add(this);
+	}
+
+	private void OnDestroy()
+	{
+		all.Remove(this);
+	}
+
+	private void Start()
+	{
+		// A networked client only draws the crates; the pulse is the server's.
+		if (NetContext.IsClient)
+		{
+			enabled = false;
+			return;
+		}
+		nextPulse = Time.time + interval;
+	}
+
+	private void Update()
+	{
+		if (Time.time < nextPulse)
+		{
+			return;
+		}
+		nextPulse = Time.time + interval;
+		int holder = ServedTeam;
+		if (holder < 0)
+		{
+			return;
+		}
+		ActorManager.AliveActorsInRange(base.transform.position, range, nearby);
+		for (int i = 0; i < nearby.Count; i++)
+		{
+			Actor actor = nearby[i];
+			if (actor == null || actor.dead || actor.team != holder)
+			{
+				continue;
+			}
+			if (kind == SupplyKind.Medical)
+			{
+				actor.ResupplyHealth();
+			}
+			else if (!NetResupply.TryGiveAmmo(actor.gameObject))
+			{
+				actor.ResupplyAmmo();
+			}
+		}
+		nearby.Clear();
+	}
+
+	private void OnDrawGizmosSelected()
+	{
+		Gizmos.color = kind == SupplyKind.Medical ? Color.red : Color.green;
+		Gizmos.DrawWireSphere(base.transform.position, range);
+	}
+}

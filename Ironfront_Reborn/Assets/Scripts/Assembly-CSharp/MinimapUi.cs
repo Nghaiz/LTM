@@ -198,6 +198,13 @@ public class MinimapUi : MonoBehaviour
 	{
 		SetupMinimap();
 		started = true;
+		// Built here, from the same picture and the same arrow, so the radar can never show a
+		// different map or a different icon set from the M map. Code-built for the reason
+		// MinimapMarker builds its speed leader: one runtime view over runtime data, no prefab.
+		if (minimap.texture != null)
+		{
+			CornerMinimap.Create((RectTransform)base.transform, minimap.texture, this);
+		}
 		UpdateSpawnPointButtons();
 	}
 
@@ -624,6 +631,14 @@ public class MinimapUi : MonoBehaviour
 		viewport = new Vector2(Mathf.Clamp01(point.x), Mathf.Clamp01(point.y));
 		return true;
 	}
+
+	/// <summary>
+	/// Every icon the map draws right now -- flags, and the soldiers and vehicles the visibility
+	/// rules let this player see -- for <see cref="CornerMinimap"/>, which shows the same things
+	/// rather than deciding visibility a second time.
+	/// </summary>
+	public static Dictionary<Transform, MinimapMarker>.ValueCollection Markers =>
+		instance != null ? instance.markers.Values : null;
 
 	/// <summary>The map picture every icon is placed on, or null with no HUD.</summary>
 	public static RectTransform MapRect => instance != null ? instance.minimap.rectTransform : null;

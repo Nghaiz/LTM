@@ -44,7 +44,7 @@ namespace Ironfront.Net.Replication.Tests
             // The hull origin is what it used, and on a tank the driver's seat is metres from it.
             string source = ReadUnitySource(Requester);
             string body = MethodBody(
-                source, "private bool TryFindNearestSeat(Vector3 from, out ushort vehicleId, out byte seatIndex)");
+                source, "private bool TryFindNearestSeat(Vector3 from, out ushort vehicleId, out byte seatIndex, out Vector3 seatAt)");
 
             // Comments stripped first. The remark inside this very method NAMES the old origin
             // in order to explain the fix, and a check that a comment can satisfy -- or defeat --
