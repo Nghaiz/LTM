@@ -1701,6 +1701,7 @@ public class AiActorController : ActorController
 			}
 			lastGotoPoint = targetPoint;
 			arrivedAtGoto = false;
+			WaterPathTags.Apply(seeker, steeringBoat: aquatic && actor.IsDriver());
 			if (aquatic && actor.IsDriver())
 			{
 				// A boat's goal is usually ashore: a flag the squad finishes on foot. The search for
