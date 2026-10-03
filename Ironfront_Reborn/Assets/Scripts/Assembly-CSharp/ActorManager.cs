@@ -183,6 +183,11 @@ public class ActorManager : MonoBehaviour
 
 	public void StartGame()
 	{
+		// Phase P32's seat promises and crews outlive a scene: with domain reload off, an Editor
+		// Play session starts with the last one's, keyed by vehicles and bodies that no longer exist.
+		seatPromises.Clear();
+		promisedCrew.Clear();
+
 		// `actors` MUST be rebuilt here, and this line is not the leftover it looks like. Awake
 		// allocates it and then OnLevelLoaded, which Awake itself subscribes to, sets it back to
 		// null on the same scene load -- so between those two callbacks the field is null and the
@@ -267,7 +272,17 @@ public class ActorManager : MonoBehaviour
 	{
 		DespawnBots();
 		Ironfront.Net.Unity.NetBotRelease.ResetForNewRound();
+		seatPromises.Clear();
+		promisedCrew.Clear();
+		RoundReset?.Invoke();
 	}
+
+	/// <summary>
+	/// A new round on the same map, after the bots are despawned: the server's world reset, passed
+	/// on so the rest of Assembly-CSharp need not reach into the server assembly to hear it (phase
+	/// P32, <see cref="FieldSupplyDirector"/>).
+	/// </summary>
+	public static event System.Action RoundReset;
 
 	/// <summary>Destroys every AI body and empties the roster.</summary>
 	/// <remarks>
