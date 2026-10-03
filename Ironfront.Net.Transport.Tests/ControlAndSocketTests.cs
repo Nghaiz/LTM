@@ -349,18 +349,22 @@ namespace Ironfront.Net.Transport.Tests
             // resent, its sample is discarded, and a lone send would leave the RTT at zero
             // forever. Keep offering fresh reliable packets until one round-trips untouched.
             //
-            // Assert on the BEST reading seen, never the first one. An RTT sample is
-            // `pollTime - sendTime`, so every source of runner noise -- a preempted spin loop,
-            // a GC pause, xUnit running sibling collections on the same core -- can only push a
-            // reading UP, never down. The floor of the readings is therefore the honest estimate
-            // of the simulated round trip, and it stays as tight as the original 15-35 ms window:
-            // a transport that really reported one-way latency (10 ms) or double-counted the trip
-            // (40 ms) cannot produce a single reading inside that window, no matter how quiet the
-            // machine is. Only jitter is filtered out; the regression signal is untouched.
+            // Assert on the smallest RAW sample, never on the smoothed RTT. A sample is
+            // `pollTime - sendTime`, so every source of runner noise -- a preempted spin loop, a GC
+            // pause, xUnit running sibling collections on the same core -- can only push it UP.
+            // The minimum is therefore the honest reading of the simulated round trip, and it keeps
+            // the tight 15-35 ms window: a transport that reported one-way latency (10 ms) or
+            // double-counted the trip (40 ms) cannot produce a single sample inside it.
+            //
+            // This used to take the best SMOOTHED value, on the same reasoning, and the reasoning
+            // does not survive an EWMA. On a loaded Windows runner the polling thread lost a
+            // 15.6 ms scheduler quantum on most samples, the noise was systematic rather than
+            // occasional, and the smoothed value never came down: 61 ms against a 20 ms trip on
+            // the v3.1.0 merge (run 36816080754), never reproduced on an idle machine in 40 runs.
             Stopwatch ackClock = Stopwatch.StartNew();
             double nextSendAtMs = 0.0;
-            float bestRttMs = float.MaxValue;
-            while (bestRttMs > 35f && ackClock.ElapsedMilliseconds < 5000)
+            while ((client.Stats.MinRttMs <= 0f || client.Stats.MinRttMs > 35f)
+                   && ackClock.ElapsedMilliseconds < 5000)
             {
                 if (ackClock.Elapsed.TotalMilliseconds >= nextSendAtMs)
                 {
@@ -369,15 +373,13 @@ namespace Ironfront.Net.Transport.Tests
                 }
                 server.Poll();
                 client.Poll();
-
-                float rttMs = client.Stats.SmoothedRttMs;
-                if (rttMs > 0f && rttMs < bestRttMs) bestRttMs = rttMs;
             }
 
-            Assert.True(bestRttMs < float.MaxValue,
+            float minRttMs = client.Stats.MinRttMs;
+            Assert.True(minRttMs > 0f,
                 $"rtt={client.Stats.SmoothedRttMs}, sent={client.Stats.PacketsSent}, "
                 + $"resent={client.Stats.PacketsResent}, pending={client.Stats.PendingReliableCount}");
-            Assert.InRange(bestRttMs, 15f, 35f);
+            Assert.InRange(minRttMs, 15f, 35f);
         }
 
         [Fact]
