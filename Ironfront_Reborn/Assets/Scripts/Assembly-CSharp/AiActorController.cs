@@ -1677,6 +1677,7 @@ public class AiActorController : ActorController
 	{
 		if (!p.error)
 		{
+			strandedFailures = 0;
 			calculatingPath = false;
 			hasPath = true;
 			path = p;
@@ -1696,10 +1697,85 @@ public class AiActorController : ActorController
 			calculatingPath = false;
 			moveTimeoutAction.Start();
 
+			// No node near where the bot stands: it is off the graph it searches, and every
+			// retry fails the same way until it dies (phase P32 soaks: one quadbike rider asked
+			// for ~150 such paths in ten minutes). See RescueStranded.
+			if (p.errorLog != null && p.errorLog.Contains(NoStartNodeError))
+			{
+				strandedFailures++;
+				if (strandedFailures >= StrandedFailuresBeforeRescue)
+				{
+					RescueStranded();
+				}
+			}
+			else
+			{
+				strandedFailures = 0;
+			}
+
 			// Not logged here: AstarPath counts every failed search and reports them once a
 			// minute (PathFailureSummary). Printing each again as an error put dozens of lines in
 			// a match log for searches the bot simply retries, cancellations included.
 		}
+	}
+
+	/// <summary>The search error a bot off its graph meets: A*'s own wording.</summary>
+	private const string NoStartNodeError = "close node to the start point";
+
+	/// <summary>How many such failures in a row before the bot is helped back onto its graph.</summary>
+	private const int StrandedFailuresBeforeRescue = 3;
+
+	/// <summary>
+	/// The furthest a stranded bot on foot is moved to the walkable ground nearest it. Far, because
+	/// Forest Lake's rock fields are wide: the night soak's quadbike rider stood 169 m from the nearest
+	/// walkable node. A jump of that size is seen only by somebody up on the rocks with it.
+	/// </summary>
+	private const float StrandedRescueMetres = 250f;
+
+	private int strandedFailures;
+
+	/// <summary>
+	/// Gets a bot back onto a graph it can search (phase P32). A driver whose vehicle has left the
+	/// road graph -- a quadbike up the rocks, a car in the ford -- gets out and walks. On foot, the
+	/// bot is put on the walkable ground nearest it, if that is within
+	/// <see cref="StrandedRescueMetres"/>: the alternative is a soldier standing on a cliff asking
+	/// for paths until somebody shoots him.
+	/// </summary>
+	private void RescueStranded()
+	{
+		strandedFailures = 0;
+		Vector3 from = actor.Position();
+		if (actor.IsSeated())
+		{
+			if (actor.IsDriver())
+			{
+				Debug.Log("[bots] " + base.name + " drove off the road graph at " + from.ToString("F0") + ": getting out to walk.");
+				actor.LeaveSeat();
+			}
+			return;
+		}
+		if (AstarPath.active == null || !actor.autoMoveActor)
+		{
+			return;
+		}
+		NNConstraint walkable = new NNConstraint
+		{
+			graphMask = 1,
+			constrainDistance = false
+		};
+		NNInfo nearest = AstarPath.active.GetNearest(from, walkable);
+		if (nearest.node == null)
+		{
+			return;
+		}
+		Vector3 to = nearest.clampedPosition;
+		float distance = Vector3.Distance(from, to);
+		if (distance > StrandedRescueMetres)
+		{
+			return;
+		}
+		actor.transform.position = TerrainSurface.AtOrAbove(to);
+		Debug.Log("[bots] " + base.name + " was off the walkable graph at " + from.ToString("F0") + ": moved " + distance.ToString("F0") + " m back onto it.");
 	}
 
 	private void RecalculatePath()
