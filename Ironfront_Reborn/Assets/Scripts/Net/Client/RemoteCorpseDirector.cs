@@ -187,6 +187,9 @@ namespace Ironfront.Net.Unity.Client
         {
             float now = Time.time;
             float dt = Time.deltaTime;
+            Camera viewer = Camera.main;
+            Vector3 eye = viewer != null ? viewer.transform.position : Vector3.zero;
+            float farSquared = viewer != null ? RemoteCorpse.FarMetres * RemoteCorpse.FarMetres : float.PositiveInfinity;
             for (int i = _corpses.Count - 1; i >= 0; i--)
             {
                 RemoteCorpse corpse = _corpses[i];
@@ -202,7 +205,7 @@ namespace Ironfront.Net.Unity.Client
                     corpse.TickCrumple(age);
                     Bleed(corpse, age, now);
                     if (age >= LingerSeconds || corpse.Evicted) corpse.BeginSink(now);
-                    else corpse.TickSettle(now);
+                    else corpse.TickSettle(now, (corpse.ChestPosition - eye).sqrMagnitude > farSquared);
                     continue;
                 }
 
