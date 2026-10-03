@@ -25,10 +25,17 @@ public static class WaterPathTags
 	private const string WaterTagName = "Water";
 
 	/// <summary>
-	/// What entering one deep-water node costs: about a hundred metres of dry ground (A* path
-	/// costs are millimetres). Crossing a lake enters many, so any reasonable detour wins.
+	/// What entering one deep-water node costs: about a kilometre of dry ground (A* path costs are
+	/// millimetres), more than any walk round Forest Lake's lake, so a bot with a dry route takes it.
 	/// </summary>
-	public const int WaterPenalty = 100000;
+	/// <remarks>
+	/// It was a hundred metres, on the reasoning that a crossing enters many nodes. It enters few:
+	/// the recast graph spans the lake with large triangles, and a node is water only when its
+	/// centre is, so a crossing could cost two hundred metres of penalty against a three-hundred
+	/// metre walk to a bridge. A bot soak on Forest Lake still counted 16 long swims, most of them
+	/// to or from Island, which has a bridge on two sides.
+	/// </remarks>
+	public const int WaterPenalty = 1000000;
 
 	// The graphs bodies on foot (0) and land vehicles (2) path on; the boat graph (1) is all water.
 	private static readonly int[] LandGraphs = { 0, 2 };
