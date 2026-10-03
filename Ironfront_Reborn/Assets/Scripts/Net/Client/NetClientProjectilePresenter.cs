@@ -48,6 +48,11 @@ namespace Ironfront.Net.Unity.Client
                  + "must not throw. Client-track item.")]
         [SerializeField] private GameObject[] _prefabsByKind;
 
+        [Tooltip("Indexed by (byte)ProjectileKind like the list above, for a deployable nobody threw: "
+                 + "a crate the server left in the field (phase P32, owner actor 0). An empty slot "
+                 + "falls back to the list above, so an old scene draws a dropped bag instead.")]
+        [SerializeField] private GameObject[] _fieldCratePrefabsByKind;
+
         private NetClientBootstrap _client;
         private ClientProjectileTracker _tracker;
 
@@ -273,7 +278,9 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            GameObject prefab = PrefabFor(message.Kind);
+            GameObject prefab = message.OwnerActorId == 0 && DeployableKinds.Is(message.Kind)
+                ? FieldCratePrefabFor(message.Kind) ?? PrefabFor(message.Kind)
+                : PrefabFor(message.Kind);
             if (prefab == null)
             {
                 UnrenderableKinds++;
@@ -341,6 +348,16 @@ namespace Ironfront.Net.Unity.Client
             if (_prefabsByKind == null || index < 0 || index >= _prefabsByKind.Length) return null;
 
             return _prefabsByKind[index];
+        }
+
+        /// <summary>The field-crate prefab for <paramref name="kind"/>, or null when none is wired.</summary>
+        private GameObject FieldCratePrefabFor(ProjectileKind kind)
+        {
+            int index = (int)kind;
+            if (_fieldCratePrefabsByKind == null || index < 0 || index >= _fieldCratePrefabsByKind.Length) return null;
+
+            GameObject prefab = _fieldCratePrefabsByKind[index];
+            return prefab != null ? prefab : null;
         }
 
         private static bool IsGrenade(ProjectileKind kind)

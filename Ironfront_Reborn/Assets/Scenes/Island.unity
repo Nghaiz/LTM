@@ -226443,6 +226443,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   frameMargin: 0.08
+  objectiveFrameMargin: 0
+  bakedPicture: {fileID: 0}
+  bakedCentre: {x: 0, y: 0}
+  bakedHalfSpan: 0
 --- !u!1 &9727261
 GameObject:
   m_ObjectHideFlags: 0
@@ -232526,6 +232530,15 @@ MonoBehaviour:
   - {fileID: 1123403298314486, guid: a09117c64a1029d4190b100d0036d988, type: 3}
   - {fileID: 1916407597999263, guid: 9f1098264490a2d499c3607481ceb047, type: 3}
   - {fileID: 1784760153386333, guid: 43a3e682750cb3b4d8867f1b17a06c9d, type: 3}
+  _fieldCratePrefabsByKind:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 3414827123468032950, guid: dcba18d6c62af1f419b99cfa0ac97627, type: 3}
+  - {fileID: 3876693286005975308, guid: ab2fc6d11a4bfca48a0b378c3b14c3a2, type: 3}
+  - {fileID: 0}
+  - {fileID: 0}
 --- !u!114 &67069239
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -249052,6 +249065,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7043066d925a26602f38f10e773b5be3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  coverage: 0
 --- !u!23 &365472337
 MeshRenderer:
   m_ObjectHideFlags: 0
