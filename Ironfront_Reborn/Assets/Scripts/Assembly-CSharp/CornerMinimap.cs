@@ -54,6 +54,16 @@ public class CornerMinimap : MonoBehaviour
 
 	private static readonly float SelfPixels = Soldier * MinimapIconLayout.SelfScale;
 
+	/// <summary>A supply cache's icon: a soldier's size, smaller than a flag.</summary>
+	private static readonly float SupplyPixels = Soldier * 1.1f;
+
+	/// <summary>A cache that does not serve the player's side: still findable, plainly off.</summary>
+	private static readonly Color InactiveSupplyTint = new Color(0.42f, 0.42f, 0.42f, 1f);
+
+	private static Texture2D ammoIcon;
+
+	private static Texture2D medicalIcon;
+
 	/// <summary>The M map lightens the player's colour this much for the view cone (ActorBlip).</summary>
 	private const float ViewConeLightening = 0.35f;
 
@@ -259,6 +269,7 @@ public class CornerMinimap : MonoBehaviour
 		}
 
 		used = 0;
+		DrawSupplies(camera, centre, halfUv, heading, actor.team);
 		DrawFlags(camera, centre, halfUv, heading);
 		Dictionary<Transform, MinimapMarker>.ValueCollection markers = MinimapUi.Markers;
 		if (markers != null)
@@ -313,6 +324,23 @@ public class CornerMinimap : MonoBehaviour
 				Place(picture != null ? picture : Circle(), marker.Color, marker.IsHuman ? HumanPixels : Soldier, offset, picture != null ? marker.Subject : null, heading, false, FullUv);
 			}
 			break;
+		}
+	}
+
+	// Every ammo dump and medical station in range: bright when it serves the player's side, dimmed
+	// while its flag is neutral or the enemy's, so the radar says where to refill and which crates
+	// are worth retaking.
+	private void DrawSupplies(Camera camera, Vector3 centre, float halfUv, float heading, int team)
+	{
+		IReadOnlyList<SupplyCache> caches = SupplyCache.All;
+		for (int i = 0; i < caches.Count; i++)
+		{
+			SupplyCache cache = caches[i];
+			if (cache != null && OnRadar(camera, cache.transform.position, centre, halfUv, heading, 0.95f, out Vector2 offset))
+			{
+				Color tint = cache.ServedTeam == team ? Color.white : InactiveSupplyTint;
+				Place(SupplyIcon(cache.kind), tint, SupplyPixels, offset, null, heading, false, FullUv);
+			}
 		}
 	}
 
@@ -589,6 +617,80 @@ public class CornerMinimap : MonoBehaviour
 		ring.Apply();
 		rings[key] = ring;
 		return ring;
+	}
+
+	/// <summary>
+	/// The supply icons, drawn once: a white tile with a red cross for medical, an olive tile with
+	/// three brass rounds for ammunition. Both carry their own colours, so the tint only dims them.
+	/// </summary>
+	private static Texture2D SupplyIcon(SupplyKind kind)
+	{
+		if (kind == SupplyKind.Medical)
+		{
+			return medicalIcon != null ? medicalIcon : (medicalIcon = DrawSupplyIcon(kind));
+		}
+		return ammoIcon != null ? ammoIcon : (ammoIcon = DrawSupplyIcon(kind));
+	}
+
+	private static Texture2D DrawSupplyIcon(SupplyKind kind)
+	{
+		const int size = 64;
+		const float corner = 12f;
+		bool medical = kind == SupplyKind.Medical;
+		Color tile = medical ? new Color(0.96f, 0.96f, 0.94f) : new Color(0.27f, 0.33f, 0.18f);
+		Color mark = medical ? new Color(0.86f, 0.1f, 0.1f) : new Color(0.95f, 0.76f, 0.3f);
+		Texture2D texture = NewTexture(medical ? "Corner Minimap Medical" : "Corner Minimap Ammo", size, size);
+		var pixels = new Color32[size * size];
+		for (int y = 0; y < size; y++)
+		{
+			for (int x = 0; x < size; x++)
+			{
+				float px = x + 0.5f;
+				float py = y + 0.5f;
+				// Rounded square, one-texel soft edge.
+				float dx = Mathf.Max(Mathf.Max(corner - px, px - (size - corner)), 0f);
+				float dy = Mathf.Max(Mathf.Max(corner - py, py - (size - corner)), 0f);
+				float alpha = Mathf.Clamp01(corner - Mathf.Sqrt(dx * dx + dy * dy) + 0.5f);
+				bool onMark = medical ? OnCross(px, py, size) : OnRounds(px, py, size);
+				Color colour = onMark ? mark : tile;
+				colour.a = alpha;
+				pixels[y * size + x] = colour;
+			}
+		}
+		texture.SetPixels32(pixels);
+		texture.Apply();
+		return texture;
+	}
+
+	private static bool OnCross(float x, float y, int size)
+	{
+		float c = size * 0.5f;
+		float arm = size * 0.33f;
+		float half = size * 0.11f;
+		return (Mathf.Abs(x - c) < half && Mathf.Abs(y - c) < arm) || (Mathf.Abs(y - c) < half && Mathf.Abs(x - c) < arm);
+	}
+
+	// Three upright rounds: a body and a pointed tip each.
+	private static bool OnRounds(float x, float y, int size)
+	{
+		float bottom = size * 0.2f;
+		float shoulder = size * 0.62f;
+		float top = size * 0.8f;
+		float halfWidth = size * 0.07f;
+		for (int i = -1; i <= 1; i++)
+		{
+			float centre = size * 0.5f + i * size * 0.22f;
+			float across = Mathf.Abs(x - centre);
+			if (y >= bottom && y <= shoulder && across <= halfWidth)
+			{
+				return true;
+			}
+			if (y > shoulder && y <= top && across <= halfWidth * (top - y) / (top - shoulder))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static Texture2D NewTexture(string name, int width, int height)

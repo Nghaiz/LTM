@@ -1015,6 +1015,112 @@ public class Squad
 		return false;
 	}
 
+	/// <summary>How far a squad on foot will walk out of its way to a supply cache its side holds.</summary>
+	public const float SupplyDetourMetres = 60f;
+
+	/// <summary>The longest a squad spends on one trip to a cache, walking there included.</summary>
+	public const float SupplyDetourSeconds = 25f;
+
+	/// <summary>How long after a trip before the squad may take another.</summary>
+	public const float SupplyDetourCooldownSeconds = 45f;
+
+	private float supplyDetourEnds = -1f;
+
+	private float nextSupplyDetour;
+
+	private SupplyCache supplyTarget;
+
+	/// <summary>
+	/// Whether a member is down to half the spare rounds a weapon holds. Not
+	/// <c>Actor.needsResupply</c>: that flag stays set for a weapon whose spare ceiling is zero,
+	/// which no cache can ever fill, and a squad reading it would never leave the crates.
+	/// </summary>
+	private bool MemberShortOfAmmo()
+	{
+		foreach (AiActorController member in members)
+		{
+			Actor soldier = member.actor;
+			for (int i = 0; i < soldier.weapons.Length; i++)
+			{
+				Weapon weapon = soldier.weapons[i];
+				if (weapon != null && weapon.configuration.spareAmmo > 0 && soldier.spareAmmo[i] <= weapon.configuration.spareAmmo / 2)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/// <summary>
+	/// Sends a squad that is short of ammunition, or has a hurt member, to the nearest supply cache
+	/// its side holds, and keeps it there until the need is met. False when there is no need, no
+	/// cache in reach, or the squad rides a vehicle; the caller then gives its usual order.
+	/// </summary>
+	/// <remarks>
+	/// Owner request 2026-10-03: the caches at every flag are for bots as well as players. Called
+	/// only from the leader's quiet branch (no fire taken, not holding cover), so a squad never
+	/// breaks off a fight for a crate. A trip is capped at <see cref="SupplyDetourSeconds"/> and
+	/// followed by <see cref="SupplyDetourCooldownSeconds"/>, so a need the crates cannot meet (a
+	/// straggler who never arrives) costs the squad one trip, not the round.
+	/// </remarks>
+	/// <param name="leaderMoving">Whether the leader still has a path to walk: an order is
+	/// re-issued only to a squad that has stopped short, never every half second.</param>
+	public bool TryGoResupply(bool leaderMoving)
+	{
+		if (HasVehicle())
+		{
+			supplyDetourEnds = -1f;
+			return false;
+		}
+		AiActorController leader = Leader();
+		if (leader == null || leader.actor == null)
+		{
+			return false;
+		}
+		bool ammo = MemberShortOfAmmo();
+		bool health = MemberNeedsHealth();
+		float now = Time.time;
+		if (!ammo && !health)
+		{
+			if (supplyDetourEnds >= 0f)
+			{
+				supplyDetourEnds = -1f;
+				nextSupplyDetour = now + SupplyDetourCooldownSeconds;
+			}
+			return false;
+		}
+		if (supplyDetourEnds >= 0f && now > supplyDetourEnds)
+		{
+			supplyDetourEnds = -1f;
+			nextSupplyDetour = now + SupplyDetourCooldownSeconds;
+			return false;
+		}
+		if (supplyDetourEnds < 0f && now < nextSupplyDetour)
+		{
+			return false;
+		}
+		Vector3 from = leader.actor.Position();
+		SupplyCache cache = SupplyCache.Nearest(from, leader.actor.team, ammo, health, SupplyDetourMetres);
+		if (cache == null)
+		{
+			supplyDetourEnds = -1f;
+			return false;
+		}
+		bool starting = supplyDetourEnds < 0f || cache != supplyTarget;
+		if (supplyDetourEnds < 0f)
+		{
+			supplyDetourEnds = now + SupplyDetourSeconds;
+		}
+		supplyTarget = cache;
+		// Walk there once; again only if the squad stopped short. At it: hold for the pulses.
+		if ((starting || !leaderMoving) && Vector3.Distance(from, cache.transform.position) > cache.range * 0.6f)
+		{
+			MoveTo(cache.transform.position);
+		}
+		return true;
+	}
+
 	public void MakeLeader(AiActorController member)
 	{
 		leader = member;
