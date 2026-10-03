@@ -34,6 +34,22 @@ public class TimeOfDay : MonoBehaviour
 
 	private Atmosphere atmosphere;
 
+	// The day as the scene authored it, captured once, so a server or client that goes to night and
+	// back for the next room (phase P32 Night Mode) returns to the same day.
+	private Atmosphere dayAtmosphere;
+
+	/// <summary>
+	/// How much of the night's fog night vision leaves (phase P32): it amplifies light, so it sees
+	/// further into the dark, though not as far as by day.
+	/// </summary>
+	public float nightVisionFogFactor = 1f;
+
+	/// <summary>Whether the night is up: the Night child shown and its atmosphere applied.</summary>
+	public bool IsNight { get; private set; }
+
+	/// <summary>Whether Start has run: before it, a night is chosen by GameManager.nightMode.</summary>
+	public bool Started { get; private set; }
+
 	public bool testNight;
 
 	private Light[] lights;
@@ -55,6 +71,15 @@ public class TimeOfDay : MonoBehaviour
 		{
 			ApplyDay();
 		}
+		CaptureLights();
+		ReflectionProber.instance.SetupProbes();
+		Started = true;
+	}
+
+	// Lights in the scene now, at their authored strength: what night vision multiplies. Taken
+	// again after a switch, because the Day and Night children each hold a light the other hides.
+	private void CaptureLights()
+	{
 		lights = UnityEngine.Object.FindObjectsOfType<Light>();
 		lightIntensity = new Dictionary<Light, float>(lights.Length);
 		Light[] array = lights;
@@ -62,28 +87,70 @@ public class TimeOfDay : MonoBehaviour
 		{
 			lightIntensity.Add(light, light.intensity);
 		}
-		ReflectionProber.instance.SetupProbes();
 	}
 
 	private void ApplyDay()
 	{
 		base.transform.Find("Day").gameObject.SetActive(true);
 		base.transform.Find("Night").gameObject.SetActive(false);
-		atmosphere = new Atmosphere();
-		atmosphere.sky = RenderSettings.ambientSkyColor;
-		atmosphere.equator = RenderSettings.ambientEquatorColor;
-		atmosphere.ground = RenderSettings.ambientGroundColor;
-		atmosphere.fog = RenderSettings.fogColor;
-		atmosphere.fogDensity = RenderSettings.fogDensity;
-		atmosphere.skyboxMaterial = RenderSettings.skybox;
-		ApplyAtmosphere(atmosphere);
+		if (dayAtmosphere == null)
+		{
+			dayAtmosphere = new Atmosphere();
+			dayAtmosphere.sky = RenderSettings.ambientSkyColor;
+			dayAtmosphere.equator = RenderSettings.ambientEquatorColor;
+			dayAtmosphere.ground = RenderSettings.ambientGroundColor;
+			dayAtmosphere.fog = RenderSettings.fogColor;
+			dayAtmosphere.fogDensity = RenderSettings.fogDensity;
+			dayAtmosphere.skyboxMaterial = RenderSettings.skybox;
+		}
+		IsNight = false;
+		ApplyAtmosphere(dayAtmosphere);
 	}
 
 	private void ApplyNight()
 	{
+		ApplyNight(nightAtmosphere);
+	}
+
+	private void ApplyNight(Atmosphere night)
+	{
+		if (dayAtmosphere == null && !IsNight)
+		{
+			// Remember the day before the night replaces it, so SetNight(false) can bring it back.
+			dayAtmosphere = new Atmosphere();
+			dayAtmosphere.sky = RenderSettings.ambientSkyColor;
+			dayAtmosphere.equator = RenderSettings.ambientEquatorColor;
+			dayAtmosphere.ground = RenderSettings.ambientGroundColor;
+			dayAtmosphere.fog = RenderSettings.fogColor;
+			dayAtmosphere.fogDensity = RenderSettings.fogDensity;
+			dayAtmosphere.skyboxMaterial = RenderSettings.skybox;
+		}
 		base.transform.Find("Day").gameObject.SetActive(false);
 		base.transform.Find("Night").gameObject.SetActive(true);
-		ApplyAtmosphere(nightAtmosphere);
+		IsNight = true;
+		ApplyAtmosphere(night);
+	}
+
+	/// <summary>
+	/// Day or night while the map is up (phase P32 Night Mode): a game server hosts room after room
+	/// on one loaded map, and a client learns the room's mode as it joins. <paramref name="night"/>
+	/// may override the scene's own night atmosphere; null keeps it.
+	/// </summary>
+	public void SetNight(bool night, Atmosphere nightOverride = null)
+	{
+		if (night)
+		{
+			ApplyNight(nightOverride ?? nightAtmosphere);
+		}
+		else
+		{
+			ApplyDay();
+		}
+		CaptureLights();
+		if (ReflectionProber.instance != null)
+		{
+			ReflectionProber.instance.SetupProbesAgain();
+		}
 	}
 
 	private void ApplyAtmosphere(Atmosphere atmosphere)
@@ -100,6 +167,7 @@ public class TimeOfDay : MonoBehaviour
 	public void ApplyNightvision()
 	{
 		instance.BlendAtmosphereColor(Color.green, 0.7f, 1.1f);
+		RenderSettings.fogDensity = atmosphere.fogDensity * nightVisionFogFactor;
 		ReflectionProber.instance.SwitchToNightVision();
 		Light[] array = lights;
 		foreach (Light light in array)

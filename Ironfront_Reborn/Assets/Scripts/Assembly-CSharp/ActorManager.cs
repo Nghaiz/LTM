@@ -183,6 +183,11 @@ public class ActorManager : MonoBehaviour
 
 	public void StartGame()
 	{
+		// Phase P32's seat promises and crews outlive a scene: with domain reload off, an Editor
+		// Play session starts with the last one's, keyed by vehicles and bodies that no longer exist.
+		seatPromises.Clear();
+		promisedCrew.Clear();
+
 		// `actors` MUST be rebuilt here, and this line is not the leftover it looks like. Awake
 		// allocates it and then OnLevelLoaded, which Awake itself subscribes to, sets it back to
 		// null on the same scene load -- so between those two callbacks the field is null and the
@@ -267,7 +272,17 @@ public class ActorManager : MonoBehaviour
 	{
 		DespawnBots();
 		Ironfront.Net.Unity.NetBotRelease.ResetForNewRound();
+		seatPromises.Clear();
+		promisedCrew.Clear();
+		RoundReset?.Invoke();
 	}
+
+	/// <summary>
+	/// A new round on the same map, after the bots are despawned: the server's world reset, passed
+	/// on so the rest of Assembly-CSharp need not reach into the server assembly to hear it (phase
+	/// P32, <see cref="FieldSupplyDirector"/>).
+	/// </summary>
+	public static event System.Action RoundReset;
 
 	/// <summary>Destroys every AI body and empties the roster.</summary>
 	/// <remarks>
@@ -547,6 +562,7 @@ public class ActorManager : MonoBehaviour
 				}
 			}
 		}
+		FormVehicleCrews(spawnedActors);
 		SpawnPoint[] array2 = spawnPoints;
 		foreach (SpawnPoint spawnPoint2 in array2)
 		{
@@ -679,6 +695,228 @@ public class ActorManager : MonoBehaviour
 			}
 		}
 		return RandomSpawnPointForTeam(team);
+	}
+
+	/// <summary>
+	/// Whether a bot can steer a boat on this map: the boat graph (index 1) has a node at all. Island's
+	/// has 146; Forest Lake's has none, so a bot that boarded a boat there sat in it asking for paths
+	/// that could not exist ("Couldn't find close nodes", 135 times in one soak, phase P32).
+	/// </summary>
+	public static bool BoatsNavigable
+	{
+		get
+		{
+			if (AstarPath.active == null || AstarPath.active.astarData == null)
+			{
+				return false;
+			}
+			Pathfinding.NavGraph[] graphs = AstarPath.active.astarData.graphs;
+			if (graphs == null || graphs.Length < 2 || graphs[1] == null)
+			{
+				return false;
+			}
+			bool found = false;
+			graphs[1].GetNodes(node =>
+			{
+				found = true;
+				return false;
+			});
+			return found;
+		}
+	}
+
+	/// <summary>How far from a flag a parked vehicle counts as that flag's: the HQ pads stand 31-38 m out.</summary>
+	public const float IdleVehicleRadius = 60f;
+
+	private static readonly Ironfront.Net.Replication.Ai.VehicleSeatPromises seatPromises =
+		new Ironfront.Net.Replication.Ai.VehicleSeatPromises();
+
+	private static Ironfront.Net.Replication.Ai.IdleVehicle[] idleVehicles =
+		new Ironfront.Net.Replication.Ai.IdleVehicle[32];
+
+	private static Vehicle[] idleVehicleRefs = new Vehicle[32];
+
+	/// <summary>The vehicle each bot was sent back for, until the wave that places it forms its crew.</summary>
+	private static readonly Dictionary<Actor, Vehicle> promisedCrew = new Dictionary<Actor, Vehicle>();
+
+	private static readonly Dictionary<Vehicle, List<AiActorController>> crews =
+		new Dictionary<Vehicle, List<AiActorController>>();
+
+	/// <summary>
+	/// The flag of <paramref name="team"/>'s where an empty vehicle still needs a crew, with one of
+	/// its seats promised to the bot asking; null when no parked vehicle of the side's has a seat
+	/// left (phase P32).
+	/// </summary>
+	/// <remarks>
+	/// The vehicle must be one a bot would board (<see cref="Vehicle.AiShouldEnter"/>), with nobody
+	/// in it, claimed by no player and by no squad of the other side, within
+	/// <see cref="IdleVehicleRadius"/> of a flag the side holds. Who gets which seat is
+	/// <see cref="Ironfront.Net.Replication.Ai.VehicleSeatPromises"/>'s.
+	/// </remarks>
+	public static SpawnPoint SpawnPointForIdleVehicle(Actor actor)
+	{
+		if (instance == null || instance.vehicles == null || instance.spawnPoints == null || actor == null)
+		{
+			return null;
+		}
+
+		int team = actor.team;
+		promisedCrew.Remove(actor);
+
+		int count = 0;
+		foreach (Vehicle vehicle in instance.vehicles)
+		{
+			if (vehicle == null || vehicle.dead || vehicle.claimedByPlayer || !vehicle.AiShouldEnter())
+			{
+				continue;
+			}
+			if (vehicle is Boat && !BoatsNavigable)
+			{
+				continue;
+			}
+			if (vehicle.ownerTeam >= 0 && vehicle.ownerTeam != team)
+			{
+				continue;
+			}
+			// Empty, or a crew of the side's is still boarding it and waiting for more.
+			if (vehicle.EmptySeats() < vehicle.seats.Length && Squad.BoardingCrewFor(vehicle) == null)
+			{
+				continue;
+			}
+
+			int flag = NearestOwnSpawnPointIndex(vehicle.transform.position, team, IdleVehicleRadius);
+			if (flag < 0)
+			{
+				continue;
+			}
+
+			if (count == idleVehicles.Length)
+			{
+				Array.Resize(ref idleVehicles, count * 2);
+				Array.Resize(ref idleVehicleRefs, count * 2);
+			}
+			idleVehicleRefs[count] = vehicle;
+			idleVehicles[count++] = new Ironfront.Net.Replication.Ai.IdleVehicle
+			{
+				Key = vehicle.GetInstanceID(),
+				Flag = flag,
+				// A seated bot's claim is dropped when it sits, so claims count only the bots still
+				// walking to a seat.
+				FreeSeats = vehicle.EmptySeats() - vehicle.ClaimedSeatCount,
+			};
+		}
+
+		int chosen = seatPromises.Choose(new ReadOnlySpan<Ironfront.Net.Replication.Ai.IdleVehicle>(idleVehicles, 0, count), Time.time);
+		if (chosen < 0)
+		{
+			return null;
+		}
+
+		Squad.Census.NoteSpawnedForVehicle(team);
+		promisedCrew[actor] = idleVehicleRefs[chosen];
+		return instance.spawnPoints[idleVehicles[chosen].Flag];
+	}
+
+	/// <summary>Whether a bot of <paramref name="team"/> may still be sent into <paramref name="vehicle"/>.</summary>
+	private static bool CanCrew(Vehicle vehicle, int team)
+	{
+		return vehicle != null && !vehicle.dead && !vehicle.claimedByPlayer && vehicle.AiShouldEnter()
+			&& (vehicle.ownerTeam < 0 || vehicle.ownerTeam == team);
+	}
+
+	/// <summary>
+	/// Puts the bots this batch placed for a vehicle into it, as a crew of their own: they are taken
+	/// out of <paramref name="spawnedActors"/> so the wave does not fold them into another squad
+	/// (phase P32).
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why a crew and not the wave's squad.</b> Most waves bring back one bot, and a bot the
+	/// wave leaves alone reinforces the nearest squad with room -- at an HQ, the squad digging in to
+	/// hold it, which never boards anything. The first measurement of P32 sent 42 bots back for a
+	/// vehicle in ten minutes and still found seven of the eight empty HQ vehicles free to board.
+	/// </para>
+	/// <para>
+	/// A bot sent for a vehicle that a crew from an earlier batch is still walking to joins that
+	/// crew; one whose vehicle has since been taken, wrecked or claimed falls back to the wave's
+	/// ordinary squads.
+	/// </para>
+	/// </remarks>
+	private static void FormVehicleCrews(Dictionary<SpawnPoint, List<Actor>> spawnedActors)
+	{
+		if (promisedCrew.Count == 0)
+		{
+			return;
+		}
+
+		crews.Clear();
+		foreach (List<Actor> placed in spawnedActors.Values)
+		{
+			for (int i = placed.Count - 1; i >= 0; i--)
+			{
+				Actor body = placed[i];
+				if (body == null || !promisedCrew.TryGetValue(body, out Vehicle vehicle))
+				{
+					continue;
+				}
+				promisedCrew.Remove(body);
+				if (body.dead || !body.aiControlled || !(body.controller is AiActorController ai) || !CanCrew(vehicle, body.team))
+				{
+					continue;
+				}
+				if (!crews.TryGetValue(vehicle, out List<AiActorController> crew))
+				{
+					crew = new List<AiActorController>();
+					crews.Add(vehicle, crew);
+				}
+				crew.Add(ai);
+				placed.RemoveAt(i);
+			}
+		}
+
+		foreach (KeyValuePair<Vehicle, List<AiActorController>> entry in crews)
+		{
+			Vehicle vehicle = entry.Key;
+			List<AiActorController> crew = entry.Value;
+			Squad boarding = Squad.BoardingCrewFor(vehicle);
+			int joined = 0;
+			while (boarding != null && joined < crew.Count && boarding.JoinCrew(crew[joined]))
+			{
+				joined++;
+			}
+			if (joined == crew.Count)
+			{
+				continue;
+			}
+
+			List<AiActorController> fresh = crew.GetRange(joined, crew.Count - joined);
+			Squad squad = new Squad(fresh, 0f);
+			Squad.Census.NoteFormed(fresh[0].actor.team, fresh.Count);
+			squad.MarkCrew();
+			squad.EnterVehicle(vehicle);
+		}
+		crews.Clear();
+	}
+
+	private static int NearestOwnSpawnPointIndex(Vector3 position, int team, float within)
+	{
+		int best = -1;
+		float bestDistance = within * within;
+		SpawnPoint[] points = instance.spawnPoints;
+		for (int i = 0; i < points.Length; i++)
+		{
+			if (points[i] == null || points[i].owner != team)
+			{
+				continue;
+			}
+			float distance = (points[i].transform.position - position).sqrMagnitude;
+			if (distance < bestDistance)
+			{
+				bestDistance = distance;
+				best = i;
+			}
+		}
+		return best;
 	}
 
 	public static bool HasSpawnPoint(int team)

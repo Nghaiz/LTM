@@ -437,6 +437,13 @@ namespace Ironfront.Net.Protocol
         /// </remarks>
         MapNotInstalled = 2006,
 
+        /// <summary>
+        /// A room's game mode, victory rule, points or night-vision battery is outside
+        /// <see cref="RoomRules"/>, or Night Mode was asked for on a map that does not have it
+        /// (protocol 14, phase P32). The form never sends one; this answers a client that skipped it.
+        /// </summary>
+        InvalidRoomSettings = 2007,
+
         NoGameServerAvailable = 3000,
         GameServerNotResponding = 3001,
 

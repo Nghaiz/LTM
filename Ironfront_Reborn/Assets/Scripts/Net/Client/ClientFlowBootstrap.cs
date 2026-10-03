@@ -386,6 +386,9 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        // The room state last handed to NetRoomRules, so an unchanged push is not handed again.
+        private RoomState _adoptedRoom;
+
         private void Update()
         {
             // The shell ticks the session when it is bound and drawing; this covers the window
@@ -393,6 +396,16 @@ namespace Ironfront.Net.Unity.Client
             // would age the connect timeout twice as fast, which is why the shell's own
             // _tickSession is turned off by the wiring script.
             _session?.Tick(Time.unscaledDeltaTime);
+
+            // The joined room's game mode, victory rule and battery (phase P32), handed to the
+            // map before it loads -- so a Night Mode room's map opens dark -- and here on the main
+            // thread, because the room push itself arrives on the master client's.
+            RoomState room = _session?.Room;
+            if (room != null && !ReferenceEquals(room, _adoptedRoom))
+            {
+                _adoptedRoom = room;
+                NetRoomRules.Assign((ushort)room.RoomId, room.Settings);
+            }
 
             // Poll while nothing else owns the transport. Once the map is up, NetClientBootstrap
             // polls it from its own Update at execution order -1000 -- polling here as well would

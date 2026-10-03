@@ -56,6 +56,7 @@ namespace Ironfront.Editor.Verification
         const string BotsKey = "Ironfront.BotSoak.BotsPerTeam";
         const string ReturnKey = "Ironfront.BotSoak.ReturnScene";
         const string AsServerKey = "Ironfront.BotSoak.AsServer";
+        const string NightKey = "Ironfront.BotSoak.Night";
 
         /// <summary>Frames the scene gets to come up before the bots are released.</summary>
         const int SettleFrames = 60;
@@ -144,7 +145,7 @@ namespace Ironfront.Editor.Verification
         /// Changes each map as a dedicated server build does before playing it
         /// (<see cref="ServerBuildSceneStrip.Strip"/>): what the server's bots run on, not the Editor's.
         /// </param>
-        public static void Run(string[] maps, float gameSeconds, float timeScale, int botsPerTeam, string label, bool asServer = false)
+        public static void Run(string[] maps, float gameSeconds, float timeScale, int botsPerTeam, string label, bool asServer = false, bool night = false)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
             {
@@ -156,6 +157,7 @@ namespace Ironfront.Editor.Verification
             SessionState.SetFloat(ScaleKey, timeScale);
             SessionState.SetInt(BotsKey, botsPerTeam);
             SessionState.SetBool(AsServerKey, asServer);
+            SessionState.SetBool(NightKey, night);
             SessionState.SetString(ReturnKey, EditorSceneManager.GetActiveScene().path);
             Advance();
         }
@@ -268,6 +270,9 @@ namespace Ironfront.Editor.Verification
             Advance();
         }
 
+        /// <summary>Who held each flag when the bots were released: the HQs are the ones a side held.</summary>
+        static int[] _baseOwners;
+
         static void Attach()
         {
             _phase = SoakPhase.Settle;
@@ -285,6 +290,7 @@ namespace Ironfront.Editor.Verification
             Tracks.Clear();
             BoardingSince.Clear();
             _lastOwners = null;
+            _baseOwners = null;
 
             Application.logMessageReceivedThreaded -= OnLog;
             Application.logMessageReceivedThreaded += OnLog;
@@ -317,6 +323,18 @@ namespace Ironfront.Editor.Verification
                     typeof(GameManager).GetMethod("StartGame", BindingFlags.Instance | BindingFlags.NonPublic)
                         .Invoke(GameManager.instance, null);
                     _result.startedByProbe = true;
+                }
+
+                // Night Mode, offline (phase P32): the original's switch, applied again through the
+                // director so the map, the commander and the bots all go dark together.
+                if (SessionState.GetBool(NightKey, false) && GameManager.instance != null)
+                {
+                    GameManager.instance.nightMode = true;
+                    if (NightModeDirector.instance != null)
+                    {
+                        NightModeDirector.instance.StartGame();
+                    }
+                    _result.night = NightModeDirector.instance != null && NightModeDirector.instance.IsNight;
                 }
 
                 int bots = SessionState.GetInt(BotsKey, 25);
@@ -540,6 +558,7 @@ namespace Ironfront.Editor.Verification
             }
 
             SampleBoarding(now);
+            SampleTactics();
             _result.gameSeconds = now - _releasedAt;
             _result.peakAlive = Mathf.Max(_result.peakAlive, alive);
             _result.peakSwimming = Mathf.Max(_result.peakSwimming, swimming);
@@ -598,6 +617,92 @@ namespace Ironfront.Editor.Verification
             }
         }
 
+        /// <summary>
+        /// What the bots make of the vehicles and the HQs (phase P32): who sits in what, how many
+        /// vehicles stand empty and where, whether anybody presses an HQ, and the flags each side holds.
+        /// </summary>
+        /// <remarks>
+        /// An HQ is a flag a side held when the bots were released. "Pressed" means an enemy alive
+        /// inside one and a half capture ranges of it at the sample.
+        /// </remarks>
+        static void SampleTactics()
+        {
+            SpawnPoint[] flags = ActorManager.instance.spawnPoints;
+            if (flags == null) return;
+            if (_baseOwners == null || _baseOwners.Length != flags.Length)
+            {
+                _baseOwners = flags.Select(f => f != null ? f.owner : -1).ToArray();
+                _result.tactics.hqs = string.Join(", ", flags.Where((f, i) => f != null && _baseOwners[i] >= 0)
+                    .Select(f => f.name + "=" + f.owner));
+            }
+
+            BotSoakTactics t = _result.tactics;
+            t.samples++;
+
+            foreach (Actor actor in ActorManager.instance.actors)
+            {
+                if (actor == null || !actor.aiControlled || actor.dead) continue;
+                t.aliveBotSamples++;
+                AiActorController ai = actor.controller as AiActorController;
+                if (ai != null && ai.IsWearingNightVision) t.gogglesOnSamples++;
+                if (!actor.IsSeated()) continue;
+                int kind = (int)Squad.KindOf(actor.seat.vehicle);
+                if (kind >= 0 && kind < t.seatedByKind.Length) t.seatedByKind[kind]++;
+            }
+
+            List<Vehicle> vehicles = ActorManager.instance.vehicles;
+            if (vehicles != null)
+            {
+                foreach (Vehicle vehicle in vehicles)
+                {
+                    if (vehicle == null || vehicle.dead) continue;
+                    t.vehicleSamples++;
+                    bool empty = vehicle.EmptySeats() == vehicle.seats.Length;
+                    if (!empty) continue;
+                    t.emptyVehicleSamples++;
+                    for (int i = 0; i < flags.Length; i++)
+                    {
+                        if (flags[i] == null || _baseOwners[i] < 0) continue;
+                        if (Vector3.Distance(flags[i].transform.position, vehicle.transform.position) < 80f)
+                        {
+                            t.emptyAtHqSamples++;
+                            int kind = (int)Squad.KindOf(vehicle);
+                            if (kind >= 0 && kind < t.emptyAtHqByKind.Length) t.emptyAtHqByKind[kind]++;
+                            if (vehicle.stuck) t.emptyAtHqStuck++;
+                            else if (vehicle.burning) t.emptyAtHqBurning++;
+                            else if (!vehicle.AiShouldEnter()) t.emptyAtHqRefused++;
+                            else if (vehicle.ClaimedSeatCount > 0) t.emptyAtHqClaimed++;
+                            else t.emptyAtHqFree++;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < flags.Length; i++)
+            {
+                SpawnPoint flag = flags[i];
+                if (flag == null) continue;
+                if (flag.owner == 0) t.flagsHeld0++;
+                else if (flag.owner == 1) t.flagsHeld1++;
+                int baseOwner = _baseOwners[i];
+                if (baseOwner < 0 || baseOwner > 1) continue;
+                float range = (flag is CapturePoint capture ? capture.captureRange : 20f) * 1.5f;
+                foreach (Actor enemy in ActorManager.AliveActorsOnTeam(1 - baseOwner))
+                {
+                    if (enemy != null && Vector3.Distance(enemy.Position(), flag.transform.position) < range)
+                    {
+                        if (baseOwner == 0) t.hqPressed0++; else t.hqPressed1++;
+                        break;
+                    }
+                }
+                if (flag.owner != baseOwner && flag.owner >= 0)
+                {
+                    if (baseOwner == 0) t.hqLost0++; else t.hqLost1++;
+                }
+            }
+        }
+
         static void SampleFlags()
         {
             SpawnPoint[] flags = ActorManager.instance.spawnPoints;
@@ -614,6 +719,8 @@ namespace Ironfront.Editor.Verification
                 _lastOwners[i] = flags[i].owner;
             }
             _result.finalOwners = string.Join(", ", flags.Select(f => f == null ? "?" : f.name + "=" + f.owner));
+            _result.score0 = MatchScoreboard.Current.BlueScore;
+            _result.score1 = MatchScoreboard.Current.RedScore;
         }
 
         static void Note(List<BotSoakBotEvent> into, ref int count, Actor actor, AiActorController ai, float seconds)
@@ -776,6 +883,14 @@ namespace Ironfront.Editor.Verification
         public string map;
         public string role;
         public bool asServer;
+
+        /// <summary>Whether the map was in Night Mode (phase P32).</summary>
+        public bool night;
+
+        /// <summary>The scores at the end: kills times flags, so a measure of how much fighting there was.</summary>
+        public int score0;
+        public int score1;
+
         public bool startedByProbe;
         public int botsPerTeam;
         public float timeScale;
@@ -800,8 +915,58 @@ namespace Ironfront.Editor.Verification
         public List<float> notBoardedSeconds = new List<float>();
         public List<string> flagChanges = new List<string>();
         public string finalOwners;
+        public BotSoakTactics tactics = new BotSoakTactics();
         public List<string> commanderLines = new List<string>();
         public List<BotSoakLogEntry> logs = new List<BotSoakLogEntry>();
+    }
+
+    /// <summary>
+    /// Counts over every sample, so a mean is a count over <see cref="samples"/> (phase P32).
+    /// </summary>
+    [Serializable]
+    public sealed class BotSoakTactics
+    {
+        public int samples;
+
+        /// <summary>Living bots summed over the samples, and how many of them wore their goggles (phase P32).</summary>
+        public int aliveBotSamples;
+        public int gogglesOnSamples;
+
+        /// <summary>The HQs: flags a side held when the bots were released, with that side.</summary>
+        public string hqs;
+
+        /// <summary>Bots seated, summed over samples, by <c>VehicleKind</c>: transport, armour, aircraft, boat.</summary>
+        public int[] seatedByKind = new int[4];
+
+        /// <summary>Live vehicles, summed over samples.</summary>
+        public int vehicleSamples;
+
+        /// <summary>Live vehicles with nobody in them, summed over samples.</summary>
+        public int emptyVehicleSamples;
+
+        /// <summary>Of those, the ones within 80 m of an HQ.</summary>
+        public int emptyAtHqSamples;
+
+        /// <summary>Empty vehicles at an HQ by kind, and why nobody is in them: stuck, burning,
+        /// refused by <c>AiShouldEnter</c> for another reason, claimed by a squad on its way, or free.</summary>
+        public int[] emptyAtHqByKind = new int[4];
+        public int emptyAtHqStuck;
+        public int emptyAtHqBurning;
+        public int emptyAtHqRefused;
+        public int emptyAtHqClaimed;
+        public int emptyAtHqFree;
+
+        /// <summary>Samples with an enemy on side 0's / side 1's HQ.</summary>
+        public int hqPressed0;
+        public int hqPressed1;
+
+        /// <summary>Samples with side 0's / side 1's HQ held by the other side.</summary>
+        public int hqLost0;
+        public int hqLost1;
+
+        /// <summary>Flags held, summed over samples.</summary>
+        public int flagsHeld0;
+        public int flagsHeld1;
     }
 
     [Serializable]

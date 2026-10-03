@@ -391,7 +391,7 @@ namespace Ironfront.Client.Flow.Tests
 
         // ------------------------------------------------------------------ fixture
 
-        private sealed class Fixture
+        internal sealed class Fixture
         {
             internal const int RoomId = 12;
 

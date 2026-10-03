@@ -57,6 +57,25 @@ public class ReflectionProber : MonoBehaviour
 	}
 
 	/// <summary>
+	/// Renders both probes again under the atmosphere now applied (phase P32 Night Mode: the map
+	/// went from day to night, or back, after the first render). The probes come back on for it,
+	/// and the previous renders are released once the new ones are adopted.
+	/// </summary>
+	public void SetupProbesAgain()
+	{
+		StopAllCoroutines();
+		if (reflectingThroughDefault)
+		{
+			reflectingThroughDefault = false;
+			normalProbe.enabled = true;
+			nightVisionProbe.enabled = true;
+			normalProbe.size = enabledBounds;
+			nightVisionProbe.size = disabledBounds;
+		}
+		SetupProbes();
+	}
+
+	/// <summary>
 	/// Renders each probe under its own atmosphere: the day's for the normal probe, the green
 	/// night vision tint for the other.
 	/// </summary>
@@ -129,6 +148,8 @@ public class ReflectionProber : MonoBehaviour
 			}
 			return;
 		}
+		ReleaseUnless(normalReflection, day);
+		ReleaseUnless(nightVisionReflection, night);
 		normalReflection = day;
 		nightVisionReflection = night;
 		RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
@@ -137,6 +158,16 @@ public class ReflectionProber : MonoBehaviour
 		normalProbe.enabled = false;
 		nightVisionProbe.enabled = false;
 		reflectingThroughDefault = true;
+	}
+
+	// A render replaced by a newer one (SetupProbesAgain) is released rather than leaked.
+	private static void ReleaseUnless(RenderTexture old, RenderTexture replacement)
+	{
+		if (old != null && old != replacement)
+		{
+			old.Release();
+			Object.Destroy(old);
+		}
 	}
 
 	private static RenderTexture CopyOf(ReflectionProbe probe)

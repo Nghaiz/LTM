@@ -67,6 +67,9 @@ namespace Ironfront.MasterClient
         /// Bots per team: half the room's total, 0 to <c>ProtocolConstants.MAX_BOTS_PER_TEAM</c>.
         /// </summary>
         public int BotsPerTeam { get; set; }
+
+        /// <summary>The room's game-mode settings (protocol 14), every missing field its default.</summary>
+        public Ironfront.Net.Protocol.RoomSettings Settings { get; set; } = Ironfront.Net.Protocol.RoomSettings.Default;
     }
 
     /// <summary>One player's line on the end-of-match report.</summary>

@@ -44,7 +44,9 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
         {
             // 13: MAX_ACTORS 64 -> 128 and the room's bot count became a total (§ 15). Neither
             // layout below moved; a v12 client drops actor ids at or above 64.
-            Assert.Equal(13, ProtocolConstants.PROTOCOL_VERSION);
+            // 14: S_MATCH_STATE grew 10 -> 13 bytes for the lobby's game modes (§ 15). Neither
+            // layout below moved for it either.
+            Assert.Equal(14, ProtocolConstants.PROTOCOL_VERSION);
         }
 
         [Fact]

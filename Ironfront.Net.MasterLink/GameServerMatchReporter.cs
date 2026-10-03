@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Server;
 
 namespace Ironfront.Net.MasterLink
@@ -44,10 +45,19 @@ namespace Ironfront.Net.MasterLink
         /// </summary>
         public event Action<ushort, int>? RoomAssigned;
 
+        /// <summary>
+        /// The same assignment's game-mode settings (protocol 14, phase P32): rule, points, mode and
+        /// night-vision battery. Raised right after <see cref="RoomAssigned"/>, on the same thread.
+        /// </summary>
+        public event Action<ushort, RoomSettings>? RoomSettingsAssigned;
+
         // The ticket carries the room as a u16 (JoinTicket.Issue casts the master's int), so the
         // assignment is narrowed the same way or the two would never compare equal.
         private void ForwardRoomAssignment(GameServerRoomAssignment assignment)
-            => RoomAssigned?.Invoke((ushort)assignment.RoomId, assignment.BotsPerTeam);
+        {
+            RoomAssigned?.Invoke((ushort)assignment.RoomId, assignment.BotsPerTeam);
+            RoomSettingsAssigned?.Invoke((ushort)assignment.RoomId, assignment.Settings);
+        }
 
         public ushort ServerId => _link.ServerId;
 

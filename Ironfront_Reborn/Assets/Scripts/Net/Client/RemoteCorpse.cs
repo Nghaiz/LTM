@@ -137,6 +137,17 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>The wander allowed once a body has lain <see cref="TwitchSettleSeconds"/>: a creep, not a fall.</summary>
         public const float TwitchMetres = 0.15f;
 
+        /// <summary>
+        /// Beyond this many metres from the camera a corpse is a handful of pixels, and it freezes
+        /// the moment it comes to rest instead of after the settle wait (phase P32): most of a
+        /// 100-bot match's deaths are this far away, and every second one spends awake is paid for
+        /// in every physics step.
+        /// </summary>
+        public const float FarMetres = 40f;
+
+        /// <summary>The settle wait for a corpse beyond <see cref="FarMetres"/>.</summary>
+        public const float FarSettleAfterSeconds = 0.6f;
+
         /// <summary><c>Time.time</c> since every part has been within reach of where it was, or negative.</summary>
         public float StillSince { get; private set; } = -1f;
 
@@ -156,25 +167,31 @@ namespace Ironfront.Net.Unity.Client
         /// Settles a body that has lain still long enough: see <see cref="RemoteRagdoll.Settle"/>.
         /// Called every frame while the body lies; cheap once it is settled.
         /// </summary>
-        public void TickSettle(float now)
+        public void TickSettle(float now) => TickSettle(now, far: false);
+
+        /// <param name="far">The corpse lies beyond <see cref="FarMetres"/> of the camera.</param>
+        public void TickSettle(float now, bool far)
         {
             if (SinkStartedAt >= 0f) return;
 
             float disturbed = Mathf.Max(DiedAt, ThrownAt);
-            if (now - disturbed < SettleAfterSeconds)
+            if (now - disturbed < (far ? FarSettleAfterSeconds : SettleAfterSeconds))
             {
                 StillSince = -1f;
                 return;
             }
 
-            // Asleep by PhysX's own measure is still too: freeze it before something wakes it.
-            if (IsAsleep)
+            // Asleep by PhysX's own measure is still too: freeze it before something wakes it. A
+            // far corpse needs only to have stopped moving.
+            if (IsAsleep || (far && IsResting))
             {
                 if (!IsSettled) Settle();
                 return;
             }
 
-            float reach = now - DiedAt >= TwitchSettleSeconds ? TwitchMetres : StillMetres;
+            // A far body is judged by the creep allowance from the start: its shiver is invisible
+            // at that range, and one still in the air moves far more than a creep.
+            float reach = far || now - DiedAt >= TwitchSettleSeconds ? TwitchMetres : StillMetres;
             if (StillSince < 0f || FarthestMoveSqr() > reach * reach)
             {
                 StillSince = now;

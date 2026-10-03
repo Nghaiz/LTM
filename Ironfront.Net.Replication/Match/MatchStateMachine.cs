@@ -400,7 +400,8 @@ namespace Ironfront.Net.Replication.Match
                 (ushort)Math.Max(0, Math.Min(_score1, ushort.MaxValue)),
                 (ushort)Math.Min(Math.Ceiling(PhaseSecondsRemaining), ushort.MaxValue),
                 (byte)Math.Min(HumanPlayerCount, byte.MaxValue),
-                (ushort)Math.Max(0, Math.Min(_rules.VictoryPoints, ushort.MaxValue)));
+                (ushort)Math.Max(0, Math.Min(_rules.VictoryPoints, ushort.MaxValue)),
+                _rules.Rule, _rules.Mode, _rules.NightVisionSeconds);
 
         /// <summary>
         /// Records that the current match state has been broadcast. Separate from
@@ -527,9 +528,19 @@ namespace Ironfront.Net.Replication.Match
         /// alone would leave a both-teams-eliminated round running forever, which is the
         /// unbounded end/reset loop X-53 was.
         /// </remarks>
+        /// <summary>
+        /// The score that wins outright for a side holding <paramref name="own"/> against
+        /// <paramref name="other"/>: the margin above the other side, or (phase P32, Target rule) the
+        /// target itself and at least one point clear.
+        /// </summary>
+        private int WinningScore(int own, int other)
+            => _rules.Rule == VictoryRule.Target
+                ? Math.Max(own, Math.Max(_rules.VictoryPoints, other + 1))
+                : Math.Max(own, other + _rules.VictoryPoints);
+
         private bool IsDecided()
             => _drawn
-            || ConquestScoreRule.Decide(_score0, _score1, _rules.VictoryPoints) != TeamId.None;
+            || ConquestScoreRule.Decide(_score0, _score1, _rules.VictoryPoints, _rules.Rule) != TeamId.None;
 
         /// <summary>
         /// A team holding no spawn points has lost. Phase-V8 task 4.
@@ -618,9 +629,9 @@ namespace Ironfront.Net.Replication.Match
             if (eliminated0 && eliminated1)
                 _drawn = true;
             else if (eliminated0)
-                _score1 = Math.Max(_score1, _score0 + _rules.VictoryPoints);
+                _score1 = WinningScore(_score1, _score0);
             else
-                _score0 = Math.Max(_score0, _score1 + _rules.VictoryPoints);
+                _score0 = WinningScore(_score0, _score1);
 
             MatchStateIsDirty = true;
         }

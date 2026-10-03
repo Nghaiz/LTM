@@ -305,7 +305,9 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //       actor lifecycle message, so these three layouts are still untouched.
             //   v13 MAX_ACTORS 64 -> 128 for 100-bot matches (§ 1, § 15). The actor id was
             //       already a u16 in all three layouts; only the range of ids in use widened.
-            Assert.Equal(13, ProtocolConstants.PROTOCOL_VERSION);
+            //   v14 S_MATCH_STATE 10 -> 13 bytes for the lobby's game modes (§ 15). The match
+            //       state is not an actor lifecycle message; these three layouts are untouched.
+            Assert.Equal(14, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

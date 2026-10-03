@@ -1085,15 +1085,16 @@ namespace Ironfront.Net.Unity.EditorTools
             var fieldSize = new Vector2(leftWidth, 56f);
             InputField name = PackField(panel, "Name", "Room name",
                 new Vector2(leftCentre, formTop - 28f), fieldSize, password: false);
-            // `.two-col`: map and mode share the row exactly as in the HTML. Mode is retained as
-            // an honest development control because the room protocol has no mode field.
+            // `.two-col`: map and mode share the row exactly as in the HTML. The mode is a room
+            // setting since protocol 14 (phase P32); the screen fills its options.
             float half = (leftWidth - 14f) * 0.5f;
             float leftHalf = leftCentre - (half * 0.5f) - 7f;
             float rightHalf = leftCentre + (half * 0.5f) + 7f;
             Dropdown map = MakeDropdown(panel, "Map", new Vector2(leftHalf, formTop - 104f),
                 new Vector2(half, 56f));
-            Button mode = MakeButton(panel, "Mode", "GAME MODE // IN DEVELOPMENT",
-                new Vector2(rightHalf, formTop - 104f), new Vector2(half, 56f));
+            Dropdown mode = MakeDropdown(panel, "Mode", new Vector2(rightHalf, formTop - 104f),
+                new Vector2(half, 56f));
+            AuthorOptions(mode, System.Array.ConvertAll(RoomSettingsChoice.Modes, RoomSettingsChoice.ModeOption));
 
             // Seats and region share a row; the bots have a card of their own under the form
             // (protocol 13: a slider of the match's total, bounded by the servers).
@@ -1102,17 +1103,34 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(leftHalf, formTop - 180f), new Vector2(half, 56f),
                 password: false);
             maxPlayers.contentType = InputField.ContentType.IntegerNumber;
-            Button region = MakeButton(panel, "Region", "REGION // IN DEVELOPMENT",
-                new Vector2(rightHalf, formTop - 180f), new Vector2(half, 56f));
+            // The victory rule and the points it is played to (protocol 14, phase P32): lead by
+            // the points, or be first to them. The screen fills the rule options and keeps the
+            // field's placeholder on the chosen rule's range.
+            Dropdown rule = MakeDropdown(panel, "VictoryRule", new Vector2(rightHalf, formTop - 180f),
+                new Vector2(half, 56f));
+            AuthorOptions(rule, System.Array.ConvertAll(RoomSettingsChoice.Rules, RoomSettingsChoice.RuleOption));
 
             // The rows' own 56, so this pair's captions match the placeholders above them.
             Toggle isPrivate = MakeSwitch(panel, "Private", "PRIVATE ROOM",
                 new Vector2(leftHalf, formTop - 256f), new Vector2(half, 56f));
-            Button balance = MakeButton(panel, "Balance", "AUTO-BALANCE // IN DEVELOPMENT",
-                new Vector2(rightHalf, formTop - 256f), new Vector2(half, 56f));
+            InputField points = PackField(panel, "VictoryPoints",
+                RoomSettingsChoice.PointsPlaceholder(VictoryRule.Margin),
+                new Vector2(rightHalf, formTop - 256f), new Vector2(half, 56f), password: false);
+            points.contentType = InputField.ContentType.IntegerNumber;
+            points.characterLimit = 4;
+            points.text = RoomRules.DefaultMarginPoints.ToString();
+            FieldCaption(points, half, "POINTS");
             const float formBottom = formTop - 360f;
+            // The password and, beside it, Night Mode's night-vision battery (phase P32), which the
+            // screen opens only while Night Mode is chosen.
             InputField password = PackField(panel, "Password", "Room password",
-                new Vector2(leftCentre, formBottom + 28f), fieldSize, password: true);
+                new Vector2(leftHalf, formBottom + 28f), new Vector2(half, 56f), password: true);
+            InputField vision = PackField(panel, "NightVision", RoomSettingsChoice.VisionPlaceholder(),
+                new Vector2(rightHalf, formBottom + 28f), new Vector2(half, 56f), password: false);
+            vision.contentType = InputField.ContentType.IntegerNumber;
+            vision.characterLimit = 3;
+            vision.interactable = false;
+            FieldCaption(vision, half, "SECONDS");
 
             // `.map-preview`, level with the form column, with three stat cells at its foot. The
             // title is bound to the dropdown rather than authored, so the card cannot name a map
@@ -1122,15 +1140,16 @@ namespace Ironfront.Net.Unity.EditorTools
             AngularPanel preview = MapCard(panel, rightCentre, formTop, formBottom, cardWidth, 28,
                 "The map every player in this room will load.", 14f + statHeight, out Text previewTitle);
 
-            // `.map-preview dl`: three cells 8px apart, each under a 2px rule.
-            string[] previewStats = { "CAPACITY", "BOTS", "SECURITY" };
+            // `.map-preview dl`: four cells 8px apart, each under a 2px rule. VICTORY is the
+            // room's rule (protocol 14), bound to the rule dropdown and the points field.
+            string[] previewStats = { "CAPACITY", "BOTS", "VICTORY", "SECURITY" };
             var previewValues = new Text[previewStats.Length];
-            float statWidth = (cardWidth - 40f - 16f) / 3f;
+            float statWidth = (cardWidth - 40f - (8f * (previewStats.Length - 1))) / previewStats.Length;
             float statY = (-(formTop - formBottom) * 0.5f) + 20f + (statHeight * 0.5f);
             for (int i = 0; i < previewStats.Length; i++)
             {
                 AngularPanel cell = Angular(preview.gameObject, "Stat" + i,
-                    new Vector2((i - 1) * (statWidth + 8f), statY), new Vector2(statWidth, statHeight), 0f,
+                    new Vector2((i - ((previewStats.Length - 1) * 0.5f)) * (statWidth + 8f), statY), new Vector2(statWidth, statHeight), 0f,
                     Hex("0A2032"), AngularEdge.None, 0f, Color.clear);
                 cell.raycastTarget = false;
                 Plain(cell.gameObject, "Rule", new Vector2(0f, (statHeight * 0.5f) - 1f),
@@ -1146,7 +1165,10 @@ namespace Ironfront.Net.Unity.EditorTools
                     new Vector2(statWidth - 20f, 20f));
                 value.alignment = TextAnchor.MiddleLeft;
                 value.fontStyle = FontStyle.Bold;
-                value.resizeTextForBestFit = false;
+                // "FIRST TO 3000" in a quarter of the card: shrink to fit rather than wrap.
+                value.resizeTextForBestFit = true;
+                value.resizeTextMinSize = 9;
+                value.resizeTextMaxSize = 14;
                 previewValues[i] = value;
             }
 
@@ -1200,17 +1222,49 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_mapPreviewTitle", previewTitle);
             Assign(so, "_mapPreviewCapacity", previewValues[0]);
             Assign(so, "_mapPreviewBots", previewValues[1]);
-            Assign(so, "_mapPreviewSecurity", previewValues[2]);
+            Assign(so, "_rulePreview", previewValues[2]);
+            Assign(so, "_mapPreviewSecurity", previewValues[3]);
+            Assign(so, "_modeDropdown", mode);
+            Assign(so, "_ruleDropdown", rule);
+            Assign(so, "_pointsField", points);
+            Assign(so, "_visionField", vision);
             so.ApplyModifiedPropertiesWithoutUndo();
-            panel.AddComponent<MenuDevelopmentControls>().Configure(toast, mode, region, balance);
             ConfigureKeyboard(panel,
-                new Selectable[] { name, map, maxPlayers, isPrivate, password, botTrack, create, back },
+                new Selectable[] { name, map, mode, maxPlayers, rule, isPrivate, points, password, vision, botTrack, create, back },
                 create, back);
 
             log.AppendLine("create room: criterion 8's even-seats check renders on its error line.");
             log.AppendLine("create room: bots are a 0-" + ProtocolConstants.MAX_BOTS
                            + " slider bounded by the servers' capacity (protocol 13).");
+            log.AppendLine("create room: mode, victory rule and points are room settings (protocol 14).");
             return panel;
+        }
+
+        /// <summary>
+        /// A small caption at the right end of a number field, so the number still says what it
+        /// is once the placeholder has gone (phase P32: the points and the night-vision battery).
+        /// </summary>
+        private static void FieldCaption(InputField field, float width, string caption)
+        {
+            Text text = Label(field.gameObject, "Caption", caption, 11,
+                new Vector2((width * 0.5f) - 110f, 0f), new Vector2(200f, 20f));
+            text.alignment = TextAnchor.MiddleRight;
+            text.fontStyle = FontStyle.Bold;
+            text.color = Hex("6F8DA3");
+            text.resizeTextForBestFit = false;
+            text.raycastTarget = false;
+        }
+
+        /// <summary>
+        /// Saves a dropdown's options into the scene, first one shown, so the form reads right
+        /// before its screen's Awake fills them again at run time.
+        /// </summary>
+        private static void AuthorOptions(Dropdown dropdown, string[] options)
+        {
+            dropdown.ClearOptions();
+            dropdown.AddOptions(new List<string>(options));
+            dropdown.SetValueWithoutNotify(0);
+            dropdown.RefreshShownValue();
         }
 
         /// <summary>

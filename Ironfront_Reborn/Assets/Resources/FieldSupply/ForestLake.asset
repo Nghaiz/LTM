@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a9af5c1246021e4781df2a14df22d00, type: 3}
+  m_Name: ForestLake
+  m_EditorClassIdentifier: Assembly-CSharp::FieldSupplyConfig
+  padPrefab: {fileID: 2786665308023294375, guid: 6fe7ecb9fd6041e45a1811b9589b0d2a,
+    type: 3}
+  flagVehicles:
+  - prefab: {fileID: 1449476272426843, guid: b49d605db3b92e14084d23e98b85343c, type: 3}
+    weight: 4
+  - prefab: {fileID: 1963161338829483, guid: 2f2293a4cf510a14ca54611d0132981e, type: 3}
+    weight: 3
+  - prefab: {fileID: 1230382135169811, guid: 4bcd7e3e116a6d94d8b24fe86d8c481a, type: 3}
+    weight: 1.5
+  - prefab: {fileID: 1185474965220719, guid: 7fa575aacaa091149a5e01793f534279, type: 3}
+    weight: 0.75
+  flagRingInner: 34
+  flagRingOuter: 62
+  waterVehicles:
+  - prefab: {fileID: 1961941151340677, guid: be7e7e4e21124404f8e6f9af4a5771ac, type: 3}
+    weight: 1
+  flagRespawnSeconds: 25
+  fieldVehicles:
+  - prefab: {fileID: 1449476272426843, guid: b49d605db3b92e14084d23e98b85343c, type: 3}
+    weight: 4
+  - prefab: {fileID: 1963161338829483, guid: 2f2293a4cf510a14ca54611d0132981e, type: 3}
+    weight: 4
+  - prefab: {fileID: 1230382135169811, guid: 4bcd7e3e116a6d94d8b24fe86d8c481a, type: 3}
+    weight: 1
+  fieldVehicleCount: 2
+  fieldMinFromFlag: 110
+  spacing: 120
+  fieldRespawnSeconds: 45
+  ammoCratePrefab: {fileID: 3414827123468032950, guid: dcba18d6c62af1f419b99cfa0ac97627,
+    type: 3}
+  medicalCratePrefab: {fileID: 3876693286005975308, guid: ab2fc6d11a4bfca48a0b378c3b14c3a2,
+    type: 3}
+  crateCount: 10
+  medicalShare: 0.4
+  crateMinFromFlag: 50
+  crateSpacing: 90
+  crateRespawnSeconds: 20
+  maxSlopeDegrees: 11
+  maxStep: 0.7
+  treeClearance: 3.5

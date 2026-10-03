@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using Ironfront.MasterClient;
 using Ironfront.Net.Configuration;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Unity.Client.Menu;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -202,7 +203,8 @@ namespace Ironfront.Net.Unity.EditorTools
                 if (text.name == "PreviewTitle") text.text = mapName;
                 if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat0") text.text = "8";
                 if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat1") text.text = RoomBotChoice.Preview(slider.Value);
-                if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat2") text.text = "PUBLIC";
+                if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat2") text.text = RoomSettingsChoice.DescribeRule(RoomSettings.Default);
+                if (text.name == "Value" && text.transform.parent != null && text.transform.parent.name == "Stat3") text.text = "PUBLIC";
             }
 
             Dropdown map = panel.GetComponentInChildren<Dropdown>(true);

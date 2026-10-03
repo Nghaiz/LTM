@@ -31,12 +31,17 @@ namespace Ironfront.Net.Unity
         /// here and not only at the call site.
         /// </param>
         /// <param name="victoryPoints">
-        /// The lead a side needs to win. Carried because the score bar cannot be drawn without
+        /// The lead a side needs to win, or the total it must reach (see
+        /// <paramref name="victoryRule"/>). Carried because the score bar cannot be drawn without
         /// it and it is a per-match host setting, not a constant — P11.
+        /// </param>
+        /// <param name="victoryRule">
+        /// <c>Ironfront.Net.Protocol.VictoryRule</c> as a plain <c>int</c>: 0 lead by the points,
+        /// 1 first to them (protocol 14, phase P32).
         /// </param>
         void SetAuthoritativeState(
             int phase, int score0, int score1, int secondsRemaining, int humanPlayerCount,
-            int victoryPoints);
+            int victoryPoints, int victoryRule);
 
         /// <summary>
         /// Writes the capture-point flag counts -- points currently held by each team.

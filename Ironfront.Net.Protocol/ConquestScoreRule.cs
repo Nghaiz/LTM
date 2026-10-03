@@ -80,5 +80,22 @@ namespace Ironfront.Net.Protocol
             => score0 >= score1 + victoryPoints ? TeamId.Team0
              : score1 >= score0 + victoryPoints ? TeamId.Team1
              : TeamId.None;
+
+        /// <summary>
+        /// Who has won under <paramref name="rule"/> (protocol 14): <see cref="VictoryRule.Margin"/>
+        /// is <see cref="Decide(int, int, int)"/>; <see cref="VictoryRule.Target"/> is the first side
+        /// at or above <paramref name="victoryPoints"/>, the higher score when both are, and nobody
+        /// on a tie or while neither is there.
+        /// </summary>
+        public static byte Decide(int score0, int score1, int victoryPoints, VictoryRule rule)
+        {
+            if (rule != VictoryRule.Target) return Decide(score0, score1, victoryPoints);
+
+            bool reached0 = score0 >= victoryPoints;
+            bool reached1 = score1 >= victoryPoints;
+            if (!reached0 && !reached1) return TeamId.None;
+            if (score0 == score1) return TeamId.None;
+            return score0 > score1 ? TeamId.Team0 : TeamId.Team1;
+        }
     }
 }

@@ -152,6 +152,33 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void UnderTheTargetRule_TheLeadLineCountsWhatTheLeaderStillNeeds()
+        {
+            // Phase P32: first to the points. The leader's own distance to the target, not the gap.
+            Assert.Equal(
+                "BLUE TEAM LEADS  ·  88 MORE TO WIN",
+                ScoreboardWording.LeadLine(MatchPhase.Playing, 412, 376, 500, TeamId.None, VictoryRule.Target));
+            Assert.Equal(
+                "LEVEL  ·  FIRST TO 500 WINS",
+                ScoreboardWording.LeadLine(MatchPhase.Playing, 50, 50, 500, TeamId.None, VictoryRule.Target));
+            Assert.Equal(
+                "RED TEAM WINS",
+                ScoreboardWording.LeadLine(MatchPhase.Ended, 480, 500, 500, TeamId.Team1, VictoryRule.Target));
+            Assert.Equal(
+                ScoreboardWording.LeadLine(MatchPhase.Playing, 412, 376, 200, TeamId.None),
+                ScoreboardWording.LeadLine(MatchPhase.Playing, 412, 376, 200, TeamId.None, VictoryRule.Margin));
+        }
+
+        [Fact]
+        public void TheRulesLineAndSummaryNameTheRoomsRuleAndMode()
+        {
+            Assert.Contains("FIRST TO 1500 WINS", ScoreboardWording.Rules(1500, VictoryRule.Target));
+            Assert.Equal(ScoreboardWording.Rules(200), ScoreboardWording.Rules(200, VictoryRule.Margin));
+            Assert.StartsWith("NIGHT MODE", ScoreboardWording.SummaryLine(GameMode.Night, 38, 3));
+            Assert.Equal(ScoreboardWording.SummaryLine(38, 3), ScoreboardWording.SummaryLine(GameMode.PointMatch, 38, 3));
+        }
+
+        [Fact]
         public void TheLeadLine_NamesTheWinner_OnceTheRoundIsOver()
         {
             Assert.Equal("RED TEAM WINS", ScoreboardWording.LeadLine(MatchPhase.Ended, 100, 300, 200, TeamId.Team1));

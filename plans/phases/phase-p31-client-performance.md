@@ -146,6 +146,9 @@ Ranked by measured size. Measure every item with the interleaved A/B above.
    0.7 in `PxVehicles` and 0.6 in `SwapPhysXBuffers`, plus `ClothScene` 1.1 ms on the workers
    (10 `Cloth` components). Next: capture `PxScene.simulate` internals in a match, and count the
    colliders the terrain trees and props add.
+   **P32 PR 5 (2026-10-04):** a capture at the peak (268 bodies) read physics 7.1 ms of 29.8, 1.8
+   steps a frame; far corpses now freeze without the long wait and parked remote vehicles are not
+   rewritten: physics median 3.33 -> 2.87 ms in an interleaved A/B (see the P32 file).
 2. **Animation, 5.1 ms.** IK and twist-bone jobs about 1 ms; remote bodies already cull when
    unseen (#476). Look for savings that change nothing on screen: IK on remote bodies, and
    animator parameters `RemoteActorView.Apply` writes every frame even when unchanged.

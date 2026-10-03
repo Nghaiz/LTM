@@ -268,10 +268,32 @@ namespace Ironfront.Net.Unity.Client.Tests
                 $"the creeping body was settled only at {t:F2} s");
         }
 
+        [Test]
+        public void AFarCreepingBodyIsSettledWithoutTheLongWait()
+        {
+            // Phase P32: beyond RemoteCorpse.FarMetres a creep is invisible, and a body still awake
+            // is paid for in every physics step. The same creep as above, from the first step.
+            AddFloor();
+            Animator animator = SpawnProxy(Vector3.zero);
+            _corpse = Copy(animator);
+            _corpse.Fell(Vector3.zero, HumanBodyBones.Hips, Vector3.zero, 0f);
+            Rigidbody[] parts = _corpse.Root.GetComponentsInChildren<Rigidbody>();
+
+            float t = RunWhileAwake(10f, _ =>
+            {
+                foreach (Rigidbody part in parts) part.position += new Vector3(0.004f, 0f, 0f);
+            }, out _, far: true, nudgeAfter: 0f);
+
+            Assert.IsTrue(_corpse.IsAsleep, "a far creeping body was never settled");
+            Assert.Less(t, RemoteCorpse.TwitchSettleSeconds,
+                $"a far creeping body was settled only at {t:F2} s, after the near body's long wait");
+        }
+
         // Steps the scene until the corpse sleeps, calling `nudge` after each step from t = 1 s on:
         // after the step, so the nudge is what the settle check reads -- set before, the step's own
         // friction would have taken it out first.
-        private float RunWhileAwake(float seconds, System.Action<int> nudge, out float firstAsleep)
+        private float RunWhileAwake(float seconds, System.Action<int> nudge, out float firstAsleep,
+            bool far = false, float nudgeAfter = 1f)
         {
             PhysicsScene physics = _scene.GetPhysicsScene();
             firstAsleep = float.NaN;
@@ -279,8 +301,8 @@ namespace Ironfront.Net.Unity.Client.Tests
             for (int step = 0; t < seconds && !_corpse.IsAsleep; step++, t += StepSeconds)
             {
                 physics.Simulate(StepSeconds);
-                if (t > 1f) nudge(step);
-                _corpse.TickSettle(t);
+                if (t > nudgeAfter) nudge(step);
+                _corpse.TickSettle(t, far);
                 if (_corpse.IsAsleep && float.IsNaN(firstAsleep)) firstAsleep = t;
             }
             return t;

@@ -280,6 +280,15 @@ public class AiActorController : ActorController
 
 	private Action takingFireAction = new Action(3f);
 
+	// The goggles this bot wears at night (phase P32 Night Mode), made the first night it fights.
+	private BotNightVision nightVision;
+
+	/// <summary>Whether this bot has its night-vision goggles on (phase P32).</summary>
+	public bool IsWearingNightVision => nightVision != null && nightVision.IsOn;
+
+	/// <summary>How near its objective a bot puts its goggles on at night, in metres.</summary>
+	private const float NightObjectiveMetres = 70f;
+
 	[NonSerialized]
 	public Vector3 takingFireDirection;
 
@@ -1216,8 +1225,10 @@ public class AiActorController : ActorController
 								}
 								// A tank is crewed by part of the squad instead of standing empty (phase P28):
 								// the original wanted a seat for every member, so a squad of four never took a
-								// tank with fewer. The rest carry on with the squad's order on foot.
-								if (emptySeats > 0 && !vehicle.claimedByPlayer && Squad.KindOf(vehicle) == VehicleKind.Armour)
+								// tank with fewer. The rest carry on with the squad's order on foot. Since P32 a
+								// helicopter is crewed the same way, and a car by two or more: a squad of five
+								// beside a four-seat jeep used to walk past it.
+								if (!vehicle.claimedByPlayer && CrewSplitFits(Squad.KindOf(vehicle), emptySeats))
 								{
 									Squad crew = squad.SplitCrew(emptySeats);
 									if (crew != null)
@@ -1287,7 +1298,7 @@ public class AiActorController : ActorController
 					SetTarget(a);
 					break;
 				}
-				if (!a.dead && a.IsHighlighted() && Vector3.Distance(a.Position(), actor.Position()) < 30f && UnityEngine.Random.Range(0f, 1f) < 0.2f)
+				if (!a.dead && a.IsHighlighted() && Vector3.Distance(a.Position(), actor.Position()) < GunfireAttentionMetres() && UnityEngine.Random.Range(0f, 1f) < 0.2f)
 				{
 					LookAt(a.Position());
 					skipNextScan = true;
@@ -1322,6 +1333,10 @@ public class AiActorController : ActorController
 			yield return new WaitForSeconds(0.5f);
 		}
 	}
+
+	// Gunfire is heard and its flash seen from further off in the dark (NightTactics).
+	private static float GunfireAttentionMetres()
+		=> NightTactics.IsNight ? NightTactics.GunfireAttentionMetres : NightTactics.DayGunfireAttentionMetres;
 
 	private void StartSprint()
 	{
@@ -1662,6 +1677,7 @@ public class AiActorController : ActorController
 	{
 		if (!p.error)
 		{
+			strandedFailures = 0;
 			calculatingPath = false;
 			hasPath = true;
 			path = p;
@@ -1681,10 +1697,85 @@ public class AiActorController : ActorController
 			calculatingPath = false;
 			moveTimeoutAction.Start();
 
+			// No node near where the bot stands: it is off the graph it searches, and every
+			// retry fails the same way until it dies (phase P32 soaks: one quadbike rider asked
+			// for ~150 such paths in ten minutes). See RescueStranded.
+			if (p.errorLog != null && p.errorLog.Contains(NoStartNodeError))
+			{
+				strandedFailures++;
+				if (strandedFailures >= StrandedFailuresBeforeRescue)
+				{
+					RescueStranded();
+				}
+			}
+			else
+			{
+				strandedFailures = 0;
+			}
+
 			// Not logged here: AstarPath counts every failed search and reports them once a
 			// minute (PathFailureSummary). Printing each again as an error put dozens of lines in
 			// a match log for searches the bot simply retries, cancellations included.
 		}
+	}
+
+	/// <summary>The search error a bot off its graph meets: A*'s own wording.</summary>
+	private const string NoStartNodeError = "close node to the start point";
+
+	/// <summary>How many such failures in a row before the bot is helped back onto its graph.</summary>
+	private const int StrandedFailuresBeforeRescue = 3;
+
+	/// <summary>
+	/// The furthest a stranded bot on foot is moved to the walkable ground nearest it. Far, because
+	/// Forest Lake's rock fields are wide: the night soak's quadbike rider stood 169 m from the nearest
+	/// walkable node. A jump of that size is seen only by somebody up on the rocks with it.
+	/// </summary>
+	private const float StrandedRescueMetres = 250f;
+
+	private int strandedFailures;
+
+	/// <summary>
+	/// Gets a bot back onto a graph it can search (phase P32). A driver whose vehicle has left the
+	/// road graph -- a quadbike up the rocks, a car in the ford -- gets out and walks. On foot, the
+	/// bot is put on the walkable ground nearest it, if that is within
+	/// <see cref="StrandedRescueMetres"/>: the alternative is a soldier standing on a cliff asking
+	/// for paths until somebody shoots him.
+	/// </summary>
+	private void RescueStranded()
+	{
+		strandedFailures = 0;
+		Vector3 from = actor.Position();
+		if (actor.IsSeated())
+		{
+			if (actor.IsDriver())
+			{
+				Debug.Log("[bots] " + base.name + " drove off the road graph at " + from.ToString("F0") + ": getting out to walk.");
+				actor.LeaveSeat();
+			}
+			return;
+		}
+		if (AstarPath.active == null || !actor.autoMoveActor)
+		{
+			return;
+		}
+		NNConstraint walkable = new NNConstraint
+		{
+			graphMask = 1,
+			constrainDistance = false
+		};
+		NNInfo nearest = AstarPath.active.GetNearest(from, walkable);
+		if (nearest.node == null)
+		{
+			return;
+		}
+		Vector3 to = nearest.clampedPosition;
+		float distance = Vector3.Distance(from, to);
+		if (distance > StrandedRescueMetres)
+		{
+			return;
+		}
+		actor.transform.position = TerrainSurface.AtOrAbove(to);
+		Debug.Log("[bots] " + base.name + " was off the walkable graph at " + from.ToString("F0") + ": moved " + distance.ToString("F0") + " m back onto it.");
 	}
 
 	private void RecalculatePath()
@@ -1773,6 +1864,26 @@ public class AiActorController : ActorController
 		return Ironfront.Net.Unity.TerrainSurface.IsUnder(actor.Position(), FallenThroughTerrainDepth);
 	}
 
+	// The goggles at night (phase P32): on for a fight or the last stretch to the objective.
+	private void TickNightVision()
+	{
+		if (!NightTactics.IsNight)
+		{
+			if (nightVision != null && nightVision.IsOn)
+			{
+				nightVision.Battery.SwitchOff();
+			}
+			return;
+		}
+		if (nightVision == null)
+		{
+			nightVision = new BotNightVision(NightTactics.BatterySeconds);
+		}
+		bool nearObjective = squad != null && squad.commandTarget != null
+			&& (squad.commandTarget.transform.position - actor.Position()).sqrMagnitude < NightObjectiveMetres * NightObjectiveMetres;
+		nightVision.Tick(Time.deltaTime, HasTarget() || IsTakingFire(), nearObjective);
+	}
+
 	private void Update()
 	{
 		// Ahead of the dead check, not after it: a skipped tick must cost nothing at all.
@@ -1782,8 +1893,14 @@ public class AiActorController : ActorController
 		}
 		if (actor.dead)
 		{
+			// A new life brings a full battery.
+			if (nightVision != null)
+			{
+				nightVision.Refill();
+			}
 			return;
 		}
+		TickNightVision();
 		if (!actor.fallenOver)
 		{
 			ragdollAutokillAction.Start();
@@ -2788,6 +2905,28 @@ public class AiActorController : ActorController
 		return target != null;
 	}
 
+	/// <summary>
+	/// The fog this bot looks at <paramref name="target"/> through: the map's, and at night thinner
+	/// through its goggles and for a target whose muzzle flash has just lit it (NightTactics).
+	/// </summary>
+	private float SightFogDensity(Actor target)
+	{
+		float density = RenderSettings.fogDensity;
+		if (!NightTactics.IsNight)
+		{
+			return density;
+		}
+		if (nightVision != null && nightVision.IsOn)
+		{
+			density *= NightTactics.NightVisionFogFactor;
+		}
+		if (target.IsHighlighted())
+		{
+			density *= NightTactics.MuzzleFlashFogFactor;
+		}
+		return density;
+	}
+
 	private bool CanSeeActor(Actor target, bool considerFov = false)
 	{
 		Vector3 vector = target.Position() - actor.Position();
@@ -2801,7 +2940,7 @@ public class AiActorController : ActorController
 		}
 		else if (RenderSettings.fog)
 		{
-			float f = Mathf.Exp(0f - Mathf.Pow(magnitude * RenderSettings.fogDensity, 2f));
+			float f = Mathf.Exp(0f - Mathf.Pow(magnitude * SightFogDensity(target), 2f));
 			num = num2 * Mathf.Pow(f, 2f);
 			if (target.IsHighlighted())
 			{
@@ -3134,6 +3273,14 @@ public class AiActorController : ActorController
 
 	public override SpawnPoint SelectedSpawnPoint()
 	{
+		// Back to a flag where the side has an empty vehicle first (phase P32): picking a random
+		// front-line flag seven times in ten left the HQ jeeps, tanks and helicopters standing
+		// empty for the whole match, so nobody ever drove at an HQ.
+		SpawnPoint forVehicle = ActorManager.SpawnPointForIdleVehicle(actor);
+		if (forVehicle != null)
+		{
+			return forVehicle;
+		}
 		if (UnityEngine.Random.Range(0f, 1f) < 0.3f)
 		{
 			return ActorManager.RandomSpawnPointForTeam(actor.team);
@@ -3163,6 +3310,25 @@ public class AiActorController : ActorController
 		if (actor.IsSeated())
 		{
 			actor.LeaveSeat();
+		}
+	}
+
+	/// <summary>
+	/// Whether part of a squad that does not fit <paramref name="emptySeats"/> takes the vehicle
+	/// anyway: any seat in a tank or a helicopter, two or more in a car. A boat is never boarded
+	/// from here (<see cref="Vehicle.AiShouldEnter"/> refuses anything in water).
+	/// </summary>
+	private static bool CrewSplitFits(VehicleKind kind, int emptySeats)
+	{
+		switch (kind)
+		{
+			case VehicleKind.Armour:
+			case VehicleKind.Aircraft:
+				return emptySeats > 0;
+			case VehicleKind.Transport:
+				return emptySeats >= 2;
+			default:
+				return false;
 		}
 	}
 

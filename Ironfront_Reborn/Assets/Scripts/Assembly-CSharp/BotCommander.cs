@@ -84,6 +84,26 @@ public sealed class BotCommander : MonoBehaviour
 		instance = this;
 	}
 
+	/// <summary>
+	/// Plans by night or by day (phase P32 Night Mode): <see cref="TacticsProfile.Night"/> gathers
+	/// short of a defended flag and draws lone bots into squads from further off. A change starts
+	/// both sides' plans afresh; the same answer twice changes nothing.
+	/// </summary>
+	public void UseNightTactics(bool night)
+	{
+		if (night == usingNightTactics)
+		{
+			return;
+		}
+		usingNightTactics = night;
+		Profile = night ? TacticsProfile.Night() : TacticsProfile.Default();
+		_planners[0] = new TeamPlanner(Profile);
+		_planners[1] = new TeamPlanner(Profile);
+		Debug.Log("[commander] planning by " + (night ? "night: gather before an assault, regroup within " + Profile.RegroupRadius.ToString("0") + " m" : "day") + ".");
+	}
+
+	private bool usingNightTactics;
+
 	/// <summary>Reads the map's flags and their links. Called when a match starts.</summary>
 	public void StartGame()
 	{
@@ -133,6 +153,14 @@ public sealed class BotCommander : MonoBehaviour
 		}
 
 		_adjacency = adjacency.ToArray();
+
+		// The HQs: the flags a side holds as the match begins (phase P32). Read once, here, because
+		// whoever holds an HQ later, it is still the place that side's vehicles stand.
+		for (int f = 0; f < count; f++)
+		{
+			_flags[f].IsBase = _points[f] != null && _points[f].owner >= 0;
+		}
+
 		_nextPlan = Time.time + 3f;
 		_lastSummary[0] = _lastSummary[1] = null;
 		Squad.Census.Reset();
@@ -367,7 +395,8 @@ public sealed class BotCommander : MonoBehaviour
 			.Append(splits[(int)Squad.SplitReason.Rogue]).Append(" crew ").Append(splits[(int)Squad.SplitReason.Crew])
 			.Append(" full ").Append(splits[(int)Squad.SplitReason.VehicleFull]).Append(", left alone by a death ")
 			.Append(Squad.Census.LeftAlone[team]).Append(", merged ").Append(Squad.Census.Merged[team])
-			.Append(", reinforced by a spawn ").Append(Squad.Census.Reinforced[team]);
+			.Append(", reinforced by a spawn ").Append(Squad.Census.Reinforced[team])
+			.Append(", respawned for a vehicle ").Append(Squad.Census.SpawnedForVehicle[team]);
 
 		bool changed = summary != _lastSummary[team];
 		if (!changed && Time.time - _lastLogged[team] < QuietLogPeriod)

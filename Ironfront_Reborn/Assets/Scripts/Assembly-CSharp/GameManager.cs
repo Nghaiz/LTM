@@ -112,6 +112,10 @@ public class GameManager : MonoBehaviour
 		CoverManager.instance.StartGame();
 		// Each side's commander (phase P28): after ActorManager, whose spawn points it reads.
 		BotCommander.EnsureOn(ActorManager.instance.gameObject).StartGame();
+		// The vehicles scattered at random each match (phase P32): after ActorManager's flags.
+		FieldSupplyDirector.EnsureOn(ActorManager.instance.gameObject).StartGame();
+		// Night Mode (phase P32): before the scene's TimeOfDay starts, so it starts in the right dark.
+		NightModeDirector.EnsureOn(ActorManager.instance.gameObject).StartGame();
 		if (DecalManager.instance != null)
 		{
 			DecalManager.instance.StartGame();

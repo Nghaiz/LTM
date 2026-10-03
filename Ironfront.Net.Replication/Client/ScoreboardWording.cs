@@ -68,6 +68,29 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
+        /// <see cref="LeadLine(MatchPhase, int, int, int, byte)"/> under the room's rule (protocol
+        /// 14, phase P32). First to the points counts what the leader still needs to reach them.
+        /// </summary>
+        public static string LeadLine(
+            MatchPhase phase, int score0, int score1, int victoryPoints, byte winningTeam, VictoryRule rule)
+        {
+            if (rule != VictoryRule.Target) return LeadLine(phase, score0, score1, victoryPoints, winningTeam);
+
+            if (phase == MatchPhase.Ended || phase == MatchPhase.Resetting)
+                return winningTeam == TeamId.None ? "DRAW" : TeamName(winningTeam) + " WINS";
+
+            string toWin = "FIRST TO " + victoryPoints.ToString(CultureInfo.InvariantCulture) + " WINS";
+            if (phase != MatchPhase.Playing || score0 == score1)
+                return (phase == MatchPhase.Playing ? "LEVEL" + Separator : string.Empty) + toWin;
+
+            byte leader = score0 > score1 ? TeamId.Team0 : TeamId.Team1;
+            int top = score0 > score1 ? score0 : score1;
+            int more = victoryPoints - top;
+            return TeamName(leader) + " LEADS" + Separator
+                   + (more > 0 ? more.ToString(CultureInfo.InvariantCulture) + " MORE TO WIN" : toWin);
+        }
+
+        /// <summary>
         /// How far the lead has gone towards the margin, from -1 (team 0 has it) to +1 (team 1).
         /// The scoreboard's tug-of-war bar is drawn from this.
         /// </summary>
@@ -91,9 +114,19 @@ namespace Ironfront.Net.Replication.Client
         /// </remarks>
         public const string PointMatch = "POINT MATCH";
 
+        /// <summary>Night Mode, Forest Lake only (protocol 14, phase P32).</summary>
+        public const string NightMode = "NIGHT MODE";
+
+        /// <summary>The name the board gives a room's mode.</summary>
+        public static string ModeName(GameMode mode) => mode == GameMode.Night ? NightMode : PointMatch;
+
         /// <summary>The line under the map's name: "POINT MATCH  ·  38 PLAYERS  ·  3 HUMANS".</summary>
         public static string SummaryLine(int players, int humans)
             => PointMatch + Separator + PlayersLine(players, humans);
+
+        /// <summary>The summary line for a room's own mode: "NIGHT MODE  ·  38 PLAYERS  ·  3 HUMANS".</summary>
+        public static string SummaryLine(GameMode mode, int players, int humans)
+            => ModeName(mode) + Separator + PlayersLine(players, humans);
 
         /// <summary>"12 PLAYERS  ·  2 HUMANS".</summary>
         public static string PlayersLine(int players, int humans)
@@ -116,6 +149,14 @@ namespace Ironfront.Net.Replication.Client
             => "EVERY ENEMY DEATH SCORES +1 PER FLAG YOU HOLD"
                + Separator + "LEAD BY " + victoryMargin.ToString(CultureInfo.InvariantCulture) + " TO WIN"
                + Separator + "OR TAKE EVERY ENEMY SPAWN";
+
+        /// <summary>The rules line under the room's rule (protocol 14, phase P32).</summary>
+        public static string Rules(int victoryPoints, VictoryRule rule)
+            => rule != VictoryRule.Target
+                ? Rules(victoryPoints)
+                : "EVERY ENEMY DEATH SCORES +1 PER FLAG YOU HOLD"
+                  + Separator + "FIRST TO " + victoryPoints.ToString(CultureInfo.InvariantCulture) + " WINS"
+                  + Separator + "OR TAKE EVERY ENEMY SPAWN";
 
         /// <summary>
         /// What one enemy death is worth to a side holding <paramref name="flags"/> capture

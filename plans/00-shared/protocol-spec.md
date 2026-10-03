@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront: Reborn
 
-**Version: 13.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 13`
+**Version: 14.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 14`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 13;
+    public const byte   PROTOCOL_VERSION  = 14;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -1687,6 +1687,7 @@ expires after 60 seconds and only works for one specific server.
 | 2004 | Already in another room |
 | 2005 | The side change would leave the two sides differing by more than one |
 | 2006 | The room is on a map this client cannot load: not in its `LOGIN_REQ.maps`, or not 1 or 2 for a client that sent none |
+| 2007 | The room's game-mode settings are outside `RoomRules`: a mode the map does not have (Night Mode is Forest Lake only), points out of range for the rule, or a night-vision battery out of range at night or not zero by day (14.0.0) |
 | 3000 | No game server available |
 | 3001 | Game server not responding |
 | 3002 | The game-server host cannot take another room with that many bots (§ 11.3) |
@@ -1792,6 +1793,7 @@ Added at v3.0.0:
 | **12.0.2** | 2026-09-30 | the replication track | **`S_PLAYER_LIST` is bounded by connections, not by `MAX_ACTORS`.** `PlayerListMessage.MaxEntries` = 64 rows, one per connected human (§ 4.11); a game server refuses to start with `IRONFRONT_GAMESERVER_MAX_CONNECTIONS` above it. The worst case stays 1153 B, and a larger bot roster no longer grows a message no bot is in (128 actors read 2,305 B against a 1,181 B payload) | **No** — the same bytes for every list a server can send | (this PR) |
 
 | **13.0.0** | 2026-09-30 | the master-server track | **Up to 100 bots a match, and a host that is never overfilled.** `MAX_BOTS` 32 → **100** and `MAX_ACTORS` 64 → **128** (§ 1): the actor-id pool is `MAX_ACTORS - 1`, and 16 players with 100 bots would overrun 63. `ROOM_CREATE_REQ.botCount` becomes the match's **total**, even, 0…`MAX_BOTS` (owner, 2026-09-30: a 0-100 slider), with `DEFAULT_ROOM_BOTS` = 50 for matchmaking; `GS_ROOM_ASSIGNED.botsPerTeam` carries half of it. New § 11.3: the master budgets the shared game-server host (2 × 100 or 3 × 50 bots, measured), refuses a room that does not fit with new error `3002`, and sends `capacity` with every `ROOM_LIST_RES`. `ROOM_LIST_RES` rows gain `botCount` (and the table now lists `isPrivate`, `canRejoin`, `rejoinTeam`, sent since P16 and 2026-09-30); `ROOM_STATE_PUSH` gains `mapId`, `botCount`, `maxPlayers` | **Yes** — a v12 client drops every actor id at or above 64, so it would never see most of a 100-bot match; and the same `botCount` means a total to a v13 master and a per-team count to a v12 client. `CONNECT_DENIED` code 2 and the master's `1004` refuse the mismatch | (this change) |
+| **14.0.0** | 2026-10-04 | the client track | **Game modes chosen in the lobby.** A room carries `gameMode` (0 Point Match, 1 Night Mode, Forest Lake only), `victoryRule` (0 lead by N, 1 first to N), `victoryPoints` and `nightVisionSeconds` (night-vision battery, 0 by day), with ranges and defaults in `Ironfront.Net.Protocol.RoomRules`. MSP: `ROOM_CREATE_REQ`, every `ROOM_LIST_RES` row, `ROOM_STATE_PUSH` and `GS_ROOM_ASSIGNED` gain the four fields (a missing field reads as its default); a room outside the rules is refused with new error `2007 InvalidRoomSettings`. UDP: `S_MATCH_STATE` (0x45) **Size 10 → 13**, appending `u8 victoryRule`, `u8 gameMode`, `u8 nightVisionSeconds` after `victoryPoints`; `WinningTeam` decides through `ConquestScoreRule.Decide(score0, score1, victoryPoints, victoryRule)`. Phase **P32**; contract in `plans/phases/phase-p32-mode-contract.md` | **Yes** — the UDP message changed size, and a v13 client would read a first-to-500 match as a 500-point margin and draw the score bar and the winner wrong. `CONNECT_DENIED` code 2 and the master's `1004` refuse the mismatch | (this change) |
 | **13.0.1** | 2026-09-30 | the master-server track | **A client is only put in a room on a map it can load.** `LOGIN_REQ` gains an optional `maps` (the map ids the client's catalog names); a login without it is taken to load Dustbowl (1) and Island (2), the catalog of every build before it. The master hides rooms on other maps from `ROOM_LIST_RES` and from `capacity.maps`, refuses `ROOM_CREATE_REQ`, `ROOM_JOIN_REQ` and `MATCHMAKE_REQ` on them with new error **2006**, and never matchmakes a waiting player into a group on a map it lacks. Why: `MapCatalog.SceneOrDefault` loads the default map for an id the client does not know, so a v3.0.0 client in a Forest Lake room (map 3) would stand in Dustbowl while the server simulated Forest Lake | **No** — an added optional MSP field and an error code no v13 client can meet through its own screens; `PROTOCOL_VERSION` stays 13, so v3.0.0 keeps playing Dustbowl and Island | (this change) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.

@@ -29,6 +29,29 @@ namespace Ironfront.Net.Replication.Ai
         /// <summary>What any target is worth before anything else is counted: the unit of the rest.</summary>
         public float TargetBase { get; set; } = 1f;
 
+        /// <summary>
+        /// Extra worth of a base the side does not hold -- the enemy's HQ, or its own taken from it
+        /// (phase P32): taking one takes the other side's vehicles and its safe respawn with it.
+        /// </summary>
+        /// <remarks>
+        /// Hand-set, not trained (the simulator has no vehicles to raid with): on Forest Lake, where
+        /// both HQs can change hands, no enemy stood on an HQ once in a ten-minute soak, because an HQ
+        /// is the flag farthest from every squad and nothing in the utility said it was worth the
+        /// trip. Measured with the same soak: 1.5 put an enemy on each HQ in 4-5% of the samples,
+        /// 2.5 in 7-12%, with the flags each side held unchanged. It makes the enemy HQ the natural
+        /// next target once the side holds a flag beside it, and a vehicle's raid target from across
+        /// the map (with <see cref="VehicleDistanceShare"/>), while a squad on foot at the far side
+        /// still takes the flags in front of it.
+        /// </remarks>
+        public float EnemyBaseBonus { get; set; } = 2.5f;
+
+        /// <summary>
+        /// The share of the distance cost a squad in a vehicle pays (phase P32): a jeep or a
+        /// helicopter covers ground three to four times faster than a squad walking, so a far flag
+        /// costs it a fraction of the time.
+        /// </summary>
+        public float VehicleDistanceShare { get; set; } = 0.35f;
+
         /// <summary>Extra worth of a neutral flag: nobody to take it from.</summary>
         public float NeutralBonus { get; set; } = 0.3f;
 
@@ -241,6 +264,41 @@ namespace Ironfront.Net.Replication.Ai
             RegroupRadius = 14.16f,
             ReinforceRadius = 79.113f,
         };
+
+        /// <summary>
+        /// The shipped profile for a Night Mode match (phase P32): <see cref="Default"/> with what the
+        /// dark changes, hand-set rather than trained (the simulator has no night).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Gather before going in.</b> By day the trained profile sends every squad straight at a
+        /// defended flag (<see cref="GatherShare"/> 0): the gather cost more time than it won. At
+        /// night a squad arriving alone meets defenders it cannot see until it is among them, so the
+        /// assault waits short of the flag -- closer than by day, where it is as hidden -- until most
+        /// of the force it needs is there, or for at most 20 s.
+        /// </para>
+        /// <para>
+        /// <b>Stay together.</b> A lone bot looks further for a squad to join, and a spawn wave's
+        /// bot further for one to reinforce: a man alone in the dark is a man lost.
+        /// </para>
+        /// <para>
+        /// <b>Respect the defence.</b> A defended flag is priced higher, and its defenders are
+        /// remembered longer: they are as hard to see as the attackers. Flanks stay off, the owner's
+        /// choice for this profile.
+        /// </para>
+        /// </remarks>
+        public static TacticsProfile Night()
+        {
+            TacticsProfile night = Default();
+            night.GatherShare = 0.6f;
+            night.GatherDistance = 70f;
+            night.GatherMaxWait = 20f;
+            night.RegroupRadius = 30f;
+            night.ReinforceRadius = 120f;
+            night.DefenderAdvantage *= 1.3f;
+            night.ThreatMemorySeconds = 45f;
+            return night;
+        }
 
         /// <summary>A copy, for a tuner to perturb.</summary>
         public TacticsProfile Clone() => (TacticsProfile)MemberwiseClone();

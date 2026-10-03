@@ -826,7 +826,8 @@ namespace Ironfront.Net.Unity.Client
         /// </para>
         /// </remarks>
         public async Task<bool> CreateRoomAsync(
-            string name, ushort mapId, byte maxPlayers, byte botCount, string? password)
+            string name, ushort mapId, byte maxPlayers, byte botCount, string? password,
+            RoomSettings? settings = null)
         {
             _flow.Transition(GameFlowState.JoiningRoom);
 
@@ -845,6 +846,7 @@ namespace Ironfront.Net.Unity.Client
                     BotCount = botCount,
                     IsPrivate = isPrivate,
                     PasswordHash = isPrivate ? PasswordHasher.HashRoomPassword(password!) : null,
+                    Settings = settings ?? RoomSettings.Default,
                 };
 
                 CreateRoomResult result = await _master.CreateRoomAsync(request).ConfigureAwait(false);
