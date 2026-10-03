@@ -618,6 +618,11 @@ namespace Ironfront.Net.Unity.Server
             _hostedRoom ??= () => RoomIdentity.RoomId;
             NetBotRelease.HostedRoom = _hostedRoom;
 
+            // A supply cache's ammunition for a player, whose spare rounds are this loop's pool.
+            // SupplyCache cannot name this assembly. Cleared in Unbind.
+            _giveSupplyAmmo ??= GiveSupplyAmmo;
+            NetResupply.GiveAmmo = _giveSupplyAmmo;
+
             WarnAboutPlaceholderWeapons();
         }
 
@@ -698,10 +703,31 @@ namespace Ironfront.Net.Unity.Server
             NetWeaponAuthority.Clear();
             NetShotAnnouncements.Clear();
             if (NetBotRelease.HostedRoom == _hostedRoom) NetBotRelease.HostedRoom = null;
+            if (NetResupply.GiveAmmo == _giveSupplyAmmo) NetResupply.GiveAmmo = null;
         }
 
         /// <summary>This loop's <see cref="NetBotRelease.HostedRoom"/>, kept so Unbind clears only its own.</summary>
         private Func<ushort> _hostedRoom;
+
+        /// <summary>This loop's <see cref="NetResupply.GiveAmmo"/>, kept so Unbind clears only its own.</summary>
+        private Func<GameObject, bool> _giveSupplyAmmo;
+
+        /// <summary>
+        /// One supply-cache pulse for a player's body: every slot of the pool, by each slot's own
+        /// per-pulse amount, the way an ammo bag's pulse gives. False for a bot or an unclaimed
+        /// slot, whose rounds live on the <c>Actor</c>.
+        /// </summary>
+        private bool GiveSupplyAmmo(GameObject body)
+        {
+            NetServerActor actor = body.GetComponent<NetServerActor>();
+            if (actor == null || !actor.IsClaimed) return false;
+
+            for (byte slot = 0; slot < ActorSpareAmmoPool.SlotsPerActor; slot++)
+            {
+                _spareAmmo.Give(actor.ActorId, slot);
+            }
+            return true;
+        }
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
         public void RunInputStage()

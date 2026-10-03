@@ -1157,6 +1157,12 @@ public class AiActorController : ActorController
 					// the leader's own, stale or zero whenever the shots were aimed at someone else.
 					squad.DigInTowards(squad.TakingFireDirection(takingFireDirection));
 				}
+				else if (!squad.IsTakingFire() && !squad.HoldingCover() && !actor.IsPassenger() && squad.TryGoResupply(hasPath))
+				{
+					// Short of ammunition or hurt, with a cache of this side's in reach: on the way
+					// there, or standing at it (owner request 2026-10-03). The order resumes once the
+					// need is met or the trip runs out of time.
+				}
 				else if (!squad.IsTakingFire() && !squad.HoldingCover())
 				{
 					// A squad firing from cover finishes the exchange before it moves (phase P28):
