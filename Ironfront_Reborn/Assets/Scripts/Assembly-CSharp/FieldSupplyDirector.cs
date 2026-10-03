@@ -83,6 +83,15 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 
 	private float nextCheck;
 
+	/// <summary>The crates out now (phase P32), as the server or the offline game placed them.</summary>
+	private readonly List<GameObject> crates = new List<GameObject>();
+
+	/// <summary>When the next crate may be placed: soon after the start, then a while after one runs out.</summary>
+	private float nextCrate;
+
+	/// <summary>The box a crate needs on the ground: the larger of the two crates, with room round it.</summary>
+	private static readonly Bounds CrateFootprint = new Bounds(new Vector3(0f, 0.5f, 0f), new Vector3(1.6f, 1f, 1.6f));
+
 	private FieldParking parking;
 
 	public static FieldSupplyDirector EnsureOn(GameObject host)
@@ -152,11 +161,19 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		}
 		parking = new FieldParking(config);
 		Layout(firstMatch: true);
+		// The first crates a few seconds in: the server's projectile table is up by then, so each
+		// crate is replicated from its first frame rather than missed by the clients.
+		nextCrate = Time.time + 5f;
 	}
 
 	private void Update()
 	{
-		if (config == null || Time.time < nextCheck)
+		if (config == null)
+		{
+			return;
+		}
+		TendCrates();
+		if (Time.time < nextCheck)
 		{
 			return;
 		}
@@ -180,14 +197,88 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		}
 	}
 
-	/// <summary>A new match on the same map: every scattered vehicle gets a new kind and a new place.</summary>
+	/// <summary>A new match on the same map: every scattered vehicle gets a new kind and a new place, and the crates start over.</summary>
 	private void OnWorldReset()
 	{
 		if (config == null || NetContext.IsClient)
 		{
 			return;
 		}
+		foreach (GameObject crate in crates)
+		{
+			if (crate != null)
+			{
+				UnityEngine.Object.Destroy(crate);
+			}
+		}
+		crates.Clear();
+		nextCrate = Time.time + 5f;
 		Layout(firstMatch: false);
+	}
+
+	// ------------------------------------------------------------------------------ crates
+
+	/// <summary>
+	/// Keeps <see cref="FieldSupplyConfig.crateCount"/> crates out: one placed every few tenths of a
+	/// second until the field is stocked, then each one that runs out replaced somewhere else after
+	/// <see cref="FieldSupplyConfig.crateRespawnSeconds"/>.
+	/// </summary>
+	private void TendCrates()
+	{
+		int before = crates.Count;
+		crates.RemoveAll(crate => crate == null);
+		if (crates.Count < before)
+		{
+			nextCrate = Mathf.Max(nextCrate, Time.time + config.crateRespawnSeconds);
+		}
+		if (crates.Count >= config.crateCount || Time.time < nextCrate)
+		{
+			return;
+		}
+		PlaceCrate();
+		nextCrate = Time.time + 0.4f;
+	}
+
+	private void PlaceCrate()
+	{
+		bool medical = random.NextDouble() < config.medicalShare;
+		GameObject prefab = medical ? config.medicalCratePrefab : config.ammoCratePrefab;
+		if (prefab == null)
+		{
+			return;
+		}
+		Bounds area = FieldParking.PlayArea();
+		var taken = new Vec3[crates.Count];
+		for (int i = 0; i < crates.Count; i++)
+		{
+			taken[i] = ToVec(crates[i].transform.position);
+		}
+		float fromFlag = config.crateMinFromFlag * config.crateMinFromFlag;
+		for (int attempt = 0; attempt < ParkingAttempts * 4; attempt++)
+		{
+			var probe = new Vector3(
+				Mathf.Lerp(area.min.x, area.max.x, (float)random.NextDouble()),
+				0f,
+				Mathf.Lerp(area.min.z, area.max.z, (float)random.NextDouble()));
+			float yaw = (float)(random.NextDouble() * 360.0);
+			if (NearAFlag(probe, fromFlag) || !parking.CanPark(probe, yaw, CrateFootprint, out Vector3 ground)
+				|| !FieldSupplyLayout.FarFromAll(ToVec(ground), taken, config.crateSpacing * config.crateSpacing))
+			{
+				continue;
+			}
+			GameObject crate = UnityEngine.Object.Instantiate(prefab, ground + Vector3.up * 0.05f, Quaternion.Euler(0f, yaw, 0f));
+			// The deployable's Awake throws it forward at its launch speed; a crate stands still.
+			Rigidbody body = crate.GetComponent<Rigidbody>();
+			if (body != null)
+			{
+				body.linearVelocity = Vector3.zero;
+				body.angularVelocity = Vector3.zero;
+			}
+			ProjectileNetAnnouncer.AnnounceLaunch(crate.GetComponent<Projectile>(), crate.transform.position, Vector3.zero, null);
+			crates.Add(crate);
+			return;
+		}
+		Debug.Log("[supply] no place found for a " + prefab.name + " this time; trying again shortly.");
 	}
 
 	private void Layout(bool firstMatch)
@@ -218,9 +309,20 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			Pad pad = firstMatch ? null : (flagIndex < flagPads.Count ? flagPads[flagIndex] : null);
 			flagIndex++;
 			GameObject prefab = Choose(config.flagVehicles);
-			Vector3 at;
-			Quaternion facing;
-			if (prefab == null || !TryParkNearFlag(point, prefab, out at, out facing))
+			Vector3 at = default;
+			Quaternion facing = default;
+			bool parked = prefab != null && TryParkNearFlag(point, prefab, out at, out facing);
+			// The kind drawn did not fit (a helicopter needs a wide clearing): any other kind that does.
+			for (int i = 0; !parked && i < config.flagVehicles.Length; i++)
+			{
+				GameObject other = config.flagVehicles[i].prefab;
+				if (other != null && other != prefab && config.flagVehicles[i].weight > 0f && TryParkNearFlag(point, other, out at, out facing))
+				{
+					prefab = other;
+					parked = true;
+				}
+			}
+			if (!parked)
 			{
 				// Nowhere dry within reach of this flag: a boat on the water beside it, if the map has one.
 				prefab = Choose(config.waterVehicles);

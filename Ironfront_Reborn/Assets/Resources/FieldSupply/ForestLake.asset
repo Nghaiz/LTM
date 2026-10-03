@@ -40,6 +40,15 @@ MonoBehaviour:
   fieldMinFromFlag: 110
   spacing: 120
   fieldRespawnSeconds: 45
+  ammoCratePrefab: {fileID: 3414827123468032950, guid: dcba18d6c62af1f419b99cfa0ac97627,
+    type: 3}
+  medicalCratePrefab: {fileID: 3876693286005975308, guid: ab2fc6d11a4bfca48a0b378c3b14c3a2,
+    type: 3}
+  crateCount: 10
+  medicalShare: 0.4
+  crateMinFromFlag: 50
+  crateSpacing: 90
+  crateRespawnSeconds: 20
   maxSlopeDegrees: 11
   maxStep: 0.7
   treeClearance: 3.5

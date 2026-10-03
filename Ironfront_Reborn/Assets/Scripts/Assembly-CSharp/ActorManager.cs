@@ -697,6 +697,34 @@ public class ActorManager : MonoBehaviour
 		return RandomSpawnPointForTeam(team);
 	}
 
+	/// <summary>
+	/// Whether a bot can steer a boat on this map: the boat graph (index 1) has a node at all. Island's
+	/// has 146; Forest Lake's has none, so a bot that boarded a boat there sat in it asking for paths
+	/// that could not exist ("Couldn't find close nodes", 135 times in one soak, phase P32).
+	/// </summary>
+	public static bool BoatsNavigable
+	{
+		get
+		{
+			if (AstarPath.active == null || AstarPath.active.astarData == null)
+			{
+				return false;
+			}
+			Pathfinding.NavGraph[] graphs = AstarPath.active.astarData.graphs;
+			if (graphs == null || graphs.Length < 2 || graphs[1] == null)
+			{
+				return false;
+			}
+			bool found = false;
+			graphs[1].GetNodes(node =>
+			{
+				found = true;
+				return false;
+			});
+			return found;
+		}
+	}
+
 	/// <summary>How far from a flag a parked vehicle counts as that flag's: the HQ pads stand 31-38 m out.</summary>
 	public const float IdleVehicleRadius = 60f;
 
@@ -739,6 +767,10 @@ public class ActorManager : MonoBehaviour
 		foreach (Vehicle vehicle in instance.vehicles)
 		{
 			if (vehicle == null || vehicle.dead || vehicle.claimedByPlayer || !vehicle.AiShouldEnter())
+			{
+				continue;
+			}
+			if (vehicle is Boat && !BoatsNavigable)
 			{
 				continue;
 			}

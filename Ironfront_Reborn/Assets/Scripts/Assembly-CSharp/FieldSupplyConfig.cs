@@ -60,6 +60,31 @@ public sealed class FieldSupplyConfig : ScriptableObject
 	/// <summary>Seconds after a field vehicle is wrecked before another appears somewhere else.</summary>
 	public float fieldRespawnSeconds = 45f;
 
+	/// <summary>
+	/// The ammunition crate: a deployable (an <see cref="Ammobox"/> with a <see cref="FieldCrate"/>),
+	/// so the server replicates it as it does a dropped bag and it resupplies both sides.
+	/// </summary>
+	[Header("Supply crates in the field")]
+	public GameObject ammoCratePrefab;
+
+	/// <summary>The medical crate: a <see cref="Medipack"/> with a <see cref="FieldCrate"/>.</summary>
+	public GameObject medicalCratePrefab;
+
+	/// <summary>Crates out at once; each lasts its prefab's lifetime and is then replaced somewhere else.</summary>
+	public int crateCount = 10;
+
+	/// <summary>The share of crates that are medical rather than ammunition.</summary>
+	public float medicalShare = 0.4f;
+
+	/// <summary>Metres a crate keeps from every flag: the flags have caches of their own.</summary>
+	public float crateMinFromFlag = 50f;
+
+	/// <summary>Metres between two crates.</summary>
+	public float crateSpacing = 90f;
+
+	/// <summary>Seconds after a crate runs out before its replacement turns up.</summary>
+	public float crateRespawnSeconds = 20f;
+
 	/// <summary>Steepest ground a vehicle is parked on, in degrees.</summary>
 	[Header("Parking")]
 	public float maxSlopeDegrees = 11f;

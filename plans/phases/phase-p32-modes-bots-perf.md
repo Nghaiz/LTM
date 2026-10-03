@@ -29,7 +29,7 @@ last: carrying the mode and its settings to the game server and the HUD changes 
 |---|---|---|---|---|
 | 1 | 2 | Bots respawn where their side has idle vehicles, squads sized to the seats; soak measures vehicle use and HQ pressure | 13 | #513 |
 | 2 | 2 | Commander values the enemy HQ and spreads over more flags | 13 | #514 |
-| 3 | 2 | Vehicle slots at every Forest Lake flag, filled at random each match; random field vehicles | 13 | |
+| 3 | 2 | Vehicle slots at every Forest Lake flag, filled at random each match; random field vehicles | 13 | #515 |
 | 4 | 2 | Random ammo/medical supply crates each match (server deployables, crate visuals on the client) | 13 | |
 | 5+ | 3 | Physics, then animation, rendering, script Update (P31 list), each A/B measured | client | |
 | 6 | 1 | Point Match rules (margin / target) from the lobby to the server and the score bar | 14 | |
@@ -77,3 +77,14 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   walkable node within 5 m. Pads are `Field Vehicle Pad` prefabs saved inactive. Soak `p32-pr3b`:
   vehicles alive 14.4 -> 21.2 per sample, bots seated 8.2 -> 9.4, an enemy on HQ 0 / 1 in 27% / 13%
   of samples, no warnings, no pad refused an id (`MAX_VEHICLES` 24).
+- 2026-10-04 — PR 4. Ten supply crates (`Field Ammo Crate`, `Field Medical Crate`: prefab variants
+  of the dropped bags with a crate model, 150 s life) at random places at least 50 m from a flag and
+  90 m apart; one that runs out is replaced somewhere else 20 s later. They are deployables, so the
+  server replicates them as dropped bags (owner actor 0) and they serve both sides; a client with
+  this change draws the crate (`_fieldCratePrefabsByKind`), an older one a bag. `FieldCrate` lists
+  them for the radar (gold) and for squads short of ammunition or health, which take the nearer of
+  a crate and their side's cache. The same soak found bots boarding a boat moored at Island and
+  asking for 135 paths on a boat graph Forest Lake does not have (0 nodes; Island's has 146): bots
+  now leave boats alone where the boat graph is empty. After it (`p32-pr4b`): 0 failed paths, no
+  warnings, 10 crates out, 21.7 live vehicles per sample, 9.0 bots seated. HQ pressure varies a
+  lot between runs of the same build (27/13%, 4/19%, 3/3% in three soaks): read it as a range.

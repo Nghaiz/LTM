@@ -225,6 +225,11 @@ public class Squad
 		{
 			return false;
 		}
+		// A map with no boat graph gives a boat's driver nowhere to path (phase P32: Forest Lake).
+		if (vehicle is Boat && !ActorManager.BoatsNavigable)
+		{
+			return false;
+		}
 		Vector3 at = leader.actor.Position();
 		SpawnPoint objective = HasCommand ? commandTarget : targetSpawnPoint;
 		float objectiveDistance = objective != null ? Vector3.Distance(at, objective.transform.position) : float.PositiveInfinity;
@@ -1100,7 +1105,8 @@ public class Squad
 
 	private float nextSupplyDetour;
 
-	private SupplyCache supplyTarget;
+	/// <summary>The cache or field crate (phase P32) the squad is on its way to.</summary>
+	private Component supplyTarget;
 
 	/// <summary>
 	/// Whether a member is down to half the spare rounds a weapon holds. Not
@@ -1174,21 +1180,30 @@ public class Squad
 		}
 		Vector3 from = leader.actor.Position();
 		SupplyCache cache = SupplyCache.Nearest(from, leader.actor.team, ammo, health, SupplyDetourMetres);
-		if (cache == null)
+		// Or a crate left in the field (phase P32), whichever is nearer: it serves both sides.
+		FieldCrate crate = FieldCrate.Nearest(from, ammo, health, SupplyDetourMetres);
+		Component target = cache;
+		float range = cache != null ? cache.range : 0f;
+		if (crate != null && (cache == null || (crate.transform.position - from).sqrMagnitude < (cache.transform.position - from).sqrMagnitude))
+		{
+			target = crate;
+			range = FieldCrate.Range;
+		}
+		if (target == null)
 		{
 			supplyDetourEnds = -1f;
 			return false;
 		}
-		bool starting = supplyDetourEnds < 0f || cache != supplyTarget;
+		bool starting = supplyDetourEnds < 0f || target != supplyTarget;
 		if (supplyDetourEnds < 0f)
 		{
 			supplyDetourEnds = now + SupplyDetourSeconds;
 		}
-		supplyTarget = cache;
+		supplyTarget = target;
 		// Walk there once; again only if the squad stopped short. At it: hold for the pulses.
-		if ((starting || !leaderMoving) && Vector3.Distance(from, cache.transform.position) > cache.range * 0.6f)
+		if ((starting || !leaderMoving) && Vector3.Distance(from, target.transform.position) > range * 0.6f)
 		{
-			MoveTo(cache.transform.position);
+			MoveTo(target.transform.position);
 		}
 		return true;
 	}

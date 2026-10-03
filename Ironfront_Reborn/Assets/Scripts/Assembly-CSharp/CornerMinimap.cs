@@ -60,6 +60,9 @@ public class CornerMinimap : MonoBehaviour
 	/// <summary>A cache that does not serve the player's side: still findable, plainly off.</summary>
 	private static readonly Color InactiveSupplyTint = new Color(0.42f, 0.42f, 0.42f, 1f);
 
+	/// <summary>A crate left in the field (phase P32): gold, because it serves whoever reaches it.</summary>
+	private static readonly Color FieldCrateTint = new Color(1f, 0.78f, 0.25f, 1f);
+
 	private static Texture2D ammoIcon;
 
 	private static Texture2D medicalIcon;
@@ -340,6 +343,16 @@ public class CornerMinimap : MonoBehaviour
 			{
 				Color tint = cache.ServedTeam == team ? Color.white : InactiveSupplyTint;
 				Place(SupplyIcon(cache.kind), tint, SupplyPixels, offset, null, heading, false, FullUv);
+			}
+		}
+
+		IReadOnlyList<FieldCrate> crates = FieldCrate.All;
+		for (int i = 0; i < crates.Count; i++)
+		{
+			FieldCrate crate = crates[i];
+			if (crate != null && OnRadar(camera, crate.transform.position, centre, halfUv, heading, 0.95f, out Vector2 offset))
+			{
+				Place(SupplyIcon(crate.kind), FieldCrateTint, SupplyPixels, offset, null, heading, false, FullUv);
 			}
 		}
 	}
