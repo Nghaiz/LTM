@@ -334678,8 +334678,8 @@ MonoBehaviour:
   frameMargin: 0.08
   objectiveFrameMargin: 130
   bakedPicture: {fileID: 2800000, guid: a4050c5a0fffd9c4caf83c08105f6d44, type: 3}
-  bakedCentre: {x: 1384, y: 1427.5}
-  bakedHalfSpan: 754
+  bakedCentre: {x: 1384, y: 1480}
+  bakedHalfSpan: 750
 --- !u!20 &1612152106
 Camera:
   m_ObjectHideFlags: 0
