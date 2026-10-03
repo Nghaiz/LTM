@@ -84,6 +84,26 @@ public sealed class BotCommander : MonoBehaviour
 		instance = this;
 	}
 
+	/// <summary>
+	/// Plans by night or by day (phase P32 Night Mode): <see cref="TacticsProfile.Night"/> gathers
+	/// short of a defended flag and draws lone bots into squads from further off. A change starts
+	/// both sides' plans afresh; the same answer twice changes nothing.
+	/// </summary>
+	public void UseNightTactics(bool night)
+	{
+		if (night == usingNightTactics)
+		{
+			return;
+		}
+		usingNightTactics = night;
+		Profile = night ? TacticsProfile.Night() : TacticsProfile.Default();
+		_planners[0] = new TeamPlanner(Profile);
+		_planners[1] = new TeamPlanner(Profile);
+		Debug.Log("[commander] planning by " + (night ? "night: gather before an assault, regroup within " + Profile.RegroupRadius.ToString("0") + " m" : "day") + ".");
+	}
+
+	private bool usingNightTactics;
+
 	/// <summary>Reads the map's flags and their links. Called when a match starts.</summary>
 	public void StartGame()
 	{

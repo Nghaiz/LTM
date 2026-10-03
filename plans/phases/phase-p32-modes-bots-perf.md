@@ -33,8 +33,8 @@ last: carrying the mode and its settings to the game server and the HUD changes 
 | 4 | 2 | Random ammo/medical supply crates each match (server deployables, crate visuals on the client) | 13 | #516 |
 | 5 | 3 | Physics: far corpses freeze without the long wait; parked remote vehicles are not rewritten | client | #517 |
 | 6 | 1 | Point Match rules (margin / target) from the lobby to the server and the score bar | 14 | #518 |
-| 7 | 1 | Night Mode: lobby, night lighting, pumpkins/candles/flag lights, battery night vision, HUD, sound | 14 | (this PR) |
-| 8 | 1 | Night tactics for bots | 14 | |
+| 7 | 1 | Night Mode: lobby, night lighting, pumpkins/candles/flag lights, battery night vision, HUD, sound | 14 | #519 |
+| 8 | 1 | Night tactics for bots | 14 | (this PR) |
 | 9 | — | Deploy master + servers, release (MAJOR: protocol 14) | | |
 
 ## Measurement
@@ -131,3 +131,24 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   amber under a quarter, red and blinking when it is nearly out, with a synthesised low beep.
   `TimeOfDay.SetNight` switches day and night on a running map (a server hosts room after room),
   and the reflection probes re-render for it.
+- 2026-10-04 — Live check of PR 7 (master dd93c98c, servers da6525a, dev client): a Night Mode room
+  listed as "Forest Lake · 100 bots · NIGHT · FIRST TO 300", the server played it by its rules
+  (`[match] playing room 1 by its rules`), the client dressed 48 pieces, night vision drained in
+  45 s and the panel went amber "CHARGING". Without the goggles the picture was black even beside
+  the player (post-processing crushes ambient that low), so PR 8 raises the night's ambient to
+  about the scene's own night and the moonlight to 0.15; the fog still ends sight at ~70 m.
+- 2026-10-04 — PR 8 (item 1, night tactics). `NightTactics` (Assembly-CSharp): at night a target
+  whose muzzle flashed in the last 4 s is seen through half the fog, gunfire turns a bot from 90 m
+  (30 m by day), a squad's move order scatters 1.5 m (3 m). Every bot carries the players' goggles
+  on the room's battery (`BotNightVision`): on for a fight or within 70 m of its objective (keeping
+  40% back for the fight it is walking into, 15% hysteresis), off after 6 s of quiet; while on it
+  sees through the players' 35% of the fog. The commander plans with `TacticsProfile.Night`
+  (hand-set, the simulator has no night): gather at 60% of the force 70 m short of a defended flag
+  for at most 20 s, regroup within 30 m, reinforce within 120 m, defenders priced 1.3x and
+  remembered 45 s; flanks stay off. Offline soak, Forest Lake, 25 a side, 10 game minutes, day vs
+  night (`p32-n-day` / `p32-n-night`): score 485 vs 384 (less fighting in the dark), goggles on in
+  18% of bot samples, squads 18-19 vs 13-15 a side (merged 9 vs 20), gathering on in 10 of 60 plan
+  lines, 0 warnings in both. Both soaks also logged ~150 failed paths from ONE bot each: a
+  quadbike driven off the nav graph (Ford / Quarry by day, rocks at 604,724 by night), whose rider
+  then asks for paths from a start with no node near it. Pre-existing (item 2's field vehicles),
+  not night-related; follow-up.

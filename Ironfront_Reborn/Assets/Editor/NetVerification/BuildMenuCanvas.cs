@@ -1130,7 +1130,7 @@ namespace Ironfront.Net.Unity.EditorTools
             vision.contentType = InputField.ContentType.IntegerNumber;
             vision.characterLimit = 3;
             vision.interactable = false;
-            FieldCaption(vision, half, "SECONDS OF NIGHT VISION");
+            FieldCaption(vision, half, "SECONDS");
 
             // `.map-preview`, level with the form column, with three stat cells at its foot. The
             // title is bound to the dropdown rather than authored, so the card cannot name a map

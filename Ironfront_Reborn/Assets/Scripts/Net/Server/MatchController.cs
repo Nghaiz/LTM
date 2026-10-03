@@ -287,6 +287,10 @@ namespace Ironfront.Net.Unity.Server
             Debug.Log($"[match] playing room {NetRoomRules.RoomId} by its rules: {settings}.");
         }
 
+        // The room's rule in the score log: "win by 200", "first to 300" (phase P32).
+        private string VictoryWords()
+            => (_rules != null && _rules.Rule == VictoryRule.Target ? "first to " : "win by ") + _match.VictoryPoints;
+
         private void OnDestroy()
         {
             NetRoomRules.Changed -= OnRoomRulesChanged;
@@ -441,7 +445,7 @@ namespace Ironfront.Net.Unity.Server
             _sinceScoreLog = 0f;
 
             Debug.Log($"[net] match score {_match.Score0} / {_match.Score1} "
-                      + $"(win by {_match.VictoryPoints}), flags "
+                      + $"({VictoryWords()}), flags "
                       + $"{_match.OwnedPointCount(TeamId.Team0)} / {_match.OwnedPointCount(TeamId.Team1)}, "
                       + $"deaths {_loop.Scores.DeathsRecorded}, repeat death reports dropped "
                       + $"{_loop.RespawnGate.DuplicateDeathsSuppressed}");
@@ -552,7 +556,7 @@ namespace Ironfront.Net.Unity.Server
 
         private void OnPhaseChanged(MatchPhase phase)
             => Debug.Log($"[net] match phase -> {phase} "
-                         + $"({_match.Score0} / {_match.Score1}, win by {_match.VictoryPoints})");
+                         + $"({_match.Score0} / {_match.Score1}, {VictoryWords()})");
 
         private void OnResetRequested()
         {

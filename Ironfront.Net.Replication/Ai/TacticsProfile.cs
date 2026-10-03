@@ -265,6 +265,41 @@ namespace Ironfront.Net.Replication.Ai
             ReinforceRadius = 79.113f,
         };
 
+        /// <summary>
+        /// The shipped profile for a Night Mode match (phase P32): <see cref="Default"/> with what the
+        /// dark changes, hand-set rather than trained (the simulator has no night).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Gather before going in.</b> By day the trained profile sends every squad straight at a
+        /// defended flag (<see cref="GatherShare"/> 0): the gather cost more time than it won. At
+        /// night a squad arriving alone meets defenders it cannot see until it is among them, so the
+        /// assault waits short of the flag -- closer than by day, where it is as hidden -- until most
+        /// of the force it needs is there, or for at most 20 s.
+        /// </para>
+        /// <para>
+        /// <b>Stay together.</b> A lone bot looks further for a squad to join, and a spawn wave's
+        /// bot further for one to reinforce: a man alone in the dark is a man lost.
+        /// </para>
+        /// <para>
+        /// <b>Respect the defence.</b> A defended flag is priced higher, and its defenders are
+        /// remembered longer: they are as hard to see as the attackers. Flanks stay off, the owner's
+        /// choice for this profile.
+        /// </para>
+        /// </remarks>
+        public static TacticsProfile Night()
+        {
+            TacticsProfile night = Default();
+            night.GatherShare = 0.6f;
+            night.GatherDistance = 70f;
+            night.GatherMaxWait = 20f;
+            night.RegroupRadius = 30f;
+            night.ReinforceRadius = 120f;
+            night.DefenderAdvantage *= 1.3f;
+            night.ThreatMemorySeconds = 45f;
+            return night;
+        }
+
         /// <summary>A copy, for a tuner to perturb.</summary>
         public TacticsProfile Clone() => (TacticsProfile)MemberwiseClone();
     }

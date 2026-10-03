@@ -56,6 +56,7 @@ namespace Ironfront.Editor.Verification
         const string BotsKey = "Ironfront.BotSoak.BotsPerTeam";
         const string ReturnKey = "Ironfront.BotSoak.ReturnScene";
         const string AsServerKey = "Ironfront.BotSoak.AsServer";
+        const string NightKey = "Ironfront.BotSoak.Night";
 
         /// <summary>Frames the scene gets to come up before the bots are released.</summary>
         const int SettleFrames = 60;
@@ -144,7 +145,7 @@ namespace Ironfront.Editor.Verification
         /// Changes each map as a dedicated server build does before playing it
         /// (<see cref="ServerBuildSceneStrip.Strip"/>): what the server's bots run on, not the Editor's.
         /// </param>
-        public static void Run(string[] maps, float gameSeconds, float timeScale, int botsPerTeam, string label, bool asServer = false)
+        public static void Run(string[] maps, float gameSeconds, float timeScale, int botsPerTeam, string label, bool asServer = false, bool night = false)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
             {
@@ -156,6 +157,7 @@ namespace Ironfront.Editor.Verification
             SessionState.SetFloat(ScaleKey, timeScale);
             SessionState.SetInt(BotsKey, botsPerTeam);
             SessionState.SetBool(AsServerKey, asServer);
+            SessionState.SetBool(NightKey, night);
             SessionState.SetString(ReturnKey, EditorSceneManager.GetActiveScene().path);
             Advance();
         }
@@ -321,6 +323,18 @@ namespace Ironfront.Editor.Verification
                     typeof(GameManager).GetMethod("StartGame", BindingFlags.Instance | BindingFlags.NonPublic)
                         .Invoke(GameManager.instance, null);
                     _result.startedByProbe = true;
+                }
+
+                // Night Mode, offline (phase P32): the original's switch, applied again through the
+                // director so the map, the commander and the bots all go dark together.
+                if (SessionState.GetBool(NightKey, false) && GameManager.instance != null)
+                {
+                    GameManager.instance.nightMode = true;
+                    if (NightModeDirector.instance != null)
+                    {
+                        NightModeDirector.instance.StartGame();
+                    }
+                    _result.night = NightModeDirector.instance != null && NightModeDirector.instance.IsNight;
                 }
 
                 int bots = SessionState.GetInt(BotsKey, 25);
@@ -627,7 +641,11 @@ namespace Ironfront.Editor.Verification
 
             foreach (Actor actor in ActorManager.instance.actors)
             {
-                if (actor == null || !actor.aiControlled || actor.dead || !actor.IsSeated()) continue;
+                if (actor == null || !actor.aiControlled || actor.dead) continue;
+                t.aliveBotSamples++;
+                AiActorController ai = actor.controller as AiActorController;
+                if (ai != null && ai.IsWearingNightVision) t.gogglesOnSamples++;
+                if (!actor.IsSeated()) continue;
                 int kind = (int)Squad.KindOf(actor.seat.vehicle);
                 if (kind >= 0 && kind < t.seatedByKind.Length) t.seatedByKind[kind]++;
             }
@@ -701,6 +719,8 @@ namespace Ironfront.Editor.Verification
                 _lastOwners[i] = flags[i].owner;
             }
             _result.finalOwners = string.Join(", ", flags.Select(f => f == null ? "?" : f.name + "=" + f.owner));
+            _result.score0 = MatchScoreboard.Current.BlueScore;
+            _result.score1 = MatchScoreboard.Current.RedScore;
         }
 
         static void Note(List<BotSoakBotEvent> into, ref int count, Actor actor, AiActorController ai, float seconds)
@@ -863,6 +883,14 @@ namespace Ironfront.Editor.Verification
         public string map;
         public string role;
         public bool asServer;
+
+        /// <summary>Whether the map was in Night Mode (phase P32).</summary>
+        public bool night;
+
+        /// <summary>The scores at the end: kills times flags, so a measure of how much fighting there was.</summary>
+        public int score0;
+        public int score1;
+
         public bool startedByProbe;
         public int botsPerTeam;
         public float timeScale;
@@ -899,6 +927,10 @@ namespace Ironfront.Editor.Verification
     public sealed class BotSoakTactics
     {
         public int samples;
+
+        /// <summary>Living bots summed over the samples, and how many of them wore their goggles (phase P32).</summary>
+        public int aliveBotSamples;
+        public int gogglesOnSamples;
 
         /// <summary>The HQs: flags a side held when the bots were released, with that side.</summary>
         public string hqs;
