@@ -98,8 +98,33 @@ namespace Ironfront.Net.Replication.Combat
         /// <summary>Entries filled in from the real weapon assets. Fifteen of seventeen.</summary>
         public static int AuthoredCount => CountAuthored(true);
 
-        /// <summary>Assigned ids still carrying class-derived placeholder numbers.</summary>
-        public static int PlaceholderCount => CountAuthored(false);
+        /// <summary>
+        /// Assigned ids still carrying class-derived placeholder numbers: neither authored nor
+        /// melee. Zero today.
+        /// </summary>
+        public static int PlaceholderCount
+        {
+            get
+            {
+                int count = 0;
+                for (byte id = 1; id <= WeaponIds.MAX_ASSIGNED; id++)
+                    if (!Authored[id] && !IsMelee(id)) count++;
+                return count;
+            }
+        }
+
+        /// <summary>
+        /// True for the melee weapons, which this hitscan table does not describe: a swing is
+        /// resolved by the game's own <c>Actor.Damage</c> path on the server
+        /// (<c>ServerActorDamageSink</c>), with the numbers the wrench prefabs carry.
+        /// </summary>
+        /// <remarks>
+        /// A category of its own because "not in this table" is not "a placeholder". Folded
+        /// together, every server start warned that the two wrenches were placeholder configs, a
+        /// gap that does not exist (playtest 2026-10-03, item 3b).
+        /// </remarks>
+        public static bool IsMelee(byte weaponId) =>
+            weaponId == WeaponIds.WRENCH || weaponId == WeaponIds.SUPER_WRENCH;
 
         /// <summary>
         /// The numbers for one weapon id.
@@ -135,17 +160,26 @@ namespace Ironfront.Net.Replication.Combat
         public static string DescribeUnauthored()
         {
             int placeholders = PlaceholderCount;
-            if (placeholders == 0)
-                return "[weapons] all " + WeaponIds.MAX_ASSIGNED + " weapon configs are authored";
-
             var text = new StringBuilder();
+            if (placeholders == 0)
+            {
+                text.Append("[weapons] all ").Append(WeaponIds.MAX_ASSIGNED)
+                    .Append(" weapon configs are authored; melee resolves through Actor.Damage:");
+                for (byte id = 1; id <= WeaponIds.MAX_ASSIGNED; id++)
+                {
+                    if (!IsMelee(id)) continue;
+                    text.Append(" ").Append(WeaponIds.NameOf(id)).Append("(").Append(id).Append(")");
+                }
+                return text.ToString();
+            }
+
             text.Append("[weapons] ").Append(placeholders).Append(" of ")
                 .Append(WeaponIds.MAX_ASSIGNED)
                 .Append(" weapon configs are class-derived PLACEHOLDERS, not registry values:");
 
             for (byte id = 1; id <= WeaponIds.MAX_ASSIGNED; id++)
             {
-                if (Authored[id]) continue;
+                if (Authored[id] || IsMelee(id)) continue;
                 text.Append(" ").Append(WeaponIds.NameOf(id)).Append("(").Append(id).Append(")");
             }
 
@@ -400,8 +434,9 @@ namespace Ironfront.Net.Replication.Combat
             // Melee. Real numbers exist - WRENCH 60 damage / 150 balance / 300 force, SUPER_WRENCH
             // 200 / 200 / 2000, both 3 m over a 0.15 s swing - but this table models a hitscan
             // shot, and a swing is not one. Writing 60 damage at 3 m range here would let
-            // ServerFireResolver resolve a wrench as a very short rifle. They stay Inert and stay
-            // UNAUTHORED so DescribeUnauthored keeps naming them; see BuildAuthored. Inert's
+            // ServerFireResolver resolve a wrench as a very short rifle. They stay Inert and
+            // unauthored, and IsMelee says why rather than the startup log calling them
+            // placeholders; see BuildAuthored. Inert's
             // no-resupply reserve is what both prefabs say (-1), so taking it claims nothing
             // about them that they did not already author.
             configs[WeaponIds.WRENCH] = Inert;
@@ -433,8 +468,8 @@ namespace Ironfront.Net.Replication.Combat
         /// known and recorded in <see cref="BuildConfigs"/>, but a hitscan
         /// <see cref="WeaponConfig"/> cannot express a swing, and <c>ClipSize</c> is a
         /// <see cref="byte"/> so the prefabs' -1 (infinite) has no representation either. Marking
-        /// them authored would claim this table describes them. It does not, so they stay in
-        /// <see cref="DescribeUnauthored"/> where the startup log names them every session.
+        /// them authored would claim this table describes them. It does not; <see cref="IsMelee"/>
+        /// names them as resolved by <c>Actor.Damage</c> instead.
         /// </remarks>
         private static bool[] BuildAuthored()
         {

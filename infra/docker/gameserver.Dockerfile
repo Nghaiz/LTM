@@ -44,6 +44,15 @@ COPY . /app/server/
 RUN chmod +x /app/server/Ironfront.Server.x86_64 \
     && chown -R 1654:1654 /app/server
 
+# An empty PlayerPrefs file, so a fresh container's first start does not log "Unable to load
+# player prefs" (Unity's own line when the file is missing). The path is
+# ~/.config/unity3d/<companyName>/<productName>/prefs from ProjectSettings (LTM10 /
+# IronfrontReborn); rename either and this line has to follow. The server keeps no prefs.
+RUN mkdir -p /home/ironfront/.config/unity3d/LTM10/IronfrontReborn \
+    && printf '<unity_prefs version_major="1" version_minor="1">\n</unity_prefs>\n' \
+       > /home/ironfront/.config/unity3d/LTM10/IronfrontReborn/prefs \
+    && chown -R 1654:1654 /home/ironfront/.config
+
 # The UDP data-plane port. It is set per instance from IRONFRONT_GAMESERVER_UDP_PORT
 # (read by GameServerConfig), and compose publishes 27015/udp and 27016/udp; EXPOSE here
 # is documentation of the default. The two instances differ only by that variable and the
