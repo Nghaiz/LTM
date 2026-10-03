@@ -28,6 +28,20 @@ public class MinimapCamera : MonoBehaviour
 	public float frameMargin = 0.08f;
 
 	/// <summary>
+	/// Metres of ground kept round the outermost flag when the map frames its objectives instead of
+	/// its whole play volume; 0 frames the play volume.
+	/// </summary>
+	/// <remarks>
+	/// Owner report 2026-10-03 on Forest Lake: framed on its 2000 m play volume, the flags, the lake
+	/// and the quarry filled the middle half of the map and everything was small. Narrowing to the
+	/// flags plus a margin shows the same ground at about 1.4 times the size. The frame never grows
+	/// past the play-volume frame and stays inside it; a vehicle beyond the narrowed frame keeps its
+	/// icon on the map's edge, as <c>ActorBlip</c> already does past the terrain.
+	/// </remarks>
+	[Min(0f)]
+	public float objectiveFrameMargin;
+
+	/// <summary>
 	/// A picture of the map drawn ahead of time by <c>Ironfront/Maps/Bake minimap picture</c>, used
 	/// instead of a live render of the scene when it was drawn for this camera's frame.
 	/// </summary>
@@ -247,7 +261,7 @@ public class MinimapCamera : MonoBehaviour
 	/// </remarks>
 	private void FrameTheLevelBounds(Bounds box)
 	{
-		LevelFrame(box, out Vector2 centre, out float halfSpan);
+		LevelFrame(box, objectiveFrameMargin, out Vector2 centre, out float halfSpan);
 		base.transform.SetPositionAndRotation(
 			new Vector3(centre.x, box.max.y + LevelBoundsClearance, centre.y),
 			Quaternion.Euler(90f, 0f, 0f));
@@ -260,7 +274,8 @@ public class MinimapCamera : MonoBehaviour
 
 	/// <summary>
 	/// The square, in world x and z, that the minimap frames for the scene's
-	/// <see cref="LevelBounds"/>; false for a map without one. What a baked picture is drawn for.
+	/// <see cref="LevelBounds"/> (and its <see cref="objectiveFrameMargin"/>); false for a map
+	/// without one. What a baked picture is drawn for.
 	/// </summary>
 	public static bool TryGetLevelFrame(out Vector2 centre, out float halfSpan)
 	{
@@ -271,11 +286,73 @@ public class MinimapCamera : MonoBehaviour
 			halfSpan = 0f;
 			return false;
 		}
-		LevelFrame(levelBounds.WorldBox, out centre, out halfSpan);
+		MinimapCamera camera = FindFirstObjectByType<MinimapCamera>();
+		LevelFrame(levelBounds.WorldBox, camera != null ? camera.objectiveFrameMargin : 0f, out centre, out halfSpan);
 		return true;
 	}
 
-	private static void LevelFrame(Bounds box, out Vector2 centre, out float halfSpan)
+	private static void LevelFrame(Bounds box, float objectiveMargin, out Vector2 centre, out float halfSpan)
+	{
+		PlayVolumeFrame(box, out centre, out halfSpan);
+		if (objectiveMargin > 0f)
+		{
+			NarrowToObjectives(box, objectiveMargin, ref centre, ref halfSpan);
+		}
+	}
+
+	/// <summary>
+	/// The square round every spawn point plus <paramref name="margin"/>, when that is smaller than
+	/// the frame it narrows; moved only as far as it must to stay inside that frame and, when it
+	/// fits, inside the play volume itself.
+	/// </summary>
+	/// <remarks>
+	/// Inside the play volume because the ground outside it is drawn dimmed, and a frame 8 m taller
+	/// than Forest Lake's 1500 m volume showed a dimmed strip along the bottom of the map (owner
+	/// report 2026-10-03). The square is shrunk to the volume's narrower side only while every
+	/// spawn point still fits inside it with room for its icon.
+	/// </remarks>
+	private static void NarrowToObjectives(Bounds box, float margin, ref Vector2 centre, ref float halfSpan)
+	{
+		SpawnPoint[] spawnPoints = FindObjectsByType<SpawnPoint>(FindObjectsSortMode.None);
+		if (spawnPoints.Length == 0)
+		{
+			return;
+		}
+		float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+		foreach (SpawnPoint spawnPoint in spawnPoints)
+		{
+			Vector3 p = spawnPoint.transform.position;
+			minX = Mathf.Min(minX, p.x);
+			maxX = Mathf.Max(maxX, p.x);
+			minZ = Mathf.Min(minZ, p.z);
+			maxZ = Mathf.Max(maxZ, p.z);
+		}
+		float spawnHalf = Mathf.Max(maxX - minX, maxZ - minZ) * 0.5f;
+		float narrowed = spawnHalf + margin;
+		float volumeHalf = Mathf.Min(box.size.x, box.size.z) * 0.5f;
+		bool fitsVolume = volumeHalf * (1f - 2f * LevelBoundsIconMargin) >= spawnHalf;
+		if (fitsVolume)
+		{
+			narrowed = Mathf.Min(narrowed, volumeHalf);
+		}
+		if (narrowed >= halfSpan)
+		{
+			return;
+		}
+		Vector2 wanted = new Vector2((minX + maxX) * 0.5f, (minZ + maxZ) * 0.5f);
+		if (fitsVolume)
+		{
+			wanted.x = Mathf.Clamp(wanted.x, box.min.x + narrowed, box.max.x - narrowed);
+			wanted.y = Mathf.Clamp(wanted.y, box.min.z + narrowed, box.max.z - narrowed);
+		}
+		float slack = halfSpan - narrowed;
+		centre = new Vector2(
+			Mathf.Clamp(wanted.x, centre.x - slack, centre.x + slack),
+			Mathf.Clamp(wanted.y, centre.y - slack, centre.y + slack));
+		halfSpan = narrowed;
+	}
+
+	private static void PlayVolumeFrame(Bounds box, out Vector2 centre, out float halfSpan)
 	{
 		float minX = box.min.x;
 		float maxX = box.max.x;

@@ -1151,10 +1151,14 @@ public class AiActorController : ActorController
 				{
 					actor.SwitchSeat(0);
 				}
-				if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire())
+				if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire() && !actor.inWater)
 				{
 					// The bearing of the member actually under fire (phase P28): the original used
 					// the leader's own, stale or zero whenever the shots were aimed at someone else.
+					//
+					// Not while the leader swims: a swimmer has put its gun away, the water has no
+					// cover, and a squad that dug in there stayed under fire with nothing to shoot
+					// back with (bot soak, Forest Lake, 9 of 16 long swims). It swims on to land.
 					squad.DigInTowards(squad.TakingFireDirection(takingFireDirection));
 				}
 				else if (!squad.IsTakingFire() && !squad.HoldingCover() && !actor.IsPassenger() && squad.TryGoResupply(hasPath))
