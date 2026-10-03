@@ -151,10 +151,27 @@ namespace Ironfront.Net.Replication.Server
         /// clamp derived from horizontal speed alone would fire on every jump and drag players
         /// back down through their own arc.
         /// </remarks>
-        public static float MaxMovePerTick(float dt)
+        public static float MaxMovePerTick(float dt) => MaxMovePerTick(dt, fallSpeed: 0f);
+
+        /// <summary>
+        /// The furthest an actor may legitimately travel in one tick while falling at
+        /// <paramref name="fallSpeed"/> metres a second.
+        /// </summary>
+        /// <remarks>
+        /// <b>A fall is gravity, and gravity is the server's own.</b> The vertical speed comes
+        /// from <see cref="MovementCore.Step"/> running HERE -- a client sends move axes and a jump
+        /// bit, never a velocity -- so it cannot be forged and must not be clamped. Before this
+        /// overload the budget topped out at <c>sqrt(6.5^2 + 10^2) * 1.3</c> = 15.5 m/s, which a
+        /// body passes after 1.3 s of falling: every longer fall was dragged to a constant
+        /// 15.5 m/s on the server while the client predicted real gravity, so the client landed a
+        /// metre low and was pulled back up on every snapshot (playtest 2026-10-03, bug 2;
+        /// <c>FallDiagnostics</c> measured the same 0.52 m per tick as X-82).
+        /// </remarks>
+        public static float MaxMovePerTick(float dt, float fallSpeed)
         {
             float horizontal = MovementCore.MaxHorizontalSpeed;
-            float vertical   = Math.Max(MovementCore.JumpSpeed, MovementCore.StickToGroundForce);
+            float vertical   = Math.Max(
+                Math.Max(MovementCore.JumpSpeed, MovementCore.StickToGroundForce), fallSpeed);
             float combined   = (float)Math.Sqrt(horizontal * horizontal + vertical * vertical);
             return combined * SpeedTolerance * dt;
         }
@@ -170,7 +187,10 @@ namespace Ironfront.Net.Replication.Server
 
             Vec3 delta = session.State.Position - session.PreviousPosition;
             float moved = delta.Magnitude;
-            float limit = MaxMovePerTick(dt);
+            // Only a DOWNWARD speed widens the budget: an upward one would be a launch the
+            // simulation never produces from player input, and is exactly what the clamp is for.
+            float fallSpeed = Math.Max(0f, -session.State.Velocity.Y);
+            float limit = MaxMovePerTick(dt, fallSpeed);
 
             if (moved <= limit)
             {
