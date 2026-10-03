@@ -49,6 +49,17 @@ public class SupplyCache : MonoBehaviour
 
 	private static readonly List<Actor> nearby = new List<Actor>();
 
+	/// <summary>Seconds between the one-line summary of what every cache handed out.</summary>
+	private const float ReportSeconds = 60f;
+
+	private static int playerRefills;
+
+	private static int botRefills;
+
+	private static int heals;
+
+	private static float nextReport;
+
 	private float nextPulse;
 
 	/// <summary>Every cache in the loaded level.</summary>
@@ -109,6 +120,7 @@ public class SupplyCache : MonoBehaviour
 
 	private void Update()
 	{
+		Report();
 		if (Time.time < nextPulse)
 		{
 			return;
@@ -129,14 +141,62 @@ public class SupplyCache : MonoBehaviour
 			}
 			if (kind == SupplyKind.Medical)
 			{
-				actor.ResupplyHealth();
+				if (actor.ResupplyHealth())
+				{
+					heals++;
+				}
 			}
-			else if (!NetResupply.TryGiveAmmo(actor.gameObject))
+			else if (NetResupply.TryGiveAmmo(actor.gameObject, out int rounds))
 			{
-				actor.ResupplyAmmo();
+				if (rounds > 0)
+				{
+					playerRefills++;
+				}
+			}
+			else if (RefillOnActor(actor))
+			{
+				botRefills++;
 			}
 		}
 		nearby.Clear();
+	}
+
+	/// <summary>Refills a body whose rounds live on its <see cref="Actor"/>; true when any slot rose.</summary>
+	private static bool RefillOnActor(Actor actor)
+	{
+		int before = 0;
+		for (int i = 0; i < actor.spareAmmo.Length; i++)
+		{
+			before += actor.spareAmmo[i];
+		}
+		actor.ResupplyAmmo();
+		int after = 0;
+		for (int i = 0; i < actor.spareAmmo.Length; i++)
+		{
+			after += actor.spareAmmo[i];
+		}
+		return after > before;
+	}
+
+	/// <summary>
+	/// Once a minute, where caches pulse: how many player and bot ammo refills and heals they gave.
+	/// The server log is the only place a cache's work shows (a client sees replicated numbers
+	/// only), and nothing is logged for a minute in which no cache gave anything.
+	/// </summary>
+	private static void Report()
+	{
+		if (Time.time < nextReport)
+		{
+			return;
+		}
+		if (nextReport > 0f && playerRefills + botRefills + heals > 0)
+		{
+			Debug.Log($"[supply] last {ReportSeconds:0} s: {playerRefills} player and {botRefills} bot ammo refill(s), {heals} heal(s).");
+		}
+		playerRefills = 0;
+		botRefills = 0;
+		heals = 0;
+		nextReport = Time.time + ReportSeconds;
 	}
 
 	private void OnDrawGizmosSelected()

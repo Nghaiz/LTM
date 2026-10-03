@@ -23,16 +23,24 @@ namespace Ironfront.Net.Unity
     {
         /// <summary>
         /// Refills every spare slot of the networked player whose body this is, each by its own
-        /// per-pulse amount; false when the body is not a player's. Registered by
-        /// <c>ServerTickLoop</c>; null offline and on a client.
+        /// per-pulse amount, and answers the rounds given; -1 when the body is not a player's.
+        /// Registered by <c>ServerTickLoop</c>; null offline and on a client.
         /// </summary>
-        public static Func<GameObject, bool> GiveAmmo { get; set; }
+        public static Func<GameObject, int> GiveAmmo { get; set; }
 
-        /// <summary>True when the server's pool refilled this body; false when the caller must.</summary>
-        public static bool TryGiveAmmo(GameObject body)
+        /// <summary>
+        /// True when the server's pool owns this body's rounds (and has refilled it by
+        /// <paramref name="rounds"/>); false when the caller must refill the body itself.
+        /// </summary>
+        public static bool TryGiveAmmo(GameObject body, out int rounds)
         {
-            Func<GameObject, bool> give = GiveAmmo;
-            return give != null && body != null && give(body);
+            rounds = 0;
+            Func<GameObject, int> give = GiveAmmo;
+            if (give == null || body == null) return false;
+            int given = give(body);
+            if (given < 0) return false;
+            rounds = given;
+            return true;
         }
     }
 }

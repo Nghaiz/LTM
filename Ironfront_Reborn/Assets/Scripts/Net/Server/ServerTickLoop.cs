@@ -710,23 +710,24 @@ namespace Ironfront.Net.Unity.Server
         private Func<ushort> _hostedRoom;
 
         /// <summary>This loop's <see cref="NetResupply.GiveAmmo"/>, kept so Unbind clears only its own.</summary>
-        private Func<GameObject, bool> _giveSupplyAmmo;
+        private Func<GameObject, int> _giveSupplyAmmo;
 
         /// <summary>
         /// One supply-cache pulse for a player's body: every slot of the pool, by each slot's own
-        /// per-pulse amount, the way an ammo bag's pulse gives. False for a bot or an unclaimed
-        /// slot, whose rounds live on the <c>Actor</c>.
+        /// per-pulse amount, the way an ammo bag's pulse gives, and the rounds given. -1 for a bot
+        /// or an unclaimed slot, whose rounds live on the <c>Actor</c>.
         /// </summary>
-        private bool GiveSupplyAmmo(GameObject body)
+        private int GiveSupplyAmmo(GameObject body)
         {
             NetServerActor actor = body.GetComponent<NetServerActor>();
-            if (actor == null || !actor.IsClaimed) return false;
+            if (actor == null || !actor.IsClaimed) return -1;
 
+            int given = 0;
             for (byte slot = 0; slot < ActorSpareAmmoPool.SlotsPerActor; slot++)
             {
-                _spareAmmo.Give(actor.ActorId, slot);
+                given += _spareAmmo.Give(actor.ActorId, slot);
             }
-            return true;
+            return given;
         }
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
