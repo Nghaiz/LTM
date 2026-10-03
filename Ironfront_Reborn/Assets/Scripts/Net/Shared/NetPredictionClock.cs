@@ -58,6 +58,9 @@ namespace Ironfront.Net.Unity
         private Transform _cameraParent;
         private float _accumulator;
 
+        // A dropped tick warns only with focus; see TickDropReport for the background case.
+        private readonly TickDropReport _tickDrops = new TickDropReport();
+
         private int _ticksThisSecond;
         private float _secondTimer;
 
@@ -330,9 +333,12 @@ namespace Ironfront.Net.Unity
                 // reconciles against the server on every single tick.
                 int dropped = Mathf.FloorToInt(_accumulator / TickInterval);
                 _accumulator = 0f;
-                Debug.LogWarning($"[NetPredictionClock] dropped {dropped} tick(s) after a " +
-                                 $"{frame * 1000f:F0} ms frame. Raise MaxTicksPerFrame only if this is routine.");
+                string warning = _tickDrops.Record(dropped, frame * 1000f, Application.isFocused);
+                if (warning != null) Debug.LogWarning(warning);
             }
+
+            string summary = _tickDrops.TakeBackgroundSummary(Application.isFocused);
+            if (summary != null) Debug.Log(summary);
 
             if (!LogTickRate) return;
 
