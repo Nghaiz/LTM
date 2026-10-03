@@ -226,6 +226,28 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>
+        /// The vehicle the seat key would ask for right now, for the on-screen prompt: the same
+        /// choice <see cref="Update"/> makes, so the prompt never names a vehicle the key
+        /// would not try.
+        /// </summary>
+        /// <returns>False while seated, dead, waiting on an answer, or with nothing in reach.</returns>
+        internal bool TryGetEnterCandidate(out NetClientVehicle vehicle, out Vector3 seat)
+        {
+            vehicle = null;
+            seat = Vector3.zero;
+            if (!isActiveAndEnabled || _client == null || !_client.IsConnected) return false;
+            if (!LocalBodyIsDeployed() || _pendingVehicleId != 0) return false;
+            if (_stage != null && _stage.OccupiedVehicleId != 0) return false;
+
+            // The same read of the local rig the key itself makes; "pressed" only skips the
+            // scripted-input check, which a prompt has no use for.
+            if (!TryReadLocalSeatIntent(true, out Vector3 standingAt)) return false;
+
+            if (!TryFindNearestSeat(standingAt, out ushort vehicleId, out _, out seat)) return false;
+            return _registry.TryFind(vehicleId, out vehicle);
+        }
+
+        /// <summary>
         /// Whether the local player asked for a seat this frame, and where they are standing.
         /// </summary>
         /// <remarks>
@@ -252,27 +274,6 @@ namespace Ironfront.Net.Unity.Client
         /// parked near the world origin.
         /// </para>
         /// </remarks>
-        /// <summary>
-        /// The vehicle the seat key would ask for right now, for the on-screen prompt: the same
-        /// choice <see cref="Update"/> makes, so the prompt never names a vehicle the key
-        /// would not try.
-        /// </summary>
-        /// <returns>False while seated, dead, waiting on an answer, or with nothing in reach.</returns>
-        internal bool TryGetEnterCandidate(out NetClientVehicle vehicle, out Vector3 seat)
-        {
-            vehicle = null;
-            seat = Vector3.zero;
-            if (!isActiveAndEnabled || _client == null || !_client.IsConnected) return false;
-            if (!LocalBodyIsDeployed() || _pendingVehicleId != 0) return false;
-            if (_stage != null && _stage.OccupiedVehicleId != 0) return false;
-
-            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
-            if (rig == null || !rig.Exists) return false;
-
-            if (!TryFindNearestSeat(rig.Position, out ushort vehicleId, out _, out seat)) return false;
-            return _registry.TryFind(vehicleId, out vehicle);
-        }
-
         private static bool TryReadLocalSeatIntent(bool keyboardPressed, out Vector3 standingAt)
         {
             standingAt = Vector3.zero;

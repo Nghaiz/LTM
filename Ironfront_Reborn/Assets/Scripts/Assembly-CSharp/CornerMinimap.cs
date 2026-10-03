@@ -118,6 +118,9 @@ public class CornerMinimap : MonoBehaviour
 		rect.sizeDelta = new Vector2(Diameter, Diameter);
 		// Under the M map, which slides up over it.
 		rect.SetAsFirstSibling();
+		// Its own canvas: the radar moves every icon every frame, and a nested canvas rebuilds only
+		// the radar's mesh instead of everything the M map's canvas holds. Drawn in hierarchy order.
+		go.AddComponent<Canvas>();
 		CornerMinimap radar = go.AddComponent<CornerMinimap>();
 		radar.Build(picture, map);
 		return radar;
