@@ -25,9 +25,9 @@ namespace Ironfront.Net.Replication.Tests
             public readonly List<string> Names = new List<string>();
             private readonly List<List<int>> _links = new List<List<int>>();
 
-            public int Add(string name, float x, float z, int owner, bool capturable = true)
+            public int Add(string name, float x, float z, int owner, bool capturable = true, bool isBase = false)
             {
-                Flags.Add(new FlagInfo { Position = new Vec3(x, 0f, z), Owner = owner, Capturable = capturable });
+                Flags.Add(new FlagInfo { Position = new Vec3(x, 0f, z), Owner = owner, Capturable = capturable, IsBase = isBase });
                 Names.Add(name);
                 _links.Add(new List<int>());
                 return Flags.Count - 1;
@@ -648,6 +648,70 @@ namespace Ironfront.Net.Replication.Tests
             (FlagInfo[] flags, int[] adjacency) = map.Build();
             var planner = new TeamPlanner(new TacticsProfile());
             Assert.Equal(0, planner.Plan(Blue, flags, adjacency, ReadOnlySpan<SquadInfo>.Empty, 0, 0, Span<SquadOrder>.Empty));
+        }
+    
+        // ------------------------------------------------------------------ bases (phase P32)
+
+        /// <summary>
+        /// Weights that leave only distance, the target base and the base bonus, so a test reads
+        /// one rule at a time.
+        /// </summary>
+        private static TacticsProfile BaseRuleOnly() => new TacticsProfile
+        {
+            DistanceWeight = 1f, NeutralBonus = 0f, RetakeBonus = 0f, LinkWeight = 0f, ThreatWeight = 0f,
+            DeepPenalty = 0f, ShortWeight = 0f, OverWeight = 0f, DeficitWeight = 0f, Stickiness = 0f,
+            EnemyBaseBonus = 1.5f, VehicleDistanceShare = 0.35f, MinBotsToFlank = 1000, GatherShare = 0f,
+        };
+
+        /// <summary>Forest Lake's shape: both HQs can be taken. Blue holds HQ0 and A; B and HQ1 are red.</summary>
+        private static Map CapturableHqs(out int b, out int hq1, float hq1Z, float bX = 0f, float hq1X = 0f)
+        {
+            var map = new Map();
+            int hq0 = map.Add("HQ0", 0f, 0f, Blue, isBase: true);
+            int a = map.Add("A", 0f, 200f, Blue);
+            b = map.Add("B", bX, 400f, Red);
+            hq1 = map.Add("HQ1", hq1X, hq1Z, Red, isBase: true);
+            map.Link(hq0, a);
+            map.Link(a, b);
+            map.Link(a, hq1);
+            map.Link(b, hq1);
+            return map;
+        }
+
+        [Fact]
+        public void AnEnemyBase_IsWorthMoreThanAnyOtherFlagAsFarAway()
+        {
+            Map map = CapturableHqs(out int b, out int hq1, hq1Z: 400f, bX: -200f, hq1X: 200f);
+            SquadOrder[] orders = Plan(new TeamPlanner(BaseRuleOnly()), Blue, map, new[] { Squad(1, 0f, 200f) });
+            Assert.Equal(hq1, orders[0].Flag);
+
+            TacticsProfile noBonus = BaseRuleOnly();
+            noBonus.EnemyBaseBonus = 0f;
+            orders = Plan(new TeamPlanner(noBonus), Blue, map, new[] { Squad(1, 0f, 200f) });
+            Assert.Equal(b, orders[0].Flag);
+        }
+
+        [Fact]
+        public void ASquadInAVehicle_RaidsTheEnemyBase_WhileOneOnFootTakesTheFlagInFront()
+        {
+            // From A: B is 200 m away, HQ1 500 m. On foot B is worth 1 - 2 = -1 and HQ1 1 + 1.5 - 5
+            // = -2.5; in a vehicle B is 1 - 0.7 = 0.3 and HQ1 2.5 - 1.75 = 0.75.
+            Map map = CapturableHqs(out int b, out int hq1, hq1Z: 700f);
+
+            SquadOrder[] onFoot = Plan(new TeamPlanner(BaseRuleOnly()), Blue, map, new[] { Squad(1, 0f, 200f) });
+            Assert.Equal(b, onFoot[0].Flag);
+
+            SquadOrder[] riding = Plan(new TeamPlanner(BaseRuleOnly()), Blue, map, new[] { Squad(1, 0f, 200f, vehicle: true) });
+            Assert.Equal(hq1, riding[0].Flag);
+            Assert.Equal(SquadRole.Attack, riding[0].Role);
+        }
+
+        [Fact]
+        public void TheSidesOwnBase_IsNotATargetWhileItHoldsIt()
+        {
+            Map map = CapturableHqs(out _, out _, hq1Z: 700f);
+            SquadOrder[] orders = Plan(new TeamPlanner(BaseRuleOnly()), Blue, map, new[] { Squad(1, 0f, 10f) });
+            Assert.NotEqual(0, orders[0].Flag);
         }
     }
 }

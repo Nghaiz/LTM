@@ -141,6 +141,10 @@ namespace Ironfront.Tools.TacticsTrainer
                 SimFlag flag = map.Flags[f];
                 _flags[f].Position = new Vec3(flag.X, 0f, flag.Z);
                 _flags[f].Capturable = true;
+                // IsBase stays false: the simulated maps (Dustbowl, Island and generated ones) let
+                // every flag change hands, where the real Dustbowl and Island HQs never do, and no
+                // simulated squad rides a vehicle. Setting it here would train the base bonus
+                // against a game the server does not play (phase P32).
                 _flags[f].AdjacencyStart = adjacency.Count;
                 adjacency.AddRange(map.Neighbours[f]);
                 _flags[f].AdjacencyCount = map.Neighbours[f].Count;

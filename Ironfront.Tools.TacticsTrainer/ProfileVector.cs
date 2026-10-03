@@ -38,6 +38,10 @@ namespace Ironfront.Tools.TacticsTrainer
         public static readonly IReadOnlyList<ProfileParameter> Parameters = new[]
         {
             P("NeutralBonus", -0.5f, 1.5f, false, p => p.NeutralBonus, (p, v) => p.NeutralBonus = v),
+            // Inert in the simulator, which has no capturable HQ and no vehicle (phase P32): a trained
+            // profile's values for these two are noise. Keep the hand-set ones when copying a run.
+            P("EnemyBaseBonus", 0f, 3f, false, p => p.EnemyBaseBonus, (p, v) => p.EnemyBaseBonus = v),
+            P("VehicleDistanceShare", 0.1f, 1f, false, p => p.VehicleDistanceShare, (p, v) => p.VehicleDistanceShare = v),
             P("RetakeBonus", -0.5f, 2f, false, p => p.RetakeBonus, (p, v) => p.RetakeBonus = v),
             P("ThreatWeight", 0f, 0.5f, false, p => p.ThreatWeight, (p, v) => p.ThreatWeight = v),
             P("LinkWeight", 0f, 1f, false, p => p.LinkWeight, (p, v) => p.LinkWeight = v),

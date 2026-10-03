@@ -133,6 +133,14 @@ public sealed class BotCommander : MonoBehaviour
 		}
 
 		_adjacency = adjacency.ToArray();
+
+		// The HQs: the flags a side holds as the match begins (phase P32). Read once, here, because
+		// whoever holds an HQ later, it is still the place that side's vehicles stand.
+		for (int f = 0; f < count; f++)
+		{
+			_flags[f].IsBase = _points[f] != null && _points[f].owner >= 0;
+		}
+
 		_nextPlan = Time.time + 3f;
 		_lastSummary[0] = _lastSummary[1] = null;
 		Squad.Census.Reset();

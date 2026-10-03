@@ -441,6 +441,9 @@ namespace Ironfront.Net.Replication.Ai
                 // Still outnumbered there, even with this squad: Lanchester's deficit, as a share of the need.
                 float deficit = Math.Max(0f, need - have - squad.Size);
                 value -= _profile.DeficitWeight * deficit / need;
+
+                // A base the side does not hold (phase P32): its vehicles and its safe respawn go with it.
+                if (flags[f].IsBase) value += _profile.EnemyBaseBonus;
             }
             else
             {
@@ -448,7 +451,8 @@ namespace Ironfront.Net.Replication.Ai
             }
 
             value += _profile.ShortWeight * fills / need - _profile.OverWeight * over / need;
-            value -= _profile.DistanceWeight * Vec3.Distance(squad.Position, flags[f].Position) / 100f;
+            float distanceCost = _profile.DistanceWeight * Vec3.Distance(squad.Position, flags[f].Position) / 100f;
+            value -= squad.InVehicle ? distanceCost * _profile.VehicleDistanceShare : distanceCost;
 
             // Sticky on purpose: a squad keeps its job until another is clearly better, so it commits.
             if (squad.Role != SquadRole.None && squad.Flag == f) value += _profile.Stickiness;
