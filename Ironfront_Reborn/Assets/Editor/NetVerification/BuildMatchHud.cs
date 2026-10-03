@@ -322,10 +322,6 @@ namespace Ironfront.Net.Unity.EditorTools
             detail.color = CyanSoft;
             Place(detail, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(68f, -15f), new Vector2(320f, 18f));
 
-            Image pointer = Picture(panel.gameObject, "Pointer", Orange);
-            Centre(pointer.rectTransform, Vector2.zero, new Vector2(30f, 17f));
-            pointer.gameObject.SetActive(false);
-
             var so = new SerializedObject(view);
             Assign(so, "_panel", panelRect);
             Assign(so, "_group", group);
@@ -333,9 +329,8 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_keyCap", cap.gameObject);
             Assign(so, "_action", action);
             Assign(so, "_detail", detail);
-            Assign(so, "_pointer", pointer.rectTransform);
             so.ApplyModifiedPropertiesWithoutUndo();
-            log.AppendLine("seat prompt: built hidden; SeatPromptView places it over the vehicle the seat key would ask for.");
+            log.AppendLine("seat prompt: built hidden; SeatPromptView places it over the vehicle the seat key would ask for, only while the player looks at it.");
         }
 
         /// <summary>

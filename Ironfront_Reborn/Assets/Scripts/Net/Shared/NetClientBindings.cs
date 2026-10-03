@@ -6,6 +6,14 @@ using UnityEngine;
 namespace Ironfront.Net.Unity
 {
     /// <summary>
+    /// What the offline seat key would enter: the vehicle, the seat it looks at, its kind, how many
+    /// of its seats are taken and whether the crew is the other side.
+    /// </summary>
+    public delegate bool OfflineSeatProbe(
+        out Transform vehicle, out Vector3 seat, out VehicleKind kind,
+        out int crew, out int seats, out bool enemyCrew);
+
+    /// <summary>
     /// Where <c>Assembly-CSharp</c> hands this assembly the client-side singletons it may no
     /// longer name: the local player's rig and the HUD. The client mirror of
     /// <c>NetServerBindings</c>. Phase C4a.
@@ -161,6 +169,12 @@ namespace Ironfront.Net.Unity
         /// landed on did nothing until the game was restarted.
         /// </remarks>
         public static Func<bool> LeaveMatch { get; set; }
+
+        /// <summary>
+        /// The vehicle the seat key would enter right now when this process seats its own player (offline, or a host on its own server), for the seat prompt,
+        /// which otherwise reads the networked seat requester. Set by the player controller.
+        /// </summary>
+        public static OfflineSeatProbe OfflineSeatCandidate { get; set; }
 
         /// <summary>
         /// True when a matchmade match was left through <see cref="LeaveMatch"/>, false when

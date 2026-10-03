@@ -203,8 +203,7 @@ public class MinimapUi : MonoBehaviour
 		// MinimapMarker builds its speed leader: one runtime view over runtime data, no prefab.
 		if (minimap.texture != null)
 		{
-			RawImage arrow = actorBlipPrefab != null ? actorBlipPrefab.GetComponent<RawImage>() : null;
-			CornerMinimap.Create((RectTransform)base.transform, minimap.texture, arrow != null ? arrow.texture : null);
+			CornerMinimap.Create((RectTransform)base.transform, minimap.texture, this);
 		}
 		UpdateSpawnPointButtons();
 	}
