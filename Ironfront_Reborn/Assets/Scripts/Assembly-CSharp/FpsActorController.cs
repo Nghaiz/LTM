@@ -274,6 +274,7 @@ public class FpsActorController : ActorController
 
 	private void Awake()
 	{
+		NetClientBindings.OfflineSeatCandidate = ProbeOfflineSeat;
 		instance = this;
 
 		// P12 D-1. The prefab used to author `team: 0` on this body, and that literal was the
@@ -1261,6 +1262,53 @@ public class FpsActorController : ActorController
 	private int SampleWeaponSlotIntent()
 	{
 		return LocalTextEntry.Composing ? -1 : pendingNetworkWeaponSlot;
+	}
+
+	/// <summary>
+	/// The seat <see cref="SampleUseRay"/> would enter if the key went down now, for the "F" prompt
+	/// in the offline game. Same ray, same reach, same conditions.
+	/// </summary>
+	private bool ProbeOfflineSeat(out Transform vehicle, out Vector3 seat, out Ironfront.Net.Protocol.VehicleKind kind,
+		out int crew, out int seats, out bool enemyCrew)
+	{
+		vehicle = null;
+		seat = Vector3.zero;
+		kind = Ironfront.Net.Protocol.VehicleKind.Car;
+		crew = 0;
+		seats = 0;
+		enemyCrew = false;
+		if (NetContext.IsClient || actor == null || actor.dead || actor.IsSeated() || !actor.CanEnterSeat())
+		{
+			return false;
+		}
+		Ray ray = ((!actor.fallenOver) ? new Ray(fpCamera.transform.position, fpCamera.transform.forward) : new Ray(actor.CenterPosition(), tpCamera.transform.forward + tpCamera.transform.up * 0.2f));
+		RaycastHit hitInfo;
+		if (!Physics.Raycast(ray, out hitInfo, 3f, 2048) || hitInfo.collider.gameObject.layer != 11)
+		{
+			return false;
+		}
+		Seat target = hitInfo.collider.GetComponent<Seat>();
+		if (target == null || target.vehicle == null)
+		{
+			return false;
+		}
+		Vehicle body = target.vehicle;
+		vehicle = body.transform;
+		seat = target.transform.position;
+		kind = body is Tank ? Ironfront.Net.Protocol.VehicleKind.Tank : body is Helicopter ? Ironfront.Net.Protocol.VehicleKind.Helicopter : body is Boat ? Ironfront.Net.Protocol.VehicleKind.Boat : Ironfront.Net.Protocol.VehicleKind.Car;
+		if (body.seats != null)
+		{
+			seats = body.seats.Length;
+			foreach (Seat other in body.seats)
+			{
+				if (other != null && other.occupant != null && !other.occupant.dead)
+				{
+					crew++;
+					enemyCrew |= other.occupant.team != actor.team;
+				}
+			}
+		}
+		return true;
 	}
 
 	private void SampleUseRay()
