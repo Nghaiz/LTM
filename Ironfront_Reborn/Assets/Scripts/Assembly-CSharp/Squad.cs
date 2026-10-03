@@ -702,7 +702,9 @@ public class Squad
 			{
 				continue;
 			}
-			member.Goto(point + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f)));
+			// Closer together in the dark (phase P32 NightTactics).
+			float spread = NightTactics.IsNight ? NightTactics.SquadSpreadMetres : NightTactics.DaySquadSpreadMetres;
+			member.Goto(point + Vector3.Scale(Random.insideUnitSphere, new Vector3(spread, 0f, spread)));
 			if (member.squadLeader)
 			{
 				member.EmoteMoveOrder(point);

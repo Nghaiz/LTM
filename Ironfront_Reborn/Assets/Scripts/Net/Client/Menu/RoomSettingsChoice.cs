@@ -39,7 +39,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>The night-vision field's placeholder: what the number is, and its range.</summary>
         public static string VisionPlaceholder()
-            => $"Night vision battery, seconds ({RoomRules.MinNightVisionSeconds}-{RoomRules.MaxNightVisionSeconds})";
+            => $"Night vision battery ({RoomRules.MinNightVisionSeconds}-{RoomRules.MaxNightVisionSeconds})";
 
         /// <summary>
         /// What the points field should hold after the rule changes: the new rule's default when it

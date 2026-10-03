@@ -13,13 +13,13 @@ MonoBehaviour:
   m_Name: ForestLake
   m_EditorClassIdentifier: Assembly-CSharp::NightModeConfig
   atmosphere:
-    sky: {r: 0.035, g: 0.04, b: 0.07, a: 0}
-    equator: {r: 0.012, g: 0.02, b: 0.04, a: 0}
-    ground: {r: 0.008, g: 0.008, b: 0.008, a: 0}
+    sky: {r: 0.09, g: 0.092, b: 0.15, a: 0}
+    equator: {r: 0.012, g: 0.036, b: 0.077, a: 0}
+    ground: {r: 0.018, g: 0.016, b: 0.015, a: 0}
     fogDensity: 0.022
-    fog: {r: 0.012, g: 0.014, b: 0.022, a: 0}
+    fog: {r: 0.02, g: 0.022, b: 0.03, a: 0}
     skyboxMaterial: {fileID: 2100000, guid: db25a9a845635504485478179366a830, type: 2}
-  moonIntensity: 0.08
+  moonIntensity: 0.15
   nightVisionFogFactor: 0.35
   ambience: {fileID: 8300000, guid: 100c3bfecdb5ea4469e80d5cc90f43af, type: 3}
   nightVisionOn: {fileID: 8300000, guid: 838df34fb8aeb57419336b815fbba8ef, type: 3}

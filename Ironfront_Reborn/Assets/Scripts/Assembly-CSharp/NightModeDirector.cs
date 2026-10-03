@@ -120,21 +120,25 @@ public sealed class NightModeDirector : MonoBehaviour
 		{
 			Debug.LogWarning("[night] the room is in Night Mode but " + mapName + " has no Resources/" + ConfigFolder + mapName + "; playing it by day.");
 		}
-		if (wantNight == night)
+		if (wantNight != night)
 		{
-			if (night && goggles != null)
+			if (wantNight)
 			{
-				goggles.Configure(settings.NightVisionSeconds, config.nightVisionOn, config.nightVisionOff);
+				GoNight(settings);
 			}
-			return;
+			else
+			{
+				GoDay();
+			}
 		}
-		if (wantNight)
+		else if (night && goggles != null)
 		{
-			GoNight(settings);
+			goggles.Configure(settings.NightVisionSeconds, config.nightVisionOn, config.nightVisionOff);
 		}
-		else
+		// The commander plans by the same dark, every time: a new map starts it by day.
+		if (BotCommander.instance != null)
 		{
-			GoDay();
+			BotCommander.instance.UseNightTactics(NightTactics.IsNight);
 		}
 	}
 

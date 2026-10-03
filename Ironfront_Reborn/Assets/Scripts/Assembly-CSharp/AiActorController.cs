@@ -280,6 +280,15 @@ public class AiActorController : ActorController
 
 	private Action takingFireAction = new Action(3f);
 
+	// The goggles this bot wears at night (phase P32 Night Mode), made the first night it fights.
+	private BotNightVision nightVision;
+
+	/// <summary>Whether this bot has its night-vision goggles on (phase P32).</summary>
+	public bool IsWearingNightVision => nightVision != null && nightVision.IsOn;
+
+	/// <summary>How near its objective a bot puts its goggles on at night, in metres.</summary>
+	private const float NightObjectiveMetres = 70f;
+
 	[NonSerialized]
 	public Vector3 takingFireDirection;
 
@@ -1289,7 +1298,7 @@ public class AiActorController : ActorController
 					SetTarget(a);
 					break;
 				}
-				if (!a.dead && a.IsHighlighted() && Vector3.Distance(a.Position(), actor.Position()) < 30f && UnityEngine.Random.Range(0f, 1f) < 0.2f)
+				if (!a.dead && a.IsHighlighted() && Vector3.Distance(a.Position(), actor.Position()) < GunfireAttentionMetres() && UnityEngine.Random.Range(0f, 1f) < 0.2f)
 				{
 					LookAt(a.Position());
 					skipNextScan = true;
@@ -1324,6 +1333,10 @@ public class AiActorController : ActorController
 			yield return new WaitForSeconds(0.5f);
 		}
 	}
+
+	// Gunfire is heard and its flash seen from further off in the dark (NightTactics).
+	private static float GunfireAttentionMetres()
+		=> NightTactics.IsNight ? NightTactics.GunfireAttentionMetres : NightTactics.DayGunfireAttentionMetres;
 
 	private void StartSprint()
 	{
@@ -1775,6 +1788,26 @@ public class AiActorController : ActorController
 		return Ironfront.Net.Unity.TerrainSurface.IsUnder(actor.Position(), FallenThroughTerrainDepth);
 	}
 
+	// The goggles at night (phase P32): on for a fight or the last stretch to the objective.
+	private void TickNightVision()
+	{
+		if (!NightTactics.IsNight)
+		{
+			if (nightVision != null && nightVision.IsOn)
+			{
+				nightVision.Battery.SwitchOff();
+			}
+			return;
+		}
+		if (nightVision == null)
+		{
+			nightVision = new BotNightVision(NightTactics.BatterySeconds);
+		}
+		bool nearObjective = squad != null && squad.commandTarget != null
+			&& (squad.commandTarget.transform.position - actor.Position()).sqrMagnitude < NightObjectiveMetres * NightObjectiveMetres;
+		nightVision.Tick(Time.deltaTime, HasTarget() || IsTakingFire(), nearObjective);
+	}
+
 	private void Update()
 	{
 		// Ahead of the dead check, not after it: a skipped tick must cost nothing at all.
@@ -1784,8 +1817,14 @@ public class AiActorController : ActorController
 		}
 		if (actor.dead)
 		{
+			// A new life brings a full battery.
+			if (nightVision != null)
+			{
+				nightVision.Refill();
+			}
 			return;
 		}
+		TickNightVision();
 		if (!actor.fallenOver)
 		{
 			ragdollAutokillAction.Start();
@@ -2790,6 +2829,28 @@ public class AiActorController : ActorController
 		return target != null;
 	}
 
+	/// <summary>
+	/// The fog this bot looks at <paramref name="target"/> through: the map's, and at night thinner
+	/// through its goggles and for a target whose muzzle flash has just lit it (NightTactics).
+	/// </summary>
+	private float SightFogDensity(Actor target)
+	{
+		float density = RenderSettings.fogDensity;
+		if (!NightTactics.IsNight)
+		{
+			return density;
+		}
+		if (nightVision != null && nightVision.IsOn)
+		{
+			density *= NightTactics.NightVisionFogFactor;
+		}
+		if (target.IsHighlighted())
+		{
+			density *= NightTactics.MuzzleFlashFogFactor;
+		}
+		return density;
+	}
+
 	private bool CanSeeActor(Actor target, bool considerFov = false)
 	{
 		Vector3 vector = target.Position() - actor.Position();
@@ -2803,7 +2864,7 @@ public class AiActorController : ActorController
 		}
 		else if (RenderSettings.fog)
 		{
-			float f = Mathf.Exp(0f - Mathf.Pow(magnitude * RenderSettings.fogDensity, 2f));
+			float f = Mathf.Exp(0f - Mathf.Pow(magnitude * SightFogDensity(target), 2f));
 			num = num2 * Mathf.Pow(f, 2f);
 			if (target.IsHighlighted())
 			{

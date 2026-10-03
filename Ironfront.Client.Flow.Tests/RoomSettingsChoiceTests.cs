@@ -91,7 +91,7 @@ namespace Ironfront.Client.Flow.Tests
         {
             Assert.Contains(GameMode.Night, RoomSettingsChoice.Modes);
             Assert.Equal("NIGHT MODE", RoomSettingsChoice.ModeOption(GameMode.Night));
-            Assert.Equal("Night vision battery, seconds (10-180)", RoomSettingsChoice.VisionPlaceholder());
+            Assert.Equal("Night vision battery (10-180)", RoomSettingsChoice.VisionPlaceholder());
         }
 
         [Fact]
