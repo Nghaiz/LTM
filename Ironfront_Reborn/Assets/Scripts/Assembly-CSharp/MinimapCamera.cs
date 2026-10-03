@@ -296,15 +296,22 @@ public class MinimapCamera : MonoBehaviour
 		PlayVolumeFrame(box, out centre, out halfSpan);
 		if (objectiveMargin > 0f)
 		{
-			NarrowToObjectives(objectiveMargin, ref centre, ref halfSpan);
+			NarrowToObjectives(box, objectiveMargin, ref centre, ref halfSpan);
 		}
 	}
 
 	/// <summary>
 	/// The square round every spawn point plus <paramref name="margin"/>, when that is smaller than
-	/// the frame it narrows; moved only as far as it must to stay inside that frame.
+	/// the frame it narrows; moved only as far as it must to stay inside that frame and, when it
+	/// fits, inside the play volume itself.
 	/// </summary>
-	private static void NarrowToObjectives(float margin, ref Vector2 centre, ref float halfSpan)
+	/// <remarks>
+	/// Inside the play volume because the ground outside it is drawn dimmed, and a frame 8 m taller
+	/// than Forest Lake's 1500 m volume showed a dimmed strip along the bottom of the map (owner
+	/// report 2026-10-03). The square is shrunk to the volume's narrower side only while every
+	/// spawn point still fits inside it with room for its icon.
+	/// </remarks>
+	private static void NarrowToObjectives(Bounds box, float margin, ref Vector2 centre, ref float halfSpan)
 	{
 		SpawnPoint[] spawnPoints = FindObjectsByType<SpawnPoint>(FindObjectsSortMode.None);
 		if (spawnPoints.Length == 0)
@@ -320,15 +327,28 @@ public class MinimapCamera : MonoBehaviour
 			minZ = Mathf.Min(minZ, p.z);
 			maxZ = Mathf.Max(maxZ, p.z);
 		}
-		float narrowed = Mathf.Max(maxX - minX, maxZ - minZ) * 0.5f + margin;
+		float spawnHalf = Mathf.Max(maxX - minX, maxZ - minZ) * 0.5f;
+		float narrowed = spawnHalf + margin;
+		float volumeHalf = Mathf.Min(box.size.x, box.size.z) * 0.5f;
+		bool fitsVolume = volumeHalf * (1f - 2f * LevelBoundsIconMargin) >= spawnHalf;
+		if (fitsVolume)
+		{
+			narrowed = Mathf.Min(narrowed, volumeHalf);
+		}
 		if (narrowed >= halfSpan)
 		{
 			return;
 		}
+		Vector2 wanted = new Vector2((minX + maxX) * 0.5f, (minZ + maxZ) * 0.5f);
+		if (fitsVolume)
+		{
+			wanted.x = Mathf.Clamp(wanted.x, box.min.x + narrowed, box.max.x - narrowed);
+			wanted.y = Mathf.Clamp(wanted.y, box.min.z + narrowed, box.max.z - narrowed);
+		}
 		float slack = halfSpan - narrowed;
 		centre = new Vector2(
-			Mathf.Clamp((minX + maxX) * 0.5f, centre.x - slack, centre.x + slack),
-			Mathf.Clamp((minZ + maxZ) * 0.5f, centre.y - slack, centre.y + slack));
+			Mathf.Clamp(wanted.x, centre.x - slack, centre.x + slack),
+			Mathf.Clamp(wanted.y, centre.y - slack, centre.y + slack));
 		halfSpan = narrowed;
 	}
 
