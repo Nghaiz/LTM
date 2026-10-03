@@ -27,7 +27,7 @@ last: carrying the mode and its settings to the game server and the HUD changes 
 
 | # | Item | What | Wire | Status |
 |---|---|---|---|---|
-| 1 | 2 | Bots respawn where their side has idle vehicles, squads sized to the seats; soak measures vehicle use and HQ pressure | 13 | |
+| 1 | 2 | Bots respawn where their side has idle vehicles, squads sized to the seats; soak measures vehicle use and HQ pressure | 13 | #513 |
 | 2 | 2 | Commander values the enemy HQ and spreads over more flags | 13 | |
 | 3 | 2 | Vehicle slots at every Forest Lake flag, filled at random each match; random field vehicles | 13 | |
 | 4 | 2 | Random ammo/medical supply crates each match (server deployables, crate visuals on the client) | 13 | |
@@ -61,3 +61,9 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   one drove off and the next bots sent for the same jeep chased it); a crew waits seated up to
   10 s for more (`p32-pr1d`): **seated 6.5 per sample (cars 3.4, tanks 1.1, helicopters 2.0),
   empty at an HQ 5.1**, 32 respawns for a vehicle a side, no errors. HQs still unpressed: PR 2.
+- 2026-10-04 — PR 2. `FlagInfo.IsBase` (a flag a side held at the start), `EnemyBaseBonus` for a
+  base the side does not hold, and a squad in a vehicle pays `VehicleDistanceShare` (0.35) of the
+  distance cost. Soaks after #513: bonus 1.5 (`p32-pr2a`) put an enemy on each HQ in 4-5% of the
+  samples, 2.5 (`p32-pr2b`) in 12% / 7%, flags held unchanged (about 3.1 / 3.6); 2.5 kept. Neither
+  HQ fell in ten minutes. One `[ai] ... walking a path with no squad` warning in `p32-pr2b`; the
+  same line is in soaks from before P32 (`board-measure`, `diag-3`), so it is not this change.

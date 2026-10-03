@@ -47,6 +47,12 @@ namespace Ironfront.Net.Replication.Ai
         /// <summary>False for a side's base, which can never change hands.</summary>
         public bool Capturable;
 
+        /// <summary>
+        /// A side held it when the match began: its HQ, where its vehicles stand and where it can
+        /// always respawn (phase P32). Fixed for the match, whoever holds it now.
+        /// </summary>
+        public bool IsBase;
+
         /// <summary>Where this flag's neighbours start in the shared adjacency list.</summary>
         public int AdjacencyStart;
 
