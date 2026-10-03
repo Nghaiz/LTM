@@ -28,10 +28,11 @@ Release: https://github.com/Nghaiz/LTM/releases/tag/v3.3.0. Built from 2dfa810c;
 - The Unity MCP server ran with `plugin-timeout=10000`, and it retries a timed-out call up to 10 times, **re-executing it**. One scan ran 10 times in a row, which is what hung the Editor last session. It now runs with 600000.
 - `tools/build-server.ps1` leaves the Editor's Library on Linux/Server, so the next interactive Play has no player and no HUD (`UNITY_SERVER`). `ServerSubtargetGuard` (#506) switches the Editor back.
 
-## Not verified, and why
+## Verified after the release
 
-- A supply cache refilling a **human** player online. The input driver cannot hold W, so a test client could not walk into the 6 m radius; players spawn 10-15 m from the HQ caches. The bot path and the Editor host path were verified. The human path shares the ammo bag's `ActorSpareAmmoPool.Give`. The `[supply] … player and … bot ammo refill(s)` line in the Forest Lake server log is the evidence to read after friends play.
-- The F seat prompt online, for the same reason. It was verified in the Editor, and its online path uses the F key's own nearest-seat search.
+- **A supply cache refilling a human player online** (server `f1ed4f1`, release client). The player's idle body was walked to the Blue HQ ammo dump by the server, which drives idle player bodies. Two shots and a reload left 14/82; three seconds later the counter read 14/84. The server's minute line read `[supply] last 60 s: 1 player and 6 bot ammo refill(s), 6 heal(s)`, so the player path (the `NetResupply` seam into `ActorSpareAmmoPool.Give`) and the bot path both work live.
+- The F seat prompt online is still unexercised: no test client could be stood beside a vehicle. It was verified in the Editor, and its online path uses the F key's own nearest-seat search.
+- Editor host mode cannot stand in for an online player here. Its local player is a separate actor from the body the loopback connection claims, and that body never spawns, so a host test exercises only the `Actor` path.
 
 ## Release test (zip extracted to %TEMP%, two clients, fly + Azure)
 
