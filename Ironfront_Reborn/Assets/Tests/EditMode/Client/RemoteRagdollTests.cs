@@ -166,6 +166,38 @@ namespace Ironfront.Net.Unity.Client.Tests
                 "the move tore the body apart instead of carrying it");
         }
 
+        /// <remarks>
+        /// Playtest 2026-10-03, bug 2: a body falling from height jerked all the way down. The
+        /// steer closed the gap at no more than 20 m/s, so a target falling faster pulled away,
+        /// the gap passed the 4 m snap and the whole body jumped, again and again. Mutated back
+        /// to steering the gap alone, the worst gap reads about 4 m.
+        /// </remarks>
+        [Test]
+        public void ARagdollFallingFromHeightKeepsUpWithTheServers()
+        {
+            Animator animator = SpawnProxy(new Vector3(0f, 400f, 0f));
+            RemoteRagdoll ragdoll = RemoteRagdoll.TryCreate(animator);
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            ragdoll.Fell(Vector3.zero, HumanBodyBones.Hips);
+
+            Vector3 start = hips.position;
+            PhysicsScene physics = _scene.GetPhysicsScene();
+            float worst = 0f;
+            for (float t = 0f; t < 6f; t += StepSeconds)
+            {
+                // Where a server ragdoll falling freely from the same point has its pelvis.
+                var target = start + 0.5f * Physics.gravity * t * t;
+                ragdoll.Steer(target, StepSeconds);
+                physics.Simulate(StepSeconds);
+
+                if (t > 1f) worst = Mathf.Max(worst, Vector3.Distance(hips.position, target));
+            }
+
+            Assert.Less(worst, 1.5f,
+                $"the pelvis fell up to {worst:F2} m behind a body falling at "
+                + $"{Physics.gravity.magnitude * 6f:F0} m/s, so it was snapped along instead of followed");
+        }
+
         [Test]
         public void ABodyInWaterFloatsAndOneOutOfItFalls()
         {

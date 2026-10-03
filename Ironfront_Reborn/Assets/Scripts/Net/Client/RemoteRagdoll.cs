@@ -186,6 +186,8 @@ namespace Ironfront.Net.Unity.Client
             if (IsActive) return;
             IsActive = true;
             _fellAt = float.NaN;
+            _hasLastTarget = false;
+            _lead = Vector3.zero;
 
             if (_animator != null) _animator.enabled = false;
             _crumpleSeconds = Mathf.Max(0f, crumpleSeconds);
@@ -433,13 +435,27 @@ namespace Ironfront.Net.Unity.Client
         /// A velocity, set each frame, rather than a force: it survives however many physics steps
         /// fall between two frames, which a force applied from Update does not.
         /// </remarks>
-        public void Steer(Vector3 pelvis)
+        public void Steer(Vector3 pelvis) => Steer(pelvis, Time.deltaTime);
+
+        /// <inheritdoc cref="Steer(Vector3)"/>
+        /// <param name="pelvis">Where the server's ragdoll has the pelvis now.</param>
+        /// <param name="dt">Seconds since the previous call, for the target's own speed.</param>
+        /// <remarks>
+        /// <b>The target's speed is fed forward and only the gap is steered.</b> Steering the gap
+        /// alone (<c>gap / SteerSeconds</c>, capped at <see cref="MaxSteerSpeed"/>) trails a moving
+        /// target by its speed times <see cref="SteerSeconds"/> and cannot keep up with one faster
+        /// than the cap at all: a body falling from height passes 20 m/s after 1.7 s, the gap grew
+        /// past <see cref="SnapMetres"/>, the whole body snapped, fell behind and snapped again --
+        /// a remote body jerking down a cliff (playtest 2026-10-03, bug 2).
+        /// </remarks>
+        public void Steer(Vector3 pelvis, float dt)
         {
             if (!IsActive) return;
 
             Rigidbody hips = _bodies[0];
             if (hips == null) return;
 
+            Vector3 lead = TrackTarget(pelvis, dt);
             Vector3 gap = pelvis - hips.position;
             if (IsSettled)
             {
@@ -466,7 +482,34 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            hips.linearVelocity = Vector3.ClampMagnitude(gap / SteerSeconds, MaxSteerSpeed);
+            hips.linearVelocity = lead + Vector3.ClampMagnitude(gap / SteerSeconds, MaxSteerSpeed);
+        }
+
+        /// <summary>The fastest target speed fed forward: the wire's own velocity range.</summary>
+        private const float MaxLeadSpeed = 64f;
+
+        /// <summary>How quickly the fed-forward speed follows the target's, in seconds.</summary>
+        private const float LeadSmoothingSeconds = 0.1f;
+
+        private Vector3 _lastTarget;
+        private bool _hasLastTarget;
+        private Vector3 _lead;
+
+        /// <summary>
+        /// The target's velocity, smoothed and bounded so a held or jumping interpolation sample
+        /// cannot launch the body.
+        /// </summary>
+        private Vector3 TrackTarget(Vector3 pelvis, float dt)
+        {
+            if (_hasLastTarget && dt > 0f)
+            {
+                Vector3 raw = Vector3.ClampMagnitude((pelvis - _lastTarget) / dt, MaxLeadSpeed);
+                _lead = Vector3.Lerp(_lead, raw, 1f - Mathf.Exp(-dt / LeadSmoothingSeconds));
+            }
+
+            _lastTarget = pelvis;
+            _hasLastTarget = true;
+            return _lead;
         }
 
         /// <summary>How near the camera a knocked-over body keeps simulating once it has landed.</summary>
