@@ -234,6 +234,60 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void ALongFallKeepsAcceleratingUnderGravity()
+        {
+            // Playtest 2026-10-03, bug 2. The budget used to stop at 15.5 m/s, so a body that
+            // fell for longer than 1.3 s was held at that speed by the clamp while its client
+            // predicted real gravity -- and was yanked back up a metre on every snapshot.
+            var session = new ClientSession(connectionId: 1, actorId: 1);
+            session.State = MoveState.AtRest(new Vec3(0f, 200f, 0f), grounded: false);
+            session.PreviousPosition = session.State.Position;
+
+            var idle = new MoveInput(0f, 0f, 0f, jump: false, sprint: false, crouch: false);
+
+            for (int tick = 0; tick < 90; tick++)
+            {
+                Vec3 motion = MovementCore.Step(ref session.State, in idle, Dt);
+                session.State.Position += motion;
+                InputAuthority.ClampMovement(session, Dt);
+            }
+
+            Assert.Equal(0, session.SpeedViolations);
+
+            // Three seconds from rest: 0.5 * 11.772 * 3^2 = 53 m, where the old clamp allowed 37.
+            float fallen = 200f - session.State.Position.Y;
+            Assert.InRange(fallen, 51f, 55f);
+        }
+
+        [Fact]
+        public void AFallDoesNotWidenTheSidewaysBudget()
+        {
+            // The fall speed widens the vertical term only by the speed gravity produced. A
+            // client that teleports sideways in mid-air is still pulled back.
+            var session = new ClientSession(connectionId: 1, actorId: 1);
+            session.State = MoveState.AtRest(Vec3.Zero, grounded: false);
+            session.State.Velocity = new Vec3(0f, -40f, 0f);
+            session.PreviousPosition = Vec3.Zero;
+            session.State.Position = new Vec3(50f, 0f, 0f);
+
+            Assert.True(InputAuthority.ClampMovement(session, Dt));
+            Assert.True(session.State.Position.Magnitude <= InputAuthority.MaxMovePerTick(Dt, 40f) + 0.001f);
+        }
+
+        [Fact]
+        public void AnUpwardSpeedDoesNotWidenTheBudget()
+        {
+            var session = new ClientSession(connectionId: 1, actorId: 1);
+            session.State = MoveState.AtRest(Vec3.Zero, grounded: false);
+            session.State.Velocity = new Vec3(0f, 40f, 0f);
+            session.PreviousPosition = Vec3.Zero;
+            session.State.Position = new Vec3(0f, 5f, 0f);
+
+            Assert.True(InputAuthority.ClampMovement(session, Dt));
+            Assert.InRange(session.State.Position.Y, 0f, InputAuthority.MaxMovePerTick(Dt) + 0.001f);
+        }
+
+        [Fact]
         public void AnAbnormalForwardTickJumpIsRefused()
         {
             var session = new ClientSession(connectionId: 1, actorId: 1);

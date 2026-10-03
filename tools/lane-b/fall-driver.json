@@ -1,0 +1,18 @@
+{
+  "name": "fall-driver",
+  "note": "Playtest 2026-10-03, bug 2: a fall from height stutters and the body jerks. Walk to the nearest helicopter, take the pilot seat, climb for 8 s, bail out and watch the landing for 12 s. Grade the client's [pred] / correction lines while airborne and the drawn pose after landing.",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0, "respawn": true },
+    { "checkpoint": "spawned", "seconds": 1.0, "yawDegrees": 0 },
+    { "checkpoint": "walking-to-heli", "seconds": 12.0, "approachVehicle": true, "vehicleKind": "Helicopter", "vehicleSearchMetres": 250.0, "vehicleHoldDistanceMeters": 4.0, "sprint": true },
+    { "checkpoint": "seat-requested", "seconds": 3.0, "approachVehicle": true, "vehicleKind": "Helicopter", "vehicleSearchMetres": 250.0, "vehicleHoldDistanceMeters": 4.0, "seatToggle": true },
+    { "checkpoint": "spool-up", "seconds": 3.0 },
+    { "checkpoint": "climb-0", "seconds": 4.0, "heliCollective": 1.0 },
+    { "checkpoint": "climb-1", "seconds": 4.0, "heliCollective": 1.0 },
+    { "checkpoint": "bail-out", "seconds": 0.5, "heliCollective": 0.5, "seatToggle": true },
+    { "checkpoint": "falling-0", "seconds": 2.0 },
+    { "checkpoint": "falling-1", "seconds": 2.0 },
+    { "checkpoint": "landed-0", "seconds": 4.0 },
+    { "checkpoint": "done", "seconds": 4.0 }
+  ]
+}
