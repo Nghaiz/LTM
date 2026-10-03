@@ -30,8 +30,8 @@ last: carrying the mode and its settings to the game server and the HUD changes 
 | 1 | 2 | Bots respawn where their side has idle vehicles, squads sized to the seats; soak measures vehicle use and HQ pressure | 13 | #513 |
 | 2 | 2 | Commander values the enemy HQ and spreads over more flags | 13 | #514 |
 | 3 | 2 | Vehicle slots at every Forest Lake flag, filled at random each match; random field vehicles | 13 | #515 |
-| 4 | 2 | Random ammo/medical supply crates each match (server deployables, crate visuals on the client) | 13 | |
-| 5+ | 3 | Physics, then animation, rendering, script Update (P31 list), each A/B measured | client | |
+| 4 | 2 | Random ammo/medical supply crates each match (server deployables, crate visuals on the client) | 13 | #516 |
+| 5 | 3 | Physics: far corpses freeze without the long wait; parked remote vehicles are not rewritten | client | (this PR) |
 | 6 | 1 | Point Match rules (margin / target) from the lobby to the server and the score bar | 14 | |
 | 7 | 1 | Night Mode: lobby, night lighting, pumpkins/candles/flag lights, battery night vision, HUD, sound | 14 | |
 | 8 | 1 | Night tactics for bots | 14 | |
@@ -88,3 +88,18 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   now leave boats alone where the boat graph is empty. After it (`p32-pr4b`): 0 failed paths, no
   warnings, 10 crates out, 21.7 live vehicles per sample, 9.0 bots seated. HQ pressure varies a
   lot between runs of the same build (27/13%, 4/19%, 3/3% in three soaks): read it as a range.
+- 2026-10-04 — PR 5 (item 3, physics). A profile at the peak (`IRONFRONT_PROFILE_WHEN_BODIES=260`,
+  development player, 100 bots, 268 rigidbodies) put physics at 7.1 ms of a 29.8 ms frame: 1.8 steps
+  a frame, `PxScene.simulate` 6.0 ms with 1.85 ms of it the main thread waiting on PhysX's workers,
+  `Physics.UpdateRigidbodies` 0.8, `FinalizeUpdateTask` 0.7, contacts 0.6, vehicles 0.2. Two changes:
+  a corpse past 40 m from the camera freezes after 0.6 s once it creeps less than 0.15 m in half a
+  second (a near one keeps the 1.5 s wait and the 6 s creep rule), and a remote vehicle whose pose
+  has not moved is not written back (a parked one was rewritten every frame, so PhysX re-synced
+  every collider and wheel of it each step; item 2 put about 21 vehicles on Forest Lake). Measured
+  in one match by switching the two independently every 30 s (`p32-ab2`, 333 five-second windows):
+  physics median 3.33 ms with neither, 2.87 with both (corpse -0.15, vehicle -0.31); over the
+  first, undisturbed ten minutes 3.80 -> 2.89 (corpse -0.41, vehicle -0.49) and awake corpse bodies
+  39 -> 22. The frame mean moved less than its noise. The earlier lean ragdoll settings (4 solver
+  passes, a higher sleep threshold) measured nothing and were dropped. Measuring trap: a
+  `dotnet test`, the IDE taking focus, or greps over the scene files on this machine stalled the
+  player (frames of 200-2000 ms); those windows were excluded, and the medians are robust to them.

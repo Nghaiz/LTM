@@ -36,6 +36,14 @@ namespace Ironfront.Net.Unity.Diagnostics
         private string _file;
         private int _recorded = -1;
 
+        /// <summary>
+        /// With <c>IRONFRONT_PROFILE_WHEN_BODIES</c>, the capture waits past its start time until the
+        /// scene holds at least this many rigidbodies (phase P32): a 100-bot match's physics peaks
+        /// when the corpses of a fight pile up, which no fixed time can aim at.
+        /// </summary>
+        private int _whenBodies;
+        private float _nextBodyCheck;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void InstallIfRequested()
         {
@@ -61,6 +69,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             DontDestroyOnLoad(host);
             ProfileCapture capture = host.AddComponent<ProfileCapture>();
             capture._startAt = startAt;
+            capture._whenBodies = int.TryParse(Environment.GetEnvironmentVariable("IRONFRONT_PROFILE_WHEN_BODIES"), out int bodies) ? bodies : 0;
             capture._frames = int.TryParse(frames, out int count) && count > 0 ? count : DefaultFrames;
             capture._file = string.IsNullOrEmpty(file)
                 ? Path.Combine(Application.persistentDataPath, "Logs", $"profile-{System.Diagnostics.Process.GetCurrentProcess().Id}.raw")
@@ -73,6 +82,14 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (_recorded < 0)
             {
                 if (Time.realtimeSinceStartup < _startAt) return;
+                if (_whenBodies > 0)
+                {
+                    if (Time.realtimeSinceStartup < _nextBodyCheck) return;
+                    _nextBodyCheck = Time.realtimeSinceStartup + 1f;
+                    int bodies = FindObjectsByType<Rigidbody>(FindObjectsSortMode.None).Length;
+                    if (bodies < _whenBodies) return;
+                    Debug.Log($"[profile] {bodies} rigidbodies in the scene, at least {_whenBodies}: recording");
+                }
                 Directory.CreateDirectory(Path.GetDirectoryName(_file));
                 Profiler.logFile = _file;
                 Profiler.enableBinaryLog = true;

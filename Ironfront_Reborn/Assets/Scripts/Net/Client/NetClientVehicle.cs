@@ -168,6 +168,16 @@ namespace Ironfront.Net.Unity.Client
             var position = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
             Quaternion rotation = ToQuaternion(in pose.Rotation);
 
+            // A parked vehicle's pose does not change, and writing it anyway moves the body: PhysX
+            // re-syncs every collider and wheel of it, every step.
+            _vehicle.Transform.GetPositionAndRotation(out Vector3 drawnAt, out Quaternion drawnFacing);
+            if (IsSamePose(drawnAt, drawnFacing, position, rotation))
+            {
+                ApplyAuthoritativeState(in pose);
+                _hasPose = true;
+                return;
+            }
+
             _vehicle.Transform.SetPositionAndRotation(position, rotation);
             if (_rigidbody != null)
             {
@@ -248,6 +258,16 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>Whether a pose has ever been applied. Until then the scene pose stands.</summary>
         internal bool HasPose => _hasPose;
+
+        /// <summary>How far a drawn pose may be from the next one and still count as unchanged.</summary>
+        internal const float SamePoseMetres = 0.001f;
+
+        /// <summary>The rotation counterpart of <see cref="SamePoseMetres"/>: |dot| of the two, about 0.05 degrees.</summary>
+        internal const float SamePoseDot = 0.9999999f;
+
+        internal static bool IsSamePose(Vector3 drawnAt, Quaternion drawnFacing, Vector3 position, Quaternion rotation)
+            => (drawnAt - position).sqrMagnitude <= SamePoseMetres * SamePoseMetres
+               && Mathf.Abs(Quaternion.Dot(drawnFacing, rotation)) >= SamePoseDot;
 
         /// <summary>
         /// The turret aim from the last applied snapshot, degrees. V6 task 2.
