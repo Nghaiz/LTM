@@ -225,6 +225,23 @@ namespace Ironfront.Net.Unity.Client.Tests
                 "an enemy was drawn while this client had no body to measure from.");
         }
 
+        /// <summary>
+        /// Night Mode without night vision (owner report 2026-10-04): an enemy shows only inside
+        /// the radius the dark leaves (<c>EnemyMapReveal</c>), a team-mate still everywhere.
+        /// </summary>
+        [Test]
+        public void Minimap_InTheDarkMarksAnEnemyOnlyInsideTheDarkRadius()
+        {
+            float dark = 25f;
+            Assert.IsTrue(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.Team1, true, 24f * 24f, dark));
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team0, TeamId.Team1, true, 40f * 40f, dark),
+                "an enemy 40 m away in the dark was drawn -- the map hack the owner reported.");
+            Assert.IsTrue(RemoteActorRegistry.ShouldMarkOnMinimap(TeamId.Team1, TeamId.Team1, true, 2000f * 2000f, dark),
+                "the dark hid a team-mate.");
+            Assert.IsFalse(RemoteActorRegistry.ShouldMarkVehicle(true, TeamId.Team0, TeamId.Team1, 40f * 40f, dark),
+                "an enemy vehicle 40 m away in the dark was drawn.");
+        }
+
         [Test]
         public void Minimap_MarksNoCorpse()
         {

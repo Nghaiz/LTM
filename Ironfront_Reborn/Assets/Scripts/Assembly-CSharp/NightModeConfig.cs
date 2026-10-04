@@ -35,6 +35,13 @@ public sealed class NightModeConfig : ScriptableObject
 	[Tooltip("The night's ambient loop, in place of the scene's own; empty keeps it.")]
 	public AudioClip ambience;
 
+	[Header("Enemies on the map")]
+	[Tooltip("Metres the minimap and radar show an enemy at in the dark, without night vision: about what the eye makes out. With the goggles on, the usual radius.")]
+	public float darkEnemyRevealRadius = 25f;
+
+	[Tooltip("An enemy this close to a pumpkin or lamp stands in its light, and shows at the usual radius even in the dark.")]
+	public float litEnemyRevealRadius = 10f;
+
 	[Header("Night vision")]
 	public AudioClip nightVisionOn;
 

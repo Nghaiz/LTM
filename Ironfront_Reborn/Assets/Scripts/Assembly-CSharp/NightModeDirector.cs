@@ -560,7 +560,9 @@ public sealed class NightModeDirector : MonoBehaviour
 		light.renderMode = LightRenderMode.ForcePixel;
 		light.enabled = false;
 		pooledLights.Add(light);
-		glowPoints.Add(light.transform.position);
+		Vector3 at = light.transform.position;
+		glowPoints.Add(at);
+		EnemyMapReveal.AddLight(at.x, at.z);
 	}
 
 	private void PlaceFlagLight(System.Random random, SpawnPoint point, Vector3 flag)
@@ -618,6 +620,16 @@ public sealed class NightModeDirector : MonoBehaviour
 
 	private void Update()
 	{
+		// The map shows enemies by what this player can see (EnemyMapReveal): the dark hides them,
+		// the goggles bring the usual radius back.
+		if (night && !NightVisionOn)
+		{
+			EnemyMapReveal.SetDark(config.darkEnemyRevealRadius, config.litEnemyRevealRadius);
+		}
+		else if (EnemyMapReveal.IsDark)
+		{
+			EnemyMapReveal.SetSeeing();
+		}
 		if (!night || pooledLights.Count == 0)
 		{
 			return;
@@ -732,6 +744,7 @@ public sealed class NightModeDirector : MonoBehaviour
 			}
 		}
 		dressing.Clear();
+		EnemyMapReveal.Clear();
 		candles.Clear();
 		candleIntensity.Clear();
 		pumpkins.Clear();
