@@ -173,3 +173,14 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   material, which every build carries). The M map and radar read the picture every frame, so
   they switch when the room's night arrives after the map was set up. Modelled on the original's
   Island night map (`tmp/shots/orig-island-night-map.jpg`): near-black ground, pumpkins glowing.
+- 2026-10-04 — Night follow-up 3 (#524, owner: pumpkins piled up at the empty map edges). Groups go
+  50% along the routes from each flag to its two nearest flags (within 25 m of the line), 35% in a
+  12-90 m ring round flags and HQs, 15% filler inside the box round the flags plus 90 m. Editor
+  soak: 288 lights clustered round all 8 flags and their routes, the edges dark.
+- 2026-10-04 — Night follow-up 4 (owner: in the dark the radar still showed every enemy within
+  60 m, a map hack). `EnemyMapReveal` (Net/Shared, engine-free): at night without night vision an
+  enemy body or crewed vehicle shows only within 25 m (`darkEnemyRevealRadius`), or at the usual
+  60 m when it stands within 10 m of a pumpkin or lamp (`litEnemyRevealRadius`, a 16 m grid over
+  the night's light points). The goggles bring the usual 60 m back; team-mates show everywhere as
+  always. `NightModeDirector` sets it every frame, `RemoteActorRegistry` asks it per marker.
+  8 flow tests (mutant "dark radius ignored" turns 2 red) and an EditMode case.

@@ -26,6 +26,8 @@ MonoBehaviour:
   moonBearing: 221
   nightVisionFogFactor: 0.35
   ambience: {fileID: 8300000, guid: 100c3bfecdb5ea4469e80d5cc90f43af, type: 3}
+  darkEnemyRevealRadius: 25
+  litEnemyRevealRadius: 10
   nightVisionOn: {fileID: 8300000, guid: 838df34fb8aeb57419336b815fbba8ef, type: 3}
   nightVisionOff: {fileID: 8300000, guid: 3708ac659a68c4343b33ade52a68f81d, type: 3}
   pumpkinPrefabs:
