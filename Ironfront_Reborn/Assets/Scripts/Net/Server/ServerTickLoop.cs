@@ -1759,6 +1759,18 @@ namespace Ironfront.Net.Unity.Server
         /// announce every human shot twice, because ServerCombatBridge already announces it from
         /// the input frame that fired it.
         /// </remarks>
+        void IShotAnnouncer.AnnounceHorn(GameObject shooter)
+        {
+            NetServerActor replicated = shooter.GetComponent<NetServerActor>();
+            if (replicated == null || replicated.IsClaimed) return;
+
+            EmitWeaponFire(
+                replicated.ActorId,
+                WeaponIds.CAR_HORN,
+                MovementSimulation.ToCore(shooter.transform.position),
+                MovementSimulation.ToCore(Vector3.zero));
+        }
+
         void IShotAnnouncer.AnnounceShot(GameObject shooter, Vector3 direction)
         {
             NetServerActor replicated = shooter.GetComponent<NetServerActor>();

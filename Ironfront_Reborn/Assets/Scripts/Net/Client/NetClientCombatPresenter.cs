@@ -1101,6 +1101,14 @@ namespace Ironfront.Net.Unity.Client
             // otherwise flash a muzzle on a ragdoll.
             if (!view.CanPlayCosmetics) return;
 
+            // A honk, not a shot: the horn of the vehicle the shooter sits in, heard by everyone
+            // near it on either side, and no tracer (owner report 2026-10-04).
+            if (message.WeaponId == WeaponIds.CAR_HORN)
+            {
+                NetClientBindings.HornHeard?.Invoke(view.transform.position);
+                return;
+            }
+
             ShotEvent shot = ShotEvent.From(in message);
             Vector3 direction = new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z);
 

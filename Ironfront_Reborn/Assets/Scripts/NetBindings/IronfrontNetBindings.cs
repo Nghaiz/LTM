@@ -77,6 +77,7 @@ namespace Ironfront.Net.Unity.Bindings
 
             // The chat box's tabs want a pointer; the loadout screen and the Esc menu own it too.
             NetClientBindings.ChatPointer = FreePointerForChat;
+            NetClientBindings.HornHeard = CarHorn.PlayNearest;
 
             // C4d. The lane-B recorder observes the scoreboard HUD, the offline scoreboard and
             // the scene's capture points, and may name none of them now that Net/Diagnostics is

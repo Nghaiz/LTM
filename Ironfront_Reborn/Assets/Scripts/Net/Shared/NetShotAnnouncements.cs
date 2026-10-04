@@ -13,6 +13,12 @@ namespace Ironfront.Net.Unity
         /// a player's, whose shots are announced from their input frame instead.
         /// </summary>
         void AnnounceShot(GameObject shooter, Vector3 direction);
+
+        /// <summary>
+        /// Announces a bot's honk from <paramref name="shooter"/>'s seat, tagged as the horn, to
+        /// the clients close enough to hear it. A player's honk is announced from their input frame.
+        /// </summary>
+        void AnnounceHorn(GameObject shooter);
     }
 
     /// <summary>
@@ -46,6 +52,13 @@ namespace Ironfront.Net.Unity
         }
 
         /// <summary>Uninstalls the announcer. The server calls it on unbind.</summary>
+        /// <inheritdoc cref="IShotAnnouncer.AnnounceHorn"/>
+        public static void AnnounceHorn(GameObject shooter)
+        {
+            if (!NetContext.IsServer || shooter == null) return;
+            Announcer?.AnnounceHorn(shooter);
+        }
+
         public static void Clear() => Announcer = null;
 
         // With domain reload disabled a static survives leaving play mode, and the next run would

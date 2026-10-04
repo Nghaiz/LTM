@@ -144,6 +144,13 @@ namespace Ironfront.Net.Unity
         public static Action<bool> ChatPointer { get; set; }
 
         /// <summary>
+        /// Plays the horn of the vehicle nearest a world position: another player's or a bot's
+        /// honk, heard as an <c>S_WEAPON_FIRE</c> carrying <c>WeaponIds.CAR_HORN</c>. The horns
+        /// live in <c>Assembly-CSharp</c>, which no assembly definition can name. Null on a server.
+        /// </summary>
+        public static Action<Vector3> HornHeard { get; set; }
+
+        /// <summary>
         /// The way into the offline bot match, or null on a build with no legacy menu. P15.
         /// </summary>
         /// <remarks>
@@ -316,6 +323,7 @@ namespace Ironfront.Net.Unity
             ProjectileCatalogReader = null;
             LocalTeam = null;
             ExplosionPredictor = null;
+            HornHeard = null;
         }
 
         /// <summary>
