@@ -583,6 +583,10 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 
 	protected virtual Projectile SpawnProjectile(Vector3 direction)
 	{
+		if (ServerDrawsProjectile())
+		{
+			return null;
+		}
 		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
 		Vector3 origin = ProjectileOrigin(direction);
 		GameObject instance = null;
@@ -613,6 +617,36 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			if (instance != null) UnityEngine.Object.Destroy(instance);
 			throw;
 		}
+	}
+
+	/// <summary>
+	/// Whether this client leaves the shot's projectile to the server: a rocket, a rocket pod's
+	/// rocket or a tank shell, which the server announces (<see cref="ProjectileNetAnnouncer"/>)
+	/// and every client draws from that announcement.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Owner reports 2026-10-04.</b> A client used to launch its own copy as well, a cosmetic
+	/// rocket nobody else saw, so the shooter watched two (theirs and the server's), and any shot
+	/// the server refused still flew on their screen: the BEU-AW1 swapped away and back launched a
+	/// rocket the server never fired, every swap. One rocket, the server's, is the only one that
+	/// can be true. The muzzle flash, report, recoil and ammo count stay local, so the shot still
+	/// answers the trigger at once.
+	/// </para>
+	/// <para>
+	/// Rockets only: a hitscan bullet is never announced (its tracer here is the shooter's only
+	/// one), and a grenade's and a guided missile's local copies have their own prediction paths.
+	/// </para>
+	/// </remarks>
+	protected bool ServerDrawsProjectile()
+	{
+		if (!NetContext.IsClient || configuration.projectilePrefab == null)
+		{
+			return false;
+		}
+		Projectile projectile = configuration.projectilePrefab.GetComponent<Projectile>();
+		return projectile != null
+			&& ProjectileNetAnnouncer.KindOf(projectile) == Ironfront.Net.Protocol.ProjectileKind.Rocket;
 	}
 
 	/// <summary>
