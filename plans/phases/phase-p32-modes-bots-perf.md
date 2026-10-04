@@ -201,3 +201,24 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   75 m of a route, so the open ground between bases fills in and the corners stay dark. Editor
   soak, runtime night map: pumpkins spread through and just around the road ring, flags marked
   but not heaped.
+- 2026-10-04 — #528 (owner: fire the BEU-AW1, swap at once, the round is never spent). The client
+  rebuilt a swapped-to weapon with a full clip and reconciled that guess as a prediction: a
+  launcher back at 1 against the server's 0 sat inside AmmoResyncThreshold, so the local gun
+  launched a rocket the server refused, every swap. A weapon change now takes the server's clip
+  verbatim; a slot pressed behind an unsent shot waits one C_INPUT frame (the server applies a
+  frame's slot before its trigger); and a switched-to weapon cannot fire or reload until its
+  prefab draw time less 0.15 s (`WeaponCatalog.DrawSeconds`, pinned to the prefabs).
+- 2026-10-04 — #529 (owner: heli rockets read 0, fire in bursts, off aim, unseen). The client wrote
+  the carried clip (weapon id 0, 0 rounds) into the rocket pod, whose id is also 0;
+  `AlternatingMountedWeapon` never announced its launches; and every client drew its own
+  cosmetic copy of rocket-class projectiles. Mounted weapons keep their own clip, the pods
+  announce, and a client draws only the server's rockets (`Weapon.ServerDrawsProjectile`).
+- 2026-10-04 — Night follow-up 7 (owner: big empty regions on the night map, pumpkins piled
+  elsewhere; candles too strong; the dark must hide people but keep the ground and your own gun
+  readable). Pumpkins on a jittered grid: one group per 75 m square of the play area at a random
+  dry level spot, every square across the battlefield (the flags' hull plus 40 m) split 2x2, a
+  fresh roll per match. Editor soak: 1344 pumpkins in 894 groups over 936 cells, 42 cells with no
+  open ground (lake, rock). Seed = map, room id and UTC day (room ids restart with the master).
+  Candles range 20 -> 8 m, intensity 1.8; map glow 9 m. A `Night
+  Viewmodel Light` (point, 1.2 m, 0.55) rides the drawing camera at night without goggles, so the
+  hands and weapon read while nothing beyond them gets lighter.

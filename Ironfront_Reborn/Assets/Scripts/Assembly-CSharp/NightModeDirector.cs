@@ -37,8 +37,7 @@ public sealed class NightModeDirector : MonoBehaviour
 	private const float MaxGroundSlopeY = 0.85f;
 	private const float OnTerrainTolerance = 0.5f;
 	private const float DryMargin = 0.3f;
-	private const int SpotAttemptsPerSpot = 6;
-	private const int FillerTries = 8;
+	private const int SpotAttemptsPerCell = 8;
 
 	public static NightModeDirector instance;
 
@@ -69,6 +68,10 @@ public sealed class NightModeDirector : MonoBehaviour
 	private AudioClip ambienceAuthored;
 
 	private NightVisionGoggles goggles;
+
+	// The light on the player's own hands and weapon (NightModeConfig.viewmodelLightPrefab), moved
+	// to whichever camera is drawing: the on-foot camera, a seat's, a vehicle's.
+	private Light viewmodelLight;
 
 	/// <summary>Whether this map is in Night Mode now.</summary>
 	public bool IsNight => night;
@@ -214,6 +217,10 @@ public sealed class NightModeDirector : MonoBehaviour
 			}
 			goggles.enabled = true;
 			goggles.Configure(settings.NightVisionSeconds, config.nightVisionOn, config.nightVisionOff);
+			if (viewmodelLight == null && config.viewmodelLightPrefab != null)
+			{
+				viewmodelLight = Instantiate(config.viewmodelLightPrefab).GetComponentInChildren<Light>(true);
+			}
 		}
 		Debug.Log("[night] " + mapName + " is in Night Mode: fog " + config.atmosphere.fogDensity.ToString("0.000")
 			+ ", night vision " + settings.NightVisionSeconds + " s, " + dressing.Count + " dressing piece(s).");
@@ -304,8 +311,10 @@ public sealed class NightModeDirector : MonoBehaviour
 		// A new layout every match and the same for everyone in it: the room is new for every match
 		// (the master never reuses one), and every client in it knows its id. Practice and a direct
 		// connect have no room, so they take the clock.
+		// The UTC day is mixed in because room ids start again at 1 whenever the master restarts:
+		// without it room 1 after a deploy laid out the same pumpkins as room 1 before it.
 		int seed = NetRoomRules.RoomId != 0
-			? StableHash(mapName) ^ (NetRoomRules.RoomId * 7919)
+			? StableHash(mapName) ^ (NetRoomRules.RoomId * 7919) ^ StableHash(System.DateTime.UtcNow.ToString("yyyyMMdd"))
 			: System.Environment.TickCount;
 		System.Random random = new System.Random(seed);
 		ScatterPumpkins(random);
@@ -336,204 +345,177 @@ public sealed class NightModeDirector : MonoBehaviour
 	}
 
 	/// <summary>
-	/// Small groups of pumpkins where the match is fought: most scattered evenly and at random over
-	/// the ground round the flags and the routes between them, some along those routes, a few round
-	/// the flags and HQs; never out at the empty edges of the map, and not heaped on the bases
-	/// either (owner reports 2026-10-04: a blend of the first two layouts). Never on a slope, in water, under a roof or on a tree, and
-	/// kept <see cref="NightModeConfig.pumpkinSpotSpacing"/> apart.
+	/// Pumpkins over the whole play area, evenly and at random: the area is cut into
+	/// <see cref="NightModeConfig.pumpkinCellSize"/> squares and every square gets one small group
+	/// at a random dry, level spot of open ground inside it (never on a slope, in water, under a
+	/// roof or on a tree), groups kept <see cref="NightModeConfig.pumpkinSpotSpacing"/> apart.
 	/// </summary>
+	/// <remarks>
+	/// Owner reports 2026-10-04, three in a row: a plain random scatter left whole regions dark and
+	/// heaped others; weighting it toward the flags and routes emptied the rest of the map. One
+	/// group per square cannot leave a hole wider than about two squares, and the spot inside each
+	/// square is still a fresh roll every match. Across the battlefield -- the ground the flags
+	/// enclose, plus <see cref="NightModeConfig.battlefieldMargin"/> -- each square is split into
+	/// <see cref="NightModeConfig.battlefieldSubdivision"/> squared smaller ones, so the middle of
+	/// the map, where the fighting is, is lit more densely (owner, same day).
+	/// </remarks>
 	private void ScatterPumpkins(System.Random random)
 	{
-		if (config.pumpkinPrefabs == null || config.pumpkinPrefabs.Length == 0 || config.pumpkinSpots <= 0)
+		if (config.pumpkinPrefabs == null || config.pumpkinPrefabs.Length == 0 || config.pumpkinCellSize <= 1f)
 		{
 			return;
 		}
-		List<Vector3> flags = FlagPositions();
-		if (!TryPlayArea(out Rect area) || flags.Count == 0)
+		if (!TryPlayArea(out Rect area))
 		{
-			Debug.LogWarning("[night] " + mapName + " has no LevelBounds, terrain or flags; no pumpkins.");
+			Debug.LogWarning("[night] " + mapName + " has no LevelBounds or terrain; no pumpkins.");
 			return;
 		}
-		area = FightingArea(area, flags, config.pumpkinScatterReach);
-		List<Vector3> routes = Routes(flags);
-		var spots = new List<Vector3>(config.pumpkinSpots);
+		List<Vector2> battlefield = FlagHull();
+		int columns = Mathf.Max(1, Mathf.RoundToInt(area.width / config.pumpkinCellSize));
+		int rows = Mathf.Max(1, Mathf.RoundToInt(area.height / config.pumpkinCellSize));
+		float cellWidth = area.width / columns;
+		float cellHeight = area.height / rows;
+		var spots = new List<Vector3>(columns * rows);
 		float spacingSqr = config.pumpkinSpotSpacing * config.pumpkinSpotSpacing;
-		int attempts = config.pumpkinSpots * SpotAttemptsPerSpot;
-		for (int attempt = 0; attempt < attempts && spots.Count < config.pumpkinSpots; attempt++)
+		float denseSpacingSqr = spacingSqr / (config.battlefieldSubdivision * config.battlefieldSubdivision);
+		int emptyCells = 0;
+		int cells = 0;
+		int denseCells = 0;
+		for (int row = 0; row < rows; row++)
 		{
-			Vector3 around = Candidate(random, flags, routes, area);
-			if (!area.Contains(new Vector2(around.x, around.z))
-				|| !TryGround(around, out Vector3 centre) || TooClose(spots, centre, spacingSqr))
+			for (int column = 0; column < columns; column++)
+			{
+				float x0 = area.xMin + (column * cellWidth);
+				float z0 = area.yMin + (row * cellHeight);
+				Vector2 middle = new Vector2(x0 + (cellWidth * 0.5f), z0 + (cellHeight * 0.5f));
+				int split = InsideOrNear(battlefield, middle, config.battlefieldMargin)
+					? Mathf.Max(1, config.battlefieldSubdivision)
+					: 1;
+				if (split > 1)
+				{
+					denseCells++;
+				}
+				float subWidth = cellWidth / split;
+				float subHeight = cellHeight / split;
+				for (int sz = 0; sz < split; sz++)
+				{
+					for (int sx = 0; sx < split; sx++)
+					{
+						cells++;
+						if (!TryCell(random, x0 + (sx * subWidth), z0 + (sz * subHeight), subWidth, subHeight,
+							spots, split > 1 ? denseSpacingSqr : spacingSqr))
+						{
+							emptyCells++;
+						}
+					}
+				}
+			}
+		}
+		Debug.Log("[night] " + mapName + ": " + pumpkins.Count + " pumpkin(s) in " + spots.Count + " group(s) over "
+			+ cells + " cell(s) of " + config.pumpkinCellSize.ToString("0") + " m, " + denseCells + " of them split "
+			+ config.battlefieldSubdivision + "x" + config.battlefieldSubdivision + " across the battlefield ("
+			+ emptyCells + " with no open ground), " + candles.Count + " candle(s).");
+	}
+
+	/// <summary>One group at a random spot of open ground in the cell; false when none was found.</summary>
+	private bool TryCell(System.Random random, float x0, float z0, float width, float height, List<Vector3> spots, float spacingSqr)
+	{
+		for (int attempt = 0; attempt < SpotAttemptsPerCell; attempt++)
+		{
+			Vector3 around = new Vector3(
+				x0 + ((float)random.NextDouble() * width), 0f,
+				z0 + ((float)random.NextDouble() * height));
+			if (!TryGround(around, out Vector3 centre) || TooClose(spots, centre, spacingSqr))
 			{
 				continue;
 			}
 			spots.Add(centre);
-			int inGroup = 1 + random.Next(config.pumpkinsPerSpotMax);
-			for (int i = 0; i < inGroup; i++)
-			{
-				Vector3 at = centre;
-				if (i > 0)
-				{
-					float angle = (float)(random.NextDouble() * Mathf.PI * 2.0);
-					float radius = config.pumpkinGroupRadius * (0.4f + 0.6f * (float)random.NextDouble());
-					if (!TryGround(centre + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius, out at))
-					{
-						continue;
-					}
-				}
-				PlacePumpkin(random, at);
-			}
+			PlaceGroup(random, centre);
+			return true;
 		}
-		Debug.Log("[night] " + mapName + ": " + pumpkins.Count + " pumpkin(s) in " + spots.Count + " group(s), " + candles.Count + " candle(s).");
+		return false;
 	}
 
-	/// <summary>
-	/// Where to try a group: on a route between two flags, around a flag, or anywhere in the
-	/// fighting area, in the config's shares.
-	/// </summary>
-	private Vector3 Candidate(System.Random random, List<Vector3> flags, List<Vector3> routes, Rect area)
+	/// <summary>The convex hull of the flags and HQs on the ground plane (x, z), counter-clockwise.</summary>
+	private static List<Vector2> FlagHull()
 	{
-		double roll = random.NextDouble();
-		if (roll < config.pumpkinRouteShare && routes.Count >= 2)
-		{
-			int route = random.Next(routes.Count / 2) * 2;
-			Vector3 from = routes[route];
-			Vector3 to = routes[route + 1];
-			Vector3 along = to - from;
-			along.y = 0f;
-			Vector3 side = new Vector3(-along.z, 0f, along.x).normalized;
-			// A bell across the route: most close to the line players walk, a few out to its edge.
-			float offset = (float)((random.NextDouble() + random.NextDouble() - 1.0) * config.pumpkinRouteHalfWidth);
-			return Vector3.Lerp(from, to, (float)random.NextDouble()) + (side * offset);
-		}
-		if (roll < config.pumpkinRouteShare + config.pumpkinFlagShare)
-		{
-			Vector3 flag = flags[random.Next(flags.Count)];
-			float angle = (float)(random.NextDouble() * Mathf.PI * 2.0);
-			float radius = Mathf.Lerp(config.pumpkinFlagRingMin, config.pumpkinFlagReach, Mathf.Sqrt((float)random.NextDouble()));
-			return flag + (new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius);
-		}
-		// Anywhere near the play: within the scatter reach of a flag or half of it of a route, so
-		// the open ground between the bases fills in and the far corners stay dark.
-		Vector3 spot = Vector3.zero;
-		for (int tries = 0; tries < FillerTries; tries++)
-		{
-			spot = new Vector3(
-				area.xMin + ((float)random.NextDouble() * area.width), 0f,
-				area.yMin + ((float)random.NextDouble() * area.height));
-			if (NearestSqr(flags, spot) <= config.pumpkinScatterReach * config.pumpkinScatterReach
-				|| NearestRouteSqr(routes, spot) <= 0.25f * config.pumpkinScatterReach * config.pumpkinScatterReach)
-			{
-				break;
-			}
-		}
-		return spot;
-	}
-
-	private static float NearestSqr(List<Vector3> points, Vector3 at)
-	{
-		float best = float.MaxValue;
-		foreach (Vector3 p in points)
-		{
-			float dx = p.x - at.x;
-			float dz = p.z - at.z;
-			best = Mathf.Min(best, (dx * dx) + (dz * dz));
-		}
-		return best;
-	}
-
-	private static float NearestRouteSqr(List<Vector3> routes, Vector3 at)
-	{
-		float best = float.MaxValue;
-		for (int i = 0; i + 1 < routes.Count; i += 2)
-		{
-			Vector2 a = new Vector2(routes[i].x, routes[i].z);
-			Vector2 b = new Vector2(routes[i + 1].x, routes[i + 1].z);
-			Vector2 p = new Vector2(at.x, at.z);
-			Vector2 ab = b - a;
-			float t = ab.sqrMagnitude > 0f ? Mathf.Clamp01(Vector2.Dot(p - a, ab) / ab.sqrMagnitude) : 0f;
-			best = Mathf.Min(best, (a + (ab * t) - p).sqrMagnitude);
-		}
-		return best;
-	}
-
-	private static List<Vector3> FlagPositions()
-	{
-		var flags = new List<Vector3>();
+		var points = new List<Vector2>();
 		if (ActorManager.instance != null && ActorManager.instance.spawnPoints != null)
 		{
 			foreach (SpawnPoint point in ActorManager.instance.spawnPoints)
 			{
 				if (point != null)
 				{
-					flags.Add(point.transform.position);
+					points.Add(new Vector2(point.transform.position.x, point.transform.position.z));
 				}
 			}
 		}
-		return flags;
+		points.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+		if (points.Count < 3)
+		{
+			return points;
+		}
+		var hull = new List<Vector2>();
+		for (int pass = 0; pass < 2; pass++)
+		{
+			int start = hull.Count;
+			for (int i = 0; i < points.Count; i++)
+			{
+				Vector2 p = points[pass == 0 ? i : points.Count - 1 - i];
+				while (hull.Count >= start + 2 && Cross(hull[hull.Count - 2], hull[hull.Count - 1], p) <= 0f)
+				{
+					hull.RemoveAt(hull.Count - 1);
+				}
+				hull.Add(p);
+			}
+			hull.RemoveAt(hull.Count - 1);
+		}
+		return hull;
 	}
 
-	/// <summary>
-	/// Every flag's link to its two nearest flags, once each, as start/end pairs: the lines a match
-	/// moves along.
-	/// </summary>
-	private static List<Vector3> Routes(List<Vector3> flags)
+	private static float Cross(Vector2 o, Vector2 a, Vector2 b) => ((a.x - o.x) * (b.y - o.y)) - ((a.y - o.y) * (b.x - o.x));
+
+	/// <summary>Whether <paramref name="p"/> is inside the hull or within <paramref name="margin"/> of its edge.</summary>
+	private static bool InsideOrNear(List<Vector2> hull, Vector2 p, float margin)
 	{
-		var routes = new List<Vector3>();
-		var linked = new HashSet<long>();
-		for (int i = 0; i < flags.Count; i++)
+		if (hull.Count < 3)
 		{
-			int first = -1;
-			int second = -1;
-			float firstSqr = float.MaxValue;
-			float secondSqr = float.MaxValue;
-			for (int j = 0; j < flags.Count; j++)
+			return false;
+		}
+		bool inside = true;
+		float nearestSqr = float.MaxValue;
+		for (int i = 0; i < hull.Count; i++)
+		{
+			Vector2 a = hull[i];
+			Vector2 b = hull[(i + 1) % hull.Count];
+			if (Cross(a, b, p) < 0f)
 			{
-				if (j == i)
+				inside = false;
+			}
+			Vector2 ab = b - a;
+			float t = ab.sqrMagnitude > 0f ? Mathf.Clamp01(Vector2.Dot(p - a, ab) / ab.sqrMagnitude) : 0f;
+			nearestSqr = Mathf.Min(nearestSqr, (a + (ab * t) - p).sqrMagnitude);
+		}
+		return inside || nearestSqr <= margin * margin;
+	}
+
+	private void PlaceGroup(System.Random random, Vector3 centre)
+	{
+		int inGroup = 1 + random.Next(config.pumpkinsPerSpotMax);
+		for (int i = 0; i < inGroup; i++)
+		{
+			Vector3 at = centre;
+			if (i > 0)
+			{
+				float angle = (float)(random.NextDouble() * Mathf.PI * 2.0);
+				float radius = config.pumpkinGroupRadius * (0.4f + 0.6f * (float)random.NextDouble());
+				if (!TryGround(centre + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius, out at))
 				{
 					continue;
 				}
-				float d = (flags[j] - flags[i]).sqrMagnitude;
-				if (d < firstSqr)
-				{
-					second = first;
-					secondSqr = firstSqr;
-					first = j;
-					firstSqr = d;
-				}
-				else if (d < secondSqr)
-				{
-					second = j;
-					secondSqr = d;
-				}
 			}
-			foreach (int j in new[] { first, second })
-			{
-				if (j < 0 || !linked.Add(((long)Mathf.Min(i, j) << 32) | (uint)Mathf.Max(i, j)))
-				{
-					continue;
-				}
-				routes.Add(flags[i]);
-				routes.Add(flags[j]);
-			}
+			PlacePumpkin(random, at);
 		}
-		return routes;
-	}
-
-	/// <summary>The play area cut down to the box round every flag plus <paramref name="reach"/>.</summary>
-	private static Rect FightingArea(Rect playArea, List<Vector3> flags, float reach)
-	{
-		float xMin = float.MaxValue, xMax = float.MinValue, zMin = float.MaxValue, zMax = float.MinValue;
-		foreach (Vector3 flag in flags)
-		{
-			xMin = Mathf.Min(xMin, flag.x);
-			xMax = Mathf.Max(xMax, flag.x);
-			zMin = Mathf.Min(zMin, flag.z);
-			zMax = Mathf.Max(zMax, flag.z);
-		}
-		return Rect.MinMaxRect(
-			Mathf.Max(playArea.xMin, xMin - reach), Mathf.Max(playArea.yMin, zMin - reach),
-			Mathf.Min(playArea.xMax, xMax + reach), Mathf.Min(playArea.yMax, zMax + reach));
 	}
 
 	private static bool TooClose(List<Vector3> spots, Vector3 at, float spacingSqr)
@@ -650,6 +632,7 @@ public sealed class NightModeDirector : MonoBehaviour
 
 	private void Update()
 	{
+		UpdateViewmodelLight();
 		// The map shows enemies by what this player can see (EnemyMapReveal): the dark hides them,
 		// the goggles bring the usual radius back.
 		if (night && !NightVisionOn)
@@ -763,9 +746,37 @@ public sealed class NightModeDirector : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// Keeps the viewmodel light on the camera that is drawing, on only by night without goggles.
+	/// </summary>
+	private void UpdateViewmodelLight()
+	{
+		if (viewmodelLight == null)
+		{
+			return;
+		}
+		Camera viewer = Camera.main;
+		bool on = night && !NightVisionOn && viewer != null;
+		if (on && viewmodelLight.transform.parent != viewer.transform)
+		{
+			viewmodelLight.transform.SetParent(viewer.transform, false);
+			viewmodelLight.transform.localPosition = config.viewmodelLightOffset;
+			viewmodelLight.transform.localRotation = Quaternion.identity;
+		}
+		if (viewmodelLight.enabled != on)
+		{
+			viewmodelLight.enabled = on;
+		}
+	}
+
 	// A new map: the last one's dressing went with its scene, and its lights with it.
 	private void ForgetMap()
 	{
+		if (viewmodelLight != null)
+		{
+			Destroy(viewmodelLight.gameObject);
+			viewmodelLight = null;
+		}
 		foreach (GameObject piece in dressing)
 		{
 			if (piece != null)

@@ -23,11 +23,11 @@ public sealed class NightMinimapPicture
 {
 	private const int GlowTextureSize = 64;
 
-	/// <summary>The glow's radius in metres: about where a candle's light gives out.</summary>
-	public const float GlowRadiusMetres = 18f;
+	/// <summary>The glow's radius in metres: about where a candle's light gives out (its range is 8 m).</summary>
+	public const float GlowRadiusMetres = 9f;
 
 	/// <summary>The bright heart of a glow, in metres.</summary>
-	public const float CoreRadiusMetres = 3.5f;
+	public const float CoreRadiusMetres = 2.5f;
 
 	/// <summary>A glow is never smaller than this many texels, or the whole map hides it.</summary>
 	private const float MinGlowTexels = 6f;

@@ -28,22 +28,21 @@ MonoBehaviour:
   ambience: {fileID: 8300000, guid: 100c3bfecdb5ea4469e80d5cc90f43af, type: 3}
   darkEnemyRevealRadius: 25
   litEnemyRevealRadius: 10
+  viewmodelLightPrefab: {fileID: 6869900606124492827, guid: 56ad66896727da646b3cd612890f62e6,
+    type: 3}
+  viewmodelLightOffset: {x: 0, y: -0.15, z: 0.35}
   nightVisionOn: {fileID: 8300000, guid: 838df34fb8aeb57419336b815fbba8ef, type: 3}
   nightVisionOff: {fileID: 8300000, guid: 3708ac659a68c4343b33ade52a68f81d, type: 3}
   pumpkinPrefabs:
   - {fileID: 95118652481924306, guid: 5c9291e994dd0f24eb766e7062d03d30, type: 3}
   - {fileID: 95118652481924306, guid: 5c9291e994dd0f24eb766e7062d03d30, type: 3}
   - {fileID: 8814367629906294609, guid: 17fae1d6129854a4896dd3e682f406ad, type: 3}
-  pumpkinSpots: 220
-  pumpkinsPerSpotMax: 3
-  pumpkinSpotSpacing: 12
+  pumpkinCellSize: 75
+  battlefieldSubdivision: 2
+  battlefieldMargin: 40
+  pumpkinsPerSpotMax: 2
+  pumpkinSpotSpacing: 25
   pumpkinGroupRadius: 1.8
-  pumpkinRouteShare: 0.3
-  pumpkinRouteHalfWidth: 25
-  pumpkinFlagShare: 0.15
-  pumpkinFlagRingMin: 20
-  pumpkinFlagReach: 90
-  pumpkinScatterReach: 150
   pumpkinDrawDistance: 140
   nearLights: 16
   flagLightPrefab: {fileID: 3855379097010745075, guid: 668cd3afff02bfb4782404fd1658ac90,

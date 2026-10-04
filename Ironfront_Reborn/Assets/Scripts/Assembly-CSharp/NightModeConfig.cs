@@ -42,6 +42,12 @@ public sealed class NightModeConfig : ScriptableObject
 	[Tooltip("An enemy this close to a pumpkin or lamp stands in its light, and shows at the usual radius even in the dark.")]
 	public float litEnemyRevealRadius = 10f;
 
+	[Tooltip("A faint, very short light carried in front of the player's camera: it reaches the hands and the weapon and stops there, so a player can tell what they are holding without the night around them getting any lighter. Off with the goggles on.")]
+	public GameObject viewmodelLightPrefab;
+
+	[Tooltip("Where the viewmodel light sits in front of the camera, in the camera's own space.")]
+	public Vector3 viewmodelLightOffset = new Vector3(0f, -0.15f, 0.35f);
+
 	[Header("Night vision")]
 	public AudioClip nightVisionOn;
 
@@ -51,38 +57,25 @@ public sealed class NightModeConfig : ScriptableObject
 	[Tooltip("Pumpkins scattered over the whole map, a new layout every match: carved ones carry a candle light, plain ones none.")]
 	public GameObject[] pumpkinPrefabs;
 
-	[Tooltip("Places across the play area a small group of pumpkins is set out at.")]
-	public int pumpkinSpots = 220;
+	[Tooltip("The play area is cut into squares this many metres wide, and every square gets one group of pumpkins at a random spot of open ground: even cover with no large dark holes, a new layout every match.")]
+	public float pumpkinCellSize = 75f;
+
+	[Tooltip("Across the battlefield (the ground the flags enclose) every square is split into this many by this many, each with its own group: the middle of the map is lit more densely than its outskirts.")]
+	[Min(1)]
+	public int battlefieldSubdivision = 2;
+
+	[Tooltip("Metres past the flags' outline still counted as battlefield.")]
+	public float battlefieldMargin = 40f;
 
 	[Tooltip("Pumpkins in one group, at most; each group has between one and this many.")]
 	[Min(1)]
-	public int pumpkinsPerSpotMax = 3;
+	public int pumpkinsPerSpotMax = 2;
 
-	[Tooltip("Metres kept between two groups.")]
-	public float pumpkinSpotSpacing = 12f;
+	[Tooltip("Metres kept between two groups, across the squares' edges too.")]
+	public float pumpkinSpotSpacing = 25f;
 
 	[Tooltip("Metres a group's pumpkins sit from its centre, at most.")]
 	public float pumpkinGroupRadius = 1.8f;
-
-	[Tooltip("Share of the groups set along the routes between each flag and its two nearest flags.")]
-	[Range(0f, 1f)]
-	public float pumpkinRouteShare = 0.5f;
-
-	[Tooltip("Metres either side of a route a group may sit.")]
-	public float pumpkinRouteHalfWidth = 25f;
-
-	[Tooltip("Share of the groups set around the flags and HQs; the rest fill the fighting area.")]
-	[Range(0f, 1f)]
-	public float pumpkinFlagShare = 0.35f;
-
-	[Tooltip("Metres from a flag's pole a group around it starts, clear of the pole and its lamp.")]
-	public float pumpkinFlagRingMin = 12f;
-
-	[Tooltip("Metres from a flag a group around it may sit at most.")]
-	public float pumpkinFlagReach = 90f;
-
-	[Tooltip("The rest scatter at random over ground within this many metres of a flag (or half of it of a route), so the open ground between bases is lit too while the far corners stay dark.")]
-	public float pumpkinScatterReach = 150f;
 
 	[Tooltip("Metres from the camera past which a pumpkin is not drawn: the fog has hidden it long before.")]
 	public float pumpkinDrawDistance = 140f;
