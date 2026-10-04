@@ -142,6 +142,38 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>
+        /// Seconds a weapon takes to come up after a switch: the prefab's own
+        /// <c>Weapon.Configuration.unholsterTime</c>, the time the player's own gun spends drawing.
+        /// </summary>
+        /// <remarks>
+        /// Read off the weapon prefabs (2026-10-04, <c>WeaponDrawTimeTests</c> pins each row to its
+        /// asset). Before this the server raised a switched-to weapon at once, so it could fire
+        /// while the player still watched it come up. Zero for a weapon thrown from the hand.
+        /// </remarks>
+        public static float DrawSeconds(byte weaponId)
+        {
+            switch (weaponId)
+            {
+                case WeaponIds.RK44: return 0.8f;
+                case WeaponIds.SIND7: return 0.35f;
+                case WeaponIds.SIND7_SUPPRESSED: return 0.35f;
+                case WeaponIds.EAGLE_76: return 0.7f;
+                case WeaponIds.BEU_AW1: return 1f;
+                case WeaponIds.SL_DEFENDER: return 1f;
+                case WeaponIds.BINOCS: return 1.2f;
+                case WeaponIds.AMMO_BAG: return 0.4f;
+                case WeaponIds.MEDIPACK: return 0.4f;
+                case WeaponIds.BIL_SCALPEL: return 1.2f;
+                case WeaponIds.SIGNAL_DMR: return 0.8f;
+                case WeaponIds.NV_GOGGLES: return 1.2f;
+                case WeaponIds.RECON_LRR: return 1f;
+                case WeaponIds.WRENCH: return 0.5f;
+                case WeaponIds.SUPER_WRENCH: return 0.5f;
+                default: return 0f;
+            }
+        }
+
+        /// <summary>
         /// Rounds one resupply pulse (an ammo bag, a supply cache) adds to a spare slot holding
         /// this weapon: the prefab's own <c>resupplyNumber</c>. Zero for a weapon no pulse refills.
         /// </summary>

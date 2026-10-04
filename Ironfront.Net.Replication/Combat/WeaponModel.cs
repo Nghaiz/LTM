@@ -322,6 +322,22 @@ namespace Ironfront.Net.Replication.Combat
         public bool Unholstered;
 
         /// <summary>
+        /// Server time the weapon is drawn and may fire or reload, or negative infinity when it
+        /// already is. Set by a switch (<c>ClientSession.SwitchWeaponTo</c>) to the weapon's draw
+        /// time from <see cref="WeaponCatalog.DrawSeconds"/>.
+        /// </summary>
+        /// <remarks>
+        /// Owner report 2026-10-04: the incoming weapon could fire on the very tick it was
+        /// selected, while the player's own gun was still coming up, so swapping skipped every
+        /// weapon's draw. That is the quick-switch trick FPS games close: fire one gun, swap, fire
+        /// the other at once, never paying either draw.
+        /// </remarks>
+        public float ReadyAt;
+
+        /// <summary>Whether the weapon is out and drawn at <paramref name="nowSeconds"/>.</summary>
+        public readonly bool IsDrawnAt(float nowSeconds) => Unholstered && nowSeconds >= ReadyAt;
+
+        /// <summary>
         /// Server time the running reload began, or <see cref="float.NegativeInfinity"/> when
         /// none is running.
         /// </summary>
@@ -362,6 +378,7 @@ namespace Ironfront.Net.Replication.Combat
             LastThrowableReleaseTick = 0,
             HasThrowableReleaseTick = false,
             Unholstered = true,
+            ReadyAt = float.NegativeInfinity,
             ReloadStartedAt = float.NegativeInfinity,
             SpareAmmo = config.SpareAmmo,
         };
