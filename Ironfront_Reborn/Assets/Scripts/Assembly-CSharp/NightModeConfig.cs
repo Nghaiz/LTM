@@ -57,6 +57,23 @@ public sealed class NightModeConfig : ScriptableObject
 	[Tooltip("Metres a group's pumpkins sit from its centre, at most.")]
 	public float pumpkinGroupRadius = 1.8f;
 
+	[Tooltip("Share of the groups set along the routes between each flag and its two nearest flags.")]
+	[Range(0f, 1f)]
+	public float pumpkinRouteShare = 0.5f;
+
+	[Tooltip("Metres either side of a route a group may sit.")]
+	public float pumpkinRouteHalfWidth = 25f;
+
+	[Tooltip("Share of the groups set around the flags and HQs; the rest fill the fighting area.")]
+	[Range(0f, 1f)]
+	public float pumpkinFlagShare = 0.35f;
+
+	[Tooltip("Metres from a flag's pole a group around it starts, clear of the pole and its lamp.")]
+	public float pumpkinFlagRingMin = 12f;
+
+	[Tooltip("Metres from a flag a group around it may sit at most; also how far past the outermost flags any group may go.")]
+	public float pumpkinFlagReach = 90f;
+
 	[Tooltip("Metres from the camera past which a pumpkin is not drawn: the fog has hidden it long before.")]
 	public float pumpkinDrawDistance = 140f;
 
