@@ -117,7 +117,7 @@ namespace Ironfront.Net.Unity.Server
             // implementing it, because a dedicated throw bit is a second route to firing that
             // does not pass Weapon.CanFire().
             actor.ApplyWeaponSwitchIntent(frame.WeaponSlot);
-            AdoptTheWeaponTheBodyIsHolding(session, actor);
+            AdoptTheWeaponTheBodyIsHolding(session, actor, now);
             if (StepMountedWeapon(session, actor, in frame, now)) return;
 
             BuildTargets(tick);
@@ -591,7 +591,7 @@ namespace Ironfront.Net.Unity.Server
         /// <c>ClientSession.SwitchWeaponTo</c> keeping a clip per weapon id was the whole of it.
         /// </para>
         /// </remarks>
-        private static void AdoptTheWeaponTheBodyIsHolding(ClientSession session, NetServerActor actor)
+        private static void AdoptTheWeaponTheBodyIsHolding(ClientSession session, NetServerActor actor, float now)
         {
             if (actor.WeaponId == session.WeaponId) return;
 
@@ -599,7 +599,9 @@ namespace Ironfront.Net.Unity.Server
             // full clip was the only weapon state reachable from here. SwitchWeaponTo parks the
             // outgoing weapon's whole runtime state under its own id and restores the incoming
             // one's, so switching away and back no longer hands out a magazine.
-            session.SwitchWeaponTo(actor.WeaponId);
+            // Drawn over its own draw time, as the player's gun is: a switched-to weapon that could
+            // fire at once let a player skip every draw (owner report 2026-10-04).
+            session.SwitchWeaponTo(actor.WeaponId, now);
 
             // The new weapon draws from a different pouch, so the slot is re-resolved here
             // rather than only at spawn. Leaving it pointing at the old slot would have a
