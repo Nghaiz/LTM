@@ -38,11 +38,12 @@ MonoBehaviour:
   pumpkinsPerSpotMax: 3
   pumpkinSpotSpacing: 12
   pumpkinGroupRadius: 1.8
-  pumpkinRouteShare: 0.5
+  pumpkinRouteShare: 0.3
   pumpkinRouteHalfWidth: 25
-  pumpkinFlagShare: 0.35
-  pumpkinFlagRingMin: 12
+  pumpkinFlagShare: 0.15
+  pumpkinFlagRingMin: 20
   pumpkinFlagReach: 90
+  pumpkinScatterReach: 150
   pumpkinDrawDistance: 140
   nearLights: 16
   flagLightPrefab: {fileID: 3855379097010745075, guid: 668cd3afff02bfb4782404fd1658ac90,

@@ -78,8 +78,11 @@ public sealed class NightModeConfig : ScriptableObject
 	[Tooltip("Metres from a flag's pole a group around it starts, clear of the pole and its lamp.")]
 	public float pumpkinFlagRingMin = 12f;
 
-	[Tooltip("Metres from a flag a group around it may sit at most; also how far past the outermost flags any group may go.")]
+	[Tooltip("Metres from a flag a group around it may sit at most.")]
 	public float pumpkinFlagReach = 90f;
+
+	[Tooltip("The rest scatter at random over ground within this many metres of a flag (or half of it of a route), so the open ground between bases is lit too while the far corners stay dark.")]
+	public float pumpkinScatterReach = 150f;
 
 	[Tooltip("Metres from the camera past which a pumpkin is not drawn: the fog has hidden it long before.")]
 	public float pumpkinDrawDistance = 140f;

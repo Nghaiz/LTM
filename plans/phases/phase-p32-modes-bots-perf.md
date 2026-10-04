@@ -194,3 +194,10 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   Forest Lake; the pool lights the nearest 16 (was 12). The map draws glows for pumpkins and flag
   lamps only, so bases do not turn into blobs; every lamp still lights enemies (EnemyMapReveal).
   Every light of the lamp prefab is pooled now (its small glow light used to stay on everywhere).
+- 2026-10-04 — Night follow-up 6 (owner: blend the first layout's even scatter with the second's
+  focus; the second heaped pumpkins on the bases and left the ground between them bare). Shares
+  now 55% filler / 30% routes / 15% round flags; the flag ring starts at 20 m (outside the walls);
+  filler is uniform over the box round the flags plus 150 m, kept only within 150 m of a flag or
+  75 m of a route, so the open ground between bases fills in and the corners stay dark. Editor
+  soak, runtime night map: pumpkins spread through and just around the road ring, flags marked
+  but not heaped.
