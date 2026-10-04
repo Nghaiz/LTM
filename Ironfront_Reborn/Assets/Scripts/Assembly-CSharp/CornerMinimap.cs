@@ -235,6 +235,13 @@ public class CornerMinimap : MonoBehaviour
 			return;
 		}
 
+		// The same picture as the M map, by day or by night.
+		Texture picture = MinimapCamera.instance.Minimap();
+		if (picture != null && map.texture != picture)
+		{
+			map.texture = picture;
+		}
+
 		Camera camera = MinimapCamera.instance.camera;
 		Vector3 here = actor.Position();
 		Vector3 centre = camera.WorldToViewportPoint(here);

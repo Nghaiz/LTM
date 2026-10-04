@@ -54,6 +54,15 @@ public class MinimapCamera : MonoBehaviour
 	/// </remarks>
 	public Texture2D bakedPicture;
 
+	/// <summary>
+	/// The same picture by moonlight, for Night Mode (phase P32); baked beside
+	/// <see cref="bakedPicture"/> for a map that has a night. The glows of the match's pumpkins and
+	/// lamps are painted on at run time (<see cref="NightMinimapPicture"/>).
+	/// </summary>
+	public Texture2D bakedNightPicture;
+
+	private NightMinimapPicture nightPicture;
+
 	/// <summary>The frame <see cref="bakedPicture"/> was drawn for: its centre (x, z)...</summary>
 	public Vector2 bakedCentre;
 
@@ -458,9 +467,31 @@ public class MinimapCamera : MonoBehaviour
 		camera.enabled = false;
 	}
 
+	/// <summary>
+	/// The map's picture now: by night (Night Mode) the night picture with this match's lights on it,
+	/// otherwise the day's. Read again every frame by the M map and the radar, so they turn with it.
+	/// </summary>
 	public Texture Minimap()
 	{
+		NightModeDirector night = NightModeDirector.instance;
+		if (usingBakedPicture && bakedNightPicture != null && night != null && night.IsNight)
+		{
+			if (nightPicture == null)
+			{
+				nightPicture = new NightMinimapPicture(bakedNightPicture);
+			}
+			return nightPicture.Picture(night.GlowPoints, camera);
+		}
 		return usingBakedPicture ? bakedPicture : minimapRenderTexture;
+	}
+
+	private void OnDestroy()
+	{
+		if (nightPicture != null)
+		{
+			nightPicture.Release();
+			nightPicture = null;
+		}
 	}
 
 	/// <summary>Whether <see cref="bakedPicture"/> was drawn for the frame this camera now holds.</summary>

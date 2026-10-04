@@ -55,6 +55,15 @@ namespace Ironfront
 		private static readonly Color StoneFeature = Hex(0x9E998F);
 		private static readonly Color Outline = Hex(0x2E3136);
 
+		/// <summary>What the night picture keeps of each channel: dark, and bluer than the day.</summary>
+		private static readonly Color Moonlit = new Color(0.18f, 0.21f, 0.3f);
+
+		/// <summary>How much of the day's colour the night keeps.</summary>
+		private const float NightSaturation = 0.35f;
+
+		/// <summary>Extra light the brightest ground (paths, roofs) keeps at night.</summary>
+		private const float NightHighlightGain = 1.35f;
+
 		private enum Feature : byte
 		{
 			None,
@@ -94,8 +103,30 @@ namespace Ironfront
 
 			string scene = EditorSceneManager.GetActiveScene().name;
 			string path = Folder + scene + "_Minimap.png";
+			camera.bakedPicture = Save(path, picture.Encode());
+
+			// Night Mode's own map (phase P32): the same picture under the moon. A map without a
+			// night has none, and its camera keeps whatever it had cleared.
+			string nightPath = Folder + scene + "_Minimap_Night.png";
+			camera.bakedNightPicture = null;
+			if (Resources.Load<NightModeConfig>("NightMode/" + scene) != null)
+			{
+				picture.Night();
+				camera.bakedNightPicture = Save(nightPath, picture.Encode());
+			}
+			camera.bakedCentre = centre;
+			camera.bakedHalfSpan = halfSpan;
+			EditorUtility.SetDirty(camera);
+			EditorSceneManager.MarkSceneDirty(camera.gameObject.scene);
+			EditorSceneManager.SaveScene(camera.gameObject.scene);
+			return $"{path}: {Size} px over {halfSpan * 2f:0} m ({halfSpan * 2f / Size:0.00} m per pixel), centred {centre:F1}; "
+				+ $"{features} structures and rocks, {terrain.terrainData.treeInstanceCount} trees; {watch.Elapsed.TotalSeconds:0.0} s.";
+		}
+
+		private static Texture2D Save(string path, byte[] png)
+		{
 			Directory.CreateDirectory(Folder);
-			File.WriteAllBytes(path, picture.Encode());
+			File.WriteAllBytes(path, png);
 			AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
 			var importer = (TextureImporter)AssetImporter.GetAtPath(path);
 			importer.textureType = TextureImporterType.Default;
@@ -107,15 +138,7 @@ namespace Ironfront
 			importer.textureCompression = TextureImporterCompression.CompressedHQ;
 			importer.alphaSource = TextureImporterAlphaSource.None;
 			importer.SaveAndReimport();
-
-			camera.bakedPicture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
-			camera.bakedCentre = centre;
-			camera.bakedHalfSpan = halfSpan;
-			EditorUtility.SetDirty(camera);
-			EditorSceneManager.MarkSceneDirty(camera.gameObject.scene);
-			EditorSceneManager.SaveScene(camera.gameObject.scene);
-			return $"{path}: {Size} px over {halfSpan * 2f:0} m ({halfSpan * 2f / Size:0.00} m per pixel), centred {centre:F1}; "
-				+ $"{features} structures and rocks, {terrain.terrainData.treeInstanceCount} trees; {watch.Elapsed.TotalSeconds:0.0} s.";
+			return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
 		}
 
 		private static Color Hex(int rgb) => new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f);
@@ -566,6 +589,26 @@ namespace Ironfront
 							colour[i] = Color.Lerp(colour[i], new Color(0.92f, 0.9f, 0.82f), 0.6f);
 						}
 					}
+				}
+			}
+
+			/// <summary>
+			/// The finished picture by moonlight: most of its colour gone, dark and blue, its relief,
+			/// paths and buildings still readable as shapes. The original game's night map was its
+			/// level rendered in the dark, near black with the pumpkins glowing on it; the glows are
+			/// added at run time, where this match's pumpkins are (<c>MinimapCamera</c>).
+			/// </summary>
+			public void Night()
+			{
+				for (int i = 0; i < colour.Length; i++)
+				{
+					Color c = colour[i];
+					float grey = c.grayscale;
+					Color muted = Color.Lerp(new Color(grey, grey, grey), c, NightSaturation);
+					// A little more of the brightest ground than of the darkest: paths and roofs
+					// catch the moon, a forest swallows it.
+					float lift = Mathf.Lerp(1f, NightHighlightGain, Mathf.Clamp01((grey - 0.4f) / 0.5f));
+					colour[i] = new Color(muted.r * Moonlit.r * lift, muted.g * Moonlit.g * lift, muted.b * Moonlit.b * lift, 1f);
 				}
 			}
 
