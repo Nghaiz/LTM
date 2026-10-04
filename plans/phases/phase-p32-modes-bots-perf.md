@@ -152,3 +152,15 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   quadbike driven off the nav graph (Ford / Quarry by day, rocks at 604,724 by night), whose rider
   then asks for paths from a start with no node near it. Pre-existing (item 2's field vehicles),
   not night-related; follow-up.
+- 2026-10-04 — Night follow-up 1 (owner report: too dark, pumpkins only at the flags). Ambient and
+  fog colour x1.35 over v4.0.0 (owner: lift OUR night a little, never the original's brightness),
+  moonlight 0.15 -> 0.3 with soft shadows at strength 0.85, 35 degrees up, and made
+  `RenderSettings.sun` so the procedural sky's disc is where the shadows come from (it used to
+  sit opposite the hidden sunlight). Candles at the original's full strength (intensity 2, range
+  20, its warm yellow; ours was 1.25 / 5). Pumpkins are scattered over the whole play area, 220
+  groups of 1-3 at least 12 m apart, never on slopes, in water, under roofs or on trees, seeded by
+  map and room id: a new layout every match, the same for everyone in it (practice takes the
+  clock). Editor soak: 432 pumpkins, 299 candles, every quarter of the map 10-34 groups, 0 wet.
+  Only the 12 lights nearest the camera shine (per pixel, so Low sees them too) and pumpkins past
+  140 m are not drawn. `Ironfront.NightModePreview.Shot` renders the night through the scene's
+  post-processed camera for tuning.
