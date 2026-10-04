@@ -179,6 +179,7 @@ public class MinimapUi : MonoBehaviour
 			ingameBackdrop.enabled = minimapOpenness > 0.001f;
 		}
 		UpdateZoom(held);
+		RefreshPicture();
 
 		// Networked, the buttons are built before any snapshot names this player's team, so every
 		// one of them came up non-interactable -- and nothing refreshed them until a flag changed
@@ -188,6 +189,21 @@ public class MinimapUi : MonoBehaviour
 			&& NetPresenterGate.TryResolveLocalTeam(out byte team) && team != appliedLocalTeam)
 		{
 			UpdateSpawnPointButtons(team);
+		}
+	}
+
+	// The map's picture changes with the night (MinimapCamera.Minimap): Night Mode is decided by the
+	// room, which a client may learn after this map was set up.
+	private void RefreshPicture()
+	{
+		if (minimap == null || MinimapCamera.instance == null || minimap.texture == null)
+		{
+			return;
+		}
+		Texture picture = MinimapCamera.instance.Minimap();
+		if (picture != null && minimap.texture != picture)
+		{
+			minimap.texture = picture;
 		}
 	}
 

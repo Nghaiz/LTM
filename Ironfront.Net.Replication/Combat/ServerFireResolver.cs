@@ -243,7 +243,7 @@ namespace Ironfront.Net.Replication.Combat
             bool shooterIsAlive, float nowSeconds)
         {
             if (!shooterIsAlive) return FireRejection.ShooterDead;
-            if (!state.Unholstered) return FireRejection.Holstered;
+            if (!state.IsDrawnAt(nowSeconds)) return FireRejection.Holstered;
             if (state.Reloading) return FireRejection.Reloading;
 
             // Cooldown BEFORE ammo, and the order is about detection rather than about which

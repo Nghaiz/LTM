@@ -531,7 +531,8 @@ namespace Ironfront.Net.Unity.Client
                 ? (subject.position - localPosition).sqrMagnitude
                 : float.PositiveInfinity;
 
-            if (ShouldMarkOnMinimap(team, localTeam, isAlive, sqrDistance))
+            float reveal = EnemyMapReveal.RevealRadius(subject.position.x, subject.position.z, EnemyRevealRadius);
+            if (ShouldMarkOnMinimap(team, localTeam, isAlive, sqrDistance, reveal))
                 minimap.SetBodyMarker(subject, CapturePointOwnership.ToSpawnPointOwner(team), isHuman);
             else
                 minimap.RemoveMarker(subject);
@@ -609,7 +610,8 @@ namespace Ironfront.Net.Unity.Client
                     ? (subject.position - localPosition).sqrMagnitude
                     : float.PositiveInfinity;
 
-                if (ShouldMarkVehicle(crewed, crewTeam, localTeam, sqrDistance))
+                float reveal = EnemyMapReveal.RevealRadius(subject.position.x, subject.position.z, EnemyRevealRadius);
+                if (ShouldMarkVehicle(crewed, crewTeam, localTeam, sqrDistance, reveal))
                     minimap.SetVehicleMarker(subject, CapturePointOwnership.ToSpawnPointOwner(crewTeam));
                 else
                     minimap.RemoveMarker(subject);
@@ -628,9 +630,13 @@ namespace Ironfront.Net.Unity.Client
         /// Pure, for <see cref="ShouldMarkOnMinimap"/>'s reason.
         /// </remarks>
         internal static bool ShouldMarkVehicle(bool crewed, byte crewTeam, byte localTeam, float sqrDistance)
+            => ShouldMarkVehicle(crewed, crewTeam, localTeam, sqrDistance, EnemyRevealRadius);
+
+        /// <summary>As above, with an enemy shown only inside <paramref name="revealRadius"/> (the dark, <see cref="EnemyMapReveal"/>).</summary>
+        internal static bool ShouldMarkVehicle(bool crewed, byte crewTeam, byte localTeam, float sqrDistance, float revealRadius)
         {
             if (!crewed) return false;
-            return ShouldMarkOnMinimap(crewTeam, localTeam, isAlive: true, sqrDistance);
+            return ShouldMarkOnMinimap(crewTeam, localTeam, isAlive: true, sqrDistance, revealRadius);
         }
 
         /// <summary>
@@ -655,10 +661,19 @@ namespace Ironfront.Net.Unity.Client
         /// that gets quietly widened later. <c>WhichSideAmIOnTests</c> pins it.
         /// </remarks>
         internal static bool ShouldMarkOnMinimap(byte team, byte localTeam, bool isAlive, float sqrDistance)
+            => ShouldMarkOnMinimap(team, localTeam, isAlive, sqrDistance, EnemyRevealRadius);
+
+        /// <summary>
+        /// As above, with an enemy shown only inside <paramref name="revealRadius"/>: in Night Mode
+        /// without the goggles that is what the eye reaches, or the full radius for an enemy
+        /// standing in a pumpkin's or lamp's light (<see cref="EnemyMapReveal"/>). A team-mate shows
+        /// at any distance, by day or night.
+        /// </summary>
+        internal static bool ShouldMarkOnMinimap(byte team, byte localTeam, bool isAlive, float sqrDistance, float revealRadius)
         {
             if (!isAlive || team == TeamId.None || localTeam == TeamId.None) return false;
             if (team == localTeam) return true;
-            return sqrDistance <= EnemyRevealRadius * EnemyRevealRadius;
+            return sqrDistance <= revealRadius * revealRadius;
         }
 
         /// <summary>This client's own body, where the latest snapshot puts it.</summary>

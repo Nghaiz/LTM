@@ -66,14 +66,28 @@ public class AlternatingMountedWeapon : MountedWeapon
 	/// asymmetry is what the AI has aimed with since before the netcode existed. Preserved
 	/// exactly; a test pins the sequence, because "tidying" it into advance-then-spawn would move
 	/// every AI's aim point by one barrel with nothing failing anywhere.
+	/// <para>
+	/// <b>Announced like every other weapon's.</b> This override used to skip
+	/// <see cref="ProjectileNetAnnouncer.AnnounceLaunch"/>, so online nobody ever saw the
+	/// helicopter's rockets: the server's flew unseen and did their damage, and a client saw only
+	/// the explosion's scorch mark (owner report 2026-10-04). On a client the rocket is the
+	/// server's to draw (<see cref="Weapon.ServerDrawsProjectile"/>); the muzzle still advances so
+	/// the pods keep alternating in step with the server's.
+	/// </para>
 	/// </remarks>
 	protected override Projectile SpawnProjectile(Vector3 direction)
 	{
 		Transform transform = muzzles[currentMuzzle];
 		AdvanceMuzzle();
+		if (ServerDrawsProjectile())
+		{
+			return null;
+		}
 		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
 		Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, transform.position, rotation)).GetComponent<Projectile>();
 		component.source = user;
+		component.sourceWeaponId = NetworkId;
+		ProjectileNetAnnouncer.AnnounceLaunch(component, transform.position, rotation * Vector3.forward, user);
 		return component;
 	}
 

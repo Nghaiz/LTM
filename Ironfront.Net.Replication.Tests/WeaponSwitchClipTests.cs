@@ -242,7 +242,7 @@ namespace Ironfront.Net.Replication.Tests
 
             string body = bridge.Substring(adopt, 900);
 
-            Assert.Contains("session.SwitchWeaponTo(actor.WeaponId);", body, StringComparison.Ordinal);
+            Assert.Contains("session.SwitchWeaponTo(actor.WeaponId, now);", body, StringComparison.Ordinal);
             Assert.DoesNotContain("session.ResetWeapon();", body, StringComparison.Ordinal);
         }
 

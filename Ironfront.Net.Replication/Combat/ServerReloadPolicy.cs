@@ -114,7 +114,7 @@ namespace Ironfront.Net.Replication.Combat
         {
             if (!shooterIsAlive) return Rejection.Dead;
             if (!ammo.SlotIsKnown) return Rejection.LoadoutSlotUnknown;
-            if (!state.Unholstered) return Rejection.Holstered;
+            if (!state.IsDrawnAt(nowSeconds)) return Rejection.Holstered;
             if (state.Reloading) return Rejection.AlreadyReloading;
             if (state.AmmoInClip >= config.ClipSize) return Rejection.ClipFull;
             if (!reserve.CanFeedAReload) return Rejection.NoReserve;

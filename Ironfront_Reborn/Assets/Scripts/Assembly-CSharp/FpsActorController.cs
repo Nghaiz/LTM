@@ -142,6 +142,13 @@ public class FpsActorController : ActorController
 	// scripted test held both values for seconds and therefore could not expose this race.
 	private int pendingNetworkWeaponSlot = -1;
 
+	// A slot pressed while a shot is still waiting for its C_INPUT frame. The server applies a
+	// frame's slot before its trigger, so a tap and a swap inside one 33 ms tick reached it as
+	// "switch, then fire the new gun": the shot the player saw leave the launcher was never
+	// resolved and never spent (owner report 2026-10-04). Held back one frame, the server reads
+	// them in the order they were pressed.
+	private int deferredNetworkWeaponSlot = -1;
+
 	private bool pendingNetworkFire;
 
 	/// <summary>
@@ -257,6 +264,12 @@ public class FpsActorController : ActorController
 	private void OnNetworkTickSimulated(
 		uint tick, Ironfront.Net.Replication.Movement.MoveInput input)
 	{
+		// The shot has gone (or was dropped): a slot held behind it goes on the next frame.
+		if (deferredNetworkWeaponSlot >= 0 && !pendingNetworkFire)
+		{
+			pendingNetworkWeaponSlot = deferredNetworkWeaponSlot;
+			deferredNetworkWeaponSlot = -1;
+		}
 		if (pendingNetworkWeaponSlot < 0 && !pendingNetworkFire && !pendingNetworkFireRelease) return;
 
 		bool sentFire = pendingNetworkFire && input.Fire;
@@ -267,7 +280,15 @@ public class FpsActorController : ActorController
 
 		Debug.Log($"[input] C_INPUT tick {tick} buffered fire={sentFire} release={sentRelease} slot="
 			+ $"{(sentSlot ? input.WeaponSlot : -1)}");
-		if (sentFire) pendingNetworkFire = false;
+		if (sentFire)
+		{
+			pendingNetworkFire = false;
+			if (deferredNetworkWeaponSlot >= 0)
+			{
+				pendingNetworkWeaponSlot = deferredNetworkWeaponSlot;
+				deferredNetworkWeaponSlot = -1;
+			}
+		}
 		if (sentRelease) pendingNetworkFireRelease = false;
 		if (sentSlot) pendingNetworkWeaponSlot = -1;
 	}
@@ -1250,6 +1271,12 @@ public class FpsActorController : ActorController
 		actor.SwitchWeapon(slot);
 		if (!NetContext.IsClient) return;
 
+		if (pendingNetworkFire)
+		{
+			deferredNetworkWeaponSlot = slot;
+			Debug.Log($"[input] weapon slot {slot} waits one frame behind an unsent shot");
+			return;
+		}
 		pendingNetworkWeaponSlot = slot;
 		Debug.Log($"[input] queued weapon slot {slot} for C_INPUT");
 	}

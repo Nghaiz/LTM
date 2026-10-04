@@ -152,3 +152,85 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   quadbike driven off the nav graph (Ford / Quarry by day, rocks at 604,724 by night), whose rider
   then asks for paths from a start with no node near it. Pre-existing (item 2's field vehicles),
   not night-related; follow-up.
+- 2026-10-04 — Night follow-up 1 (owner report: too dark, pumpkins only at the flags). Ambient and
+  fog colour x1.35 over v4.0.0 (owner: lift OUR night a little, never the original's brightness),
+  moonlight 0.15 -> 0.3 with soft shadows at strength 0.85, 35 degrees up, and made
+  `RenderSettings.sun` so the procedural sky's disc is where the shadows come from (it used to
+  sit opposite the hidden sunlight). Candles at the original's full strength (intensity 2, range
+  20, its warm yellow; ours was 1.25 / 5). Pumpkins are scattered over the whole play area, 220
+  groups of 1-3 at least 12 m apart, never on slopes, in water, under roofs or on trees, seeded by
+  map and room id: a new layout every match, the same for everyone in it (practice takes the
+  clock). Editor soak: 432 pumpkins, 299 candles, every quarter of the map 10-34 groups, 0 wet.
+  Only the 12 lights nearest the camera shine (per pixel, so Low sees them too) and pumpkins past
+  140 m are not drawn. `Ironfront.NightModePreview.Shot` renders the night through the scene's
+  post-processed camera for tuning.
+- 2026-10-04 — Night follow-up 2 (owner: the M map and the radar showed the day). `MinimapBaker`
+  also bakes `<scene>_Minimap_Night.png` for a map with a Night Mode config: the finished picture
+  desaturated to 35%, multiplied by (0.18, 0.21, 0.30) with paths and roofs kept 35% brighter, so
+  the relief, roads, lake and bases still read as shapes. At run time `MinimapCamera.Minimap()`
+  hands out, by night, that picture with a warm glow (18 m, a bright 3.5 m heart) painted at every
+  lit pumpkin and lamp of the match (`NightMinimapPicture`, drawn once with the UI's default
+  material, which every build carries). The M map and radar read the picture every frame, so
+  they switch when the room's night arrives after the map was set up. Modelled on the original's
+  Island night map (`tmp/shots/orig-island-night-map.jpg`): near-black ground, pumpkins glowing.
+- 2026-10-04 — Night follow-up 3 (#524, owner: pumpkins piled up at the empty map edges). Groups go
+  50% along the routes from each flag to its two nearest flags (within 25 m of the line), 35% in a
+  12-90 m ring round flags and HQs, 15% filler inside the box round the flags plus 90 m. Editor
+  soak: 288 lights clustered round all 8 flags and their routes, the edges dark.
+- 2026-10-04 — Night follow-up 4 (owner: in the dark the radar still showed every enemy within
+  60 m, a map hack). `EnemyMapReveal` (Net/Shared, engine-free): at night without night vision an
+  enemy body or crewed vehicle shows only within 25 m (`darkEnemyRevealRadius`), or at the usual
+  60 m when it stands within 10 m of a pumpkin or lamp (`litEnemyRevealRadius`, a 16 m grid over
+  the night's light points). The goggles bring the usual 60 m back; team-mates show everywhere as
+  always. `NightModeDirector` sets it every frame, `RemoteActorRegistry` asks it per marker.
+  8 flow tests (mutant "dark radius ignored" turns 2 red) and an EditMode case.
+- 2026-10-04 — Night follow-up 5 (item 2, owner: more lamps at the flags and HQs, laid out with
+  care). `NightBaseLighting` hangs the lamps on the base's own plan, found by the names the
+  `ForestLakeOutposts` blueprint gives its pieces: four team-coloured lamps on the diagonals round
+  every flag (square to the front gate), a lamp 2.5 m inside every gate post, one beside every
+  ammo cache and medical station, a `Night Lantern` prefab in every watchtower, the floodlight
+  props switched on (`Night Floodlight Beam`), and at the two HQs a ring of 8 lamps 3 m outside
+  the capture range. A lamp needs level dry ground and a clear pole (capsule check). 143 lights on
+  Forest Lake; the pool lights the nearest 16 (was 12). The map draws glows for pumpkins and flag
+  lamps only, so bases do not turn into blobs; every lamp still lights enemies (EnemyMapReveal).
+  Every light of the lamp prefab is pooled now (its small glow light used to stay on everywhere).
+- 2026-10-04 — Night follow-up 6 (owner: blend the first layout's even scatter with the second's
+  focus; the second heaped pumpkins on the bases and left the ground between them bare). Shares
+  now 55% filler / 30% routes / 15% round flags; the flag ring starts at 20 m (outside the walls);
+  filler is uniform over the box round the flags plus 150 m, kept only within 150 m of a flag or
+  75 m of a route, so the open ground between bases fills in and the corners stay dark. Editor
+  soak, runtime night map: pumpkins spread through and just around the road ring, flags marked
+  but not heaped.
+- 2026-10-04 — #528 (owner: fire the BEU-AW1, swap at once, the round is never spent). The client
+  rebuilt a swapped-to weapon with a full clip and reconciled that guess as a prediction: a
+  launcher back at 1 against the server's 0 sat inside AmmoResyncThreshold, so the local gun
+  launched a rocket the server refused, every swap. A weapon change now takes the server's clip
+  verbatim; a slot pressed behind an unsent shot waits one C_INPUT frame (the server applies a
+  frame's slot before its trigger); and a switched-to weapon cannot fire or reload until its
+  prefab draw time less 0.15 s (`WeaponCatalog.DrawSeconds`, pinned to the prefabs).
+- 2026-10-04 — #529 (owner: heli rockets read 0, fire in bursts, off aim, unseen). The client wrote
+  the carried clip (weapon id 0, 0 rounds) into the rocket pod, whose id is also 0;
+  `AlternatingMountedWeapon` never announced its launches; and every client drew its own
+  cosmetic copy of rocket-class projectiles. Mounted weapons keep their own clip, the pods
+  announce, and a client draws only the server's rockets (`Weapon.ServerDrawsProjectile`).
+- 2026-10-04 — Night follow-up 7 (owner: big empty regions on the night map, pumpkins piled
+  elsewhere; candles too strong; the dark must hide people but keep the ground and your own gun
+  readable). Pumpkins on a jittered grid: one group per 75 m square of the play area at a random
+  dry level spot, every square across the battlefield (the flags' hull plus 40 m) split 2x2, a
+  fresh roll per match. Editor soak: 1344 pumpkins in 894 groups over 936 cells, 42 cells with no
+  open ground (lake, rock). Seed = map, room id and UTC day (room ids restart with the master).
+  Candles range 20 -> 8 m, intensity 1.8; map glow 9 m. A `Night
+  Viewmodel Light` (point, 1.2 m, 0.55) rides the drawing camera at night without goggles, so the
+  hands and weapon read while nothing beyond them gets lighter.
+- 2026-10-04 — Horns (owner: the horn icon shows when driving but nothing sounds; jeep and
+  motorbike should sound different; everyone near must hear it; bots should honk to warn, signal
+  and call teammates aboard). The horn had network id 0 and the snapshot apply zeroed its clip
+  (#529 fixed that); it now carries `WeaponIds.CAR_HORN`, so the server's S_WEAPON_FIRE for a
+  player's honk and a new `NetShotAnnouncements.AnnounceHorn` for a bot's both reach every client
+  in range, which plays the horn of the vehicle the shooter sits in (`CarHorn.PlayNearest`, 3D,
+  100 m). The quadbike's driver seat gained a horn with its own clip (`quadbike_horn.wav`, a
+  synthesized short double "meep", higher than the jeep's). Bots: the original's warning honk
+  (`fire = blockerAhead`) is now heard; a mustering crew's driver honks every 4 s for its crew
+  (`BotHorn.CallCrew`), and friendly bots on foot within 35 m, not fighting, answer by joining
+  that crew; a player's honk draws the nearest idle squad that fits into their vehicle. Editor
+  soak (Forest Lake, 15 a side, 400 s): 14 calls, 7 bots joined crews, 0 warnings.

@@ -397,7 +397,14 @@ namespace Ironfront.Net.Replication.Server
         /// assertion green and fails only the reload one.
         /// </para>
         /// </remarks>
-        public void SwitchWeaponTo(byte weaponId)
+        public void SwitchWeaponTo(byte weaponId) => SwitchWeaponTo(weaponId, float.NegativeInfinity);
+
+        /// <summary>
+        /// As <see cref="SwitchWeaponTo(byte)"/>, with the incoming weapon drawn over its own draw
+        /// time from <paramref name="nowSeconds"/> (<see cref="WeaponCatalog.DrawSeconds"/>, less
+        /// <see cref="DrawJitterSeconds"/>); negative infinity draws it at once.
+        /// </summary>
+        public void SwitchWeaponTo(byte weaponId, float nowSeconds)
         {
             if (weaponId == WeaponId) return;
 
@@ -429,12 +436,29 @@ namespace Ironfront.Net.Replication.Server
                 WeaponRuntimeState incoming = _parkedWeapons[weaponId];
                 incoming.Unholstered = true;
                 Weapon = incoming;
+                StartDraw(nowSeconds);
                 return;
             }
 
             // First time this life. A weapon reached for the first time is loaded, which is
             // what the loadout handed the body.
             ResetWeaponPreservingMemory();
+            StartDraw(nowSeconds);
+        }
+
+        /// <summary>
+        /// Taken off the draw time, so a player who fires the moment their gun is up is not refused
+        /// for the server having seen the switch a tick or two after the player made it: the
+        /// client draws from the key press, the server from the frame carrying it.
+        /// </summary>
+        public const float DrawJitterSeconds = 0.15f;
+
+        private void StartDraw(float nowSeconds)
+        {
+            float draw = WeaponCatalog.DrawSeconds(WeaponId) - DrawJitterSeconds;
+            Weapon.ReadyAt = draw > 0f && !float.IsNegativeInfinity(nowSeconds)
+                ? nowSeconds + draw
+                : float.NegativeInfinity;
         }
 
         /// <summary>

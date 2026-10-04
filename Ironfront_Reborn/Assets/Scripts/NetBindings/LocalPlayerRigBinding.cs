@@ -287,8 +287,13 @@ namespace Ironfront.Net.Unity.Bindings
             bool healed = before > 0f && health > before;
             bool resupplied = false;
 
+            // Never a mounted weapon. A gunner's body holds weapon id 0 with a clip of 0 on the
+            // wire, and a turret or rocket pod carries id 0 too, so the ids "matched" and every
+            // snapshot emptied the helicopter's pods: the HUD read 0 and the pods fired only in
+            // the gaps their own auto-reload opened (owner report 2026-10-04). A mounted weapon's
+            // clip is its own; the server's mounted authority keeps the real one.
             Weapon weapon = actor.activeWeapon;
-            if (weapon != null && weapon.NetworkId == weaponId)
+            if (weapon != null && !(weapon is MountedWeapon) && weapon.NetworkId == weaponId)
             {
                 // S4 (CMB-19): only assign the clip once it is settled. Mid-reload, the
                 // reconciled count on the wire is deliberately sticky (ClientCombatState keeps

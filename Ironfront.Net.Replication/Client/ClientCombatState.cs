@@ -608,7 +608,10 @@ namespace Ironfront.Net.Replication.Client
                 return;
             }
 
-            if (entry.WeaponId != WeaponId)
+            // The first snapshot that names a different weapon carries the server's clip for THAT
+            // weapon, which this side has never predicted, so it is taken verbatim below.
+            bool weaponChanged = entry.WeaponId != WeaponId;
+            if (weaponChanged)
             {
                 WeaponId = entry.WeaponId;
 
@@ -683,7 +686,13 @@ namespace Ironfront.Net.Replication.Client
             // or was never set, falls through to the ordinary pending reconcile below.
             bool reloadDelivered = serverWasReloading && !ServerSaysReloading;
 
-            byte reconciled = reloadDelivered
+            // A switch is taken verbatim too, and that is the infinite-launcher bug (owner report
+            // 2026-10-04). The branch above loads the incoming weapon with a FULL clip, and the
+            // reconcile below treated that guess as a prediction: a launcher fired empty, swapped
+            // away and back came back as 1 predicted against the server's 0 -- a drift of one,
+            // inside AmmoResyncThreshold, so the 1 was kept. The local gun then fired a rocket the
+            // server refused, every swap, forever: no ammo spent, a full launch on screen.
+            byte reconciled = reloadDelivered || weaponChanged
                 ? entry.AmmoInClip
                 : ReconcileAmmo(_runtime.AmmoInClip, entry.AmmoInClip, _reloadPending);
 
