@@ -1027,6 +1027,8 @@ public class Squad
 			// it, so one bot does not drive off alone in a jeep the next three were sent to.
 			if (isCrew && !squadVehicle.IsFull() && Time.time - enterVehicleTime < CrewMusterSeconds)
 			{
+				// The driver honks for the rest of the crew while it waits (BotHorn).
+				BotHorn.CallCrew(squadVehicle);
 				return;
 			}
 			state = State.Stationary;

@@ -5295,6 +5295,8 @@ GameObject:
   - component: {fileID: 4767907224831257}
   - component: {fileID: 114539345050348057}
   - component: {fileID: 65472222099951511}
+  - component: {fileID: 8819396528797125132}
+  - component: {fileID: 8871152308169559710}
   m_Layer: 11
   m_Name: Seat Driver
   m_TagString: Untagged
@@ -5334,7 +5336,7 @@ MonoBehaviour:
   animation: 1
   enclosed: 0
   exitOffset: {x: 2, y: 0, z: 0}
-  weapon: {fileID: 0}
+  weapon: {fileID: 8871152308169559710}
   hud: {fileID: 0}
   maxOccupantBalance: 20
 --- !u!65 &65472222099951511
@@ -5358,6 +5360,162 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.1, y: 1.5, z: 1.3}
   m_Center: {x: 0, y: 0.18, z: 0.55}
+--- !u!82 &8819396528797125132
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1431896792359314}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 24300008, guid: 0943a2253d391fc4ba5ba84c12fc0eb6,
+    type: 2}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 8300000, guid: 5f3277f9d9eb5094f896d026e77bdb8d, type: 3}
+  m_PlayOnAwake: 0
+  m_Volume: 0.791
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 70
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 100
+  Pan2D: 0
+  rolloffMode: 2
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0.01
+      value: 1
+      inSlope: 0
+      outSlope: -1.010101
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.39908206
+      value: 0.30348903
+      inSlope: -1.0102987
+      outSlope: -1.0102987
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: -1.010101
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 0
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 0
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 0
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 0
+--- !u!114 &8871152308169559710
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1431896792359314}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 012bfbcca79afa0464ffc4cf0975c971, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  thirdPersonTransform: {fileID: 0}
+  thirdPersonOffset: {x: 0, y: 0, z: 0}
+  thirdPersonScale: 1
+  configuration:
+    auto: 0
+    ammo: 1
+    spareAmmo: -1
+    resupplyNumber: -1
+    reloadTime: 0.1
+    cooldown: 0.2
+    unholsterTime: 0
+    releaseDelay: 0.6
+    aimFov: 50
+    forceAutoReload: 0
+    loud: 1
+    forceWorldAudioOutput: 0
+    muzzle: {fileID: 4767907224831257}
+    muzzleFlash: {fileID: 0}
+    casing: {fileID: 0}
+    projectilesPerShot: 0
+    projectilePrefab: {fileID: 0}
+    kickback: 2
+    randomKick: 0.2
+    spread: 0
+    snapMagnitude: 0.3
+    snapDuration: 0.4
+    snapFrequency: 4
+    aiIgnoreFriendlies: 0
+    aiAllowedAimSpread: 1
+    effInfantry: 1
+    effInfantryGroup: 1
+    effUnarmored: 1
+    effArmored: 1
+    effAir: 1
+    effectiveRange: 50
+  reverbAudio: {fileID: 0}
+  uiSprite: {fileID: 21300000, guid: 987ec2405baf9cc4aa88af2760eb6fcf, type: 2}
 --- !u!1 &1436874561239779
 GameObject:
   m_ObjectHideFlags: 0

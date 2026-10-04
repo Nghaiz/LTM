@@ -222,3 +222,15 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   Candles range 20 -> 8 m, intensity 1.8; map glow 9 m. A `Night
   Viewmodel Light` (point, 1.2 m, 0.55) rides the drawing camera at night without goggles, so the
   hands and weapon read while nothing beyond them gets lighter.
+- 2026-10-04 — Horns (owner: the horn icon shows when driving but nothing sounds; jeep and
+  motorbike should sound different; everyone near must hear it; bots should honk to warn, signal
+  and call teammates aboard). The horn had network id 0 and the snapshot apply zeroed its clip
+  (#529 fixed that); it now carries `WeaponIds.CAR_HORN`, so the server's S_WEAPON_FIRE for a
+  player's honk and a new `NetShotAnnouncements.AnnounceHorn` for a bot's both reach every client
+  in range, which plays the horn of the vehicle the shooter sits in (`CarHorn.PlayNearest`, 3D,
+  100 m). The quadbike's driver seat gained a horn with its own clip (`quadbike_horn.wav`, a
+  synthesized short double "meep", higher than the jeep's). Bots: the original's warning honk
+  (`fire = blockerAhead`) is now heard; a mustering crew's driver honks every 4 s for its crew
+  (`BotHorn.CallCrew`), and friendly bots on foot within 35 m, not fighting, answer by joining
+  that crew; a player's honk draws the nearest idle squad that fits into their vehicle. Editor
+  soak (Forest Lake, 15 a side, 400 s): 14 calls, 7 bots joined crews, 0 warnings.
