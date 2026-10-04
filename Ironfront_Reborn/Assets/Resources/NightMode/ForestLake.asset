@@ -44,10 +44,20 @@ MonoBehaviour:
   pumpkinFlagRingMin: 12
   pumpkinFlagReach: 90
   pumpkinDrawDistance: 140
-  nearLights: 12
+  nearLights: 16
   flagLightPrefab: {fileID: 3855379097010745075, guid: 668cd3afff02bfb4782404fd1658ac90,
     type: 3}
   flagLightDistance: 7
+  lampLight: {r: 1, g: 0.85, b: 0.62, a: 1}
+  gateLampInset: 2.5
+  supplyLampOffset: 3
+  towerLanternPrefab: {fileID: 2353147533712229928, guid: ff94a8ac77748f84183cb239c217c414,
+    type: 3}
+  towerLanternHeight: 0.72
+  floodlightBeamPrefab: {fileID: 4324358043398318339, guid: d7e27fab66c5e3041a0cfb2f9616c8dc,
+    type: 3}
+  headquartersLamps: 8
+  headquartersLampMargin: 3
   flickerAmount: 0.3
   flickerSpeed: 6
   neutralFlagLight: {r: 1, g: 0.82, b: 0.55, a: 1}

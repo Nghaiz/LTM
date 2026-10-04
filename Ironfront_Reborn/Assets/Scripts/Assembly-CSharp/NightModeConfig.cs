@@ -93,6 +93,33 @@ public sealed class NightModeConfig : ScriptableObject
 
 	public float flagLightDistance = 7f;
 
+	[Header("Base lamps, client only (NightBaseLighting)")]
+	[Tooltip("The colour of every lamp that is not a flag's: a warm, plain light.")]
+	public Color lampLight = new Color(1f, 0.85f, 0.62f);
+
+	[Tooltip("Metres inside a gate post its lamp stands.")]
+	public float gateLampInset = 2.5f;
+
+	[Tooltip("Metres from an ammo cache or medical station its lamp stands.")]
+	public float supplyLampOffset = 3f;
+
+	[Tooltip("Hung in every watchtower, over its platform.")]
+	public GameObject towerLanternPrefab;
+
+	[Tooltip("Where up a watchtower the lantern hangs, as a share of its height.")]
+	[Range(0f, 1f)]
+	public float towerLanternHeight = 0.72f;
+
+	[Tooltip("The beam switched on in every floodlight prop.")]
+	public GameObject floodlightBeamPrefab;
+
+	[Tooltip("Lamps ringing an HQ's compound, which has no gates of the blueprint's.")]
+	[Min(0)]
+	public int headquartersLamps = 8;
+
+	[Tooltip("Metres outside an HQ's capture range its ring of lamps stands.")]
+	public float headquartersLampMargin = 3f;
+
 	[Tooltip("Candles flicker by this share of their brightness.")]
 	[Range(0f, 1f)]
 	public float flickerAmount = 0.3f;

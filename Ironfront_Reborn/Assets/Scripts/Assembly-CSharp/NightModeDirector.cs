@@ -75,7 +75,7 @@ public sealed class NightModeDirector : MonoBehaviour
 	/// <summary>Whether this client sees through its night-vision goggles now.</summary>
 	public bool NightVisionOn => night && goggles != null && goggles.enabled && goggles.Battery != null && goggles.Battery.IsOn;
 
-	/// <summary>Where the night's lights stand (every lit pumpkin and lamp), for the map to draw.</summary>
+	/// <summary>Where the night map draws a glow: every lit pumpkin and every flag lamp.</summary>
 	public IReadOnlyList<Vector3> GlowPoints => glowPoints;
 
 	public static NightModeDirector EnsureOn(GameObject host)
@@ -309,15 +309,13 @@ public sealed class NightModeDirector : MonoBehaviour
 		System.Random random = new System.Random(seed);
 		ScatterPumpkins(random);
 
-		SpawnPoint[] points = ActorManager.instance.spawnPoints;
-		for (int index = 0; index < points.Length; index++)
+		// Lamps by every flag and HQ, by the base's own plan (NightBaseLighting).
+		int lamps = 0;
+		foreach (SpawnPoint point in ActorManager.instance.spawnPoints)
 		{
-			SpawnPoint point = points[index];
-			if (point != null)
-			{
-				PlaceFlagLight(random, point, point.transform.position);
-			}
+			lamps += NightBaseLighting.Dress(config, point, piece => dressing.Add(piece), AddBaseLight);
 		}
+		Debug.Log("[night] " + mapName + ": " + lamps + " lamp(s), lantern(s) and floodlight(s) at the flags and HQs.");
 		lightDistance = new float[pooledLights.Count];
 		nextLights = 0f;
 	}
@@ -549,11 +547,16 @@ public sealed class NightModeDirector : MonoBehaviour
 		{
 			candles.Add(candle);
 			candleIntensity.Add(candle.intensity);
-			AddPooledLight(candle);
+			AddPooledLight(candle, onMap: true);
 		}
 	}
 
-	private void AddPooledLight(Light light)
+	/// <param name="onMap">
+	/// Whether the night map draws a glow for it: every pumpkin and a flag's own lamp, but not a
+	/// base's gate, tower and floodlight lamps, which would paint every base as one bright blob
+	/// (owner report 2026-10-04). Every light still lights the enemies near it (EnemyMapReveal).
+	/// </param>
+	private void AddPooledLight(Light light, bool onMap)
 	{
 		// Only the nearest few are lit at a time (UpdateLights), and those always per pixel: a
 		// candle drawn per vertex on Low lights nothing a player can see.
@@ -561,37 +564,23 @@ public sealed class NightModeDirector : MonoBehaviour
 		light.enabled = false;
 		pooledLights.Add(light);
 		Vector3 at = light.transform.position;
-		glowPoints.Add(at);
+		if (onMap)
+		{
+			glowPoints.Add(at);
+		}
 		EnemyMapReveal.AddLight(at.x, at.z);
 	}
 
-	private void PlaceFlagLight(System.Random random, SpawnPoint point, Vector3 flag)
+	// A base's light: pooled like every other, and coloured by its flag's holder when it has one.
+	private void AddBaseLight(Light light, SpawnPoint colouredBy)
 	{
-		if (config.flagLightPrefab == null)
+		if (colouredBy != null)
 		{
-			return;
+			flagPoints.Add(colouredBy);
+			flagLights.Add(light);
 		}
-		for (int attempt = 0; attempt < 8; attempt++)
-		{
-			float angle = (float)(random.NextDouble() * Mathf.PI * 2.0);
-			Vector3 around = flag + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * config.flagLightDistance;
-			if (!TryGround(around, out Vector3 at))
-			{
-				continue;
-			}
-			Vector3 toFlag = flag - at;
-			toFlag.y = 0f;
-			GameObject lamp = Instantiate(config.flagLightPrefab, at, Quaternion.LookRotation(toFlag.normalized));
-			dressing.Add(lamp);
-			Light light = lamp.GetComponentInChildren<Light>(true);
-			if (light != null)
-			{
-				flagPoints.Add(point);
-				flagLights.Add(light);
-				AddPooledLight(light);
-			}
-			return;
-		}
+		// A flag lamp carries a spot and a small glow light: one map glow for the lamp.
+		AddPooledLight(light, onMap: colouredBy != null && light.type == LightType.Spot);
 	}
 
 	// Open ground under a spot: the terrain itself, not a roof, a rock or a tree (trees share the

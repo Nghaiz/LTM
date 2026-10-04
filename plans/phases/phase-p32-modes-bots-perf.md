@@ -184,3 +184,13 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   the night's light points). The goggles bring the usual 60 m back; team-mates show everywhere as
   always. `NightModeDirector` sets it every frame, `RemoteActorRegistry` asks it per marker.
   8 flow tests (mutant "dark radius ignored" turns 2 red) and an EditMode case.
+- 2026-10-04 — Night follow-up 5 (item 2, owner: more lamps at the flags and HQs, laid out with
+  care). `NightBaseLighting` hangs the lamps on the base's own plan, found by the names the
+  `ForestLakeOutposts` blueprint gives its pieces: four team-coloured lamps on the diagonals round
+  every flag (square to the front gate), a lamp 2.5 m inside every gate post, one beside every
+  ammo cache and medical station, a `Night Lantern` prefab in every watchtower, the floodlight
+  props switched on (`Night Floodlight Beam`), and at the two HQs a ring of 8 lamps 3 m outside
+  the capture range. A lamp needs level dry ground and a clear pole (capsule check). 143 lights on
+  Forest Lake; the pool lights the nearest 16 (was 12). The map draws glows for pumpkins and flag
+  lamps only, so bases do not turn into blobs; every lamp still lights enemies (EnemyMapReveal).
+  Every light of the lamp prefab is pooled now (its small glow light used to stay on everywhere).
