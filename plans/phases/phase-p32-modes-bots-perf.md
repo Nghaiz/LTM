@@ -164,3 +164,12 @@ last: carrying the mode and its settings to the game server and the HUD changes 
   Only the 12 lights nearest the camera shine (per pixel, so Low sees them too) and pumpkins past
   140 m are not drawn. `Ironfront.NightModePreview.Shot` renders the night through the scene's
   post-processed camera for tuning.
+- 2026-10-04 — Night follow-up 2 (owner: the M map and the radar showed the day). `MinimapBaker`
+  also bakes `<scene>_Minimap_Night.png` for a map with a Night Mode config: the finished picture
+  desaturated to 35%, multiplied by (0.18, 0.21, 0.30) with paths and roofs kept 35% brighter, so
+  the relief, roads, lake and bases still read as shapes. At run time `MinimapCamera.Minimap()`
+  hands out, by night, that picture with a warm glow (18 m, a bright 3.5 m heart) painted at every
+  lit pumpkin and lamp of the match (`NightMinimapPicture`, drawn once with the UI's default
+  material, which every build carries). The M map and radar read the picture every frame, so
+  they switch when the room's night arrives after the map was set up. Modelled on the original's
+  Island night map (`tmp/shots/orig-island-night-map.jpg`): near-black ground, pumpkins glowing.
