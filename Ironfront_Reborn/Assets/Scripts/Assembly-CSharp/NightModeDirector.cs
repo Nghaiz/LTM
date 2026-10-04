@@ -337,8 +337,10 @@ public sealed class NightModeDirector : MonoBehaviour
 	}
 
 	/// <summary>
-	/// Small groups of pumpkins over the whole play area, never on a slope, in water, under a roof
-	/// or on a tree, and kept <see cref="NightModeConfig.pumpkinSpotSpacing"/> apart.
+	/// Small groups of pumpkins where the match is fought: along the routes between neighbouring
+	/// flags, around every flag and HQ, and a few in between, never out at the empty edges of the
+	/// map (owner report 2026-10-04). Never on a slope, in water, under a roof or on a tree, and
+	/// kept <see cref="NightModeConfig.pumpkinSpotSpacing"/> apart.
 	/// </summary>
 	private void ScatterPumpkins(System.Random random)
 	{
@@ -346,20 +348,22 @@ public sealed class NightModeDirector : MonoBehaviour
 		{
 			return;
 		}
-		if (!TryPlayArea(out Rect area))
+		List<Vector3> flags = FlagPositions();
+		if (!TryPlayArea(out Rect area) || flags.Count == 0)
 		{
-			Debug.LogWarning("[night] " + mapName + " has no LevelBounds or terrain; no pumpkins.");
+			Debug.LogWarning("[night] " + mapName + " has no LevelBounds, terrain or flags; no pumpkins.");
 			return;
 		}
+		area = FightingArea(area, flags, config.pumpkinFlagReach);
+		List<Vector3> routes = Routes(flags);
 		var spots = new List<Vector3>(config.pumpkinSpots);
 		float spacingSqr = config.pumpkinSpotSpacing * config.pumpkinSpotSpacing;
 		int attempts = config.pumpkinSpots * SpotAttemptsPerSpot;
 		for (int attempt = 0; attempt < attempts && spots.Count < config.pumpkinSpots; attempt++)
 		{
-			Vector3 around = new Vector3(
-				area.xMin + (float)random.NextDouble() * area.width, 0f,
-				area.yMin + (float)random.NextDouble() * area.height);
-			if (!TryGround(around, out Vector3 centre) || TooClose(spots, centre, spacingSqr))
+			Vector3 around = Candidate(random, flags, routes, area);
+			if (!area.Contains(new Vector2(around.x, around.z))
+				|| !TryGround(around, out Vector3 centre) || TooClose(spots, centre, spacingSqr))
 			{
 				continue;
 			}
@@ -381,6 +385,116 @@ public sealed class NightModeDirector : MonoBehaviour
 			}
 		}
 		Debug.Log("[night] " + mapName + ": " + pumpkins.Count + " pumpkin(s) in " + spots.Count + " group(s), " + candles.Count + " candle(s).");
+	}
+
+	/// <summary>
+	/// Where to try a group: on a route between two flags, around a flag, or anywhere in the
+	/// fighting area, in the config's shares.
+	/// </summary>
+	private Vector3 Candidate(System.Random random, List<Vector3> flags, List<Vector3> routes, Rect area)
+	{
+		double roll = random.NextDouble();
+		if (roll < config.pumpkinRouteShare && routes.Count >= 2)
+		{
+			int route = random.Next(routes.Count / 2) * 2;
+			Vector3 from = routes[route];
+			Vector3 to = routes[route + 1];
+			Vector3 along = to - from;
+			along.y = 0f;
+			Vector3 side = new Vector3(-along.z, 0f, along.x).normalized;
+			// A bell across the route: most close to the line players walk, a few out to its edge.
+			float offset = (float)((random.NextDouble() + random.NextDouble() - 1.0) * config.pumpkinRouteHalfWidth);
+			return Vector3.Lerp(from, to, (float)random.NextDouble()) + (side * offset);
+		}
+		if (roll < config.pumpkinRouteShare + config.pumpkinFlagShare)
+		{
+			Vector3 flag = flags[random.Next(flags.Count)];
+			float angle = (float)(random.NextDouble() * Mathf.PI * 2.0);
+			float radius = Mathf.Lerp(config.pumpkinFlagRingMin, config.pumpkinFlagReach, Mathf.Sqrt((float)random.NextDouble()));
+			return flag + (new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius);
+		}
+		return new Vector3(
+			area.xMin + ((float)random.NextDouble() * area.width), 0f,
+			area.yMin + ((float)random.NextDouble() * area.height));
+	}
+
+	private static List<Vector3> FlagPositions()
+	{
+		var flags = new List<Vector3>();
+		if (ActorManager.instance != null && ActorManager.instance.spawnPoints != null)
+		{
+			foreach (SpawnPoint point in ActorManager.instance.spawnPoints)
+			{
+				if (point != null)
+				{
+					flags.Add(point.transform.position);
+				}
+			}
+		}
+		return flags;
+	}
+
+	/// <summary>
+	/// Every flag's link to its two nearest flags, once each, as start/end pairs: the lines a match
+	/// moves along.
+	/// </summary>
+	private static List<Vector3> Routes(List<Vector3> flags)
+	{
+		var routes = new List<Vector3>();
+		var linked = new HashSet<long>();
+		for (int i = 0; i < flags.Count; i++)
+		{
+			int first = -1;
+			int second = -1;
+			float firstSqr = float.MaxValue;
+			float secondSqr = float.MaxValue;
+			for (int j = 0; j < flags.Count; j++)
+			{
+				if (j == i)
+				{
+					continue;
+				}
+				float d = (flags[j] - flags[i]).sqrMagnitude;
+				if (d < firstSqr)
+				{
+					second = first;
+					secondSqr = firstSqr;
+					first = j;
+					firstSqr = d;
+				}
+				else if (d < secondSqr)
+				{
+					second = j;
+					secondSqr = d;
+				}
+			}
+			foreach (int j in new[] { first, second })
+			{
+				if (j < 0 || !linked.Add(((long)Mathf.Min(i, j) << 32) | (uint)Mathf.Max(i, j)))
+				{
+					continue;
+				}
+				routes.Add(flags[i]);
+				routes.Add(flags[j]);
+			}
+		}
+		return routes;
+	}
+
+	/// <summary>The play area cut down to the box round every flag plus <paramref name="reach"/>.</summary>
+	private static Rect FightingArea(Rect playArea, List<Vector3> flags, float reach)
+	{
+		float xMin = float.MaxValue, xMax = float.MinValue, zMin = float.MaxValue, zMax = float.MinValue;
+		foreach (Vector3 flag in flags)
+		{
+			xMin = Mathf.Min(xMin, flag.x);
+			xMax = Mathf.Max(xMax, flag.x);
+			zMin = Mathf.Min(zMin, flag.z);
+			zMax = Mathf.Max(zMax, flag.z);
+		}
+		return Rect.MinMaxRect(
+			Mathf.Max(playArea.xMin, xMin - reach), Mathf.Max(playArea.yMin, zMin - reach),
+			Mathf.Min(playArea.xMax, xMax + reach), Mathf.Min(playArea.yMax, zMax + reach));
 	}
 
 	private static bool TooClose(List<Vector3> spots, Vector3 at, float spacingSqr)
