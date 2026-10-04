@@ -16,6 +16,18 @@ public sealed class NightModeConfig : ScriptableObject
 	[Tooltip("The moonlight's intensity in Night Mode, against the scene's own.")]
 	public float moonIntensity = 0.08f;
 
+	[Tooltip("The moonlight's shadows in Night Mode: the moon, not the ambient, is what gives the night its shapes.")]
+	public LightShadows moonShadows = LightShadows.Soft;
+
+	[Range(0f, 1f)]
+	public float moonShadowStrength = 0.85f;
+
+	[Tooltip("The moon's height above the horizon in degrees, and its compass bearing; a low moon throws long shadows.")]
+	[Range(5f, 90f)]
+	public float moonElevation = 35f;
+
+	public float moonBearing = 221f;
+
 	[Tooltip("The share of the night's fog density night vision leaves.")]
 	[Range(0.05f, 1f)]
 	public float nightVisionFogFactor = 0.35f;
@@ -29,14 +41,28 @@ public sealed class NightModeConfig : ScriptableObject
 	public AudioClip nightVisionOff;
 
 	[Header("Dressing, client only")]
-	[Tooltip("Pumpkins set out around every flag: carved ones carry a candle light, plain ones none.")]
+	[Tooltip("Pumpkins scattered over the whole map, a new layout every match: carved ones carry a candle light, plain ones none.")]
 	public GameObject[] pumpkinPrefabs;
 
-	public int pumpkinsPerFlag = 5;
+	[Tooltip("Places across the play area a small group of pumpkins is set out at.")]
+	public int pumpkinSpots = 220;
 
-	public float pumpkinRingMin = 4f;
+	[Tooltip("Pumpkins in one group, at most; each group has between one and this many.")]
+	[Min(1)]
+	public int pumpkinsPerSpotMax = 3;
 
-	public float pumpkinRingMax = 11f;
+	[Tooltip("Metres kept between two groups.")]
+	public float pumpkinSpotSpacing = 12f;
+
+	[Tooltip("Metres a group's pumpkins sit from its centre, at most.")]
+	public float pumpkinGroupRadius = 1.8f;
+
+	[Tooltip("Metres from the camera past which a pumpkin is not drawn: the fog has hidden it long before.")]
+	public float pumpkinDrawDistance = 140f;
+
+	[Tooltip("How many of the dressing's lights, the nearest to the camera, shine at once. The rest stay dark until the camera comes near: a forward renderer pays for every light on everything it touches.")]
+	[Min(0)]
+	public int nearLights = 12;
 
 	[Tooltip("A dim lamp on a stand beside every flag, its light in the colour of the side that holds it.")]
 	public GameObject flagLightPrefab;

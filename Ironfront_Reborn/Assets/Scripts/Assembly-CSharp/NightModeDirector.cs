@@ -17,10 +17,11 @@ using UnityEngine.SceneManagement;
 /// room assignment, on a client from the room it joined and the match state.
 /// </para>
 /// <para>
-/// <b>Client only:</b> the pumpkins and candles around every flag and a lamp beside it in the
-/// colour of the side holding it (all without colliders, so a client's world never differs from
-/// the server's where it matters), the night's ambience, and the goggles
-/// (<see cref="NightVisionGoggles"/>) with the room's battery.
+/// <b>Client only:</b> pumpkins scattered over the whole map, a new layout every match but the same
+/// for everyone in it (seeded by the map and the room), their candles lit at the original's
+/// strength, a lamp beside every flag in the colour of the side holding it (all without colliders,
+/// so a client's world never differs from the server's where it matters), the night's ambience,
+/// and the goggles (<see cref="NightVisionGoggles"/>) with the room's battery.
 /// </para>
 /// <para>
 /// Lives on <c>ActorManager</c>'s object, which outlives a map load, so <see cref="StartGame"/>
@@ -31,8 +32,12 @@ using UnityEngine.SceneManagement;
 public sealed class NightModeDirector : MonoBehaviour
 {
 	private const string ConfigFolder = "NightMode/";
-	private const float FlagColourEverySeconds = 0.5f;
 	private const float GroundProbeHeight = 60f;
+	private const float LightsEverySeconds = 0.25f;
+	private const float MaxGroundSlopeY = 0.85f;
+	private const float OnTerrainTolerance = 0.5f;
+	private const float DryMargin = 0.3f;
+	private const int SpotAttemptsPerSpot = 6;
 
 	public static NightModeDirector instance;
 
@@ -44,12 +49,21 @@ public sealed class NightModeDirector : MonoBehaviour
 	private readonly List<GameObject> dressing = new List<GameObject>();
 	private readonly List<Light> candles = new List<Light>();
 	private readonly List<float> candleIntensity = new List<float>();
+	private readonly List<GameObject> pumpkins = new List<GameObject>();
+	private readonly List<Light> pooledLights = new List<Light>();
+	private readonly List<Vector3> glowPoints = new List<Vector3>();
+	private float[] lightDistance = new float[0];
+	private float[] sortedDistance = new float[0];
+	private float nextLights;
 	private readonly List<SpawnPoint> flagPoints = new List<SpawnPoint>();
 	private readonly List<Light> flagLights = new List<Light>();
-	private float nextFlagColour;
 
 	private Light moon;
 	private float moonAuthored;
+	private LightShadows moonShadowsAuthored;
+	private float moonShadowStrengthAuthored;
+	private Quaternion moonRotationAuthored;
+	private Light skySunAuthored;
 	private AudioSource ambience;
 	private AudioClip ambienceAuthored;
 
@@ -57,6 +71,12 @@ public sealed class NightModeDirector : MonoBehaviour
 
 	/// <summary>Whether this map is in Night Mode now.</summary>
 	public bool IsNight => night;
+
+	/// <summary>Whether this client sees through its night-vision goggles now.</summary>
+	public bool NightVisionOn => night && goggles != null && goggles.enabled && goggles.Battery != null && goggles.Battery.IsOn;
+
+	/// <summary>Where the night's lights stand (every lit pumpkin and lamp), for the map to draw.</summary>
+	public IReadOnlyList<Vector3> GlowPoints => glowPoints;
 
 	public static NightModeDirector EnsureOn(GameObject host)
 	{
@@ -159,6 +179,13 @@ public sealed class NightModeDirector : MonoBehaviour
 			if (moon != null)
 			{
 				moon.intensity = config.moonIntensity;
+				moon.shadows = config.moonShadows;
+				moon.shadowStrength = config.moonShadowStrength;
+				moon.transform.rotation = Quaternion.Euler(config.moonElevation, config.moonBearing, 0f);
+				// The procedural sky draws its disc opposite RenderSettings.sun, which is still the
+				// hidden sunlight: make it the moon, so the moon in the sky casts the shadows.
+				skySunAuthored = RenderSettings.sun;
+				RenderSettings.sun = moon;
 			}
 			if (ambience != null && config.ambience != null)
 			{
@@ -201,6 +228,10 @@ public sealed class NightModeDirector : MonoBehaviour
 		if (moon != null)
 		{
 			moon.intensity = moonAuthored;
+			moon.shadows = moonShadowsAuthored;
+			moon.shadowStrength = moonShadowStrengthAuthored;
+			moon.transform.rotation = moonRotationAuthored;
+			RenderSettings.sun = skySunAuthored;
 		}
 		if (ambience != null && ambienceAuthored != null)
 		{
@@ -235,6 +266,9 @@ public sealed class NightModeDirector : MonoBehaviour
 			if (moon != null)
 			{
 				moonAuthored = moon.intensity;
+				moonShadowsAuthored = moon.shadows;
+				moonShadowStrengthAuthored = moon.shadowStrength;
+				moonRotationAuthored = moon.transform.rotation;
 			}
 		}
 		if (ambience == null)
@@ -266,56 +300,153 @@ public sealed class NightModeDirector : MonoBehaviour
 			return;
 		}
 
+		// A new layout every match and the same for everyone in it: the room is new for every match
+		// (the master never reuses one), and every client in it knows its id. Practice and a direct
+		// connect have no room, so they take the clock.
+		int seed = NetRoomRules.RoomId != 0
+			? StableHash(mapName) ^ (NetRoomRules.RoomId * 7919)
+			: System.Environment.TickCount;
+		System.Random random = new System.Random(seed);
+		ScatterPumpkins(random);
+
 		SpawnPoint[] points = ActorManager.instance.spawnPoints;
 		for (int index = 0; index < points.Length; index++)
 		{
 			SpawnPoint point = points[index];
-			if (point == null)
+			if (point != null)
 			{
-				continue;
+				PlaceFlagLight(random, point, point.transform.position);
 			}
-			// The same layout on every client: seeded by the map and the flag, not by the clock.
-			System.Random random = new System.Random(mapName.GetHashCode() ^ (index * 7919));
-			Vector3 flag = point.transform.position;
-			PlacePumpkins(random, flag);
-			PlaceFlagLight(random, point, flag);
+		}
+		lightDistance = new float[pooledLights.Count];
+		nextLights = 0f;
+	}
+
+	// FNV-1a: string.GetHashCode is not promised to agree between processes.
+	private static int StableHash(string text)
+	{
+		unchecked
+		{
+			uint hash = 2166136261;
+			foreach (char c in text)
+			{
+				hash = (hash ^ c) * 16777619;
+			}
+			return (int)hash;
 		}
 	}
 
-	private void PlacePumpkins(System.Random random, Vector3 flag)
+	/// <summary>
+	/// Small groups of pumpkins over the whole play area, never on a slope, in water, under a roof
+	/// or on a tree, and kept <see cref="NightModeConfig.pumpkinSpotSpacing"/> apart.
+	/// </summary>
+	private void ScatterPumpkins(System.Random random)
 	{
-		if (config.pumpkinPrefabs == null || config.pumpkinPrefabs.Length == 0)
+		if (config.pumpkinPrefabs == null || config.pumpkinPrefabs.Length == 0 || config.pumpkinSpots <= 0)
 		{
 			return;
 		}
-		int placed = 0;
-		for (int attempt = 0; attempt < config.pumpkinsPerFlag * 4 && placed < config.pumpkinsPerFlag; attempt++)
+		if (!TryPlayArea(out Rect area))
 		{
-			float angle = (float)(random.NextDouble() * Mathf.PI * 2.0);
-			float radius = Mathf.Lerp(config.pumpkinRingMin, config.pumpkinRingMax, (float)random.NextDouble());
-			Vector3 around = flag + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
-			if (!TryGround(around, out Vector3 at))
-			{
-				continue;
-			}
-			GameObject prefab = config.pumpkinPrefabs[random.Next(config.pumpkinPrefabs.Length)];
-			if (prefab == null)
-			{
-				continue;
-			}
-			// Facing the flag, so a carved face looks at whoever is fighting for it.
-			Vector3 toFlag = flag - at;
-			toFlag.y = 0f;
-			Quaternion facing = toFlag.sqrMagnitude > 0.01f ? Quaternion.LookRotation(toFlag) : Quaternion.identity;
-			GameObject pumpkin = Instantiate(prefab, at, facing * Quaternion.Euler(0f, (float)(random.NextDouble() * 40.0 - 20.0), 0f));
-			dressing.Add(pumpkin);
-			foreach (Light candle in pumpkin.GetComponentsInChildren<Light>(true))
-			{
-				candles.Add(candle);
-				candleIntensity.Add(candle.intensity);
-			}
-			placed++;
+			Debug.LogWarning("[night] " + mapName + " has no LevelBounds or terrain; no pumpkins.");
+			return;
 		}
+		var spots = new List<Vector3>(config.pumpkinSpots);
+		float spacingSqr = config.pumpkinSpotSpacing * config.pumpkinSpotSpacing;
+		int attempts = config.pumpkinSpots * SpotAttemptsPerSpot;
+		for (int attempt = 0; attempt < attempts && spots.Count < config.pumpkinSpots; attempt++)
+		{
+			Vector3 around = new Vector3(
+				area.xMin + (float)random.NextDouble() * area.width, 0f,
+				area.yMin + (float)random.NextDouble() * area.height);
+			if (!TryGround(around, out Vector3 centre) || TooClose(spots, centre, spacingSqr))
+			{
+				continue;
+			}
+			spots.Add(centre);
+			int inGroup = 1 + random.Next(config.pumpkinsPerSpotMax);
+			for (int i = 0; i < inGroup; i++)
+			{
+				Vector3 at = centre;
+				if (i > 0)
+				{
+					float angle = (float)(random.NextDouble() * Mathf.PI * 2.0);
+					float radius = config.pumpkinGroupRadius * (0.4f + 0.6f * (float)random.NextDouble());
+					if (!TryGround(centre + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius, out at))
+					{
+						continue;
+					}
+				}
+				PlacePumpkin(random, at);
+			}
+		}
+		Debug.Log("[night] " + mapName + ": " + pumpkins.Count + " pumpkin(s) in " + spots.Count + " group(s), " + candles.Count + " candle(s).");
+	}
+
+	private static bool TooClose(List<Vector3> spots, Vector3 at, float spacingSqr)
+	{
+		for (int i = 0; i < spots.Count; i++)
+		{
+			Vector3 d = spots[i] - at;
+			if ((d.x * d.x) + (d.z * d.z) < spacingSqr)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// The play area with ground under it: the minimap's own rule (MinimapCamera.PlayVolumeFrame).
+	private static bool TryPlayArea(out Rect area)
+	{
+		area = default;
+		Terrain terrain = Terrain.activeTerrain;
+		if (LevelBounds.instance == null || terrain == null || terrain.terrainData == null)
+		{
+			return false;
+		}
+		Bounds box = LevelBounds.instance.WorldBox;
+		Vector3 origin = terrain.GetPosition();
+		Vector3 size = terrain.terrainData.size;
+		float xMin = Mathf.Max(box.min.x, origin.x);
+		float xMax = Mathf.Min(box.max.x, origin.x + size.x);
+		float zMin = Mathf.Max(box.min.z, origin.z);
+		float zMax = Mathf.Min(box.max.z, origin.z + size.z);
+		if (xMax <= xMin || zMax <= zMin)
+		{
+			return false;
+		}
+		area = Rect.MinMaxRect(xMin, zMin, xMax, zMax);
+		return true;
+	}
+
+	private void PlacePumpkin(System.Random random, Vector3 at)
+	{
+		GameObject prefab = config.pumpkinPrefabs[random.Next(config.pumpkinPrefabs.Length)];
+		if (prefab == null)
+		{
+			return;
+		}
+		Quaternion facing = Quaternion.Euler(0f, (float)(random.NextDouble() * 360.0), 0f);
+		GameObject pumpkin = Instantiate(prefab, at, facing);
+		dressing.Add(pumpkin);
+		pumpkins.Add(pumpkin);
+		foreach (Light candle in pumpkin.GetComponentsInChildren<Light>(true))
+		{
+			candles.Add(candle);
+			candleIntensity.Add(candle.intensity);
+			AddPooledLight(candle);
+		}
+	}
+
+	private void AddPooledLight(Light light)
+	{
+		// Only the nearest few are lit at a time (UpdateLights), and those always per pixel: a
+		// candle drawn per vertex on Low lights nothing a player can see.
+		light.renderMode = LightRenderMode.ForcePixel;
+		light.enabled = false;
+		pooledLights.Add(light);
+		glowPoints.Add(light.transform.position);
 	}
 
 	private void PlaceFlagLight(System.Random random, SpawnPoint point, Vector3 flag)
@@ -341,45 +472,130 @@ public sealed class NightModeDirector : MonoBehaviour
 			{
 				flagPoints.Add(point);
 				flagLights.Add(light);
+				AddPooledLight(light);
 			}
 			return;
 		}
 	}
 
-	// Open ground under a spot: the terrain itself, not a roof, a rock or a tree, and not a slope.
+	// Open ground under a spot: the terrain itself, not a roof, a rock or a tree (trees share the
+	// terrain's collider, so the hit must also sit on the terrain's surface), not a slope and not
+	// under water.
 	private static bool TryGround(Vector3 around, out Vector3 at)
 	{
-		Vector3 origin = new Vector3(around.x, around.y + GroundProbeHeight, around.z);
-		if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, GroundProbeHeight * 3f, ~0, QueryTriggerInteraction.Ignore)
-			&& hit.collider is TerrainCollider && hit.normal.y > 0.85f)
-		{
-			at = hit.point;
-			return true;
-		}
 		at = around;
-		return false;
+		Terrain terrain = Terrain.activeTerrain;
+		if (terrain == null)
+		{
+			return false;
+		}
+		float surface = terrain.SampleHeight(around) + terrain.GetPosition().y;
+		Vector3 origin = new Vector3(around.x, surface + GroundProbeHeight, around.z);
+		if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, GroundProbeHeight * 3f, ~0, QueryTriggerInteraction.Ignore)
+			|| !(hit.collider is TerrainCollider) || hit.normal.y <= MaxGroundSlopeY
+			|| Mathf.Abs(hit.point.y - surface) > OnTerrainTolerance
+			|| WaterLevel.Depth(hit.point) > -DryMargin)
+		{
+			return false;
+		}
+		at = hit.point;
+		return true;
 	}
 
 	private void Update()
 	{
-		if (!night || candles.Count + flagLights.Count == 0)
+		if (!night || pooledLights.Count == 0)
 		{
 			return;
+		}
+		if (Time.time >= nextLights)
+		{
+			nextLights = Time.time + LightsEverySeconds;
+			UpdateLights();
+			UpdateFlagColours();
 		}
 		float t = Time.time * config.flickerSpeed;
 		for (int i = 0; i < candles.Count; i++)
 		{
 			Light candle = candles[i];
-			if (candle != null)
+			if (candle != null && candle.enabled)
 			{
 				candle.intensity = candleIntensity[i] * (1f - (config.flickerAmount * Mathf.PerlinNoise(t, i * 3.7f)));
 			}
 		}
-		if (Time.time < nextFlagColour)
+	}
+
+	/// <summary>
+	/// Lights the <see cref="NightModeConfig.nearLights"/> nearest the camera and darkens the rest;
+	/// draws only the pumpkins inside <see cref="NightModeConfig.pumpkinDrawDistance"/>.
+	/// </summary>
+	private void UpdateLights()
+	{
+		Camera viewer = Camera.main;
+		if (viewer == null)
 		{
 			return;
 		}
-		nextFlagColour = Time.time + FlagColourEverySeconds;
+		Vector3 eye = viewer.transform.position;
+		int count = pooledLights.Count;
+		if (lightDistance.Length != count)
+		{
+			lightDistance = new float[count];
+		}
+		for (int i = 0; i < count; i++)
+		{
+			Light light = pooledLights[i];
+			lightDistance[i] = light != null ? (light.transform.position - eye).sqrMagnitude : float.MaxValue;
+		}
+		// The K-th nearest distance: lights at or inside it shine.
+		int wanted = Mathf.Min(config.nearLights, count);
+		float cutoff = float.MaxValue;
+		if (wanted < count)
+		{
+			if (sortedDistance.Length != count)
+			{
+				sortedDistance = new float[count];
+			}
+			System.Array.Copy(lightDistance, sortedDistance, count);
+			System.Array.Sort(sortedDistance);
+			cutoff = wanted > 0 ? sortedDistance[wanted - 1] : -1f;
+		}
+		int lit = 0;
+		for (int i = 0; i < count; i++)
+		{
+			Light light = pooledLights[i];
+			if (light == null)
+			{
+				continue;
+			}
+			bool on = lit < wanted && lightDistance[i] <= cutoff;
+			if (on)
+			{
+				lit++;
+			}
+			if (light.enabled != on)
+			{
+				light.enabled = on;
+			}
+		}
+		float drawSqr = config.pumpkinDrawDistance * config.pumpkinDrawDistance;
+		for (int i = 0; i < pumpkins.Count; i++)
+		{
+			GameObject pumpkin = pumpkins[i];
+			if (pumpkin == null)
+			{
+				continue;
+			}
+			bool show = (pumpkin.transform.position - eye).sqrMagnitude <= drawSqr;
+			if (pumpkin.activeSelf != show)
+			{
+				pumpkin.SetActive(show);
+			}
+		}
+	}
+
+	private void UpdateFlagColours()
+	{
 		for (int i = 0; i < flagLights.Count; i++)
 		{
 			if (flagLights[i] == null || flagPoints[i] == null)
@@ -404,6 +620,9 @@ public sealed class NightModeDirector : MonoBehaviour
 		dressing.Clear();
 		candles.Clear();
 		candleIntensity.Clear();
+		pumpkins.Clear();
+		pooledLights.Clear();
+		glowPoints.Clear();
 		flagPoints.Clear();
 		flagLights.Clear();
 		moon = null;

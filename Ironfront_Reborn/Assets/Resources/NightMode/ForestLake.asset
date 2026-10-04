@@ -13,13 +13,17 @@ MonoBehaviour:
   m_Name: ForestLake
   m_EditorClassIdentifier: Assembly-CSharp::NightModeConfig
   atmosphere:
-    sky: {r: 0.09, g: 0.092, b: 0.15, a: 0}
-    equator: {r: 0.012, g: 0.036, b: 0.077, a: 0}
-    ground: {r: 0.018, g: 0.016, b: 0.015, a: 0}
+    sky: {r: 0.1215, g: 0.1242, b: 0.2025, a: 0}
+    equator: {r: 0.0162, g: 0.0486, b: 0.104, a: 0}
+    ground: {r: 0.0243, g: 0.0216, b: 0.0203, a: 0}
     fogDensity: 0.022
-    fog: {r: 0.02, g: 0.022, b: 0.03, a: 0}
+    fog: {r: 0.027, g: 0.0297, b: 0.0405, a: 0}
     skyboxMaterial: {fileID: 2100000, guid: db25a9a845635504485478179366a830, type: 2}
-  moonIntensity: 0.15
+  moonIntensity: 0.3
+  moonShadows: 2
+  moonShadowStrength: 0.85
+  moonElevation: 35
+  moonBearing: 221
   nightVisionFogFactor: 0.35
   ambience: {fileID: 8300000, guid: 100c3bfecdb5ea4469e80d5cc90f43af, type: 3}
   nightVisionOn: {fileID: 8300000, guid: 838df34fb8aeb57419336b815fbba8ef, type: 3}
@@ -28,9 +32,12 @@ MonoBehaviour:
   - {fileID: 95118652481924306, guid: 5c9291e994dd0f24eb766e7062d03d30, type: 3}
   - {fileID: 95118652481924306, guid: 5c9291e994dd0f24eb766e7062d03d30, type: 3}
   - {fileID: 8814367629906294609, guid: 17fae1d6129854a4896dd3e682f406ad, type: 3}
-  pumpkinsPerFlag: 5
-  pumpkinRingMin: 4
-  pumpkinRingMax: 11
+  pumpkinSpots: 220
+  pumpkinsPerSpotMax: 3
+  pumpkinSpotSpacing: 12
+  pumpkinGroupRadius: 1.8
+  pumpkinDrawDistance: 140
+  nearLights: 12
   flagLightPrefab: {fileID: 3855379097010745075, guid: 668cd3afff02bfb4782404fd1658ac90,
     type: 3}
   flagLightDistance: 7
