@@ -38,6 +38,7 @@ public sealed class NightModeDirector : MonoBehaviour
 	private const float OnTerrainTolerance = 0.5f;
 	private const float DryMargin = 0.3f;
 	private const int SpotAttemptsPerSpot = 6;
+	private const int FillerTries = 8;
 
 	public static NightModeDirector instance;
 
@@ -335,9 +336,10 @@ public sealed class NightModeDirector : MonoBehaviour
 	}
 
 	/// <summary>
-	/// Small groups of pumpkins where the match is fought: along the routes between neighbouring
-	/// flags, around every flag and HQ, and a few in between, never out at the empty edges of the
-	/// map (owner report 2026-10-04). Never on a slope, in water, under a roof or on a tree, and
+	/// Small groups of pumpkins where the match is fought: most scattered evenly and at random over
+	/// the ground round the flags and the routes between them, some along those routes, a few round
+	/// the flags and HQs; never out at the empty edges of the map, and not heaped on the bases
+	/// either (owner reports 2026-10-04: a blend of the first two layouts). Never on a slope, in water, under a roof or on a tree, and
 	/// kept <see cref="NightModeConfig.pumpkinSpotSpacing"/> apart.
 	/// </summary>
 	private void ScatterPumpkins(System.Random random)
@@ -352,7 +354,7 @@ public sealed class NightModeDirector : MonoBehaviour
 			Debug.LogWarning("[night] " + mapName + " has no LevelBounds, terrain or flags; no pumpkins.");
 			return;
 		}
-		area = FightingArea(area, flags, config.pumpkinFlagReach);
+		area = FightingArea(area, flags, config.pumpkinScatterReach);
 		List<Vector3> routes = Routes(flags);
 		var spots = new List<Vector3>(config.pumpkinSpots);
 		float spacingSqr = config.pumpkinSpotSpacing * config.pumpkinSpotSpacing;
@@ -411,9 +413,48 @@ public sealed class NightModeDirector : MonoBehaviour
 			float radius = Mathf.Lerp(config.pumpkinFlagRingMin, config.pumpkinFlagReach, Mathf.Sqrt((float)random.NextDouble()));
 			return flag + (new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius);
 		}
-		return new Vector3(
-			area.xMin + ((float)random.NextDouble() * area.width), 0f,
-			area.yMin + ((float)random.NextDouble() * area.height));
+		// Anywhere near the play: within the scatter reach of a flag or half of it of a route, so
+		// the open ground between the bases fills in and the far corners stay dark.
+		Vector3 spot = Vector3.zero;
+		for (int tries = 0; tries < FillerTries; tries++)
+		{
+			spot = new Vector3(
+				area.xMin + ((float)random.NextDouble() * area.width), 0f,
+				area.yMin + ((float)random.NextDouble() * area.height));
+			if (NearestSqr(flags, spot) <= config.pumpkinScatterReach * config.pumpkinScatterReach
+				|| NearestRouteSqr(routes, spot) <= 0.25f * config.pumpkinScatterReach * config.pumpkinScatterReach)
+			{
+				break;
+			}
+		}
+		return spot;
+	}
+
+	private static float NearestSqr(List<Vector3> points, Vector3 at)
+	{
+		float best = float.MaxValue;
+		foreach (Vector3 p in points)
+		{
+			float dx = p.x - at.x;
+			float dz = p.z - at.z;
+			best = Mathf.Min(best, (dx * dx) + (dz * dz));
+		}
+		return best;
+	}
+
+	private static float NearestRouteSqr(List<Vector3> routes, Vector3 at)
+	{
+		float best = float.MaxValue;
+		for (int i = 0; i + 1 < routes.Count; i += 2)
+		{
+			Vector2 a = new Vector2(routes[i].x, routes[i].z);
+			Vector2 b = new Vector2(routes[i + 1].x, routes[i + 1].z);
+			Vector2 p = new Vector2(at.x, at.z);
+			Vector2 ab = b - a;
+			float t = ab.sqrMagnitude > 0f ? Mathf.Clamp01(Vector2.Dot(p - a, ab) / ab.sqrMagnitude) : 0f;
+			best = Mathf.Min(best, (a + (ab * t) - p).sqrMagnitude);
+		}
+		return best;
 	}
 
 	private static List<Vector3> FlagPositions()
