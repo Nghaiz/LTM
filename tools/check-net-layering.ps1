@@ -296,6 +296,18 @@ $DiagnosticsBaseline = @(
        Reason = 'ProfilerCategory.Memory in LaneBAllocationSampler, check 10s instrument. ' +
                 'The collision is with Pathfinding.Util.Memory, a static class in ' +
                 'Assembly-CSharp that this assembly does not and cannot reference' }
+
+    # The measuring clients' tools (#541). Both are System types named in full of meaning only
+    # to the BCL; the collisions are with legacy declarations this assembly cannot reach.
+    @{ Type = 'Action'  ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'System.Action, the undo callback GpuCostProbe keeps for the renderers it ' +
+                'switched off. The collision is with the legacy Action class in Assembly-CSharp ' +
+                'and TimedObjectActivator.Action, an enum in firstpass' }
+    @{ Type = 'Type'    ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'System.Type in MenuAutopilot: LoadoutUi is looked up BY NAME at run time ' +
+                '("LoadoutUi, Assembly-CSharp"), the reflection a diagnostics-only driver may use ' +
+                'and a compile reference may not. The collision is with the nested enums ' +
+                'CoverPoint.Type and Seat.Type' }
 )
 
 Write-Host "=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ==="
