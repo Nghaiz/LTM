@@ -108,6 +108,73 @@ jitter range, scale ranges and rotation distribution are. Say so in the class re
   wind unchanged; screenshots in the PR.
 - Maps without details, a machine without compute shaders and the minimap render behave as before.
 
+## Step 1 — which maps carry details (measured 2026-10-05, Editor)
+
+| Map | TerrainData | Detail res / per patch | Prototypes | Drawn by |
+|---|---|---|---|---|
+| Forest Lake | `ForestLake_Terrain` | 1984 / 64 (31x31 patches, 98.7 m), InstanceCountMode | 0 `Ter_Grass_A` 3.82 M, 1 fern 22 k, 2 blueberry 29 k, 3 flower 111 k (all `M_Foliage_Wind`, cast On); 4-7 rocks 19 k (`Standard` + `_NORMALMAP`, cast Off). All instanced mesh details, alignToGround 0, roots untransformed | **GPU** (`InstancedDetailRenderer`) |
+| Island | `New Terrain` | 512 / 8 | texture grass (Grass mode), `RubbleSingle` mesh not instanced, `Bush5` mesh in Grass mode | terrain (refused: texture / non-instanced) |
+| Dustbowl | `TerrainData` | 512 / 16 | texture grass | terrain (refused: texture) |
+
+## What the build found (2026-10-05) — read before changing the renderer
+
+- **Unity's own scatter is public.** `TerrainData.ComputeDetailInstanceTransforms(patchX, patchZ,
+  layer, density, out bounds)` returns "the exact same transform data the engine uses". It is
+  deterministic, and a lower density returns a subset of the same instances. It costs ~10 ms for
+  the densest grass patch (31,641 instances) in the Editor. So the renderer reads the terrain's real
+  scatter for the patches near the camera (streamed, 1 ms a frame ahead of need) instead of the
+  hash this plan proposed: placement is identical, not a lookalike.
+- **The terrain draws a patch whole** once its instances' bounds come within the detail distance
+  (instances 40 m past the distance still drawn in a near patch, measured). The renderer keeps that
+  rule on the CPU and culls only against the view and the shadows on the GPU.
+- **The quality preset overrides the terrain's own detail distance and density**
+  (`terrainQualityOverrides` 255): zeroing `terrain.detailObjectDistance` changes nothing (0 pixels),
+  and the getters return the preset's values. The hand-off sets `ignoreQualitySettings` and mirrors
+  every preset value into the terrain except the detail distance (pixel-identical render). The
+  same override means `DetailObjectQuality`'s vegetation sliders and the old `nodetails` probe state
+  never did anything (not fixed here, reported).
+- **The terrain lights details with the sun and the ambient alone.** A forced-per-pixel or Auto
+  point light (Night Mode's lamps and pumpkins, a rocket) leaves terrain grass as dark as it was; a
+  per-vertex one lights it. The detail copies are compiled without the additive pass
+  (`noforwardadd`; the hand-written `Standard` copy has none and is `OnlyDirectional`) and with no
+  vertex lights, which matches every light the game uses; the one case left apart is a rocket's
+  light ranked per vertex (Low, or past the pixel light count), which no longer lights grass.
+- **Pixel A/B in the Editor, same frame** (terrain details vs GPU details): mean 0.003-0.12 levels
+  of 255 for grass and rocks, standing, prone, from 20 m and 60 m, day and night with 1-4 point
+  lights. Two traps cost hours: the Editor compiles new shader variants asynchronously (set
+  `ShaderUtil.allowAsyncCompilation = false` or the first renders skip the draw), and in edit mode a
+  `Graphics.RenderMesh*` draw stays queued across manual `Camera.Render` calls until the editor
+  frame ends (issue one frame's draws per render, or additive light passes stack).
+
+## Step 4 — the live A/B (2026-10-05, release IL2CPP + diagnostics, build a25b8363 + probe filter)
+
+Two clients on this machine in one Forest Lake 50-a-side match on the Azure server; the measured
+client ran `IRONFRONT_GPU_PROBE_STATES=base,nodetailsgpu`, so every 20 s it switched between the
+GPU details (`base`) and the terrain's own (`nodetailsgpu`), and `tools/perf/thread_cpu.ps1`
+sampled its threads every second (`tools/perf/thread_ab.py` groups them). Raw files:
+`tmp/perf/p33ab2-*`, `p33ab3-*`, `p33ab4-*` (untracked).
+
+| Per frame (GPU details vs terrain details) | run 2 | run 3 | run 4 (threads named) |
+|---|---|---|---|
+| draws | 910 vs 1,429 (−36%) | 915 vs 1,388 (−34%) | |
+| fps | 61.3 vs 56.4 | 68.0 vs 61.3 | 51.7 vs 45.8 |
+| GPU | 11.9 vs 14.8 ms | 10.4 vs 13.1 ms | 14.1 vs 19.0 ms (−26%) |
+| render thread | 9.7 vs 12.1 ms | 8.9 vs 11.3 ms | 12.8 vs 15.5 ms CPU (−18%) |
+| NVIDIA driver thread | | | 9.7 vs 12.2 ms CPU (−21%) |
+| main thread | | | 17.4 vs 18.1 ms CPU (−4%) |
+| whole process | 55.5 vs 62.6 ms CPU (−11%) | 50.7 vs 58.9 ms CPU (−14%) | 67.3 vs 76.4 ms CPU (−12%) |
+
+The measured client was uncapped (it held the focus, so the 30 fps background cap never applied):
+time saved per frame became more frames, and process cores moved only 3.40 vs 3.53. Read CPU per
+frame, which is what a capped player saves.
+
+**The 0.55 GHz clock.** During the same match the CPU stood at 21.8-21.9% of its 2.5 GHz base in
+all 64 two-second samples, while the game used 5.0-6.5 cores, and switching the game processes
+between Windows' default power throttling and an explicit opt-out (`SetProcessInformation`,
+`ProcessPowerThrottling`, EXECUTION_SPEED) every 30 s changed nothing. A flat line that ignores
+load is a fixed clamp the game neither sets nor lifts; not investigated further (owner rules:
+no temperature, no power supply).
+
 ## Next after P33 (not in scope)
 
 Instanced trees still draw every shadow command into all four cascades (~590 events in the walked
