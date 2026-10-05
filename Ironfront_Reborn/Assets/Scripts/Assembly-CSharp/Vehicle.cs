@@ -124,8 +124,6 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	public bool crashSkipsBurn;
 
-	public bool directJavelinPath;
-
 	public bool exitWhenTakingFire;
 
 	private float health;

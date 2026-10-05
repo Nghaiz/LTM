@@ -118,6 +118,16 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 
 		Rigidbody body = GetComponent<Rigidbody>();
 		if (body != null) body.linearVelocity = netVelocity;
+
+		OnNetVelocity(netVelocity);
+	}
+
+	/// <summary>
+	/// Called with every authoritative velocity a presented copy is handed, so a projectile that
+	/// steers can carry its turn on between re-seats (<c>JavelinMissile</c>).
+	/// </summary>
+	protected virtual void OnNetVelocity(Vector3 announced)
+	{
 	}
 
 	protected virtual void Update()

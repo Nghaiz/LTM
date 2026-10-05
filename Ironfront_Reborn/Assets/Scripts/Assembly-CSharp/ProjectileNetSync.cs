@@ -107,6 +107,17 @@ public sealed class ProjectileNetSync : MonoBehaviour
 	{
 		if (_projectile == null || _projectile.netProjectileId == 0) return;
 
+		// A guided missile's last word: where it ended, with no life left, so every client retires
+		// the copy it is drawing there. A missile can end in mid-air (its proximity fuse), where a
+		// client's coasting copy would otherwise fly on past the blast and explode somewhere else.
+		if (enabled && _kind == ProjectileKind.GuidedMissile)
+		{
+			Vector3 end = transform.position;
+			ServerTickLoop.Current?.Projectiles?.ReAnnounce(
+				_projectile.netProjectileId, _kind, OwnerActorIdOf(_projectile),
+				new Vec3(end.x, end.y, end.z), new Vec3(0f, 0f, 0f), 0f);
+		}
+
 		// The id goes back whether this ended in a blast, an expiry or a scene teardown. Leaving
 		// it out is a leak of exactly one id per projectile, which brainstorm criterion 13's
 		// five-back-to-back-matches check is what would eventually find.

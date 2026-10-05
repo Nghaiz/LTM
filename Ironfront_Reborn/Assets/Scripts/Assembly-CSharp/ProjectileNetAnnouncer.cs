@@ -98,13 +98,14 @@ public static class ProjectileNetAnnouncer
 	}
 
 	/// <summary>
-	/// Whether a client leaves a projectile of this kind to the server: every unguided
-	/// explosive, which the server announces and every client draws from that announcement.
+	/// Whether a client leaves a projectile of this kind to the server: every explosive the
+	/// server announces, guided or not, which every client draws from that announcement.
 	/// See <c>Weapon.ServerDrawsProjectile</c>.
 	/// </summary>
 	public static bool IsServerDrawn(ProjectileKind kind)
 	{
 		return kind == ProjectileKind.Rocket
+			|| kind == ProjectileKind.GuidedMissile
 			|| kind == ProjectileKind.Shell
 			|| kind == ProjectileKind.GatlingRound
 			|| kind == ProjectileKind.LauncherRocket;
