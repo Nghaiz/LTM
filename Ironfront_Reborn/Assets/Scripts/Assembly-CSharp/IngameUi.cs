@@ -51,6 +51,24 @@ public class IngameUi : MonoBehaviour
 
 	public RawImage flagIndicator;
 
+	/// <summary>
+	/// One line while the local soldier stands at a supply cache that will not serve him:
+	/// "ENEMY AMMO CACHE - TAKE QUARRY TO RESUPPLY HERE". Optional: a HUD without it says nothing.
+	/// </summary>
+	/// <remarks>
+	/// A cache serves only the side holding its flag (<see cref="SupplyCache"/>, owner request
+	/// 2026-10-03), and flags change hands all match, so the same crates refill a player one minute
+	/// and ignore him the next. The radar dims a cache that is not his, but nobody reads the radar
+	/// standing on the crate, and the owner's friend reported the result as a bug in the v4.3.0
+	/// playtest: "sometimes standing by the ammo or health crate refills nothing".
+	/// </remarks>
+	public Text supplyHint;
+
+	/// <summary>Seconds between looks for a cache: one is a place the soldier stands at.</summary>
+	private const float SupplyHintInterval = 0.25f;
+
+	private float nextSupplyHint;
+
 	private AudioSource hitmarkerSound;
 
 	private MinimapCamera minimapCamera;
@@ -159,6 +177,39 @@ public class IngameUi : MonoBehaviour
 		{
 			SetVehicleBarAmount(actor.seat.vehicle.GetHealthRatio());
 		}
+		UpdateSupplyHint(actor);
+	}
+
+	private void UpdateSupplyHint(Actor actor)
+	{
+		if (supplyHint == null || Time.unscaledTime < nextSupplyHint)
+		{
+			return;
+		}
+		nextSupplyHint = Time.unscaledTime + SupplyHintInterval;
+		string text = SupplyHintWording(actor);
+		supplyHint.enabled = text != null;
+		if (text != null)
+		{
+			supplyHint.text = text;
+		}
+	}
+
+	/// <summary>Why the cache under this soldier gives him nothing, or null when it serves him or there is none.</summary>
+	public static string SupplyHintWording(Actor actor)
+	{
+		if (actor == null || actor.dead || actor.IsSeated())
+		{
+			return null;
+		}
+		SupplyCache cache = SupplyCache.Reaching(actor.Position());
+		if (cache == null || cache.ServedTeam == actor.team)
+		{
+			return null;
+		}
+		string what = cache.kind == SupplyKind.Medical ? "MEDICAL STATION" : "AMMO CACHE";
+		string whose = cache.ServedTeam < 0 ? "NEUTRAL " : "ENEMY ";
+		return whose + what + " - TAKE " + cache.FlagName + " TO RESUPPLY HERE";
 	}
 
 	private void LateUpdate()

@@ -39,8 +39,26 @@ public class SupplyCache : MonoBehaviour
 	/// <summary>The flag whose holder this serves. A neutral flag serves no one.</summary>
 	public SpawnPoint point;
 
-	/// <summary>Metres from the cache a soldier must stand within.</summary>
+	/// <summary>
+	/// Metres from the cache a soldier must stand within, measured across the ground (see
+	/// <see cref="Reaches"/>).
+	/// </summary>
 	public float range = 6f;
+
+	/// <summary>
+	/// Metres every cache reaches at least, whatever its authored <see cref="range"/>.
+	/// </summary>
+	/// <remarks>
+	/// A cache is a module of crates up to 2.9 m from its centre (measured on Forest Lake's 24,
+	/// 2026-10-06), and the 6 m the scenes author was taken from that centre, so a soldier
+	/// standing against the far crate of a stack could be out of reach while touching it. The
+	/// v4.3.0 playtest's "sometimes standing by the ammo or health crate refills nothing" logged
+	/// a friend 6.5 m from a cache's centre for fourteen seconds without a refill.
+	/// </remarks>
+	public const float MinimumReach = 8f;
+
+	/// <summary>Metres above or below a cache a soldier may stand and still be served: a floor, not a storey.</summary>
+	public const float VerticalReach = 3f;
 
 	/// <summary>Seconds between pulses: an ammo bag's rate.</summary>
 	public float interval = 3f;
@@ -131,7 +149,14 @@ public class SupplyCache : MonoBehaviour
 		{
 			return;
 		}
-		ActorManager.AliveActorsInRange(base.transform.position, range, nearby);
+		nearby.Clear();
+		foreach (Actor candidate in ActorManager.instance.actors)
+		{
+			if (candidate != null && !candidate.dead && Reaches(candidate.Position()))
+			{
+				nearby.Add(candidate);
+			}
+		}
 		for (int i = 0; i < nearby.Count; i++)
 		{
 			Actor actor = nearby[i];
@@ -160,6 +185,43 @@ public class SupplyCache : MonoBehaviour
 		}
 		nearby.Clear();
 	}
+
+	/// <summary>
+	/// Whether a soldier standing at <paramref name="position"/> is served: within
+	/// <see cref="range"/> (and never less than <see cref="MinimumReach"/>) across the ground, on
+	/// roughly the cache's own floor.
+	/// </summary>
+	public bool Reaches(Vector3 position)
+	{
+		Vector3 offset = position - base.transform.position;
+		float reach = Mathf.Max(range, MinimumReach);
+		return Mathf.Abs(offset.y) <= VerticalReach && offset.x * offset.x + offset.z * offset.z <= reach * reach;
+	}
+
+	/// <summary>The cache whose reach covers <paramref name="position"/>, nearest first; null when none does.</summary>
+	public static SupplyCache Reaching(Vector3 position)
+	{
+		SupplyCache best = null;
+		float bestSquared = float.MaxValue;
+		for (int i = 0; i < all.Count; i++)
+		{
+			SupplyCache cache = all[i];
+			if (cache == null || !cache.Reaches(position))
+			{
+				continue;
+			}
+			float squared = (cache.transform.position - position).sqrMagnitude;
+			if (squared < bestSquared)
+			{
+				bestSquared = squared;
+				best = cache;
+			}
+		}
+		return best;
+	}
+
+	/// <summary>The flag's name as the HUD writes it: "QUARRY" for "Quarry Capture Point".</summary>
+	public string FlagName => point != null ? point.name.Replace(" Capture Point", string.Empty).ToUpperInvariant() : string.Empty;
 
 	/// <summary>Refills a body whose rounds live on its <see cref="Actor"/>; true when any slot rose.</summary>
 	private static bool RefillOnActor(Actor actor)
