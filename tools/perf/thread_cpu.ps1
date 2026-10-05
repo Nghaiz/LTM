@@ -4,9 +4,10 @@
 # use, not frame rate. Task Manager shows one number for the process; what decides the fix is
 # WHICH threads burn it: the main thread, Unity's render thread, the graphics driver's own
 # submission thread, the job workers. Each thread is named by its Windows thread description
-# (Unity names its own: UnityGfxDeviceWorker, Job.Worker N, ...), the oldest unnamed thread is the
-# main thread, and any other unnamed thread by the module it started in (nvwgf2umx.dll is
-# NVIDIA's DX11 driver, igd* Intel's, amd*/ati* AMD's).
+# (Unity names its own: UnityGfxDeviceWorker, Job.Worker N, ...), an unnamed one by the module it
+# started in: the game's own .exe is the main thread, nvwgf2umx.dll NVIDIA's DX11 driver, igd*
+# Intel's, amd*/ati* AMD's. The module list is read again whenever a thread starts outside it: a
+# driver loads after the process starts, and a list read at launch names its threads "unknown".
 #
 # One JSON object a line: the wall clock, the seconds since the process started (to line up with
 # a player log's `t=` stamps, which count from engine start), the process's cores, and cores per
@@ -32,7 +33,24 @@ public static class IronfrontThreadNames
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
     [DllImport("kernel32.dll")] static extern int GetThreadDescription(IntPtr handle, out IntPtr description);
     [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport("ntdll.dll")] static extern int NtQueryInformationThread(IntPtr handle, int infoClass, out IntPtr info, int length, IntPtr returned);
     const uint QueryLimitedInformation = 0x0800;
+    const uint QueryInformation = 0x0040;
+    const int Win32StartAddress = 9;
+
+    // ProcessThread.StartAddress reads 0 for every thread of a Unity player; asked directly with
+    // full query access, Windows answers.
+    public static long StartAddress(int id)
+    {
+        IntPtr handle = OpenThread(QueryInformation, false, (uint)id);
+        if (handle == IntPtr.Zero) return 0;
+        try
+        {
+            IntPtr address;
+            return NtQueryInformationThread(handle, Win32StartAddress, out address, IntPtr.Size, IntPtr.Zero) == 0 ? address.ToInt64() : 0;
+        }
+        finally { CloseHandle(handle); }
+    }
 
     public static string Describe(int id)
     {
@@ -56,21 +74,30 @@ if (Test-Path $Out) { Remove-Item $Out }
 
 $process = Get-Process -Id $Id
 $started = $process.StartTime
-$modules = @($process.Modules | ForEach-Object {
-    [pscustomobject]@{ Name = $_.ModuleName; Base = $_.BaseAddress.ToInt64(); End = $_.BaseAddress.ToInt64() + $_.ModuleMemorySize }
-})
+$exeName = [System.IO.Path]::GetFileName($process.Path)
+$script:modules = @()
+$script:modulesFresh = $false
 $names = @{}
 
-function Label($thread, [int64] $oldestTicks) {
+function Read-Modules {
+    $script:modules = @((Get-Process -Id $Id).Modules | ForEach-Object {
+        [pscustomobject]@{ Name = $_.ModuleName; Base = $_.BaseAddress.ToInt64(); End = $_.BaseAddress.ToInt64() + $_.ModuleMemorySize }
+    })
+}
+
+function Module-At([int64] $address) {
+    return $script:modules | Where-Object { $address -ge $_.Base -and $address -lt $_.End } | Select-Object -First 1
+}
+
+function Label($thread) {
     if ($names.ContainsKey($thread.Id)) { return $names[$thread.Id] }
     $name = [IronfrontThreadNames]::Describe($thread.Id)
     if (-not $name) {
-        try { if ($thread.StartTime.Ticks -eq $oldestTicks) { $name = "main" } } catch { }
-    }
-    if (-not $name) {
-        $start = $thread.StartAddress.ToInt64()
-        $module = $modules | Where-Object { $start -ge $_.Base -and $start -lt $_.End } | Select-Object -First 1
-        $name = if ($module) { $module.Name } else { "unknown" }
+        $start = [IronfrontThreadNames]::StartAddress($thread.Id)
+        $module = Module-At $start
+        # Once a snapshot at most: a thread that starts in no module would otherwise re-read them.
+        if (-not $module -and -not $script:modulesFresh) { Read-Modules; $script:modulesFresh = $true; $module = Module-At $start }
+        $name = if (-not $module) { "unknown" } elseif ($module.Name -eq $exeName) { "main" } else { $module.Name }
     }
     $names[$thread.Id] = $name
     return $name
@@ -79,10 +106,10 @@ function Label($thread, [int64] $oldestTicks) {
 function Snapshot {
     $p = Get-Process -Id $Id -ErrorAction SilentlyContinue
     if (-not $p) { return $null }
-    $oldest = ($p.Threads | ForEach-Object { try { $_.StartTime.Ticks } catch { [int64]::MaxValue } } | Measure-Object -Minimum).Minimum
+    $script:modulesFresh = $false
     $table = @{}
     foreach ($t in $p.Threads) {
-        try { $table[$t.Id] = @{ Name = (Label $t $oldest); Cpu = $t.TotalProcessorTime.TotalSeconds } } catch { }
+        try { $table[$t.Id] = @{ Name = (Label $t); Cpu = $t.TotalProcessorTime.TotalSeconds } } catch { }
     }
     return @{ At = Get-Date; Total = $p.TotalProcessorTime.TotalSeconds; Threads = $table }
 }
