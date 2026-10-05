@@ -99,6 +99,8 @@
              Link="Linked\GraphicsPresetRules.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\VegetationRules.cs"
              Link="Linked\VegetationRules.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\PresetGrassScale.cs"
+             Link="Linked\PresetGrassScale.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\CpuBudgetRules.cs"
              Link="Linked\CpuBudgetRules.cs" />
   </ItemGroup>

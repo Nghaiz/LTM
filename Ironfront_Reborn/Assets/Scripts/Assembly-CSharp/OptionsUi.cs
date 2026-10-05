@@ -1,4 +1,5 @@
 using System.Collections;
+using Ironfront.Net.Unity;
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.UI;
@@ -70,32 +71,15 @@ public class OptionsUi : MonoBehaviour
 			options.hitmarkers = PlayerPrefs.GetInt("hitmarkers2", 1) == 1;
 			options.autoReload = PlayerPrefs.GetInt("auto reload", 0) == 1;
 			options.difficulty = PlayerPrefs.GetInt("difficulty", 1);
-			options.ReadVegetationDensity();
-			options.vegetationDistance = Mathf.Clamp01(PlayerPrefs.GetFloat("vegetation distance", 0.7f));
+			// Fractions of the preset's grass, full when never set (Ironfront.Net.Unity.VegetationRules).
+			options.vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat(VegetationRules.DensityKey, VegetationRules.DefaultDensity));
+			options.vegetationDistance = Mathf.Clamp01(PlayerPrefs.GetFloat(VegetationRules.DistanceKey, VegetationRules.DefaultDistance));
 			options.masterVolume = Mathf.Clamp01(PlayerPrefs.GetFloat("master volume", 1f));
 			options.toggleAim = PlayerPrefs.GetInt("toggle aim", 0) == 1;
 			options.toggleCrouch = PlayerPrefs.GetInt("toggle crouch", 0) == 1;
 			options.fieldOfView = PlayerPrefs.GetFloat("field of view", 90f);
 			return options;
 		}
-
-		/// <summary>
-		/// Reads the density saved for the current preset, Low's and the rest's being kept apart.
-		/// </summary>
-		/// <remarks>
-		/// Low used to default to 0, which is no vegetation at all: integrated graphics start on Low
-		/// since v3.2.0 and lost every tree and blade of grass. See <c>VegetationRules</c>.
-		/// </remarks>
-		internal void ReadVegetationDensity()
-		{
-			vegetationReadAsFast = IsFastQuality();
-			float fallback = Ironfront.Net.Unity.VegetationRules.DefaultDensityFor(QualitySettings.GetQualityLevel());
-			string key = vegetationReadAsFast ? "fast vegetation density" : "vegetation density";
-			vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat(key, fallback));
-		}
-
-		/// <summary>Whether <see cref="vegetationDensity"/> was read under a Low preset.</summary>
-		internal bool vegetationReadAsFast;
 
 		public void Save()
 		{
@@ -111,15 +95,8 @@ public class OptionsUi : MonoBehaviour
 			PlayerPrefs.SetInt("hitmarkers2", instance.hitmarkers.isOn ? 1 : 0);
 			PlayerPrefs.SetInt("auto reload", instance.autoReload.isOn ? 1 : 0);
 			PlayerPrefs.SetInt("difficulty", instance.difficulty.value);
-			if (IsFastQuality())
-			{
-				PlayerPrefs.SetFloat("fast vegetation density", instance.vegetationDensity.value);
-			}
-			else
-			{
-				PlayerPrefs.SetFloat("vegetation density", instance.vegetationDensity.value);
-			}
-			PlayerPrefs.SetFloat("vegetation distance", instance.vegetationDistance.value);
+			PlayerPrefs.SetFloat(VegetationRules.DensityKey, instance.vegetationDensity.value);
+			PlayerPrefs.SetFloat(VegetationRules.DistanceKey, instance.vegetationDistance.value);
 			PlayerPrefs.SetFloat("master volume", instance.masterVolume.value);
 			PlayerPrefs.SetInt("toggle aim", instance.toggleAim.isOn ? 1 : 0);
 			PlayerPrefs.SetInt("toggle crouch", instance.toggleCrouch.isOn ? 1 : 0);
@@ -178,12 +155,6 @@ public class OptionsUi : MonoBehaviour
 
 	public Dropdown difficulty;
 
-	public static bool IsFastQuality()
-	{
-		// The original's Fastest and Fast (0, 1) are this game's Low since 2026-10-02.
-		return QualitySettings.GetQualityLevel() <= Ironfront.Net.Unity.GraphicsPresetRules.Low;
-	}
-
 	public static void Show()
 	{
 		if (instance != null)
@@ -218,12 +189,6 @@ public class OptionsUi : MonoBehaviour
 		if (options == null)
 		{
 			options = Options.Load();
-		}
-		else if (options.vegetationReadAsFast != IsFastQuality())
-		{
-			// The preset moved across Low since the options were cached (the menu's Settings
-			// screen), and the two keep separate densities: re-read rather than keep Low's.
-			options.ReadVegetationDensity();
 		}
 		return options;
 	}
