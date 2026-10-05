@@ -170,9 +170,29 @@ public class VehicleSpawner : MonoBehaviour
 	/// to be parked and used as cover can be authored longer without changing anyone else.
 	/// </para>
 	/// </remarks>
-	[Tooltip("Seconds a superseded vehicle may sit empty before this pad reclaims its network "
-	         + "id. 0 or less disables reclamation for this pad.")]
+	[Tooltip("Seconds a vehicle from this pad may sit empty, off the pad, before a server "
+	         + "reclaims it and spawns a fresh one here. 0 or less disables reclamation for this pad.")]
 	public float reclaimAbandonedAfterSeconds = 90f;
+
+	/// <summary>
+	/// How long the pad's CURRENT vehicle has stood empty off its pad (owner 2026-10-05).
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Every pad on every map respawns only when its vehicle is destroyed or abandoned.</b>
+	/// <see cref="VehicleSpawnScheduler.OnAServer"/> stops <c>AfterMoved</c> pads refilling the
+	/// moment they are driven off; this is the other half, which hands the pad back its vehicle
+	/// once nobody wants the one that left. Before it, a vehicle a bot drove to a field and left
+	/// there held its id, and its pad's place in the match, until something happened to shoot it.
+	/// </para>
+	/// <para>
+	/// <b>Server only</b>, beside the superseded sweep and for its reason: offline there is no id
+	/// pool to be out of, and the original game keeps every vehicle it spawned.
+	/// </para>
+	/// </remarks>
+	private AbandonedVehicleClock currentVehicleClock;
+
+	private float nextCurrentVehicleCheckAt;
 
 	/// <summary>
 	/// How close a living player has to be to keep an abandoned vehicle from being reclaimed.
@@ -261,6 +281,7 @@ public class VehicleSpawner : MonoBehaviour
 
 		spawnIsBlocked = SpawnIsBlocked;
 		scheduler = new VehicleSpawnScheduler((VehicleRespawnType)respawnType, spawnTime);
+		currentVehicleClock = new AbandonedVehicleClock(reclaimAbandonedAfterSeconds);
 		spawnerId = NetVehicleLifecycle.RegisterSpawner();
 	}
 
@@ -296,6 +317,7 @@ public class VehicleSpawner : MonoBehaviour
 		// that is most starved -- and SpawnIsBlocked asks the pool directly, so it would read
 		// the pre-sweep answer and defer for nothing.
 		SweepAbandonedVehicles();
+		ReclaimAbandonedCurrentVehicle();
 
 		VehicleSpawnStep step = scheduler.Tick(Time.deltaTime, spawnIsBlocked);
 
@@ -431,6 +453,7 @@ public class VehicleSpawner : MonoBehaviour
 		lastSpawnedVehicleNetId = netId;
 		lastSpawnedVehicle.SetSpawner(this);
 		lastSpawnedVehicleHasBeenUsed = false;
+		currentVehicleClock.Restart(Time.time);
 		scheduler.ReportSpawned();
 
 		LogFirstState(spawned, netId);
@@ -862,6 +885,75 @@ public class VehicleSpawner : MonoBehaviour
 	}
 
 	/// <summary>
+	/// Takes back the pad's own vehicle once it has stood empty off the pad for
+	/// <see cref="reclaimAbandonedAfterSeconds"/> with no player within
+	/// <see cref="reclaimKeepAliveRadius"/>, and spawns a fresh one on the pad.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// See <see cref="currentVehicleClock"/>. A <see cref="RespawnType.Never"/> pad is not
+	/// re-armed here: reclaiming its vehicle makes <see cref="IsSpent"/> true, and
+	/// <see cref="FieldSupplyDirector"/> moves such a pad somewhere new and spawns it there, the
+	/// same as for a wreck.
+	/// </para>
+	/// <para>
+	/// <b>Reported, ejected, then destroyed</b>, in <see cref="SweepAbandonedVehicles"/>'s order
+	/// and for its reasons. A wreck is not a candidate: <see cref="VehicleDied"/> already cleared
+	/// <see cref="lastSpawnedVehicleNetId"/> and its despawn waits for the wreck to go.
+	/// </para>
+	/// </remarks>
+	private void ReclaimAbandonedCurrentVehicle()
+	{
+		if (lastSpawnedVehicle == null || lastSpawnedVehicleNetId == 0) return;
+		if (!NetVehicleLifecycle.IsReplicating) return;
+
+		float now = Time.time;
+		if (now < nextCurrentVehicleCheckAt) return;
+		nextCurrentVehicleCheckAt = now + ReclaimSweepInterval;
+
+		Vehicle vehicle = lastSpawnedVehicle;
+		if (vehicle.dead) return;
+		if (!currentVehicleClock.Observe(now, !vehicle.IsEmpty(), IsOnItsPad(vehicle))) return;
+		if (SomebodyIsStandingBy(vehicle)) return;
+
+		ushort netId = lastSpawnedVehicleNetId;
+		float emptyFor = now - currentVehicleClock.InUseAt;
+		lastSpawnedVehicle = null;
+		lastSpawnedVehicleNetId = 0;
+		lastSpawnedVehicleHasBeenUsed = false;
+
+		NetVehicleLifecycle.ReportDespawned(netId, VehicleDespawnReason.Reclaimed);
+		Debug.Log(
+			$"[net] vehicle spawner '{name}' (id {spawnerId}) reclaimed its {vehicle.name} (id {netId}): "
+			+ $"empty off the pad for {emptyFor:F0}s with nobody within {reclaimKeepAliveRadius:F0}m. "
+			+ (respawnType == RespawnType.Never
+				? "The pad moves on."
+				: $"A fresh one in {spawnTime:F0}s."));
+
+		// EjectOccupants for X-55/X-56's reason in SweepAbandonedVehicles.
+		vehicle.EjectOccupants();
+		UnityEngine.Object.Destroy(vehicle.gameObject);
+
+		if (respawnType != RespawnType.Never && !VehiclesAreSuppressed())
+		{
+			scheduler.ScheduleRespawn();
+		}
+	}
+
+	/// <summary>
+	/// Whether <paramref name="vehicle"/> still stands in the space this pad spawns into: the
+	/// footprint <see cref="SpawnIsBlocked"/> tests, read at the vehicle's root and ignoring
+	/// height.
+	/// </summary>
+	private bool IsOnItsPad(Vehicle vehicle)
+	{
+		Vector3 local = Quaternion.Inverse(base.transform.rotation)
+		                * (vehicle.transform.position - base.transform.position);
+		local.y = spawnFootprint.center.y;
+		return spawnFootprint.Contains(local);
+	}
+
+	/// <summary>
 	/// True when a living PLAYER is close enough that this vehicle is parked rather than
 	/// abandoned.
 	/// </summary>
@@ -942,6 +1034,8 @@ public class VehicleSpawner : MonoBehaviour
 
 	public void VehicleDied(Vehicle vehicle)
 	{
+		UseServerRulesWhenReplicating();
+
 		// A superseded vehicle -- alive and driven away when this pad respawned. Its id is the
 		// one X-70 leaked: released here, and its despawn put on the wire, so the clients that
 		// have been rendering it since stop. Checked before the lastSpawnedVehicle branch
@@ -969,11 +1063,29 @@ public class VehicleSpawner : MonoBehaviour
 
 	public void FirstDriverEntered(Vehicle vehicle)
 	{
+		UseServerRulesWhenReplicating();
+
 		if (vehicle == lastSpawnedVehicle)
 		{
 			lastSpawnedVehicleHasBeenUsed = true;
 		}
 		scheduler.ReportFirstDriverEntered(vehicle == lastSpawnedVehicle);
+	}
+
+	/// <summary>
+	/// Plays this pad by <see cref="VehicleSpawnScheduler.OnAServer"/> on a game server.
+	/// </summary>
+	/// <remarks>
+	/// Here, at the two events the rule decides, rather than in <c>Awake</c>: the role and the
+	/// lifecycle sink can be set up after a map scene's components have woken, and both events
+	/// come long after either is known.
+	/// </remarks>
+	private void UseServerRulesWhenReplicating()
+	{
+		if (NetVehicleLifecycle.IsReplicating)
+		{
+			scheduler.UseServerRules();
+		}
 	}
 
 	/// <summary>
