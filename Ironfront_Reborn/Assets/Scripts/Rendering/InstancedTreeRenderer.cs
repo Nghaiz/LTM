@@ -76,6 +76,36 @@ namespace Ironfront.Rendering
         private static readonly int EyeId = Shader.PropertyToID("_Eye");
         private static readonly int ShadowRange2Id = Shader.PropertyToID("_ShadowRange2");
         private static readonly int PlanesId = Shader.PropertyToID("_Planes");
+        private static readonly int LightDirectionId = Shader.PropertyToID("_LightDirection");
+        private static readonly int ShadowReachPerRadiusId = Shader.PropertyToID("_ShadowReachPerRadius");
+        private static readonly int ShadowRangeId = Shader.PropertyToID("_ShadowRange");
+
+        /// <summary>
+        /// What a kept tree is drawn in. A tree out of view but inside the shadow range is drawn
+        /// in the shadow passes only: until P31 every tree within the range, all round the camera,
+        /// went through the main pass too, and into every cascade whether its shadow could fall in
+        /// view or not (TreeCulling.compute).
+        /// </summary>
+        internal enum Pass
+        {
+            /// <summary>In view, past the shadow range: drawn, casting nothing.</summary>
+            Unshadowed = 0,
+
+            /// <summary>In view and in the shadow range: drawn with its shadow.</summary>
+            Shadowed = 1,
+
+            /// <summary>Out of view, its shadow able to reach the view: the shadow alone.</summary>
+            ShadowOnly = 2,
+        }
+
+        private const int Passes = 3;
+
+        /// <summary>
+        /// The lowest the shadow-casting light is taken to stand, as the sine of its elevation: a
+        /// tree's shadow runs 2 radii / sin(elevation) along the light, so a light at the horizon
+        /// would make every shadow endless. Under it the shadow range alone bounds them.
+        /// </summary>
+        internal const float LowestLightSine = 0.1f;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct GpuTree
@@ -91,7 +121,7 @@ namespace Ironfront.Rendering
             public TreeCatalog.Part Part;
             public int Prototype;
             public int Lod;
-            public bool Shadowed;
+            public Pass Pass;
             public int Bucket;
             public MaterialPropertyBlock Properties;
         }
@@ -114,6 +144,7 @@ namespace Ironfront.Rendering
         private float _terrainBias;
         private bool _holding;
         private int _builtFrame = -1;
+        private float _tallestRadius;
 
         internal bool IsBuilt => _catalog != null;
 
@@ -124,6 +155,13 @@ namespace Ironfront.Rendering
 
         /// <summary>Indirect draws issued last frame.</summary>
         internal int DrawCalls { get; private set; }
+
+        /// <summary>Of <see cref="DrawCalls"/>, the draws issued for out-of-view shadows alone.</summary>
+        internal int ShadowOnlyDraws { get; private set; }
+
+        // The light the last cull used, for the cells' own shadow test (MarkReachable).
+        private Vector3 _lightDirection;
+        private float _shadowReachPerRadius;
 
         private void Start() => Build();
 
@@ -180,6 +218,7 @@ namespace Ironfront.Rendering
             using (FrameMarker.Auto())
             {
                 DrawCalls = 0;
+                ShadowOnlyDraws = 0;
                 if (_catalog == null || viewer == null || !_terrain.drawTreesAndFoliage)
                 {
                     Release();
@@ -196,16 +235,22 @@ namespace Ironfront.Rendering
             }
         }
 
-        /// <summary>How many trees the last cull kept for one prototype, LOD and shadow. Reads the GPU back.</summary>
-        internal int Kept(int prototype, int lod, bool shadowed)
+        /// <summary>How many trees the last cull kept for one prototype, LOD and pass. Reads the GPU back.</summary>
+        internal int Kept(int prototype, int lod, Pass pass)
         {
             var counts = new uint[_bucketCount];
             _bucketCounts.GetData(counts);
-            return (int)counts[Bucket(prototype, lod, shadowed)];
+            return (int)counts[Bucket(prototype, lod, pass)];
         }
 
-        private static int Bucket(int prototype, int lod, bool shadowed) =>
-            (prototype * TreeCatalog.MaxLods + lod) * 2 + (shadowed ? 1 : 0);
+        /// <summary>How many trees the last cull kept casting a shadow (<paramref name="shadowed"/>) or not.</summary>
+        internal int Kept(int prototype, int lod, bool shadowed) =>
+            shadowed
+                ? Kept(prototype, lod, Pass.Shadowed) + Kept(prototype, lod, Pass.ShadowOnly)
+                : Kept(prototype, lod, Pass.Unshadowed);
+
+        private static int Bucket(int prototype, int lod, Pass pass) =>
+            (prototype * TreeCatalog.MaxLods + lod) * Passes + (int)pass;
 
         private void Hold()
         {
@@ -242,9 +287,29 @@ namespace Ironfront.Rendering
             _culling.SetVector(EyeId, eye);
             _culling.SetFloat(ShadowRange2Id, shadowRange * shadowRange);
             _culling.SetVectorArray(PlanesId, _planeVectors);
+            SetShadowLight(shadowRange);
             _culling.Dispatch(_clearKernel, Groups(_bucketCount), 1, 1);
             _culling.Dispatch(_cullKernel, Groups(_catalog.Count), 1, 1);
             _culling.Dispatch(_writeArgsKernel, Groups(_commands.Length), 1, 1);
+        }
+
+        /// <summary>
+        /// Hands the cull the light the shadows come from: <see cref="RenderSettings.sun"/>, which
+        /// is the moon in Night Mode. With none, or none casting shadows, every tree in the shadow
+        /// range is kept for its shadow, as before.
+        /// </summary>
+        private void SetShadowLight(float shadowRange)
+        {
+            Light sun = RenderSettings.sun;
+            bool known = sun != null && sun.isActiveAndEnabled && sun.type == LightType.Directional
+                         && sun.shadows != LightShadows.None && shadowRange > 0f;
+            Vector3 direction = known ? sun.transform.forward : Vector3.down;
+            float sine = Mathf.Max(-direction.y, LowestLightSine);
+            _lightDirection = direction;
+            _shadowReachPerRadius = known ? 2f / sine : 0f;
+            _culling.SetVector(LightDirectionId, direction);
+            _culling.SetFloat(ShadowReachPerRadiusId, _shadowReachPerRadius);
+            _culling.SetFloat(ShadowRangeId, shadowRange);
         }
 
         private void Draw(Vector3 eye, float shadowRange)
@@ -258,9 +323,10 @@ namespace Ironfront.Rendering
                 TreeCatalog.Part part = command.Part;
                 Graphics.DrawMeshInstancedIndirect(
                     part.Mesh, part.Submesh, part.Material, _bounds, _args, c * ArgsPerCommand * sizeof(uint),
-                    command.Properties, command.Shadowed ? part.ShadowCasting : ShadowCastingMode.Off,
+                    command.Properties, CastingFor(command.Pass, part.ShadowCasting),
                     part.ReceiveShadows, part.Layer, null, part.LightProbes);
                 DrawCalls++;
+                if (command.Pass == Pass.ShadowOnly) ShadowOnlyDraws++;
             }
         }
 
@@ -285,9 +351,14 @@ namespace Ironfront.Rendering
                 if (cell.Prototypes == 0) continue;
                 float near2 = cell.Bounds.SqrDistance(eye);
                 float far2 = FarthestSquared(cell.Bounds, eye);
-                bool shadowed = near2 <= shadow2;
-                bool unshadowed = far2 > shadow2 && GeometryUtility.TestPlanesAABB(_planes, cell.Bounds);
-                if (!shadowed && !unshadowed) continue;
+                bool inView = GeometryUtility.TestPlanesAABB(_planes, cell.Bounds);
+                bool inRange = near2 <= shadow2;
+                bool shadowed = inRange && inView;
+                // Out of view, a cell can still hold trees whose shadows fall into it -- unless all
+                // of it is in view, or its shadow, the cell swept along the light, misses the view.
+                bool shadowOnly = inRange && !Contains(_planes, cell.Bounds) && ShadowCanReachView(cell.Bounds, Mathf.Sqrt(shadow2));
+                bool unshadowed = far2 > shadow2 && inView;
+                if (!shadowed && !shadowOnly && !unshadowed) continue;
 
                 for (int p = 0; p < _catalog.Prototypes.Length; p++)
                 {
@@ -299,10 +370,52 @@ namespace Ironfront.Rendering
                     if (coarsest < 0) coarsest = prototype.Lods.Length - 1;
                     for (int lod = finest; lod <= coarsest; lod++)
                     {
-                        if (shadowed) _reachable[Bucket(p, lod, true)] = true;
-                        if (unshadowed) _reachable[Bucket(p, lod, false)] = true;
+                        if (shadowed) _reachable[Bucket(p, lod, Pass.Shadowed)] = true;
+                        if (shadowOnly) _reachable[Bucket(p, lod, Pass.ShadowOnly)] = true;
+                        if (unshadowed) _reachable[Bucket(p, lod, Pass.Unshadowed)] = true;
                     }
                 }
+            }
+        }
+
+        /// <summary>Whether all of <paramref name="bounds"/> lies inside every plane.</summary>
+        internal static bool Contains(Plane[] planes, Bounds bounds)
+        {
+            Vector3 min = bounds.min, max = bounds.max;
+            foreach (Plane plane in planes)
+            {
+                Vector3 n = plane.normal;
+                // The corner farthest behind the plane: inside it, so is the whole box.
+                var corner = new Vector3(n.x >= 0f ? min.x : max.x, n.y >= 0f ? min.y : max.y, n.z >= 0f ? min.z : max.z);
+                if (plane.GetDistanceToPoint(corner) < 0f) return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Whether the shadow of anything in <paramref name="bounds"/> can fall in view: the box
+        /// swept along the light by the longest shadow a tree in it can throw meets the view. With
+        /// no light known, it can.
+        /// </summary>
+        private bool ShadowCanReachView(Bounds bounds, float shadowRange)
+        {
+            if (_shadowReachPerRadius <= 0f) return true;
+            float tallest = _tallestRadius * _shadowReachPerRadius;
+            Vector3 sweep = _lightDirection * Mathf.Min(tallest, shadowRange);
+            var swept = new Bounds(bounds.center, bounds.size);
+            swept.Encapsulate(bounds.min + sweep);
+            swept.Encapsulate(bounds.max + sweep);
+            return GeometryUtility.TestPlanesAABB(_planes, swept);
+        }
+
+        /// <summary>How a part is drawn in <paramref name="pass"/>, given how its renderer casts.</summary>
+        internal static ShadowCastingMode CastingFor(Pass pass, ShadowCastingMode authored)
+        {
+            switch (pass)
+            {
+                case Pass.Shadowed: return authored;
+                case Pass.ShadowOnly: return authored == ShadowCastingMode.Off ? ShadowCastingMode.Off : ShadowCastingMode.ShadowsOnly;
+                default: return ShadowCastingMode.Off;
             }
         }
 
@@ -349,15 +462,15 @@ namespace Ironfront.Rendering
             _lodCounts = Structured(prototypes, sizeof(uint));
             _lodCounts.SetData(lodCounts);
 
-            // A bucket per (prototype, LOD, shadowed), each with room for every tree of its prototype.
-            _bucketCount = prototypes * TreeCatalog.MaxLods * 2;
+            // A bucket per (prototype, LOD, pass), each with room for every tree of its prototype.
+            _bucketCount = prototypes * TreeCatalog.MaxLods * Passes;
             var starts = new uint[_bucketCount];
             uint capacity = 0;
             for (int p = 0; p < prototypes; p++)
                 for (int lod = 0; lod < catalog.Prototypes[p].Lods.Length; lod++)
-                    for (int s = 0; s < 2; s++)
+                    for (int s = 0; s < Passes; s++)
                     {
-                        starts[Bucket(p, lod, s == 1)] = capacity;
+                        starts[Bucket(p, lod, (Pass)s)] = capacity;
                         capacity += (uint)catalog.Prototypes[p].Count;
                     }
             _reachable = new bool[_bucketCount];
@@ -371,17 +484,19 @@ namespace Ironfront.Rendering
             for (int p = 0; p < prototypes; p++)
                 for (int lod = 0; lod < catalog.Prototypes[p].Lods.Length; lod++)
                     foreach (TreeCatalog.Part part in catalog.Prototypes[p].Lods[lod])
-                        for (int s = 0; s < 2; s++)
+                        for (int s = 0; s < Passes; s++)
                         {
-                            bool shadowed = s == 1;
-                            if (shadowed && part.ShadowCasting == ShadowCastingMode.Off) continue;
-                            int bucket = Bucket(p, lod, shadowed);
+                            var pass = (Pass)s;
+                            // A part that casts nothing has no shadow to draw out of view; in view,
+                            // its Shadowed bucket draws it plainly.
+                            if (pass == Pass.ShadowOnly && part.ShadowCasting == ShadowCastingMode.Off) continue;
+                            int bucket = Bucket(p, lod, pass);
                             var properties = new MaterialPropertyBlock();
                             properties.SetBuffer("_TreeObjectToWorld", _objectToWorld);
                             properties.SetBuffer("_TreeWorldToObject", _worldToObject);
                             properties.SetBuffer("_TreeVisible", _visible);
                             properties.SetFloat("_TreeBucketStart", starts[bucket]);
-                            commands.Add(new Command { Part = part, Prototype = p, Lod = lod, Shadowed = shadowed, Bucket = bucket, Properties = properties });
+                            commands.Add(new Command { Part = part, Prototype = p, Lod = lod, Pass = pass, Bucket = bucket, Properties = properties });
                             args.Add(part.Mesh.GetIndexCount(part.Submesh));
                             args.Add(0);
                             args.Add(part.Mesh.GetIndexStart(part.Submesh));
@@ -419,6 +534,7 @@ namespace Ironfront.Rendering
             foreach (TreeCatalog.Prototype prototype in catalog.Prototypes)
                 tallest = Mathf.Max(tallest, prototype.Size * Mathf.Sqrt(prototype.LargestSquaredScale));
             _bounds = new Bounds(origin + size * 0.5f, size + new Vector3(tallest, tallest, tallest) * 2f);
+            _tallestRadius = tallest * 0.5f;
         }
 
         private static GraphicsBuffer Structured(int count, int stride) =>

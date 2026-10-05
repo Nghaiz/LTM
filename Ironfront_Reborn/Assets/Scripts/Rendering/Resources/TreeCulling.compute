@@ -35,6 +35,43 @@ uint _CommandCount;
 float3 _Eye;
 float _ShadowRange2;
 float4 _Planes[6];
+// The direction the shadow-casting light travels, and how far along it a tree's shadow reaches
+// per metre of its radius; 0 when no light is known, which keeps every tree in the shadow range.
+float3 _LightDirection;
+float _ShadowReachPerRadius;
+float _ShadowRange;
+
+// Three passes a tree can be drawn in (InstancedTreeRenderer.Pass): seen without a shadow, seen
+// with its shadow, or out of view with only its shadow drawn, because the shadow falls into view.
+#define PASS_UNSHADOWED 0
+#define PASS_SHADOWED 1
+#define PASS_SHADOW_ONLY 2
+#define PASSES 3
+
+bool OutsideFrustum(float3 centre, float radius)
+{
+    [unroll]
+    for (int p = 0; p < 6; p++)
+    {
+        if (dot(_Planes[p].xyz, centre) + _Planes[p].w < -radius) return true;
+    }
+    return false;
+}
+
+// Whether the tree's shadow, a capsule from the tree along the light, misses the view: both ends
+// beyond the same plane put the whole segment beyond it.
+bool ShadowMissesFrustum(float3 centre, float radius)
+{
+    if (_ShadowReachPerRadius <= 0) return false;
+    float3 far = centre + _LightDirection * min(radius * _ShadowReachPerRadius, _ShadowRange);
+    [unroll]
+    for (int p = 0; p < 6; p++)
+    {
+        if (dot(_Planes[p].xyz, centre) + _Planes[p].w < -radius
+            && dot(_Planes[p].xyz, far) + _Planes[p].w < -radius) return true;
+    }
+    return false;
+}
 
 [numthreads(64, 1, 1)]
 void Clear(uint3 id : SV_DispatchThreadID)
@@ -63,17 +100,23 @@ void Cull(uint3 id : SV_DispatchThreadID)
     }
     if (lod < 0) return;
 
-    uint shadowed = distance2 <= _ShadowRange2 ? 1 : 0;
-    if (shadowed == 0)
+    bool seen = !OutsideFrustum(tree.reference, tree.radius);
+    uint drawPass;
+    if (distance2 > _ShadowRange2)
     {
-        [unroll]
-        for (int p = 0; p < 6; p++)
-        {
-            if (dot(_Planes[p].xyz, tree.reference) + _Planes[p].w < -tree.radius) return;
-        }
+        if (!seen) return;
+        drawPass = PASS_UNSHADOWED;
+    }
+    else if (seen) drawPass = PASS_SHADOWED;
+    else
+    {
+        // Out of view, and so out of the main pass; it stays only for a shadow that can reach the
+        // view. Behind the camera with the light behind it too, nothing of it can be seen.
+        if (ShadowMissesFrustum(tree.reference, tree.radius)) return;
+        drawPass = PASS_SHADOW_ONLY;
     }
 
-    uint bucket = (tree.prototype * MAX_LODS + (uint)lod) * 2 + shadowed;
+    uint bucket = (tree.prototype * MAX_LODS + (uint)lod) * PASSES + drawPass;
     uint slot;
     InterlockedAdd(_BucketCounts[bucket], 1, slot);
     _Visible[_BucketStarts[bucket] + slot] = id.x;
