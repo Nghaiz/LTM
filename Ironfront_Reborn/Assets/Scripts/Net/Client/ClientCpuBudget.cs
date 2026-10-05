@@ -38,9 +38,11 @@ namespace Ironfront.Net.Unity.Client
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BackgroundFrameCap.HarnessRoleVariable))) return;
 
             double refreshHz = Screen.currentResolution.refreshRateRatio.value;
-            Application.targetFrameRate = CpuBudgetRules.ForegroundFrameCap(refreshHz);
+            int limit = PlayerPrefs.GetInt(Menu.MenuSettingsModel.FpsLimitKey, 0);
+            Application.targetFrameRate = CpuBudgetRules.FrameCapFor(limit, refreshHz);
             Debug.Log($"[graphics] frame cap {Application.targetFrameRate} fps while v-sync is off "
-                      + $"(display {refreshHz:F0} Hz).");
+                      + $"(display {refreshHz:F0} Hz, limit {CpuBudgetRules.FrameRateLimitLabel(limit, refreshHz)}); "
+                      + $"menus at most {CpuBudgetRules.MenuFrameCap}.");
         }
     }
 }
