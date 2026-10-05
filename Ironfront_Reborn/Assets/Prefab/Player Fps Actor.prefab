@@ -237,8 +237,8 @@ MonoBehaviour:
   monochromeTiling: 64
   filterMode: 0
   noiseTexture: {fileID: 2800000, guid: c368ad81433d8f84d995d4c8ace29463, type: 3}
-  noiseShader: {fileID: 4800000, guid: 38cf32dad2948144cb54473f05c8f031, type: 3}
-  dx11NoiseShader: {fileID: 4800000, guid: cd801cdfe58e1424f83bd71e62e5e172, type: 3}
+  noiseShader: {fileID: 4800000, guid: b0249d8c935344451aa4de6db76f0688, type: 3}
+  dx11NoiseShader: {fileID: 4800000, guid: 8b30686bb4322ab42ad5eb50a0210b58, type: 3}
 --- !u!114 &2255418725700192304
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2190,8 +2190,8 @@ MonoBehaviour:
   monochromeTiling: 64
   filterMode: 0
   noiseTexture: {fileID: 2800000, guid: c368ad81433d8f84d995d4c8ace29463, type: 3}
-  noiseShader: {fileID: 4800000, guid: 38cf32dad2948144cb54473f05c8f031, type: 3}
-  dx11NoiseShader: {fileID: 4800000, guid: cd801cdfe58e1424f83bd71e62e5e172, type: 3}
+  noiseShader: {fileID: 4800000, guid: b0249d8c935344451aa4de6db76f0688, type: 3}
+  dx11NoiseShader: {fileID: 4800000, guid: 8b30686bb4322ab42ad5eb50a0210b58, type: 3}
 --- !u!114 &3734094590401976809
 MonoBehaviour:
   m_ObjectHideFlags: 0
