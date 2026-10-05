@@ -86,7 +86,11 @@ param(
     # the step simulates and a [render] line with what an average frame drew, and a [hitch] line
     # naming the heaviest systems of every frame over 50 ms, in this client's log. For a
     # playtest that is chasing stutter; off otherwise.
-    [switch] $LogFrames
+    [switch] $LogFrames,
+
+    # Extra player command-line arguments, for example a measuring run at the owner's
+    # resolution: -ExtraArgs '-screen-width','2560','-screen-height','1440','-screen-fullscreen','0'
+    [string[]] $ExtraArgs = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -135,4 +139,4 @@ Write-Host "[play] in the client: register or log in, open the room browser, pic
 Write-Host "[play] the match starts when everyone in the room is ready; the map loads itself."
 Write-Host "[play] grep the log for '[net] connected as' once you are in."
 
-Start-Process -FilePath $exe -ArgumentList @("-logFile", $LogFile) | Out-Null
+Start-Process -FilePath $exe -ArgumentList (@("-logFile", $LogFile) + $ExtraArgs) | Out-Null

@@ -115,7 +115,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (state == GameFlowState.InMatch || flow == null)
             {
                 DeployWhenLoadoutIsUp();
-                if (_uncapped && (QualitySettings.vSyncCount != 0 || Application.targetFrameRate != -1))
+                if (_uncapped && flow != null && (QualitySettings.vSyncCount != 0 || Application.targetFrameRate != -1))
                 {
                     QualitySettings.vSyncCount = 0;
                     Application.targetFrameRate = -1;
