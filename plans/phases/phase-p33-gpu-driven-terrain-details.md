@@ -175,11 +175,40 @@ between Windows' default power throttling and an explicit opt-out (`SetProcessIn
 load is a fixed clamp the game neither sets nor lifts; not investigated further (owner rules:
 no temperature, no power supply).
 
-## Next after P33 (not in scope)
+## Step 4b — the Frame Debugger walk and the follow-ups (2026-10-06)
 
-Instanced trees still draw every shadow command into all four cascades (~590 events in the walked
-frame). Fewer LOD buckets in the shadow passes or per-cascade buckets are the candidates; measure
-first with the same two tools.
+Development player (Mono, diagnostics) built from develop `3d3062a8` + the slider fix, two clients
+in one Forest Lake 50-a-side match on the Azure server, the measured one cycling
+`base,wholebounds,nodetailsgpu` every 20 s (18 windows each). Raw files: `tmp/perf/fd-*`,
+`fd-walk-base.tsv`, `fd-walk-v420.tsv` (untracked).
+
+| One walked frame | v4.2.0 (terrain details) | now (GPU details) |
+|---|---|---|
+| events / draw calls | 2,354 / 2,612 | **1,554 / 2,249** (−34 % events) |
+| shadow map events | 1,481 | **554** (−63 %) |
+| detail events (all passes) | 1,232 | **28** (`InstancedDetails/*`, 4 a cascade) |
+
+Different frames (the walk freezes one), so the per-match probe is the like-for-like number:
+draws 980 (`base`) vs 1,509 (`nodetailsgpu`) per frame, −35 %; CPU 47.6 vs 70.0 ms a frame
+(2.92 cores at 61.3 fps vs 3.52 at 50.3; Mono development build, uncapped).
+
+**The full Unity EditMode suite: 531/531 on the GPU.** Under `-nographics` (Null device) the 22
+GPU-driven renderer tests are now ignored with the reason instead of failing in SetUp.
+
+**The grass sliders work now** (`PresetGrassScale`): they scale the preset's distance and density,
+start at 1 (the preset's own grass, as every player saw while they did nothing), and are saved
+under new keys. Editor check on Forest Lake, High: never set 80 m / 0.85; 0.5 and 0.5 give
+40 m / 0.425, applied again the same; density 0 gives 0; leaving the map gives the preset back.
+
+**Tree shadows into all four cascades — bounding each draw by its own cells does NOT help
+(measured, not shipped).** Each tree bucket's indirect draw was given the bounds of the cells that
+reach it instead of the whole terrain's: pixel-identical (6 Editor views, 0 pixels differ), but the
+walk shows the same tree sequence in every cascade (M_Foliage x10, Foliage_Wind x68, rock x2,
+Foliage_Wind x2, four times) and the probe's `wholebounds` state measured the same draws (929 vs
+980, noise). A LOD bucket is a ring of distance around the camera, and the trees' cells are 128 m:
+a ring's bounding box always holds the camera, and Unity culls casters per cascade by bounds
+against volumes that all hold the camera too. The real fix is drawing the tree casters per
+cascade: `plans/phases/phase-p34-tree-shadows-per-cascade.md`.
 
 ## Tools (all in the repo)
 
@@ -187,4 +216,4 @@ first with the same two tools.
   player (`build-player.ps1 -Development`) from a shell; `tools/perf/fd_summary.py` summarises it.
 - `GpuCostProbe` (`IRONFRONT_GPU_PROBE=1`) + `tools/perf/probe_attribution.py` — price features,
   layers and root groups in a live match from the `[render]`/`[frames]` log lines.
-- `tmp/perf/` holds this session's raw logs (`attr-c1.log`, `fd-walk.tsv`); untracked.
+- `tmp/perf/` holds the raw logs (`attr-c1.log`, `fd-walk-v420.tsv`, `fd-walk-base.tsv`, `fd-c1.log`); untracked.

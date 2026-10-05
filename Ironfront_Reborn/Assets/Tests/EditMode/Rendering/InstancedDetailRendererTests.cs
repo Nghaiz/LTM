@@ -54,7 +54,7 @@ namespace Ironfront.Rendering.Tests
             _terrain.detailObjectDensity = 1f;
             _details = _terrain.gameObject.AddComponent<InstancedDetailRenderer>();
             _details.Build();
-            Assert.IsTrue(_details.IsBuilt, "Setup: the grass terrain was refused");
+            GpuDrivenDevice.RequireBuilt(_details.IsBuilt, InstancedDetailRenderer.VertexBufferInputs, "grass");
 
             _viewer = new GameObject("Viewer");
             _camera = _viewer.AddComponent<Camera>();
