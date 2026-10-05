@@ -385,9 +385,7 @@ namespace Ironfront.Net.Unity.Server
         private static void LaunchCarriedProjectile(
             ClientSession session, NetServerActor actor, in CombatTickResult result)
         {
-            if (actor.FireCarriedWeapon(
-                    result.Origin.X, result.Origin.Y, result.Origin.Z,
-                    result.AimDirection.X, result.AimDirection.Y, result.AimDirection.Z))
+            if (FireApprovedLaunch(session, actor, result.Origin, result.AimDirection))
                 return;
 
             Debug.LogError(
@@ -398,6 +396,38 @@ namespace Ironfront.Net.Unity.Server
                 + "!CoolingDown(); run with IRONFRONT_LOG_SHOTS=1 to see which gate answered. "
                 + "Before this line said so, a refusal here spent the round, launched nothing "
                 + "and produced no message at all.");
+        }
+
+        /// <summary>
+        /// Hands the engine weapon a launch the authority has just approved, after making the
+        /// weapon agree with the state the approval was made against.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The mirror in <see cref="StepCombat"/> runs before the authority, and the authority
+        /// can move the state it mirrored.</b> <c>ServerCombatAuthority.Step</c> finishes a running
+        /// reload as its first act and only then resolves the trigger, so a launcher whose reload
+        /// ends on the tick its trigger is pulled is approved with a full clip while the engine
+        /// weapon still holds the empty one it was handed a moment earlier. <c>Weapon.CanFire</c>
+        /// then refuses on <c>HasLoadedAmmo</c>, the round is gone and nothing flies: the
+        /// "NOTHING WAS LAUNCHED" line, three times in v4.1.0's first 13 hours, every one for
+        /// the BIL Scalpel, the clip-of-one launcher whose every shot follows a reload.
+        /// </para>
+        /// <para>
+        /// So the clip handed over is the one the round came out of (the authority has just
+        /// spent exactly one), the weapon is up (it was drawn, or the shot would have been
+        /// refused), and the cooldown has run (likewise). What can still refuse is what the
+        /// authority does not model, and that keeps its error line.
+        /// </para>
+        /// </remarks>
+        internal static bool FireApprovedLaunch(
+            ClientSession session, NetServerActor actor, in Vec3 origin, in Vec3 aim)
+        {
+            actor.MirrorAuthorityWeaponState(
+                session.Weapon.AmmoInClip + 1, unholstered: true,
+                elapsedSinceLastShot: float.PositiveInfinity);
+
+            return actor.FireCarriedWeapon(origin.X, origin.Y, origin.Z, aim.X, aim.Y, aim.Z);
         }
 
         /// <summary>

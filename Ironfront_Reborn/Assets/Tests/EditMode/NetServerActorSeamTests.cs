@@ -1,4 +1,6 @@
-﻿using NUnit.Framework;
+﻿using Ironfront.Net.Replication.Movement;
+using Ironfront.Net.Replication.Server;
+using NUnit.Framework;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server.Tests
@@ -86,6 +88,8 @@ namespace Ironfront.Net.Unity.Server.Tests
                 float directionX, float directionY, float directionZ)
             {
                 if (!HoldsAWeapon) return false;
+                if (RefusesWithoutARound && (LastMirror.AmmoInClip <= 0 || !LastMirror.Unholstered))
+                    return false;
 
                 FiredOrigins.Add(new Vector3(originX, originY, originZ));
                 FiredDirections.Add(new Vector3(directionX, directionY, directionZ));
@@ -121,6 +125,9 @@ namespace Ironfront.Net.Unity.Server.Tests
                 OfferedTriggers.Add(new Vector3(forwardX, forwardY, forwardZ));
                 return WithholdsTrigger;
             }
+
+            /// <summary>Weapon.CanFire's ammo and draw terms, read off the last mirror.</summary>
+            internal bool RefusesWithoutARound;
 
             /// <summary>How many times the authority's weapon state was mirrored in.</summary>
             internal int Mirrors;
@@ -293,6 +300,27 @@ namespace Ironfront.Net.Unity.Server.Tests
         }
 
         // ------------------------------------------------ X-42: the engine's trigger
+
+        [Test]
+        public void ALaunchApprovedAsItsReloadEndsIsNotRefusedByTheEmptyClipMirroredBeforeIt()
+        {
+            // v4.1.0: three BIL Scalpel rounds spent with nothing launched. StepCombat mirrors
+            // the session into the engine weapon BEFORE the authority, the authority finishes the
+            // reload as its first act and then approves the trigger, and the engine weapon --
+            // still holding the empty clip it was handed -- refused on HasLoadedAmmo.
+            var gameplay = new FakeGameplayActor { RefusesWithoutARound = true };
+            NetServerActor actor = CreateActor(gameplay);
+            var session = new ClientSession(connectionId: 3, actorId: 7);
+
+            actor.MirrorAuthorityWeaponState(0, true, 2f);
+            session.Weapon.AmmoInClip = 0;
+
+            Assert.IsTrue(ServerCombatBridge.FireApprovedLaunch(
+                session, actor, new Vec3(1f, 2f, 3f), new Vec3(0f, 0f, 1f)));
+            Assert.AreEqual(1, gameplay.LastMirror.AmmoInClip,
+                "the engine must hold the round the authority just spent");
+            Assert.AreEqual(1, gameplay.FiredDirections.Count);
+        }
 
         [Test]
         public void FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection()
