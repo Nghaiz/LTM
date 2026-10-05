@@ -48,6 +48,14 @@ namespace Ironfront.Net.Unity.Diagnostics
         private int _gcAtWindowStart;
         private long _ticksAtWindowStart;
 
+        // FrameTimingManager's view of the same frames (P31): the GPU's own time and the two CPU
+        // threads', so a slow window says whether the CPU or the GPU was the wall. Needs Frame
+        // Timing Stats in the player settings; without it, or on a device that cannot time the
+        // GPU, the columns read "n/a" rather than a zero that looks like a fast GPU.
+        private readonly FrameTiming[] _timing = new FrameTiming[1];
+        private double _gpuMs, _mainMs, _renderMs;
+        private int _gpuFrames, _cpuFrames;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void InstallIfRequested()
         {
@@ -68,6 +76,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         private void Update()
         {
             if (_frames < MaxFramesPerWindow) _frameMs[_frames++] = Time.unscaledDeltaTime * 1000f;
+            SampleFrameTiming();
 
             float elapsed = Time.realtimeSinceStartup - _windowStart;
             if (elapsed < WindowSeconds) return;
@@ -82,6 +91,35 @@ namespace Ironfront.Net.Unity.Diagnostics
             _windowStart = Time.realtimeSinceStartup;
             _gcAtWindowStart = GC.CollectionCount(0);
             _ticksAtWindowStart = CurrentTicks();
+            _gpuMs = _mainMs = _renderMs = 0;
+            _gpuFrames = _cpuFrames = 0;
+        }
+
+        private void SampleFrameTiming()
+        {
+            FrameTimingManager.CaptureFrameTimings();
+            if (FrameTimingManager.GetLatestTimings(1, _timing) < 1) return;
+
+            FrameTiming timing = _timing[0];
+            if (timing.cpuMainThreadFrameTime > 0)
+            {
+                _mainMs += timing.cpuMainThreadFrameTime;
+                _renderMs += timing.cpuRenderThreadFrameTime;
+                _cpuFrames++;
+            }
+            if (timing.gpuFrameTime > 0)
+            {
+                _gpuMs += timing.gpuFrameTime;
+                _gpuFrames++;
+            }
+        }
+
+        private string FrameTimingColumns()
+        {
+            string gpu = _gpuFrames > 0 ? $"{_gpuMs / _gpuFrames:F1}ms" : "n/a";
+            string main = _cpuFrames > 0 ? $"{_mainMs / _cpuFrames:F1}ms" : "n/a";
+            string render = _cpuFrames > 0 ? $"{_renderMs / _cpuFrames:F1}ms" : "n/a";
+            return $"gpu={gpu} main={main} render={render}";
         }
 
         private void Print(float elapsed)
@@ -105,7 +143,8 @@ namespace Ironfront.Net.Unity.Diagnostics
                 $"[frames] t={Time.realtimeSinceStartup:F0}s role={Role()} fps={_frames / elapsed:F1} "
                 + $"mean={sum / _frames:F1}ms p99={p99:F1}ms max={max:F1}ms hitches={hitches} "
                 + $"gc0={GC.CollectionCount(0) - _gcAtWindowStart} "
-                + $"ticks/s={ticks / elapsed:F1} mem={GC.GetTotalMemory(false) / (1024 * 1024)}MB");
+                + $"ticks/s={ticks / elapsed:F1} mem={GC.GetTotalMemory(false) / (1024 * 1024)}MB "
+                + FrameTimingColumns());
         }
 
         private static long CurrentTicks()
