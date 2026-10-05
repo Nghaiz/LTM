@@ -175,7 +175,7 @@ public class VehicleSpawner : MonoBehaviour
 	public float reclaimAbandonedAfterSeconds = 90f;
 
 	/// <summary>
-	/// How close a living actor has to be to keep an abandoned vehicle from being reclaimed.
+	/// How close a living player has to be to keep an abandoned vehicle from being reclaimed.
 	/// </summary>
 	/// <remarks>
 	/// <b>Without this, reclamation eats a player's parked jeep.</b> Somebody who drives to a
@@ -183,8 +183,8 @@ public class VehicleSpawner : MonoBehaviour
 	/// emphatically not abandoned. An empty-seat test alone cannot tell those apart; standing
 	/// next to it can. Bot litter is abandoned precisely because the bot walked off.
 	/// </remarks>
-	[Tooltip("A living actor within this many metres keeps an empty vehicle from being "
-	         + "reclaimed, so a player's parked vehicle is never taken.")]
+	[Tooltip("A living player within this many metres keeps an empty vehicle from being "
+	         + "reclaimed, so a player's parked vehicle is never taken. Bots do not.")]
 	public float reclaimKeepAliveRadius = 30f;
 
 	// Reclamation runs on a slow cadence rather than every frame: the threshold is measured in
@@ -862,16 +862,39 @@ public class VehicleSpawner : MonoBehaviour
 	}
 
 	/// <summary>
-	/// True when a living actor is close enough that this vehicle is parked rather than
+	/// True when a living PLAYER is close enough that this vehicle is parked rather than
 	/// abandoned.
 	/// </summary>
+	/// <remarks>
+	/// <b>Players only, not bots.</b> The radius exists so a player who drives to a flag and
+	/// gets out to capture it keeps the jeep. A bot never comes back for one it left, and in a
+	/// 100-bot match there is nearly always one within 30 m of any flag, so counting them meant
+	/// bot litter was never reclaimed: 0 reclaims in v4.1.0's first 13 hours on all three maps,
+	/// while Forest Lake's 20 pads (P32 took it from 12) ran the 24-id pool dry about three
+	/// minutes into every match and refused 117 spawns, Dustbowl 13. A pad left empty for the
+	/// rest of the match is a base with no vehicle for the players spawning at it.
+	/// </remarks>
 	private bool SomebodyIsStandingBy(Vehicle vehicle)
 	{
 		if (reclaimKeepAliveRadius <= 0f) return false;
 
 		ActorManager.AliveActorsInRange(
 			vehicle.transform.position, reclaimKeepAliveRadius, reclaimNearbyActors);
-		return reclaimNearbyActors.Count > 0;
+		for (int i = 0; i < reclaimNearbyActors.Count; i++)
+		{
+			if (IsPlayerBody(reclaimNearbyActors[i])) return true;
+		}
+		return false;
+	}
+
+	// The local player offline, a claimed body on a server. Not aiControlled alone: a player
+	// slot is built from the same AI character prefab a bot is, so it stays aiControlled for the
+	// whole match and only IsClaimed says a connection is driving it (see ActorManager).
+	private static bool IsPlayerBody(Actor actor)
+	{
+		if (!actor.aiControlled) return true;
+		NetServerActor networked = actor.GetComponent<NetServerActor>();
+		return networked != null && networked.IsClaimed;
 	}
 
 	/// <summary>
