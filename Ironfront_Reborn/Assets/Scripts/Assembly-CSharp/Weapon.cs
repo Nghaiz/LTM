@@ -163,6 +163,13 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	[NonSerialized]
 	public float projectileSpeed;
 
+	/// <summary>
+	/// Seconds the projectile flies before gravity takes hold: its
+	/// <c>Projectile.Configuration.straightDistance</c> at <see cref="projectileSpeed"/>.
+	/// </summary>
+	[NonSerialized]
+	public float projectileStraightTime;
+
 	[NonSerialized]
 	public Animator animator;
 
@@ -180,7 +187,9 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	{
 		if (configuration.projectilePrefab != null)
 		{
-			projectileSpeed = configuration.projectilePrefab.GetComponent<Projectile>().configuration.speed;
+			Projectile.Configuration flight = configuration.projectilePrefab.GetComponent<Projectile>().configuration;
+			projectileSpeed = flight.speed;
+			projectileStraightTime = flight.speed > 0f ? flight.straightDistance / flight.speed : 0f;
 		}
 		else
 		{

@@ -28,6 +28,19 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		public float dropoffEnd = 300f;
 
 		public AnimationCurve damageDropOff;
+
+		/// <summary>
+		/// Metres flown dead straight before gravity takes hold. 0, the default, is the original
+		/// game: everything drops from the muzzle.
+		/// </summary>
+		/// <remarks>
+		/// Authored on the BEU-AW1's rocket (owner, v4.3.0 playtest: "it must fly dead straight to
+		/// show how powerful it is, and only drop once it has flown very far"). A motor that keeps
+		/// burning, not a lighter projectile: past this distance the arc is the ordinary one. The
+		/// server's engine flight and every client's drawing run this same Update, so both sides
+		/// fly the same line. Bots aim with it too (<c>AiActorController.WeaponLead</c>).
+		/// </remarks>
+		public float straightDistance;
 	}
 
 	private const float PASS_PLAYER_MAX_SOUND_DISTANCE = 15f;
@@ -121,9 +134,7 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		// about 33 cm over a two-second flight at 30 Hz against 6 cm of position quantization --
 		// so server and client disagreed about where a bullet was purely from frame timing.
 		// Recorded in Ballistics.Step as the third deliberate change to offline behaviour.
-		Vector3 delta = velocity * Time.deltaTime
-			+ Physics.gravity * (0.5f * Time.deltaTime * Time.deltaTime);
-		velocity += Physics.gravity * Time.deltaTime;
+		Vector3 delta = FlightStep(ref velocity, travelDistance, configuration.straightDistance, Time.deltaTime);
 		Travel(delta);
 		if (!configuration.makesFlybySound)
 		{
@@ -155,6 +166,20 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 				FpsActorController.instance.BulletFlyby(vector2, UnityEngine.Random.Range(configuration.flybyPitch, 0.9f * configuration.flybyPitch));
 			}
 		}
+	}
+
+	/// <summary>
+	/// One step of a free flight: the displacement over <paramref name="dt"/>, with
+	/// <paramref name="velocity"/> advanced to the step's end. Gravity acts only once
+	/// <paramref name="travelled"/> is past <paramref name="straightDistance"/>
+	/// (<see cref="Configuration.straightDistance"/>).
+	/// </summary>
+	public static Vector3 FlightStep(ref Vector3 velocity, float travelled, float straightDistance, float dt)
+	{
+		Vector3 gravity = travelled > straightDistance ? Physics.gravity : Vector3.zero;
+		Vector3 delta = velocity * dt + gravity * (0.5f * dt * dt);
+		velocity += gravity * dt;
+		return delta;
 	}
 
 	protected virtual void Travel(Vector3 delta)
