@@ -758,8 +758,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Dropdown displayMode = MakeDropdown(displayGroup, "DisplayMode", new Vector2(rightColumn, 165f), cell);
             Dropdown quality = MakeDropdown(displayGroup, "Quality", new Vector2(leftColumn, 85f), cell);
             Toggle vSync = MakeSwitch(displayGroup, "VSync", "V-SYNC", new Vector2(rightColumn, 85f), cell);
-            Button fps = MakeButton(displayGroup, "FpsLimit", "FPS LIMIT // IN DEVELOPMENT",
-                new Vector2(leftColumn, 5f), cell);
+            Dropdown fps = MakeDropdown(displayGroup, "FpsLimit", new Vector2(leftColumn, 5f), cell);
             Button motionBlur = MakeButton(displayGroup, "MotionBlur", "MOTION BLUR // IN DEVELOPMENT",
                 new Vector2(rightColumn, 5f), cell);
 
@@ -817,6 +816,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_displayMode", displayMode);
             Assign(so, "_quality", quality);
             Assign(so, "_vSync", vSync);
+            Assign(so, "_fpsLimit", fps);
             Assign(so, "_masterVolume", volume);
             Assign(so, "_fieldOfView", fov);
             Assign(so, "_sensitivity", sensitivity);
@@ -826,7 +826,7 @@ namespace Ironfront.Net.Unity.EditorTools
             AssignArray(so, "_categoryButtons", new Object[] { displayTab, audioTab, gameplayTab });
             AssignArray(so, "_categoryGroups", new Object[] { displayGroup, audioGroup, gameplayGroup });
             AssignArray(so, "_unsupportedButtons",
-                new Object[] { fps, motionBlur, music, sfx, voice, advancedAudio, outputDevice,
+                new Object[] { motionBlur, music, sfx, voice, advancedAudio, outputDevice,
                     language, colorblind, accessibility, cameraShake });
             Assign(so, "_toast", toast);
             so.ApplyModifiedPropertiesWithoutUndo();

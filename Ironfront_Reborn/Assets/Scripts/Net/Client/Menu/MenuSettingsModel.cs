@@ -7,7 +7,8 @@ namespace Ironfront.Net.Unity.Client.Menu
     public readonly struct MenuSettingsData
     {
         public MenuSettingsData(int resolutionWidth, int resolutionHeight, int displayMode,
-            int quality, int vSync, float masterVolume, float fieldOfView, float sensitivity)
+            int quality, int vSync, float masterVolume, float fieldOfView, float sensitivity,
+            int fpsLimit = 0)
         {
             ResolutionWidth = resolutionWidth;
             ResolutionHeight = resolutionHeight;
@@ -17,6 +18,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             MasterVolume = masterVolume;
             FieldOfView = fieldOfView;
             Sensitivity = sensitivity;
+            FpsLimit = fpsLimit;
         }
 
         public int ResolutionWidth { get; }
@@ -27,6 +29,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         public float MasterVolume { get; }
         public float FieldOfView { get; }
         public float Sensitivity { get; }
+
+        /// <summary>One of <c>CpuBudgetRules.FrameRateLimits</c>: 0 the display's refresh, -1 none.</summary>
+        public int FpsLimit { get; }
     }
 
     public static class MenuSettingsModel
@@ -39,6 +44,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         public const string MasterVolumeKey = "master volume";
         public const string FieldOfViewKey = "field of view";
         public const string SensitivityKey = "mouse sensitivity";
+        public const string FpsLimitKey = "ironfront fps limit";
 
         /// <summary>
         /// The layout the saved quality belongs to (<see cref="GraphicsPresetRules.SettingsVersion"/>);
@@ -55,7 +61,8 @@ namespace Ironfront.Net.Unity.Client.Menu
                 PlayerPrefs.GetInt(VSyncKey, fallback.VSync),
                 PlayerPrefs.GetFloat(MasterVolumeKey, fallback.MasterVolume),
                 PlayerPrefs.GetFloat(FieldOfViewKey, fallback.FieldOfView),
-                PlayerPrefs.GetFloat(SensitivityKey, fallback.Sensitivity));
+                PlayerPrefs.GetFloat(SensitivityKey, fallback.Sensitivity),
+                PlayerPrefs.GetInt(FpsLimitKey, fallback.FpsLimit));
 
         /// <summary>
         /// The player's saved graphics preset, or <paramref name="fallback"/> when nothing is saved.
@@ -93,6 +100,8 @@ namespace Ironfront.Net.Unity.Client.Menu
             PlayerPrefs.SetFloat(MasterVolumeKey, Mathf.Clamp01(value.MasterVolume));
             PlayerPrefs.SetFloat(FieldOfViewKey, Mathf.Clamp(value.FieldOfView, 60f, 120f));
             PlayerPrefs.SetFloat(SensitivityKey, Mathf.Max(0.05f, value.Sensitivity));
+            PlayerPrefs.SetInt(FpsLimitKey,
+                CpuBudgetRules.FrameRateLimits[CpuBudgetRules.FrameRateLimitIndex(value.FpsLimit)]);
             PlayerPrefs.Save();
         }
     }

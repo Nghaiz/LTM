@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Ironfront.Net.Unity.Client
 {
@@ -63,6 +64,7 @@ namespace Ironfront.Net.Unity.Client
 
         private bool _unfocused;
         private bool _loading;
+        private bool _inMenus;
         private bool _capped;
         private int _savedVSyncCount;
         private int _savedTargetFrameRate;
@@ -76,6 +78,31 @@ namespace Ironfront.Net.Unity.Client
 
             _installed = new BackgroundFrameCap();
             Application.focusChanged += _installed.OnFocusChanged;
+            SceneManager.activeSceneChanged += (_, next) => _installed.OnMenusChanged(IsMenuScene(next.name));
+            _installed.OnMenusChanged(IsMenuScene(SceneManager.GetActiveScene().name));
+        }
+
+        /// <summary>
+        /// Whether <paramref name="sceneName"/> is one of the menus: the title, login, room browser,
+        /// lobby and settings all live in <c>Menu</c>, and <c>Splash</c> comes before it. Every map,
+        /// practice included, is something else.
+        /// </summary>
+        internal static bool IsMenuScene(string sceneName) => sceneName == "Menu" || sceneName == "Splash";
+
+        /// <summary>
+        /// Applies the frame rate the player chose in Settings: at once when nothing caps the
+        /// game, or as the rate to come back to when a cap lifts. Without this, saving Settings in
+        /// the menus -- which are always capped -- was undone the moment the cap lifted.
+        /// </summary>
+        public static void ApplyPlayerChoice(int vSyncCount, int targetFrameRate)
+        {
+            if (_installed != null)
+            {
+                _installed.OnPlayerChoice(vSyncCount, targetFrameRate);
+                return;
+            }
+            QualitySettings.vSyncCount = vSyncCount;
+            Application.targetFrameRate = targetFrameRate;
         }
 
         /// <summary>
@@ -91,6 +118,27 @@ namespace Ironfront.Net.Unity.Client
             Apply();
         }
 
+        /// <summary>The Settings edge, callable without a settings screen.</summary>
+        internal void OnPlayerChoice(int vSyncCount, int targetFrameRate)
+        {
+            if (_capped)
+            {
+                _savedVSyncCount = vSyncCount;
+                _savedTargetFrameRate = targetFrameRate;
+                Apply();
+                return;
+            }
+            QualitySettings.vSyncCount = vSyncCount;
+            Application.targetFrameRate = targetFrameRate;
+        }
+
+        /// <summary>The menus edge, callable without a scene to change.</summary>
+        internal void OnMenusChanged(bool inMenus)
+        {
+            _inMenus = inMenus;
+            Apply();
+        }
+
         /// <summary>The loading edge, callable without a map to load.</summary>
         internal void OnLoadingChanged(bool loading)
         {
@@ -100,7 +148,10 @@ namespace Ironfront.Net.Unity.Client
 
         private void Apply()
         {
-            int cap = _loading ? LoadingFrameRate : _unfocused ? BackgroundFrameRate : 0;
+            int cap = _loading ? LoadingFrameRate
+                : _unfocused ? BackgroundFrameRate
+                : _inMenus ? CpuBudgetRules.MenuFrameCap
+                : 0;
 
             if (cap > 0)
             {
@@ -110,8 +161,9 @@ namespace Ironfront.Net.Unity.Client
                     _savedTargetFrameRate = Application.targetFrameRate;
                     _capped = true;
                 }
+                // Never above the rate the player's own settings give: a 15 fps load stays 15 under any limit.
                 QualitySettings.vSyncCount = 0;
-                Application.targetFrameRate = cap;
+                Application.targetFrameRate = CpuBudgetRules.CapUnder(cap, _savedVSyncCount > 0 ? -1 : _savedTargetFrameRate);
             }
             else if (_capped)
             {

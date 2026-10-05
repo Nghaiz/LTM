@@ -14,6 +14,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Dropdown? _displayMode;
         [SerializeField] private Dropdown? _quality;
         [SerializeField] private Toggle? _vSync;
+        [SerializeField] private Dropdown? _fpsLimit;
         [SerializeField] private Slider? _masterVolume;
         [SerializeField] private Slider? _fieldOfView;
         [SerializeField] private Slider? _sensitivity;
@@ -97,7 +98,8 @@ namespace Ironfront.Net.Unity.Client.Menu
                 _vSync != null && _vSync.isOn ? 1 : 0,
                 _masterVolume != null ? _masterVolume.value : 1f,
                 _fieldOfView != null ? _fieldOfView.value : 90f,
-                _sensitivity != null ? _sensitivity.value : 0.5f);
+                _sensitivity != null ? _sensitivity.value : 0.5f,
+                _fpsLimit != null ? CpuBudgetRules.FrameRateLimits[Mathf.Clamp(_fpsLimit.value, 0, CpuBudgetRules.FrameRateLimits.Length - 1)] : 0);
             MenuSettingsModel.Save(data);
             if (applyRuntime) ApplyRuntime(data);
             SetStatus("ALL CHANGES SAVED");
@@ -130,7 +132,8 @@ namespace Ironfront.Net.Unity.Client.Menu
                 QualitySettings.vSyncCount > 0 ? 1 : 0,
                 PlayerPrefs.GetFloat(MenuSettingsModel.MasterVolumeKey, 1f),
                 PlayerPrefs.GetFloat(MenuSettingsModel.FieldOfViewKey, 90f),
-                PlayerPrefs.GetFloat(MenuSettingsModel.SensitivityKey, 0.5f));
+                PlayerPrefs.GetFloat(MenuSettingsModel.SensitivityKey, 0.5f),
+                PlayerPrefs.GetInt(MenuSettingsModel.FpsLimitKey, 0));
             PutIntoControls(MenuSettingsModel.Load(fallback));
         }
 
@@ -143,6 +146,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_quality != null)
                 _quality.value = Mathf.Clamp(data.Quality, 0, Mathf.Max(0, QualitySettings.names.Length - 1));
             if (_vSync != null) _vSync.isOn = data.VSync > 0;
+            if (_fpsLimit != null) _fpsLimit.value = CpuBudgetRules.FrameRateLimitIndex(data.FpsLimit);
             if (_masterVolume != null) _masterVolume.value = data.MasterVolume;
             if (_fieldOfView != null) _fieldOfView.value = data.FieldOfView;
             if (_sensitivity != null) _sensitivity.value = data.Sensitivity;
@@ -181,9 +185,18 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             EnsureOptions(_displayMode, new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" });
             EnsureOptions(_quality, QualitySettings.names);
+            EnsureOptions(_fpsLimit, FrameRateLimitLabels());
             if (_masterVolume != null) { _masterVolume.minValue = 0f; _masterVolume.maxValue = 1f; }
             if (_fieldOfView != null) { _fieldOfView.minValue = 60f; _fieldOfView.maxValue = 120f; }
             if (_sensitivity != null) { _sensitivity.minValue = 0.05f; _sensitivity.maxValue = 1f; }
+        }
+
+        /// <summary>The FPS LIMIT row, in <c>CpuBudgetRules.FrameRateLimits</c> order.</summary>
+        private static IEnumerable<string> FrameRateLimitLabels()
+        {
+            double refreshHz = Screen.currentResolution.refreshRateRatio.value;
+            foreach (int limit in CpuBudgetRules.FrameRateLimits)
+                yield return CpuBudgetRules.FrameRateLimitLabel(limit, refreshHz);
         }
 
         private static void EnsureOptions(Dropdown? dropdown, IEnumerable<string> labels)
@@ -339,8 +352,12 @@ namespace Ironfront.Net.Unity.Client.Menu
                 data, Screen.currentResolution.width, Screen.currentResolution.height);
             Screen.SetResolution(application.Width, application.Height, application.Mode);
 
+            // A preset carries its own v-sync, so the player's choice goes on after it, through the
+            // frame cap, which keeps the menus' own cap in force until the player leaves them.
             QualitySettings.SetQualityLevel(data.Quality, applyExpensiveChanges: true);
-            QualitySettings.vSyncCount = data.VSync;
+            BackgroundFrameCap.ApplyPlayerChoice(
+                data.VSync,
+                CpuBudgetRules.FrameCapFor(data.FpsLimit, Screen.currentResolution.refreshRateRatio.value));
             AudioListener.volume = data.MasterVolume;
         }
     }
