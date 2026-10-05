@@ -187,9 +187,12 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	{
 		if (configuration.projectilePrefab != null)
 		{
-			Projectile.Configuration flight = configuration.projectilePrefab.GetComponent<Projectile>().configuration;
+			Projectile round = configuration.projectilePrefab.GetComponent<Projectile>();
+			Projectile.Configuration flight = round.configuration;
 			projectileSpeed = flight.speed;
-			projectileStraightTime = flight.speed > 0f ? flight.straightDistance / flight.speed : 0f;
+			projectileStraightTime = Projectile.IsHitscanRound(round)
+				? float.MaxValue
+				: (flight.speed > 0f ? flight.straightDistance / flight.speed : 0f);
 		}
 		else
 		{

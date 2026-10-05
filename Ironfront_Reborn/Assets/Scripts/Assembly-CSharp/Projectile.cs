@@ -92,8 +92,30 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 
 	private float travelDistance;
 
+	/// <summary>
+	/// A plain round: this class itself, no warhead, guidance or deployable behind it.
+	/// </summary>
+	/// <remarks>
+	/// <b>Online it is drawn, not flown.</b> The server resolves a player's shot as a straight
+	/// hitscan ray (<c>ServerFireResolver</c>), so a round that dropped under gravity showed a
+	/// player a trajectory, an impact and a decal below the line the server actually judged: at a
+	/// sniper's 500 m, 2 m low, and a player who held over for the drop missed on the server.
+	/// These rounds therefore fly straight everywhere (<see cref="Start"/>), and bots lead them
+	/// without drop (<c>Weapon.projectileStraightTime</c>), so every round's line is the line that
+	/// hits. Weapons whose rounds the server does fly -- rockets, shells, the gatling's exploding
+	/// rounds -- keep gravity, and their client drawing runs the same flight.
+	/// </remarks>
+	public static bool IsHitscanRound(Projectile projectile)
+	{
+		return projectile != null && projectile.GetType() == typeof(Projectile);
+	}
+
 	protected virtual void Start()
 	{
+		if (IsHitscanRound(this))
+		{
+			configuration.straightDistance = float.MaxValue;
+		}
 		velocity = base.transform.forward * configuration.speed;
 		expireTime = Time.time + configuration.lifetime;
 		if (warnsEnemyAi)
