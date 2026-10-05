@@ -170,12 +170,32 @@ public class VehicleSpawner : MonoBehaviour
 	/// to be parked and used as cover can be authored longer without changing anyone else.
 	/// </para>
 	/// </remarks>
-	[Tooltip("Seconds a superseded vehicle may sit empty before this pad reclaims its network "
-	         + "id. 0 or less disables reclamation for this pad.")]
+	[Tooltip("Seconds a vehicle from this pad may sit empty, off the pad, before a server "
+	         + "reclaims it and spawns a fresh one here. 0 or less disables reclamation for this pad.")]
 	public float reclaimAbandonedAfterSeconds = 90f;
 
 	/// <summary>
-	/// How close a living actor has to be to keep an abandoned vehicle from being reclaimed.
+	/// How long the pad's CURRENT vehicle has stood empty off its pad (owner 2026-10-05).
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Every pad on every map respawns only when its vehicle is destroyed or abandoned.</b>
+	/// <see cref="VehicleSpawnScheduler.OnAServer"/> stops <c>AfterMoved</c> pads refilling the
+	/// moment they are driven off; this is the other half, which hands the pad back its vehicle
+	/// once nobody wants the one that left. Before it, a vehicle a bot drove to a field and left
+	/// there held its id, and its pad's place in the match, until something happened to shoot it.
+	/// </para>
+	/// <para>
+	/// <b>Server only</b>, beside the superseded sweep and for its reason: offline there is no id
+	/// pool to be out of, and the original game keeps every vehicle it spawned.
+	/// </para>
+	/// </remarks>
+	private AbandonedVehicleClock currentVehicleClock;
+
+	private float nextCurrentVehicleCheckAt;
+
+	/// <summary>
+	/// How close a living player has to be to keep an abandoned vehicle from being reclaimed.
 	/// </summary>
 	/// <remarks>
 	/// <b>Without this, reclamation eats a player's parked jeep.</b> Somebody who drives to a
@@ -183,8 +203,8 @@ public class VehicleSpawner : MonoBehaviour
 	/// emphatically not abandoned. An empty-seat test alone cannot tell those apart; standing
 	/// next to it can. Bot litter is abandoned precisely because the bot walked off.
 	/// </remarks>
-	[Tooltip("A living actor within this many metres keeps an empty vehicle from being "
-	         + "reclaimed, so a player's parked vehicle is never taken.")]
+	[Tooltip("A living player within this many metres keeps an empty vehicle from being "
+	         + "reclaimed, so a player's parked vehicle is never taken. Bots do not.")]
 	public float reclaimKeepAliveRadius = 30f;
 
 	// Reclamation runs on a slow cadence rather than every frame: the threshold is measured in
@@ -261,6 +281,7 @@ public class VehicleSpawner : MonoBehaviour
 
 		spawnIsBlocked = SpawnIsBlocked;
 		scheduler = new VehicleSpawnScheduler((VehicleRespawnType)respawnType, spawnTime);
+		currentVehicleClock = new AbandonedVehicleClock(reclaimAbandonedAfterSeconds);
 		spawnerId = NetVehicleLifecycle.RegisterSpawner();
 	}
 
@@ -296,6 +317,7 @@ public class VehicleSpawner : MonoBehaviour
 		// that is most starved -- and SpawnIsBlocked asks the pool directly, so it would read
 		// the pre-sweep answer and defer for nothing.
 		SweepAbandonedVehicles();
+		ReclaimAbandonedCurrentVehicle();
 
 		VehicleSpawnStep step = scheduler.Tick(Time.deltaTime, spawnIsBlocked);
 
@@ -431,6 +453,7 @@ public class VehicleSpawner : MonoBehaviour
 		lastSpawnedVehicleNetId = netId;
 		lastSpawnedVehicle.SetSpawner(this);
 		lastSpawnedVehicleHasBeenUsed = false;
+		currentVehicleClock.Restart(Time.time);
 		scheduler.ReportSpawned();
 
 		LogFirstState(spawned, netId);
@@ -862,16 +885,108 @@ public class VehicleSpawner : MonoBehaviour
 	}
 
 	/// <summary>
-	/// True when a living actor is close enough that this vehicle is parked rather than
+	/// Takes back the pad's own vehicle once it has stood empty off the pad for
+	/// <see cref="reclaimAbandonedAfterSeconds"/> with no player within
+	/// <see cref="reclaimKeepAliveRadius"/>, and spawns a fresh one on the pad.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// See <see cref="currentVehicleClock"/>. A <see cref="RespawnType.Never"/> pad is not
+	/// re-armed here: reclaiming its vehicle makes <see cref="IsSpent"/> true, and
+	/// <see cref="FieldSupplyDirector"/> moves such a pad somewhere new and spawns it there, the
+	/// same as for a wreck.
+	/// </para>
+	/// <para>
+	/// <b>Reported, ejected, then destroyed</b>, in <see cref="SweepAbandonedVehicles"/>'s order
+	/// and for its reasons. A wreck is not a candidate: <see cref="VehicleDied"/> already cleared
+	/// <see cref="lastSpawnedVehicleNetId"/> and its despawn waits for the wreck to go.
+	/// </para>
+	/// </remarks>
+	private void ReclaimAbandonedCurrentVehicle()
+	{
+		if (lastSpawnedVehicle == null || lastSpawnedVehicleNetId == 0) return;
+		if (!NetVehicleLifecycle.IsReplicating) return;
+
+		float now = Time.time;
+		if (now < nextCurrentVehicleCheckAt) return;
+		nextCurrentVehicleCheckAt = now + ReclaimSweepInterval;
+
+		Vehicle vehicle = lastSpawnedVehicle;
+		if (vehicle.dead) return;
+		if (!currentVehicleClock.Observe(now, !vehicle.IsEmpty(), IsOnItsPad(vehicle))) return;
+		if (SomebodyIsStandingBy(vehicle)) return;
+
+		ushort netId = lastSpawnedVehicleNetId;
+		float emptyFor = now - currentVehicleClock.InUseAt;
+		lastSpawnedVehicle = null;
+		lastSpawnedVehicleNetId = 0;
+		lastSpawnedVehicleHasBeenUsed = false;
+
+		NetVehicleLifecycle.ReportDespawned(netId, VehicleDespawnReason.Reclaimed);
+		Debug.Log(
+			$"[net] vehicle spawner '{name}' (id {spawnerId}) reclaimed its {vehicle.name} (id {netId}): "
+			+ $"empty off the pad for {emptyFor:F0}s with nobody within {reclaimKeepAliveRadius:F0}m. "
+			+ (respawnType == RespawnType.Never
+				? "The pad moves on."
+				: $"A fresh one in {spawnTime:F0}s."));
+
+		// EjectOccupants for X-55/X-56's reason in SweepAbandonedVehicles.
+		vehicle.EjectOccupants();
+		UnityEngine.Object.Destroy(vehicle.gameObject);
+
+		if (respawnType != RespawnType.Never && !VehiclesAreSuppressed())
+		{
+			scheduler.ScheduleRespawn();
+		}
+	}
+
+	/// <summary>
+	/// Whether <paramref name="vehicle"/> still stands in the space this pad spawns into: the
+	/// footprint <see cref="SpawnIsBlocked"/> tests, read at the vehicle's root and ignoring
+	/// height.
+	/// </summary>
+	private bool IsOnItsPad(Vehicle vehicle)
+	{
+		Vector3 local = Quaternion.Inverse(base.transform.rotation)
+		                * (vehicle.transform.position - base.transform.position);
+		local.y = spawnFootprint.center.y;
+		return spawnFootprint.Contains(local);
+	}
+
+	/// <summary>
+	/// True when a living PLAYER is close enough that this vehicle is parked rather than
 	/// abandoned.
 	/// </summary>
+	/// <remarks>
+	/// <b>Players only, not bots.</b> The radius exists so a player who drives to a flag and
+	/// gets out to capture it keeps the jeep. A bot never comes back for one it left, and in a
+	/// 100-bot match there is nearly always one within 30 m of any flag, so counting them meant
+	/// bot litter was never reclaimed: 0 reclaims in v4.1.0's first 13 hours on all three maps,
+	/// while Forest Lake's 20 pads (P32 took it from 12) ran the 24-id pool dry about three
+	/// minutes into every match and refused 117 spawns, Dustbowl 13. A pad left empty for the
+	/// rest of the match is a base with no vehicle for the players spawning at it.
+	/// </remarks>
 	private bool SomebodyIsStandingBy(Vehicle vehicle)
 	{
 		if (reclaimKeepAliveRadius <= 0f) return false;
 
 		ActorManager.AliveActorsInRange(
 			vehicle.transform.position, reclaimKeepAliveRadius, reclaimNearbyActors);
-		return reclaimNearbyActors.Count > 0;
+		for (int i = 0; i < reclaimNearbyActors.Count; i++)
+		{
+			if (IsPlayerBody(reclaimNearbyActors[i])) return true;
+		}
+		return false;
+	}
+
+	// The local player offline, a claimed body on a server. Not aiControlled alone: a player
+	// slot is built from the same AI character prefab a bot is, so it stays aiControlled for the
+	// whole match and only IsClaimed says a connection is driving it (see ActorManager).
+	private static bool IsPlayerBody(Actor actor)
+	{
+		if (!actor.aiControlled) return true;
+		NetServerActor networked = actor.GetComponent<NetServerActor>();
+		return networked != null && networked.IsClaimed;
 	}
 
 	/// <summary>
@@ -919,6 +1034,8 @@ public class VehicleSpawner : MonoBehaviour
 
 	public void VehicleDied(Vehicle vehicle)
 	{
+		UseServerRulesWhenReplicating();
+
 		// A superseded vehicle -- alive and driven away when this pad respawned. Its id is the
 		// one X-70 leaked: released here, and its despawn put on the wire, so the clients that
 		// have been rendering it since stop. Checked before the lastSpawnedVehicle branch
@@ -946,11 +1063,29 @@ public class VehicleSpawner : MonoBehaviour
 
 	public void FirstDriverEntered(Vehicle vehicle)
 	{
+		UseServerRulesWhenReplicating();
+
 		if (vehicle == lastSpawnedVehicle)
 		{
 			lastSpawnedVehicleHasBeenUsed = true;
 		}
 		scheduler.ReportFirstDriverEntered(vehicle == lastSpawnedVehicle);
+	}
+
+	/// <summary>
+	/// Plays this pad by <see cref="VehicleSpawnScheduler.OnAServer"/> on a game server.
+	/// </summary>
+	/// <remarks>
+	/// Here, at the two events the rule decides, rather than in <c>Awake</c>: the role and the
+	/// lifecycle sink can be set up after a map scene's components have woken, and both events
+	/// come long after either is known.
+	/// </remarks>
+	private void UseServerRulesWhenReplicating()
+	{
+		if (NetVehicleLifecycle.IsReplicating)
+		{
+			scheduler.UseServerRules();
+		}
 	}
 
 	/// <summary>

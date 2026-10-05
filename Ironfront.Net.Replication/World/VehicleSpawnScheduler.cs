@@ -107,7 +107,7 @@ namespace Ironfront.Net.Replication.World
         /// </summary>
         public const float DefaultDormantProbeSeconds = 10f;
 
-        private readonly VehicleRespawnType _respawnType;
+        private VehicleRespawnType _respawnType;
         private readonly float _spawnSeconds;
         private readonly int _maxBlockedRetries;
         private readonly float _blockedRetrySeconds;
@@ -137,6 +137,30 @@ namespace Ironfront.Net.Replication.World
         public int BlockedRetries { get; private set; }
 
         public VehicleRespawnType RespawnType => _respawnType;
+
+        /// <summary>
+        /// The rule a game server plays an <paramref name="authored"/> pad by: <c>AfterMoved</c>
+        /// becomes <c>AfterDestroyed</c>, and the other two are unchanged.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner 2026-10-05, every pad on every map.</b> A pad respawns only when its vehicle
+        /// is destroyed or abandoned; the abandoned half is <see cref="AbandonedVehicleClock"/>.
+        /// <c>AfterMoved</c> put a second vehicle on the pad the moment the first was driven
+        /// off, so each such pad held two of <c>MAX_VEHICLES</c>'s 24 ids, and a 100-bot match
+        /// drove every one of them off within minutes. v4.1.0 on Forest Lake, 20 pads, ran the
+        /// pool dry about three minutes into every match and refused 117 spawns: bases sat empty
+        /// because the ids were in jeeps the bots had left in a field.
+        /// </para>
+        /// <para>
+        /// Offline keeps the original's rule: there is no id pool to run out of.
+        /// </para>
+        /// </remarks>
+        public static VehicleRespawnType OnAServer(VehicleRespawnType authored)
+            => authored == VehicleRespawnType.AfterMoved ? VehicleRespawnType.AfterDestroyed : authored;
+
+        /// <summary>Plays this pad by <see cref="OnAServer"/> from now on. Idempotent.</summary>
+        public void UseServerRules() => _respawnType = OnAServer(_respawnType);
 
         /// <summary>The retry budget, so a caller can state it in a log line rather than guess.</summary>
         public int MaxBlockedRetries => _maxBlockedRetries;

@@ -58,7 +58,7 @@ MonoBehaviour:
     type: 3}
   headquartersLamps: 8
   headquartersLampMargin: 3
-  flickerAmount: 0.3
+  flickerAmount: 0.2
   flickerSpeed: 6
   neutralFlagLight: {r: 1, g: 0.82, b: 0.55, a: 1}
   blueFlagLight: {r: 0.45, g: 0.62, b: 1, a: 1}

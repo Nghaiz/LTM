@@ -21,6 +21,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             PlayerPrefs.DeleteKey(MenuSettingsModel.MasterVolumeKey);
             PlayerPrefs.DeleteKey(MenuSettingsModel.FieldOfViewKey);
             PlayerPrefs.DeleteKey(MenuSettingsModel.SensitivityKey);
+            PlayerPrefs.DeleteKey(MenuSettingsModel.FpsLimitKey);
         }
 
         [Test]
@@ -57,6 +58,22 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.AreEqual(expected.MasterVolume, actual.MasterVolume, 0.001f);
             Assert.AreEqual(expected.FieldOfView, actual.FieldOfView, 0.001f);
             Assert.AreEqual(expected.Sensitivity, actual.Sensitivity, 0.001f);
+        }
+
+        [Test]
+        public void TheFpsLimitRoundTripsAndAnUnofferedOneSavesAsTheDefault()
+        {
+            var fallback = new MenuSettingsData(1600, 900, 1, 3, 0, 0.65f, 103f, 0.42f);
+            Assert.AreEqual(0, MenuSettingsModel.Load(fallback).FpsLimit, "nothing saved: the display's refresh");
+
+            MenuSettingsModel.Save(new MenuSettingsData(1600, 900, 1, 3, 0, 0.65f, 103f, 0.42f, fpsLimit: 144));
+            Assert.AreEqual(144, MenuSettingsModel.Load(fallback).FpsLimit);
+
+            MenuSettingsModel.Save(new MenuSettingsData(1600, 900, 1, 3, 0, 0.65f, 103f, 0.42f, fpsLimit: -1));
+            Assert.AreEqual(-1, MenuSettingsModel.Load(fallback).FpsLimit);
+
+            MenuSettingsModel.Save(new MenuSettingsData(1600, 900, 1, 3, 0, 0.65f, 103f, 0.42f, fpsLimit: 30));
+            Assert.AreEqual(0, MenuSettingsModel.Load(fallback).FpsLimit);
         }
 
         [Test]
