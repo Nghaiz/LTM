@@ -643,8 +643,10 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	/// answers the trigger at once.
 	/// </para>
 	/// <para>
-	/// Rockets only: a hitscan bullet is never announced (its tracer here is the shooter's only
-	/// one), and a grenade's and a guided missile's local copies have their own prediction paths.
+	/// Not bullets or grenades: a hitscan bullet is never announced (its tracer here is the
+	/// shooter's only one), and a grenade's local copy has its own prediction path. A guided
+	/// missile is the server's too since 2026-10-06: its local copy flew to the client's lock while
+	/// the server's flew to the server's, so the shooter could watch a hit that did no damage.
 	/// </para>
 	/// </remarks>
 	protected bool ServerDrawsProjectile()
