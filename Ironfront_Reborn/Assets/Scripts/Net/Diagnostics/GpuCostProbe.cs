@@ -44,7 +44,7 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         private static readonly string[] Features =
         {
-            "base", "nodetails", "noshadows", "nomsaa", "nodepth", "notrees", "shadow150", "pixelerr8", "nopost",
+            "base", "nodetails", "nodetailsgpu", "noshadows", "nomsaa", "nodepth", "notrees", "shadow150", "pixelerr8", "nopost",
         };
 
         private List<string> _states;
@@ -156,9 +156,28 @@ namespace Ironfront.Net.Unity.Diagnostics
             {
                 case "nodetails":
                 {
-                    float distance = terrain.detailObjectDistance;
+                    // The preset's detail distance overrides the terrain's own (terrainQualityOverrides),
+                    // so zeroing the terrain's alone left every detail drawn until P33.
+                    float preset = QualitySettings.terrainDetailDistance;
+                    float own = terrain.detailObjectDistance;
+                    QualitySettings.terrainDetailDistance = 0f;
                     terrain.detailObjectDistance = 0f;
-                    _undo = () => { if (terrain != null) terrain.detailObjectDistance = distance; };
+                    _undo = () =>
+                    {
+                        QualitySettings.terrainDetailDistance = preset;
+                        if (terrain != null) terrain.detailObjectDistance = own;
+                    };
+                    break;
+                }
+                case "nodetailsgpu":
+                {
+                    // The terrain draws its details itself again, as before P33: the A/B of the GPU details.
+                    Behaviour gpuDetails = terrain.GetComponent("InstancedDetailRenderer") as Behaviour;
+                    if (gpuDetails != null && gpuDetails.enabled)
+                    {
+                        gpuDetails.enabled = false;
+                        _undo = () => { if (gpuDetails != null) gpuDetails.enabled = true; };
+                    }
                     break;
                 }
                 case "noshadows":

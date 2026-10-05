@@ -401,11 +401,16 @@ namespace Ironfront.Rendering
         {
             if (_shadowReachPerRadius <= 0f) return true;
             float tallest = _tallestRadius * _shadowReachPerRadius;
-            Vector3 sweep = _lightDirection * Mathf.Min(tallest, shadowRange);
+            return SweepMeetsView(_planes, bounds, _lightDirection * Mathf.Min(tallest, shadowRange));
+        }
+
+        /// <summary>Whether <paramref name="bounds"/>, swept along <paramref name="sweep"/>, meets the view.</summary>
+        internal static bool SweepMeetsView(Plane[] planes, Bounds bounds, Vector3 sweep)
+        {
             var swept = new Bounds(bounds.center, bounds.size);
             swept.Encapsulate(bounds.min + sweep);
             swept.Encapsulate(bounds.max + sweep);
-            return GeometryUtility.TestPlanesAABB(_planes, swept);
+            return GeometryUtility.TestPlanesAABB(planes, swept);
         }
 
         /// <summary>How a part is drawn in <paramref name="pass"/>, given how its renderer casts.</summary>

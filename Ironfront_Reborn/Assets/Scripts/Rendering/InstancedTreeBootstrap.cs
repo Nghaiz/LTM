@@ -8,13 +8,14 @@ using UnityEngine.SceneManagement;
 namespace Ironfront.Rendering
 {
     /// <summary>
-    /// Puts an <see cref="InstancedTreeRenderer"/> on every terrain with trees in every scene that loads,
-    /// in a process that renders: a headless server draws no trees.
+    /// Puts an <see cref="InstancedTreeRenderer"/> on every terrain with trees, and an
+    /// <see cref="InstancedDetailRenderer"/> on every terrain with details, in every scene that
+    /// loads, in a process that renders: a headless server draws neither.
     /// </summary>
     /// <remarks>
     /// Installed from code rather than placed in the map scenes, so a map added later is covered
-    /// without anyone remembering to; a terrain the renderer cannot take keeps its trees and says so
-    /// once (<see cref="InstancedTreeRenderer.Build"/>).
+    /// without anyone remembering to; a terrain a renderer cannot take keeps its trees or details and
+    /// says so once (<see cref="InstancedTreeRenderer.Build"/>, <see cref="InstancedDetailRenderer.Build"/>).
     /// </remarks>
     internal static class InstancedTreeBootstrap
     {
@@ -37,10 +38,12 @@ namespace Ironfront.Rendering
                 foreach (Terrain terrain in root.GetComponentsInChildren<Terrain>(true))
                 {
                     TerrainData data = terrain.terrainData;
-                    if (data == null || data.treeInstanceCount == 0) continue;
-                    if (terrain.GetComponent<InstancedTreeRenderer>() != null) continue;
+                    if (data == null) continue;
                     // Added in code on purpose, not authored: see the class remark.
-                    terrain.gameObject.AddComponent<InstancedTreeRenderer>();
+                    if (data.treeInstanceCount > 0 && terrain.GetComponent<InstancedTreeRenderer>() == null)
+                        terrain.gameObject.AddComponent<InstancedTreeRenderer>();
+                    if (data.detailPrototypes.Length > 0 && terrain.GetComponent<InstancedDetailRenderer>() == null)
+                        terrain.gameObject.AddComponent<InstancedDetailRenderer>();
                 }
             }
         }
