@@ -79,6 +79,22 @@ namespace Ironfront.Net.Unity.Server.Tests
         }
 
         [Test]
+        public void HonkingTheHornIsNotADisagreement()
+        {
+            // The horn is a seat weapon with a wire id and no loadout row (V6-D8): the body holds
+            // it while the driver honks, exactly as it holds a turret's gun. v4.1.0 warned on
+            // every honk.
+            ClientSession session = DeployedSession();
+            ServerCombatBridge.ResolveActiveLoadoutSlot(session, WeaponIds.RK44);
+
+            ServerCombatBridge.ResolveActiveLoadoutSlot(session, WeaponIds.CAR_HORN);
+
+            Assert.IsFalse(session.HasActiveLoadoutSlot,
+                "a horn has no reserve, so the carried weapon's slot must be forgotten");
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
         public void ALoadoutWeaponResolvesToItsSlotQuietly()
         {
             ClientSession session = DeployedSession();
