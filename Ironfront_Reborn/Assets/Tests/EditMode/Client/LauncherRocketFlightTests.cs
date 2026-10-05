@@ -68,6 +68,25 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.GreaterOrEqual(straight, 400f, "the launcher rocket drops before it has flown very far");
         }
 
+        [TestCase("AK Tracer", true)]
+        [TestCase("Sniper Rifle Tracer", true)]
+        [TestCase("Shotgun Pellet", true)]
+        [TestCase("rocket", false)]
+        [TestCase("Gatling Tracer", false)]
+        [TestCase("Tank Projectile", false)]
+        [TestCase("javelin missile", false)]
+        public void OnlyPlainRoundsAreTheHitscanRoundsThatFlyStraight(string prefab, bool hitscan)
+        {
+            // The server judges a plain round as a straight ray, so only those may drop nothing;
+            // everything the server actually flies keeps its own arc.
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Prefab/{prefab}.prefab");
+            Assert.IsNotNull(asset, prefab);
+            Component round = asset.GetComponent(ProjectileType);
+            MethodInfo isHitscan = ProjectileType.GetMethod("IsHitscanRound", BindingFlags.Public | BindingFlags.Static);
+
+            Assert.AreEqual(hitscan, (bool)isHitscan.Invoke(null, new object[] { round }), prefab);
+        }
+
         private static Vector3 Step(ref Vector3 velocity, float travelled, float straight)
         {
             MethodInfo step = ProjectileType.GetMethod("FlightStep", BindingFlags.Public | BindingFlags.Static);
