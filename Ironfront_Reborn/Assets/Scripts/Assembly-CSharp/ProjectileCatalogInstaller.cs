@@ -29,9 +29,9 @@ using UnityEngine;
 public sealed class ProjectileCatalogInstaller : MonoBehaviour
 {
 	[Tooltip("Indexed by (byte)ProjectileKind: Shell=0, Rocket=1, GuidedMissile=2, Grenade=3, "
-	         + "AmmoBag=4, Medipack=5, Bullet=6, Spearhead=7. Each entry is the projectile prefab whose "
+	         + "AmmoBag=4, Medipack=5, Bullet=6, Spearhead=7, GatlingRound=8, LauncherRocket=9. Each entry is the projectile prefab whose "
 	         + "Projectile.Configuration the server simulates from. An empty slot means that "
-	         + "kind is not replicated.")]
+	         + "kind is not replicated. A projectile prefab travels as the kind whose slot holds it.")]
 	[SerializeField] private GameObject[] _prefabsByKind;
 
 	private void Awake()
@@ -56,6 +56,9 @@ public sealed class ProjectileCatalogInstaller : MonoBehaviour
 			return;
 		}
 
+		// The same table decides each launch's kind, so the slot a prefab sits in here is the
+		// kind every client draws it as. See ProjectileNetAnnouncer.prefabsByKind.
+		ProjectileNetAnnouncer.RegisterPrefabTable(_prefabsByKind);
 		loop.InstallProjectileCatalog(
 			ProjectileCatalogBuilder.FromPrefabs(_prefabsByKind), new UnityProjectileWorldSweep());
 	}

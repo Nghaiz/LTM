@@ -43,6 +43,8 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             "Medipack",
             "Bullet",
             "Spearhead",
+            "GatlingRound",
+            "LauncherRocket",
         };
 
         [Fact]

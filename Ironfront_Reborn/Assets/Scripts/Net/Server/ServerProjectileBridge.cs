@@ -384,7 +384,9 @@ namespace Ironfront.Net.Unity.Server
             => kind == ProjectileKind.Rocket
                || kind == ProjectileKind.GuidedMissile
                || kind == ProjectileKind.Grenade
-               || kind == ProjectileKind.Shell;
+               || kind == ProjectileKind.Shell
+               || kind == ProjectileKind.GatlingRound
+               || kind == ProjectileKind.LauncherRocket;
 
         private void AnnounceExplosion(in ProjectileHit hit)
         {

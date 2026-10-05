@@ -606,7 +606,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
 			// the direction announced is the direction fired. A no-op off the server.
 			ProjectileNetAnnouncer.AnnounceLaunch(
-				component, origin, rotation * Vector3.forward, user);
+				component, origin, rotation * Vector3.forward, user, configuration.projectilePrefab);
 			return component;
 		}
 		catch
@@ -621,7 +621,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 
 	/// <summary>
 	/// Whether this client leaves the shot's projectile to the server: a rocket, a rocket pod's
-	/// rocket or a tank shell, which the server announces (<see cref="ProjectileNetAnnouncer"/>)
+	/// rocket, a tank shell or a mounted gatling's round, which the server announces (<see cref="ProjectileNetAnnouncer"/>)
 	/// and every client draws from that announcement.
 	/// </summary>
 	/// <remarks>
@@ -645,8 +645,15 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			return false;
 		}
 		Projectile projectile = configuration.projectilePrefab.GetComponent<Projectile>();
-		return projectile != null
-			&& ProjectileNetAnnouncer.KindOf(projectile) == Ironfront.Net.Protocol.ProjectileKind.Rocket;
+		if (projectile == null)
+		{
+			return false;
+		}
+		if (!ProjectileNetAnnouncer.TryKindOfPrefab(configuration.projectilePrefab, out Ironfront.Net.Protocol.ProjectileKind kind))
+		{
+			kind = ProjectileNetAnnouncer.KindOf(projectile);
+		}
+		return ProjectileNetAnnouncer.IsServerDrawn(kind);
 	}
 
 	/// <summary>
