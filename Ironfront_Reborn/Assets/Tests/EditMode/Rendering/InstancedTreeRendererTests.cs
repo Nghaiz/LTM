@@ -75,9 +75,12 @@ namespace Ironfront.Rendering.Tests
             // One cell a tree here, so the reachable LODs are exactly the kept ones: LOD 3 with its
             // shadow, and the last LOD without.
             LOD[] lods = AssetDatabase.LoadAssetAtPath<GameObject>(PinePath).GetComponent<LODGroup>().GetLODs();
-            int expected = Submeshes(lods[3], shadowCastersOnly: true) + Submeshes(lods[4], shadowCastersOnly: false);
-            Assert.AreEqual(expected, _trees.DrawCalls,
+            int expected = Submeshes(lods[3], shadowCastersOnly: false) + Submeshes(lods[4], shadowCastersOnly: false);
+            Assert.AreEqual(expected, _trees.DrawCalls - _trees.ShadowOnlyDraws,
                 "draws were issued for LODs and shadows no tree is on: each costs a draw call a pass with no instances");
+            // The out-of-view shadows of the one cell inside the shadow range, at most: with no
+            // light set here, a cell the view only partly covers keeps them.
+            Assert.LessOrEqual(_trees.ShadowOnlyDraws, Submeshes(lods[3], shadowCastersOnly: true));
         }
 
         private static int Submeshes(LOD lod, bool shadowCastersOnly)
@@ -171,6 +174,20 @@ namespace Ironfront.Rendering.Tests
                 Object.DestroyImmediate(bare.gameObject);
                 Object.DestroyImmediate(empty);
             }
+        }
+
+        [Test]
+        public void HowEachPassCasts()
+        {
+            var on = UnityEngine.Rendering.ShadowCastingMode.On;
+            var off = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var only = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+            Assert.AreEqual(off, InstancedTreeRenderer.CastingFor(InstancedTreeRenderer.Pass.Unshadowed, on));
+            Assert.AreEqual(on, InstancedTreeRenderer.CastingFor(InstancedTreeRenderer.Pass.Shadowed, on));
+            Assert.AreEqual(off, InstancedTreeRenderer.CastingFor(InstancedTreeRenderer.Pass.Shadowed, off));
+            Assert.AreEqual(only, InstancedTreeRenderer.CastingFor(InstancedTreeRenderer.Pass.ShadowOnly, on),
+                "a tree out of view drew in the main pass");
+            Assert.AreEqual(off, InstancedTreeRenderer.CastingFor(InstancedTreeRenderer.Pass.ShadowOnly, off));
         }
 
         private int KeptInAll()
