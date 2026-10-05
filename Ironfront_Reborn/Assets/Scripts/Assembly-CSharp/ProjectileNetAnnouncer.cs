@@ -1,5 +1,6 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
+using Ironfront.Net.Replication.Projectiles;
 using Ironfront.Net.Unity;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
@@ -17,23 +18,107 @@ using UnityEngine;
 /// on the server, before the direction is announced.
 /// </para>
 /// <para>
-/// <b>The kind is read off the prefab's component type, not from authored data.</b> A
-/// <c>weaponId → ProjectileKind</c> table would be a second source of truth for something the
-/// prefab already states unambiguously: a prefab carrying a <c>JavelinMissile</c> IS a guided
-/// missile. It also means nothing has to be assigned in the Editor for replication to work, so
-/// this cannot silently do nothing because a table row was missed. The one pair of weapons the
-/// prefab cannot separate -- the frag and the spearhead, both <c>GrenadeProjectile</c> -- is
-/// refined from the weapon at the call site instead; see <see cref="KindOf(Projectile, Actor)"/>
-/// for why that is not the table this paragraph argues against.
+/// <b>The kind is the index of the projectile's prefab in the scene's <c>_prefabsByKind</c>
+/// table</b> (<see cref="KindOfLaunch"/>), the table a client already draws from, so no second
+/// table is authored for it. It used to be read off the prefab's component type, on the reasoning
+/// that a table could miss a row and fail silently, but the class could not separate five guns
+/// that need five different drawings (see <see cref="prefabsByKind"/>), and an EditMode test now
+/// fails for any weapon whose projectile prefab is missing from a scene's table. The class
+/// remains the fallback for objects no weapon fires (field crates), and the weapon still
+/// separates the two grenades first, which share a script and are the one case the weapon
+/// knows best.
 /// </para>
 /// </remarks>
 public static class ProjectileNetAnnouncer
 {
 	/// <summary>
+	/// The scene's <c>_prefabsByKind</c> table: the projectile prefab each kind is drawn with,
+	/// indexed by <c>(byte)ProjectileKind</c>. Null until a map registers it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The kind of a launch is the index of its prefab in this table</b>, because this is the
+	/// table a client draws from: a kind names exactly one prefab and one catalog speed on the far
+	/// side, so the only kind that draws a projectile truthfully is the one whose slot holds that
+	/// projectile's own prefab. The class could not say it. The tank cannon, the tank coaxial gun
+	/// and the helicopter door gun all fire an <c>ExplodingProjectile</c>; the BEU-AW1 and the
+	/// helicopter pod both fire a <c>Rocket</c>. All five were announced as
+	/// <see cref="ProjectileKind.Rocket"/> and every client drew the pod rocket at 120 m/s for
+	/// each of them (owner, v4.3.0 playtest: a gunner seat "spamming the vehicle's main rounds",
+	/// a launcher rocket that "falls after a short distance").
+	/// </para>
+	/// <para>
+	/// Registered by <c>ProjectileCatalogInstaller</c> on a server and by the client's catalog
+	/// binding on a client, from the arrays the scene authors for each. A prefab missing from the
+	/// table falls back to its class, which is what every field crate does on purpose.
+	/// </para>
+	/// </remarks>
+	private static GameObject[] prefabsByKind;
+
+	/// <summary>Registers the scene's kind table. See <see cref="prefabsByKind"/>.</summary>
+	public static void RegisterPrefabTable(GameObject[] table)
+	{
+		prefabsByKind = table;
+	}
+
+	/// <summary>
+	/// The kind whose table slot holds <paramref name="prefab"/>; false when no table is
+	/// registered or the prefab is in none of its slots.
+	/// </summary>
+	public static bool TryKindOfPrefab(GameObject prefab, out ProjectileKind kind)
+	{
+		kind = default;
+		GameObject[] table = prefabsByKind;
+		if (prefab == null || table == null) return false;
+		int count = Mathf.Min(table.Length, ProjectileCatalog.KindCount);
+		for (int i = 0; i < count; i++)
+		{
+			if (table[i] == prefab)
+			{
+				kind = (ProjectileKind)i;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// <summary>
+	/// The kind a projectile spawned from <paramref name="prefab"/> by <paramref name="source"/>
+	/// travels as: the throwable refinement first, then the prefab table, then the class.
+	/// </summary>
+	public static ProjectileKind KindOfLaunch(Projectile projectile, GameObject prefab, Actor source)
+	{
+		if (TryKindForThrowableWeapon(ActiveWeaponIdOf(source), out ProjectileKind kind))
+			return kind;
+
+		if (TryKindOfPrefab(prefab, out kind))
+			return kind;
+
+		return KindOf(projectile);
+	}
+
+	/// <summary>
+	/// Whether a client leaves a projectile of this kind to the server: every unguided
+	/// explosive, which the server announces and every client draws from that announcement.
+	/// See <c>Weapon.ServerDrawsProjectile</c>.
+	/// </summary>
+	public static bool IsServerDrawn(ProjectileKind kind)
+	{
+		return kind == ProjectileKind.Rocket
+			|| kind == ProjectileKind.Shell
+			|| kind == ProjectileKind.GatlingRound
+			|| kind == ProjectileKind.LauncherRocket;
+	}
+
+	/// <summary>
 	/// Registers and announces a freshly spawned projectile, and stamps the id the server
 	/// assigned onto it. A no-op off the server.
 	/// </summary>
-	public static void AnnounceLaunch(Projectile projectile, Vector3 origin, Vector3 direction, Actor source)
+	/// <param name="prefab">
+	/// The prefab it was instantiated from, which is what decides its kind (see
+	/// <see cref="prefabsByKind"/>). Null for an object no weapon fired, such as a field crate.
+	/// </param>
+	public static void AnnounceLaunch(Projectile projectile, Vector3 origin, Vector3 direction, Actor source, GameObject prefab = null)
 	{
 		if (projectile == null) return;
 		if (!NetContext.IsServer) return;
@@ -42,7 +127,7 @@ public static class ProjectileNetAnnouncer
 		if (bridge == null) return;
 
 		ushort actorId = ActorIdOf(source);
-		ProjectileKind kind = KindOf(projectile, source);
+		ProjectileKind kind = KindOfLaunch(projectile, prefab, source);
 
 		// The server learns each kind's numbers from the first prefab of that kind it fires,
 		// rather than from an array somebody has to remember to fill in. See
@@ -136,36 +221,6 @@ public static class ProjectileNetAnnouncer
 		return ProjectileKind.Bullet;
 	}
 
-	/// <summary>
-	/// The kind a launch of <paramref name="projectile"/> by <paramref name="source"/> announces
-	/// as: the prefab's class, refined by the weapon when the class cannot tell two weapons apart.
-	/// </summary>
-	/// <remarks>
-	/// <para>
-	/// <b>The refinement exists for exactly one pair, and only the weapon can make it.</b> The
-	/// game ships two thrown grenades — <c>WeaponIds.FRAG</c> and <c>WeaponIds.SPEARHEAD</c> — whose
-	/// projectile prefabs are different objects with different meshes but the same
-	/// <c>GrenadeProjectile</c> script. The kind is the only projectile identity
-	/// <c>S_PROJECTILE_SPAWN</c> carries, so with both mapped to
-	/// <see cref="ProjectileKind.Grenade"/> every client drew the frag prefab for a spearhead
-	/// throw: "the object that appears is the same for both".
-	/// </para>
-	/// <para>
-	/// <b>This is not the <c>weaponId → kind</c> table the class remark argues against, and it is
-	/// worth saying why.</b> That objection is to a table restating what a prefab already states —
-	/// and for the other six kinds the prefab still does state it, which is why they are read off
-	/// the component here and not looked up. For these two the prefab states nothing that
-	/// separates them; the weapon is not a second source of truth but the only one. Nothing is
-	/// authored for it to work, so the failure mode the argument names cannot occur.
-	/// </para>
-	/// </remarks>
-	public static ProjectileKind KindOf(Projectile projectile, Actor source)
-	{
-		if (TryKindForThrowableWeapon(ActiveWeaponIdOf(source), out ProjectileKind kind))
-			return kind;
-
-		return KindOf(projectile);
-	}
 
 	/// <summary>
 	/// The complete identity map for carried throwables. Their weapon id is committed at the

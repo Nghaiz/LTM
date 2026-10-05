@@ -87,7 +87,7 @@ public class AlternatingMountedWeapon : MountedWeapon
 		Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, transform.position, rotation)).GetComponent<Projectile>();
 		component.source = user;
 		component.sourceWeaponId = NetworkId;
-		ProjectileNetAnnouncer.AnnounceLaunch(component, transform.position, rotation * Vector3.forward, user);
+		ProjectileNetAnnouncer.AnnounceLaunch(component, transform.position, rotation * Vector3.forward, user, configuration.projectilePrefab);
 		return component;
 	}
 

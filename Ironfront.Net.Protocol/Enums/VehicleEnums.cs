@@ -239,7 +239,11 @@ namespace Ironfront.Net.Protocol
     /// </remarks>
     public enum ProjectileKind : byte
     {
-        /// <summary>Tank main gun (<c>ShellLoadedWeapon</c>). Ballistic, unguided.</summary>
+        /// <summary>
+        /// Tank main gun (<c>Tank Projectile.prefab</c>, fired by <c>TankTurret</c>). Ballistic,
+        /// unguided. Announced as <see cref="Rocket"/> until 2026-10-06, when kinds started being
+        /// read off the prefab table rather than the class (see <see cref="GatlingRound"/>).
+        /// </summary>
         Shell         = 0,
         /// <summary>Unguided rocket (<c>Rocket</c>).</summary>
         Rocket        = 1,
@@ -291,6 +295,37 @@ namespace Ironfront.Net.Protocol
         /// </para>
         /// </remarks>
         Spearhead     = 7,
+        /// <summary>
+        /// A mounted gatling's round (<c>Gatling Tracer.prefab</c>, an
+        /// <c>ExplodingProjectile</c>). Appended 2026-10-06.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The class folded three different guns onto <see cref="Rocket"/>.</b> The tank's
+        /// coaxial gun and the helicopter's door gun fire <c>Gatling Tracer</c>, the tank's cannon
+        /// fires <c>Tank Projectile</c>, and both are <c>ExplodingProjectile</c>, so every one of
+        /// them was announced as a rocket. A client draws a kind's ONE prefab at that kind's
+        /// catalog speed, so every gatling round arrived on screen as a pod rocket at 120 m/s,
+        /// ten a second: the owner's report of a gunner seat "spamming the vehicle's main
+        /// rounds, doubled because both seats fire them" (v4.3.0 playtest).
+        /// </para>
+        /// <para>
+        /// Appending is not a wire change, for the reason <see cref="Spearhead"/> gives: a client
+        /// older than the value counts the round in <c>UnrenderableKinds</c> and draws nothing.
+        /// </para>
+        /// </remarks>
+        GatlingRound  = 8,
+        /// <summary>
+        /// The BEU-AW1 launcher's rocket (<c>rocket.prefab</c>, a <c>Rocket</c>). Appended
+        /// 2026-10-06.
+        /// </summary>
+        /// <remarks>
+        /// Split from <see cref="Rocket"/> for the reason <see cref="GatlingRound"/> gives: the
+        /// helicopter pod's rocket owns that kind's prefab and its 120 m/s, so the launcher's
+        /// 190 m/s rocket was drawn as a slower pod rocket that fell short of where the server's
+        /// rocket landed.
+        /// </remarks>
+        LauncherRocket = 9,
     }
 
     /// <summary>Why a vehicle left the world. Carried by <c>S_VEHICLE_DESPAWN</c>.</summary>

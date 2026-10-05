@@ -46,10 +46,10 @@ namespace Ironfront.Net.Replication.Tests
             ProjectileConfig config = Bullet();
             var catalog = new ProjectileCatalog();
 
-            catalog.Set(ProjectileKind.Spearhead, in config);
+            catalog.Set(ProjectileKind.LauncherRocket, in config);
 
-            Assert.True(catalog.IsPopulated(ProjectileKind.Spearhead));
-            Assert.Equal((int)ProjectileKind.Spearhead + 1, ProjectileCatalog.KindCount);
+            Assert.True(catalog.IsPopulated(ProjectileKind.LauncherRocket));
+            Assert.Equal((int)ProjectileKind.LauncherRocket + 1, ProjectileCatalog.KindCount);
         }
 
         // ------------------------------------------------------------------ task 1: ballistics
