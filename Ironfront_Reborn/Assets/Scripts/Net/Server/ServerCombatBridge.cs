@@ -359,6 +359,12 @@ namespace Ironfront.Net.Unity.Server
             if (session.ResolveActiveLoadoutSlotFrom(weaponId)) return;
             if (weaponId == WeaponIds.NONE) return;
 
+            // A seat's own weapon with a wire id but no loadout row -- the car horn, V6-D8 -- is
+            // the turret case again: the driver honks, the body holds the horn, and there is no
+            // reserve to draw. Every honk of v4.1.0 logged this warning (3 to 12 per server in
+            // its first 13 hours, all for weapon 18).
+            if (WeaponIds.IsKnown(weaponId) && !WeaponIds.IsLoadoutRegistered(weaponId)) return;
+
             Debug.LogWarning(
                 $"[net] actor {session.ActorId} is holding weapon {weaponId}, which is in none "
                 + "of its five loadout slots. The session and the body disagree about the "
