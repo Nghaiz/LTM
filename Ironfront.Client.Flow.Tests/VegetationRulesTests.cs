@@ -5,28 +5,29 @@ namespace Ironfront.Client.Flow.Tests
 {
     /// <summary>
     /// Grass at every preset by default (owner report 2026-10-03: no trees or grass on an old PC
-    /// with integrated graphics, from Low to Ultra, on v3.2.0).
+    /// with integrated graphics, from Low to Ultra, on v3.2.0), and the preset's full grass for a
+    /// player who never moved the sliders, which is all any player saw while they did nothing.
     /// </summary>
     public sealed class VegetationRulesTests
     {
-        [Theory]
-        [InlineData(GraphicsPresetRules.Low)]
-        [InlineData(GraphicsPresetRules.Medium)]
-        [InlineData(GraphicsPresetRules.High)]
-        [InlineData(GraphicsPresetRules.Ultra)]
-        public void EveryPresetStartsWithSomeGrass(int level)
+        [Fact]
+        public void APlayerWhoNeverSetTheSlidersKeepsThePresetsFullGrass()
         {
-            // 0.01 is where the legacy options slider and DetailObjectQuality read "no vegetation".
-            Assert.True(VegetationRules.DefaultDensityFor(level) >= 0.01f,
-                $"preset {level} defaults to no grass; v3.2.0 shipped exactly that on Low");
+            Assert.Equal(1f, VegetationRules.DefaultDensity);
+            Assert.Equal(1f, VegetationRules.DefaultDistance);
         }
 
         [Fact]
-        public void LowStartsThinnerThanTheRest()
+        public void TheSlidersAreNotReadFromTheKeysThatNeverApplied()
         {
-            Assert.True(VegetationRules.DefaultDensityFor(GraphicsPresetRules.Low)
-                        < VegetationRules.DefaultDensityFor(GraphicsPresetRules.Medium));
-            Assert.Equal(VegetationRules.DefaultDensity, VegetationRules.DefaultDensityFor(GraphicsPresetRules.Ultra));
+            // 0.5 and 0.7 sit under these for any player who ever saved the options; read as the
+            // fractions they now are, they would halve the grass nobody chose to halve.
+            foreach (string old in new[] { "vegetation density", "fast vegetation density", "vegetation distance" })
+            {
+                Assert.NotEqual(VegetationRules.DensityKey, old);
+                Assert.NotEqual(VegetationRules.DistanceKey, old);
+            }
+            Assert.NotEqual(VegetationRules.DensityKey, VegetationRules.DistanceKey);
         }
     }
 }
