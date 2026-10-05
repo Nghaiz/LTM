@@ -1,0 +1,167 @@
+// Culling for InstancedDetailRenderer, one thread an instance slot of a page of near details.
+//
+// The CPU has already kept the patches the terrain would draw (whole, within its detail distance)
+// and marked each page with what its patch can take part in: the view, the shadows, or both. Here
+// each detail is decoded from its 20 bytes (DetailPatchCache.Pack) and appended to its prototype's
+// buckets: the visible bucket when its sphere meets the view, the caster bucket when it is within
+// the shadow range and either in view or able to throw its shadow into it. WriteArgs copies every
+// bucket's count into the instance count of the draws that read it.
+
+#pragma kernel Clear
+#pragma kernel Cull
+#pragma kernel WriteArgs
+
+// DetailPatchCache.PageSize; Cull runs PAGE_SIZE / GROUP groups across and one row a page.
+#define PAGE_SIZE 1024
+#define GROUP 64
+
+// InstancedDetailRenderer.PageFlags.
+#define FLAG_IN_VIEW 1
+#define FLAG_SHADOW 2
+
+#define FULL_TURN 6.28318530718
+
+// InstancedDetailRenderer.GpuPage: 32 bytes.
+struct Page
+{
+    uint poolStart;
+    uint count;
+    float2 scaleMin;
+    float2 scaleRange;
+    uint prototype;
+    uint flags;
+};
+
+// InstancedDetailRenderer.GpuPrototype: 16 bytes.
+struct Prototype
+{
+    float radius;
+    float height;
+    uint casts;
+    uint unused;
+};
+
+// DetailInstancing.cginc's IronfrontDetailInstance: 24 bytes.
+struct Instance
+{
+    float3 position;
+    float rotation;
+    float scaleXZ;
+    float scaleY;
+};
+
+// DetailPatchCache.Packed: 20 bytes.
+struct Packed
+{
+    float3 position;
+    uint turnWidth;
+    uint height;
+};
+
+// GraphicsBuffer.IndirectDrawIndexedArgs: 20 bytes.
+struct Args
+{
+    uint indexCountPerInstance;
+    uint instanceCount;
+    uint startIndex;
+    uint baseVertexIndex;
+    uint startInstance;
+};
+
+StructuredBuffer<Packed> _Pool;
+StructuredBuffer<Page> _Pages;
+StructuredBuffer<Prototype> _Prototypes;
+StructuredBuffer<uint> _BucketStarts;
+RWStructuredBuffer<uint> _BucketCounts;
+RWStructuredBuffer<Instance> _Instances;
+StructuredBuffer<uint> _CommandBuckets;
+RWStructuredBuffer<Args> _Args;
+
+uint _PageCount;
+uint _BucketCount;
+uint _CommandCount;
+float3 _Eye;
+float _ShadowRange2;
+float4 _Planes[6];
+// The direction the shadow-casting light travels, and how far along it a detail's shadow reaches
+// per metre of its height; 0 when no light is known, which keeps every caster in the range.
+float3 _LightDirection;
+float _ShadowReachPerMetre;
+float _ShadowRange;
+
+bool OutsideFrustum(float3 centre, float radius)
+{
+    [unroll]
+    for (int p = 0; p < 6; p++)
+    {
+        if (dot(_Planes[p].xyz, centre) + _Planes[p].w < -radius) return true;
+    }
+    return false;
+}
+
+// Whether the detail's shadow, a capsule from it along the light, misses the view: both ends
+// beyond the same plane put the whole segment beyond it.
+bool ShadowMissesFrustum(float3 centre, float radius, float height)
+{
+    if (_ShadowReachPerMetre <= 0) return false;
+    float3 far = centre + _LightDirection * min(height * _ShadowReachPerMetre, _ShadowRange);
+    [unroll]
+    for (int p = 0; p < 6; p++)
+    {
+        if (dot(_Planes[p].xyz, centre) + _Planes[p].w < -radius
+            && dot(_Planes[p].xyz, far) + _Planes[p].w < -radius) return true;
+    }
+    return false;
+}
+
+Instance Decode(Page page, Packed q)
+{
+    Instance d;
+    d.position = q.position;
+    d.rotation = (q.turnWidth & 0xFFFF) / 65536.0 * FULL_TURN;
+    d.scaleXZ = page.scaleMin.x + page.scaleRange.x * (q.turnWidth >> 16) / 65535.0;
+    d.scaleY = page.scaleMin.y + page.scaleRange.y * (q.height & 0xFFFF) / 65535.0;
+    return d;
+}
+
+void Append(uint bucket, Instance d)
+{
+    uint slot;
+    InterlockedAdd(_BucketCounts[bucket], 1, slot);
+    _Instances[_BucketStarts[bucket] + slot] = d;
+}
+
+[numthreads(GROUP, 1, 1)]
+void Clear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _BucketCount) _BucketCounts[id.x] = 0;
+}
+
+[numthreads(GROUP, 1, 1)]
+void Cull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    if (group.y >= _PageCount) return;
+    Page page = _Pages[group.y];
+    uint slot = group.x * GROUP + thread.x;
+    if (slot >= page.count) return;
+
+    Instance d = Decode(page, _Pool[page.poolStart + slot]);
+    Prototype prototype = _Prototypes[page.prototype];
+    float radius = prototype.radius * max(d.scaleXZ, d.scaleY);
+
+    bool seen = (page.flags & FLAG_IN_VIEW) != 0 && !OutsideFrustum(d.position, radius);
+    if (seen) Append(page.prototype * 2, d);
+
+    if ((page.flags & FLAG_SHADOW) == 0 || prototype.casts == 0) return;
+    float3 offset = d.position - _Eye;
+    if (dot(offset, offset) > _ShadowRange2) return;
+    // Out of view it is kept only for a shadow that can reach the view.
+    if (!seen && ShadowMissesFrustum(d.position, radius, prototype.height * d.scaleY)) return;
+    Append(page.prototype * 2 + 1, d);
+}
+
+[numthreads(GROUP, 1, 1)]
+void WriteArgs(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _CommandCount) _Args[id.x].instanceCount = _BucketCounts[_CommandBuckets[id.x]];
+}
