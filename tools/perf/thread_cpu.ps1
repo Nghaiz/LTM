@@ -95,10 +95,11 @@ while ($before -and (Get-Date) -lt $deadline) {
     if (-not $after) { break }
     $wall = ($after.At - $before.At).TotalSeconds
     $byName = @{}
-    foreach ($id in $after.Threads.Keys) {
-        if (-not $before.Threads.ContainsKey($id)) { continue }
-        $cores = ($after.Threads[$id].Cpu - $before.Threads[$id].Cpu) / $wall
-        $name = $after.Threads[$id].Name
+    # Not $id: PowerShell names are case-insensitive, and $id IS the -Id parameter.
+    foreach ($threadId in $after.Threads.Keys) {
+        if (-not $before.Threads.ContainsKey($threadId)) { continue }
+        $cores = ($after.Threads[$threadId].Cpu - $before.Threads[$threadId].Cpu) / $wall
+        $name = $after.Threads[$threadId].Name
         $byName[$name] = [math]::Round(($byName[$name] + $cores), 4)
     }
     $line = [ordered]@{
