@@ -1985,7 +1985,7 @@ public class AiActorController : ActorController
 		float num2 = num;
 		for (int i = 0; i < 1; i++)
 		{
-			Vector3 vector3 = Physics.gravity * Mathf.Pow(num2, 2f) / 2f;
+			Vector3 vector3 = Physics.gravity * Mathf.Pow(FallingTime(num2), 2f) / 2f;
 			num2 = num / Vector3.Dot((vector - vector3).normalized, normalized);
 		}
 		Vector3 vector4 = SmoothNoise(0.2f);
@@ -1995,8 +1995,18 @@ public class AiActorController : ActorController
 		Vector3 vector8 = vector6 - Vector3.Dot(vector6, vector7) * vector7;
 		Vector3 vector9 = target.Velocity() + vector4 * vector8.magnitude * 0.3f;
 		float num3 = num2 * (1f + PARAMETERS.LEAD_SWAY_MAGNITUDE * (vector4.x + vector4.z) + UnityEngine.Random.Range(0f - PARAMETERS.LEAD_NOISE_MAGNITUDE, PARAMETERS.LEAD_NOISE_MAGNITUDE));
-		Vector3 vector10 = vector9 * num3 - Physics.gravity * Mathf.Pow(num3, 2f) / 2f;
+		Vector3 vector10 = vector9 * num3 - Physics.gravity * Mathf.Pow(FallingTime(num3), 2f) / 2f;
 		return vector10 + vector5 * PARAMETERS.SWAY_MAGNITUDE;
+	}
+
+	/// <summary>
+	/// Of a flight of <paramref name="seconds"/>, the part gravity acts on: a rocket that flies
+	/// straight for its first stretch (<c>Projectile.Configuration.straightDistance</c>) drops
+	/// only after it, so aiming above a target inside that stretch would overshoot it.
+	/// </summary>
+	private float FallingTime(float seconds)
+	{
+		return Mathf.Max(0f, seconds - actor.activeWeapon.projectileStraightTime);
 	}
 
 	private Vector3 SmoothNoise(float frequency)
