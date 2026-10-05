@@ -45,7 +45,7 @@ namespace Ironfront.Rendering.Tests
             _terrain = Terrain.CreateTerrainGameObject(_data).GetComponent<Terrain>();
             _trees = _terrain.gameObject.AddComponent<InstancedTreeRenderer>();
             _trees.Build();
-            Assert.IsTrue(_trees.IsBuilt, "Setup: the pine terrain was refused");
+            GpuDrivenDevice.RequireBuilt(_trees.IsBuilt, InstancedTreeRenderer.VertexBufferInputs, "pine");
 
             _viewer = new GameObject("Viewer");
             _camera = _viewer.AddComponent<Camera>();
