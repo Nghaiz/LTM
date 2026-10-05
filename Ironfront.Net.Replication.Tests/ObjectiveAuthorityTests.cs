@@ -400,6 +400,87 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(1, spawns);
         }
 
+        /// <summary>
+        /// On a game server a pad driven off is not refilled (owner 2026-10-05): the replacement
+        /// waits for the vehicle to die or be abandoned, so a pad holds one id, not two.
+        /// </summary>
+        [Fact]
+        public void OnAServerAPadDrivenOffWaitsForItsVehicleToGo()
+        {
+            var scheduler = new VehicleSpawnScheduler(VehicleRespawnType.AfterMoved, spawnSeconds: 1f);
+            scheduler.UseServerRules();
+            scheduler.RequestSpawnNow();
+            scheduler.Tick(Tick, Clear);
+            scheduler.ReportSpawned();
+
+            scheduler.ReportFirstDriverEntered(wasLastSpawned: true);
+            Assert.Equal(VehicleSpawnPhase.Spawned, scheduler.Phase);
+
+            scheduler.ReportVehicleDied(wasLastSpawned: true, hasBeenUsed: true);
+            Assert.Equal(VehicleSpawnPhase.CountingDown, scheduler.Phase);
+        }
+
+        [Theory]
+        [InlineData(VehicleRespawnType.AfterMoved, VehicleRespawnType.AfterDestroyed)]
+        [InlineData(VehicleRespawnType.AfterDestroyed, VehicleRespawnType.AfterDestroyed)]
+        [InlineData(VehicleRespawnType.Never, VehicleRespawnType.Never)]
+        public void TheServerRuleChangesOnlyAfterMoved(VehicleRespawnType authored, VehicleRespawnType onAServer)
+        {
+            Assert.Equal(onAServer, VehicleSpawnScheduler.OnAServer(authored));
+
+            var scheduler = new VehicleSpawnScheduler(authored, spawnSeconds: 1f);
+            scheduler.UseServerRules();
+            scheduler.UseServerRules();
+            Assert.Equal(onAServer, scheduler.RespawnType);
+        }
+
+        [Fact]
+        public void AVehicleEmptyOffItsPadIsAbandonedAfterTheWholeWait()
+        {
+            var clock = new AbandonedVehicleClock(90f);
+            clock.Restart(0f);
+
+            Assert.False(clock.Observe(10f, occupied: true, onItsPad: false), "being driven");
+            Assert.False(clock.Observe(99f, occupied: false, onItsPad: false), "89 s since the driver got out");
+            Assert.True(clock.Observe(100f, occupied: false, onItsPad: false), "90 s");
+        }
+
+        [Fact]
+        public void AVehicleOnItsPadIsNeverAbandoned()
+        {
+            var clock = new AbandonedVehicleClock(90f);
+            clock.Restart(0f);
+
+            Assert.False(clock.Observe(1000f, occupied: false, onItsPad: true));
+            Assert.False(clock.Observe(1089f, occupied: false, onItsPad: false), "the wait starts when it leaves");
+            Assert.True(clock.Observe(1090f, occupied: false, onItsPad: false));
+        }
+
+        [Fact]
+        public void GettingBackInStartsTheWaitOver()
+        {
+            var clock = new AbandonedVehicleClock(90f);
+            clock.Restart(0f);
+
+            Assert.False(clock.Observe(80f, occupied: false, onItsPad: false));
+            Assert.False(clock.Observe(85f, occupied: true, onItsPad: false));
+            Assert.False(clock.Observe(170f, occupied: false, onItsPad: false));
+            Assert.True(clock.Observe(175f, occupied: false, onItsPad: false));
+        }
+
+        [Fact]
+        public void ANewVehicleStartsTheWaitOverAndZeroNeverAbandons()
+        {
+            var clock = new AbandonedVehicleClock(90f);
+            clock.Restart(0f);
+            clock.Restart(500f);
+            Assert.False(clock.Observe(589f, occupied: false, onItsPad: false));
+
+            var off = new AbandonedVehicleClock(0f);
+            off.Restart(0f);
+            Assert.False(off.Observe(1e6f, occupied: false, onItsPad: false));
+        }
+
         [Fact]
         public void AWorldResetCancelsWhateverWasPending()
         {

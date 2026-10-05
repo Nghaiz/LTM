@@ -179,8 +179,9 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		}
 		nextCheck = Time.time + CheckSeconds;
 
-		// A wrecked field vehicle is not replaced where it stood: the pad moves on, so the find
-		// turns up somewhere else.
+		// A wrecked field vehicle -- or, on a server, one left empty in the field (VehicleSpawner
+		// reclaims it) -- is not replaced where it stood: the pad moves on, so the find turns up
+		// somewhere else.
 		foreach (Pad pad in fieldPads)
 		{
 			if (pad.Spawner == null || !pad.Spawner.IsSpent)
@@ -191,7 +192,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			if (prefab != null && TryParkInField(prefab, pad.Spawner, out Vector3 at, out Quaternion facing))
 			{
 				pad.Spawner.Relocate(at, facing, prefab);
-				Debug.Log("[supply] field vehicle wrecked; a " + prefab.name + " will turn up at " + Describe(at) + " in " + config.fieldRespawnSeconds.ToString("F0") + " s.");
+				Debug.Log("[supply] field vehicle wrecked or abandoned; a " + prefab.name + " will turn up at " + Describe(at) + " in " + config.fieldRespawnSeconds.ToString("F0") + " s.");
 			}
 			pad.Spawner.RespawnLater();
 		}
