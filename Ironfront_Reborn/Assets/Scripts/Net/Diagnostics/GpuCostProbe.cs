@@ -25,6 +25,11 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// The groups are listed once with their renderer, shadow-caster and material-slot counts.
     /// </para>
     /// <para>
+    /// <c>IRONFRONT_GPU_PROBE_STATES=base,nodetailsgpu</c> cycles through those states alone, for an
+    /// interleaved A/B in which each comes round every few windows rather than once a full cycle
+    /// (P33: the GPU details against the terrain's own).
+    /// </para>
+    /// <para>
     /// Measuring only: every state restores what it changed before the next begins, and the
     /// player sees the match change look while it runs. Never ship a build with it switched on.
     /// </para>
@@ -84,6 +89,14 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// </summary>
         private static List<string> BuildStates()
         {
+            string only = Environment.GetEnvironmentVariable("IRONFRONT_GPU_PROBE_STATES");
+            if (!string.IsNullOrWhiteSpace(only))
+            {
+                List<string> picked = only.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+                Debug.Log($"[ab] only these states, in turn: {string.Join(", ", picked)}");
+                return picked;
+            }
+
             Renderer[] renderers = FindObjectsByType<Renderer>(FindObjectsSortMode.None)
                 .Where(r => r.enabled && r.gameObject.activeInHierarchy).ToArray();
             var states = new List<string>(Features);
