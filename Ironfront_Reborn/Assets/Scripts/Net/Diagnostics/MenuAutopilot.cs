@@ -28,6 +28,12 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// <c>IRONFRONT_AUTOPLAY_CREATE=name;mapId;botsPerTeam[;night]</c> creates that room, or
     /// <c>IRONFRONT_AUTOPLAY_JOIN=name</c> waits for a room of that name and joins it.
     /// </para>
+    /// <para>
+    /// <c>IRONFRONT_AUTOPLAY_UNCAPPED=1</c> runs the match as a focused window would, with no
+    /// v-sync and no frame cap, though the window is in the background: the measuring client of
+    /// an A/B must not sit under <c>BackgroundFrameCap</c>'s 30 fps, and bringing it to the front
+    /// would take the owner's desktop away from them. Menus and loading keep their caps.
+    /// </para>
     /// </remarks>
     public sealed class MenuAutopilot : MonoBehaviour
     {
@@ -42,6 +48,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         private byte _createBots;
         private bool _createNight;
         private string _joinName = string.Empty;
+        private bool _uncapped;
 
         private float _nextStep;
         private GameFlowState _lastState = (GameFlowState)(-1);
@@ -82,6 +89,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                 pilot._createNight = parts.Length > 3 && parts[3] == "night";
             }
             pilot._joinName = Environment.GetEnvironmentVariable("IRONFRONT_AUTOPLAY_JOIN") ?? string.Empty;
+            pilot._uncapped = Environment.GetEnvironmentVariable("IRONFRONT_AUTOPLAY_UNCAPPED") == "1";
 
             Debug.Log($"[autoplay] driving the menus as {pilot._user}: "
                       + (pilot._createName.Length > 0
@@ -107,6 +115,12 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (state == GameFlowState.InMatch || flow == null)
             {
                 DeployWhenLoadoutIsUp();
+                if (_uncapped && (QualitySettings.vSyncCount != 0 || Application.targetFrameRate != -1))
+                {
+                    QualitySettings.vSyncCount = 0;
+                    Application.targetFrameRate = -1;
+                    Debug.Log("[autoplay] uncapped: no v-sync, no frame cap");
+                }
                 return;
             }
 
