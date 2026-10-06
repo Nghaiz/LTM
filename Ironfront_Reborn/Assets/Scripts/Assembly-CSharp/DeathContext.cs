@@ -77,6 +77,16 @@ public static class DeathContext
 		return scope;
 	}
 
+	/// <summary>A body landing too hard (<c>FallDamage</c>): nobody's weapon, nobody's vehicle.</summary>
+	public static Scope Fall()
+	{
+		Scope scope = Scope.Capture();
+		Cause = CauseOfDeath.Fall;
+		WeaponId = WeaponIds.NONE;
+		Vehicle = null;
+		return scope;
+	}
+
 	/// <summary>The crew of <paramref name="vehicle"/> dying with it.</summary>
 	public static Scope WentDownWith(GameObject vehicle)
 	{

@@ -114,6 +114,9 @@ public class FpsActorController : ActorController
 
 	private FirstPersonController controller;
 
+	/// <summary>Where the offline player's current fall started (<see cref="TrackOfflineFall"/>).</summary>
+	private readonly Ironfront.Net.Replication.Movement.FallTracker offlineFall = new Ironfront.Net.Replication.Movement.FallTracker();
+
 	private Renderer[] thirdpersonRenderers;
 
 	private Vector3 fpCameraParentOffset;
@@ -1034,9 +1037,52 @@ public class FpsActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// The offline player's fall damage: the speed of the height it fell, from the last ground it
+	/// stood on or the seat it left (<see cref="Ironfront.Net.Replication.Movement.FallTracker"/>),
+	/// paid by <see cref="Ironfront.Net.Replication.Combat.FallDamage"/>.
+	/// </summary>
+	/// <remarks>
+	/// Owner request 2026-10-06: leaving a helicopter high up must hurt on landing, and a high fall
+	/// must kill. A networked player's landing is the server's (<c>ServerPlayer.ApplyLanding</c>,
+	/// the same rule); this is the practice game's, where this body's CharacterController falls.
+	/// Measured on the actor's own transform, which rides the seat while seated and the capsule
+	/// on foot, so a bail-out is measured from the seat. A ragdoll's fall is
+	/// <c>Actor.TrackRagdollFall</c>'s.
+	/// </remarks>
+	private void TrackOfflineFall()
+	{
+		if (!NetContext.IsOffline)
+		{
+			return;
+		}
+		if (actor.dead || actor.fallenOver)
+		{
+			offlineFall.Forget();
+			return;
+		}
+		float y = actor.transform.position.y;
+		if (actor.IsSeated() || !characterController.enabled)
+		{
+			offlineFall.Rebase(y);
+			return;
+		}
+		float landedAt = offlineFall.Observe(controller.OnGround(), y, characterController.velocity.y);
+		float damage = Ironfront.Net.Replication.Combat.FallDamage.ForImpact(landedAt, -Ironfront.Net.Replication.Movement.MovementCore.Gravity);
+		if (damage <= 0f)
+		{
+			return;
+		}
+		using (DeathContext.Fall())
+		{
+			actor.Damage(damage, 0f, true, actor.Position(), Vector3.down, Vector3.zero);
+		}
+	}
+
 	private void Update()
 	{
 		UpdateNetworkSwim();
+		TrackOfflineFall();
 
 		// Capture the edge every render frame. NetPredictionClock may or may not simulate a tick
 		// in this frame; OnNetworkTickSimulated clears it only after it reached C_INPUT.

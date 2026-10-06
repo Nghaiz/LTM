@@ -92,28 +92,29 @@ namespace Ironfront.Net.Replication.Tests
         public void AWreckOnAClientLeavesEveryOccupantToTheServer()
         {
             // The snapshot that flags a wreck Dead runs Vehicle.Die on a client, and it only takes
-            // the body out of its seat -- drawing nothing from an enclosed seat, whose crew S_DEATH
-            // is about to fell. It damages nobody: the 2026-09-30 playtest dropped all three
-            // open-seat drivers through the map because the offline Damage(0, 200) knocked the
-            // local body over while the server kept it standing.
+            // the body out of its seat -- drawing nothing, since S_DEATH is about to fell every
+            // occupant (owner ruling 2026-10-06: open seats die with the vehicle too). It damages
+            // nobody: the 2026-09-30 playtest dropped all three open-seat drivers through the map
+            // because the offline Damage(0, 200) knocked the local body over while the server kept
+            // it standing.
             MethodDeclarationSyntax die = Methods(Parse("Assembly-CSharp/Vehicle.cs"), "Die").Single();
 
             IfStatementSyntax clientBranch = die.DescendantNodes().OfType<IfStatementSyntax>()
                 .Single(s => Normalized(s.Condition).Contains("NetContext.IsClient", StringComparison.Ordinal));
             Assert.Equal("Ironfront.Net.Unity.NetContext.IsClient", Normalized(clientBranch.Condition));
 
-            // An enclosed seat's crew is felled by S_DEATH -- except from a hull the water drowned,
-            // which kills nobody (Vehicle.IsFlooded, 2026-10-02), so that crew swims away armed.
+            // Every crew is felled by S_DEATH -- except from a hull the water drowned, which kills
+            // nobody (Vehicle.IsFlooded, 2026-10-02), so that crew swims away armed.
             List<InvocationExpressionSyntax> leaves = Invocations(clientBranch.Statement, "LeaveSeat");
             Assert.Single(leaves);
-            Assert.Equal("occupant.LeaveSeat(drawWeapon:!seat.enclosed||drowned)", Normalized(leaves[0]));
+            Assert.Equal("occupant.LeaveSeat(drawWeapon:drowned)", Normalized(leaves[0]));
             Assert.Empty(Invocations(clientBranch.Statement, "Damage"));
 
-            // The server and the offline game keep the original's two outcomes.
+            // The server and the offline game kill every occupant, open seat or enclosed.
             Assert.NotNull(clientBranch.Else);
             List<string> damages = Invocations(clientBranch.Else!.Statement, "Damage").Select(Normalized).ToList();
-            Assert.Contains(damages, d => d.StartsWith("occupant.Damage(200f,200f,", StringComparison.Ordinal));
-            Assert.Contains(damages, d => d.StartsWith("occupant.Damage(0f,200f,", StringComparison.Ordinal));
+            Assert.Single(damages);
+            Assert.StartsWith("occupant.Damage(200f,200f,", damages[0], StringComparison.Ordinal);
         }
 
         [Fact]

@@ -1258,6 +1258,7 @@ namespace Ironfront.Net.Unity.Server
             player.Session.State.IsCrouching = false;
 
             player.Session.PreviousPosition = core;
+            player.RebaseFall(core.Y);
         }
 
         /// <summary>

@@ -299,6 +299,41 @@ namespace Ironfront.Net.Replication.Combat
         /// which of the two negatives it is.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// Each gun's bullet as it really flies (<see cref="RoundBallistics"/>): muzzle velocity,
+        /// the drag constant fitted to the cartridge's published velocity loss, and the sights'
+        /// zero. Owner request 2026-10-06: every gun its own trajectory, by real physics, with no
+        /// weapon buffed or nerfed -- damage, range, spread and cadence are untouched.
+        /// </summary>
+        /// <remarks>
+        /// Mirrored on each round's prefab (<c>Projectile.Configuration</c>: speed, dragPerMetre,
+        /// zeroMetres), which bots fly and clients draw; <c>RoundBallisticsPrefabTests</c> fails
+        /// the moment the two disagree.
+        /// </remarks>
+        public static class Rounds
+        {
+            /// <summary>RK-44, an AK: 7.62x39 mm M43, 715 m/s, 482 m/s left at 274 m; zeroed at 100 m.</summary>
+            public static readonly RoundBallistics Rk44 = new RoundBallistics(715f, 0.00144f, 100f);
+
+            /// <summary>S-IND7 sidearm: 9x19 mm 124 gr, 360 m/s, 305 m/s left at 91 m; zeroed at 25 m.</summary>
+            public static readonly RoundBallistics Sind7 = new RoundBallistics(360f, 0.0015f, 25f);
+
+            /// <summary>S-IND7 suppressed: subsonic 9x19 mm 147 gr, 300 m/s, 280 m/s left at 91 m; zeroed at 25 m.</summary>
+            public static readonly RoundBallistics Sind7Suppressed = new RoundBallistics(300f, 0.00083f, 25f);
+
+            /// <summary>76 EAGLE shotgun: 12-gauge 00 buckshot, 400 m/s, 309 m/s left at 46 m; bead sight true at 25 m.</summary>
+            public static readonly RoundBallistics Eagle76 = new RoundBallistics(400f, 0.0059f, 25f);
+
+            /// <summary>SL-DEFENDER bolt-action: 7.62x51 mm M118LR 175 gr, 790 m/s, 651 m/s left at 274 m; zeroed at 100 m.</summary>
+            public static readonly RoundBallistics SlDefender = new RoundBallistics(790f, 0.00072f, 100f);
+
+            /// <summary>SIGNAL DMR: 7.62x51 mm M80 147 gr, 840 m/s, 674 m/s left at 274 m; zeroed at 100 m.</summary>
+            public static readonly RoundBallistics SignalDmr = new RoundBallistics(840f, 0.0008f, 100f);
+
+            /// <summary>RECON LRR, a short bullpup: 7.62x51 mm M80 from an 18-inch barrel, 808 m/s; zeroed at 100 m.</summary>
+            public static readonly RoundBallistics ReconLrr = new RoundBallistics(808f, 0.0008f, 100f);
+        }
+
         private static WeaponConfig[] BuildConfigs()
         {
             var configs = new WeaponConfig[WeaponIds.MAX_ASSIGNED + 1];
@@ -310,7 +345,8 @@ namespace Ironfront.Net.Replication.Combat
                 cooldown: 0.095f, spread: 0.003f, projectilesPerShot: 1, range: 400f,
                 damage: 35f, force: 80f, clipSize: 30, spareAmmo: 180,
                 balanceDamage: 55f,
-                dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f);
+                dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f,
+                round: Rounds.Rk44);
 
             // mk25.prefab. The SIDEARM, and the row the "one press costs two rounds" report was
             // about. It is a semi-automatic: the prefab authors `auto: 0`.
@@ -332,7 +368,7 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 30f, force: 50f, clipSize: 12, spareAmmo: 36,
                 balanceDamage: 50f,
                 dropoffStartMetres: 99.3f, dropoffEndMetres: 200f, dropoffMinMultiplier: 0.75f,
-                automatic: false);
+                automatic: false, round: Rounds.Sind7);
 
             // The suppressed variant is NOT a copy: it loses range sooner and floors lower. Same
             // prefab family and the same `auto: 0`, so the same semi-automatic trigger; the two
@@ -342,7 +378,7 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 30f, force: 50f, clipSize: 12, spareAmmo: 36,
                 balanceDamage: 50f,
                 dropoffStartMetres: 30f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.6f,
-                automatic: false);
+                automatic: false, round: Rounds.Sind7Suppressed);
 
             // shotgun.prefab (ShellLoadedWeapon). TWENTY pellets at 15, not one round at 40.
             // `auto: 0` in the prefab, so `automatic: false` -- and here the flag is not
@@ -353,7 +389,7 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 15f, force: 30f, clipSize: 6, spareAmmo: 30,
                 balanceDamage: 20f,
                 dropoffStartMetres: 0f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.1f,
-                automatic: false);
+                automatic: false, round: Rounds.Eagle76);
 
             // sniper.prefab (ScopedWeapon). The placeholder had this as an automatic. Piercing: it
             // fires Sniper Rifle Tracer.prefab, the one projectile authored `piercing: 1`, so it
@@ -363,15 +399,15 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 80f, force: 130f, clipSize: 8, spareAmmo: 40,
                 balanceDamage: 130f,
                 dropoffStartMetres: 248.3f, dropoffEndMetres: 500f, dropoffMinMultiplier: 0.9f,
-                automatic: false, piercing: true);
+                automatic: false, piercing: true, round: Rounds.SlDefender);
 
-            // dmr.prefab. Semi-auto, 20-round magazine.
+            // dmr.prefab. Automatic, as its prefab authors it (`auto: 1`), 20-round magazine.
             configs[WeaponIds.SIGNAL_DMR] = new WeaponConfig(
                 cooldown: 0.14f, spread: 0.0012f, projectilesPerShot: 1, range: 800f,
                 damage: 38f, force: 100f, clipSize: 20, spareAmmo: 120,
                 balanceDamage: 60f,
                 dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f,
-                automatic: false);
+                automatic: true, round: Rounds.SignalDmr);
 
             // RFB.prefab (ScopedWeapon). A fast-firing marksman rifle, not the bolt-action the
             // placeholder assumed - 0.1 s and 14 rounds against the guessed 1.5 s and 5. `auto: 0`
@@ -382,7 +418,7 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 52f, force: 110f, clipSize: 14, spareAmmo: 84,
                 balanceDamage: 85f,
                 dropoffStartMetres: 36f, dropoffEndMetres: 400f, dropoffMinMultiplier: 0.8f,
-                automatic: false);
+                automatic: false, round: Rounds.ReconLrr);
 
             // `automatic` is READ OFF THE PREFAB, not judged here. Every weapon prefab carries the
             // gun's own `auto` field, `tools/extract_weapon_registry.py` has emitted it as
@@ -399,13 +435,14 @@ namespace Ironfront.Net.Replication.Combat
             // or a throwable with a clip of one is one press per shot by construction and its
             // prefab says 0 as well.
             //
-            // ONE ENTRY IS NOT READ FROM ITS ASSET, and it is named here rather than left to be
-            // rediscovered: SIGNAL_DMR. dmr.prefab authors `auto: 1` and this row says false, on
-            // the strength of the entry's own "Semi-auto" comment. That disagreement is the one
-            // place this column and the assets part company, it is in the harmless direction --
-            // semi-automatic cannot double-fire -- and resolving it is a cadence decision about a
-            // shipped weapon rather than a fix for the sidearm defect, so it is deliberately left
-            // where it was and booked here.
+            // SIGNAL_DMR was the one row not read from its asset: dmr.prefab authors `auto: 1` and
+            // this row said false, on the strength of its own "Semi-auto" comment, booked here as
+            // "the harmless direction". It was not harmless (owner report 2026-10-07: "the DMR
+            // fires forever, the count drops by one and comes straight back"): the player's client
+            // fires the engine weapon off the prefab, so a held trigger fired at the cooldown on
+            // the client while the server fired once per press and handed the unspent round back
+            // in every snapshot. The row follows its prefab now, and WeaponCatalogPrefabTests
+            // (EditMode) fails the moment any gun's cadence, clip or auto flag parts from its asset.
             //
             // Launched. smaw.prefab -> rocket.prefab (Rocket): damage 1000, balanceDamage 400.
             // The placeholder had this as an 8-pellet shotgun doing 12 a pellet.

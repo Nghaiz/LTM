@@ -163,6 +163,20 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	[NonSerialized]
 	public float projectileSpeed;
 
+	/// <summary>
+	/// Seconds the projectile flies before gravity takes hold: its
+	/// <c>Projectile.Configuration.straightDistance</c> at <see cref="projectileSpeed"/>.
+	/// </summary>
+	[NonSerialized]
+	public float projectileStraightTime;
+
+	/// <summary>
+	/// The flight of this gun's plain round (<c>Projectile.Round</c>): muzzle velocity, drag and
+	/// zero. Not ballistic for a weapon whose rounds the server flies, or that fires none.
+	/// </summary>
+	[NonSerialized]
+	public Ironfront.Net.Replication.Combat.RoundBallistics projectileRound;
+
 	[NonSerialized]
 	public Animator animator;
 
@@ -180,7 +194,12 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	{
 		if (configuration.projectilePrefab != null)
 		{
-			projectileSpeed = configuration.projectilePrefab.GetComponent<Projectile>().configuration.speed;
+			Projectile round = configuration.projectilePrefab.GetComponent<Projectile>();
+			Projectile.Configuration flight = round.configuration;
+			projectileSpeed = flight.speed;
+			bool plain = Projectile.IsHitscanRound(round);
+			projectileRound = plain ? round.Round : default;
+			projectileStraightTime = plain || !(flight.speed > 0f) ? 0f : flight.straightDistance / flight.speed;
 		}
 		else
 		{
@@ -606,7 +625,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
 			// the direction announced is the direction fired. A no-op off the server.
 			ProjectileNetAnnouncer.AnnounceLaunch(
-				component, origin, rotation * Vector3.forward, user);
+				component, origin, rotation * Vector3.forward, user, configuration.projectilePrefab);
 			return component;
 		}
 		catch
@@ -621,7 +640,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 
 	/// <summary>
 	/// Whether this client leaves the shot's projectile to the server: a rocket, a rocket pod's
-	/// rocket or a tank shell, which the server announces (<see cref="ProjectileNetAnnouncer"/>)
+	/// rocket, a tank shell or a mounted gatling's round, which the server announces (<see cref="ProjectileNetAnnouncer"/>)
 	/// and every client draws from that announcement.
 	/// </summary>
 	/// <remarks>
@@ -634,8 +653,10 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	/// answers the trigger at once.
 	/// </para>
 	/// <para>
-	/// Rockets only: a hitscan bullet is never announced (its tracer here is the shooter's only
-	/// one), and a grenade's and a guided missile's local copies have their own prediction paths.
+	/// Not bullets or grenades: a hitscan bullet is never announced (its tracer here is the
+	/// shooter's only one), and a grenade's local copy has its own prediction path. A guided
+	/// missile is the server's too since 2026-10-06: its local copy flew to the client's lock while
+	/// the server's flew to the server's, so the shooter could watch a hit that did no damage.
 	/// </para>
 	/// </remarks>
 	protected bool ServerDrawsProjectile()
@@ -645,8 +666,15 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			return false;
 		}
 		Projectile projectile = configuration.projectilePrefab.GetComponent<Projectile>();
-		return projectile != null
-			&& ProjectileNetAnnouncer.KindOf(projectile) == Ironfront.Net.Protocol.ProjectileKind.Rocket;
+		if (projectile == null)
+		{
+			return false;
+		}
+		if (!ProjectileNetAnnouncer.TryKindOfPrefab(configuration.projectilePrefab, out Ironfront.Net.Protocol.ProjectileKind kind))
+		{
+			kind = ProjectileNetAnnouncer.KindOf(projectile);
+		}
+		return ProjectileNetAnnouncer.IsServerDrawn(kind);
 	}
 
 	/// <summary>

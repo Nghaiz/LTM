@@ -1156,8 +1156,8 @@ namespace Ironfront.Net.Unity.Server
                 // VehicleSpawner.VehicleDied, which calls ReportDespawned. Announcing here as
                 // well would be the second authority this whole guard exists to remove.
                 //
-                // Die() is also the only thing that ejects the occupants, damages the ones in
-                // enclosed seats, schedules the replacement, and — in Tank's override — destroys
+                // Die() is also the only thing that ejects the occupants, kills every one still
+                // aboard, schedules the replacement, and — in Tank's override — destroys
                 // towerJoint. None of that is expressible in the value stream, which is why
                 // V4-D12 makes death an event.
                 if (ServerVehicleRegistry.Instance.TryFind(

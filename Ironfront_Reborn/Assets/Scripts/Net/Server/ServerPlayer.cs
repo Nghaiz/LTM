@@ -1,5 +1,6 @@
 using System;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Replication.World;
@@ -229,7 +230,14 @@ namespace Ironfront.Net.Unity.Server
 
             Session.State = MoveState.AtRest(position);
             Session.PreviousPosition = position;
+            _fall.Forget();
         }
+
+        /// <summary>
+        /// The body was just put at <paramref name="y"/> by something other than a fall (a spawn
+        /// point), so a fall from here is measured from here. See <see cref="FallTracker"/>.
+        /// </summary>
+        public void RebaseFall(float y) => _fall.Rebase(y);
 
         /// <summary>
         /// Applies every input frame buffered for this tick, plus the coast that covers a
@@ -353,6 +361,8 @@ namespace Ironfront.Net.Unity.Server
                 Session.State = MoveState.AtRest(exit);
                 Session.PreviousPosition = exit;
                 agent.ApplyAuthoritativeState(in Session.State);
+                // Out of a helicopter in the air, this is where the fall starts.
+                _fall.Rebase(exit.Y);
             }
             else if (!agent.CollisionEnabled && Actor.IsAlive)
             {
@@ -365,6 +375,21 @@ namespace Ironfront.Net.Unity.Server
             // knows what it is standing on and MovementCore does not.
             Session.State.IsGrounded = agent.IsGrounded;
             Session.State.IsBlockedSideways = agent.IsBlockedSideways;
+
+            // A dead body's falls are nobody's: the next life measures from where it is placed.
+            if (!Actor.IsAlive)
+            {
+                _fall.Forget();
+            }
+            else
+            {
+                float landedAt = _fall.Observe(
+                    Session.State.IsGrounded, Session.State.Position.Y, Session.State.Velocity.Y);
+                if (landedAt > 0f)
+                {
+                    ApplyLanding(landedAt);
+                }
+            }
 
             InputAuthority.ApplyPendingInput(Session, dt, _moveThroughCollision, this);
 
@@ -383,6 +408,53 @@ namespace Ironfront.Net.Unity.Server
             // After the move and the containment: the body is posed where it ended the tick.
             Actor.PresentAsPlayer(
                 seated: false, crouching: Session.State.IsCrouching, Session.State.Velocity);
+        }
+
+        /// <summary>
+        /// The fall damage of a landing at <paramref name="impactSpeed"/> m/s (<see cref="FallDamage"/>:
+        /// nothing from a 3 m fall, death from a 20 m one), and the death when it is enough.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner request 2026-10-06</b>: a player who leaves a helicopter high up takes fall
+        /// damage on landing, and a high enough fall kills. The fall is this server's own
+        /// simulation (a client sends move axes and a jump bit, never a velocity), so the fall
+        /// cannot be forged, and it is the fall the client predicted as well.
+        /// </para>
+        /// <para>
+        /// <b>The speed of the height fallen</b> (<see cref="FallTracker"/>), from the last ground
+        /// the body stood on, not its velocity, which carries the stick-to-ground pull. Every move
+        /// of the body that is not a fall rebases the tracker: a seat exit (from there a bail-out
+        /// falls), the wire-volume clamp, and a death, which a respawn always follows. Water never
+        /// lands: a body that falls into water swims and is never grounded on the way down.
+        /// </para>
+        /// <para>
+        /// <b>Killed the way a drowning kills</b> (<c>NetServerActor.ApplyBreath</c>): through
+        /// <c>IsAlive</c>, reported with no attacker and <see cref="CauseOfDeath.Fall"/>, so the
+        /// killfeed says the player fell to their death and nobody is credited.
+        /// </para>
+        /// </remarks>
+        private readonly FallTracker _fall = new FallTracker();
+
+        private void ApplyLanding(float impactSpeed)
+        {
+            if (Actor == null || !Actor.IsAlive) return;
+
+            float damage = FallDamage.ForImpact(impactSpeed, -MovementCore.Gravity);
+            if (damage <= 0f) return;
+
+            float remaining = Actor.Health - damage;
+            Debug.Log($"[net] actor {Actor.ActorId} (team {Actor.Team}) landed at {impactSpeed:F1} m/s: "
+                      + $"{damage:F0} fall damage" + (remaining > 0f ? $", {remaining:F0} health left." : ", killed."));
+            if (remaining > 0f)
+            {
+                Actor.Health = remaining;
+                return;
+            }
+
+            Actor.Health = 0f;
+            Actor.IsAlive = false;
+            ServerCombatEvents.ReportDeath(Actor, Vector3.zero, cause: CauseOfDeath.Fall);
         }
 
         /// <summary>
@@ -457,6 +529,15 @@ namespace Ironfront.Net.Unity.Server
         /// Ground comes from a ray cast down past the hull, which skips vehicles, bodies and
         /// hitboxes; the capsule is then checked against the world and every vehicle.
         /// </para>
+        /// <para>
+        /// <b>Only ground the vehicle stands on.</b> The ray reaches
+        /// <see cref="FallDamage.SafeDropMetres"/> below the hull's lowest point and no further, so
+        /// a player leaving a helicopter in the air is left beside it, in the air, and falls
+        /// (owner request 2026-10-06: a bail-out from high up must hurt). It used to reach 40 m
+        /// below the hull, which set a player leaving a helicopter at up to 40 m straight down
+        /// on the ground beside it, unhurt. A hover lower than the safe drop still steps the player
+        /// down, which is all a fall from there would have done.
+        /// </para>
         /// </remarks>
         internal static bool TryFindExitSpot(
             Vector3 preferred, Bounds hull, CharacterController capsule, out Vector3 root)
@@ -473,7 +554,7 @@ namespace Ironfront.Net.Unity.Server
 
             float reach = Mathf.Max(hull.extents.x, hull.extents.z) + radius + ExitClearanceMetres;
             float rayTop = hull.max.y + 3f;
-            float rayLength = hull.size.y + 40f;
+            float rayLength = rayTop - hull.min.y + FallDamage.SafeDropMetres;
 
             for (int i = 0; i < 8; i++)
             {
@@ -663,6 +744,7 @@ namespace Ironfront.Net.Unity.Server
             Session.State.Position = contained;
             Session.State.Velocity = Vec3.Zero;
             agent.Teleport(MovementSimulation.ToUnity(contained), resetVelocity: true);
+            _fall.Rebase(contained.Y);
         }
 
         /// <summary>

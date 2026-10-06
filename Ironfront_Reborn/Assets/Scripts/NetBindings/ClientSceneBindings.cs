@@ -202,10 +202,15 @@ namespace Ironfront.Net.Unity.Bindings
         /// Reads the catalogue off the authored prefabs.
         /// </summary>
         /// <remarks>
-        /// A one-line forward to the builder that already existed. The seam is here only because
-        /// reading a prefab's projectile configuration means naming <c>Projectile</c>.
+        /// A forward to the builder that already existed. The seam is here only because
+        /// reading a prefab's projectile configuration means naming <c>Projectile</c>. It
+        /// also registers the table as the kind map, so <c>Weapon.ServerDrawsProjectile</c> on this
+        /// client names a weapon's projectile by the same slot the server announces it under.
         /// </remarks>
         internal static ProjectileCatalog Read(GameObject[] prefabsByKind)
-            => ProjectileCatalogBuilder.FromPrefabs(prefabsByKind);
+        {
+            ProjectileNetAnnouncer.RegisterPrefabTable(prefabsByKind);
+            return ProjectileCatalogBuilder.FromPrefabs(prefabsByKind);
+        }
     }
 }

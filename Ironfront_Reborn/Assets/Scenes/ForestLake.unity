@@ -220,7 +220,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1635790087}
-  range: 6
   interval: 3
 --- !u!1 &966332
 GameObject:
@@ -14055,7 +14054,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 1
   point: {fileID: 1086069162}
-  range: 6
   interval: 3
 --- !u!1 &51293640
 GameObject:
@@ -48633,7 +48631,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 722940545}
-  range: 6
   interval: 3
 --- !u!1 &233768627
 GameObject:
@@ -64294,7 +64291,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 722940545}
-  range: 6
   interval: 3
 --- !u!1 &340075493
 GameObject:
@@ -76840,7 +76836,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 1
   point: {fileID: 1923222863}
-  range: 6
   interval: 3
 --- !u!1 &383520821
 GameObject:
@@ -82226,7 +82221,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 1
   point: {fileID: 1306880460}
-  range: 6
   interval: 3
 --- !u!1 &388773472
 GameObject:
@@ -83600,7 +83594,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1315871260}
-  range: 6
   interval: 3
 --- !u!1 &398624449
 GameObject:
@@ -93836,7 +93829,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1872448858}
-  range: 6
   interval: 3
 --- !u!1 &453969268
 GameObject:
@@ -104230,7 +104222,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1245976864}
-  range: 6
   interval: 3
 --- !u!1 &493055914
 GameObject:
@@ -122740,7 +122731,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1315871260}
-  range: 6
   interval: 3
 --- !u!1 &549847939
 GameObject:
@@ -123137,7 +123127,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1086069162}
-  range: 6
   interval: 3
 --- !u!1001 &551937020
 PrefabInstance:
@@ -137479,7 +137468,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 1
   point: {fileID: 1245976864}
-  range: 6
   interval: 3
 --- !u!1001 &608609191
 PrefabInstance:
@@ -151306,7 +151294,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1923222863}
-  range: 6
   interval: 3
 --- !u!1 &664415202
 GameObject:
@@ -178826,7 +178813,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1872448858}
-  range: 6
   interval: 3
 --- !u!1 &828127748
 GameObject:
@@ -199137,7 +199123,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1245976864}
-  range: 6
   interval: 3
 --- !u!1 &920632771
 GameObject:
@@ -203397,7 +203382,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 1
   point: {fileID: 1315871260}
-  range: 6
   interval: 3
 --- !u!1 &945738096
 GameObject:
@@ -222051,7 +222035,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1306880460}
-  range: 6
   interval: 3
 --- !u!1001 &1062601865
 PrefabInstance:
@@ -255690,7 +255673,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1635790087}
-  range: 6
   interval: 3
 --- !u!1 &1218963272
 GameObject:
@@ -280707,6 +280689,8 @@ MonoBehaviour:
   - {fileID: 1123403298314486, guid: a09117c64a1029d4190b100d0036d988, type: 3}
   - {fileID: 1916407597999263, guid: 9f1098264490a2d499c3607481ceb047, type: 3}
   - {fileID: 1784760153386333, guid: 43a3e682750cb3b4d8867f1b17a06c9d, type: 3}
+  - {fileID: 1200958754331278, guid: ef0f2b758f2ecb6429b291fc4986d1ca, type: 3}
+  - {fileID: 1613789017196765, guid: 790225750eee48f43a26b60ec569c1c1, type: 3}
 --- !u!114 &1350657178
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -304445,7 +304429,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 1
   point: {fileID: 1635790087}
-  range: 6
   interval: 3
 --- !u!1 &1504223340
 GameObject:
@@ -309437,7 +309420,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1306880460}
-  range: 6
   interval: 3
 --- !u!1 &1539541800
 GameObject:
@@ -319652,7 +319634,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1086069162}
-  range: 6
   interval: 3
 --- !u!1001 &1612143973
 PrefabInstance:
@@ -324333,6 +324314,8 @@ MonoBehaviour:
   - {fileID: 1123403298314486, guid: a09117c64a1029d4190b100d0036d988, type: 3}
   - {fileID: 1916407597999263, guid: 9f1098264490a2d499c3607481ceb047, type: 3}
   - {fileID: 1784760153386333, guid: 43a3e682750cb3b4d8867f1b17a06c9d, type: 3}
+  - {fileID: 1200958754331278, guid: ef0f2b758f2ecb6429b291fc4986d1ca, type: 3}
+  - {fileID: 1613789017196765, guid: 790225750eee48f43a26b60ec569c1c1, type: 3}
   _fieldCratePrefabsByKind:
   - {fileID: 0}
   - {fileID: 0}
@@ -324340,6 +324323,8 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 3414827123468032950, guid: dcba18d6c62af1f419b99cfa0ac97627, type: 3}
   - {fileID: 3876693286005975308, guid: ab2fc6d11a4bfca48a0b378c3b14c3a2, type: 3}
+  - {fileID: 0}
+  - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
 --- !u!114 &1642634729
@@ -340277,7 +340262,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 1
   point: {fileID: 1872448858}
-  range: 6
   interval: 3
 --- !u!1001 &1725891333
 PrefabInstance:
@@ -343963,7 +343947,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 0
   point: {fileID: 1923222863}
-  range: 6
   interval: 3
 --- !u!1001 &1751289258
 PrefabInstance:
@@ -354265,7 +354248,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SupplyCache
   kind: 1
   point: {fileID: 722940545}
-  range: 6
   interval: 3
 --- !u!1001 &1808160501
 PrefabInstance:

@@ -124,8 +124,6 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	public bool crashSkipsBurn;
 
-	public bool directJavelinPath;
-
 	public bool exitWhenTakingFire;
 
 	private float health;
@@ -368,6 +366,8 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	protected virtual void FixedUpdate()
 	{
+		// The heat of the flames on whoever stands near (Vehicle.WreckHazard.cs).
+		TickFire();
 		if (rigidbody.linearVelocity.magnitude < 3f)
 		{
 			cannotRamAction.Start();
@@ -1154,6 +1154,9 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	{
 		// Read before anything below moves the hull: a vehicle the water killed (IsFlooded).
 		bool drowned = IsFlooded;
+		// Its blast is credited to whoever destroyed it (BlastSurroundings), read now, before the
+		// hits that keep landing on a wreck can overwrite it.
+		destroyedBy = LastDamagedBy;
 		dead = true;
 		if (fireAlarm != null)
 		{
@@ -1170,26 +1173,26 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 			if (seat.IsOccupied())
 			{
 				Actor occupant = seat.occupant;
-				// A networked client runs this from the snapshot that flags the wreck Dead, and it
-				// only takes its own body out of the seat. What the wreck does to that body is the
-				// server's to say: an enclosed occupant dies with its vehicle (S_DEATH, which fells
-				// this body through LocalPlayerRigBinding.FellBody -- bug 1 of the 2026-09-28
-				// playtest, where the pilot was set down drawing his rifle), and an open-seat
-				// occupant is put down on foot, unhurt, because the server never knocks a player's
-				// body over (Actor.IsServerClaimedBody).
+				// Everybody still aboard when the vehicle goes up dies with it, in an open seat as
+				// much as an enclosed one; whoever got out before it blew lives, since the blast
+				// itself hurts nobody (Explode). Owner request 2026-10-06: "on a motorbike, jeep,
+				// tank or aircraft, if it explodes before you get off you must die; if you jumped
+				// clear in time, you don't". The original killed only an enclosed seat's occupant
+				// (Damage(200, 200)) and only knocked an open seat's over (Damage(0, 200)) -- and a
+				// networked player's body is never knocked over (Actor.IsServerClaimedBody), so a
+				// player riding a jeep or a quad bike walked away from its explosion at full health.
 				//
-				// The open seat used to run the offline Damage(0, 200) here as well, and on a client
-				// that balance hit KNOCKED THE LOCAL BODY OVER: FallOver switched input and the
-				// capsule off, the ragdoll it enabled was lost under the map, and its get-up waits
-				// for the ragdoll to come to rest, so it never came. All three open-seat vehicle
-				// deaths of the 2026-09-30 playtest dropped their driver through the world at 100
-				// HP with no way to respawn, while the server held the body standing beside the
-				// wreck (both clients logged "left vehicle N ... the server has the body on foot",
-				// then an unmoving position until they quit). Actor.DamageAttributed refuses that
-				// knock-over too; this is the call that made it.
+				// A networked client runs this from the snapshot that flags the wreck Dead, and it
+				// only takes its own body out of the seat: the death is the server's to say
+				// (S_DEATH, which fells this body through LocalPlayerRigBinding.FellBody -- bug 1 of
+				// the 2026-09-28 playtest, where the pilot was set down drawing his rifle), so no
+				// weapon is drawn for the moment in between. It must not run the damage itself: on a
+				// client the balance half of it KNOCKED THE LOCAL BODY OVER, and the ragdoll that
+				// enabled was lost under the map with no way to respawn (all three open-seat
+				// vehicle deaths of the 2026-09-30 playtest).
 				if (Ironfront.Net.Unity.NetContext.IsClient)
 				{
-					occupant.LeaveSeat(drawWeapon: !seat.enclosed || drowned);
+					occupant.LeaveSeat(drawWeapon: drowned);
 				}
 				else
 				{
@@ -1201,14 +1204,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 					{
 						using (DeathContext.WentDownWith(base.gameObject))
 						{
-							if (seat.enclosed)
-							{
-								occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
-							}
-							else
-							{
-								occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
-							}
+							occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
 						}
 					}
 				}
@@ -1285,23 +1281,25 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	}
 
 	/// <summary>
-	/// The wreck goes off: an impulse that throws it, particles and a sound. It damages nothing.
+	/// The wreck goes off: an impulse that throws it, particles, a sound, and its blast on the
+	/// soldiers and vehicles around it (<see cref="BlastSurroundings"/>).
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Exactly the original's <c>Vehicle.Explode</c>, by the owner's ruling of 2026-09-27.</b>
-	/// Ledger C-10 (debt-closure phase 2, PR #145) had this also call <c>ActorManager.Explode</c>
-	/// for 300 damage over 6 m, on the reasoning that taking cover behind a burning vehicle should
-	/// be dangerous. In play it made every wreck kill its neighbours: an empty vehicle decays to
-	/// death after about 80 s (original behaviour, <see cref="AutoDamage"/>), bots leave vehicles
-	/// parked side by side on pads and roads, and each wreck set off the next 0.3 s after it — the
-	/// "smoking, burning, exploding in a chain" the 2026-09-27 Island playtest reported. The owner
-	/// chose the original over "infantry only" and "reduced damage".
+	/// <b>The blast hurts by distance, by the owner's ruling of 2026-10-06</b> ("explosions and
+	/// fires must hurt what is around them, more the closer it stands"), from real blast data
+	/// (<c>WreckHazard</c>) and each prefab's own charge. It replaces the ruling of 2026-09-27
+	/// that a wreck hurts nobody, made after ledger C-10's flat 300 damage over 6 m (PR #145) set
+	/// parked vehicles off one after another: an empty vehicle decays to death after about 80 s
+	/// (<see cref="AutoDamage"/>), bots park side by side, and each wreck killed the next 0.3 s
+	/// later. A neighbouring vehicle now takes at most its own <see cref="blastVulnerability"/>
+	/// share of its health from one blast, so a healthy vehicle is never destroyed by the wreck
+	/// beside it.
 	/// </para>
 	/// <para>
 	/// Every client still draws and hears the blast: <see cref="Die"/> runs on each client when the
-	/// vehicle is destroyed, so this method's particles and sound play there locally, as they
-	/// always have. Do not re-add area damage here.
+	/// vehicle is destroyed, so the particles and sound play there locally, as they always have;
+	/// the damage is the server's (offline, the game's) and reaches clients as health.
 	/// </para>
 	/// </remarks>
 	protected virtual void Explode()
@@ -1325,6 +1323,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		{
 			explosionSound.Play();
 		}
+		BlastSurroundings();
 	}
 
 	private void Cleanup()

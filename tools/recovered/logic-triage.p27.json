@@ -3,9 +3,9 @@
   "readThisFirst": "`nearestLineInOurs` is the most similar line ANYWHERE in our file, not the corresponding line. It is a navigation hint. Two independent readers of this data hit the same trap: a renamed local shifts which line scores highest, so the match lands on a sibling line in another method and fabricates a structural divergence that does not exist -- an inverted condition, a changed loop, a wrong constant. Below a similarity of ~0.8, go read `recoveredMember` in our tree and find the real counterpart. Grade the method, not the row.",
   "scope": {
     "commonFiles": 322,
-    "filesWithCandidates": 82,
-    "candidates": 720,
-    "outrightDeletions": 150,
+    "filesWithCandidates": 84,
+    "candidates": 833,
+    "outrightDeletions": 182,
     "skippedAsP24": [
       "AstarPath.cs",
       "EuclideanEmbedding.cs",
@@ -18,7 +18,7 @@
       "AssemblyInfo.cs",
       "Extensions.cs"
     ],
-    "onlyInOurs": 18,
+    "onlyInOurs": 34,
     "onlyInRecovered": 196
   },
   "files": {
@@ -569,11 +569,404 @@
         }
       ]
     },
+    "AiActorController.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/AiActorController.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AiActorController.cs",
+      "survivors": 55,
+      "outrightDeletions": 7,
+      "candidates": [
+        {
+          "line": 1,
+          "recoveredMember": null,
+          "recovered": "using System;",
+          "nearestLineInOurs": "\ufeffusing System;",
+          "similarity": 0.96
+        },
+        {
+          "line": 375,
+          "recoveredMember": "FindPotentialTargets",
+          "recovered": "List<Actor> list = new List<Actor>(ActorManager.AliveActorsOnTeam(team));",
+          "nearestLineInOurs": "List<Actor> enemies = ActorManager.AliveActorsOnTeam(team);",
+          "similarity": 0.82
+        },
+        {
+          "line": 376,
+          "recoveredMember": "FindPotentialTargets",
+          "recovered": "list.RemoveAll((Actor actor) => !HasEffectiveWeaponAgainst(actor) || (actor.IsSeated() && actor.seat.vehicle.burning));",
+          "nearestLineInOurs": "if (item == null || !HasEffectiveWeaponAgainst(item) || (item.IsSeated() && item.seat.vehicle.burning))",
+          "similarity": 0.74
+        },
+        {
+          "line": 377,
+          "recoveredMember": "FindPotentialTargets",
+          "recovered": "Dictionary<Actor, float> distanceTo = new Dictionary<Actor, float>(list.Count);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 378,
+          "recoveredMember": "FindPotentialTargets",
+          "recovered": "foreach (Actor item in list)",
+          "nearestLineInOurs": "foreach (int item2 in list)",
+          "similarity": 0.87
+        },
+        {
+          "line": 380,
+          "recoveredMember": "FindPotentialTargets",
+          "recovered": "float num = ((!item.fallenOver) ? 0f : 30f);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 381,
+          "recoveredMember": "FindPotentialTargets",
+          "recovered": "distanceTo.Add(item, Vector3.Distance(item.Position(), actor.Position()) + num);",
+          "nearestLineInOurs": "float range = Vector3.Distance(targetActor.Position(), actor.Position());",
+          "similarity": 0.72
+        },
+        {
+          "line": 383,
+          "recoveredMember": "FindPotentialTargets",
+          "recovered": "list.Sort((Actor x, Actor y) => distanceTo[x].CompareTo(distanceTo[y]));",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 489,
+          "recoveredMember": "AiVehicle",
+          "recovered": "if (Vector3.Distance(newPosition, lastSampledVehiclePosition) > 0.4f)",
+          "nearestLineInOurs": "if (holdingStandoff || Vector3.Distance(newPosition, lastSampledVehiclePosition) > 0.4f)",
+          "similarity": 0.88
+        },
+        {
+          "line": 547,
+          "recoveredMember": "PushAntiStuckEvent",
+          "recovered": "squad.squadVehicle.stuck = true;",
+          "nearestLineInOurs": "actor.seat.vehicle.stuck = true;",
+          "similarity": 0.75
+        },
+        {
+          "line": 564,
+          "recoveredMember": "ShouldHavePath",
+          "recovered": "return (!actor.IsSeated() || actor.IsDriver()) && !inCover && squad.hasAssignedOrder;",
+          "nearestLineInOurs": "return (!actor.IsSeated() || actor.IsDriver()) && !inCover && squad.hasAssignedOrder && squad.state != Squad.State.DigIn;",
+          "similarity": 0.83
+        },
+        {
+          "line": 571,
+          "recoveredMember": "CreateRougeSquad",
+          "recovered": "squad.SplitSquad(list);",
+          "nearestLineInOurs": "squad.SplitSquad(list, Squad.SplitReason.Rogue);",
+          "similarity": 0.65
+        },
+        {
+          "line": 580,
+          "recoveredMember": "AiOrders",
+          "recovered": "if (!hasPath && ShouldHavePath() && moveTimeoutAction.TrueDone())",
+          "nearestLineInOurs": "if (!hasPath && !arrivedAtGoto && ShouldHavePath() && moveTimeoutAction.TrueDone() && squad.members.Count > 1)",
+          "similarity": 0.74
+        },
+        {
+          "line": 603,
+          "recoveredMember": "AiOrders",
+          "recovered": "if (squad.state == Squad.State.EnterVehicle && squad.squadVehicle.dead)",
+          "nearestLineInOurs": "if (squad.HasVehicle() && squad.squadVehicle.burning)",
+          "similarity": 0.68
+        },
+        {
+          "line": 607,
+          "recoveredMember": "AiOrders",
+          "recovered": "if (!squad.HasVehicle() && squad.state == Squad.State.Moving)",
+          "nearestLineInOurs": "if (!squad.HasVehicle() && squad.state == Squad.State.Moving && FpsActorController.instance != null)",
+          "similarity": 0.76
+        },
+        {
+          "line": 623,
+          "recoveredMember": "AiOrders",
+          "recovered": "if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire())",
+          "nearestLineInOurs": "if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire() && !actor.inWater)",
+          "similarity": 0.9
+        },
+        {
+          "line": 625,
+          "recoveredMember": "AiOrders",
+          "recovered": "squad.DigInTowards(takingFireDirection);",
+          "nearestLineInOurs": "squad.DigInTowards(squad.TakingFireDirection(takingFireDirection));",
+          "similarity": 0.75
+        },
+        {
+          "line": 627,
+          "recoveredMember": "AiOrders",
+          "recovered": "else if (!squad.IsTakingFire())",
+          "nearestLineInOurs": "if (IsTakingFire())",
+          "similarity": 0.76
+        },
+        {
+          "line": 630,
+          "recoveredMember": "AiOrders",
+          "recovered": "if ((!squad.HasTargetSpawnPoint() || squad.targetSpawnPoint != closestSpawnPoint) && squad.ShouldGotoSpawnPoint(closestSpawnPoint))",
+          "nearestLineInOurs": "else if (squad.HasTargetSpawnPoint() && squad.targetSpawnPoint == closestSpawnPoint && !squad.ShouldGotoSpawnPoint(closestSpawnPoint))",
+          "similarity": 0.94
+        },
+        {
+          "line": 665,
+          "recoveredMember": "AiOrders",
+          "recovered": "if (!squad.HasTargetSpawnPoint() || !squad.ShouldGotoSpawnPoint(squad.targetSpawnPoint))",
+          "nearestLineInOurs": "else if (!squad.HasTargetSpawnPoint() || !squad.ShouldGotoSpawnPoint(squad.targetSpawnPoint))",
+          "similarity": 0.97
+        },
+        {
+          "line": 667,
+          "recoveredMember": "AiOrders",
+          "recovered": "squad.NewAttackOrder();",
+          "nearestLineInOurs": "squad.NewAttackOrder();",
+          "similarity": 1.0
+        },
+        {
+          "line": 696,
+          "recoveredMember": "AiTarget",
+          "recovered": "if (!a.dead && a.IsHighlighted() && Vector3.Distance(a.Position(), actor.Position()) < 30f && UnityEngine.Random.Range(0f, 1f) < 0.2f)",
+          "nearestLineInOurs": "if (!a.dead && a.IsHighlighted() && Vector3.Distance(a.Position(), actor.Position()) < GunfireAttentionMetres() && UnityEngine.Random.Range(0f, 1f) < 0.2f)",
+          "similarity": 0.91
+        },
+        {
+          "line": 797,
+          "recoveredMember": "AiWeapon",
+          "recovered": "if (!HasTarget() && actor.hasAmmoBox && actor.weapons[actor.ammoBoxSlot].AmmoFull() && (squad.MemberNeedsResupply() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 801,
+          "recoveredMember": "AiWeapon",
+          "recovered": "if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 803,
+          "recoveredMember": "AiWeapon",
+          "recovered": "LookAt(ActorManager.instance.player.transform.position);",
+          "nearestLineInOurs": "LookAt(ActorManager.Player.transform.position);",
+          "similarity": 0.89
+        },
+        {
+          "line": 814,
+          "recoveredMember": "AiWeapon",
+          "recovered": "if (!HasTarget() && actor.hasMedipack && actor.weapons[actor.medipackSlot].AmmoFull() && (squad.MemberNeedsHealth() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 818,
+          "recoveredMember": "AiWeapon",
+          "recovered": "if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 820,
+          "recoveredMember": "AiWeapon",
+          "recovered": "LookAt(ActorManager.instance.player.transform.position);",
+          "nearestLineInOurs": "LookAt(ActorManager.Player.transform.position);",
+          "similarity": 0.89
+        },
+        {
+          "line": 859,
+          "recoveredMember": "AiWeapon",
+          "recovered": "if (actor.activeWeapon.CanFire() && insideAimCube && CanSeeActor(target))",
+          "nearestLineInOurs": "if (actor.activeWeapon.CanFire() && insideAimCube && !CombatRules.HoldFire(squad != null && squad.sneaking, IsTakingFire(), distance) && CanSeeActor(target))",
+          "similarity": 0.63
+        },
+        {
+          "line": 923,
+          "recoveredMember": "AiScan",
+          "recovered": "facingDirection = cover.transform.forward + UnityEngine.Random.insideUnitSphere * 0.1f;",
+          "nearestLineInOurs": "facingDirection = coverFacing + UnityEngine.Random.insideUnitSphere * 0.1f;",
+          "similarity": 0.88
+        },
+        {
+          "line": 1005,
+          "recoveredMember": "HasEffectiveWeaponAgainst",
+          "recovered": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != Weapon.Effectiveness.No && weapon.EffectiveAtRange(range))",
+          "nearestLineInOurs": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != 0 && weapon.EffectiveAtRange(range))",
+          "similarity": 0.91
+        },
+        {
+          "line": 1039,
+          "recoveredMember": "OnPathComplete",
+          "recovered": "Debug.LogError(p.errorLog);",
+          "nearestLineInOurs": "Debug.LogError(",
+          "similarity": 0.71
+        },
+        {
+          "line": 1106,
+          "recoveredMember": "Update",
+          "recovered": "else if (InCover() && cover.type == CoverPoint.Type.LeanLeft)",
+          "nearestLineInOurs": "else if (InCover() && coverType == CoverPoint.Type.LeanLeft)",
+          "similarity": 0.98
+        },
+        {
+          "line": 1110,
+          "recoveredMember": "Update",
+          "recovered": "else if (InCover() && cover.type == CoverPoint.Type.LeanRight)",
+          "nearestLineInOurs": "else if (InCover() && coverType == CoverPoint.Type.LeanRight)",
+          "similarity": 0.98
+        },
+        {
+          "line": 1158,
+          "recoveredMember": "WeaponLead",
+          "recovered": "Vector3 vector3 = Physics.gravity * Mathf.Pow(num2, 2f) / 2f;",
+          "nearestLineInOurs": "Vector3 vector3 = Physics.gravity * Mathf.Pow(FallingTime(num2), 2f) / 2f;",
+          "similarity": 0.9
+        },
+        {
+          "line": 1168,
+          "recoveredMember": "WeaponLead",
+          "recovered": "Vector3 vector10 = vector9 * num3 - Physics.gravity * Mathf.Pow(num3, 2f) / 2f;",
+          "nearestLineInOurs": "Vector3 vector10 = vector9 * num3 - Physics.gravity * Mathf.Pow(FallingTime(num3), 2f) / 2f;",
+          "similarity": 0.92
+        },
+        {
+          "line": 1322,
+          "recoveredMember": "AvoidVehicle",
+          "recovered": "list.Sort(delegate(int x, int y)",
+          "nearestLineInOurs": "list.Sort(delegate (int x, int y)",
+          "similarity": 0.98
+        },
+        {
+          "line": 1325,
+          "recoveredMember": "AvoidVehicle",
+          "recovered": "return shortLtNext ? num5 : (-num5);",
+          "nearestLineInOurs": "return shortLtNext ? num6 : (-num6);",
+          "similarity": 0.94
+        },
+        {
+          "line": 1339,
+          "recoveredMember": "AvoidVehicle",
+          "recovered": "list2.Sort(delegate(int x, int y)",
+          "nearestLineInOurs": "list2.Sort(delegate (int x, int y)",
+          "similarity": 0.99
+        },
+        {
+          "line": 1341,
+          "recoveredMember": "AvoidVehicle",
+          "recovered": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
+          "nearestLineInOurs": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
+          "similarity": 1.0
+        },
+        {
+          "line": 1401,
+          "recoveredMember": "PathDone",
+          "recovered": "LookDirection(cover.transform.forward);",
+          "nearestLineInOurs": "LookDirection(coverFacing);",
+          "similarity": 0.7
+        },
+        {
+          "line": 1423,
+          "recoveredMember": "Velocity",
+          "recovered": "return (GetWaypointDeltaBlockable().ToGround().normalized + LocalAvoidanceVelocity() * 0.4f).normalized * num;",
+          "nearestLineInOurs": "return (GetWaypointDeltaBlockable().ToGround().normalized + avoidance).normalized * num;",
+          "similarity": 0.89
+        },
+        {
+          "line": 1554,
+          "recoveredMember": "GetCarInput",
+          "recovered": "float magnitude3 = vehicle.rigidbody.velocity.magnitude;",
+          "nearestLineInOurs": "float magnitude3 = vehicle.rigidbody.linearVelocity.magnitude;",
+          "similarity": 0.93
+        },
+        {
+          "line": 1600,
+          "recoveredMember": "GetProjectedDrivingTarget",
+          "recovered": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.velocity.magnitude);",
+          "nearestLineInOurs": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
+          "similarity": 0.95
+        },
+        {
+          "line": 1617,
+          "recoveredMember": "GetFutureProjectedDrivingTarget",
+          "recovered": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.velocity.magnitude);",
+          "nearestLineInOurs": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
+          "similarity": 0.95
+        },
+        {
+          "line": 1638,
+          "recoveredMember": "HelicopterInput",
+          "recovered": "Vector3 vector = position + rigidbody.velocity * 3f;",
+          "nearestLineInOurs": "Vector3 vector = position + rigidbody.linearVelocity * 3f;",
+          "similarity": 0.93
+        },
+        {
+          "line": 1709,
+          "recoveredMember": "ReceivedDamage",
+          "recovered": "if (!HasTarget())",
+          "nearestLineInOurs": "if (HasTarget())",
+          "similarity": 0.97
+        },
+        {
+          "line": 1811,
+          "recoveredMember": "CanSeeActor",
+          "recovered": "float f = Mathf.Exp(0f - Mathf.Pow(magnitude * RenderSettings.fogDensity, 2f));",
+          "nearestLineInOurs": "float f = Mathf.Exp(0f - Mathf.Pow(magnitude * SightFogDensity(target), 2f));",
+          "similarity": 0.83
+        },
+        {
+          "line": 1896,
+          "recoveredMember": "FindCoverTowards",
+          "recovered": "cover.taken = true;",
+          "nearestLineInOurs": "cover.taken = true;",
+          "similarity": 1.0
+        },
+        {
+          "line": 1970,
+          "recoveredMember": "EmoteHailPlayer",
+          "recovered": "if (!HasTarget())",
+          "nearestLineInOurs": "if (HasTarget())",
+          "similarity": 0.97
+        },
+        {
+          "line": 1979,
+          "recoveredMember": "EmoteHailLeader",
+          "recovered": "if (!HasTarget())",
+          "nearestLineInOurs": "if (HasTarget())",
+          "similarity": 0.97
+        },
+        {
+          "line": 2051,
+          "recoveredMember": "Crouch",
+          "recovered": "return InCover() && cover.type == CoverPoint.Type.Crouch && (IsReloading() || CoolingDown());",
+          "nearestLineInOurs": "return (coverType == CoverPoint.Type.Crouch && (IsReloading() || CoolingDown())) || IsFallingBack();",
+          "similarity": 0.82
+        },
+        {
+          "line": 2066,
+          "recoveredMember": "GetLoadout",
+          "recovered": "loadoutSet.primary = WeaponManager.EntryNamed(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)]);",
+          "nearestLineInOurs": "loadoutSet.primary = WeaponManager.EntryNamed(PinnedOr(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)], LoadoutSlot.Primary));",
+          "similarity": 0.89
+        },
+        {
+          "line": 2067,
+          "recoveredMember": "GetLoadout",
+          "recovered": "loadoutSet.secondary = WeaponManager.EntryNamed(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)]);",
+          "nearestLineInOurs": "loadoutSet.secondary = WeaponManager.EntryNamed(PinnedOr(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)], LoadoutSlot.Secondary));",
+          "similarity": 0.89
+        },
+        {
+          "line": 2068,
+          "recoveredMember": "GetLoadout",
+          "recovered": "loadoutSet.gear1 = WeaponManager.EntryNamed(gearNames[UnityEngine.Random.Range(0, gearNames.Length)]);",
+          "nearestLineInOurs": "loadoutSet.gear1 = WeaponManager.EntryNamed(PinnedOr(gearNames[UnityEngine.Random.Range(0, gearNames.Length)], LoadoutSlot.Gear1));",
+          "similarity": 0.88
+        }
+      ]
+    },
     "FpsActorController.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/FpsActorController.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/FpsActorController.cs",
       "survivors": 54,
-      "outrightDeletions": 18,
+      "outrightDeletions": 17,
       "candidates": [
         {
           "line": 51,
@@ -705,8 +1098,8 @@
           "line": 209,
           "recoveredMember": "HelicopterInput",
           "recovered": "vector = Vector2.zero;",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
+          "nearestLineInOurs": "seat = Vector3.zero;",
+          "similarity": 0.81
         },
         {
           "line": 211,
@@ -965,15 +1358,15 @@
           "line": 28,
           "recoveredMember": null,
           "recovered": "private int blueScore;",
-          "nearestLineInOurs": "private Color blue;",
-          "similarity": 0.68
+          "nearestLineInOurs": "private int lastVictoryRule;",
+          "similarity": 0.72
         },
         {
           "line": 30,
           "recoveredMember": null,
           "recovered": "private int redScore;",
-          "nearestLineInOurs": "private Color red;",
-          "similarity": 0.67
+          "nearestLineInOurs": "private int lastVictoryRule;",
+          "similarity": 0.69
         },
         {
           "line": 32,
@@ -1491,8 +1884,8 @@
           "line": 790,
           "recoveredMember": "Damage",
           "recovered": "else if (balance < 0f)",
-          "nearestLineInOurs": "else if (!lqUpdate && flag)",
-          "similarity": 0.54
+          "nearestLineInOurs": "if (damage <= 0f)",
+          "similarity": 0.65
         },
         {
           "line": 798,
@@ -1713,354 +2106,530 @@
         }
       ]
     },
-    "AiActorController.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/AiActorController.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AiActorController.cs",
-      "survivors": 49,
-      "outrightDeletions": 7,
+    "JavelinMissile.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/JavelinMissile.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/JavelinMissile.cs",
+      "survivors": 39,
+      "outrightDeletions": 18,
+      "candidates": [
+        {
+          "line": 6,
+          "recoveredMember": null,
+          "recovered": "private const float TURN_SPEED = 300f;",
+          "nearestLineInOurs": "private const float MIN_TURN_SPEED = 10f;",
+          "similarity": 0.91
+        },
+        {
+          "line": 8,
+          "recoveredMember": null,
+          "recovered": "private const float TARGET_ALTITUDE = 200f;",
+          "nearestLineInOurs": "private const float IGNITION_DELAY = 0.5f;",
+          "similarity": 0.72
+        },
+        {
+          "line": 10,
+          "recoveredMember": null,
+          "recovered": "private const float ACCELERATION = 110f;",
+          "nearestLineInOurs": "private const float IGNITION_DELAY = 0.5f;",
+          "similarity": 0.72
+        },
+        {
+          "line": 12,
+          "recoveredMember": null,
+          "recovered": "private const float ACCURATE_ACCELERATION = 160f;",
+          "nearestLineInOurs": "private const float MIN_TURN_SPEED = 10f;",
+          "similarity": 0.68
+        },
+        {
+          "line": 14,
+          "recoveredMember": null,
+          "recovered": "private const float DIVE_DISTANCE = 50f;",
+          "nearestLineInOurs": "private const float IGNITION_DELAY = 0.5f;",
+          "similarity": 0.72
+        },
+        {
+          "line": 16,
+          "recoveredMember": null,
+          "recovered": "private const float VELOCITY_COMPENSATION = 0.3f;",
+          "nearestLineInOurs": "private const float IGNITION_DELAY = 0.5f;",
+          "similarity": 0.72
+        },
+        {
+          "line": 26,
+          "recoveredMember": null,
+          "recovered": "private bool diving;",
+          "nearestLineInOurs": "private bool Guide()",
+          "similarity": 0.7
+        },
+        {
+          "line": 30,
+          "recoveredMember": null,
+          "recovered": "private bool missing;",
+          "nearestLineInOurs": "private bool Guide()",
+          "similarity": 0.68
+        },
+        {
+          "line": 32,
+          "recoveredMember": null,
+          "recovered": "private Action thrustStartAction = new Action(0.5f);",
+          "nearestLineInOurs": "private Action thrustStartAction = new Action(IGNITION_DELAY);",
+          "similarity": 0.85
+        },
+        {
+          "line": 34,
+          "recoveredMember": null,
+          "recovered": "private Action cannotMissDiveAction = new Action(1f);",
+          "nearestLineInOurs": "private Action thrustStartAction = new Action(IGNITION_DELAY);",
+          "similarity": 0.68
+        },
+        {
+          "line": 36,
+          "recoveredMember": null,
+          "recovered": "private Action inaccurateDiveAction = new Action(3f);",
+          "nearestLineInOurs": "private Action thrustStartAction = new Action(IGNITION_DELAY);",
+          "similarity": 0.7
+        },
+        {
+          "line": 47,
+          "recoveredMember": "Start",
+          "recovered": "velocity = base.transform.forward * ejectSpeed + source.Velocity() * 0.9f;",
+          "nearestLineInOurs": "? base.transform.forward * ejectSpeed + source.Velocity() * 0.9f",
+          "similarity": 0.91
+        },
+        {
+          "line": 49,
+          "recoveredMember": "Start",
+          "recovered": "inaccurateDiveAction.Start();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 58,
+          "recoveredMember": "Update",
+          "recovered": "if (!thrustEnabled)",
+          "nearestLineInOurs": "private bool thrustEnabled;",
+          "similarity": 0.65
+        },
+        {
+          "line": 65,
+          "recoveredMember": "Update",
+          "recovered": "Vector3 vector = ((!(target == null)) ? target.position : targetPoint);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 66,
+          "recoveredMember": "Update",
+          "recovered": "Vector3 rhs = vector - base.transform.position;",
+          "nearestLineInOurs": "Vector3 position = base.transform.position;",
+          "similarity": 0.8
+        },
+        {
+          "line": 67,
+          "recoveredMember": "Update",
+          "recovered": "Vector3 vector2 = Vector3.zero;",
+          "nearestLineInOurs": "aimVelocity = Vector3.zero;",
+          "similarity": 0.69
+        },
+        {
+          "line": 68,
+          "recoveredMember": "Update",
+          "recovered": "if (!diving)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 70,
+          "recoveredMember": "Update",
+          "recovered": "rhs.y = 0f;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 71,
+          "recoveredMember": "Update",
+          "recovered": "float value = 200f - base.transform.position.y;",
+          "nearestLineInOurs": "Vector3 position = base.transform.position;",
+          "similarity": 0.65
+        },
+        {
+          "line": 72,
+          "recoveredMember": "Update",
+          "recovered": "vector2 = (rhs.normalized + Vector3.up * Mathf.Clamp(value, 0f, 3f)).normalized * configuration.speed;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 73,
+          "recoveredMember": "Update",
+          "recovered": "if (rhs.magnitude < 50f)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 75,
+          "recoveredMember": "Update",
+          "recovered": "StartDiving();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 78,
+          "recoveredMember": "Update",
+          "recovered": "else if (!missing)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 80,
+          "recoveredMember": "Update",
+          "recovered": "vector2 = (rhs.normalized - velocity.normalized * 0.3f).normalized * configuration.speed;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 81,
+          "recoveredMember": "Update",
+          "recovered": "if (target != null && cannotMissDiveAction.Done() && Vector3.Dot(velocity, rhs) < 0f)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 83,
+          "recoveredMember": "Update",
+          "recovered": "missing = true;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 86,
+          "recoveredMember": "Update",
+          "recovered": "if (!missing)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 88,
+          "recoveredMember": "Update",
+          "recovered": "float num = ((!diving || !inaccurateDiveAction.TrueDone()) ? 110f : 160f);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 89,
+          "recoveredMember": "Update",
+          "recovered": "velocity = Vector3.MoveTowards(velocity, vector2, 110f * Time.deltaTime);",
+          "nearestLineInOurs": "float speed = Mathf.MoveTowards(velocity.magnitude, configuration.speed, boost * Time.deltaTime);",
+          "similarity": 0.62
+        },
+        {
+          "line": 93,
+          "recoveredMember": "Update",
+          "recovered": "velocity += Physics.gravity * Time.deltaTime;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 95,
+          "recoveredMember": "Update",
+          "recovered": "bool flag = diving && Vector3.Dot(base.transform.forward, Vector3.down) > 0.8f;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 96,
+          "recoveredMember": "Update",
+          "recovered": "configuration.damage = ((!flag) ? damage : divingDamage);",
+          "nearestLineInOurs": "configuration.damage = targetVehicle != null ? divingDamage : damage;",
+          "similarity": 0.65
+        },
+        {
+          "line": 97,
+          "recoveredMember": "Update",
+          "recovered": "base.transform.rotation = Quaternion.RotateTowards(base.transform.rotation, Quaternion.LookRotation(velocity), 300f * Time.deltaTime);",
+          "nearestLineInOurs": "base.transform.rotation = Quaternion.LookRotation(velocity);",
+          "similarity": 0.62
+        },
+        {
+          "line": 102,
+          "recoveredMember": "ForceDirectMode",
+          "recovered": "public void ForceDirectMode()",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 104,
+          "recoveredMember": "ForceDirectMode",
+          "recovered": "StartDiving();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 107,
+          "recoveredMember": "StartDiving",
+          "recovered": "private void StartDiving()",
+          "nearestLineInOurs": "private void ForgetTarget()",
+          "similarity": 0.72
+        },
+        {
+          "line": 109,
+          "recoveredMember": "StartDiving",
+          "recovered": "diving = true;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 110,
+          "recoveredMember": "StartDiving",
+          "recovered": "cannotMissDiveAction.Start();",
+          "nearestLineInOurs": "thrustStartAction.Start();",
+          "similarity": 0.62
+        }
+      ]
+    },
+    "Javelin.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Javelin.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Javelin.cs",
+      "survivors": 34,
+      "outrightDeletions": 14,
       "candidates": [
         {
           "line": 1,
           "recoveredMember": null,
-          "recovered": "using System;",
-          "nearestLineInOurs": "\ufeffusing System;",
-          "similarity": 0.96
-        },
-        {
-          "line": 375,
-          "recoveredMember": "FindPotentialTargets",
-          "recovered": "List<Actor> list = new List<Actor>(ActorManager.AliveActorsOnTeam(team));",
-          "nearestLineInOurs": "List<Actor> enemies = ActorManager.AliveActorsOnTeam(team);",
-          "similarity": 0.82
-        },
-        {
-          "line": 376,
-          "recoveredMember": "FindPotentialTargets",
-          "recovered": "list.RemoveAll((Actor actor) => !HasEffectiveWeaponAgainst(actor) || (actor.IsSeated() && actor.seat.vehicle.burning));",
-          "nearestLineInOurs": "if (item == null || !HasEffectiveWeaponAgainst(item) || (item.IsSeated() && item.seat.vehicle.burning))",
-          "similarity": 0.74
-        },
-        {
-          "line": 377,
-          "recoveredMember": "FindPotentialTargets",
-          "recovered": "Dictionary<Actor, float> distanceTo = new Dictionary<Actor, float>(list.Count);",
+          "recovered": "using System.Collections.Generic;",
           "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
-          "line": 378,
-          "recoveredMember": "FindPotentialTargets",
-          "recovered": "foreach (Actor item in list)",
-          "nearestLineInOurs": "foreach (int item2 in list)",
-          "similarity": 0.87
+          "line": 31,
+          "recoveredMember": null,
+          "recovered": "private Vehicle target;",
+          "nearestLineInOurs": "private Component target;",
+          "similarity": 0.71
         },
         {
-          "line": 380,
-          "recoveredMember": "FindPotentialTargets",
-          "recovered": "float num = ((!item.fallenOver) ? 0f : 30f);",
+          "line": 43,
+          "recoveredMember": "Unholster",
+          "recovered": "if (ammo == 0)",
           "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
-          "line": 381,
-          "recoveredMember": "FindPotentialTargets",
-          "recovered": "distanceTo.Add(item, Vector3.Distance(item.Position(), actor.Position()) + num);",
-          "nearestLineInOurs": "float range = Vector3.Distance(targetActor.Position(), actor.Position());",
-          "similarity": 0.72
+          "line": 45,
+          "recoveredMember": "Unholster",
+          "recovered": "ReloadDone();",
+          "nearestLineInOurs": "SetReloadPose(true);",
+          "similarity": 0.67
         },
         {
-          "line": 383,
-          "recoveredMember": "FindPotentialTargets",
-          "recovered": "list.Sort((Actor x, Actor y) => distanceTo[x].CompareTo(distanceTo[y]));",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
+          "line": 53,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "Ray ray = new Ray(pointSampler.position, pointSampler.forward);",
+          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
+          "similarity": 0.77
         },
         {
-          "line": 489,
-          "recoveredMember": "AiVehicle",
-          "recovered": "if (Vector3.Distance(newPosition, lastSampledVehiclePosition) > 0.4f)",
-          "nearestLineInOurs": "if (holdingStandoff || Vector3.Distance(newPosition, lastSampledVehiclePosition) > 0.4f)",
-          "similarity": 0.88
-        },
-        {
-          "line": 547,
-          "recoveredMember": "PushAntiStuckEvent",
-          "recovered": "squad.squadVehicle.stuck = true;",
-          "nearestLineInOurs": "actor.seat.vehicle.stuck = true;",
-          "similarity": 0.75
-        },
-        {
-          "line": 564,
-          "recoveredMember": "ShouldHavePath",
-          "recovered": "return (!actor.IsSeated() || actor.IsDriver()) && !inCover && squad.hasAssignedOrder;",
-          "nearestLineInOurs": "return (!actor.IsSeated() || actor.IsDriver()) && !inCover && squad.hasAssignedOrder && squad.state != Squad.State.DigIn;",
-          "similarity": 0.83
-        },
-        {
-          "line": 571,
-          "recoveredMember": "CreateRougeSquad",
-          "recovered": "squad.SplitSquad(list);",
-          "nearestLineInOurs": "squad.SplitSquad(list, Squad.SplitReason.Rogue);",
-          "similarity": 0.65
-        },
-        {
-          "line": 580,
-          "recoveredMember": "AiOrders",
-          "recovered": "if (!hasPath && ShouldHavePath() && moveTimeoutAction.TrueDone())",
-          "nearestLineInOurs": "if (!hasPath && !arrivedAtGoto && ShouldHavePath() && moveTimeoutAction.TrueDone() && squad.members.Count > 1)",
-          "similarity": 0.74
-        },
-        {
-          "line": 603,
-          "recoveredMember": "AiOrders",
-          "recovered": "if (squad.state == Squad.State.EnterVehicle && squad.squadVehicle.dead)",
-          "nearestLineInOurs": "if (squad.HasVehicle() && squad.squadVehicle.burning)",
-          "similarity": 0.68
-        },
-        {
-          "line": 607,
-          "recoveredMember": "AiOrders",
-          "recovered": "if (!squad.HasVehicle() && squad.state == Squad.State.Moving)",
-          "nearestLineInOurs": "if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire())",
-          "similarity": 0.79
-        },
-        {
-          "line": 625,
-          "recoveredMember": "AiOrders",
-          "recovered": "squad.DigInTowards(takingFireDirection);",
-          "nearestLineInOurs": "squad.DigInTowards(squad.TakingFireDirection(takingFireDirection));",
-          "similarity": 0.75
-        },
-        {
-          "line": 627,
-          "recoveredMember": "AiOrders",
-          "recovered": "else if (!squad.IsTakingFire())",
-          "nearestLineInOurs": "if (IsTakingFire())",
-          "similarity": 0.76
-        },
-        {
-          "line": 630,
-          "recoveredMember": "AiOrders",
-          "recovered": "if ((!squad.HasTargetSpawnPoint() || squad.targetSpawnPoint != closestSpawnPoint) && squad.ShouldGotoSpawnPoint(closestSpawnPoint))",
-          "nearestLineInOurs": "else if (squad.HasTargetSpawnPoint() && squad.targetSpawnPoint == closestSpawnPoint && !squad.ShouldGotoSpawnPoint(closestSpawnPoint))",
-          "similarity": 0.94
-        },
-        {
-          "line": 665,
-          "recoveredMember": "AiOrders",
-          "recovered": "if (!squad.HasTargetSpawnPoint() || !squad.ShouldGotoSpawnPoint(squad.targetSpawnPoint))",
-          "nearestLineInOurs": "else if (!squad.HasTargetSpawnPoint() || !squad.ShouldGotoSpawnPoint(squad.targetSpawnPoint))",
-          "similarity": 0.97
-        },
-        {
-          "line": 667,
-          "recoveredMember": "AiOrders",
-          "recovered": "squad.NewAttackOrder();",
-          "nearestLineInOurs": "squad.NewAttackOrder();",
-          "similarity": 1.0
-        },
-        {
-          "line": 797,
-          "recoveredMember": "AiWeapon",
-          "recovered": "if (!HasTarget() && actor.hasAmmoBox && actor.weapons[actor.ammoBoxSlot].AmmoFull() && (squad.MemberNeedsResupply() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 801,
-          "recoveredMember": "AiWeapon",
-          "recovered": "if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 803,
-          "recoveredMember": "AiWeapon",
-          "recovered": "LookAt(ActorManager.instance.player.transform.position);",
-          "nearestLineInOurs": "LookAt(ActorManager.Player.transform.position);",
-          "similarity": 0.89
-        },
-        {
-          "line": 814,
-          "recoveredMember": "AiWeapon",
-          "recovered": "if (!HasTarget() && actor.hasMedipack && actor.weapons[actor.medipackSlot].AmmoFull() && (squad.MemberNeedsHealth() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 818,
-          "recoveredMember": "AiWeapon",
-          "recovered": "if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 820,
-          "recoveredMember": "AiWeapon",
-          "recovered": "LookAt(ActorManager.instance.player.transform.position);",
-          "nearestLineInOurs": "LookAt(ActorManager.Player.transform.position);",
-          "similarity": 0.89
-        },
-        {
-          "line": 859,
-          "recoveredMember": "AiWeapon",
-          "recovered": "if (actor.activeWeapon.CanFire() && insideAimCube && CanSeeActor(target))",
-          "nearestLineInOurs": "if (actor.activeWeapon.CanFire() && insideAimCube && !CombatRules.HoldFire(squad != null && squad.sneaking, IsTakingFire(), distance) && CanSeeActor(target))",
-          "similarity": 0.63
-        },
-        {
-          "line": 923,
-          "recoveredMember": "AiScan",
-          "recovered": "facingDirection = cover.transform.forward + UnityEngine.Random.insideUnitSphere * 0.1f;",
-          "nearestLineInOurs": "facingDirection = coverFacing + UnityEngine.Random.insideUnitSphere * 0.1f;",
-          "similarity": 0.88
-        },
-        {
-          "line": 1005,
-          "recoveredMember": "HasEffectiveWeaponAgainst",
-          "recovered": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != Weapon.Effectiveness.No && weapon.EffectiveAtRange(range))",
-          "nearestLineInOurs": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != 0 && weapon.EffectiveAtRange(range))",
-          "similarity": 0.91
-        },
-        {
-          "line": 1106,
-          "recoveredMember": "Update",
-          "recovered": "else if (InCover() && cover.type == CoverPoint.Type.LeanLeft)",
-          "nearestLineInOurs": "else if (InCover() && coverType == CoverPoint.Type.LeanLeft)",
-          "similarity": 0.98
-        },
-        {
-          "line": 1110,
-          "recoveredMember": "Update",
-          "recovered": "else if (InCover() && cover.type == CoverPoint.Type.LeanRight)",
-          "nearestLineInOurs": "else if (InCover() && coverType == CoverPoint.Type.LeanRight)",
-          "similarity": 0.98
-        },
-        {
-          "line": 1322,
-          "recoveredMember": "AvoidVehicle",
-          "recovered": "list.Sort(delegate(int x, int y)",
-          "nearestLineInOurs": "list.Sort(delegate (int x, int y)",
-          "similarity": 0.98
-        },
-        {
-          "line": 1325,
-          "recoveredMember": "AvoidVehicle",
-          "recovered": "return shortLtNext ? num5 : (-num5);",
-          "nearestLineInOurs": "return shortLtNext ? num6 : (-num6);",
-          "similarity": 0.94
-        },
-        {
-          "line": 1339,
-          "recoveredMember": "AvoidVehicle",
-          "recovered": "list2.Sort(delegate(int x, int y)",
-          "nearestLineInOurs": "list2.Sort(delegate (int x, int y)",
-          "similarity": 0.99
-        },
-        {
-          "line": 1341,
-          "recoveredMember": "AvoidVehicle",
-          "recovered": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
-          "nearestLineInOurs": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
-          "similarity": 1.0
-        },
-        {
-          "line": 1401,
-          "recoveredMember": "PathDone",
-          "recovered": "LookDirection(cover.transform.forward);",
-          "nearestLineInOurs": "LookDirection(coverFacing);",
+          "line": 60,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "javelinMissile.target = target.transform;",
+          "nearestLineInOurs": "javelinMissile.targetPoint = manualTargetPoint;",
           "similarity": 0.7
         },
         {
-          "line": 1423,
-          "recoveredMember": "Velocity",
-          "recovered": "return (GetWaypointDeltaBlockable().ToGround().normalized + LocalAvoidanceVelocity() * 0.4f).normalized * num;",
-          "nearestLineInOurs": "return (GetWaypointDeltaBlockable().ToGround().normalized + avoidance).normalized * num;",
-          "similarity": 0.89
+          "line": 61,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "if (target.HasDriver() && target.directJavelinPath)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
-          "line": 1554,
-          "recoveredMember": "GetCarInput",
-          "recovered": "float magnitude3 = vehicle.rigidbody.velocity.magnitude;",
-          "nearestLineInOurs": "float magnitude3 = vehicle.rigidbody.linearVelocity.magnitude;",
-          "similarity": 0.93
+          "line": 63,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "javelinMissile.ForceDirectMode();",
+          "nearestLineInOurs": "javelinMissile.Lock(target);",
+          "similarity": 0.69
         },
         {
-          "line": 1600,
-          "recoveredMember": "GetProjectedDrivingTarget",
-          "recovered": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.velocity.magnitude);",
-          "nearestLineInOurs": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
-          "similarity": 0.95
+          "line": 84,
+          "recoveredMember": "LateUpdate",
+          "recovered": "Vehicle vehicle = null;",
+          "nearestLineInOurs": "Component vehicle = null;",
+          "similarity": 0.71
         },
         {
-          "line": 1617,
-          "recoveredMember": "GetFutureProjectedDrivingTarget",
-          "recovered": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.velocity.magnitude);",
-          "nearestLineInOurs": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
-          "similarity": 0.95
+          "line": 133,
+          "recoveredMember": "LateUpdate",
+          "recovered": "if (!(user != null) || user.aiControlled)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
-          "line": 1638,
-          "recoveredMember": "HelicopterInput",
-          "recovered": "Vector3 vector = position + rigidbody.velocity * 3f;",
-          "nearestLineInOurs": "Vector3 vector = position + rigidbody.linearVelocity * 3f;",
-          "similarity": 0.93
+          "line": 146,
+          "recoveredMember": "LateUpdate",
+          "recovered": "lockImage.rectTransform.position = Camera.main.WorldToScreenPoint(target.transform.position);",
+          "nearestLineInOurs": "lockImage.rectTransform.position = Camera.main.WorldToScreenPoint(manualTargetPoint);",
+          "similarity": 0.83
         },
         {
-          "line": 1709,
-          "recoveredMember": "ReceivedDamage",
-          "recovered": "if (!HasTarget())",
-          "nearestLineInOurs": "if (HasTarget())",
-          "similarity": 0.97
+          "line": 178,
+          "recoveredMember": "Fire",
+          "recovered": "Reload();",
+          "nearestLineInOurs": "SetReloadPose(true);",
+          "similarity": 0.62
         },
         {
-          "line": 1896,
-          "recoveredMember": "FindCoverTowards",
-          "recovered": "cover.taken = true;",
-          "nearestLineInOurs": "cover.taken = true;",
-          "similarity": 1.0
+          "line": 180,
+          "recoveredMember": "Fire",
+          "recovered": "else if (!hasManualTarget)",
+          "nearestLineInOurs": "if (hasManualTarget)",
+          "similarity": 0.87
         },
         {
-          "line": 1970,
-          "recoveredMember": "EmoteHailPlayer",
-          "recovered": "if (!HasTarget())",
-          "nearestLineInOurs": "if (HasTarget())",
-          "similarity": 0.97
+          "line": 182,
+          "recoveredMember": "Fire",
+          "recovered": "Ray ray = new Ray(pointSampler.position, pointSampler.forward);",
+          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
+          "similarity": 0.77
         },
         {
-          "line": 1979,
-          "recoveredMember": "EmoteHailLeader",
-          "recovered": "if (!HasTarget())",
-          "nearestLineInOurs": "if (HasTarget())",
-          "similarity": 0.97
+          "line": 202,
+          "recoveredMember": "FindTarget",
+          "recovered": "private Vehicle FindTarget()",
+          "nearestLineInOurs": "vehicle = FindTarget();",
+          "similarity": 0.78
         },
         {
-          "line": 2051,
-          "recoveredMember": "Crouch",
-          "recovered": "return InCover() && cover.type == CoverPoint.Type.Crouch && (IsReloading() || CoolingDown());",
-          "nearestLineInOurs": "return (coverType == CoverPoint.Type.Crouch && (IsReloading() || CoolingDown())) || IsFallingBack();",
-          "similarity": 0.82
+          "line": 204,
+          "recoveredMember": "FindTarget",
+          "recovered": "List<Vehicle> sortedTargets = GetSortedTargets();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
-          "line": 2066,
-          "recoveredMember": "GetLoadout",
-          "recovered": "loadoutSet.primary = WeaponManager.EntryNamed(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)]);",
-          "nearestLineInOurs": "loadoutSet.primary = WeaponManager.EntryNamed(PinnedOr(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)], LoadoutSlot.Primary));",
-          "similarity": 0.89
+          "line": 205,
+          "recoveredMember": "FindTarget",
+          "recovered": "foreach (Vehicle item in sortedTargets)",
+          "nearestLineInOurs": "foreach (Vehicle vehicle in ActorManager.instance.vehicles)",
+          "similarity": 0.63
         },
         {
-          "line": 2067,
-          "recoveredMember": "GetLoadout",
-          "recovered": "loadoutSet.secondary = WeaponManager.EntryNamed(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)]);",
-          "nearestLineInOurs": "loadoutSet.secondary = WeaponManager.EntryNamed(PinnedOr(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)], LoadoutSlot.Secondary));",
-          "similarity": 0.89
+          "line": 207,
+          "recoveredMember": "FindTarget",
+          "recovered": "Vector3 direction = item.transform.position - base.transform.position;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
-          "line": 2068,
-          "recoveredMember": "GetLoadout",
-          "recovered": "loadoutSet.gear1 = WeaponManager.EntryNamed(gearNames[UnityEngine.Random.Range(0, gearNames.Length)]);",
-          "nearestLineInOurs": "loadoutSet.gear1 = WeaponManager.EntryNamed(PinnedOr(gearNames[UnityEngine.Random.Range(0, gearNames.Length)], LoadoutSlot.Gear1));",
-          "similarity": 0.88
+          "line": 208,
+          "recoveredMember": "FindTarget",
+          "recovered": "if (IsInFov(item.transform.position))",
+          "nearestLineInOurs": "if (IsInFov(manualTargetPoint))",
+          "similarity": 0.59
+        },
+        {
+          "line": 210,
+          "recoveredMember": "FindTarget",
+          "recovered": "Ray ray = new Ray(MuzzlePosition(), direction);",
+          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
+          "similarity": 0.61
+        },
+        {
+          "line": 211,
+          "recoveredMember": "FindTarget",
+          "recovered": "if (!Physics.Raycast(ray, direction.magnitude, 1))",
+          "nearestLineInOurs": "if (Physics.Raycast(ray, out hitInfo, 1000f, 1))",
+          "similarity": 0.68
+        },
+        {
+          "line": 213,
+          "recoveredMember": "FindTarget",
+          "recovered": "return item;",
+          "nearestLineInOurs": "return target;",
+          "similarity": 0.77
+        },
+        {
+          "line": 222,
+          "recoveredMember": "IsInFov",
+          "recovered": "return Vector3.Dot((point - base.transform.position).normalized, pointSampler.forward) > 0.99f;",
+          "nearestLineInOurs": "return Vector3.Dot((point - SightPosition()).normalized, SampleForward()) > 0.99f;",
+          "similarity": 0.81
+        },
+        {
+          "line": 225,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "private List<Vehicle> GetSortedTargets()",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 227,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "List<Vehicle> list = new List<Vehicle>(ActorManager.instance.vehicles);",
+          "nearestLineInOurs": "foreach (Vehicle vehicle in ActorManager.instance.vehicles)",
+          "similarity": 0.69
+        },
+        {
+          "line": 228,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "if (user.IsSeated())",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 230,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "list.Remove(user.seat.vehicle);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 232,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "Dictionary<Vehicle, bool> isEnemy = new Dictionary<Vehicle, bool>();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 233,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "foreach (Vehicle item in list)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 235,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "if (item.HasDriver())",
+          "nearestLineInOurs": "if (HasActiveAnimator())",
+          "similarity": 0.62
+        },
+        {
+          "line": 237,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "isEnemy.Add(item, item.Driver().team != user.team);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 241,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "isEnemy.Add(item, false);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 244,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "list.Sort((Vehicle x, Vehicle y) => (isEnemy[x] != isEnemy[y]) ? isEnemy[y].CompareTo(isEnemy[x]) : Vector3.Distance(base.transform.position, x.transform.position).CompareTo(Vector3.Distance(base.transform.position, y.transform.position)));",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 245,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "return list;",
+          "nearestLineInOurs": "return best;",
+          "similarity": 0.83
         }
       ]
     },
@@ -2068,7 +2637,7 @@
       "recovered": "tmp/recovered/src/Assembly-CSharp/ActorManager.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActorManager.cs",
       "survivors": 32,
-      "outrightDeletions": 3,
+      "outrightDeletions": 1,
       "candidates": [
         {
           "line": 78,
@@ -2263,15 +2832,15 @@
           "line": 349,
           "recoveredMember": "Explode",
           "recovered": "Vehicle[] array = instance.vehicles.ToArray();",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
+          "nearestLineInOurs": "foreach (Vehicle vehicle in instance.vehicles)",
+          "similarity": 0.61
         },
         {
           "line": 350,
           "recoveredMember": "Explode",
           "recovered": "foreach (Vehicle vehicle in array)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
+          "nearestLineInOurs": "foreach (Vehicle vehicle in instance.vehicles)",
+          "similarity": 0.75
         },
         {
           "line": 353,
@@ -2517,7 +3086,7 @@
     "Vehicle.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Vehicle.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Vehicle.cs",
-      "survivors": 25,
+      "survivors": 28,
       "outrightDeletions": 3,
       "candidates": [
         {
@@ -2526,6 +3095,13 @@
           "recovered": "public class Vehicle : MonoBehaviour",
           "nearestLineInOurs": null,
           "similarity": 0.0
+        },
+        {
+          "line": 56,
+          "recoveredMember": null,
+          "recovered": "public bool directJavelinPath;",
+          "nearestLineInOurs": "public bool dead;",
+          "similarity": 0.68
         },
         {
           "line": 120,
@@ -2638,6 +3214,20 @@
           "recovered": "InvokeRepeating(\"AutoDamage\", 50f, 2f);",
           "nearestLineInOurs": "CancelInvoke(\"AutoDamage\");",
           "similarity": 0.66
+        },
+        {
+          "line": 349,
+          "recoveredMember": "Die",
+          "recovered": "if (seat.enclosed)",
+          "nearestLineInOurs": "if (seat.IsOccupied())",
+          "similarity": 0.65
+        },
+        {
+          "line": 355,
+          "recoveredMember": "Die",
+          "recovered": "occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);",
+          "nearestLineInOurs": "occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);",
+          "similarity": 0.99
         },
         {
           "line": 377,
@@ -2856,7 +3446,7 @@
       "recovered": "tmp/recovered/src/Assembly-CSharp/VehicleSpawner.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/VehicleSpawner.cs",
       "survivors": 20,
-      "outrightDeletions": 9,
+      "outrightDeletions": 7,
       "candidates": [
         {
           "line": 1,
@@ -2960,8 +3550,8 @@
           "line": 73,
           "recoveredMember": "VehicleDied",
           "recovered": "if (respawnType == RespawnType.AfterDestroyed)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
+          "nearestLineInOurs": "+ (respawnType == RespawnType.Never",
+          "similarity": 0.77
         },
         {
           "line": 75,
@@ -2988,8 +3578,8 @@
           "line": 88,
           "recoveredMember": "FirstDriverEntered",
           "recovered": "if (respawnType == RespawnType.AfterMoved)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
+          "nearestLineInOurs": "+ (respawnType == RespawnType.Never",
+          "similarity": 0.81
         },
         {
           "line": 90,
@@ -3137,6 +3727,225 @@
           "recoveredMember": null,
           "recovered": "GameObject ob2 = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
           "nearestLineInOurs": "GameObject ob = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
+          "similarity": 1.0
+        }
+      ]
+    },
+    "MountedTurret.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/MountedTurret.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MountedTurret.cs",
+      "survivors": 15,
+      "outrightDeletions": 3,
+      "candidates": [
+        {
+          "line": 5,
+          "recoveredMember": null,
+          "recovered": "private const float MAX_TURN_DELTA = 10f;",
+          "nearestLineInOurs": "private const float LEGACY_STEP_DEG = 10f;",
+          "similarity": 0.79
+        },
+        {
+          "line": 16,
+          "recoveredMember": "Update",
+          "recovered": "if (user != null)",
+          "nearestLineInOurs": "if (user == null)",
+          "similarity": 0.94
+        },
+        {
+          "line": 18,
+          "recoveredMember": "Update",
+          "recovered": "Vector2 vector = Vector2.ClampMagnitude(GetInput(), 10f);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 19,
+          "recoveredMember": "Update",
+          "recovered": "Vector3 localEulerAngles = towerTransform.localEulerAngles;",
+          "nearestLineInOurs": "Vector3 tower = towerTransform.localEulerAngles;",
+          "similarity": 0.86
+        },
+        {
+          "line": 20,
+          "recoveredMember": "Update",
+          "recovered": "localEulerAngles.z += vector.x;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 21,
+          "recoveredMember": "Update",
+          "recovered": "towerTransform.localEulerAngles = localEulerAngles;",
+          "nearestLineInOurs": "Vector3 tower = towerTransform.localEulerAngles;",
+          "similarity": 0.65
+        },
+        {
+          "line": 22,
+          "recoveredMember": "Update",
+          "recovered": "Vector3 localEulerAngles2 = turretTransform.localEulerAngles;",
+          "nearestLineInOurs": "Vector3 turret = turretTransform.localEulerAngles;",
+          "similarity": 0.83
+        },
+        {
+          "line": 23,
+          "recoveredMember": "Update",
+          "recovered": "localEulerAngles2.x = Mathf.Clamp(Mathf.DeltaAngle(0f, localEulerAngles2.x - vector.y), -40f, 15f);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 24,
+          "recoveredMember": "Update",
+          "recovered": "turretTransform.localEulerAngles = localEulerAngles2;",
+          "nearestLineInOurs": "Vector3 turret = turretTransform.localEulerAngles;",
+          "similarity": 0.64
+        },
+        {
+          "line": 31,
+          "recoveredMember": "Unholster",
+          "recovered": "if (!user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 42,
+          "recoveredMember": "Holster",
+          "recovered": "if (!user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 48,
+          "recoveredMember": "GetInput",
+          "recovered": "private Vector2 GetInput()",
+          "nearestLineInOurs": "protected virtual Vector2 GetInput()",
+          "similarity": 0.74
+        },
+        {
+          "line": 54,
+          "recoveredMember": "GetInput",
+          "recovered": "if (!user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 56,
+          "recoveredMember": "GetInput",
+          "recovered": "return new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
+          "nearestLineInOurs": "_pendingMouseAim += new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
+          "similarity": 0.94
+        },
+        {
+          "line": 59,
+          "recoveredMember": "GetInput",
+          "recovered": "return new Vector2(vector.x * 5f, vector.y * 5f);",
+          "nearestLineInOurs": "return new Vector2(vector.x * 5f, vector.y * 5f) / LEGACY_STEP_DEG;",
+          "similarity": 0.84
+        }
+      ]
+    },
+    "TimeOfDay.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/TimeOfDay.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/TimeOfDay.cs",
+      "survivors": 14,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 70,
+          "recoveredMember": "ApplyDay",
+          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(true);",
+          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(true);",
+          "similarity": 0.96
+        },
+        {
+          "line": 71,
+          "recoveredMember": "ApplyDay",
+          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(false);",
+          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(false);",
+          "similarity": 0.96
+        },
+        {
+          "line": 72,
+          "recoveredMember": "ApplyDay",
+          "recovered": "atmosphere = new Atmosphere();",
+          "nearestLineInOurs": "dayAtmosphere = new Atmosphere();",
+          "similarity": 0.95
+        },
+        {
+          "line": 73,
+          "recoveredMember": "ApplyDay",
+          "recovered": "atmosphere.sky = RenderSettings.ambientSkyColor;",
+          "nearestLineInOurs": "dayAtmosphere.sky = RenderSettings.ambientSkyColor;",
+          "similarity": 0.97
+        },
+        {
+          "line": 74,
+          "recoveredMember": "ApplyDay",
+          "recovered": "atmosphere.equator = RenderSettings.ambientEquatorColor;",
+          "nearestLineInOurs": "dayAtmosphere.equator = RenderSettings.ambientEquatorColor;",
+          "similarity": 0.97
+        },
+        {
+          "line": 75,
+          "recoveredMember": "ApplyDay",
+          "recovered": "atmosphere.ground = RenderSettings.ambientGroundColor;",
+          "nearestLineInOurs": "dayAtmosphere.ground = RenderSettings.ambientGroundColor;",
+          "similarity": 0.97
+        },
+        {
+          "line": 76,
+          "recoveredMember": "ApplyDay",
+          "recovered": "atmosphere.fog = RenderSettings.fogColor;",
+          "nearestLineInOurs": "dayAtmosphere.fog = RenderSettings.fogColor;",
+          "similarity": 0.96
+        },
+        {
+          "line": 77,
+          "recoveredMember": "ApplyDay",
+          "recovered": "atmosphere.fogDensity = RenderSettings.fogDensity;",
+          "nearestLineInOurs": "dayAtmosphere.fogDensity = RenderSettings.fogDensity;",
+          "similarity": 0.97
+        },
+        {
+          "line": 78,
+          "recoveredMember": "ApplyDay",
+          "recovered": "atmosphere.skyboxMaterial = RenderSettings.skybox;",
+          "nearestLineInOurs": "dayAtmosphere.skyboxMaterial = RenderSettings.skybox;",
+          "similarity": 0.97
+        },
+        {
+          "line": 84,
+          "recoveredMember": "ApplyNight",
+          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(false);",
+          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(false);",
+          "similarity": 0.96
+        },
+        {
+          "line": 85,
+          "recoveredMember": "ApplyNight",
+          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(true);",
+          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(true);",
+          "similarity": 0.96
+        },
+        {
+          "line": 86,
+          "recoveredMember": "ApplyNight",
+          "recovered": "ApplyAtmosphere(nightAtmosphere);",
+          "nearestLineInOurs": "ApplyAtmosphere(atmosphere);",
+          "similarity": 0.89
+        },
+        {
+          "line": 117,
+          "recoveredMember": "BlendAtmosphereColor",
+          "recovered": "RenderSettings.skybox.SetColor(\"_SkyTint\", Color.Lerp(atmosphere.skyboxMaterial.GetColor(\"_SkyTint\"), target, amount));",
+          "nearestLineInOurs": "RenderSettings.skybox.SetColor(tint, Color.Lerp(atmosphere.skyboxMaterial.GetColor(tint), target, amount));",
+          "similarity": 0.93
+        },
+        {
+          "line": 123,
+          "recoveredMember": "ResetAtmosphere",
+          "recovered": "ApplyAtmosphere(atmosphere);",
+          "nearestLineInOurs": "ApplyAtmosphere(atmosphere);",
           "similarity": 1.0
         }
       ]
@@ -3339,88 +4148,88 @@
         }
       ]
     },
-    "MountedTurret.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/MountedTurret.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MountedTurret.cs",
+    "Weapon.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Weapon.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs",
       "survivors": 11,
-      "outrightDeletions": 2,
+      "outrightDeletions": 0,
       "candidates": [
         {
           "line": 5,
           "recoveredMember": null,
-          "recovered": "private const float MAX_TURN_DELTA = 10f;",
-          "nearestLineInOurs": "private const float LEGACY_STEP_DEG = 10f;",
-          "similarity": 0.79
+          "recovered": "public class Weapon : MonoBehaviour",
+          "nearestLineInOurs": "public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon",
+          "similarity": 0.61
         },
         {
-          "line": 16,
+          "line": 135,
+          "recoveredMember": "Awake",
+          "recovered": "projectileSpeed = configuration.projectilePrefab.GetComponent<Projectile>().configuration.speed;",
+          "nearestLineInOurs": "Projectile round = configuration.projectilePrefab.GetComponent<Projectile>();",
+          "similarity": 0.82
+        },
+        {
+          "line": 178,
           "recoveredMember": "Update",
-          "recovered": "if (user != null)",
-          "nearestLineInOurs": "if (user == null)",
-          "similarity": 0.94
+          "recovered": "if (!stopFireLoop.Done())",
+          "nearestLineInOurs": "if (stopFireLoop.TrueDone())",
+          "similarity": 0.91
         },
         {
-          "line": 18,
-          "recoveredMember": "Update",
-          "recovered": "Vector2 vector = Vector2.ClampMagnitude(GetInput(), 10f);",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
+          "line": 197,
+          "recoveredMember": "Fire",
+          "recovered": "if (configuration.auto && (!audio.isPlaying || !stopFireLoop.Done()))",
+          "nearestLineInOurs": "if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))",
+          "similarity": 0.89
         },
         {
-          "line": 20,
-          "recoveredMember": "Update",
-          "recovered": "localEulerAngles.z += vector.x;",
-          "nearestLineInOurs": "localEulerAngles.z = _aim.Yaw;",
-          "similarity": 0.75
+          "line": 274,
+          "recoveredMember": "AmmoChanged",
+          "recovered": "private void AmmoChanged()",
+          "nearestLineInOurs": "protected void AmmoChanged()",
+          "similarity": 0.85
         },
         {
-          "line": 23,
-          "recoveredMember": "Update",
-          "recovered": "localEulerAngles2.x = Mathf.Clamp(Mathf.DeltaAngle(0f, localEulerAngles2.x - vector.y), -40f, 15f);",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
+          "line": 281,
+          "recoveredMember": "AmmoChanged",
+          "recovered": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && (configuration.forceAutoReload || OptionsUi.GetOptions().autoReload))",
+          "nearestLineInOurs": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)",
+          "similarity": 0.7
         },
         {
-          "line": 31,
-          "recoveredMember": "Unholster",
-          "recovered": "if (!user.aiControlled)",
-          "nearestLineInOurs": "if (user.aiControlled)",
+          "line": 347,
+          "recoveredMember": "Shoot",
+          "recovered": "if (!user.aiControlled && configuration.casing != null)",
+          "nearestLineInOurs": "if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)",
+          "similarity": 0.72
+        },
+        {
+          "line": 351,
+          "recoveredMember": "Shoot",
+          "recovered": "if (!configuration.auto)",
+          "nearestLineInOurs": "if (configuration.auto)",
           "similarity": 0.98
         },
         {
-          "line": 42,
-          "recoveredMember": "Holster",
-          "recovered": "if (!user.aiControlled)",
-          "nearestLineInOurs": "if (user.aiControlled)",
-          "similarity": 0.98
+          "line": 355,
+          "recoveredMember": "Shoot",
+          "recovered": "else if (ammo == 0)",
+          "nearestLineInOurs": "if (ammo != -1)",
+          "similarity": 0.71
         },
         {
-          "line": 48,
-          "recoveredMember": "GetInput",
-          "recovered": "private Vector2 GetInput()",
-          "nearestLineInOurs": "protected virtual Vector2 GetInput()",
-          "similarity": 0.74
+          "line": 359,
+          "recoveredMember": "Shoot",
+          "recovered": "if (!user.aiControlled && reverbAudio != null)",
+          "nearestLineInOurs": "if (user != null && !user.aiControlled && reverbAudio != null)",
+          "similarity": 0.85
         },
         {
-          "line": 54,
-          "recoveredMember": "GetInput",
-          "recovered": "if (!user.aiControlled)",
-          "nearestLineInOurs": "if (user.aiControlled)",
-          "similarity": 0.98
-        },
-        {
-          "line": 56,
-          "recoveredMember": "GetInput",
-          "recovered": "return new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
-          "nearestLineInOurs": "_pendingMouseAim += new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
-          "similarity": 0.94
-        },
-        {
-          "line": 59,
-          "recoveredMember": "GetInput",
-          "recovered": "return new Vector2(vector.x * 5f, vector.y * 5f);",
-          "nearestLineInOurs": "return new Vector2(vector.x * 5f, vector.y * 5f) / LEGACY_STEP_DEG;",
-          "similarity": 0.84
+          "line": 388,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, configuration.muzzle.position, rotation)).GetComponent<Projectile>();",
+          "nearestLineInOurs": "Projectile projectile = configuration.projectilePrefab.GetComponent<Projectile>();",
+          "similarity": 0.61
         }
       ]
     },
@@ -3658,79 +4467,79 @@
         }
       ]
     },
-    "Weapon.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Weapon.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs",
+    "OptionsUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/OptionsUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/OptionsUi.cs",
       "survivors": 10,
-      "outrightDeletions": 1,
+      "outrightDeletions": 3,
       "candidates": [
         {
-          "line": 5,
+          "line": 73,
           "recoveredMember": null,
-          "recovered": "public class Weapon : MonoBehaviour",
-          "nearestLineInOurs": "public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon",
-          "similarity": 0.61
+          "recovered": "if (IsFastQuality())",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
-          "line": 178,
-          "recoveredMember": "Update",
-          "recovered": "if (!stopFireLoop.Done())",
-          "nearestLineInOurs": "if (stopFireLoop.TrueDone())",
-          "similarity": 0.91
+          "line": 75,
+          "recoveredMember": null,
+          "recovered": "options.vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat(\"fast vegetation density\", 0f));",
+          "nearestLineInOurs": "options.vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat(VegetationRules.DensityKey, VegetationRules.DefaultDensity));",
+          "similarity": 0.76
         },
         {
-          "line": 197,
-          "recoveredMember": "Fire",
-          "recovered": "if (configuration.auto && (!audio.isPlaying || !stopFireLoop.Done()))",
-          "nearestLineInOurs": "if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))",
-          "similarity": 0.89
+          "line": 79,
+          "recoveredMember": null,
+          "recovered": "options.vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat(\"vegetation density\", 0.5f));",
+          "nearestLineInOurs": "options.vegetationDensity = Mathf.Clamp01(PlayerPrefs.GetFloat(VegetationRules.DensityKey, VegetationRules.DefaultDensity));",
+          "similarity": 0.78
         },
         {
-          "line": 274,
-          "recoveredMember": "AmmoChanged",
-          "recovered": "private void AmmoChanged()",
-          "nearestLineInOurs": "protected void AmmoChanged()",
-          "similarity": 0.85
+          "line": 81,
+          "recoveredMember": null,
+          "recovered": "options.vegetationDistance = Mathf.Clamp01(PlayerPrefs.GetFloat(\"vegetation distance\", 0.7f));",
+          "nearestLineInOurs": "options.vegetationDistance = Mathf.Clamp01(PlayerPrefs.GetFloat(VegetationRules.DistanceKey, VegetationRules.DefaultDistance));",
+          "similarity": 0.78
         },
         {
-          "line": 281,
-          "recoveredMember": "AmmoChanged",
-          "recovered": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && (configuration.forceAutoReload || OptionsUi.GetOptions().autoReload))",
-          "nearestLineInOurs": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)",
-          "similarity": 0.7
+          "line": 103,
+          "recoveredMember": null,
+          "recovered": "if (IsFastQuality())",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
-          "line": 347,
-          "recoveredMember": "Shoot",
-          "recovered": "if (!user.aiControlled && configuration.casing != null)",
-          "nearestLineInOurs": "if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)",
-          "similarity": 0.72
+          "line": 105,
+          "recoveredMember": null,
+          "recovered": "PlayerPrefs.SetFloat(\"fast vegetation density\", instance.vegetationDensity.value);",
+          "nearestLineInOurs": "PlayerPrefs.SetFloat(VegetationRules.DensityKey, instance.vegetationDensity.value);",
+          "similarity": 0.87
         },
         {
-          "line": 351,
-          "recoveredMember": "Shoot",
-          "recovered": "if (!configuration.auto)",
-          "nearestLineInOurs": "if (configuration.auto)",
-          "similarity": 0.98
+          "line": 109,
+          "recoveredMember": null,
+          "recovered": "PlayerPrefs.SetFloat(\"vegetation density\", instance.vegetationDensity.value);",
+          "nearestLineInOurs": "PlayerPrefs.SetFloat(VegetationRules.DensityKey, instance.vegetationDensity.value);",
+          "similarity": 0.9
         },
         {
-          "line": 355,
-          "recoveredMember": "Shoot",
-          "recovered": "else if (ammo == 0)",
-          "nearestLineInOurs": "if (ammo != -1)",
-          "similarity": 0.71
+          "line": 111,
+          "recoveredMember": null,
+          "recovered": "PlayerPrefs.SetFloat(\"vegetation distance\", instance.vegetationDistance.value);",
+          "nearestLineInOurs": "PlayerPrefs.SetFloat(VegetationRules.DistanceKey, instance.vegetationDistance.value);",
+          "similarity": 0.9
         },
         {
-          "line": 359,
-          "recoveredMember": "Shoot",
-          "recovered": "if (!user.aiControlled && reverbAudio != null)",
-          "nearestLineInOurs": "if (user != null && !user.aiControlled && reverbAudio != null)",
-          "similarity": 0.85
+          "line": 170,
+          "recoveredMember": "IsFastQuality",
+          "recovered": "public static bool IsFastQuality()",
+          "nearestLineInOurs": "public static bool IsOpen()",
+          "similarity": 0.75
         },
         {
-          "line": 388,
-          "recoveredMember": "SpawnProjectile",
-          "recovered": "Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, configuration.muzzle.position, rotation)).GetComponent<Projectile>();",
+          "line": 172,
+          "recoveredMember": "IsFastQuality",
+          "recovered": "return QualitySettings.GetQualityLevel() <= 1;",
           "nearestLineInOurs": null,
           "similarity": 0.0
         }
@@ -3804,6 +4613,77 @@
           "recovered": "Gizmos.DrawLine(vector, (Vector3)graphNode.position);",
           "nearestLineInOurs": "Gizmos.DrawLine(from, (Vector3)graphNode.position);",
           "similarity": 0.92
+        }
+      ]
+    },
+    "Projectile.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Projectile.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs",
+      "survivors": 9,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 4,
+          "recoveredMember": null,
+          "recovered": "public class Projectile : MonoBehaviour",
+          "nearestLineInOurs": "public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectileBody",
+          "similarity": 0.63
+        },
+        {
+          "line": 71,
+          "recoveredMember": "Update",
+          "recovered": "velocity += Physics.gravity * Time.deltaTime;",
+          "nearestLineInOurs": "velocity += gravity * dt;",
+          "similarity": 0.71
+        },
+        {
+          "line": 72,
+          "recoveredMember": "Update",
+          "recovered": "Vector3 delta = velocity * Time.deltaTime;",
+          "nearestLineInOurs": "Vector3 delta = velocity * dt + gravity * (0.5f * dt * dt);",
+          "similarity": 0.64
+        },
+        {
+          "line": 78,
+          "recoveredMember": "Update",
+          "recovered": "Vector3 vector = ActorManager.instance.player.Position();",
+          "nearestLineInOurs": "Vector3 vector = player.Position();",
+          "similarity": 0.76
+        },
+        {
+          "line": 97,
+          "recoveredMember": "Travel",
+          "recovered": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude * 2f, -2049) && Hit(ray, hitInfo))",
+          "nearestLineInOurs": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude, -2049) && Hit(ray, hitInfo))",
+          "similarity": 0.98
+        },
+        {
+          "line": 125,
+          "recoveredMember": "Hit",
+          "recovered": "if (Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer))",
+          "nearestLineInOurs": "Hitbox component = Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer)",
+          "similarity": 0.85
+        },
+        {
+          "line": 127,
+          "recoveredMember": "Hit",
+          "recovered": "Hitbox component = hitInfo.collider.GetComponent<Hitbox>();",
+          "nearestLineInOurs": "? hitInfo.collider.GetComponent<Hitbox>()",
+          "similarity": 0.8
+        },
+        {
+          "line": 132,
+          "recoveredMember": "Hit",
+          "recovered": "else if (component.ProjectileHit(this, hitInfo.point) && !source.aiControlled)",
+          "nearestLineInOurs": "&& component.ProjectileHit(this, hitInfo.point)",
+          "similarity": 0.72
+        },
+        {
+          "line": 142,
+          "recoveredMember": "Hit",
+          "recovered": "if (configuration.makesFlybySound && travellingTowardsPlayer && Vector3.Distance(hitInfo.point, ActorManager.instance.player.Position()) < 15f)",
+          "nearestLineInOurs": "&& Vector3.Distance(hitInfo.point, ActorManager.Player.Position()) < 15f)",
+          "similarity": 0.66
         }
       ]
     },
@@ -3935,70 +4815,6 @@
         }
       ]
     },
-    "Projectile.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Projectile.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs",
-      "survivors": 8,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 4,
-          "recoveredMember": null,
-          "recovered": "public class Projectile : MonoBehaviour",
-          "nearestLineInOurs": "public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectileBody",
-          "similarity": 0.63
-        },
-        {
-          "line": 72,
-          "recoveredMember": "Update",
-          "recovered": "Vector3 delta = velocity * Time.deltaTime;",
-          "nearestLineInOurs": "Vector3 delta = velocity * Time.deltaTime",
-          "similarity": 0.99
-        },
-        {
-          "line": 78,
-          "recoveredMember": "Update",
-          "recovered": "Vector3 vector = ActorManager.instance.player.Position();",
-          "nearestLineInOurs": "Vector3 vector = player.Position();",
-          "similarity": 0.76
-        },
-        {
-          "line": 97,
-          "recoveredMember": "Travel",
-          "recovered": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude * 2f, -2049) && Hit(ray, hitInfo))",
-          "nearestLineInOurs": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude, -2049) && Hit(ray, hitInfo))",
-          "similarity": 0.98
-        },
-        {
-          "line": 125,
-          "recoveredMember": "Hit",
-          "recovered": "if (Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer))",
-          "nearestLineInOurs": "Hitbox component = Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer)",
-          "similarity": 0.85
-        },
-        {
-          "line": 127,
-          "recoveredMember": "Hit",
-          "recovered": "Hitbox component = hitInfo.collider.GetComponent<Hitbox>();",
-          "nearestLineInOurs": "? hitInfo.collider.GetComponent<Hitbox>()",
-          "similarity": 0.8
-        },
-        {
-          "line": 132,
-          "recoveredMember": "Hit",
-          "recovered": "else if (component.ProjectileHit(this, hitInfo.point) && !source.aiControlled)",
-          "nearestLineInOurs": "&& component.ProjectileHit(this, hitInfo.point)",
-          "similarity": 0.72
-        },
-        {
-          "line": 142,
-          "recoveredMember": "Hit",
-          "recovered": "if (configuration.makesFlybySound && travellingTowardsPlayer && Vector3.Distance(hitInfo.point, ActorManager.instance.player.Position()) < 15f)",
-          "nearestLineInOurs": "&& Vector3.Distance(hitInfo.point, ActorManager.Player.Position()) < 15f)",
-          "similarity": 0.66
-        }
-      ]
-    },
     "ExplodingProjectile.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/ExplodingProjectile.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ExplodingProjectile.cs",
@@ -4110,6 +4926,113 @@
           "recovered": "return spawnpointContainer.GetChild(Random.Range(0, childCount)).position;",
           "nearestLineInOurs": "return SnappedContainerChildPosition(spawnpointContainer.GetChild(Random.Range(0, childCount)));",
           "similarity": 0.76
+        }
+      ]
+    },
+    "Squad.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Squad.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Squad.cs",
+      "survivors": 7,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 64,
+          "recoveredMember": "DropMember",
+          "recovered": "squadVehicle.DropSeatClaim();",
+          "nearestLineInOurs": "squadVehicle.DropSeatClaim(a != null ? a.actor : null);",
+          "similarity": 0.69
+        },
+        {
+          "line": 161,
+          "recoveredMember": "MoveTo",
+          "recovered": "member.Goto(point + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f)));",
+          "nearestLineInOurs": "member.Goto(point + Vector3.Scale(Random.insideUnitSphere, new Vector3(spread, 0f, spread)));",
+          "similarity": 0.92
+        },
+        {
+          "line": 231,
+          "recoveredMember": "SetAlreadyInVehicle",
+          "recovered": "squadVehicle.ClaimSeat();",
+          "nearestLineInOurs": "squadVehicle.ClaimSeat(member.actor);",
+          "similarity": 0.81
+        },
+        {
+          "line": 248,
+          "recoveredMember": "EnterVehicle",
+          "recovered": "vehicle.ClaimSeat();",
+          "nearestLineInOurs": "squadVehicle.ClaimSeat(member.actor);",
+          "similarity": 0.67
+        },
+        {
+          "line": 292,
+          "recoveredMember": "HasVehicle",
+          "recovered": "return squadVehicle != null;",
+          "nearestLineInOurs": "squadVehicle = null;",
+          "similarity": 0.83
+        },
+        {
+          "line": 370,
+          "recoveredMember": "UpdateVehicleStatus",
+          "recovered": "SplitSquad(list);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 375,
+          "recoveredMember": "SplitSquad",
+          "recovered": "public Squad SplitSquad(List<AiActorController> leavingMembers)",
+          "nearestLineInOurs": "public Squad SplitSquad(List<AiActorController> leavingMembers, SplitReason reason)",
+          "similarity": 0.86
+        }
+      ]
+    },
+    "Ammobox.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Ammobox.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Ammobox.cs",
+      "survivors": 6,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 10,
+          "recoveredMember": null,
+          "recovered": "private const float RESUPPLY_RANGE = 6f;",
+          "nearestLineInOurs": "private const float RESUPPLY_RATE = 3f;",
+          "similarity": 0.94
+        },
+        {
+          "line": 15,
+          "recoveredMember": "Awake",
+          "recovered": "component.velocity = base.transform.forward * configuration.speed;",
+          "nearestLineInOurs": "component.linearVelocity = base.transform.forward * configuration.speed;",
+          "similarity": 0.94
+        },
+        {
+          "line": 16,
+          "recoveredMember": "Awake",
+          "recovered": "InvokeRepeating(\"Resupply\", 3f, 3f);",
+          "nearestLineInOurs": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
+          "similarity": 0.86
+        },
+        {
+          "line": 21,
+          "recoveredMember": "Resupply",
+          "recovered": "List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, 6f);",
+          "nearestLineInOurs": "ActorManager.AliveActorsInRange(base.transform.position, RESUPPLY_RANGE, _nearby);",
+          "similarity": 0.73
+        },
+        {
+          "line": 22,
+          "recoveredMember": "Resupply",
+          "recovered": "foreach (Actor item in list)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 24,
+          "recoveredMember": "Resupply",
+          "recovered": "item.ResupplyAmmo();",
+          "nearestLineInOurs": "_nearby[i].ResupplyAmmo();",
+          "similarity": 0.74
         }
       ]
     },
@@ -4263,53 +5186,53 @@
         }
       ]
     },
-    "Javelin.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Javelin.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Javelin.cs",
+    "Medipack.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Medipack.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Medipack.cs",
       "survivors": 6,
-      "outrightDeletions": 0,
+      "outrightDeletions": 1,
       "candidates": [
         {
-          "line": 53,
-          "recoveredMember": "SpawnProjectile",
-          "recovered": "Ray ray = new Ray(pointSampler.position, pointSampler.forward);",
-          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
-          "similarity": 0.77
+          "line": 10,
+          "recoveredMember": null,
+          "recovered": "private const float RESUPPLY_RANGE = 6f;",
+          "nearestLineInOurs": "private const float RESUPPLY_RATE = 3f;",
+          "similarity": 0.94
         },
         {
-          "line": 182,
-          "recoveredMember": "Fire",
-          "recovered": "Ray ray = new Ray(pointSampler.position, pointSampler.forward);",
-          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
-          "similarity": 0.77
+          "line": 17,
+          "recoveredMember": "Awake",
+          "recovered": "component.velocity = base.transform.forward * configuration.speed;",
+          "nearestLineInOurs": "component.linearVelocity = base.transform.forward * configuration.speed;",
+          "similarity": 0.94
         },
         {
-          "line": 207,
-          "recoveredMember": "FindTarget",
-          "recovered": "Vector3 direction = item.transform.position - base.transform.position;",
-          "nearestLineInOurs": "Vector3 direction = item.transform.position - SightPosition();",
-          "similarity": 0.83
+          "line": 18,
+          "recoveredMember": "Awake",
+          "recovered": "InvokeRepeating(\"Resupply\", 3f, 3f);",
+          "nearestLineInOurs": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
+          "similarity": 0.86
         },
         {
-          "line": 210,
-          "recoveredMember": "FindTarget",
-          "recovered": "Ray ray = new Ray(MuzzlePosition(), direction);",
-          "nearestLineInOurs": "Ray ray = new Ray(LineOfSightOrigin(), direction);",
-          "similarity": 0.78
-        },
-        {
-          "line": 222,
-          "recoveredMember": "IsInFov",
-          "recovered": "return Vector3.Dot((point - base.transform.position).normalized, pointSampler.forward) > 0.99f;",
-          "nearestLineInOurs": "return Vector3.Dot((point - SightPosition()).normalized, SampleForward()) > 0.99f;",
-          "similarity": 0.81
-        },
-        {
-          "line": 244,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "list.Sort((Vehicle x, Vehicle y) => (isEnemy[x] != isEnemy[y]) ? isEnemy[y].CompareTo(isEnemy[x]) : Vector3.Distance(base.transform.position, x.transform.position).CompareTo(Vector3.Distance(base.transform.position, y.transform.position)));",
-          "nearestLineInOurs": "list.Sort((Vehicle x, Vehicle y) => (isEnemy[x] != isEnemy[y]) ? isEnemy[y].CompareTo(isEnemy[x]) : Vector3.Distance(sight, x.transform.position).CompareTo(Vector3.Distance(sight, y.transform.position)));",
+          "line": 23,
+          "recoveredMember": "Resupply",
+          "recovered": "List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, 6f);",
+          "nearestLineInOurs": "ActorManager.AliveActorsInRange(base.transform.position, RESUPPLY_RANGE, _nearby);",
           "similarity": 0.73
+        },
+        {
+          "line": 24,
+          "recoveredMember": "Resupply",
+          "recovered": "foreach (Actor item in list)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 26,
+          "recoveredMember": "Resupply",
+          "recovered": "if (item.ResupplyHealth())",
+          "nearestLineInOurs": "if (_nearby[i].ResupplyHealth())",
+          "similarity": 0.79
         }
       ]
     },
@@ -4360,99 +5283,6 @@
           "recovered": "list2[index] = vector - zero;",
           "nearestLineInOurs": "list3[index2] = vector - zero;",
           "similarity": 0.95
-        }
-      ]
-    },
-    "Squad.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Squad.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Squad.cs",
-      "survivors": 6,
-      "outrightDeletions": 2,
-      "candidates": [
-        {
-          "line": 64,
-          "recoveredMember": "DropMember",
-          "recovered": "squadVehicle.DropSeatClaim();",
-          "nearestLineInOurs": "squadVehicle.DropSeatClaim(a != null ? a.actor : null);",
-          "similarity": 0.69
-        },
-        {
-          "line": 231,
-          "recoveredMember": "SetAlreadyInVehicle",
-          "recovered": "squadVehicle.ClaimSeat();",
-          "nearestLineInOurs": "squadVehicle = null;",
-          "similarity": 0.62
-        },
-        {
-          "line": 248,
-          "recoveredMember": "EnterVehicle",
-          "recovered": "vehicle.ClaimSeat();",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 292,
-          "recoveredMember": "HasVehicle",
-          "recovered": "return squadVehicle != null;",
-          "nearestLineInOurs": "squadVehicle = null;",
-          "similarity": 0.83
-        },
-        {
-          "line": 370,
-          "recoveredMember": "UpdateVehicleStatus",
-          "recovered": "SplitSquad(list);",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 375,
-          "recoveredMember": "SplitSquad",
-          "recovered": "public Squad SplitSquad(List<AiActorController> leavingMembers)",
-          "nearestLineInOurs": "public Squad SplitSquad(List<AiActorController> leavingMembers, SplitReason reason)",
-          "similarity": 0.86
-        }
-      ]
-    },
-    "Ammobox.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Ammobox.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Ammobox.cs",
-      "survivors": 5,
-      "outrightDeletions": 1,
-      "candidates": [
-        {
-          "line": 15,
-          "recoveredMember": "Awake",
-          "recovered": "component.velocity = base.transform.forward * configuration.speed;",
-          "nearestLineInOurs": "component.linearVelocity = base.transform.forward * configuration.speed;",
-          "similarity": 0.94
-        },
-        {
-          "line": 16,
-          "recoveredMember": "Awake",
-          "recovered": "InvokeRepeating(\"Resupply\", 3f, 3f);",
-          "nearestLineInOurs": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
-          "similarity": 0.86
-        },
-        {
-          "line": 21,
-          "recoveredMember": "Resupply",
-          "recovered": "List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, 6f);",
-          "nearestLineInOurs": "ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);",
-          "similarity": 0.81
-        },
-        {
-          "line": 22,
-          "recoveredMember": "Resupply",
-          "recovered": "foreach (Actor item in list)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 24,
-          "recoveredMember": "Resupply",
-          "recovered": "item.ResupplyAmmo();",
-          "nearestLineInOurs": "_nearby[i].ResupplyAmmo();",
-          "similarity": 0.74
         }
       ]
     },
@@ -4542,6 +5372,49 @@
         }
       ]
     },
+    "DetailObjectQuality.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/DetailObjectQuality.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/DetailObjectQuality.cs",
+      "survivors": 5,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 23,
+          "recoveredMember": "ApplyQuality",
+          "recovered": "int qualityLevel = QualitySettings.GetQualityLevel();",
+          "nearestLineInOurs": "scaledLevel = QualitySettings.GetQualityLevel();",
+          "similarity": 0.87
+        },
+        {
+          "line": 24,
+          "recoveredMember": "ApplyQuality",
+          "recovered": "float num = Mathf.Clamp01(OptionsUi.GetOptions().vegetationDensity);",
+          "nearestLineInOurs": "float density = Mathf.Clamp01(OptionsUi.GetOptions().vegetationDensity);",
+          "similarity": 0.94
+        },
+        {
+          "line": 25,
+          "recoveredMember": "ApplyQuality",
+          "recovered": "component.drawTreesAndFoliage = num >= 0.01f;",
+          "nearestLineInOurs": "component.drawTreesAndFoliage = true;",
+          "similarity": 0.84
+        },
+        {
+          "line": 26,
+          "recoveredMember": "ApplyQuality",
+          "recovered": "component.detailObjectDistance = OptionsUi.GetOptions().vegetationDistance * maxDistance;",
+          "nearestLineInOurs": "component.detailObjectDistance = distance * maxDistance;",
+          "similarity": 0.76
+        },
+        {
+          "line": 27,
+          "recoveredMember": "ApplyQuality",
+          "recovered": "component.detailObjectDensity = num * maxDensity;",
+          "nearestLineInOurs": "component.detailObjectDensity = density * maxDensity;",
+          "similarity": 0.92
+        }
+      ]
+    },
     "GridNode.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/GridNode.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/GridNode.cs",
@@ -4585,89 +5458,46 @@
         }
       ]
     },
-    "Medipack.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Medipack.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Medipack.cs",
+    "ScopedWeapon.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ScopedWeapon.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ScopedWeapon.cs",
       "survivors": 5,
-      "outrightDeletions": 1,
+      "outrightDeletions": 3,
       "candidates": [
         {
-          "line": 17,
-          "recoveredMember": "Awake",
-          "recovered": "component.velocity = base.transform.forward * configuration.speed;",
-          "nearestLineInOurs": "component.linearVelocity = base.transform.forward * configuration.speed;",
-          "similarity": 0.94
+          "line": 73,
+          "recoveredMember": "OnGUI",
+          "recovered": "private void OnGUI()",
+          "nearestLineInOurs": "private void EnsureBlackout()",
+          "similarity": 0.65
         },
         {
-          "line": 18,
-          "recoveredMember": "Awake",
-          "recovered": "InvokeRepeating(\"Resupply\", 3f, 3f);",
-          "nearestLineInOurs": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
-          "similarity": 0.86
-        },
-        {
-          "line": 23,
-          "recoveredMember": "Resupply",
-          "recovered": "List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, 6f);",
-          "nearestLineInOurs": "ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);",
-          "similarity": 0.81
-        },
-        {
-          "line": 24,
-          "recoveredMember": "Resupply",
-          "recovered": "foreach (Actor item in list)",
+          "line": 77,
+          "recoveredMember": "OnGUI",
+          "recovered": "Color black = Color.black;",
           "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
-          "line": 26,
-          "recoveredMember": "Resupply",
-          "recovered": "if (item.ResupplyHealth())",
-          "nearestLineInOurs": "if (_nearby[i].ResupplyHealth())",
-          "similarity": 0.79
-        }
-      ]
-    },
-    "TimeOfDay.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/TimeOfDay.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/TimeOfDay.cs",
-      "survivors": 5,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 70,
-          "recoveredMember": "ApplyDay",
-          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(true);",
-          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(true);",
-          "similarity": 0.96
+          "line": 78,
+          "recoveredMember": "OnGUI",
+          "recovered": "black.a = Mathf.Clamp01(4f - 4f * blackoutAction.Ratio());",
+          "nearestLineInOurs": "return Mathf.Clamp01(4f - 4f * blackoutAction.Ratio());",
+          "similarity": 0.86
         },
         {
-          "line": 71,
-          "recoveredMember": "ApplyDay",
-          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(false);",
-          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(false);",
-          "similarity": 0.96
+          "line": 79,
+          "recoveredMember": "OnGUI",
+          "recovered": "GUI.color = black;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         },
         {
-          "line": 84,
-          "recoveredMember": "ApplyNight",
-          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(false);",
-          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(false);",
-          "similarity": 0.96
-        },
-        {
-          "line": 85,
-          "recoveredMember": "ApplyNight",
-          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(true);",
-          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(true);",
-          "similarity": 0.96
-        },
-        {
-          "line": 117,
-          "recoveredMember": "BlendAtmosphereColor",
-          "recovered": "RenderSettings.skybox.SetColor(\"_SkyTint\", Color.Lerp(atmosphere.skyboxMaterial.GetColor(\"_SkyTint\"), target, amount));",
-          "nearestLineInOurs": "RenderSettings.skybox.SetColor(tint, Color.Lerp(atmosphere.skyboxMaterial.GetColor(tint), target, amount));",
-          "similarity": 0.93
+          "line": 80,
+          "recoveredMember": "OnGUI",
+          "recovered": "GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), blackoutTexture);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
         }
       ]
     },
@@ -4812,6 +5642,42 @@
           "recovered": "vector2 = vector3;",
           "nearestLineInOurs": "from = vector2;",
           "similarity": 0.67
+        }
+      ]
+    },
+    "Path.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/Path.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/Path.cs",
+      "survivors": 4,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 256,
+          "recoveredMember": null,
+          "recovered": "if (AstarPath.isEditor || AstarPath.active.logPathResults != PathLog.None)",
+          "nearestLineInOurs": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
+          "similarity": 0.91
+        },
+        {
+          "line": 260,
+          "recoveredMember": null,
+          "recovered": "if (AstarPath.active.logPathResults != PathLog.None && AstarPath.active.logPathResults != PathLog.InGame)",
+          "nearestLineInOurs": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
+          "similarity": 0.64
+        },
+        {
+          "line": 262,
+          "recoveredMember": null,
+          "recovered": "Debug.LogWarning(msg);",
+          "nearestLineInOurs": "Debug.LogError(msg);",
+          "similarity": 0.76
+        },
+        {
+          "line": 275,
+          "recoveredMember": null,
+          "recovered": "if (AstarPath.isEditor || AstarPath.active.logPathResults != PathLog.None)",
+          "nearestLineInOurs": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
+          "similarity": 0.91
         }
       ]
     },
@@ -5097,32 +5963,32 @@
         }
       ]
     },
-    "Path.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/Path.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/Path.cs",
+    "MinimapCamera.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/MinimapCamera.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MinimapCamera.cs",
       "survivors": 3,
       "outrightDeletions": 0,
       "candidates": [
         {
-          "line": 256,
+          "line": 6,
           "recoveredMember": null,
-          "recovered": "if (AstarPath.isEditor || AstarPath.active.logPathResults != PathLog.None)",
-          "nearestLineInOurs": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
-          "similarity": 0.91
+          "recovered": "private const int RESOLUTION = 1024;",
+          "nearestLineInOurs": "private const int RESOLUTION = 2048;",
+          "similarity": 0.94
         },
         {
-          "line": 260,
-          "recoveredMember": null,
-          "recovered": "if (AstarPath.active.logPathResults != PathLog.None && AstarPath.active.logPathResults != PathLog.InGame)",
-          "nearestLineInOurs": "if (AstarPath.active.logPathResults != 0 && AstarPath.active.logPathResults != PathLog.InGame)",
-          "similarity": 0.93
+          "line": 20,
+          "recoveredMember": "Awake",
+          "recovered": "minimapRenderTexture = new RenderTexture(1024, 1024, 16);",
+          "nearestLineInOurs": "minimapRenderTexture = new RenderTexture(RESOLUTION, RESOLUTION, 16);",
+          "similarity": 0.78
         },
         {
-          "line": 275,
-          "recoveredMember": null,
-          "recovered": "if (AstarPath.isEditor || AstarPath.active.logPathResults != PathLog.None)",
-          "nearestLineInOurs": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
-          "similarity": 0.91
+          "line": 40,
+          "recoveredMember": "Minimap",
+          "recovered": "return minimapRenderTexture;",
+          "nearestLineInOurs": "public RenderTexture minimapRenderTexture;",
+          "similarity": 0.77
         }
       ]
     },
@@ -5279,28 +6145,6 @@
         }
       ]
     },
-    "JavelinMissile.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/JavelinMissile.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/JavelinMissile.cs",
-      "survivors": 2,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 47,
-          "recoveredMember": "Start",
-          "recovered": "velocity = base.transform.forward * ejectSpeed + source.Velocity() * 0.9f;",
-          "nearestLineInOurs": "? base.transform.forward * ejectSpeed + source.Velocity() * 0.9f",
-          "similarity": 0.91
-        },
-        {
-          "line": 58,
-          "recoveredMember": "Update",
-          "recovered": "if (!thrustEnabled)",
-          "nearestLineInOurs": "private bool thrustEnabled;",
-          "similarity": 0.65
-        }
-      ]
-    },
     "LevelGridNode.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/LevelGridNode.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/LevelGridNode.cs",
@@ -5320,28 +6164,6 @@
           "recovered": "gridFlags = (ushort)((gridFlags & -513) | (value ? 512 : 0));",
           "nearestLineInOurs": "gridFlags = (ushort)((gridFlags & 0xFFFFFDFFu) | (value ? 512u : 0u));",
           "similarity": 0.87
-        }
-      ]
-    },
-    "MinimapCamera.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/MinimapCamera.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MinimapCamera.cs",
-      "survivors": 2,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 6,
-          "recoveredMember": null,
-          "recovered": "private const int RESOLUTION = 1024;",
-          "nearestLineInOurs": "private const int RESOLUTION = 2048;",
-          "similarity": 0.94
-        },
-        {
-          "line": 20,
-          "recoveredMember": "Awake",
-          "recovered": "minimapRenderTexture = new RenderTexture(1024, 1024, 16);",
-          "nearestLineInOurs": "minimapRenderTexture = new RenderTexture(RESOLUTION, RESOLUTION, 16);",
-          "similarity": 0.78
         }
       ]
     },
@@ -5580,21 +6402,6 @@
           "recovered": "if (base.CompleteState != PathCompleteState.NotCalculated)",
           "nearestLineInOurs": "while (base.CompleteState == PathCompleteState.NotCalculated)",
           "similarity": 0.94
-        }
-      ]
-    },
-    "OptionsUi.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/OptionsUi.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/OptionsUi.cs",
-      "survivors": 1,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 172,
-          "recoveredMember": "IsFastQuality",
-          "recovered": "return QualitySettings.GetQualityLevel() <= 1;",
-          "nearestLineInOurs": "return QualitySettings.GetQualityLevel() <= Ironfront.Net.Unity.GraphicsPresetRules.Low;",
-          "similarity": 0.67
         }
       ]
     },
