@@ -219,6 +219,32 @@ namespace Ironfront.Net.Replication.Tests
         /// (<c>Actor.cs:1213</c>). A bag that banked rounds above the ceiling would let a player
         /// stockpile past what their loadout allows by standing on one.
         /// </summary>
+        /// <summary>
+        /// A soldier must stand within 5 m of a bag to be served: the owner's ruling of 2026-10-06
+        /// ("phải ở gần"), down from the original 6 m. A rise or a fall of this number is a change to
+        /// that ruling, never a re-pin.
+        /// </summary>
+        [Theory]
+        [InlineData(4.5f, true)]
+        [InlineData(5.5f, false)]
+        public void ABagServesOnlyWithinFiveMetres(float feetDistance, bool healed)
+        {
+            (ServerDeployableAuthority authority, RecordingSink sink, _) = Build();
+            sink.SetHealth(NearbyId, 10f);
+
+            authority.Deploy(
+                ProjectileKind.Medipack, OwnerId, Vec3.Zero, Vec3.Zero, 30f, 0);
+
+            HitscanTarget[] actors = { AliveAt(NearbyId, new Vec3(0f, 0f, feetDistance)) };
+            Span<ushort> reAnnounce = stackalloc ushort[8];
+            Span<ushort> expired = stackalloc ushort[8];
+
+            Assert.Equal(5f, ServerDeployableAuthority.ResupplyRange);
+            Assert.Equal(
+                healed ? 1 : 0,
+                authority.Step(ResupplyTicks, actors, reAnnounce, expired).HealsApplied);
+        }
+
         [Fact]
         public void AResupplyClampsToTheAuthoredSpareAmmoCeiling()
         {
