@@ -90,7 +90,10 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Contains("LeaveSeat()", die, StringComparison.Ordinal);
             Assert.Contains("occupant.Damage(200f, 200f", die, StringComparison.Ordinal);
-            Assert.Contains("occupant.Damage(0f, 200f", die, StringComparison.Ordinal);
+
+            // Owner ruling 2026-10-06: an open seat's occupant dies with the vehicle too. The
+            // original only knocked it over, which a networked player's body never is.
+            Assert.DoesNotContain("occupant.Damage(0f, 200f", die, StringComparison.Ordinal);
         }
 
         // ---------------------------------------------- X-55: the backstop

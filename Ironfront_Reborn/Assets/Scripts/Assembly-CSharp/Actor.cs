@@ -118,6 +118,25 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	private Action stopFallAction = new Action(0.5f);
 
+	/// <summary>
+	/// Whether the ragdoll this body is in is a fall of its own -- off an edge, out of a seat in
+	/// the air -- whose landing costs health (<see cref="TrackRagdollFall"/>). Not a body a blow
+	/// knocked over: what threw it already hurt it.
+	/// </summary>
+	private bool fallDamageArmed;
+
+	/// <summary>The fastest the falling ragdoll has gone down lately, metres a second.</summary>
+	private float fallPeakSpeed;
+
+	/// <summary>When <see cref="fallPeakSpeed"/> was reached.</summary>
+	private float fallPeakTime;
+
+	/// <summary>
+	/// Seconds within which a fall must lose half its downward speed to count as hitting
+	/// something. Any real impact stops a body far faster; a slide that slows down does not.
+	/// </summary>
+	private const float FallImpactSeconds = 0.25f;
+
 	private Action getupAction = new Action(2f);
 
 	private Action highlightAction = new Action(4f);
@@ -695,6 +714,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			}
 			FallOver();
 		}
+		TrackRagdollFall();
 		UpdateSwimWeapon();
 		if (!hurtAction.Done() && !fallenOver && !dead)
 		{
@@ -1391,6 +1411,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (!ragdoll.IsRagdoll())
 		{
 			FallOver();
+			fallDamageArmed = false;
 			ApplyRigidbodyForce(force);
 		}
 	}
@@ -1411,6 +1432,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (!ragdoll.IsRagdoll())
 		{
 			FallOver();
+			fallDamageArmed = false;
 			ApplyRigidbodyForce(force, bone);
 		}
 	}
@@ -1591,10 +1613,77 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			activeWeapon.SetAiming(false);
 			activeWeapon.gameObject.SetActive(false);
 		}
+		fallDamageArmed = true;
+		fallPeakSpeed = 0f;
+		fallPeakTime = Time.time;
+	}
+
+	/// <summary>
+	/// The fall damage of a ragdoll that fell on its own (<see cref="fallDamageArmed"/>) when it
+	/// hits the ground: <see cref="Ironfront.Net.Replication.Combat.FallDamage"/> of the speed it
+	/// landed at, the same rule a player's landing follows (<c>ServerPlayer.ApplyLanding</c>).
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Owner request 2026-10-06</b>: a soldier leaving a helicopter high up takes fall damage,
+	/// and a high fall kills. A bot leaving a seat in the air, or walking off an edge more than
+	/// 4 m high, falls over (<see cref="UpdateMovement"/>) and falls as a ragdoll; this is where
+	/// that fall ends. A networked player never ragdolls on the server
+	/// (<see cref="IsServerClaimedBody"/>), so this is a bot's, or an offline body's.
+	/// </para>
+	/// <para>
+	/// <b>Every frame, not at the low-quality rate</b>: a landing lasts a few physics steps, and
+	/// a far bot updates five times a second. The impact is a loss of half the downward speed
+	/// within <see cref="FallImpactSeconds"/> of its peak; the peak slides forward as it ages, so
+	/// a slide that slows down gradually never reads as one.
+	/// </para>
+	/// </remarks>
+	private void TrackRagdollFall()
+	{
+		if (!fallDamageArmed)
+		{
+			return;
+		}
+		// Water breaks the fall; a client's health is the server's to write.
+		if (!fallenOver || !ragdoll.IsRagdoll() || inWater || Ironfront.Net.Unity.NetContext.IsClient)
+		{
+			fallDamageArmed = false;
+			return;
+		}
+		float now = Time.time;
+		float speed = -ragdoll.Velocity().y;
+		if (speed >= fallPeakSpeed)
+		{
+			fallPeakSpeed = speed;
+			fallPeakTime = now;
+			return;
+		}
+		if (now - fallPeakTime > FallImpactSeconds)
+		{
+			fallPeakSpeed = speed;
+			fallPeakTime = now;
+			return;
+		}
+		if (speed > fallPeakSpeed * 0.5f)
+		{
+			return;
+		}
+		float landedAt = fallPeakSpeed;
+		fallDamageArmed = false;
+		float damage = Ironfront.Net.Replication.Combat.FallDamage.ForImpact(landedAt);
+		if (damage <= 0f)
+		{
+			return;
+		}
+		using (DeathContext.Fall())
+		{
+			Damage(damage, 0f, true, Position(), Vector3.down, Vector3.zero);
+		}
 	}
 
 	private void GetUp()
 	{
+		fallDamageArmed = false;
 		ragdoll.Animate();
 		controller.GettingUp();
 		getupAction.Start();
@@ -1603,6 +1692,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	private void InstantGetUp()
 	{
+		fallDamageArmed = false;
 		ragdoll.InstantAnimate();
 		controller.GettingUp();
 		controller.EnableInput();
