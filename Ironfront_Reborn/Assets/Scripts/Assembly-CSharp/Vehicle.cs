@@ -1168,26 +1168,26 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 			if (seat.IsOccupied())
 			{
 				Actor occupant = seat.occupant;
-				// A networked client runs this from the snapshot that flags the wreck Dead, and it
-				// only takes its own body out of the seat. What the wreck does to that body is the
-				// server's to say: an enclosed occupant dies with its vehicle (S_DEATH, which fells
-				// this body through LocalPlayerRigBinding.FellBody -- bug 1 of the 2026-09-28
-				// playtest, where the pilot was set down drawing his rifle), and an open-seat
-				// occupant is put down on foot, unhurt, because the server never knocks a player's
-				// body over (Actor.IsServerClaimedBody).
+				// Everybody still aboard when the vehicle goes up dies with it, in an open seat as
+				// much as an enclosed one; whoever got out before it blew lives, since the blast
+				// itself hurts nobody (Explode). Owner request 2026-10-06: "on a motorbike, jeep,
+				// tank or aircraft, if it explodes before you get off you must die; if you jumped
+				// clear in time, you don't". The original killed only an enclosed seat's occupant
+				// (Damage(200, 200)) and only knocked an open seat's over (Damage(0, 200)) -- and a
+				// networked player's body is never knocked over (Actor.IsServerClaimedBody), so a
+				// player riding a jeep or a quad bike walked away from its explosion at full health.
 				//
-				// The open seat used to run the offline Damage(0, 200) here as well, and on a client
-				// that balance hit KNOCKED THE LOCAL BODY OVER: FallOver switched input and the
-				// capsule off, the ragdoll it enabled was lost under the map, and its get-up waits
-				// for the ragdoll to come to rest, so it never came. All three open-seat vehicle
-				// deaths of the 2026-09-30 playtest dropped their driver through the world at 100
-				// HP with no way to respawn, while the server held the body standing beside the
-				// wreck (both clients logged "left vehicle N ... the server has the body on foot",
-				// then an unmoving position until they quit). Actor.DamageAttributed refuses that
-				// knock-over too; this is the call that made it.
+				// A networked client runs this from the snapshot that flags the wreck Dead, and it
+				// only takes its own body out of the seat: the death is the server's to say
+				// (S_DEATH, which fells this body through LocalPlayerRigBinding.FellBody -- bug 1 of
+				// the 2026-09-28 playtest, where the pilot was set down drawing his rifle), so no
+				// weapon is drawn for the moment in between. It must not run the damage itself: on a
+				// client the balance half of it KNOCKED THE LOCAL BODY OVER, and the ragdoll that
+				// enabled was lost under the map with no way to respawn (all three open-seat
+				// vehicle deaths of the 2026-09-30 playtest).
 				if (Ironfront.Net.Unity.NetContext.IsClient)
 				{
-					occupant.LeaveSeat(drawWeapon: !seat.enclosed || drowned);
+					occupant.LeaveSeat(drawWeapon: drowned);
 				}
 				else
 				{
@@ -1199,14 +1199,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 					{
 						using (DeathContext.WentDownWith(base.gameObject))
 						{
-							if (seat.enclosed)
-							{
-								occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
-							}
-							else
-							{
-								occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
-							}
+							occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);
 						}
 					}
 				}
