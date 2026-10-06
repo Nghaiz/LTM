@@ -8,7 +8,7 @@ public class Medipack : Projectile
 
 	private const float RESUPPLY_RATE = 3f;
 
-	private const float RESUPPLY_RANGE = 6f;
+	private const float RESUPPLY_RANGE = Ironfront.Net.Replication.Projectiles.ServerDeployableAuthority.ResupplyRange;
 
 	public float reducedLifetimePerResupply = 5f;
 
@@ -35,7 +35,7 @@ public class Medipack : Projectile
 
 	private void Resupply()
 	{
-		ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);
+		ActorManager.AliveActorsInRange(base.transform.position, RESUPPLY_RANGE, _nearby);
 		for (int i = 0; i < _nearby.Count; i++)
 		{
 			if (_nearby[i].ResupplyHealth())

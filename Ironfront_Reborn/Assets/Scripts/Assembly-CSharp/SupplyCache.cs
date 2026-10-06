@@ -40,22 +40,16 @@ public class SupplyCache : MonoBehaviour
 	public SpawnPoint point;
 
 	/// <summary>
-	/// Metres from the cache a soldier must stand within, measured across the ground (see
-	/// <see cref="Reaches"/>).
-	/// </summary>
-	public float range = 6f;
-
-	/// <summary>
-	/// Metres every cache reaches at least, whatever its authored <see cref="range"/>.
+	/// Metres from the cache's centre a soldier must stand within, measured across the ground (see
+	/// <see cref="Reaches"/>): the one range every ammunition and health source shares.
 	/// </summary>
 	/// <remarks>
 	/// A cache is a module of crates up to 2.9 m from its centre (measured on Forest Lake's 24,
-	/// 2026-10-06), and the 6 m the scenes author was taken from that centre, so a soldier
-	/// standing against the far crate of a stack could be out of reach while touching it. The
-	/// v4.3.0 playtest's "sometimes standing by the ammo or health crate refills nothing" logged
-	/// a friend 6.5 m from a cache's centre for fourteen seconds without a refill.
+	/// 2026-10-06), so 5 m still covers a soldier standing against the far crate of a stack. It
+	/// was 8 m after the v4.3.0 playtest (#553); the owner ruled on 2026-10-06 that a soldier must
+	/// stand close to refill, 5 m and no more, and the scenes' authored 6 m no longer counts.
 	/// </remarks>
-	public const float MinimumReach = 8f;
+	public const float Reach = Ironfront.Net.Replication.Projectiles.ServerDeployableAuthority.ResupplyRange;
 
 	/// <summary>Metres above or below a cache a soldier may stand and still be served: a floor, not a storey.</summary>
 	public const float VerticalReach = 3f;
@@ -188,14 +182,12 @@ public class SupplyCache : MonoBehaviour
 
 	/// <summary>
 	/// Whether a soldier standing at <paramref name="position"/> is served: within
-	/// <see cref="range"/> (and never less than <see cref="MinimumReach"/>) across the ground, on
-	/// roughly the cache's own floor.
+	/// <see cref="Reach"/> across the ground, on roughly the cache's own floor.
 	/// </summary>
 	public bool Reaches(Vector3 position)
 	{
 		Vector3 offset = position - base.transform.position;
-		float reach = Mathf.Max(range, MinimumReach);
-		return Mathf.Abs(offset.y) <= VerticalReach && offset.x * offset.x + offset.z * offset.z <= reach * reach;
+		return Mathf.Abs(offset.y) <= VerticalReach && offset.x * offset.x + offset.z * offset.z <= Reach * Reach;
 	}
 
 	/// <summary>The cache whose reach covers <paramref name="position"/>, nearest first; null when none does.</summary>
@@ -264,6 +256,6 @@ public class SupplyCache : MonoBehaviour
 	private void OnDrawGizmosSelected()
 	{
 		Gizmos.color = kind == SupplyKind.Medical ? Color.red : Color.green;
-		Gizmos.DrawWireSphere(base.transform.position, range);
+		Gizmos.DrawWireSphere(base.transform.position, Reach);
 	}
 }

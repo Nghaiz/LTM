@@ -18,7 +18,7 @@ using UnityEngine;
 public sealed class FieldCrate : MonoBehaviour
 {
 	/// <summary>Metres a soldier must stand within: a bag's range (<c>ServerDeployableAuthority.ResupplyRange</c>).</summary>
-	public const float Range = 6f;
+	public const float Range = Ironfront.Net.Replication.Projectiles.ServerDeployableAuthority.ResupplyRange;
 
 	public SupplyKind kind;
 

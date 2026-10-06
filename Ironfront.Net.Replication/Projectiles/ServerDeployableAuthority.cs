@@ -63,8 +63,15 @@ namespace Ironfront.Net.Replication.Projectiles
     /// </remarks>
     public sealed class ServerDeployableAuthority
     {
-        /// <summary>Metres a deployable resupplies within. <c>Ammobox.RESUPPLY_RANGE</c>.</summary>
-        public const float ResupplyRange = 6f;
+        /// <summary>
+        /// Metres every ammunition or health source resupplies within: a deployed bag, a crate left
+        /// in the field and a flag's supply cache alike.
+        /// </summary>
+        /// <remarks>
+        /// The original <c>Ammobox.RESUPPLY_RANGE</c> was 6 m and the caches reached 8 m; the owner
+        /// ruled on 2026-10-06 that a soldier must stand close to refill: "5 m, not 8".
+        /// </remarks>
+        public const float ResupplyRange = 5f;
 
         /// <summary>Seconds between resupply pulses. <c>Ammobox.RESUPPLY_RATE</c>.</summary>
         public const float ResupplyIntervalSeconds = 3f;

@@ -1187,7 +1187,7 @@ public class Squad
 		// Or a crate left in the field (phase P32), whichever is nearer: it serves both sides.
 		FieldCrate crate = FieldCrate.Nearest(from, ammo, health, SupplyDetourMetres);
 		Component target = cache;
-		float range = cache != null ? cache.range : 0f;
+		float range = cache != null ? SupplyCache.Reach : 0f;
 		if (crate != null && (cache == null || (crate.transform.position - from).sqrMagnitude < (cache.transform.position - from).sqrMagnitude))
 		{
 			target = crate;
