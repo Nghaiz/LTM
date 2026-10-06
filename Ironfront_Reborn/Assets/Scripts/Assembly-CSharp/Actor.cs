@@ -119,23 +119,14 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	private Action stopFallAction = new Action(0.5f);
 
 	/// <summary>
-	/// Whether the ragdoll this body is in is a fall of its own -- off an edge, out of a seat in
-	/// the air -- whose landing costs health (<see cref="TrackRagdollFall"/>). Not a body a blow
-	/// knocked over: what threw it already hurt it.
+	/// Whether the ragdoll this body is in is being watched for hard impacts
+	/// (<see cref="TrackRagdollFall"/>): from the moment it falls or is knocked over until it
+	/// gets up, dies or reaches water.
 	/// </summary>
 	private bool fallDamageArmed;
 
-	/// <summary>The fastest the falling ragdoll has gone down lately, metres a second.</summary>
-	private float fallPeakSpeed;
-
-	/// <summary>When <see cref="fallPeakSpeed"/> was reached.</summary>
-	private float fallPeakTime;
-
-	/// <summary>
-	/// Seconds within which a fall must lose half its downward speed to count as hitting
-	/// something. Any real impact stops a body far faster; a slide that slows down does not.
-	/// </summary>
-	private const float FallImpactSeconds = 0.25f;
+	/// <summary>The impacts of the ragdoll this body is in (<see cref="TrackRagdollFall"/>).</summary>
+	private readonly Ironfront.Net.Replication.Combat.ImpactDetector ragdollImpacts = new Ironfront.Net.Replication.Combat.ImpactDetector();
 
 	private Action getupAction = new Action(2f);
 
@@ -1411,7 +1402,6 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (!ragdoll.IsRagdoll())
 		{
 			FallOver();
-			fallDamageArmed = false;
 			ApplyRigidbodyForce(force);
 		}
 	}
@@ -1432,7 +1422,6 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (!ragdoll.IsRagdoll())
 		{
 			FallOver();
-			fallDamageArmed = false;
 			ApplyRigidbodyForce(force, bone);
 		}
 	}
@@ -1614,28 +1603,31 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			activeWeapon.gameObject.SetActive(false);
 		}
 		fallDamageArmed = true;
-		fallPeakSpeed = 0f;
-		fallPeakTime = Time.time;
+		ragdollImpacts.Reset();
 	}
 
 	/// <summary>
-	/// The fall damage of a ragdoll that fell on its own (<see cref="fallDamageArmed"/>) when it
-	/// hits the ground: <see cref="Ironfront.Net.Replication.Combat.FallDamage"/> of the speed it
-	/// landed at, the same rule a player's landing follows (<c>ServerPlayer.ApplyLanding</c>).
+	/// The impact damage of a ragdoll: whenever it hits the ground or a wall hard, the speed it lost
+	/// (<see cref="Ironfront.Net.Replication.Combat.ImpactDetector"/>) is paid as
+	/// <see cref="Ironfront.Net.Replication.Combat.FallDamage"/> -- nothing from a 3 m fall's
+	/// worth, death from a 20 m fall's.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Owner request 2026-10-06</b>: a soldier leaving a helicopter high up takes fall damage,
-	/// and a high fall kills. A bot leaving a seat in the air, or walking off an edge more than
-	/// 4 m high, falls over (<see cref="UpdateMovement"/>) and falls as a ragdoll; this is where
-	/// that fall ends. A networked player never ragdolls on the server
-	/// (<see cref="IsServerClaimedBody"/>), so this is a bot's, or an offline body's.
+	/// <b>Owner rulings 2026-10-06</b>: a soldier leaving a helicopter high up takes fall damage
+	/// and a high fall kills; and "a free fall from 10 m is not the same as being thrown by a big
+	/// force at high speed -- that must hurt more". So every ragdoll is watched, a fall (a bot
+	/// leaving a seat in the air or walking off an edge more than 4 m high, <see cref="UpdateMovement"/>)
+	/// and a knock-over alike: a bot a blast throws into a wall or flings onto the ground pays for
+	/// the speed it hits at, on top of the blast's own damage, and a bot that merely topples pays
+	/// nothing. A networked player never ragdolls on the server (<see cref="IsServerClaimedBody"/>);
+	/// its falls are <c>ServerPlayer.ApplyLanding</c>'s, by the same scale.
 	/// </para>
 	/// <para>
-	/// <b>Every frame, not at the low-quality rate</b>: a landing lasts a few physics steps, and
-	/// a far bot updates five times a second. The impact is a loss of half the downward speed
-	/// within <see cref="FallImpactSeconds"/> of its peak; the peak slides forward as it ages, so
-	/// a slide that slows down gradually never reads as one.
+	/// <b>Every frame, not at the low-quality rate</b>: an impact lasts a few physics steps, and a
+	/// far bot updates five times a second. Measured on the whole body's centre of mass
+	/// (<see cref="ActiveRaggy.CenterOfMassVelocity"/>) against the physics engine's gravity, the
+	/// one a ragdoll falls under.
 	/// </para>
 	/// </remarks>
 	private void TrackRagdollFall()
@@ -1650,31 +1642,19 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			fallDamageArmed = false;
 			return;
 		}
-		float now = Time.time;
-		float speed = -ragdoll.Velocity().y;
-		if (speed >= fallPeakSpeed)
-		{
-			fallPeakSpeed = speed;
-			fallPeakTime = now;
-			return;
-		}
-		if (now - fallPeakTime > FallImpactSeconds)
-		{
-			fallPeakSpeed = speed;
-			fallPeakTime = now;
-			return;
-		}
-		if (speed > fallPeakSpeed * 0.5f)
-		{
-			return;
-		}
-		float landedAt = fallPeakSpeed;
-		fallDamageArmed = false;
-		float damage = Ironfront.Net.Replication.Combat.FallDamage.ForImpact(landedAt);
+		float gravity = -Physics.gravity.y;
+		Vector3 v = ragdoll.CenterOfMassVelocity();
+		float lost = ragdollImpacts.Observe(
+			new Ironfront.Net.Replication.Movement.Vec3(v.x, v.y, v.z), Time.time,
+			Ironfront.Net.Replication.Combat.FallDamage.SafeImpactSpeed(gravity));
+		float damage = Ironfront.Net.Replication.Combat.FallDamage.ForImpact(lost, gravity);
 		if (damage <= 0f)
 		{
 			return;
 		}
+		// Rare -- a hard landing, not every tumble -- and the only record of why a bot lost
+		// health with nobody shooting at it.
+		Debug.Log($"[fall] {(aiControlled ? "bot" : "player")} {name} (team {team}) hit at {lost:F1} m/s: {damage:F0} damage, {Mathf.Max(0f, health - damage):F0} health left.");
 		using (DeathContext.Fall())
 		{
 			Damage(damage, 0f, true, Position(), Vector3.down, Vector3.zero);

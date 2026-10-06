@@ -8,13 +8,14 @@ namespace Ironfront.Net.Replication.Movement
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The speed comes from the height fallen, not from the body's velocity.</b> A grounded
-    /// body is pulled down at <see cref="MovementCore.StickToGroundForce"/> (10 m/s) so it hugs
-    /// slopes and stairs; step off a 0.5 m kerb and its velocity already reads about 10.4 m/s,
-    /// which would cost a fifth of its health. Under gravity a body that leaves the ground at
-    /// <c>v0</c> upward and lands <c>h</c> metres lower arrives at <c>√(v0² + 2gh)</c>, whatever the
-    /// controller's bookkeeping says, so that is what this computes: from the height of the last
-    /// ground it stood on, and the upward speed it left that ground with (a jump's, or none).
+    /// <b>From the height fallen, not from the body's velocity.</b> A grounded body is pulled
+    /// down at <see cref="MovementCore.StickToGroundForce"/> (10 m/s) so it hugs slopes and
+    /// stairs; step off a 0.5 m kerb and its velocity already reads about 10.4 m/s, the speed of a
+    /// 4.6 m fall. A body that leaves the ground at <c>v0</c> upward and lands <c>h</c> metres lower
+    /// arrives at <c>√(v0² + 2gh)</c>, whatever the controller's bookkeeping says, so that is what
+    /// this reports: from the height of the last ground it stood on, and the upward speed it left
+    /// that ground with (a jump's, or none). A walking body's own run is not counted: it lands on
+    /// its feet and runs on, and only its fall is stopped.
     /// </para>
     /// <para>
     /// <b>Fed once per step with the ground check the movement uses</b>: the server's tick
@@ -57,8 +58,9 @@ namespace Ironfront.Net.Replication.Movement
 
         /// <summary>
         /// One step's observation: whether the body touches the ground, its height, and its
-        /// vertical speed (m/s, up positive). Returns the speed it landed at when this step ends a
-        /// fall, otherwise zero.
+        /// vertical speed (m/s, up positive). Returns the speed it landed at, m/s
+        /// (<see cref="Combat.FallDamage.LandingSpeed"/>), when this step ends a fall, otherwise
+        /// zero.
         /// </summary>
         public float Observe(bool grounded, float y, float verticalSpeed)
         {
@@ -79,22 +81,13 @@ namespace Ironfront.Net.Replication.Movement
                 return 0f;
             }
 
-            float impact = _wasGrounded ? 0f : ImpactSpeed(_originY - y, _takeoffUpSpeed);
+            float landedAt = _wasGrounded
+                ? 0f
+                : Combat.FallDamage.LandingSpeed(_originY - y, _takeoffUpSpeed, -MovementCore.Gravity);
             _originY = y;
             _takeoffUpSpeed = 0f;
             _wasGrounded = true;
-            return impact;
-        }
-
-        /// <summary>
-        /// The speed a body lands at <paramref name="dropMetres"/> below where it left the ground
-        /// with <paramref name="takeoffUpSpeed"/> upward, under the game's gravity
-        /// (<see cref="MovementCore.Gravity"/>).
-        /// </summary>
-        public static float ImpactSpeed(float dropMetres, float takeoffUpSpeed)
-        {
-            float drop = Math.Max(0f, dropMetres);
-            return (float)Math.Sqrt(takeoffUpSpeed * takeoffUpSpeed + 2.0 * -MovementCore.Gravity * drop);
+            return landedAt;
         }
     }
 }
