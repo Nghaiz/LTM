@@ -4,8 +4,8 @@
   "scope": {
     "commonFiles": 322,
     "filesWithCandidates": 84,
-    "candidates": 830,
-    "outrightDeletions": 181,
+    "candidates": 833,
+    "outrightDeletions": 182,
     "skippedAsP24": [
       "AstarPath.cs",
       "EuclideanEmbedding.cs",
@@ -2387,6 +2387,252 @@
         }
       ]
     },
+    "Javelin.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Javelin.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Javelin.cs",
+      "survivors": 34,
+      "outrightDeletions": 14,
+      "candidates": [
+        {
+          "line": 1,
+          "recoveredMember": null,
+          "recovered": "using System.Collections.Generic;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 31,
+          "recoveredMember": null,
+          "recovered": "private Vehicle target;",
+          "nearestLineInOurs": "private Component target;",
+          "similarity": 0.71
+        },
+        {
+          "line": 43,
+          "recoveredMember": "Unholster",
+          "recovered": "if (ammo == 0)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 45,
+          "recoveredMember": "Unholster",
+          "recovered": "ReloadDone();",
+          "nearestLineInOurs": "SetReloadPose(true);",
+          "similarity": 0.67
+        },
+        {
+          "line": 53,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "Ray ray = new Ray(pointSampler.position, pointSampler.forward);",
+          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
+          "similarity": 0.77
+        },
+        {
+          "line": 60,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "javelinMissile.target = target.transform;",
+          "nearestLineInOurs": "javelinMissile.targetPoint = manualTargetPoint;",
+          "similarity": 0.7
+        },
+        {
+          "line": 61,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "if (target.HasDriver() && target.directJavelinPath)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 63,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "javelinMissile.ForceDirectMode();",
+          "nearestLineInOurs": "javelinMissile.Lock(target);",
+          "similarity": 0.69
+        },
+        {
+          "line": 84,
+          "recoveredMember": "LateUpdate",
+          "recovered": "Vehicle vehicle = null;",
+          "nearestLineInOurs": "Component vehicle = null;",
+          "similarity": 0.71
+        },
+        {
+          "line": 133,
+          "recoveredMember": "LateUpdate",
+          "recovered": "if (!(user != null) || user.aiControlled)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 146,
+          "recoveredMember": "LateUpdate",
+          "recovered": "lockImage.rectTransform.position = Camera.main.WorldToScreenPoint(target.transform.position);",
+          "nearestLineInOurs": "lockImage.rectTransform.position = Camera.main.WorldToScreenPoint(manualTargetPoint);",
+          "similarity": 0.83
+        },
+        {
+          "line": 178,
+          "recoveredMember": "Fire",
+          "recovered": "Reload();",
+          "nearestLineInOurs": "SetReloadPose(true);",
+          "similarity": 0.62
+        },
+        {
+          "line": 180,
+          "recoveredMember": "Fire",
+          "recovered": "else if (!hasManualTarget)",
+          "nearestLineInOurs": "if (hasManualTarget)",
+          "similarity": 0.87
+        },
+        {
+          "line": 182,
+          "recoveredMember": "Fire",
+          "recovered": "Ray ray = new Ray(pointSampler.position, pointSampler.forward);",
+          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
+          "similarity": 0.77
+        },
+        {
+          "line": 202,
+          "recoveredMember": "FindTarget",
+          "recovered": "private Vehicle FindTarget()",
+          "nearestLineInOurs": "vehicle = FindTarget();",
+          "similarity": 0.78
+        },
+        {
+          "line": 204,
+          "recoveredMember": "FindTarget",
+          "recovered": "List<Vehicle> sortedTargets = GetSortedTargets();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 205,
+          "recoveredMember": "FindTarget",
+          "recovered": "foreach (Vehicle item in sortedTargets)",
+          "nearestLineInOurs": "foreach (Vehicle vehicle in ActorManager.instance.vehicles)",
+          "similarity": 0.63
+        },
+        {
+          "line": 207,
+          "recoveredMember": "FindTarget",
+          "recovered": "Vector3 direction = item.transform.position - base.transform.position;",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 208,
+          "recoveredMember": "FindTarget",
+          "recovered": "if (IsInFov(item.transform.position))",
+          "nearestLineInOurs": "if (IsInFov(manualTargetPoint))",
+          "similarity": 0.59
+        },
+        {
+          "line": 210,
+          "recoveredMember": "FindTarget",
+          "recovered": "Ray ray = new Ray(MuzzlePosition(), direction);",
+          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
+          "similarity": 0.61
+        },
+        {
+          "line": 211,
+          "recoveredMember": "FindTarget",
+          "recovered": "if (!Physics.Raycast(ray, direction.magnitude, 1))",
+          "nearestLineInOurs": "if (Physics.Raycast(ray, out hitInfo, 1000f, 1))",
+          "similarity": 0.68
+        },
+        {
+          "line": 213,
+          "recoveredMember": "FindTarget",
+          "recovered": "return item;",
+          "nearestLineInOurs": "return target;",
+          "similarity": 0.77
+        },
+        {
+          "line": 222,
+          "recoveredMember": "IsInFov",
+          "recovered": "return Vector3.Dot((point - base.transform.position).normalized, pointSampler.forward) > 0.99f;",
+          "nearestLineInOurs": "return Vector3.Dot((point - SightPosition()).normalized, SampleForward()) > 0.99f;",
+          "similarity": 0.81
+        },
+        {
+          "line": 225,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "private List<Vehicle> GetSortedTargets()",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 227,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "List<Vehicle> list = new List<Vehicle>(ActorManager.instance.vehicles);",
+          "nearestLineInOurs": "foreach (Vehicle vehicle in ActorManager.instance.vehicles)",
+          "similarity": 0.69
+        },
+        {
+          "line": 228,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "if (user.IsSeated())",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 230,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "list.Remove(user.seat.vehicle);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 232,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "Dictionary<Vehicle, bool> isEnemy = new Dictionary<Vehicle, bool>();",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 233,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "foreach (Vehicle item in list)",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 235,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "if (item.HasDriver())",
+          "nearestLineInOurs": "if (HasActiveAnimator())",
+          "similarity": 0.62
+        },
+        {
+          "line": 237,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "isEnemy.Add(item, item.Driver().team != user.team);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 241,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "isEnemy.Add(item, false);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 244,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "list.Sort((Vehicle x, Vehicle y) => (isEnemy[x] != isEnemy[y]) ? isEnemy[y].CompareTo(isEnemy[x]) : Vector3.Distance(base.transform.position, x.transform.position).CompareTo(Vector3.Distance(base.transform.position, y.transform.position)));",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 245,
+          "recoveredMember": "GetSortedTargets",
+          "recovered": "return list;",
+          "nearestLineInOurs": "return best;",
+          "similarity": 0.83
+        }
+      ]
+    },
     "ActorManager.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/ActorManager.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActorManager.cs",
@@ -2616,231 +2862,6 @@
           "recovered": "vehicle.Damage(configuration.damage * num4);",
           "nearestLineInOurs": "vehicle.Damage(configuration.damage * num4, ResolveAttackerId(source));",
           "similarity": 0.77
-        }
-      ]
-    },
-    "Javelin.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Javelin.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Javelin.cs",
-      "survivors": 31,
-      "outrightDeletions": 13,
-      "candidates": [
-        {
-          "line": 1,
-          "recoveredMember": null,
-          "recovered": "using System.Collections.Generic;",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 31,
-          "recoveredMember": null,
-          "recovered": "private Vehicle target;",
-          "nearestLineInOurs": "private Component target;",
-          "similarity": 0.71
-        },
-        {
-          "line": 53,
-          "recoveredMember": "SpawnProjectile",
-          "recovered": "Ray ray = new Ray(pointSampler.position, pointSampler.forward);",
-          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
-          "similarity": 0.77
-        },
-        {
-          "line": 60,
-          "recoveredMember": "SpawnProjectile",
-          "recovered": "javelinMissile.target = target.transform;",
-          "nearestLineInOurs": "javelinMissile.targetPoint = manualTargetPoint;",
-          "similarity": 0.7
-        },
-        {
-          "line": 61,
-          "recoveredMember": "SpawnProjectile",
-          "recovered": "if (target.HasDriver() && target.directJavelinPath)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 63,
-          "recoveredMember": "SpawnProjectile",
-          "recovered": "javelinMissile.ForceDirectMode();",
-          "nearestLineInOurs": "javelinMissile.Lock(target);",
-          "similarity": 0.69
-        },
-        {
-          "line": 84,
-          "recoveredMember": "LateUpdate",
-          "recovered": "Vehicle vehicle = null;",
-          "nearestLineInOurs": "Component vehicle = null;",
-          "similarity": 0.71
-        },
-        {
-          "line": 133,
-          "recoveredMember": "LateUpdate",
-          "recovered": "if (!(user != null) || user.aiControlled)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 146,
-          "recoveredMember": "LateUpdate",
-          "recovered": "lockImage.rectTransform.position = Camera.main.WorldToScreenPoint(target.transform.position);",
-          "nearestLineInOurs": "lockImage.rectTransform.position = Camera.main.WorldToScreenPoint(manualTargetPoint);",
-          "similarity": 0.83
-        },
-        {
-          "line": 180,
-          "recoveredMember": "Fire",
-          "recovered": "else if (!hasManualTarget)",
-          "nearestLineInOurs": "if (hasManualTarget)",
-          "similarity": 0.87
-        },
-        {
-          "line": 182,
-          "recoveredMember": "Fire",
-          "recovered": "Ray ray = new Ray(pointSampler.position, pointSampler.forward);",
-          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
-          "similarity": 0.77
-        },
-        {
-          "line": 202,
-          "recoveredMember": "FindTarget",
-          "recovered": "private Vehicle FindTarget()",
-          "nearestLineInOurs": "vehicle = FindTarget();",
-          "similarity": 0.78
-        },
-        {
-          "line": 204,
-          "recoveredMember": "FindTarget",
-          "recovered": "List<Vehicle> sortedTargets = GetSortedTargets();",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 205,
-          "recoveredMember": "FindTarget",
-          "recovered": "foreach (Vehicle item in sortedTargets)",
-          "nearestLineInOurs": "foreach (Vehicle vehicle in ActorManager.instance.vehicles)",
-          "similarity": 0.63
-        },
-        {
-          "line": 207,
-          "recoveredMember": "FindTarget",
-          "recovered": "Vector3 direction = item.transform.position - base.transform.position;",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 208,
-          "recoveredMember": "FindTarget",
-          "recovered": "if (IsInFov(item.transform.position))",
-          "nearestLineInOurs": "if (IsInFov(manualTargetPoint))",
-          "similarity": 0.59
-        },
-        {
-          "line": 210,
-          "recoveredMember": "FindTarget",
-          "recovered": "Ray ray = new Ray(MuzzlePosition(), direction);",
-          "nearestLineInOurs": "Ray ray = new Ray(SampleOrigin(), SampleForward());",
-          "similarity": 0.61
-        },
-        {
-          "line": 211,
-          "recoveredMember": "FindTarget",
-          "recovered": "if (!Physics.Raycast(ray, direction.magnitude, 1))",
-          "nearestLineInOurs": "if (Physics.Raycast(ray, out hitInfo, 1000f, 1))",
-          "similarity": 0.68
-        },
-        {
-          "line": 213,
-          "recoveredMember": "FindTarget",
-          "recovered": "return item;",
-          "nearestLineInOurs": "return target;",
-          "similarity": 0.77
-        },
-        {
-          "line": 222,
-          "recoveredMember": "IsInFov",
-          "recovered": "return Vector3.Dot((point - base.transform.position).normalized, pointSampler.forward) > 0.99f;",
-          "nearestLineInOurs": "return Vector3.Dot((point - SightPosition()).normalized, SampleForward()) > 0.99f;",
-          "similarity": 0.81
-        },
-        {
-          "line": 225,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "private List<Vehicle> GetSortedTargets()",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 227,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "List<Vehicle> list = new List<Vehicle>(ActorManager.instance.vehicles);",
-          "nearestLineInOurs": "foreach (Vehicle vehicle in ActorManager.instance.vehicles)",
-          "similarity": 0.69
-        },
-        {
-          "line": 228,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "if (user.IsSeated())",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 230,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "list.Remove(user.seat.vehicle);",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 232,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "Dictionary<Vehicle, bool> isEnemy = new Dictionary<Vehicle, bool>();",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 233,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "foreach (Vehicle item in list)",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 235,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "if (item.HasDriver())",
-          "nearestLineInOurs": "if (HasActiveAnimator())",
-          "similarity": 0.62
-        },
-        {
-          "line": 237,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "isEnemy.Add(item, item.Driver().team != user.team);",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 241,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "isEnemy.Add(item, false);",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 244,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "list.Sort((Vehicle x, Vehicle y) => (isEnemy[x] != isEnemy[y]) ? isEnemy[y].CompareTo(isEnemy[x]) : Vector3.Distance(base.transform.position, x.transform.position).CompareTo(Vector3.Distance(base.transform.position, y.transform.position)));",
-          "nearestLineInOurs": null,
-          "similarity": 0.0
-        },
-        {
-          "line": 245,
-          "recoveredMember": "GetSortedTargets",
-          "recovered": "return list;",
-          "nearestLineInOurs": "return best;",
-          "similarity": 0.83
         }
       ]
     },

@@ -9,8 +9,8 @@ using Vec3 = Ironfront.Net.Replication.Movement.Vec3;
 
 /// <summary>
 /// Scatters a match's field vehicles (phase P32): one at every flag that is not an HQ, a few out in
-/// the field, all of a kind and at a place chosen at random each match, so no two matches lay the
-/// map out alike. What a map scatters is its <see cref="FieldSupplyConfig"/>.
+/// the field, boats moored along a shore, all of a kind and at a place chosen at random each match,
+/// so no two matches lay the map out alike. What a map scatters is its <see cref="FieldSupplyConfig"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -26,9 +26,11 @@ using Vec3 = Ironfront.Net.Replication.Movement.Vec3;
 /// </para>
 /// <para>
 /// <b>Inside the vehicle-id budget.</b> <c>MAX_VEHICLES</c> is 24. Forest Lake authors 12 pads, four
-/// of them <c>AfterMoved</c>, which hold two ids while a replacement waits; six flag vehicles and two
-/// field vehicles bring the worst case to 24. A pad refused an id waits, and says so, rather than
-/// spawning an unaddressable vehicle (<see cref="VehicleSpawner"/>).
+/// of them <c>AfterMoved</c>, which held two ids while a replacement waited; six flag vehicles and two
+/// field vehicles brought the worst case to 24. Since #544 no pad refills until its vehicle is
+/// destroyed or abandoned, so each holds one, and the shore boat (2026-10-07) makes 21 pads. A pad
+/// refused an id waits, and says so, rather than spawning an unaddressable vehicle
+/// (<see cref="VehicleSpawner"/>).
 /// </para>
 /// <para>
 /// <b>A place a vehicle can stand</b> is <see cref="FieldParking"/>'s to decide.
@@ -42,6 +44,9 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 
 	/// <summary>Places tried for each vehicle before it is left out, and said to be.</summary>
 	private const int ParkingAttempts = 64;
+
+	/// <summary>Points tried for a shore boat: the shore is a thin band, and a miss costs a few heightmap reads.</summary>
+	private const int ShoreAttempts = 4096;
 
 	/// <summary>Metres a new pad keeps from any other pad, authored or scattered.</summary>
 	private const float PadSeparation = 14f;
@@ -73,6 +78,9 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 	private readonly List<Pad> flagPads = new List<Pad>();
 
 	private readonly List<Pad> fieldPads = new List<Pad>();
+
+	/// <summary>Boats moored along a shore (<see cref="FieldSupplyConfig.shoreVehicles"/>).</summary>
+	private readonly List<Pad> shorePads = new List<Pad>();
 
 	/// <summary>The flags that were HQs when the map loaded: a side's base never gets a scattered vehicle.</summary>
 	private readonly HashSet<SpawnPoint> bases = new HashSet<SpawnPoint>();
@@ -122,7 +130,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 	/// <summary>Lays the map out for the first match: after <see cref="ActorManager"/>, whose flags it reads.</summary>
 	public void StartGame()
 	{
-		if (NetContext.IsClient || flagPads.Count > 0 || fieldPads.Count > 0)
+		if (NetContext.IsClient || flagPads.Count > 0 || fieldPads.Count > 0 || shorePads.Count > 0)
 		{
 			return;
 		}
@@ -193,6 +201,21 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			{
 				pad.Spawner.Relocate(at, facing, prefab);
 				Debug.Log("[supply] field vehicle wrecked or abandoned; a " + prefab.name + " will turn up at " + Describe(at) + " in " + config.fieldRespawnSeconds.ToString("F0") + " s.");
+			}
+			pad.Spawner.RespawnLater();
+		}
+		// A boat moves along the shore the same way.
+		foreach (Pad pad in shorePads)
+		{
+			if (pad.Spawner == null || !pad.Spawner.IsSpent)
+			{
+				continue;
+			}
+			GameObject prefab = Choose(config.shoreVehicles);
+			if (prefab != null && TryMoorAtShore(prefab, pad.Spawner, out Vector3 at, out Quaternion facing))
+			{
+				pad.Spawner.Relocate(at, facing, prefab);
+				Debug.Log("[supply] shore boat wrecked or abandoned; a " + prefab.name + " will be moored at " + Describe(at) + " in " + config.fieldRespawnSeconds.ToString("F0") + " s.");
 			}
 			pad.Spawner.RespawnLater();
 		}
@@ -369,6 +392,31 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			report.Append(' ').Append(prefab.name).Append(" at ").Append(Describe(at));
 		}
 
+		if (config.shoreVehicleCount > 0)
+		{
+			report.Append("; shore boats");
+		}
+		for (int i = 0; i < config.shoreVehicleCount; i++)
+		{
+			Pad pad = !firstMatch && i < shorePads.Count ? shorePads[i] : null;
+			GameObject prefab = Choose(config.shoreVehicles);
+			if (prefab == null || !TryMoorAtShore(prefab, pad != null ? pad.Spawner : null, out Vector3 at, out Quaternion facing))
+			{
+				report.Append(" none");
+				continue;
+			}
+			if (pad == null)
+			{
+				pad = new Pad { Spawner = CreatePad("Shore Boat " + (i + 1), prefab, VehicleSpawner.RespawnType.Never, config.fieldRespawnSeconds, at, facing) };
+				shorePads.Add(pad);
+			}
+			else
+			{
+				pad.Spawner.Relocate(at, facing, prefab);
+			}
+			report.Append(' ').Append(prefab.name).Append(" at ").Append(Describe(at));
+		}
+
 		Debug.Log(report.ToString());
 	}
 
@@ -379,6 +427,10 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			if (pad.Spawner == spawner) return true;
 		}
 		foreach (Pad pad in fieldPads)
+		{
+			if (pad.Spawner == spawner) return true;
+		}
+		foreach (Pad pad in shorePads)
 		{
 			if (pad.Spawner == spawner) return true;
 		}
@@ -509,10 +561,68 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		return false;
 	}
 
+	/// <summary>
+	/// A place along a shore -- water at least <see cref="FieldParking.MinMooringDepth"/> deep with dry
+	/// land within <see cref="FieldSupplyConfig.shoreReach"/> -- for a boat, nosed out onto the water,
+	/// as far from the other finds as a field vehicle keeps.
+	/// </summary>
+	/// <remarks>
+	/// Points are drawn over the map's lakes and rivers alone (<see cref="WaterLevel.TryGetBoundedArea"/>),
+	/// or over the play area on a map with only a sea, and the heightmap test runs before the physics
+	/// one: the shore is a thin band, so most points miss it and should cost almost nothing.
+	/// </remarks>
+	private bool TryMoorAtShore(GameObject prefab, VehicleSpawner moving, out Vector3 at, out Quaternion facing)
+	{
+		Bounds footprint = VehicleSpawner.FootprintOf(prefab);
+		Bounds play = FieldParking.PlayArea();
+		Rect area = Rect.MinMaxRect(play.min.x, play.min.z, play.max.x, play.max.z);
+		if (WaterLevel.TryGetBoundedArea(out Rect water))
+		{
+			area = Rect.MinMaxRect(Mathf.Max(area.xMin, water.xMin), Mathf.Max(area.yMin, water.yMin), Mathf.Min(area.xMax, water.xMax), Mathf.Min(area.yMax, water.yMax));
+		}
+		Vec3[] others = OtherFieldPositions(moving);
+		Vec3[] pads = padPositions.ToArray();
+		if (area.width > 0f && area.height > 0f)
+		{
+			for (int attempt = 0; attempt < ShoreAttempts; attempt++)
+			{
+				var probe = new Vector3(
+					Mathf.Lerp(area.xMin, area.xMax, (float)random.NextDouble()),
+					0f,
+					Mathf.Lerp(area.yMin, area.yMax, (float)random.NextDouble()));
+				if (!FieldParking.NearShore(probe, config.shoreReach, out float yaw)
+					|| !parking.CanMoor(probe, yaw, footprint, out Vector3 surface))
+				{
+					continue;
+				}
+				Vec3 spot = ToVec(surface);
+				if (!FieldSupplyLayout.FarFromAll(spot, others, config.spacing * config.spacing)
+					|| !FieldSupplyLayout.FarFromAll(spot, pads, PadSeparation * PadSeparation))
+				{
+					continue;
+				}
+				at = surface + Vector3.up * 0.3f;
+				facing = Quaternion.Euler(0f, yaw, 0f);
+				fieldPositions.Add(spot);
+				return true;
+			}
+		}
+		at = default;
+		facing = default;
+		return false;
+	}
+
 	private Vec3[] OtherFieldPositions(VehicleSpawner moving)
 	{
 		var others = new List<Vec3>(fieldPositions);
 		foreach (Pad pad in fieldPads)
+		{
+			if (pad.Spawner != null && pad.Spawner != moving)
+			{
+				others.Add(ToVec(pad.Spawner.transform.position));
+			}
+		}
+		foreach (Pad pad in shorePads)
 		{
 			if (pad.Spawner != null && pad.Spawner != moving)
 			{
