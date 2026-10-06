@@ -57,6 +57,60 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void AReloadFromTheHipGoesDownOutOfViewToo()
+        {
+            foreach (string from in new[] { "Hip", "Unholster" })
+            {
+                AnimatorStateTransition down = State(from).transitions.Single(t => t.destinationState == State("Reload hidden"));
+                Assert.IsTrue(down.conditions.Any(c => c.parameter == "reloading" && c.mode == AnimatorConditionMode.If), from);
+            }
+        }
+
+        /// <summary>
+        /// Owner report 2026-10-07: "when it is fired empty (0/0) the launcher is gone from my hands".
+        /// The original redrew it after the shot, and drew it at all, only while ammunition was left.
+        /// </summary>
+        [Test]
+        public void AnEmptyLauncherStaysInView()
+        {
+            foreach (string from in new[] { "Fire", "Out of frame" })
+            {
+                AnimatorStateTransition draw = State(from).transitions.Single(t => t.destinationState == State("Unholster"));
+                Assert.IsFalse(draw.conditions.Any(c => c.parameter == "no ammo"), from + " waits for ammunition before the launcher comes up");
+            }
+        }
+
+        /// <summary>
+        /// Owner report 2026-10-07: "after the shot it reloads by itself -- it should take R". The
+        /// original called <c>Reload()</c> after every shot and <c>ReloadDone()</c> when an empty
+        /// launcher was drawn; online both loaded only the client's copy.
+        /// </summary>
+        [Test]
+        public void TheLauncherReloadsOnlyWhenThePlayerAsks()
+        {
+            string source = System.IO.File.ReadAllText(System.IO.Path.Combine(Application.dataPath, "Scripts/Assembly-CSharp/Javelin.cs"));
+
+            StringAssert.DoesNotContain("Reload();", Body(source, "public override void Fire("));
+            StringAssert.DoesNotContain("ReloadDone", Body(source, "public override void Unholster()"));
+        }
+
+        /// <summary>The text of the method whose signature starts with <paramref name="signature"/>, to its closing brace.</summary>
+        private static string Body(string source, string signature)
+        {
+            int start = source.IndexOf(signature, StringComparison.Ordinal);
+            Assert.GreaterOrEqual(start, 0, signature);
+            int open = source.IndexOf('{', start);
+            int depth = 0;
+            for (int i = open; i < source.Length; i++)
+            {
+                if (source[i] == '{') depth++;
+                else if (source[i] == '}' && --depth == 0) return source.Substring(open, i - open + 1);
+            }
+            Assert.Fail("unbalanced braces after " + signature);
+            return string.Empty;
+        }
+
+        [Test]
         public void TheRaiseTheCodeWaitsForIsTheRaiseTheControllerPlays()
         {
             AnimatorState raise = State("Reload raise");
