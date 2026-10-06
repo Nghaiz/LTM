@@ -95,13 +95,17 @@ public sealed class FieldParking
 	public static bool NearShore(Vector3 probe, float reach, out float awayYaw)
 	{
 		awayYaw = 0f;
-		Terrain terrain = Terrain.activeTerrain;
-		if (terrain == null || !(reach > 0f))
+		if (!(reach > 0f))
 		{
 			return false;
 		}
 		float water = WaterSurfaceAt(probe.x, probe.z);
-		if (float.IsNegativeInfinity(water) || water - GroundAt(terrain, probe.x, probe.z) < MinMooringDepth)
+		if (float.IsNegativeInfinity(water))
+		{
+			return false;
+		}
+		Terrain terrain = FindTerrain();
+		if (water - GroundAt(terrain, probe.x, probe.z) < MinMooringDepth)
 		{
 			return false;
 		}
@@ -113,7 +117,8 @@ public sealed class FieldParking
 				float angle = bearing * (Mathf.PI * 2f / ShoreBearings);
 				float x = probe.x + Mathf.Cos(angle) * radius;
 				float z = probe.z + Mathf.Sin(angle) * radius;
-				if (GroundAt(terrain, x, z) > WaterSurfaceAt(x, z))
+				float surface = WaterSurfaceAt(x, z);
+				if (float.IsNegativeInfinity(surface) || GroundAt(terrain, x, z) > surface)
 				{
 					awayYaw = Mathf.Atan2(-Mathf.Cos(angle), -Mathf.Sin(angle)) * Mathf.Rad2Deg;
 					return true;
@@ -126,8 +131,85 @@ public sealed class FieldParking
 	/// <summary>The highest water surface over (x, z): the sea or a lake or river; negative infinity where there is none.</summary>
 	private static float WaterSurfaceAt(float x, float z) => Mathf.Max(WaterLevel.height, WaterLevel.BoundedSurfaceAt(x, z));
 
-	private static float GroundAt(Terrain terrain, float x, float z) =>
-		terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.GetPosition().y;
+	/// <summary>
+	/// The scene's terrain for heightmap reads, or null with none to read. Not
+	/// <c>Terrain.activeTerrain</c> alone: on the dedicated server it answered nothing and no boat was
+	/// ever moored (v4.5.0, <c>[supply] ... shore boats none</c> on every match), while the same code
+	/// moored one every time in practice. <c>MinimapCamera.TryGetGroundExtent</c> finds terrains the
+	/// same way for the reason it gives: the active list fills only as each terrain enables.
+	/// </summary>
+	/// <remarks>
+	/// The heightmap is used only where it agrees with the terrain's collider, checked at the
+	/// terrain's centre once a frame: the collider is what <see cref="CanPark"/> and
+	/// <see cref="CanMoor"/> stand on, proven on the server, and a heightmap that read differently
+	/// there would silently find no shore at all.
+	/// </remarks>
+	private static Terrain FindTerrain()
+	{
+		if (heightmapCheckedFrame == Time.frameCount)
+		{
+			return heightmapTerrain;
+		}
+		heightmapCheckedFrame = Time.frameCount;
+		heightmapTerrain = null;
+		Terrain found = Terrain.activeTerrain;
+		if (found == null || found.terrainData == null)
+		{
+			found = null;
+			foreach (Terrain terrain in Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None))
+			{
+				if (terrain.terrainData != null)
+				{
+					found = terrain;
+					break;
+				}
+			}
+		}
+		if (found != null)
+		{
+			Vector3 centre = found.GetPosition() + found.terrainData.size * 0.5f;
+			float fromHeightmap = found.SampleHeight(centre) + found.GetPosition().y;
+			bool hit = Physics.Raycast(new Vector3(centre.x, 2000f, centre.z), Vector3.down, out RaycastHit ground, 4000f, GroundOnlyMask, QueryTriggerInteraction.Ignore)
+				&& ground.collider is TerrainCollider;
+			if (!hit || Mathf.Abs(ground.point.y - fromHeightmap) <= HeightmapTolerance)
+			{
+				heightmapTerrain = found;
+			}
+		}
+		return heightmapTerrain;
+	}
+
+	/// <summary>Metres the heightmap and the collider may disagree by before the collider is trusted instead.</summary>
+	private const float HeightmapTolerance = 1f;
+
+	private static int heightmapCheckedFrame = -1;
+
+	private static Terrain heightmapTerrain;
+
+	/// <summary>
+	/// The ground's height at (x, z): the heightmap when there is a terrain, else straight down onto
+	/// the terrain's collider, the ground the vehicle tests stand on; negative infinity over nothing.
+	/// </summary>
+	private static float GroundAt(Terrain terrain, float x, float z)
+	{
+		if (terrain != null)
+		{
+			return terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.GetPosition().y;
+		}
+		return Physics.Raycast(new Vector3(x, 2000f, z), Vector3.down, out RaycastHit hit, 4000f, GroundOnlyMask, QueryTriggerInteraction.Ignore)
+			&& hit.collider is TerrainCollider
+				? hit.point.y
+				: float.NegativeInfinity;
+	}
+
+	/// <summary>Which ground <see cref="NearShore"/> reads, for the director's report when no mooring is found.</summary>
+	public static string ShoreGroundSource()
+	{
+		Terrain terrain = FindTerrain();
+		return terrain != null
+			? "heightmap of '" + terrain.name + "'" + (Terrain.activeTerrain == null ? " (not the active terrain)" : string.Empty)
+			: "terrain collider (no terrain whose heightmap matches it)";
+	}
 
 	/// <summary>The play volume, shrunk by a margin; the terrain's bounds on a map without one.</summary>
 	public static Bounds PlayArea()

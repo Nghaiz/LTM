@@ -582,6 +582,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		}
 		Vec3[] others = OtherFieldPositions(moving);
 		Vec3[] pads = padPositions.ToArray();
+		int nearShore = 0, moorable = 0;
 		if (area.width > 0f && area.height > 0f)
 		{
 			for (int attempt = 0; attempt < ShoreAttempts; attempt++)
@@ -590,11 +591,16 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 					Mathf.Lerp(area.xMin, area.xMax, (float)random.NextDouble()),
 					0f,
 					Mathf.Lerp(area.yMin, area.yMax, (float)random.NextDouble()));
-				if (!FieldParking.NearShore(probe, config.shoreReach, out float yaw)
-					|| !parking.CanMoor(probe, yaw, footprint, out Vector3 surface))
+				if (!FieldParking.NearShore(probe, config.shoreReach, out float yaw))
 				{
 					continue;
 				}
+				nearShore++;
+				if (!parking.CanMoor(probe, yaw, footprint, out Vector3 surface))
+				{
+					continue;
+				}
+				moorable++;
 				Vec3 spot = ToVec(surface);
 				if (!FieldSupplyLayout.FarFromAll(spot, others, config.spacing * config.spacing)
 					|| !FieldSupplyLayout.FarFromAll(spot, pads, PadSeparation * PadSeparation))
@@ -607,6 +613,11 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 				return true;
 			}
 		}
+		// Said, not swallowed: v4.5.0's server moored no boat on any match and printed only "none".
+		Debug.LogWarning("[supply] no shore mooring for a " + prefab.name + ": " + ShoreAttempts + " points over "
+			+ (area.width > 0f && area.height > 0f ? "x " + area.xMin.ToString("F0") + "-" + area.xMax.ToString("F0") + ", z " + area.yMin.ToString("F0") + "-" + area.yMax.ToString("F0") : "no area")
+			+ ", " + nearShore + " deep water by a shore, " + moorable + " fit the hull, the rest too close to another find; ground from the "
+			+ FieldParking.ShoreGroundSource() + ".");
 		at = default;
 		facing = default;
 		return false;
