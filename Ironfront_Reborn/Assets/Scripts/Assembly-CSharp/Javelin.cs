@@ -105,9 +105,60 @@ public class Javelin : ScopedWeapon
 	{
 		base.Unholster();
 		hasManualTarget = false;
+		SetReloadPose(false);
 		if (ammo == 0)
 		{
 			ReloadDone();
+		}
+	}
+
+	/// <summary>
+	/// Seconds the reload's raise takes: the "Reload raise" state plays the unholster clip
+	/// (1.29 s) at speed 1.6. Pinned against the controller by <c>JavelinReloadAnimationTests</c>.
+	/// </summary>
+	public const float ReloadRaiseSeconds = 0.81f;
+
+	/// <summary>
+	/// A reload you can see. After the shot the launcher comes down out of view, a fresh tube goes
+	/// on, and it comes back up just as the reload completes.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Owner request 2026-10-06</b>: "the guided launcher has no reload animation". Nor did the
+	/// original: its controller has no reload state, so after the shot the launcher sat in view
+	/// for the whole reload and was simply loaded again when it ended. The original's timing is
+	/// kept exactly -- the same <c>reloadTime</c> (2 s), the same moment the launcher can fire
+	/// again -- and the animation is fitted inside it: the shot's kick, down out of view
+	/// ("reloading" set here), and the raise started <see cref="ReloadRaiseSeconds"/> before
+	/// the reload ends, so the launcher is up as it is loaded.
+	/// </para>
+	/// <para>
+	/// Presentation only: a bot's launcher and a server's have no animator.
+	/// </para>
+	/// </remarks>
+	public override void Reload(bool overrideHolstered = false)
+	{
+		bool wasReloading = reloading;
+		base.Reload(overrideHolstered);
+		if (wasReloading || !reloading)
+		{
+			return;
+		}
+		SetReloadPose(true);
+		CancelInvoke(nameof(RaiseAfterReload));
+		Invoke(nameof(RaiseAfterReload), Mathf.Max(0f, configuration.reloadTime - ReloadRaiseSeconds));
+	}
+
+	private void RaiseAfterReload()
+	{
+		SetReloadPose(false);
+	}
+
+	private void SetReloadPose(bool down)
+	{
+		if (HasActiveAnimator())
+		{
+			animator.SetBool("reloading", down);
 		}
 	}
 
