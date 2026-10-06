@@ -41,6 +41,23 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		/// fly the same line. Bots aim with it too (<c>AiActorController.WeaponLead</c>).
 		/// </remarks>
 		public float straightDistance;
+
+		/// <summary>
+		/// A plain round's air drag: the quadratic drag constant k, per metre, its speed falling by
+		/// e^(-k*x) over x metres (<c>RoundBallistics.DragPerMetre</c>).
+		/// </summary>
+		/// <remarks>
+		/// With <see cref="speed"/> (the muzzle velocity) and <see cref="zeroMetres"/> it is the
+		/// round's whole flight, the same numbers the server sweeps a player's shot along
+		/// (<c>WeaponCatalog.Rounds</c>); <c>RoundBallisticsPrefabTests</c> fails if the two drift.
+		/// </remarks>
+		public float dragPerMetre;
+
+		/// <summary>
+		/// The range, metres, a plain round's sights are zeroed at: it leaves the muzzle tilted up
+		/// just enough to fall back onto the line of sight there (<c>RoundBallistics.ZeroMetres</c>).
+		/// </summary>
+		public float zeroMetres;
 	}
 
 	private const float PASS_PLAYER_MAX_SOUND_DISTANCE = 15f;
@@ -92,18 +109,40 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 
 	private float travelDistance;
 
+	/// <summary>Where a plain round left the muzzle, the start of its <see cref="Round"/> flight.</summary>
+	private Vector3 flightOrigin;
+
+	/// <summary>The direction a plain round left the muzzle: the aim tilted up to the sights' zero.</summary>
+	private Vector3 flightLaunch;
+
+	/// <summary>Seconds a plain round has flown.</summary>
+	private float flightTime;
+
 	/// <summary>
-	/// A plain round: this class itself, no warhead, guidance or deployable behind it.
+	/// The flight of a plain round (<see cref="IsHitscanRound"/>) as its prefab authors it: the
+	/// muzzle velocity, the drag and the zero.
+	/// </summary>
+	public Ironfront.Net.Replication.Combat.RoundBallistics Round
+		=> new Ironfront.Net.Replication.Combat.RoundBallistics(configuration.speed, configuration.dragPerMetre, configuration.zeroMetres);
+
+	/// <summary>
+	/// A plain round: this class itself, no warhead, guidance or deployable behind it -- a rifle,
+	/// pistol, shotgun or sniper bullet.
 	/// </summary>
 	/// <remarks>
-	/// <b>Online it is drawn, not flown.</b> The server resolves a player's shot as a straight
-	/// hitscan ray (<c>ServerFireResolver</c>), so a round that dropped under gravity showed a
-	/// player a trajectory, an impact and a decal below the line the server actually judged: at a
-	/// sniper's 500 m, 2 m low, and a player who held over for the drop missed on the server.
-	/// These rounds therefore fly straight everywhere (<see cref="Start"/>), and bots lead them
-	/// without drop (<c>Weapon.projectileStraightTime</c>), so every round's line is the line that
-	/// hits. Weapons whose rounds the server does fly -- rockets, shells, the gatling's exploding
-	/// rounds -- keep gravity, and their client drawing runs the same flight.
+	/// <para>
+	/// <b>It flies its gun's own ballistic arc</b> (<see cref="Round"/>, owner request
+	/// 2026-10-06): its muzzle velocity, the air's drag and gravity, out of a barrel tilted to the
+	/// sights' zero. The server sweeps a player's shot along the same arc
+	/// (<c>LagCompensator.ResolveBallistic</c>), a bot's round flies it here, and every client
+	/// draws it here, all from one closed-form flight, so the line drawn is the line judged at
+	/// any frame rate. Until then these rounds flew dead straight (#552), because the server
+	/// judged a straight ray.
+	/// </para>
+	/// <para>
+	/// Weapons whose rounds the server flies itself -- rockets, shells, the gatling's exploding
+	/// rounds -- keep <see cref="FlightStep"/>.
+	/// </para>
 	/// </remarks>
 	public static bool IsHitscanRound(Projectile projectile)
 	{
@@ -112,11 +151,16 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 
 	protected virtual void Start()
 	{
+		velocity = base.transform.forward * configuration.speed;
 		if (IsHitscanRound(this))
 		{
-			configuration.straightDistance = float.MaxValue;
+			Vector3 aim = base.transform.forward;
+			Ironfront.Net.Replication.Movement.Vec3 launch = Round.LaunchDirection(new Ironfront.Net.Replication.Movement.Vec3(aim.x, aim.y, aim.z));
+			flightLaunch = new Vector3(launch.X, launch.Y, launch.Z);
+			flightOrigin = base.transform.position;
+			flightTime = 0f;
+			velocity = flightLaunch * configuration.speed;
 		}
-		velocity = base.transform.forward * configuration.speed;
 		expireTime = Time.time + configuration.lifetime;
 		if (warnsEnemyAi)
 		{
@@ -166,7 +210,9 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		// about 33 cm over a two-second flight at 30 Hz against 6 cm of position quantization --
 		// so server and client disagreed about where a bullet was purely from frame timing.
 		// Recorded in Ballistics.Step as the third deliberate change to offline behaviour.
-		Vector3 delta = FlightStep(ref velocity, travelDistance, configuration.straightDistance, Time.deltaTime);
+		Vector3 delta = IsHitscanRound(this)
+			? BallisticStep(Time.deltaTime)
+			: FlightStep(ref velocity, travelDistance, configuration.straightDistance, Time.deltaTime);
 		Travel(delta);
 		if (!configuration.makesFlybySound)
 		{
@@ -212,6 +258,24 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		Vector3 delta = velocity * dt + gravity * (0.5f * dt * dt);
 		velocity += gravity * dt;
 		return delta;
+	}
+
+	/// <summary>
+	/// One frame of a plain round's flight: the displacement to where its closed-form arc
+	/// (<see cref="Round"/>) puts it after <paramref name="dt"/> more seconds, with
+	/// <see cref="velocity"/> set to the arc's own. Computed from the launch, not accumulated, so
+	/// a slow frame and a fast one put the round at the same point at the same time.
+	/// </summary>
+	private Vector3 BallisticStep(float dt)
+	{
+		flightTime += dt;
+		Ironfront.Net.Replication.Combat.RoundBallistics round = Round;
+		var origin = new Ironfront.Net.Replication.Movement.Vec3(flightOrigin.x, flightOrigin.y, flightOrigin.z);
+		var launch = new Ironfront.Net.Replication.Movement.Vec3(flightLaunch.x, flightLaunch.y, flightLaunch.z);
+		Ironfront.Net.Replication.Movement.Vec3 at = round.PositionAt(in origin, in launch, flightTime);
+		Ironfront.Net.Replication.Movement.Vec3 v = round.VelocityAt(in launch, flightTime);
+		velocity = new Vector3(v.X, v.Y, v.Z);
+		return new Vector3(at.X, at.Y, at.Z) - base.transform.position;
 	}
 
 	protected virtual void Travel(Vector3 delta)

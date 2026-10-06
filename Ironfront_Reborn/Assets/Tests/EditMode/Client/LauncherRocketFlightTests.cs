@@ -75,10 +75,10 @@ namespace Ironfront.Net.Unity.Client.Tests
         [TestCase("Gatling Tracer", false)]
         [TestCase("Tank Projectile", false)]
         [TestCase("javelin missile", false)]
-        public void OnlyPlainRoundsAreTheHitscanRoundsThatFlyStraight(string prefab, bool hitscan)
+        public void OnlyPlainRoundsAreTheRoundsTheServerSweeps(string prefab, bool hitscan)
         {
-            // The server judges a plain round as a straight ray, so only those may drop nothing;
-            // everything the server actually flies keeps its own arc.
+            // The server sweeps a plain round along its gun's ballistic arc (Projectile.Round,
+            // RoundBallistics); everything the server actually flies keeps its own flight step.
             var asset = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Prefab/{prefab}.prefab");
             Assert.IsNotNull(asset, prefab);
             Component round = asset.GetComponent(ProjectileType);

@@ -205,6 +205,19 @@ namespace Ironfront.Net.Replication.Combat
         /// Defaults to <see cref="InfiniteSpareAmmo"/>, which is the behaviour every pre-V6
         /// caller already had: the server refilled a clip unconditionally.
         /// </param>
+        /// <summary>
+        /// How this gun's bullet flies (<see cref="RoundBallistics"/>): its muzzle velocity, its
+        /// drag and its sights' zero. The server sweeps a player's shot along this arc
+        /// (<c>LagCompensator.ResolveBallistic</c>) and the engine flies a bot's round and every
+        /// client's drawing along the same one, read off the round's prefab -- the two are pinned
+        /// equal by <c>RoundBallisticsPrefabTests</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>The default is no flight: a straight ray</b>, which is what every weapon swept
+        /// before 2026-10-06 and every non-gun still is.
+        /// </remarks>
+        public readonly RoundBallistics Round;
+
         public WeaponConfig(
             float cooldown, float spread, int projectilesPerShot, float range,
             float damage, float force, byte clipSize,
@@ -217,8 +230,10 @@ namespace Ironfront.Net.Replication.Combat
             WeaponDelivery delivery = WeaponDelivery.Hitscan,
             bool automatic = true,
             ushort releaseDelayTicks = 0,
-            bool piercing = false)
+            bool piercing = false,
+            RoundBallistics round = default)
         {
+            Round = round;
             Piercing = piercing;
             SpareAmmo = spareAmmo;
             SpendsAmmo = spendsAmmo;

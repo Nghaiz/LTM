@@ -4,7 +4,7 @@
   "scope": {
     "commonFiles": 322,
     "filesWithCandidates": 82,
-    "candidates": 720,
+    "candidates": 724,
     "outrightDeletions": 150,
     "skippedAsP24": [
       "AstarPath.cs",
@@ -2517,7 +2517,7 @@
     "Vehicle.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Vehicle.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Vehicle.cs",
-      "survivors": 25,
+      "survivors": 27,
       "outrightDeletions": 3,
       "candidates": [
         {
@@ -2638,6 +2638,20 @@
           "recovered": "InvokeRepeating(\"AutoDamage\", 50f, 2f);",
           "nearestLineInOurs": "CancelInvoke(\"AutoDamage\");",
           "similarity": 0.66
+        },
+        {
+          "line": 349,
+          "recoveredMember": "Die",
+          "recovered": "if (seat.enclosed)",
+          "nearestLineInOurs": "if (seat.IsOccupied())",
+          "similarity": 0.65
+        },
+        {
+          "line": 355,
+          "recoveredMember": "Die",
+          "recovered": "occupant.Damage(0f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);",
+          "nearestLineInOurs": "occupant.Damage(200f, 200f, true, base.transform.position, Vector3.forward, Vector3.up * 10f);",
+          "similarity": 0.99
         },
         {
           "line": 377,
@@ -4416,9 +4430,16 @@
     "Ammobox.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Ammobox.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Ammobox.cs",
-      "survivors": 5,
+      "survivors": 6,
       "outrightDeletions": 1,
       "candidates": [
+        {
+          "line": 10,
+          "recoveredMember": null,
+          "recovered": "private const float RESUPPLY_RANGE = 6f;",
+          "nearestLineInOurs": "private const float RESUPPLY_RATE = 3f;",
+          "similarity": 0.94
+        },
         {
           "line": 15,
           "recoveredMember": "Awake",
@@ -4588,9 +4609,16 @@
     "Medipack.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Medipack.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Medipack.cs",
-      "survivors": 5,
+      "survivors": 6,
       "outrightDeletions": 1,
       "candidates": [
+        {
+          "line": 10,
+          "recoveredMember": null,
+          "recovered": "private const float RESUPPLY_RANGE = 6f;",
+          "nearestLineInOurs": "private const float RESUPPLY_RATE = 3f;",
+          "similarity": 0.94
+        },
         {
           "line": 17,
           "recoveredMember": "Awake",
