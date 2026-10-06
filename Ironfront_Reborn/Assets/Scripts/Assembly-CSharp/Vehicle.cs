@@ -366,6 +366,8 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	protected virtual void FixedUpdate()
 	{
+		// The heat of the flames on whoever stands near (Vehicle.WreckHazard.cs).
+		TickFire();
 		if (rigidbody.linearVelocity.magnitude < 3f)
 		{
 			cannotRamAction.Start();
@@ -1152,6 +1154,9 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	{
 		// Read before anything below moves the hull: a vehicle the water killed (IsFlooded).
 		bool drowned = IsFlooded;
+		// Its blast is credited to whoever destroyed it (BlastSurroundings), read now, before the
+		// hits that keep landing on a wreck can overwrite it.
+		destroyedBy = LastDamagedBy;
 		dead = true;
 		if (fireAlarm != null)
 		{
@@ -1276,23 +1281,25 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	}
 
 	/// <summary>
-	/// The wreck goes off: an impulse that throws it, particles and a sound. It damages nothing.
+	/// The wreck goes off: an impulse that throws it, particles, a sound, and its blast on the
+	/// soldiers and vehicles around it (<see cref="BlastSurroundings"/>).
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Exactly the original's <c>Vehicle.Explode</c>, by the owner's ruling of 2026-09-27.</b>
-	/// Ledger C-10 (debt-closure phase 2, PR #145) had this also call <c>ActorManager.Explode</c>
-	/// for 300 damage over 6 m, on the reasoning that taking cover behind a burning vehicle should
-	/// be dangerous. In play it made every wreck kill its neighbours: an empty vehicle decays to
-	/// death after about 80 s (original behaviour, <see cref="AutoDamage"/>), bots leave vehicles
-	/// parked side by side on pads and roads, and each wreck set off the next 0.3 s after it — the
-	/// "smoking, burning, exploding in a chain" the 2026-09-27 Island playtest reported. The owner
-	/// chose the original over "infantry only" and "reduced damage".
+	/// <b>The blast hurts by distance, by the owner's ruling of 2026-10-06</b> ("explosions and
+	/// fires must hurt what is around them, more the closer it stands"), from real blast data
+	/// (<c>WreckHazard</c>) and each prefab's own charge. It replaces the ruling of 2026-09-27
+	/// that a wreck hurts nobody, made after ledger C-10's flat 300 damage over 6 m (PR #145) set
+	/// parked vehicles off one after another: an empty vehicle decays to death after about 80 s
+	/// (<see cref="AutoDamage"/>), bots park side by side, and each wreck killed the next 0.3 s
+	/// later. A neighbouring vehicle now takes at most its own <see cref="blastVulnerability"/>
+	/// share of its health from one blast, so a healthy vehicle is never destroyed by the wreck
+	/// beside it.
 	/// </para>
 	/// <para>
 	/// Every client still draws and hears the blast: <see cref="Die"/> runs on each client when the
-	/// vehicle is destroyed, so this method's particles and sound play there locally, as they
-	/// always have. Do not re-add area damage here.
+	/// vehicle is destroyed, so the particles and sound play there locally, as they always have;
+	/// the damage is the server's (offline, the game's) and reaches clients as health.
 	/// </para>
 	/// </remarks>
 	protected virtual void Explode()
@@ -1316,6 +1323,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		{
 			explosionSound.Play();
 		}
+		BlastSurroundings();
 	}
 
 	private void Cleanup()
