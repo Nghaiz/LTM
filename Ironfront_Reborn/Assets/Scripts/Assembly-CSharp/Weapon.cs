@@ -170,6 +170,13 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	[NonSerialized]
 	public float projectileStraightTime;
 
+	/// <summary>
+	/// The flight of this gun's plain round (<c>Projectile.Round</c>): muzzle velocity, drag and
+	/// zero. Not ballistic for a weapon whose rounds the server flies, or that fires none.
+	/// </summary>
+	[NonSerialized]
+	public Ironfront.Net.Replication.Combat.RoundBallistics projectileRound;
+
 	[NonSerialized]
 	public Animator animator;
 
@@ -190,9 +197,9 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			Projectile round = configuration.projectilePrefab.GetComponent<Projectile>();
 			Projectile.Configuration flight = round.configuration;
 			projectileSpeed = flight.speed;
-			projectileStraightTime = Projectile.IsHitscanRound(round)
-				? float.MaxValue
-				: (flight.speed > 0f ? flight.straightDistance / flight.speed : 0f);
+			bool plain = Projectile.IsHitscanRound(round);
+			projectileRound = plain ? round.Round : default;
+			projectileStraightTime = plain || !(flight.speed > 0f) ? 0f : flight.straightDistance / flight.speed;
 		}
 		else
 		{

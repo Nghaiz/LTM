@@ -283,62 +283,10 @@ namespace Ironfront.Net.Replication.Combat
             Vec3 ray = direction.Normalized;
             if (ray.SqrMagnitude < 0.5f) return HitResult.Miss(targetTick);   // zero direction
 
-            bool found = false;
-            float bestDistance = maxDistance;
-            ushort bestActor = 0;
-            HitboxType bestType = HitboxType.Body;
-            bool bestUsedFallback = false;
-            Vec3 bestTravel = default;
-
-            for (int i = 0; i < targets.Length; i++)
-            {
-                ref readonly HitscanTarget target = ref targets[i];
-
-                if (!target.IsAlive) continue;
-                if (target.ActorId == shooterActorId) continue;   // trap 5
-
-                // Not a target at all, rather than a hit for nothing: the hull around the seat is
-                // what the round meets, and the occlusion test below is what stops it there.
-                if (target.InEnclosedSeat && !piercing) continue;
-
-                HitboxSet boxes;
-                bool usedFallback;
-                Vec3 travel = default;
-
-                if (_history.TryGetFrame(target.ActorId, targetTick, out HitboxHistory.Frame frame))
-                {
-                    boxes = frame.Boxes;
-                    usedFallback = false;
-                    travel = target.Present.Torso.Center - frame.Boxes.Torso.Center;
-                }
-                else
-                {
-                    // No frame: the actor was outside the relevance filter until moments ago,
-                    // or the match just started. Resolving against the present is strictly
-                    // better than declaring the target unhittable for up to a second.
-                    boxes = target.Present;
-                    usedFallback = true;
-                    PresentFallbacks++;
-                }
-
-                for (int box = 0; box < HitboxSet.Count; box++)
-                {
-                    if (!boxes[box].Raycast(in origin, in ray, maxDistance, out float distance))
-                        continue;
-
-                    // Strictly nearer: on an exact tie the earlier box wins, and the boxes are
-                    // ordered head-first, so a ray entering head and torso at the same depth
-                    // resolves as the headshot it visually is.
-                    if (found && distance >= bestDistance) continue;
-
-                    found = true;
-                    bestDistance = distance;
-                    bestActor = target.ActorId;
-                    bestType = HitboxSet.TypeOf(box);
-                    bestUsedFallback = usedFallback;
-                    bestTravel = travel;
-                }
-            }
+            bool found = FindNearest(
+                targets, shooterActorId, in origin, in ray, maxDistance, targetTick, piercing,
+                out float bestDistance, out ushort bestActor, out HitboxType bestType,
+                out bool bestUsedFallback, out Vec3 bestTravel);
 
             if (!found)
             {
@@ -388,6 +336,211 @@ namespace Ironfront.Net.Replication.Combat
         /// filter is dropping actors people are shooting at.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// Fires one round along a ballistic arc (<see cref="RoundBallistics"/>) into the rewound
+        /// world and returns the nearest actor it struck: <see cref="ResolveHitscan"/> for a bullet
+        /// that drops and slows.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Owner request 2026-10-06</b>: every gun flies its own trajectory under gravity, by
+        /// real physics. The arc is cut into chords <see cref="BallisticSegmentSeconds"/> of
+        /// flight apart -- a chord of a falling path strays from it by g·dt²/8, 1.2 cm here, far
+        /// inside any hitbox -- and each chord is swept like a hitscan ray against the same
+        /// rewound poses, so the round meets the target where the shooter saw it, as a straight
+        /// shot always has. The round's flight time is not added to the rewind: the shooter is
+        /// favoured exactly as before, and holds over for the drop, not ahead for the travel.
+        /// </para>
+        /// <para>
+        /// <b>Walls, only once something is hit.</b> A miss costs no engine query, as before; a
+        /// hit is confirmed by asking the world about every chord up to it, so a round that came
+        /// down on a ridge short of its target misses.
+        /// </para>
+        /// <para>
+        /// <see cref="HitResult.Distance"/> is the length of the path flown, which is what the
+        /// weapon's damage drop-off has always been measured on.
+        /// </para>
+        /// </remarks>
+        /// <param name="launch">The direction the round leaves the muzzle, <see cref="RoundBallistics.LaunchDirection"/>.</param>
+        /// <param name="range">The longest path, metres, the round may fly.</param>
+        public HitResult ResolveBallistic(
+            ReadOnlySpan<HitscanTarget> targets,
+            ushort shooterActorId,
+            in Vec3 muzzle,
+            in Vec3 launch,
+            in RoundBallistics round,
+            float range,
+            float smoothedRttMs,
+            uint currentTick,
+            bool piercing = false,
+            in Vec3 shooterTravel = default)
+        {
+            if (!round.IsBallistic)
+                return ResolveHitscan(
+                    targets, shooterActorId, in muzzle, in launch, range, smoothedRttMs, currentTick,
+                    piercing, in shooterTravel);
+
+            ShotsResolved++;
+            BallisticShots++;
+
+            uint targetTick = ResolveTargetTick(currentTick, smoothedRttMs);
+
+            if (!IsFinite(in muzzle) || !IsFinite(in launch)) return HitResult.Miss(targetTick);
+
+            Vec3 direction = launch.Normalized;
+            if (direction.SqrMagnitude < 0.5f) return HitResult.Miss(targetTick);
+
+            Span<Vec3> points = stackalloc Vec3[MaxBallisticSegments + 1];
+            points[0] = muzzle;
+            int count = 1;
+            float flown = 0f;
+
+            for (int segment = 1; segment <= MaxBallisticSegments && flown < range; segment++)
+            {
+                Vec3 from = points[count - 1];
+                Vec3 next = round.PositionAt(in muzzle, in direction, segment * BallisticSegmentSeconds);
+                Vec3 chord = next - from;
+                float length = chord.Magnitude;
+                if (!(length > 1e-4f)) break;
+
+                Vec3 along = chord * (1f / length);
+                float allowed = range - flown;
+                if (length > allowed)
+                {
+                    length = allowed;
+                    next = from + along * length;
+                }
+
+                if (FindNearest(
+                        targets, shooterActorId, in from, in along, length, targetTick, piercing,
+                        out float distance, out ushort actor, out HitboxType type,
+                        out bool usedFallback, out Vec3 victimTravel))
+                {
+                    Vec3 point = from + along * distance;
+
+                    for (int i = 1; i < count; i++)
+                    {
+                        if (IsOccluded(in points[i - 1], in points[i], 0, shooterActorId, default, in shooterTravel))
+                        {
+                            ShotsOccluded++;
+                            return HitResult.Miss(targetTick);
+                        }
+                    }
+
+                    if (IsOccluded(in from, in point, actor, shooterActorId, in victimTravel, in shooterTravel))
+                    {
+                        ShotsOccluded++;
+                        return HitResult.Miss(targetTick);
+                    }
+
+                    ShotsHit++;
+                    return new HitResult(true, actor, type, in point, flown + distance, targetTick, usedFallback);
+                }
+
+                points[count++] = next;
+                flown += length;
+            }
+
+            return HitResult.Miss(targetTick);
+        }
+
+        /// <summary>Seconds of flight between the chords <see cref="ResolveBallistic"/> sweeps.</summary>
+        public const float BallisticSegmentSeconds = 0.1f;
+
+        /// <summary>The most chords one round is swept in: 6.4 s of flight, past every gun's range.</summary>
+        public const int MaxBallisticSegments = 64;
+
+        /// <summary>Rounds resolved along a ballistic arc rather than a straight ray.</summary>
+        public long BallisticShots { get; private set; }
+
+        private bool IsOccluded(
+            in Vec3 from, in Vec3 to, ushort victimActorId, ushort shooterActorId,
+            in Vec3 victimTravel, in Vec3 shooterTravel)
+        {
+            if (Occlusion == null) return false;
+            float length = (to - from).Magnitude;
+            return Occlusion(new OcclusionQuery(
+                in from, in to, length, victimActorId, shooterActorId, in victimTravel, in shooterTravel));
+        }
+
+        /// <summary>
+        /// The nearest rewound hitbox <paramref name="ray"/> enters within
+        /// <paramref name="maxDistance"/> of <paramref name="origin"/>, walls not considered.
+        /// </summary>
+        private bool FindNearest(
+            ReadOnlySpan<HitscanTarget> targets,
+            ushort shooterActorId,
+            in Vec3 origin,
+            in Vec3 ray,
+            float maxDistance,
+            uint targetTick,
+            bool piercing,
+            out float bestDistance,
+            out ushort bestActor,
+            out HitboxType bestType,
+            out bool bestUsedFallback,
+            out Vec3 bestTravel)
+        {
+            bool found = false;
+            bestDistance = maxDistance;
+            bestActor = 0;
+            bestType = HitboxType.Body;
+            bestUsedFallback = false;
+            bestTravel = default;
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                ref readonly HitscanTarget target = ref targets[i];
+
+                if (!target.IsAlive) continue;
+                if (target.ActorId == shooterActorId) continue;   // trap 5
+
+                // Not a target at all, rather than a hit for nothing: the hull around the seat is
+                // what the round meets, and the occlusion test is what stops it there.
+                if (target.InEnclosedSeat && !piercing) continue;
+
+                HitboxSet boxes;
+                bool usedFallback;
+                Vec3 travel = default;
+
+                if (_history.TryGetFrame(target.ActorId, targetTick, out HitboxHistory.Frame frame))
+                {
+                    boxes = frame.Boxes;
+                    usedFallback = false;
+                    travel = target.Present.Torso.Center - frame.Boxes.Torso.Center;
+                }
+                else
+                {
+                    // No frame: the actor was outside the relevance filter until moments ago,
+                    // or the match just started. Resolving against the present is strictly
+                    // better than declaring the target unhittable for up to a second.
+                    boxes = target.Present;
+                    usedFallback = true;
+                    PresentFallbacks++;
+                }
+
+                for (int box = 0; box < HitboxSet.Count; box++)
+                {
+                    if (!boxes[box].Raycast(in origin, in ray, maxDistance, out float distance))
+                        continue;
+
+                    // Strictly nearer: on an exact tie the earlier box wins, and the boxes are
+                    // ordered head-first, so a ray entering head and torso at the same depth
+                    // resolves as the headshot it visually is.
+                    if (found && distance >= bestDistance) continue;
+
+                    found = true;
+                    bestDistance = distance;
+                    bestActor = target.ActorId;
+                    bestType = HitboxSet.TypeOf(box);
+                    bestUsedFallback = usedFallback;
+                    bestTravel = travel;
+                }
+            }
+
+            return found;
+        }
+
         private void MeasureNearestMiss(
             ReadOnlySpan<HitscanTarget> targets, ushort shooterActorId,
             in Vec3 origin, in Vec3 ray, float maxDistance, uint targetTick, bool piercing)
@@ -463,6 +616,7 @@ namespace Ironfront.Net.Replication.Combat
             ShotsHit = 0;
             PresentFallbacks = 0;
             ShotsOccluded = 0;
+            BallisticShots = 0;
             NearestMissesMeasured = 0;
             LastNearestMiss = HitboxMiss.None;
         }

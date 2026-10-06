@@ -92,7 +92,9 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   configuration:
-    speed: 600
+    speed: 808
+    dragPerMetre: 0.0008
+    zeroMetres: 100
     impactForce: 110
     lifetime: 6
     damage: 52

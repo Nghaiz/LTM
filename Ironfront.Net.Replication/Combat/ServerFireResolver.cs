@@ -167,13 +167,22 @@ namespace Ironfront.Net.Replication.Combat
                 muzzle = origin - travelled;
             }
 
+            // A gun's bullet flies its own arc (RoundBallistics): gravity and drag, and the barrel
+            // tilted up to the sights' zero. Owner request 2026-10-06. Anything without one is
+            // still a straight ray.
+            RoundBallistics round = config.Round;
+
             for (int projectile = 0; projectile < config.ProjectilesPerShot; projectile++)
             {
                 Vec3 direction = ApplySpread(in aim, config.Spread * DiagnosticSpreadScale);
 
-                HitResult hit = _lagCompensator.ResolveHitscan(
-                    targets, shooterActorId, in muzzle, in direction,
-                    config.Range, smoothedRttMs, currentTick, config.Piercing, in travelled);
+                HitResult hit = round.IsBallistic
+                    ? _lagCompensator.ResolveBallistic(
+                        targets, shooterActorId, in muzzle, round.LaunchDirection(in direction), in round,
+                        config.Range, smoothedRttMs, currentTick, config.Piercing, in travelled)
+                    : _lagCompensator.ResolveHitscan(
+                        targets, shooterActorId, in muzzle, in direction,
+                        config.Range, smoothedRttMs, currentTick, config.Piercing, in travelled);
 
                 if (!hit.Hit) continue;
                 if (hitCount >= hits.Length) continue;
