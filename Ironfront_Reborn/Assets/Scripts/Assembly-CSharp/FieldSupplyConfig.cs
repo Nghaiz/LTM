@@ -61,6 +61,24 @@ public sealed class FieldSupplyConfig : ScriptableObject
 	public float fieldRespawnSeconds = 45f;
 
 	/// <summary>
+	/// Boats moored at a random place along a shore each match -- a lake's edge or an island's -- and
+	/// moored somewhere else along it once wrecked or abandoned, after
+	/// <see cref="fieldRespawnSeconds"/> like a field vehicle. Owner 2026-10-07: "a boat placed at
+	/// random each match, round the lake's edge or the edge of the island in the middle of it".
+	/// </summary>
+	[Header("Boats moored along a shore")]
+	public VehicleChoice[] shoreVehicles = new VehicleChoice[0];
+
+	public int shoreVehicleCount;
+
+	/// <summary>
+	/// Most metres from a moored boat's centre to dry land: at the water's edge, not out on open water.
+	/// On Forest Lake 10 put the boat by the island 88 % of the time, the lake's own shore being
+	/// shallow; 15 splits it about evenly between the two (measured 2026-10-07).
+	/// </summary>
+	public float shoreReach = 15f;
+
+	/// <summary>
 	/// The ammunition crate: a deployable (an <see cref="Ammobox"/> with a <see cref="FieldCrate"/>),
 	/// so the server replicates it as it does a dropped bag and it resupplies both sides.
 	/// </summary>

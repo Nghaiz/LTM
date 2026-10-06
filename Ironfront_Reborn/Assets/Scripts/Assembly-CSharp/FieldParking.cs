@@ -77,6 +77,58 @@ public sealed class FieldParking
 		return true;
 	}
 
+	/// <summary>Bearings round a mooring tested for dry land, on each of <see cref="ShoreRings"/> rings.</summary>
+	private const int ShoreBearings = 16;
+
+	private const int ShoreRings = 4;
+
+	/// <summary>
+	/// Whether <paramref name="probe"/> is water at least <see cref="MinMooringDepth"/> deep with dry
+	/// land within <paramref name="reach"/> metres -- a lake's edge or an island's, not open water --
+	/// and the heading, in degrees, that points away from the nearest of that land, so a boat moored
+	/// there noses out onto the water.
+	/// </summary>
+	/// <remarks>
+	/// Read off the terrain's heightmap and the water's own surface, nearest ring first, so the cheap
+	/// test can run over many random points before <see cref="CanMoor"/>'s physics checks the hull.
+	/// </remarks>
+	public static bool NearShore(Vector3 probe, float reach, out float awayYaw)
+	{
+		awayYaw = 0f;
+		Terrain terrain = Terrain.activeTerrain;
+		if (terrain == null || !(reach > 0f))
+		{
+			return false;
+		}
+		float water = WaterSurfaceAt(probe.x, probe.z);
+		if (float.IsNegativeInfinity(water) || water - GroundAt(terrain, probe.x, probe.z) < MinMooringDepth)
+		{
+			return false;
+		}
+		for (int ring = 1; ring <= ShoreRings; ring++)
+		{
+			float radius = reach * ring / ShoreRings;
+			for (int bearing = 0; bearing < ShoreBearings; bearing++)
+			{
+				float angle = bearing * (Mathf.PI * 2f / ShoreBearings);
+				float x = probe.x + Mathf.Cos(angle) * radius;
+				float z = probe.z + Mathf.Sin(angle) * radius;
+				if (GroundAt(terrain, x, z) > WaterSurfaceAt(x, z))
+				{
+					awayYaw = Mathf.Atan2(-Mathf.Cos(angle), -Mathf.Sin(angle)) * Mathf.Rad2Deg;
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/// <summary>The highest water surface over (x, z): the sea or a lake or river; negative infinity where there is none.</summary>
+	private static float WaterSurfaceAt(float x, float z) => Mathf.Max(WaterLevel.height, WaterLevel.BoundedSurfaceAt(x, z));
+
+	private static float GroundAt(Terrain terrain, float x, float z) =>
+		terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.GetPosition().y;
+
 	/// <summary>The play volume, shrunk by a margin; the terrain's bounds on a map without one.</summary>
 	public static Bounds PlayArea()
 	{

@@ -165,6 +165,32 @@ public class WaterLevel : MonoBehaviour
 		return highest;
 	}
 
+	/// <summary>
+	/// The ground rectangle (x, z) round every lake and river of the loaded map, or false when it
+	/// has none. A boat is looked for inside it rather than over the whole map.
+	/// </summary>
+	public static bool TryGetBoundedArea(out Rect area)
+	{
+		area = default;
+		bool found = false;
+		for (int i = 0; i < surfaces.Count; i++)
+		{
+			WaterLevel body = surfaces[i];
+			if (body.grid == null)
+			{
+				body.grid = SurfaceGrid.Build(body);
+			}
+			Rect covered = body.grid.Area;
+			if (covered.width <= 0f || covered.height <= 0f)
+			{
+				continue;
+			}
+			area = found ? Rect.MinMaxRect(Mathf.Min(area.xMin, covered.xMin), Mathf.Min(area.yMin, covered.yMin), Mathf.Max(area.xMax, covered.xMax), Mathf.Max(area.yMax, covered.yMax)) : covered;
+			found = true;
+		}
+		return found;
+	}
+
 	/// <summary>The loaded map's lakes and rivers, as <see cref="MovementCore"/> reads them.</summary>
 	private sealed class BoundedSurfaces : IBoundedWater
 	{
@@ -211,6 +237,9 @@ public class WaterLevel : MonoBehaviour
 				heights[i] = float.NegativeInfinity;
 			}
 		}
+
+		/// <summary>The ground rectangle (x, z) the grid covers; empty for a body with no mesh.</summary>
+		public Rect Area => new Rect(minX, minZ, width * CellSize, depth * CellSize);
 
 		public float HeightAt(float x, float z)
 		{
