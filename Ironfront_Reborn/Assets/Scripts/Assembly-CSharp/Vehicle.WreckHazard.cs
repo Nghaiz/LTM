@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Unity;
-using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
 /// <summary>
@@ -205,17 +204,24 @@ public partial class Vehicle
 		return Physics.Linecast(from, to, HazardShieldMask, QueryTriggerInteraction.Ignore);
 	}
 
-	/// <summary>The actor a network id names, or null: offline, or nobody in particular.</summary>
+	/// <summary>
+	/// The actor a network id names, or null: offline, or nobody in particular. Found through
+	/// <see cref="ActorManager.ResolveAttackerId"/>, the one place Assembly-CSharp already maps an
+	/// actor to its id, rather than by reaching into the server assembly (ledger E-11).
+	/// </summary>
 	private static Actor ActorWithId(int actorId)
 	{
-		if (actorId == NoAttacker || actorId < 0 || actorId > ushort.MaxValue)
+		if (actorId == NoAttacker || ActorManager.instance == null || ActorManager.instance.actors == null)
 		{
 			return null;
 		}
-		if (!ServerActorRegistry.Instance.TryFind((ushort)actorId, out NetServerActor replicated) || replicated == null)
+		foreach (Actor candidate in ActorManager.instance.actors)
 		{
-			return null;
+			if (candidate != null && ActorManager.ResolveAttackerId(candidate) == actorId)
+			{
+				return candidate;
+			}
 		}
-		return replicated.GetComponent<Actor>();
+		return null;
 	}
 }
