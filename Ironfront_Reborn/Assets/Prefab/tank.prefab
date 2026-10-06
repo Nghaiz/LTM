@@ -25426,6 +25426,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d6316386184580ee22c6b4f5b47f7d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  blastTntKg: 25
+  fireRadiatedMegawatts: 2
+  blastVulnerability: 0.05
   targetType: 3
   seats:
   - {fileID: 114460948981978761}
@@ -25437,7 +25440,6 @@ MonoBehaviour:
   spotChanceMultiplier: 10
   burnTime: 4
   crashSkipsBurn: 0
-  directJavelinPath: 0
   exitWhenTakingFire: 0
   damageParticles: {fileID: 198263497966372040}
   burnParticles: {fileID: 198785947540083602}
