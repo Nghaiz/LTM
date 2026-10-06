@@ -6,65 +6,96 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
-    /// A landing hurts by the energy it carries: nothing from a drop a soldier jumps down unhurt,
-    /// death from about four storeys (owner request 2026-10-06, a bail-out from a high helicopter).
+    /// The owner's fall-damage scale (2026-10-06): nothing from a 3 m free fall, instant death at
+    /// full health from 20 m, in between by the impact's energy -- so just short of 20 m leaves
+    /// 1 HP -- and a body that hits faster than its height alone, thrown by a force, pays for the
+    /// extra speed.
     /// </summary>
     public sealed class FallDamageTests
     {
-        private static float ImpactFromRealDrop(float metres) => (float)Math.Sqrt(2.0 * FallDamage.RealGravity * metres);
+        private const float OneG = 9.81f;
+        private static float PlayerGravity => -MovementCore.Gravity;
 
-        [Fact]
-        public void AJumpLandsUnhurt()
-        {
-            Assert.Equal(0f, FallDamage.ForImpact(MovementCore.JumpSpeed));
-        }
+        private static float FreeFall(float metres, float gravity) => (float)Math.Sqrt(2.0 * gravity * metres);
 
         [Theory]
         [InlineData(0f)]
         [InlineData(1.5f)]
         [InlineData(3f)]
-        public void ADropASoldierJumpsDownFromCostsNothing(float metres)
+        public void AFallOfThreeMetresOrLessCostsNothing(float metres)
         {
-            Assert.Equal(0f, FallDamage.ForImpact(ImpactFromRealDrop(metres)));
+            Assert.Equal(0f, FallDamage.ForDrop(metres));
+            Assert.Equal(0f, FallDamage.ForImpact(FreeFall(metres, OneG), OneG), 3);
+        }
+
+        [Theory]
+        [InlineData(20f)]
+        [InlineData(25f)]
+        [InlineData(60f)]
+        public void AFallOfTwentyMetresOrMoreKillsAFullHealthSoldier(float metres)
+        {
+            Assert.True(FallDamage.ForDrop(metres) >= FallDamage.FullHealth - 0.001f);
+            Assert.True(FallDamage.ForImpact(FreeFall(metres, OneG), OneG) >= FallDamage.FullHealth - 0.01f);
         }
 
         [Fact]
-        public void FourStoreysKillAFullHealthSoldier()
+        public void JustShortOfTwentyMetresLeavesOneHealth()
         {
-            Assert.True(FallDamage.ForImpact(ImpactFromRealDrop(FallDamage.LethalDropMetres)) >= FallDamage.FullHealth - 0.01f);
-            Assert.True(FallDamage.ForImpact(ImpactFromRealDrop(30f)) > FallDamage.FullHealth);
+            float left = FallDamage.FullHealth - FallDamage.ForImpact(FreeFall(19.83f, PlayerGravity), PlayerGravity);
+
+            Assert.InRange(left, 0.9f, 1.1f);
+            Assert.True(FallDamage.ForDrop(19.99f) < FallDamage.FullHealth, "19.99 m killed outright");
+        }
+
+        [Theory]
+        [InlineData(5f, 11.76f)]
+        [InlineData(11.5f, 50f)]
+        [InlineData(15f, 70.59f)]
+        public void InBetweenEachMetreOfFreeFallCostsTheSame(float metres, float damage)
+        {
+            Assert.Equal(damage, FallDamage.ForDrop(metres), 1);
+            Assert.Equal(damage, FallDamage.ForImpact(FreeFall(metres, OneG), OneG), 1);
         }
 
         [Fact]
-        public void DamageGrowsWithTheHeightFallenPastTheSafeDrop()
+        public void BeingThrownHurtsMoreThanFallingTheSameHeight()
         {
-            // Energy above the safe landing, so equal steps of height cost equal health:
-            // 6 m is a quarter of the way from 3 m to 15 m, 9 m half.
-            Assert.Equal(25f, FallDamage.ForImpact(ImpactFromRealDrop(6f)), 2);
-            Assert.Equal(50f, FallDamage.ForImpact(ImpactFromRealDrop(9f)), 2);
+            // A 10 m free fall, and the same body thrown down 10 m by a blast that started it at
+            // 10 m/s: the second lands at 17.2 m/s and pays for it.
+            float fell = FallDamage.ForImpact(FreeFall(10f, OneG), OneG);
+            float thrown = FallDamage.ForImpact(FallDamage.LandingSpeed(10f, 10f, OneG), OneG);
+
+            Assert.Equal(41.18f, fell, 1);
+            Assert.True(thrown > fell + 25f, $"thrown {thrown:F1} vs fallen {fell:F1}");
         }
 
         [Fact]
-        public void TheThresholdsAreRealDropsUnderRealGravity()
+        public void HittingAWallAtTwentyMetresASecondIsATwentyMetreFall()
         {
-            Assert.Equal(7.67f, FallDamage.SafeImpactSpeed, 2);
-            Assert.Equal(17.16f, FallDamage.LethalImpactSpeed, 2);
+            Assert.True(FallDamage.ForImpact(20f, OneG) >= FallDamage.FullHealth);
+            Assert.Equal(FallDamage.LethalImpactSpeed(OneG), FreeFall(20f, OneG), 3);
+        }
+
+        [Fact]
+        public void ANormalJumpOnFlatGroundCostsNothing()
+        {
+            Assert.Equal(0f, FallDamage.ForImpact(MovementCore.JumpSpeed, PlayerGravity));
+        }
+
+        [Fact]
+        public void EachBodysOwnGravityMakesTwentyMetresLethal()
+        {
+            // A ragdoll falls at 1 g, a player at 1.2 g: a 20 m free fall kills both.
+            Assert.Equal(FallDamage.FullHealth, FallDamage.ForImpact(FreeFall(20f, OneG), OneG), 2);
+            Assert.Equal(FallDamage.FullHealth, FallDamage.ForImpact(FreeFall(20f, PlayerGravity), PlayerGravity), 2);
         }
 
         [Fact]
         public void AnUpwardOrUnknownSpeedCostsNothing()
         {
-            Assert.Equal(0f, FallDamage.ForImpact(-20f));
-            Assert.Equal(0f, FallDamage.ForImpact(float.NaN));
-        }
-
-        [Fact]
-        public void TheGamesOwnGravityMakesAFortyMetreBailOutFatal()
-        {
-            // MovementCore falls at 1.2 g: a player who leaves a helicopter 40 m up lands at
-            // sqrt(2 * 11.77 * 40) = 30.7 m/s.
-            float landing = (float)Math.Sqrt(2.0 * -MovementCore.Gravity * 40.0);
-            Assert.True(FallDamage.ForImpact(landing) > FallDamage.FullHealth);
+            Assert.Equal(0f, FallDamage.ForImpact(-20f, OneG));
+            Assert.Equal(0f, FallDamage.ForImpact(float.NaN, OneG));
+            Assert.Equal(0f, FallDamage.ForDrop(float.NaN));
         }
     }
 }

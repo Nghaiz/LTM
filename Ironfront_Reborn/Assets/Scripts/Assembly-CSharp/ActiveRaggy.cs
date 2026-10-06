@@ -302,6 +302,30 @@ public class ActiveRaggy : MonoBehaviour
 		return rigidbodies[0].linearVelocity;
 	}
 
+	/// <summary>
+	/// The velocity of the whole body's centre of mass: every part's velocity weighted by its
+	/// mass. Unlike <see cref="Velocity"/> (the hips alone) it changes only when something outside
+	/// the body pushes on it -- the ground, a wall, a blast -- because the joints pulling the parts
+	/// on each other cancel out. That is what a landing's fall damage is measured on
+	/// (<c>Actor.TrackRagdollFall</c>).
+	/// </summary>
+	public Vector3 CenterOfMassVelocity()
+	{
+		Vector3 momentum = Vector3.zero;
+		float mass = 0f;
+		for (int i = 0; i < rigidbodies.Length; i++)
+		{
+			Rigidbody part = rigidbodies[i];
+			if (part == null)
+			{
+				continue;
+			}
+			momentum += part.linearVelocity * part.mass;
+			mass += part.mass;
+		}
+		return mass > 0f ? momentum / mass : Velocity();
+	}
+
 	public Rigidbody MainRigidbody()
 	{
 		return rigidbodies[0];

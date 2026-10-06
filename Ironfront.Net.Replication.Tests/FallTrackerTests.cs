@@ -42,24 +42,26 @@ namespace Ironfront.Net.Replication.Tests
             return landed;
         }
 
+        private static float G => -MovementCore.Gravity;
+
         [Fact]
         public void AKerbCostsNothingThoughTheStickPullReadsTenMetresASecond()
         {
-            // The velocity at this landing is about -10.4 m/s, which FallDamage would charge a
-            // fifth of a soldier's health for. The height says 3 m/s.
+            // The velocity at this landing is about -10.4 m/s, the speed of a 4.6 m fall. The
+            // height says 3.4 m/s.
             float landed = WalkOffAnEdge(0.5f);
 
-            Assert.InRange(landed, 3.0f, 3.6f);
-            Assert.Equal(0f, FallDamage.ForImpact(landed));
+            Assert.Equal(FallDamage.LandingSpeed(0.5f, 0f, G), landed, 2);
+            Assert.Equal(0f, FallDamage.ForImpact(landed, G));
         }
 
         [Fact]
-        public void ALongFallLandsAtTheSpeedOfItsHeight()
+        public void ALongFallLandsFromItsHeight()
         {
             float landed = WalkOffAnEdge(40f);
 
-            Assert.Equal(FallTracker.ImpactSpeed(40f, 0f), landed, 0);
-            Assert.True(FallDamage.ForImpact(landed) > FallDamage.FullHealth);
+            Assert.Equal(FallDamage.LandingSpeed(40f, 0f, G), landed, 2);
+            Assert.True(FallDamage.ForImpact(landed, G) > FallDamage.FullHealth);
         }
 
         [Fact]
@@ -78,7 +80,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             float landed = WalkOffAnEdge(4f, jump: true);
 
-            Assert.True(landed > FallTracker.ImpactSpeed(4f, 0f));
+            Assert.Equal(FallDamage.LandingSpeed(4f, MovementCore.JumpSpeed, G), landed, 2);
         }
 
         [Fact]
@@ -89,7 +91,7 @@ namespace Ironfront.Net.Replication.Tests
             tracker.Rebase(42f);                  // left its seat 40 m above that ground
             tracker.Observe(false, 30f, -15f);
 
-            Assert.Equal(FallTracker.ImpactSpeed(40f, 0f), tracker.Observe(true, 2f, -30f), 3);
+            Assert.Equal(FallDamage.LandingSpeed(40f, 0f, G), tracker.Observe(true, 2f, -30f), 3);
         }
 
         [Fact]
@@ -106,7 +108,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void LandingHigherThanTheTakeoffPaysOnlyTheTakeoff()
         {
-            Assert.Equal(MovementCore.JumpSpeed, FallTracker.ImpactSpeed(-1f, MovementCore.JumpSpeed), 3);
+            Assert.Equal(MovementCore.JumpSpeed, FallDamage.LandingSpeed(-1f, MovementCore.JumpSpeed, G), 3);
         }
     }
 }

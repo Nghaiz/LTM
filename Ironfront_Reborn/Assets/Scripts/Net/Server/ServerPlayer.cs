@@ -411,15 +411,15 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
-        /// The fall damage of a landing at <paramref name="impactSpeed"/> metres a second
-        /// (<see cref="FallDamage"/>), and the death when it is enough.
+        /// The fall damage of a landing at <paramref name="impactSpeed"/> m/s (<see cref="FallDamage"/>:
+        /// nothing from a 3 m fall, death from a 20 m one), and the death when it is enough.
         /// </summary>
         /// <remarks>
         /// <para>
         /// <b>Owner request 2026-10-06</b>: a player who leaves a helicopter high up takes fall
         /// damage on landing, and a high enough fall kills. The fall is this server's own
-        /// simulation (a client sends move axes and a jump bit, never a velocity), so the speed
-        /// cannot be forged, and it is the speed the client predicted as well.
+        /// simulation (a client sends move axes and a jump bit, never a velocity), so the fall
+        /// cannot be forged, and it is the fall the client predicted as well.
         /// </para>
         /// <para>
         /// <b>The speed of the height fallen</b> (<see cref="FallTracker"/>), from the last ground
@@ -440,7 +440,7 @@ namespace Ironfront.Net.Unity.Server
         {
             if (Actor == null || !Actor.IsAlive) return;
 
-            float damage = FallDamage.ForImpact(impactSpeed);
+            float damage = FallDamage.ForImpact(impactSpeed, -MovementCore.Gravity);
             if (damage <= 0f) return;
 
             float remaining = Actor.Health - damage;

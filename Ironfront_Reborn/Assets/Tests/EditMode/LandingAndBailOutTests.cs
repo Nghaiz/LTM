@@ -90,12 +90,12 @@ namespace Ironfront.Net.Unity.Server.Tests
         [Test]
         public void AHighDropCostsHealthByTheHeightFallen()
         {
-            const float height = 7.5f;   // in the game's 1.2 g: half a soldier's health
+            const float height = 11.5f;  // half a soldier's health on the owner's 3-20 m scale
             ServerPlayer player = PlayerFallingFrom(height, out NetServerActor body);
 
             Land(player);
 
-            float expected = 100f - FallDamage.ForImpact(FallTracker.ImpactSpeed(height, 0f));
+            float expected = 100f - FallDamage.ForDrop(height);
             Assert.AreEqual(expected, body.Health, 1f);
             Assert.IsTrue(body.IsAlive);
         }
@@ -109,6 +109,22 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             Assert.IsFalse(body.IsAlive, "a 40 m fall left the player alive");
             Assert.AreEqual(0f, body.Health, 0.001f);
+        }
+
+        [Test]
+        public void TwentyMetresKillsAndJustUnderLeavesAFewHealth()
+        {
+            // The owner's scale: 20 m is instant death at full health, just under it is not.
+            ServerPlayer player = PlayerFallingFrom(FallDamage.LethalDropMetres + 0.2f, out NetServerActor body);
+            Land(player);
+            Assert.IsFalse(body.IsAlive, "20 m left the player alive");
+
+            ServerActorRegistry.Instance.Unregister(body);
+            Object.DestroyImmediate(_body);
+            ServerPlayer survivor = PlayerFallingFrom(19.6f, out NetServerActor lucky);
+            Land(survivor);
+            Assert.IsTrue(lucky.IsAlive, "a fall just under 20 m killed the player");
+            Assert.That(lucky.Health, Is.InRange(1f, 5f));
         }
 
         [Test]
