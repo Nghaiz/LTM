@@ -146,10 +146,8 @@ namespace Ironfront.Net.Replication.Tests
         /// <para>
         /// <b>RECON_LRR and EAGLE_76 are here because they are the same defect, not neighbours of
         /// it.</b> Same field, same table, same error, and the asset answers all four the same way.
-        /// <c>SIGNAL_DMR</c> is deliberately NOT here: <c>dmr.prefab</c> authors <c>auto: 1</c>
-        /// while the catalogue says semi, and that opposite-signed disagreement is a cadence
-        /// decision about a shipped weapon rather than this defect -- it is booked in
-        /// <c>WeaponCatalog</c> beside the entry.
+        /// <c>SIGNAL_DMR</c> is not here: <c>dmr.prefab</c> authors <c>auto: 1</c>, and since
+        /// 2026-10-07 the catalogue follows it (<c>WeaponCatalogPrefabTests</c> pins every row).
         /// </para>
         /// </remarks>
         [Theory]

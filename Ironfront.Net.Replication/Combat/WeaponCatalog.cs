@@ -401,13 +401,13 @@ namespace Ironfront.Net.Replication.Combat
                 dropoffStartMetres: 248.3f, dropoffEndMetres: 500f, dropoffMinMultiplier: 0.9f,
                 automatic: false, piercing: true, round: Rounds.SlDefender);
 
-            // dmr.prefab. Semi-auto, 20-round magazine.
+            // dmr.prefab. Automatic, as its prefab authors it (`auto: 1`), 20-round magazine.
             configs[WeaponIds.SIGNAL_DMR] = new WeaponConfig(
                 cooldown: 0.14f, spread: 0.0012f, projectilesPerShot: 1, range: 800f,
                 damage: 38f, force: 100f, clipSize: 20, spareAmmo: 120,
                 balanceDamage: 60f,
                 dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f,
-                automatic: false, round: Rounds.SignalDmr);
+                automatic: true, round: Rounds.SignalDmr);
 
             // RFB.prefab (ScopedWeapon). A fast-firing marksman rifle, not the bolt-action the
             // placeholder assumed - 0.1 s and 14 rounds against the guessed 1.5 s and 5. `auto: 0`
@@ -435,13 +435,14 @@ namespace Ironfront.Net.Replication.Combat
             // or a throwable with a clip of one is one press per shot by construction and its
             // prefab says 0 as well.
             //
-            // ONE ENTRY IS NOT READ FROM ITS ASSET, and it is named here rather than left to be
-            // rediscovered: SIGNAL_DMR. dmr.prefab authors `auto: 1` and this row says false, on
-            // the strength of the entry's own "Semi-auto" comment. That disagreement is the one
-            // place this column and the assets part company, it is in the harmless direction --
-            // semi-automatic cannot double-fire -- and resolving it is a cadence decision about a
-            // shipped weapon rather than a fix for the sidearm defect, so it is deliberately left
-            // where it was and booked here.
+            // SIGNAL_DMR was the one row not read from its asset: dmr.prefab authors `auto: 1` and
+            // this row said false, on the strength of its own "Semi-auto" comment, booked here as
+            // "the harmless direction". It was not harmless (owner report 2026-10-07: "the DMR
+            // fires forever, the count drops by one and comes straight back"): the player's client
+            // fires the engine weapon off the prefab, so a held trigger fired at the cooldown on
+            // the client while the server fired once per press and handed the unspent round back
+            // in every snapshot. The row follows its prefab now, and WeaponCatalogPrefabTests
+            // (EditMode) fails the moment any gun's cadence, clip or auto flag parts from its asset.
             //
             // Launched. smaw.prefab -> rocket.prefab (Rocket): damage 1000, balanceDamage 400.
             // The placeholder had this as an 8-pellet shotgun doing 12 a pellet.

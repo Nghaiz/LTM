@@ -41,8 +41,14 @@ namespace Ironfront.Net.Replication.Tests
         private const ushort LocalActor = 1;
         private const float Now = 10f;
 
-        /// <summary>SIGNAL DMR: the weapon the measured run used. 0.14 s cooldown, clip of 20.</summary>
-        private static WeaponConfig SemiAuto => WeaponCatalog.For(WeaponIds.SIGNAL_DMR);
+        /// <summary>
+        /// RECON LRR: semi-automatic in its prefab (<c>RFB.prefab</c>, <c>auto: 0</c>), 0.1 s cooldown,
+        /// clip of 14. The measured run used the SIGNAL DMR, which was semi-automatic only in the
+        /// catalogue; its prefab is automatic and the catalogue follows it since 2026-10-07.
+        /// </summary>
+        private const byte SemiAutoId = WeaponIds.RECON_LRR;
+
+        private static WeaponConfig SemiAuto => WeaponCatalog.For(SemiAutoId);
 
         /// <summary>RK-44: the control. Same trigger, opposite <see cref="WeaponConfig.Automatic"/>.</summary>
         private static WeaponConfig Automatic => WeaponCatalog.For(WeaponIds.RK44);
@@ -51,10 +57,10 @@ namespace Ironfront.Net.Replication.Tests
         /// SL-DEFENDER: the weapon the two switch tests swap TO.
         /// </summary>
         /// <remarks>
-        /// Its 1.5 s cooldown is more than ten times the DMR's, and a SERVER-side swap does not
+        /// Its 1.5 s cooldown is more than ten times the semi-automatic's, and a SERVER-side swap does not
         /// reset <c>_runtime.LastFiredTime</c> — only <see cref="ClientCombatState.EquipWeapon"/>
         /// does. So the wait before the second press is stated against THIS cooldown: against
-        /// the DMR's, the re-armed edge is spent immediately on a shot the COOLDOWN refuses, and
+        /// the semi-automatic's, the re-armed edge is spent immediately on a shot the COOLDOWN refuses, and
         /// the test would report a dead trigger while measuring something else entirely. The
         /// edge being consumed by a refused attempt is correct and is the server's behaviour
         /// too — <c>Advance</c> writes <c>WasEffective</c> before the resolver is consulted.
@@ -63,7 +69,7 @@ namespace Ironfront.Net.Replication.Tests
 
         /// <summary>
         /// How many cooldowns a "held" press covers. Large enough that an ungated client
-        /// empties the SIGNAL DMR's whole 20-round clip, which is what the run recorded.
+        /// empties a whole clip (the SIGNAL DMR's 20 in the run), which is what the run recorded.
         /// </summary>
         private const int CooldownsPerPress = 20;
 
@@ -122,7 +128,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void HoldingTheTriggerOnASemiAutomaticSpendsExactlyOneRound()
         {
-            var state = Armed(WeaponIds.SIGNAL_DMR);
+            var state = Armed(SemiAutoId);
             int ticks = Ticks(SemiAuto.Cooldown * CooldownsPerPress);
 
             int predicted = Hold(state, ticks, fire: true, startAt: Now);
@@ -160,7 +166,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void ReleasingAndPressingAgainSpendsASecondRound()
         {
-            var state = Armed(WeaponIds.SIGNAL_DMR);
+            var state = Armed(SemiAutoId);
             int ticks = Ticks(SemiAuto.Cooldown * CooldownsPerPress);
             float press2 = Now + SemiAuto.Cooldown * (CooldownsPerPress + 2);
 
@@ -181,8 +187,8 @@ namespace Ironfront.Net.Replication.Tests
             // EffectiveTriggerPolicy's remark says that difference is bounded and harmless, and
             // this is the assertion behind the claim -- a faster loop samples the same held
             // button more often, and the edge collapses every extra sample.
-            var slow = Armed(WeaponIds.SIGNAL_DMR);
-            var fast = Armed(WeaponIds.SIGNAL_DMR);
+            var slow = Armed(SemiAutoId);
+            var fast = Armed(SemiAutoId);
             float seconds = SemiAuto.Cooldown * CooldownsPerPress;
 
             int slowShots = Hold(slow, Ticks(seconds), fire: true, startAt: Now);
@@ -205,7 +211,7 @@ namespace Ironfront.Net.Replication.Tests
             // `if (FirePressed())` never sees the release, so WasEffective stays true and the
             // weapon fires once and then never again. That is worse than the bug being fixed
             // AND it reads to a grader as a flat clip, which is what success looks like.
-            var state = Armed(WeaponIds.SIGNAL_DMR);
+            var state = Armed(SemiAutoId);
             int ticks = Ticks(SemiAuto.Cooldown * CooldownsPerPress);
             float press2 = Now + SemiAuto.Cooldown * (CooldownsPerPress + 2);
 
@@ -223,7 +229,7 @@ namespace Ironfront.Net.Replication.Tests
             // ClientSession.SwitchWeaponTo re-arms the server's edge on a switch. Without the
             // matching ReArm here, a player who swaps with the trigger down is holding a weapon
             // whose edge is already spent and has to release and press again to fire it.
-            var state = Armed(WeaponIds.SIGNAL_DMR);
+            var state = Armed(SemiAutoId);
 
             Assert.Equal(1, Hold(state, Ticks(SemiAuto.Cooldown * 4), fire: true, startAt: Now));
 
@@ -239,7 +245,7 @@ namespace Ironfront.Net.Replication.Tests
             // The OTHER way a weapon changes: a respawn with a different loadout, or a pickup.
             // The client never called EquipWeapon for it, so re-arming in that method alone
             // would leave exactly this path with a dead trigger.
-            var state = Armed(WeaponIds.SIGNAL_DMR);
+            var state = Armed(SemiAutoId);
 
             Assert.Equal(1, Hold(state, Ticks(SemiAuto.Cooldown * 4), fire: true, startAt: Now));
 
@@ -269,7 +275,7 @@ namespace Ironfront.Net.Replication.Tests
             // the round it owes at the end of the window and this side would predict nothing --
             // and a one-round gap is INSIDE AmmoResyncThreshold, so ReconcileAmmo would KEEP
             // the wrong prediction. A silent permanent bias, not a visible correction.
-            var state = Armed(WeaponIds.SIGNAL_DMR);
+            var state = Armed(SemiAutoId);
             float window = ProtocolConstants.SPRINT_FIRE_BLOCK_SECONDS;
 
             Assert.Equal(1, Hold(state, Ticks(SemiAuto.Cooldown * 4), fire: true, startAt: Now));
