@@ -17,7 +17,7 @@ CÀI ĐẶT
        "Open Anyway" bên cạnh dòng nói về Ironfront, rồi nhập mật khẩu máy.
      - Trên macOS 14 trở về trước có cách nhanh hơn: giữ phím Control,
        bấm vào Ironfront.app, chọn Open, rồi bấm Open lần nữa.
-     Nếu macOS báo "Ironfront is damaged and can't be opened", mở Terminal
+     Nếu macOS báo game "is damaged and can't be opened", mở Terminal
      và chạy lệnh sau, rồi mở lại game:
        xattr -dr com.apple.quarantine /Applications/Ironfront.app
   4. Nếu macOS hỏi cho phép kết nối mạng đến: bấm "Allow".
@@ -64,7 +64,7 @@ INSTALL
        "Open Anyway" next to the Ironfront line and enter your password.
      - On macOS 14 and older you can instead Control-click Ironfront.app,
        choose Open, then click Open again.
-     If macOS says "Ironfront is damaged and can't be opened", run this
+     If macOS says the game "is damaged and can't be opened", run this
      in Terminal and open the game again:
        xattr -dr com.apple.quarantine /Applications/Ironfront.app
   4. If macOS asks to accept incoming network connections: click "Allow".

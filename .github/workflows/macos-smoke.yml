@@ -64,15 +64,16 @@ jobs:
           app=$(find "$PWD/extracted" -maxdepth 2 -name Ironfront.app -type d | head -1)
           if [ -z "$app" ]; then echo "::error::no Ironfront.app in the zip"; exit 1; fi
           echo "APP=$app" >> "$GITHUB_ENV"
+          # Unity names the executable after productName, not after the .app; macOS reads it here.
+          echo "EXE=$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" >> "$GITHUB_ENV"
           ls -la "$(dirname "$app")"
 
       - name: Bundle checks
         run: |
           set -euo pipefail
-          exe="$APP/Contents/MacOS/Ironfront"
-          ls -l "$exe"
-          if [ ! -x "$exe" ]; then echo "::error::Contents/MacOS/Ironfront is not executable after unzipping"; exit 1; fi
-          archs=$(lipo -archs "$exe")
+          ls -l "$EXE"
+          if [ ! -x "$EXE" ]; then echo "::error::$EXE is not executable after unzipping"; exit 1; fi
+          archs=$(lipo -archs "$EXE")
           echo "architectures: $archs"
           case " $archs " in *" x86_64 "*) ;; *) echo "::error::no x86_64 slice"; exit 1;; esac
           case " $archs " in *" arm64 "*) ;; *) echo "::error::no arm64 slice"; exit 1;; esac
@@ -94,7 +95,7 @@ jobs:
         run: |
           set -uo pipefail
           log="$PWD/player-$ARCH.log"
-          arch "-$ARCH" "$APP/Contents/MacOS/Ironfront" -logFile "$log" \
+          arch "-$ARCH" "$EXE" -logFile "$log" \
             -screen-fullscreen 0 -screen-width 1280 -screen-height 720 &
           pid=$!
           for _ in $(seq 1 120); do

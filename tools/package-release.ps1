@@ -70,6 +70,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $isMac = $Platform -eq "macos"
+. "$PSScriptRoot/lib/mac-bundle.ps1"
 if (-not $BuildDirectory) { $BuildDirectory = "build/$Platform" }
 
 function Resolve-RepoPath([string] $path) {
@@ -113,11 +114,12 @@ if (-not $Commit) { throw "Could not read the commit to release." }
 if ($isMac) {
     # --- macOS release player -------------------------------------------------------------------
     $app     = Join-Path $buildDir "Ironfront.app"
-    $macExe  = Join-Path $app "Contents/MacOS/Ironfront"
     $dataDir = Join-Path $app "Contents/Resources/Data"
     $managed = Join-Path $dataDir "Managed"
 
-    if (-not (Test-Path $macExe)) { throw "No macOS player at $app. Run tools/build-player.ps1 -Platform macos first." }
+    if (-not (Test-Path $app)) { throw "No macOS player at $app. Run tools/build-player.ps1 -Platform macos first." }
+    $macExe = Get-MacBundleExecutable $app
+    if (-not (Test-Path $macExe)) { throw "$app names $macExe as its executable, and it is not there." }
     if (-not (Test-Path (Join-Path $managed "Assembly-CSharp.dll"))) {
         throw "$app has no Contents/Resources/Data/Managed/Assembly-CSharp.dll; it is not the Mono player build-player.ps1 makes."
     }

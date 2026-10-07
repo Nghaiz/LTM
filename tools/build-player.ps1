@@ -82,6 +82,7 @@ $isMac = $Platform -eq "macos"
 if (-not $OutputDirectory) { $OutputDirectory = "build/$Platform" }
 
 . "$PSScriptRoot/lib/build-stamp.ps1"
+. "$PSScriptRoot/lib/mac-bundle.ps1"
 
 # Capture source cleanliness BEFORE build-libs replaces the tracked plugin binaries. Managed
 # assemblies contain a new PE/MVID on each successful compilation, so testing afterwards makes
@@ -210,9 +211,10 @@ else {
 }
 
 # What the player is, what proves it was written, and the line the Editor logs once it has checked
-# the output (EditorBuildWindowsHarness.PlayerPlatform.CompletionMarker).
+# the output (EditorBuildWindowsHarness.PlayerPlatform.CompletionMarker). The macOS executable is
+# named in the bundle's Info.plist, which does not exist until the build has run (see below).
 if ($isMac) {
-    $exe            = Join-Path $buildOut "Ironfront.app/Contents/MacOS/Ironfront"
+    $exe            = Join-Path $buildOut "Ironfront.app/Contents/Info.plist"
     $executeMethod  = "Ironfront.EditorBuildWindowsHarness.BuildMacPlayer"
     $completionLine = "[build] macos player complete ->"
 }
@@ -318,6 +320,7 @@ if ($null -ne $unityExitCode -and $unityExitCode -ne 0) {
     throw "the $Platform player build exited $unityExitCode after ${elapsed}s. See $LogFile."
 }
 
+if ($isMac -and (Test-Path $exe)) { $exe = Get-MacBundleExecutable (Join-Path $buildOut "Ironfront.app") }
 if (-not (Test-Path $exe)) {
     throw "the build reported success but there is no $exe. See $LogFile."
 }
