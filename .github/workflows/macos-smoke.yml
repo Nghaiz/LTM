@@ -94,6 +94,23 @@ jobs:
           fi
           arch -x86_64 /usr/bin/true
 
+      # A real mouse click. System Events' "click at" goes through the accessibility tree, and a
+      # Unity window has no element there to click (run 4: DEPLOY never pressed). Compiled before
+      # the player starts so the compile time stays out of its timeline.
+      - name: Mouse helper
+        run: |
+          cat > click.swift <<'SWIFT'
+          import CoreGraphics
+          import Foundation
+          let point = CGPoint(x: Double(CommandLine.arguments[1])!, y: Double(CommandLine.arguments[2])!)
+          for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+              CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?
+                  .post(tap: .cghidEventTap)
+              usleep(150_000)
+          }
+          SWIFT
+          swiftc -O click.swift -o click
+
       - name: Menu, then a practice match
         run: |
           set -uo pipefail
@@ -101,7 +118,8 @@ jobs:
           alive() { kill -0 "$pid" 2>/dev/null; }
           wait_while_alive() { for _ in $(seq 1 "$1"); do sleep 1; alive || return 0; done; }
           click_at() {  # screen points; the runner's display is 1024x768 at 1x, the size of a screenshot
-            osascript -e "tell application id \"$BUNDLE_ID\" to activate"                       -e "tell application \"System Events\" to click at {$1, $2}" >/dev/null 2>>keys.err
+            osascript -e "tell application id \"$BUNDLE_ID\" to activate" >/dev/null 2>&1
+            ./click "$1" "$2" 2>>keys.err
           }
           keys() {  # key codes: 48 Tab, 36 Return
             osascript -e "tell application id \"$BUNDLE_ID\" to activate" >/dev/null 2>&1
