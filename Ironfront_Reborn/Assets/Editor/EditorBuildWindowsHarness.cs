@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
@@ -9,7 +10,8 @@ namespace Ironfront
 {
     /// <summary>
     /// Produces the Windows player that phase-3D lane B's runner launches four times: once
-    /// headless as the server, three times rendered as scripted clients.
+    /// headless as the server, three times rendered as scripted clients -- and, since 2026-10-07,
+    /// the macOS player as well.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -38,6 +40,14 @@ namespace Ironfront
     /// by <c>IRONFRONT_LANEB_ROLE</c>, read by <c>LaneBHarness</c> — so there is one build to
     /// wait for rather than two, and the server and the clients are provably the same code.
     /// </para>
+    /// <para>
+    /// <b>The macOS player</b> (<see cref="BuildMacPlayer"/>, <c>build-player.ps1 -Platform macos</c>)
+    /// goes through the same steps with two differences the build machine forces. It is always
+    /// Mono: IL2CPP for macOS links with Apple's toolchain, which only runs on a Mac, and Unity
+    /// cross-compiles IL2CPP from Windows to Windows and Linux only. And it is a universal binary
+    /// (Intel + Apple silicon), set explicitly, because an Intel-only player runs on an M-series
+    /// Mac only under Rosetta, which Apple is retiring.
+    /// </para>
     /// </remarks>
     public static class EditorBuildWindowsHarness
     {
@@ -58,7 +68,8 @@ namespace Ironfront
         // The player people download. Until 2026-10-02 every release zip was this harness's
         // Development build: "Development Build" in the corner of every screen, the profiler and
         // player-connection hooks compiled in, and Mono. -release builds it without
-        // BuildOptions.Development and on IL2CPP, which compiles the game's C# to native code.
+        // BuildOptions.Development and, on Windows, on IL2CPP, which compiles the game's C# to
+        // native code.
         //
         // IL2CPP is switched on for this build only and the project's own backend put back after,
         // the same way UNITY_MCP_READY is. The lane-B harness and quick playtest builds stay on
@@ -70,18 +81,74 @@ namespace Ironfront
         // build first rather than in the release.
         private const string ReleaseArgument = "-release";
 
-        private const string DefaultOutputDirectory = "build/windows";
-
-        // Matched literally by tools/run-lane-b.ps1, so it is part of the contract.
-        private const string ExecutableName = "Ironfront.exe";
-
         // Same Editor-only package define EditorBuild strips, for the same reason: with it set
         // the MCP runtime assembly compiles into the player against precompiled references that
         // are all constrained to UNITY_EDITOR. See EditorBuild.StripEditorOnlyDefines.
         private const string McpReadyDefine = "UNITY_MCP_READY";
 
+        // OSArchitecture.x64ARM64, by name: the enum's assembly is always there, but the property
+        // that takes it ships with the Mac Build Support module. See UseUniversalMacArchitecture.
+        private const string UniversalMacArchitecture = "x64ARM64";
+
+        /// <summary>What differs between the players this class builds.</summary>
+        private sealed class PlayerPlatform
+        {
+            public string Name;
+            public BuildTarget Target;
+            public string Module;
+            public string DefaultOutputDirectory;
+
+            // Ironfront.exe / Ironfront.app. Matched literally by the tools/ scripts, so it is
+            // part of the contract.
+            public string PlayerFileName;
+
+            // Written after a verified build. build-player.ps1 accepts it in place of an exit
+            // code Windows sometimes loses, so the Windows wording must not change.
+            public string CompletionMarker;
+
+            // null = whatever the project is set to (Mono, see ProjectSettings.asset).
+            public ScriptingImplementation? ReleaseBackend;
+            public ScriptingImplementation? DevelopmentBackend;
+
+            // A batch build normally leaves the target where it built, to save a switch. The
+            // Editor's working target is Windows, though, so a batch macOS build switches back:
+            // otherwise the next interactive Editor opens compiling the game for macOS.
+            public bool RestoreTargetInBatchMode;
+        }
+
+        private static readonly PlayerPlatform Windows = new PlayerPlatform
+        {
+            Name = "windows",
+            Target = BuildTarget.StandaloneWindows64,
+            Module = "Windows Build Support",
+            DefaultOutputDirectory = "build/windows",
+            PlayerFileName = "Ironfront.exe",
+            CompletionMarker = "lane-B windows player complete",
+            ReleaseBackend = ScriptingImplementation.IL2CPP,
+            DevelopmentBackend = null,
+            RestoreTargetInBatchMode = false,
+        };
+
+        private static readonly PlayerPlatform MacOS = new PlayerPlatform
+        {
+            Name = "macos",
+            Target = BuildTarget.StandaloneOSX,
+            Module = "Mac Build Support (Mono)",
+            DefaultOutputDirectory = "build/macos",
+            PlayerFileName = "Ironfront.app",
+            CompletionMarker = "macos player complete",
+            ReleaseBackend = ScriptingImplementation.Mono2x,
+            DevelopmentBackend = ScriptingImplementation.Mono2x,
+            RestoreTargetInBatchMode = true,
+        };
+
         [MenuItem("Ironfront/Build Windows Player (lane-B harness)")]
-        public static void BuildWindowsPlayer()
+        public static void BuildWindowsPlayer() => BuildPlayer(Windows);
+
+        [MenuItem("Ironfront/Build macOS Player")]
+        public static void BuildMacPlayer() => BuildPlayer(MacOS);
+
+        private static void BuildPlayer(PlayerPlatform platform)
         {
             BuildTarget previousTarget = EditorUserBuildSettings.activeBuildTarget;
             StandaloneBuildSubtarget previousSubtarget =
@@ -93,7 +160,7 @@ namespace Ironfront
 
             try
             {
-                succeeded = Build(ref previousDefines, ref previousBackend);
+                succeeded = Build(platform, ref previousDefines, ref previousBackend);
             }
             catch (Exception ex)
             {
@@ -106,7 +173,10 @@ namespace Ironfront
             {
                 RestoreBackend(previousBackend);
                 RestoreDefines(previousDefines);
-                if (!Application.isBatchMode) RestoreBuildTarget(previousTarget, previousSubtarget);
+                if (!Application.isBatchMode || platform.RestoreTargetInBatchMode)
+                {
+                    RestoreBuildTarget(previousTarget, previousSubtarget);
+                }
             }
 
             // Outside the try, after the finally: EditorApplication.Exit terminates without
@@ -115,10 +185,13 @@ namespace Ironfront
             if (Application.isBatchMode) EditorApplication.Exit(succeeded ? 0 : 1);
         }
 
-        private static bool Build(ref string[] previousDefines, ref ScriptingImplementation? previousBackend)
+        private static bool Build(
+            PlayerPlatform platform,
+            ref string[] previousDefines,
+            ref ScriptingImplementation? previousBackend)
         {
             bool release = HasFlag(ReleaseArgument);
-            string outputDirectory = ResolveOutputDirectory();
+            string outputDirectory = ResolveOutputDirectory(platform);
             Directory.CreateDirectory(outputDirectory);
 
             string[] scenes = EditorBuildSettings.scenes
@@ -128,23 +201,23 @@ namespace Ironfront
 
             if (scenes.Length == 0)
             {
-                Fail("no scenes are enabled in Build Settings — the lane-B player would have "
-                     + "no map to load.");
+                Fail($"no scenes are enabled in Build Settings — the {platform.Name} player would "
+                     + "have no map to load.");
                 return false;
             }
 
-            string executablePath = Path.Combine(outputDirectory, ExecutableName);
+            string playerPath = Path.Combine(outputDirectory, platform.PlayerFileName);
 
             // Switch the platform BEFORE the subtarget: standaloneBuildSubtarget applies to
             // whichever standalone platform is active, and BuildPlayer against a non-active
             // target performs the switch mid-build, triggering a reimport inside a batch run.
-            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64
+            if (EditorUserBuildSettings.activeBuildTarget != platform.Target
                 && !EditorUserBuildSettings.SwitchActiveBuildTarget(
-                       BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64))
+                       BuildTargetGroup.Standalone, platform.Target))
             {
-                Fail("could not switch the active build target to StandaloneWindows64 — the "
-                     + "Windows Build Support module is most likely not installed for this "
-                     + "Editor version.");
+                Fail($"could not switch the active build target to {platform.Target} — the "
+                     + $"{platform.Module} module is most likely not installed for this Editor "
+                     + "version. Add it through Unity Hub (Installs -> Manage -> Manage modules).");
                 return false;
             }
 
@@ -171,21 +244,28 @@ namespace Ironfront
             {
                 Fail($"a live Editor cannot run this build: stripping {McpReadyDefine} queues a "
                      + "script recompile, and BuildPlayer refuses to start during one. Close "
-                     + "the Editor and run `pwsh tools/run-lane-b.ps1 -Build`, which builds the "
-                     + "same player in batchmode. The defines are restored either way.");
+                     + $"the Editor and run `pwsh tools/build-player.ps1 -Platform {platform.Name}` "
+                     + "(-Development for the development player), which builds it in batchmode. "
+                     + "The defines are restored either way.");
                 return false;
             }
 
-            if (release)
+            ScriptingImplementation? backend = release ? platform.ReleaseBackend : platform.DevelopmentBackend;
+            if (backend != null)
             {
-                previousBackend = UseBackend(ScriptingImplementation.IL2CPP);
+                previousBackend = UseBackend(backend.Value);
+            }
+
+            if (platform.Target == BuildTarget.StandaloneOSX)
+            {
+                UseUniversalMacArchitecture();
             }
 
             var options = new BuildPlayerOptions
             {
                 scenes = scenes,
-                locationPathName = executablePath,
-                target = BuildTarget.StandaloneWindows64,
+                locationPathName = playerPath,
+                target = platform.Target,
                 subtarget = (int)StandaloneBuildSubtarget.Player,
                 options = release ? BuildOptions.None : BuildOptions.Development,
                 extraScriptingDefines = HasFlag(NoDiagnosticsArgument)
@@ -198,7 +278,7 @@ namespace Ironfront
                 Debug.Log($"[build] {NoDiagnosticsDefine} set: Net/Diagnostics is compiled out.");
             }
 
-            Debug.Log($"[build] lane-B windows player ({Describe(release)}): {scenes.Length} scene(s) -> {executablePath}");
+            Debug.Log($"[build] {platform.Name} player ({Describe(release)}): {scenes.Length} scene(s) -> {playerPath}");
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;
@@ -206,34 +286,56 @@ namespace Ironfront
             if (summary.result != BuildResult.Succeeded)
             {
                 Fail($"build {summary.result} with {summary.totalErrors} error(s); see the "
-                     + $"Unity log. Output: {executablePath}");
+                     + $"Unity log. Output: {playerPath}");
                 return false;
             }
 
             // BuildResult.Succeeded does not mean a player was written — see
             // EditorBuild.VerifyOutput for the observed case where it was not.
-            if (!File.Exists(executablePath))
+            string missing = platform.Target == BuildTarget.StandaloneOSX
+                ? FindMissingMacBundlePart(playerPath)
+                : FindMissingWindowsPlayerPart(outputDirectory, playerPath);
+            if (missing != null)
             {
-                Fail($"build reported {summary.result} and {summary.totalSize} bytes, but "
-                     + $"nothing was written to {executablePath}.");
+                Fail($"build reported {summary.result} and {summary.totalSize} bytes, but {missing}; "
+                     + "the player will not start.");
                 return false;
             }
 
-            if (Directory.GetDirectories(outputDirectory, "*_Data").Length == 0)
-            {
-                Fail($"the executable exists but no *_Data folder was written beside it in "
-                     + $"{outputDirectory}; the player will not start.");
-                return false;
-            }
-
-            Debug.Log($"[build] lane-B windows player complete -> {executablePath} "
+            Debug.Log($"[build] {platform.CompletionMarker} -> {playerPath} "
                       + $"({summary.totalSize} bytes, {summary.totalWarnings} warning(s), {Describe(release)})");
             return true;
         }
 
+        private static string FindMissingWindowsPlayerPart(string outputDirectory, string executablePath)
+        {
+            if (!File.Exists(executablePath)) return $"nothing was written to {executablePath}";
+            if (Directory.GetDirectories(outputDirectory, "*_Data").Length == 0)
+            {
+                return $"no *_Data folder was written beside the executable in {outputDirectory}";
+            }
+            return null;
+        }
+
+        // An .app is a folder. The two parts without which macOS cannot start it: the executable
+        // Info.plist names, and the player data Unity reads from Contents/Resources/Data.
+        private static string FindMissingMacBundlePart(string appPath)
+        {
+            string macOsFolder = Path.Combine(appPath, "Contents", "MacOS");
+            if (!Directory.Exists(macOsFolder) || Directory.GetFiles(macOsFolder).Length == 0)
+            {
+                return $"{appPath} has no executable in Contents/MacOS";
+            }
+            if (!Directory.Exists(Path.Combine(appPath, "Contents", "Resources", "Data")))
+            {
+                return $"{appPath} has no Contents/Resources/Data";
+            }
+            return null;
+        }
+
         private static string Describe(bool release)
-            => release ? "release, IL2CPP" : "development, " + PlayerSettings.GetScriptingBackend(
-                UnityEditor.Build.NamedBuildTarget.Standalone);
+            => (release ? "release, " : "development, ")
+               + PlayerSettings.GetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Standalone);
 
         /// <summary>
         /// Sets the STANDALONE scripting backend for this build and returns the one it replaced,
@@ -248,6 +350,41 @@ namespace Ironfront
             PlayerSettings.SetScriptingBackend(target, backend);
             Debug.Log($"[build] scripting backend {current} -> {backend} for this build");
             return current;
+        }
+
+        /// <summary>
+        /// Builds the macOS player for Intel and Apple silicon in one universal binary.
+        /// </summary>
+        /// <remarks>
+        /// Through reflection because <c>UnityEditor.OSXStandalone.UserBuildSettings</c> ships in
+        /// the Mac Build Support module's own editor assembly: a direct reference would stop this
+        /// whole Editor folder compiling on a machine without that module, which is every machine
+        /// that never builds for macOS. Throws rather than building whatever the default happens to
+        /// be — an Intel-only player starts on an M-series Mac only through Rosetta, and nothing
+        /// downstream would notice. The setting lives in Library/, so nothing committed changes.
+        /// </remarks>
+        private static void UseUniversalMacArchitecture()
+        {
+            Type settings = AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.GetType("UnityEditor.OSXStandalone.UserBuildSettings", false))
+                .FirstOrDefault(t => t != null);
+            PropertyInfo architecture = settings?.GetProperty(
+                "architecture", BindingFlags.Public | BindingFlags.Static);
+            if (architecture == null || !architecture.CanWrite)
+            {
+                throw new InvalidOperationException(
+                    "UnityEditor.OSXStandalone.UserBuildSettings.architecture was not found, so the "
+                    + "macOS architecture cannot be set. Is the Mac Build Support (Mono) module installed?");
+            }
+
+            architecture.SetValue(null, Enum.Parse(architecture.PropertyType, UniversalMacArchitecture));
+            object now = architecture.GetValue(null);
+            if (!string.Equals(now.ToString(), UniversalMacArchitecture, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"set the macOS architecture to {UniversalMacArchitecture} and read back {now}.");
+            }
+            Debug.Log($"[build] macOS architecture: {now} (Intel + Apple silicon)");
         }
 
         // Saved explicitly for the reason RestoreDefines gives: BuildPlayer flushes project
@@ -265,7 +402,8 @@ namespace Ironfront
         /// </summary>
         /// <remarks>
         /// <c>NamedBuildTarget.Standalone</c>, not <c>.Server</c>: the two keep separate define
-        /// sets, and stripping the wrong one strips nothing while reporting that it did.
+        /// sets, and stripping the wrong one strips nothing while reporting that it did. Windows
+        /// and macOS share the Standalone set.
         /// </remarks>
         private static string[] StripEditorOnlyDefines()
         {
@@ -319,7 +457,7 @@ namespace Ironfront
             return false;
         }
 
-        private static string ResolveOutputDirectory()
+        private static string ResolveOutputDirectory(PlayerPlatform platform)
         {
             string[] args = Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++)
@@ -337,7 +475,7 @@ namespace Ironfront
             // and report success. Application.dataPath is <project>/Assets, so two levels up is
             // the repo root -- the same build/ the Linux server build writes into.
             return Path.GetFullPath(
-                Path.Combine(Application.dataPath, "..", "..", DefaultOutputDirectory));
+                Path.Combine(Application.dataPath, "..", "..", platform.DefaultOutputDirectory));
         }
 
         private static void Fail(string message) => Debug.LogError($"[build] {message}");
