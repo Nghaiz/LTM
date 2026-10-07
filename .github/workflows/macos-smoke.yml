@@ -100,6 +100,9 @@ jobs:
           log="$PWD/player-$ARCH.log"
           alive() { kill -0 "$pid" 2>/dev/null; }
           wait_while_alive() { for _ in $(seq 1 "$1"); do sleep 1; alive || return 0; done; }
+          click_at() {  # screen points; the runner's display is 1024x768 at 1x, the size of a screenshot
+            osascript -e "tell application id \"$BUNDLE_ID\" to activate"                       -e "tell application \"System Events\" to click at {$1, $2}" >/dev/null 2>>keys.err
+          }
           keys() {  # key codes: 48 Tab, 36 Return
             osascript -e "tell application id \"$BUNDLE_ID\" to activate" >/dev/null 2>&1
             local code
@@ -134,6 +137,11 @@ jobs:
           if [ "$practice" = yes ]; then
             wait_while_alive 90
             screencapture -x "shot-$ARCH-practice.png" || true
+            # The map opens on the loadout screen. DEPLOY sits bottom right at this window size;
+            # whether the click reached the game is judged from the next screenshot, not here.
+            click_at 800 644 || echo "::warning::System Events would not click ($(tail -1 keys.err))"
+            wait_while_alive 45
+            screencapture -x "shot-$ARCH-deployed.png" || true
             if ! alive; then
               wait "$pid"; echo "::error::the player exited on its own (status $?) during the practice match"; tail -80 "$log"; exit 1
             fi
@@ -171,8 +179,10 @@ jobs:
           need '\[flow\] master = kien-master-2026.fly.dev:443 (TLS' "[flow] master = kien-master-2026.fly.dev:443 (TLS ..."
           need '\[flow\] client flow up; title screen ready' "[flow] client flow up; title screen ready"
           if [ "$practice" = yes ]; then
-            need '\[net\] build ' "[net] build ... (the practice map loaded its client)"
-            need '\[net\] server up on the loopback wire' "[net] server up on the loopback wire (the practice server started)"
+            # Practice runs offline: no loopback server and no client bootstrap, hence no [net] build
+            # line (package-release.ps1 checks the stamp in the DLL instead).
+            need '\[net\] this process plays offline' "[net] this process plays offline (practice started)"
+            need "\[vegetation\] 'Terrain" "[vegetation] 'Terrain ...' (the map's terrain loaded)"
           fi
           exceptions=$(grep -c 'Exception' "$log" || true)
           echo "exception lines in the log: $exceptions"

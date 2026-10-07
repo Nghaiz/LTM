@@ -165,10 +165,11 @@ What is different, and why:
 the zip from a release (a draft is fine), unzips it with `ditto` as Finder would, checks the
 executable bit, both architectures and `codesign --verify --deep --strict`, then starts the player
 natively and under Rosetta: a minute at the menu, then a practice match entered from the keyboard
-(Tab, Return, Return) and played for 90 s against bots and the loopback server on the Mac. It then
-asks the player to quit, because the macOS player writes its log out only on a clean quit, and
-requires the `[flow] master` / `title screen ready` / `[net] build` / `server up on the loopback
-wire` lines, no exception line and exit status 0. Logs and a screenshot are kept as artifacts. Before a zip is
+(Tab, Return, Return), left running against bots for 90 s, then DEPLOY clicked. It then asks the
+player to quit, because the macOS player writes its log out only on a clean quit, and requires the
+`[flow] master`, `title screen ready`, `plays offline` and `[vegetation] 'Terrain` lines, no
+exception line and exit status 0. Practice is offline, so its log has no `[net] build` line; the
+stamp is checked in the DLL by `package-release.ps1`. Logs and a screenshot are kept as artifacts. Before a zip is
 public:
 
 ```powershell
