@@ -135,4 +135,47 @@ Tags follow semantic versioning, `vMAJOR.MINOR.PATCH`. **v1.0.0 (2026-09-28, bui
 - The exe is not code-signed, so SmartScreen warns on first launch. The player README says how
   to get past it. Signing needs a certificate the project does not have.
 - There is no auto-update. Players download each release by hand.
-- Windows only. `build-player.ps1` produces a Windows x64 player and nothing else.
+- The macOS player is Mono, not IL2CPP, and is not notarized (§ 7).
+
+---
+
+## 7. macOS
+
+Since 2026-10-07 the same release can carry a macOS zip beside the Windows one. It is built on
+this Windows machine:
+
+```powershell
+pwsh .claude/scripts/unity-editor.ps1 close
+pwsh tools/build-player.ps1 -Platform macos                    # build/macos/Ironfront.app
+pwsh tools/package-release.ps1 -Platform macos -Version v4.5.0 # IronfrontReborn-v4.5.0-macos.zip
+```
+
+What is different, and why:
+
+| | Windows | macOS |
+|---|---|---|
+| Module | Windows Build Support (IL2CPP) | **Mac Build Support (Mono)**, added through Unity Hub |
+| Backend | IL2CPP | **Mono**. IL2CPP for macOS links with Apple's toolchain and can only be built on a Mac |
+| CPU | x64 | **universal**: x86_64 + arm64 in one binary, checked by `package-release.ps1` |
+| Signature | none (SmartScreen warns) | Unity's **ad-hoc** signature, written on Windows too. Apple silicon will not start unsigned code. Not notarized, so Gatekeeper blocks the first launch until the player clicks "Open Anyway" |
+| Zip | `System.IO.Compression` | `tools/release/zip_macos_bundle.py`, which records Unix permissions. A zip made by .NET on Windows drops the executable bit and the app does not open |
+| First build | minutes | far longer: every shader compiles for Metal once; later builds reuse `Library/` |
+
+**This machine cannot run the result, so a Mac does.** `.github/workflows/macos-smoke.yml` takes
+the zip from a release (a draft is fine), unzips it with `ditto` as Finder would, checks the
+executable bit, both architectures and `codesign --verify --deep --strict`, then starts the player
+natively and under Rosetta and requires the `[flow] master = kien-master-2026.fly.dev:443 (TLS`
+and `[net] build` lines in its log. Logs and a screenshot are kept as artifacts. Before a zip is
+public:
+
+```powershell
+gh release create macos-smoke-<n> --draft --title "macOS smoke <n>" artifacts/release/<zip>
+git tag macos-smoke-<n>; git push origin macos-smoke-<n>     # the tag push starts the run
+```
+
+For a published release: `gh workflow run macos-smoke.yml -f release=<tag>`. Delete the draft and
+the tag afterwards.
+
+`-Publish` adds the zip to the release when it already exists (the Windows zip went first),
+otherwise it creates it. A batch macOS build switches the Editor's target back to Windows when it
+ends, so the next Editor opens where it always does.

@@ -1,0 +1,133 @@
+name: macOS smoke
+
+# Opens a packaged macOS release zip on real Macs. The machine that builds the macOS player is
+# Windows: it can write Ironfront.app but never start it, so everything a Mac decides at launch is
+# checked here instead -- the executable bit the zip has to carry, both architectures in the
+# universal binary, the ad-hoc signature Apple silicon refuses to run without, and the player
+# itself getting as far as the menu and its master endpoint.
+#
+# How to run it on a zip that is not public yet (docs/releasing.md):
+#   gh release create macos-smoke-<n> --draft --title "macOS smoke <n>" artifacts/release/<zip>
+#   git tag macos-smoke-<n> <commit> && git push origin macos-smoke-<n>     # starts this run
+# or, for any release that already has a *-macos.zip:
+#   gh workflow run macos-smoke.yml -f release=v4.5.0
+#
+# It reads the release through the API rather than its download URL because a draft has no
+# public URL, and that is also why the token needs contents: write.
+
+on:
+  push:
+    tags: ['macos-smoke-*']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release tag holding the *-macos.zip (a draft release works)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.release }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: macOS ${{ matrix.arch }}
+    # Apple silicon. The x86_64 half of the universal binary runs there under Rosetta, which is
+    # also how most Intel-only players run on a current Mac.
+    runs-on: macos-15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE: ${{ inputs.release || github.ref_name }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Download the macOS zip
+        run: |
+          set -euo pipefail
+          url=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$RELEASE\")][0].assets[] | select(.name | endswith(\"-macos.zip\")) | .url")
+          if [ -z "$url" ]; then echo "::error::release $RELEASE has no *-macos.zip"; exit 1; fi
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" -o ironfront.zip "$url"
+          ls -l ironfront.zip
+
+      - name: Unzip it the way Finder does
+        run: |
+          set -euo pipefail
+          ditto -x -k ironfront.zip extracted
+          app=$(find "$PWD/extracted" -maxdepth 2 -name Ironfront.app -type d | head -1)
+          if [ -z "$app" ]; then echo "::error::no Ironfront.app in the zip"; exit 1; fi
+          echo "APP=$app" >> "$GITHUB_ENV"
+          ls -la "$(dirname "$app")"
+
+      - name: Bundle checks
+        run: |
+          set -euo pipefail
+          exe="$APP/Contents/MacOS/Ironfront"
+          ls -l "$exe"
+          if [ ! -x "$exe" ]; then echo "::error::Contents/MacOS/Ironfront is not executable after unzipping"; exit 1; fi
+          archs=$(lipo -archs "$exe")
+          echo "architectures: $archs"
+          case " $archs " in *" x86_64 "*) ;; *) echo "::error::no x86_64 slice"; exit 1;; esac
+          case " $archs " in *" arm64 "*) ;; *) echo "::error::no arm64 slice"; exit 1;; esac
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP" 2>&1 | head -12
+          # Expected to be rejected: the app is signed ad hoc, not notarized. Players clear this
+          # once in System Settings > Privacy & Security; the README says how.
+          spctl --assess --type execute -vv "$APP" || echo "Gatekeeper: not notarized (expected)"
+
+      - name: Rosetta
+        if: matrix.arch == 'x86_64'
+        run: |
+          if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+          arch -x86_64 /usr/bin/true
+
+      - name: Launch the player
+        run: |
+          set -uo pipefail
+          log="$PWD/player-$ARCH.log"
+          arch "-$ARCH" "$APP/Contents/MacOS/Ironfront" -logFile "$log" \
+            -screen-fullscreen 0 -screen-width 1280 -screen-height 720 &
+          pid=$!
+          for _ in $(seq 1 120); do
+            sleep 1
+            kill -0 "$pid" 2>/dev/null || break
+            if grep -q '\[flow\] master = ' "$log" 2>/dev/null && grep -q '\[net\] build ' "$log" 2>/dev/null; then break; fi
+          done
+          # A little longer, so a crash right after the menu appears is still caught.
+          sleep 15
+          screencapture -x "shot-$ARCH.png" || true
+          alive=no
+          if kill -0 "$pid" 2>/dev/null; then alive=yes; fi
+          kill "$pid" 2>/dev/null; sleep 3; kill -9 "$pid" 2>/dev/null || true
+
+          echo "--- first lines of the player log"
+          head -40 "$log" || true
+          echo "--- markers"
+          grep -E '\[(flow|net)\]|Metal|GfxDevice|Crash|Exception' "$log" | head -60 || true
+
+          if [ "$alive" != yes ]; then echo "::error::the player exited within the check window"; exit 1; fi
+          if ! grep -q '\[flow\] master = kien-master-2026.fly.dev:443 (TLS' "$log"; then
+            echo "::error::no '[flow] master = kien-master-2026.fly.dev:443 (TLS' line: the menu flow did not start"; exit 1
+          fi
+          if ! grep -q '\[net\] build ' "$log"; then echo "::error::no '[net] build' line"; exit 1; fi
+          echo "build line: $(grep -m1 '\[net\] build ' "$log")"
+
+      - name: Keep the logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-smoke-${{ matrix.arch }}
+          path: |
+            player-*.log
+            shot-*.png
+          if-no-files-found: ignore
+          retention-days: 14
