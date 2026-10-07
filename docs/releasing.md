@@ -164,9 +164,11 @@ What is different, and why:
 **This machine cannot run the result, so a Mac does.** `.github/workflows/macos-smoke.yml` takes
 the zip from a release (a draft is fine), unzips it with `ditto` as Finder would, checks the
 executable bit, both architectures and `codesign --verify --deep --strict`, then starts the player
-natively and under Rosetta, asks it to quit after a minute (the macOS player writes its log out
-only on a clean quit) and requires the `[flow] master = kien-master-2026.fly.dev:443 (TLS` and
-`[net] build` lines in that log. Logs and a screenshot are kept as artifacts. Before a zip is
+natively and under Rosetta: a minute at the menu, then a practice match entered from the keyboard
+(Tab, Return, Return) and played for 90 s against bots and the loopback server on the Mac. It then
+asks the player to quit, because the macOS player writes its log out only on a clean quit, and
+requires the `[flow] master` / `title screen ready` / `[net] build` / `server up on the loopback
+wire` lines, no exception line and exit status 0. Logs and a screenshot are kept as artifacts. Before a zip is
 public:
 
 ```powershell

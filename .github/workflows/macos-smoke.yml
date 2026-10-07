@@ -3,13 +3,14 @@ name: macOS smoke
 # Opens a packaged macOS release zip on real Macs. The machine that builds the macOS player is
 # Windows: it can write Ironfront.app but never start it, so everything a Mac decides at launch is
 # checked here instead -- the executable bit the zip has to carry, both architectures in the
-# universal binary, the ad-hoc signature Apple silicon refuses to run without, and the player
-# itself getting as far as the menu and its master endpoint.
+# universal binary, the ad-hoc signature Apple silicon refuses to run without, the player reaching
+# its menu and master endpoint, and then a practice match: a map loaded and played against bots
+# with the loopback server on the same Mac.
 #
-# How to run it on a zip that is not public yet (docs/releasing.md):
+# How to run it on a zip that is not public yet (docs/releasing.md § 7):
 #   gh release create macos-smoke-<n> --draft --title "macOS smoke <n>" artifacts/release/<zip>
 #   git tag macos-smoke-<n> <commit> && git push origin macos-smoke-<n>     # starts this run
-# or, for any release that already has a *-macos.zip:
+# or, for any release that holds a *-macos.zip (drafts included):
 #   gh workflow run macos-smoke.yml -f release=v4.5.0
 #
 # It reads the release through the API rather than its download URL because a draft has no
@@ -36,9 +37,9 @@ jobs:
   smoke:
     name: macOS ${{ matrix.arch }}
     # Apple silicon. The x86_64 half of the universal binary runs there under Rosetta, which is
-    # also how most Intel-only players run on a current Mac.
+    # also how an Intel-only build would reach most players' Macs.
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -63,9 +64,11 @@ jobs:
           ditto -x -k ironfront.zip extracted
           app=$(find "$PWD/extracted" -maxdepth 2 -name Ironfront.app -type d | head -1)
           if [ -z "$app" ]; then echo "::error::no Ironfront.app in the zip"; exit 1; fi
+          plist="$app/Contents/Info.plist"
           echo "APP=$app" >> "$GITHUB_ENV"
           # Unity names the executable after productName, not after the .app; macOS reads it here.
-          echo "EXE=$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" >> "$GITHUB_ENV"
+          echo "EXE=$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")" >> "$GITHUB_ENV"
+          echo "BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" >> "$GITHUB_ENV"
           ls -la "$(dirname "$app")"
 
       - name: Bundle checks
@@ -91,39 +94,65 @@ jobs:
           fi
           arch -x86_64 /usr/bin/true
 
-      - name: Launch the player
+      - name: Menu, then a practice match
         run: |
           set -uo pipefail
           log="$PWD/player-$ARCH.log"
+          alive() { kill -0 "$pid" 2>/dev/null; }
+          wait_while_alive() { for _ in $(seq 1 "$1"); do sleep 1; alive || return 0; done; }
+          keys() {  # key codes: 48 Tab, 36 Return
+            osascript -e "tell application id \"$BUNDLE_ID\" to activate" >/dev/null 2>&1
+            local code
+            for code in "$@"; do
+              osascript -e "tell application \"System Events\" to key code $code" 2>>keys.err || return 1
+              sleep 2
+            done
+          }
+
           arch "-$ARCH" "$EXE" -logFile "$log" \
             -screen-fullscreen 0 -screen-width 1280 -screen-height 720 &
           pid=$!
+
           # The macOS player buffers its log and writes it out when it quits cleanly: run 1 of this
           # workflow killed a player sitting at the menu and found 40 lines of engine start-up and
-          # nothing after. So it is not polled; the player gets a minute (a cold Rosetta start
-          # included), then is asked to quit, and the log is read once it has.
-          for _ in $(seq 1 60); do sleep 1; kill -0 "$pid" 2>/dev/null || break; done
-          screencapture -x "shot-$ARCH.png" || true
-          if ! kill -0 "$pid" 2>/dev/null; then
-            wait "$pid"; status=$?
-            echo "::error::the player exited on its own (status $status) before it was asked to quit"
-            tail -60 "$log"; exit 1
+          # nothing after. So it is never polled; the player is driven on timers, asked to quit,
+          # and the log is read once it has.
+          wait_while_alive 60
+          screencapture -x "shot-$ARCH-menu.png" || true
+          if ! alive; then
+            wait "$pid"; echo "::error::the player exited on its own (status $?) at the menu"; tail -60 "$log"; exit 1
+          fi
+
+          # Into practice from the keyboard (MenuKeyboardNavigator): MULTIPLAYER has focus, Tab
+          # moves to PRACTICE OFFLINE, Return opens it, and Return on the map dropdown falls through
+          # to the panel's primary button, START PRACTICE.
+          practice=yes
+          if ! keys 48 36 36; then
+            practice=no
+            echo "::warning::System Events would not send keys on this runner ($(tail -1 keys.err)); practice match not played"
+          fi
+          if [ "$practice" = yes ]; then
+            wait_while_alive 90
+            screencapture -x "shot-$ARCH-practice.png" || true
+            if ! alive; then
+              wait "$pid"; echo "::error::the player exited on its own (status $?) during the practice match"; tail -80 "$log"; exit 1
+            fi
           fi
 
           # Quit the way the Dock does, with an Apple Event Unity answers by shutting down. Cmd+Q
           # through System Events is the fallback; SIGINT the last resort before giving up.
-          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")
           quit_via=none
           started=$(date +%s)
           for how in apple-event cmd-q sigint; do
             case "$how" in
-              apple-event) osascript -e "with timeout of 10 seconds" -e "tell application id \"$bundle_id\" to quit" -e "end timeout" >/dev/null 2>&1 & ;;
-              cmd-q) osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $pid) to true" \
+              apple-event) osascript -e "with timeout of 10 seconds" -e "tell application id \"$BUNDLE_ID\" to quit" \
+                                     -e "end timeout" >/dev/null 2>&1 & ;;
+              cmd-q) osascript -e "tell application id \"$BUNDLE_ID\" to activate" \
                                -e "tell application \"System Events\" to keystroke \"q\" using command down" >/dev/null 2>&1 & ;;
               sigint) kill -INT "$pid" 2>/dev/null ;;
             esac
-            for _ in $(seq 1 20); do sleep 1; kill -0 "$pid" 2>/dev/null || break; done
-            if ! kill -0 "$pid" 2>/dev/null; then quit_via=$how; break; fi
+            wait_while_alive 20
+            if ! alive; then quit_via=$how; break; fi
           done
           if [ "$quit_via" = none ]; then
             kill -9 "$pid" 2>/dev/null
@@ -134,14 +163,24 @@ jobs:
           echo "quit via $quit_via in $(( $(date +%s) - started )) s, exit status $status"
 
           echo "--- player log markers"
-          grep -E '\[(flow|net)\]|Exception|Crash|error' "$log" | head -60 || true
-          if ! grep -q '\[flow\] master = kien-master-2026.fly.dev:443 (TLS' "$log"; then
-            echo "::error::no '[flow] master = kien-master-2026.fly.dev:443 (TLS' line: the menu flow did not start"; exit 1
+          grep -E '\[(flow|net)\]|Exception|Crash' "$log" | head -80 || true
+          failed=no
+          need() {
+            if grep -q "$1" "$log"; then echo "ok   $2"; else echo "::error::missing from the player log: $2"; failed=yes; fi
+          }
+          need '\[flow\] master = kien-master-2026.fly.dev:443 (TLS' "[flow] master = kien-master-2026.fly.dev:443 (TLS ..."
+          need '\[flow\] client flow up; title screen ready' "[flow] client flow up; title screen ready"
+          if [ "$practice" = yes ]; then
+            need '\[net\] build ' "[net] build ... (the practice map loaded its client)"
+            need '\[net\] server up on the loopback wire' "[net] server up on the loopback wire (the practice server started)"
           fi
-          if ! grep -q '\[net\] build ' "$log"; then echo "::error::no '[net] build' line"; exit 1; fi
-          echo "build line: $(grep -m1 '\[net\] build ' "$log")"
+          exceptions=$(grep -c 'Exception' "$log" || true)
+          echo "exception lines in the log: $exceptions"
+          if [ "$exceptions" -gt 0 ]; then echo "::error::the player log holds $exceptions exception line(s)"; failed=yes; fi
+          if [ "$status" -ne 0 ]; then echo "::error::the player exited with status $status"; failed=yes; fi
+          [ "$failed" = no ]
 
-      - name: Keep the logs and screenshot
+      - name: Keep the logs and screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
