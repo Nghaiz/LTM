@@ -98,24 +98,43 @@ jobs:
           arch "-$ARCH" "$EXE" -logFile "$log" \
             -screen-fullscreen 0 -screen-width 1280 -screen-height 720 &
           pid=$!
-          for _ in $(seq 1 120); do
-            sleep 1
-            kill -0 "$pid" 2>/dev/null || break
-            if grep -q '\[flow\] master = ' "$log" 2>/dev/null && grep -q '\[net\] build ' "$log" 2>/dev/null; then break; fi
-          done
-          # A little longer, so a crash right after the menu appears is still caught.
-          sleep 15
+          # The macOS player buffers its log and writes it out when it quits cleanly: run 1 of this
+          # workflow killed a player sitting at the menu and found 40 lines of engine start-up and
+          # nothing after. So it is not polled; the player gets a minute (a cold Rosetta start
+          # included), then is asked to quit, and the log is read once it has.
+          for _ in $(seq 1 60); do sleep 1; kill -0 "$pid" 2>/dev/null || break; done
           screencapture -x "shot-$ARCH.png" || true
-          alive=no
-          if kill -0 "$pid" 2>/dev/null; then alive=yes; fi
-          kill "$pid" 2>/dev/null; sleep 3; kill -9 "$pid" 2>/dev/null || true
+          if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"; status=$?
+            echo "::error::the player exited on its own (status $status) before it was asked to quit"
+            tail -60 "$log"; exit 1
+          fi
 
-          echo "--- first lines of the player log"
-          head -40 "$log" || true
-          echo "--- markers"
-          grep -E '\[(flow|net)\]|Metal|GfxDevice|Crash|Exception' "$log" | head -60 || true
+          # Quit the way the Dock does, with an Apple Event Unity answers by shutting down. Cmd+Q
+          # through System Events is the fallback; SIGINT the last resort before giving up.
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")
+          quit_via=none
+          started=$(date +%s)
+          for how in apple-event cmd-q sigint; do
+            case "$how" in
+              apple-event) osascript -e "with timeout of 10 seconds" -e "tell application id \"$bundle_id\" to quit" -e "end timeout" >/dev/null 2>&1 & ;;
+              cmd-q) osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $pid) to true" \
+                               -e "tell application \"System Events\" to keystroke \"q\" using command down" >/dev/null 2>&1 & ;;
+              sigint) kill -INT "$pid" 2>/dev/null ;;
+            esac
+            for _ in $(seq 1 20); do sleep 1; kill -0 "$pid" 2>/dev/null || break; done
+            if ! kill -0 "$pid" 2>/dev/null; then quit_via=$how; break; fi
+          done
+          if [ "$quit_via" = none ]; then
+            kill -9 "$pid" 2>/dev/null
+            echo "::error::the player did not quit when asked (Apple Event, Cmd+Q, SIGINT); its log was never written out"
+            tail -60 "$log"; exit 1
+          fi
+          wait "$pid"; status=$?
+          echo "quit via $quit_via in $(( $(date +%s) - started )) s, exit status $status"
 
-          if [ "$alive" != yes ]; then echo "::error::the player exited within the check window"; exit 1; fi
+          echo "--- player log markers"
+          grep -E '\[(flow|net)\]|Exception|Crash|error' "$log" | head -60 || true
           if ! grep -q '\[flow\] master = kien-master-2026.fly.dev:443 (TLS' "$log"; then
             echo "::error::no '[flow] master = kien-master-2026.fly.dev:443 (TLS' line: the menu flow did not start"; exit 1
           fi
