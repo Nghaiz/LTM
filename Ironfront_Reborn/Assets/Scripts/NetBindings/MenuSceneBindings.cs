@@ -156,7 +156,11 @@ namespace Ironfront.Net.Unity.Bindings
     /// <summary>Forwards title-screen actions to the legacy game-owned UI and quit path.</summary>
     internal sealed class LegacyMenuPlatformActions : IMenuPlatformActions
     {
-        public void OpenSettings() => OptionsUi.Show();
+        public void OpenSettings()
+        {
+            if (GameOverlays.IsAvailable(OverlayPage.Settings)) GameOverlays.Open(OverlayPage.Settings);
+            else OptionsUi.Show();
+        }
 
         public void ExitGame() => AppQuit.Quit();
     }

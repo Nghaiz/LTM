@@ -110,11 +110,11 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         private static bool Typing => LocalTextEntry.Composing;
 
-        public float MoveX => Typing ? 0f : Input.GetAxis("Horizontal");
+        public float MoveX => Typing ? 0f : GameKeys.MoveX;
 
-        public float MoveZ => Typing ? 0f : Input.GetAxis("Vertical");
+        public float MoveZ => Typing ? 0f : GameKeys.MoveZ;
 
-        public float Lean => Typing ? 0f : Input.GetAxis("Lean");
+        public float Lean => Typing ? 0f : GameKeys.LeanAxis;
 
         public float LookDeltaX => Input.GetAxis("Mouse X");
 
@@ -166,19 +166,19 @@ namespace Ironfront.Net.Unity
                 // The three keys the sprint gate is written in terms of, computed HERE and handed
                 // over, so the gate never has to ask this property for them. See _sprinting's
                 // remark for what asking cost.
-                bool aimKey = Input.GetButton("Fire2") || Input.GetMouseButton(1);
-                bool crouchKey = Input.GetButton("Crouch");
-                bool sprintKey = Input.GetButton("Sprint");
+                bool aimKey = GameKeys.Held(GameAction.Aim);
+                bool crouchKey = GameKeys.Held(GameAction.Crouch);
+                bool sprintKey = GameKeys.Held(GameAction.Sprint);
                 bool sprinting = _sprinting != null ? _sprinting(crouchKey, aimKey, sprintKey) : sprintKey;
 
                 return InputButtonPacker.Pack(
-                    fire:   (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen,
+                    fire:   GameKeys.Held(GameAction.Fire) && !loadoutOpen,
                     aim:    aimKey && !loadoutOpen,
-                    reload: Input.GetButton("Reload") && !loadoutOpen,
-                    jump:   Input.GetButton("Jump"),
+                    reload: GameKeys.Held(GameAction.Reload) && !loadoutOpen,
+                    jump:   GameKeys.Held(GameAction.Jump),
                     crouch: crouchKey,
                     sprint: sprinting,
-                    use:    Input.GetButton("Use"),
+                    use:    GameKeys.Held(GameAction.Use),
                     weaponSlot: _weaponSlotIntent != null ? _weaponSlotIntent() : -1,
                     // The server fires a leaning shot from where the leaning camera is; without
                     // the bits it fired from 0.4 m beside it (playtest 2026-09-28, bug 5). Zero

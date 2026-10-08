@@ -160,7 +160,6 @@ namespace Ironfront.Net.Unity.EditorTools
             GameObject login = BuildLogin(root, controller, toast, log);
             GameObject register = BuildRegister(root, controller, log);
             GameObject practice = BuildPractice(root, controller, toast, out Button practiceBack);
-            GameObject settings = BuildSettings(root, controller, toast, out Button settingsBack);
             GameObject authenticating = BuildAuthenticating(root);
             GameObject lobby = BuildLobby(root, controller, toast, out Text signedIn, out Button browseRooms);
             GameObject browser = BuildRoomBrowser(root, controller, toast, log);
@@ -179,8 +178,6 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_browseRoomsButton", browseRooms);
             Assign(so, "_practiceBackBar", practice);
             Assign(so, "_practiceBackButton", practiceBack);
-            Assign(so, "_settingsScreen", settings);
-            Assign(so, "_settingsBackButton", settingsBack);
             Assign(so, "_signedInText", signedIn);
             so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -190,7 +187,6 @@ namespace Ironfront.Net.Unity.EditorTools
             login.SetActive(false);
             register.SetActive(false);
             practice.SetActive(false);
-            settings.SetActive(false);
             authenticating.SetActive(false);
             lobby.SetActive(false);
             browser.SetActive(false);
@@ -740,138 +736,6 @@ namespace Ironfront.Net.Unity.EditorTools
             ConfigureKeyboard(panel,
                 new Selectable[] { map, mode, rule, points, team, vision, vehicles, respawn, botTrack, back, start },
                 start, back);
-            return panel;
-        }
-
-        private static GameObject BuildSettings(
-            GameObject root, MenuScreenController controller, MenuToast toast, out Button back)
-        {
-            GameObject panel = Panel(root, "Settings", opaque: false);
-            FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
-            MultiplayerShade(panel);
-            PackPanel(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f));
-            TopBar(panel, controller, toast, "SYSTEM SETTINGS", "CONFIGURATION", "LOCAL PROFILE",
-                offline: true, ("MAIN MENU", MenuNavigationAction.MainMenu));
-            // Heading block on the content inset like Practice's; it used to start 20px OUTSIDE the
-            // panel. The two control columns below are sized to end at the panel's right inset --
-            // at 560 wide they ran 30px past the panel edge, and APPLY SETTINGS 70px.
-            Kicker(panel, "SYSTEM CONTROL // CLIENT CONFIGURATION",
-                new Vector2(PanelContentLeft + 310f, 375f), new Vector2(620f, 28f), TextAnchor.MiddleLeft);
-            Label(panel, "Heading", "SETTINGS", 42,
-                new Vector2(PanelContentLeft + 230f, 325f), new Vector2(460f, 66f)).alignment = TextAnchor.MiddleLeft;
-            Text settingsNote = Label(panel, "Subtitle",
-                "Optimize visuals, performance and battlefield awareness.", 14,
-                new Vector2(PanelContentLeft + 350f, 286f), new Vector2(700f, 28f));
-            settingsNote.alignment = TextAnchor.MiddleLeft;
-            settingsNote.color = Hex("8DA8BA");
-            Text profile = Label(panel, "SettingsProfile", "PROFILE   DEFAULT", 13,
-                new Vector2(570f, 338f), new Vector2(260f, 30f));
-            profile.alignment = TextAnchor.MiddleRight;
-            profile.color = Orange;
-
-            Button displayTab = MakeButton(panel, "DisplayTab", "01  DISPLAY",
-                new Vector2(-570f, 190f), new Vector2(260f, 64f));
-            Button audioTab = MakeButton(panel, "AudioTab", "02  AUDIO",
-                new Vector2(-570f, 110f), new Vector2(260f, 64f));
-            Button gameplayTab = MakeButton(panel, "GameplayTab", "03  GAMEPLAY",
-                new Vector2(-570f, 30f), new Vector2(260f, 64f));
-
-            GameObject displayGroup = Panel(panel, "DisplayGroup", opaque: false);
-            GameObject audioGroup = Panel(panel, "AudioGroup", opaque: false);
-            GameObject gameplayGroup = Panel(panel, "GameplayGroup", opaque: false);
-
-            // Two columns between the category tabs and the panel's right inset.
-            const float columnWidth = 526f;
-            const float columnGap = 24f;
-            const float firstColumnLeft = PanelContentLeft + 320f;
-            const float leftColumn = firstColumnLeft + (columnWidth * 0.5f);
-            const float rightColumn = leftColumn + columnWidth + columnGap;
-            var cell = new Vector2(columnWidth, 60f);
-            var headingPosition = new Vector2(firstColumnLeft + 450f, 245f);
-
-            Label(displayGroup, "GroupHeading", "DISPLAY & PERFORMANCE", 24,
-                headingPosition, new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
-            Dropdown resolution = MakeDropdown(displayGroup, "Resolution", new Vector2(leftColumn, 165f), cell);
-            Dropdown displayMode = MakeDropdown(displayGroup, "DisplayMode", new Vector2(rightColumn, 165f), cell);
-            Dropdown quality = MakeDropdown(displayGroup, "Quality", new Vector2(leftColumn, 85f), cell);
-            Toggle vSync = MakeSwitch(displayGroup, "VSync", "V-SYNC", new Vector2(rightColumn, 85f), cell);
-            Dropdown fps = MakeDropdown(displayGroup, "FpsLimit", new Vector2(leftColumn, 5f), cell);
-            Button motionBlur = MakeButton(displayGroup, "MotionBlur", "MOTION BLUR // IN DEVELOPMENT",
-                new Vector2(rightColumn, 5f), cell);
-
-            Label(audioGroup, "GroupHeading", "AUDIO MIXER", 24,
-                headingPosition, new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
-            Slider volume = MakeSlider(audioGroup, "MasterVolume", "MASTER VOLUME",
-                new Vector2(leftColumn, 165f), 0f, 1f, columnWidth);
-            Button music = MakeButton(audioGroup, "MusicVolume", "MUSIC // IN DEVELOPMENT",
-                new Vector2(rightColumn, 165f), cell);
-            Button sfx = MakeButton(audioGroup, "SfxVolume", "SOUND EFFECTS // IN DEVELOPMENT",
-                new Vector2(leftColumn, 85f), cell);
-            Button voice = MakeButton(audioGroup, "VoiceVolume", "VOICE CHAT // IN DEVELOPMENT",
-                new Vector2(rightColumn, 85f), cell);
-            Button advancedAudio = MakeButton(audioGroup, "AdvancedAudio", "DYNAMIC RANGE // IN DEVELOPMENT",
-                new Vector2(leftColumn, 5f), cell);
-            Button outputDevice = MakeButton(audioGroup, "OutputDevice", "OUTPUT DEVICE // IN DEVELOPMENT",
-                new Vector2(rightColumn, 5f), cell);
-
-            Label(gameplayGroup, "GroupHeading", "GAMEPLAY & ACCESSIBILITY", 24,
-                headingPosition, new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
-            Slider fov = MakeSlider(gameplayGroup, "FieldOfView", "FIELD OF VIEW",
-                new Vector2(leftColumn, 165f), 60f, 120f, columnWidth);
-            Slider sensitivity = MakeSlider(gameplayGroup, "Sensitivity", "MOUSE SENSITIVITY",
-                new Vector2(rightColumn, 165f), 0.05f, 1f, columnWidth);
-            Button language = MakeButton(gameplayGroup, "Language", "LANGUAGE // IN DEVELOPMENT",
-                new Vector2(leftColumn, 85f), cell);
-            Button colorblind = MakeButton(gameplayGroup, "Colorblind", "COLORBLIND // IN DEVELOPMENT",
-                new Vector2(rightColumn, 85f), cell);
-            Button accessibility = MakeButton(gameplayGroup, "Accessibility", "SUBTITLES // IN DEVELOPMENT",
-                new Vector2(leftColumn, 5f), cell);
-            Button cameraShake = MakeButton(gameplayGroup, "CameraShake", "CAMERA SHAKE // IN DEVELOPMENT",
-                new Vector2(rightColumn, 5f), cell);
-
-            audioGroup.SetActive(false);
-            gameplayGroup.SetActive(false);
-
-            // Right-aligned on the panel's right inset, 16 apart: APPLY, CANCEL, RESET.
-            const float applyCentre = PanelContentRight - 150f;
-            const float cancelCentre = applyCentre - 150f - 16f - 130f;
-            const float resetCentre = cancelCentre - 130f - 16f - 140f;
-            Button reset = PackButton(panel, "Reset", "RESET DEFAULTS",
-                new Vector2(resetCentre, -365f), new Vector2(280f, 50f), "secondary");
-            back = PackButton(panel, "Back", "CANCEL",
-                new Vector2(cancelCentre, -365f), new Vector2(260f, 50f), "secondary");
-            Button save = PackButton(panel, "Save", "APPLY SETTINGS",
-                new Vector2(applyCentre, -365f), new Vector2(300f, 50f), "primary");
-            Text settingsStatus = Label(panel, "SettingsStatus", "NO UNSAVED CHANGES", 11,
-                new Vector2(PanelContentLeft + 150f, -365f), new Vector2(300f, 30f));
-            settingsStatus.alignment = TextAnchor.MiddleLeft;
-            settingsStatus.color = Hex("718FA4");
-
-            MenuSettingsScreen screen = panel.AddComponent<MenuSettingsScreen>();
-            var so = new SerializedObject(screen);
-            Assign(so, "_resolution", resolution);
-            Assign(so, "_displayMode", displayMode);
-            Assign(so, "_quality", quality);
-            Assign(so, "_vSync", vSync);
-            Assign(so, "_fpsLimit", fps);
-            Assign(so, "_masterVolume", volume);
-            Assign(so, "_fieldOfView", fov);
-            Assign(so, "_sensitivity", sensitivity);
-            Assign(so, "_saveButton", save);
-            Assign(so, "_resetButton", reset);
-            Assign(so, "_statusText", settingsStatus);
-            AssignArray(so, "_categoryButtons", new Object[] { displayTab, audioTab, gameplayTab });
-            AssignArray(so, "_categoryGroups", new Object[] { displayGroup, audioGroup, gameplayGroup });
-            AssignArray(so, "_unsupportedButtons",
-                new Object[] { motionBlur, music, sfx, voice, advancedAudio, outputDevice,
-                    language, colorblind, accessibility, cameraShake });
-            Assign(so, "_toast", toast);
-            so.ApplyModifiedPropertiesWithoutUndo();
-            ConfigureKeyboard(panel,
-                new Selectable[] { displayTab, audioTab, gameplayTab, resolution, displayMode,
-                    quality, vSync, fps, motionBlur, volume, music, sfx, voice, advancedAudio,
-                    outputDevice, fov, sensitivity, language, colorblind, accessibility,
-                    cameraShake, reset, back, save }, save, back);
             return panel;
         }
 
@@ -1457,7 +1321,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 presetButtons[i] = button;
             }
 
-            Text ceiling = null;
+            Text ceiling;
             if (!compact)
             {
                 float presetsRight = left + (presets * (chipWidth + chipGap)) - chipGap;
@@ -1468,6 +1332,16 @@ namespace Ironfront.Net.Unity.EditorTools
                 ceiling.resizeTextForBestFit = true;
                 ceiling.resizeTextMinSize = 10;
                 ceiling.resizeTextMaxSize = 13;
+            }
+            else
+            {
+                // Practice's card has no presets row: the line goes in the heading row, between
+                // the kicker and the tier chip, and says the bots run here (MenuBotSlider._runsLocally).
+                ceiling = Label(root, "Ceiling", string.Empty, 12,
+                    new Vector2(left + 300f + ((-left - 168f) - (left + 300f)) * 0.5f, top - 24f + lift),
+                    new Vector2((-left - 168f) - (left + 300f), 22f));
+                ceiling.alignment = TextAnchor.MiddleRight;
+                ceiling.resizeTextForBestFit = false;
             }
 
             MenuBotSlider component = root.AddComponent<MenuBotSlider>();
@@ -1481,7 +1355,8 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_perSideText", perSide);
             Assign(so, "_tierChip", chip);
             Assign(so, "_tierText", tier);
-            if (ceiling != null) Assign(so, "_ceilingText", ceiling);
+            Assign(so, "_ceilingText", ceiling);
+            so.FindProperty("_runsLocally").boolValue = compact;
             AssignArray(so, "_tickLabels", tickLabels);
             AssignArray(so, "_tickMarks", tickMarks);
             AssignArray(so, "_presetButtons", presetButtons);

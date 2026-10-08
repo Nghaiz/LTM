@@ -76,10 +76,6 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private GameObject? _practiceBackBar;
         [SerializeField] private Button? _practiceBackButton;
 
-        [Header("Settings")]
-        [SerializeField] private GameObject? _settingsScreen;
-        [SerializeField] private Button? _settingsBackButton;
-
         [Header("Lobby readout")]
         [SerializeField] private Text? _signedInText;
 
@@ -138,10 +134,11 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>The legacy practice menu is showing, so every network screen is down.</summary>
         private bool _practiceOpen;
-        private bool _settingsOpen;
 
         public bool IsPracticeScreenOpen => _practiceOpen;
-        public bool IsSettingsScreenOpen => _settingsOpen;
+
+        /// <summary>The settings overlay is up (<see cref="GameOverlays"/>); it draws over whatever screen is.</summary>
+        public bool IsSettingsScreenOpen => GameOverlays.Current == OverlayPage.Settings;
 
         private volatile bool _busy;
 
@@ -214,9 +211,6 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             if (_practiceBackButton != null)
                 _practiceBackButton.onClick.AddListener(ClosePractice);
-
-            if (_settingsBackButton != null)
-                _settingsBackButton.onClick.AddListener(CloseSettings);
 
             if (_browseRoomsButton != null)
                 _browseRoomsButton.onClick.AddListener(OpenRoomBrowser);
@@ -347,7 +341,6 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearError();
             ClearChat();
             _practiceOpen = false;
-            _settingsOpen = false;
             _registerRequested = false;
             _createRequested = false;
             _roomHeading = string.Empty;
@@ -367,7 +360,6 @@ namespace Ironfront.Net.Unity.Client.Menu
         public void OpenPractice()
         {
             ClearError();
-            _settingsOpen = false;
             _practiceOpen = true;
             _dirty = true;
         }
@@ -380,18 +372,17 @@ namespace Ironfront.Net.Unity.Client.Menu
             _dirty = true;
         }
 
+        /// <summary>Opens the settings overlay over whichever screen is up (<see cref="GameOverlays"/>).</summary>
         public void OpenSettings()
         {
             ClearError();
-            _practiceOpen = false;
-            _settingsOpen = true;
-            _dirty = true;
+            GameOverlays.Open(OverlayPage.Settings);
         }
 
+        /// <summary>Closes the settings overlay, if it is up.</summary>
         public void CloseSettings()
         {
-            _settingsOpen = false;
-            _dirty = true;
+            if (IsSettingsScreenOpen) GameOverlays.Close();
         }
 
         /// <summary>Starts a practice match on <paramref name="sceneName"/>, played by <paramref name="settings"/>.</summary>
@@ -790,7 +781,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             GameFlowState state = _flow != null ? _flow.State : GameFlowState.Booting;
 
-            bool localOverlay = _practiceOpen || _settingsOpen;
+            bool localOverlay = _practiceOpen;
             bool login = !localOverlay && state == GameFlowState.LoginScreen && !_registerRequested;
             bool register = !localOverlay && state == GameFlowState.LoginScreen && _registerRequested;
 
@@ -810,7 +801,6 @@ namespace Ironfront.Net.Unity.Client.Menu
             SetActive(_createRoomScreen, browsing && _createRequested);
             SetActive(_roomLobbyScreen, !localOverlay && state == GameFlowState.RoomLobby);
             SetActive(_practiceBackBar, _practiceOpen);
-            SetActive(_settingsScreen, _settingsOpen);
 
             if (_browseRoomsButton != null) _browseRoomsButton.interactable = !_busy;
 

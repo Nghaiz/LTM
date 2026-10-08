@@ -47,6 +47,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Text? _tierText;
         [SerializeField] private Text? _ceilingText;
 
+        [Tooltip("Practice's card: every bot runs on this machine, so there is no servers' ceiling to report.")]
+        [SerializeField] private bool _runsLocally;
+
         [Header("Notches and presets")]
         [SerializeField] private Text[] _tickLabels = Array.Empty<Text>();
         [SerializeField] private Image[] _tickMarks = Array.Empty<Image>();
@@ -188,8 +191,9 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (_ceilingText != null)
             {
-                _ceilingText.text = RoomBotChoice.CeilingText(_capacity);
-                _ceilingText.color = _capacity == null ? CeilingUnknown
+                _ceilingText.text = _runsLocally ? RoomBotChoice.LocalCeilingText : RoomBotChoice.CeilingText(_capacity);
+                _ceilingText.color = _runsLocally ? CeilingOk
+                    : _capacity == null ? CeilingUnknown
                     : !RoomBotChoice.CanCreate(_capacity) || _ceiling == 0 ? CeilingNone
                     : limited ? CeilingLimited
                     : CeilingOk;

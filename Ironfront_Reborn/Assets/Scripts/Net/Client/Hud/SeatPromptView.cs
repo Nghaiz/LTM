@@ -66,7 +66,17 @@ namespace Ironfront.Net.Unity.Client.Hud
         {
             if (_group != null) _group.alpha = 0f;
             if (_detail != null) _detailInk = _detail.color;
-            if (_key != null) _key.text = SeatPromptWording.Key;
+            ShowKey();
+        }
+
+        private void OnEnable() => GameKeys.Changed += ShowKey;
+
+        private void OnDisable() => GameKeys.Changed -= ShowKey;
+
+        /// <summary>The player's own enter/exit key on the key cap, F unless they rebound it.</summary>
+        private void ShowKey()
+        {
+            if (_key != null) _key.text = GameKeys.Cap(GameAction.Use);
         }
 
         private void LateUpdate()

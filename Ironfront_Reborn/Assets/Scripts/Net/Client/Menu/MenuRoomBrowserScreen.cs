@@ -173,6 +173,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         private void Update()
         {
             if (_passwordPrompt == null || !_passwordPrompt.activeSelf) return;
+            if (GameOverlays.OwnsEscape) return;
 
             if (Input.GetKeyDown(KeyCode.Escape)) ClosePrompt();
             else if ((Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
