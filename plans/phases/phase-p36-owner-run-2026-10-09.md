@@ -45,3 +45,27 @@ Windows, macOS and Linux. Owner rule for this run: single-threaded, no subagents
   first deploys sent `flag 0` and `flag 7` (drawn) and three redeploys after deaths `flag 3`, `0`,
   `1`; the respawn frame is now 78-95 ms (first render of the new view), was 332-440 ms with 298 ms
   of grass reading; no tick dropped, no `[details]` read on the deploy frame.
+- **B (item 6):** release players now say how much of a long frame fell between frames, outside
+  the player loop (`PlayerLoopClock`, #576). P35 finding 3 is closed in
+  `phase-p35-frame-hitches.md`.
+- **B (item 7), measured, nothing cheap left on the client's CPU.** Two autopilot release
+  players in one live Azure room (Forest Lake, 50 bots a side), per-thread CPU sampled every
+  second by `tools/perf/thread_cpu.ps1`; a development capture of the same match for the
+  breakdown. Every lead below was measured and dropped:
+  - *Fewer job workers* (`-job-worker-count 2` against today's 4): 2.93 cores against 3.57, but
+    39 fps against 57 in the same window, so 75 core-ms a frame against 62. Fewer workers only
+    slow the frame; the cap stays at 4.
+  - *Writing animator parameters only when they change* (100 remote bodies, nine parameters
+    each): 25.6 us a frame written always, 19.4 us cached (Editor micro-benchmark,
+    `GetLayerIndex` + `SetLayerWeight` 11.7 us). Not worth a cache.
+  - *Cloth on distant bodies*: absent from the capture's top 60 samples.
+  - *UI rebuilds*: a census of Unity's own rebuild queues found under one graphic or layout
+    rebuilt per frame; `Canvas.SendWillRenderCanvases` (1.3 ms) and `Canvas.Sort` (1 ms) are
+    batching cost, not churn.
+  - *IMGUI* (0.95 ms, 47 `OnGUI` passes a frame, 40 of them `Vehicle.OnGUI`): development builds
+    only; the release client compiled those out on 2026-10-02.
+  - **Where the CPU actually goes:** shadow rendering. `Shadows.RenderJobDir` is 5.3 ms a frame
+    on the job workers and 4.4 ms on the render thread, the largest entries on both, and the
+    tree casters are drawn in all four cascades (328 of 554 shadow-map events). That is phase
+    P34 (`phase-p34-tree-shadows-per-cascade.md`), a spike-first design; it is the next CPU
+    lever and is not part of this run.
