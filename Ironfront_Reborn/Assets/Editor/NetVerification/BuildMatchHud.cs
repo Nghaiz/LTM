@@ -1140,6 +1140,26 @@ namespace Ironfront.Net.Unity.EditorTools
             hint.text = "TAB  ·  CLOSE";
             Place(hint, BottomRight, BottomRight, new Vector2(-8f, 10f), new Vector2(200f, 20f));
 
+            // ---- the pages, at the foot's left: shown only when one page does not hold everyone
+            var pager = new GameObject("Pager", typeof(RectTransform));
+            pager.transform.SetParent(panel.transform, worldPositionStays: false);
+            Place(pager.transform, BottomLeft, BottomLeft, new Vector2(8f, 6f), new Vector2(520f, 28f));
+            Image previous = Picture(pager, "Previous", HudStyle.BoardMuted);
+            previous.sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Resources/IronfrontUi/Icons/arrow-left.png");
+            previous.preserveAspect = true;
+            Place(previous, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(18f, 18f));
+            Text pageLabel = BoardText(pager, "Page", bold, 17, Ink, TextAnchor.MiddleCenter);
+            pageLabel.text = "PAGE 1 / 2";
+            Place(pageLabel, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(120f, 28f));
+            Image next = Picture(pager, "Next", HudStyle.BoardMuted);
+            next.sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Resources/IronfrontUi/Icons/arrow-right.png");
+            next.preserveAspect = true;
+            Place(next, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(146f, 0f), new Vector2(18f, 18f));
+            Text pageHint = BoardText(pager, "Keys", bold, 14, HudStyle.BoardFaint, TextAnchor.MiddleLeft);
+            pageHint.text = "MOUSE WHEEL  ·  PG UP / PG DN";
+            Place(pageHint, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(178f, 0f), new Vector2(340f, 28f));
+            pager.SetActive(false);
+
             ScoreboardView view = board.AddComponent<ScoreboardView>();
 
             var so = new SerializedObject(view);
@@ -1164,6 +1184,8 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_team0", team0);
             Assign(so, "_team1", team1);
             Assign(so, "_rules", rules);
+            Assign(so, "_pager", pager);
+            Assign(so, "_pageLabel", pageLabel);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             log.AppendLine(
@@ -1223,26 +1245,29 @@ namespace Ironfront.Net.Unity.EditorTools
             headsRect.anchorMin = new Vector2(0f, 1f);
             headsRect.anchorMax = new Vector2(1f, 1f);
             headsRect.pivot = new Vector2(0.5f, 1f);
-            headsRect.anchoredPosition = new Vector2(0f, -(BandHeight + 8f));
-            headsRect.sizeDelta = new Vector2(-2f * RowInset, 28f);
+            headsRect.anchoredPosition = new Vector2(0f, -(BandHeight + 6f));
+            headsRect.sizeDelta = new Vector2(-2f * RowInset, HeadsHeight);
 
-            ColumnHead(heads, "#", bold, TextAnchor.MiddleCenter, fromRight: false, RankX, RankWidth);
-            ColumnHead(heads, "PLAYER", bold, TextAnchor.MiddleLeft, fromRight: false, NameX, 220f);
-            ColumnHead(heads, "K", bold, TextAnchor.MiddleRight, fromRight: true, KillsX, NumberWidth);
-            ColumnHead(heads, "D", bold, TextAnchor.MiddleRight, fromRight: true, DeathsX, NumberWidth);
-            ColumnHead(heads, "K/D", bold, TextAnchor.MiddleRight, fromRight: true, RatioX, RatioWidth);
-            ColumnHead(heads, "HS", bold, TextAnchor.MiddleRight, fromRight: true, HeadshotsX, NumberWidth);
-            ColumnHead(heads, "STREAK", bold, TextAnchor.MiddleRight, fromRight: true, StreakX, StreakWidth);
-            ColumnHead(heads, "BEST", bold, TextAnchor.MiddleRight, fromRight: true, BestX, NumberWidth);
-            ColumnHead(heads, "SCORE", bold, TextAnchor.MiddleRight, fromRight: true, ScoreX, ScoreWidth);
-            ColumnHead(heads, "PING", bold, TextAnchor.MiddleRight, fromRight: true, PingX, PingWidth);
+            // Every column carries its own mark and colour (owner's list of 2026-10-09, item 2), the
+            // same colours its numbers take on the rows: green kills, a red skull for deaths, the
+            // ratio's cyan, an orange-red headshot, the streak's flame, a gold crown for the best.
+            ColumnHead(heads, "#", "medal", HudStyle.BoardMuted, bold, fromRight: false, RankX, RankWidth);
+            ColumnHead(heads, "PLAYER", "person", HudStyle.BoardMuted, bold, fromRight: false, NameX, 220f);
+            ColumnHead(heads, "KILLS", "crosshair", HudStyle.KillsInk, bold, fromRight: true, KillsX, NumberWidth);
+            ColumnHead(heads, "DEATHS", "skull", HudStyle.DeadInk, bold, fromRight: true, DeathsX, NumberWidth);
+            ColumnHead(heads, "K/D", "ratio", HudStyle.RatioHeadInk, bold, fromRight: true, RatioX, RatioWidth);
+            ColumnHead(heads, "HEADS", "headshot", HudStyle.HeadshotInk, bold, fromRight: true, HeadshotsX, NumberWidth);
+            ColumnHead(heads, "STREAK", "flame", HudStyle.StreakInk, bold, fromRight: true, StreakX, StreakWidth);
+            ColumnHead(heads, "BEST", "crown", HudStyle.GoldInk, bold, fromRight: true, BestX, NumberWidth);
+            ColumnHead(heads, "SCORE", "star", HudStyle.ScoreHeadInk, bold, fromRight: true, ScoreX, ScoreWidth);
+            ColumnHead(heads, "PING", "signal", HudStyle.AliveInk, bold, fromRight: true, PingX, PingWidth);
 
-            Image rule = Picture(side, "Column Rule", new Color(1f, 1f, 1f, 0.12f));
+            Image rule = Picture(side, "Column Rule", new Color(1f, 1f, 1f, 0.16f));
             RectTransform ruleRect = rule.rectTransform;
             ruleRect.anchorMin = new Vector2(0f, 1f);
             ruleRect.anchorMax = new Vector2(1f, 1f);
             ruleRect.pivot = new Vector2(0.5f, 1f);
-            ruleRect.anchoredPosition = new Vector2(0f, -(BandHeight + 38f));
+            ruleRect.anchoredPosition = new Vector2(0f, -(BandHeight + 8f + HeadsHeight));
             ruleRect.sizeDelta = new Vector2(-2f * RowInset, 1f);
 
             var rows = new GameObject("Rows", typeof(RectTransform));
@@ -1251,7 +1276,7 @@ namespace Ironfront.Net.Unity.EditorTools
             rowsRect.anchorMin = Vector2.zero;
             rowsRect.anchorMax = Vector2.one;
             rowsRect.offsetMin = new Vector2(RowInset, RowInset);
-            rowsRect.offsetMax = new Vector2(-RowInset, -(BandHeight + 44f));
+            rowsRect.offsetMax = new Vector2(-RowInset, -(BandHeight + 14f + HeadsHeight));
 
             Text empty = BoardText(rows, "Empty", medium, 18, HudStyle.BoardFaint, TextAnchor.MiddleCenter);
             empty.text = "NO PLAYERS YET";
@@ -1510,6 +1535,9 @@ namespace Ironfront.Net.Unity.EditorTools
         private const float SideTop = 194f;
         private const float SideHeight = BoardHeight - SideTop - 44f;
         private const float BandHeight = 96f;
+
+        /// <summary>The column heads: a mark over a name.</summary>
+        private const float HeadsHeight = 40f;
         private const float RowInset = 12f;
 
         // Columns, from a row's left edge or (fromRight) its right edge. The owner's report of
@@ -1539,14 +1567,48 @@ namespace Ironfront.Net.Unity.EditorTools
         private static readonly Vector2 TopRight = new Vector2(1f, 1f);
         private static readonly Vector2 Middle = new Vector2(0.5f, 0.5f);
         private static readonly Vector2 BottomCentre = new Vector2(0.5f, 0f);
+        private static readonly Vector2 BottomLeft = new Vector2(0f, 0f);
         private static readonly Vector2 BottomRight = new Vector2(1f, 0f);
 
+        /// <summary>
+        /// One column's heading: its mark over its name, both in the column's colour. A name column
+        /// (rank, player) reads left to right instead, mark then name, on one line.
+        /// </summary>
         private static void ColumnHead(
-            GameObject heads, string caption, Font font, TextAnchor anchor, bool fromRight, float x, float width)
+            GameObject heads, string caption, string icon, Color ink, Font font, bool fromRight, float x, float width)
         {
-            Text head = BoardText(heads, caption, font, 15, HudStyle.BoardFaint, anchor, shadowed: false);
+            var cell = new GameObject(caption, typeof(RectTransform));
+            cell.transform.SetParent(heads.transform, worldPositionStays: false);
+            Column(cell.transform, fromRight, x, width);
+
+            Sprite mark = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Resources/IronfrontUi/Icons/" + icon + ".png");
+            Image glyph = Picture(cell, "Icon", ink);
+            glyph.sprite = mark;
+            glyph.preserveAspect = true;
+
+            Text head = BoardText(cell, "Caption", font, 11, ink,
+                fromRight ? TextAnchor.LowerCenter : TextAnchor.MiddleLeft, shadowed: false);
             head.text = caption;
-            Column(head, fromRight, x, width);
+
+            if (fromRight)
+            {
+                // Right-aligned, like the numbers under them.
+                Place(glyph, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-1f, -1f), new Vector2(20f, 20f));
+                Stretch(head.rectTransform);
+                head.alignment = TextAnchor.LowerRight;
+            }
+            else
+            {
+                Place(glyph, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(18f, 18f));
+                Place(head, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(caption.Length > 1 ? 24f : 22f, 0f),
+                    new Vector2(width, 20f));
+                if (caption == "#")
+                {
+                    // The rank column is narrow: the mark alone, centred.
+                    head.gameObject.SetActive(false);
+                    glyph.rectTransform.anchoredPosition = new Vector2((width - 18f) * 0.5f, 0f);
+                }
+            }
         }
 
         /// <summary>A full-height column in a row, <paramref name="x"/> in from one edge.</summary>
