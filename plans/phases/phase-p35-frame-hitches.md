@@ -1,6 +1,7 @@
 # Phase P35: long frames on the owner's Ultra machine (handover)
 
-Status: **investigated, not fixed.** Handed over by the owner on 2026-10-07 for a later session.
+Status: **findings 1 and 2 fixed (2026-10-08); the "flag any" respawn fixed and finding 3 closed
+as not reproduced (2026-10-09, P36).** Handed over by the owner on 2026-10-07 for a later session.
 Everything below was measured on the owner's own machine (RTX 4060 Laptop, 8 GB, 32 threads,
 Ultra preset), which is also the development PC.
 
@@ -123,6 +124,21 @@ clients in a live Azure room (Forest Lake, night, 50 bots a side), the measured 
 - A frame that spends 20 ms or more reading patches now logs `[details] ... read N patch
   prototype(s) ... in X ms` with the split (at most once in 5 s), in every build, so the next
   playtest's logs say how much of the stutter is grass.
+
+### 2026-10-09 (second run): finding 3 closed as not reproduced, and watched in every build
+
+Owner's list of 2026-10-09, item 6. Release IL2CPP player with diagnostics, the measured client
+focused and uncapped, the other in the background, a live Azure room (Forest Lake, 50 bots a side),
+cua-driver not touching either window: **about 20 minutes, three deaths and four deploys, and not one
+frame over 168 ms after the map finished loading** (the only three were the boot, the menu load and
+the map load, all `EarlyUpdate.UpdatePreloading`). With the respawn read gone (P36 item 5) and the
+pre-deploy camera off, nothing left in the measured client stalls between frames.
+
+The 2026-10-07 stalls stay unexplained, so the release player now carries the measurement the
+diagnostics build used to find them: `PlayerLoopClock` marks the start and end of every frame's
+player loop (two clock reads a frame, not in batch mode), and a focused prediction-clock drop now
+reads `dropped N tick(s) after a X ms frame (Y ms of it between frames, outside the game loop)`. If
+the owner's next session has one, the log says whether it was the game or the window.
 
 ### Not the cause (measured)
 

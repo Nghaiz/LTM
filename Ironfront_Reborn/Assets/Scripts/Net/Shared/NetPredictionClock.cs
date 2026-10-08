@@ -333,7 +333,7 @@ namespace Ironfront.Net.Unity
                 // reconciles against the server on every single tick.
                 int dropped = Mathf.FloorToInt(_accumulator / TickInterval);
                 _accumulator = 0f;
-                string warning = _tickDrops.Record(dropped, frame * 1000f, Application.isFocused);
+                string warning = _tickDrops.Record(dropped, frame * 1000f, Application.isFocused, PlayerLoopClock.LastGapMs);
                 if (warning != null) Debug.LogWarning(warning);
             }
 
