@@ -226,6 +226,8 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// </remarks>
         private void Update()
         {
+            ReadGuideKey();
+
             string created = _pendingAccountCreated;
             if (created != null)
             {
@@ -257,6 +259,30 @@ namespace Ironfront.Net.Unity.Client.Menu
             _dirty = false;
             Apply();
         }
+
+        /// <summary>
+        /// The How to play key opens the guide on every menu screen (owner's list of 2026-10-09,
+        /// item 1), except while a field is being typed in, where it is a letter.
+        /// </summary>
+        private static void ReadGuideKey()
+        {
+            if (GameOverlays.Current != OverlayPage.None || !GameKeys.Down(GameAction.HowToPlay)) return;
+            if (IsTyping()) return;
+            OpenHowToPlay();
+        }
+
+        /// <summary>Whether a text field holds the keyboard, so a letter key is a letter.</summary>
+        internal static bool IsTyping()
+        {
+            GameObject? selected = UnityEngine.EventSystems.EventSystem.current != null
+                ? UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject
+                : null;
+            InputField? field = selected != null ? selected.GetComponent<InputField>() : null;
+            return LocalTextEntry.OwnsKeyboard || (field != null && field.isFocused);
+        }
+
+        /// <summary>Opens the guide over whichever screen is up.</summary>
+        public static void OpenHowToPlay() => GameOverlays.Open(OverlayPage.HowToPlay);
 
         /// <summary>Every screen under this controller, active or not. Main thread only.</summary>
         private MenuFormScreen[] Forms()
@@ -321,6 +347,35 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearError();
             _registerRequested = false;
             _flow.Transition(GameFlowState.LoginScreen);
+
+            // "Remember me" (owner's list of 2026-10-09, item 1): this machine's token signs the
+            // player straight in; a refused one is forgotten and the form asks for the password.
+            string token = RememberedSignIn.Token;
+            if (token.Length > 0 && _session != null) Submit(TokenLogInAsync(token));
+        }
+
+        /// <summary>The signed-in player's name, or empty before a sign-in.</summary>
+        public string SignedInName => _session != null ? _session.DisplayName : string.Empty;
+
+        /// <summary>
+        /// Signs out of this machine: the remembered sign-in is forgotten (the name stays in the
+        /// field) and the menu goes back to the sign-in form, so another account can sign in.
+        /// Offered on the room list, outside any room.
+        /// </summary>
+        public void SignOut()
+        {
+            if (_flow == null) return;
+
+            RememberedSignIn.ForgetToken();
+            ClearError();
+            ClearChat();
+            _practiceOpen = false;
+            _createRequested = false;
+            _registerRequested = false;
+            _roomHeading = string.Empty;
+            _flow.Reset();
+            _flow.Transition(GameFlowState.LoginScreen);
+            _dirty = true;
         }
 
         /// <summary>Returns from the login form to the title screen.</summary>
@@ -439,12 +494,12 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// survives the link dying, and every later press then talks to a dead socket and reports
         /// "lost the connection" with no way back short of restarting the game.
         /// </remarks>
-        public void SubmitLogin(string username, string password)
+        public void SubmitLogin(string username, string password, bool remember = false)
         {
             if (_session == null || _flow == null) return;
             if (_flow.State != GameFlowState.LoginScreen) return;
 
-            Submit(LogInAsync(username, password));
+            Submit(LogInAsync(username, password, remember));
         }
 
         /// <summary>
@@ -635,13 +690,41 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         // ------------------------------------------------------------------ the work
 
-        private async Task<bool> LogInAsync(string username, string password)
+        private async Task<bool> LogInAsync(string username, string password, bool remember)
         {
             if (_session == null) return false;
 
             if (!_session.IsMasterConnected && !await ConnectAsync()) return false;
 
-            return await _session.LoginAsync(username, password);
+            if (!await _session.LoginAsync(username, password, remember)) return false;
+
+            // The token, not the password; an older master sends none and only the name is kept.
+            if (remember) RememberedSignIn.Remember(username, _session.RememberToken);
+            return await BrowseAfterSignInAsync();
+        }
+
+        /// <summary>
+        /// Straight on to the room list: the signed-in screen between them was one more press
+        /// that said nothing (owner's list of 2026-10-09, item 1: nothing superfluous).
+        /// </summary>
+        private async Task<bool> BrowseAfterSignInAsync()
+        {
+            if (_session == null || _flow == null || _flow.State != GameFlowState.Lobby) return true;
+            await _session.OpenRoomBrowserAsync();
+            return true;
+        }
+
+        private async Task<bool> TokenLogInAsync(string token)
+        {
+            if (_session == null) return false;
+
+            if (!_session.IsMasterConnected && !await ConnectAsync()) return false;
+
+            bool signedIn = await _session.LoginWithTokenAsync(token);
+
+            // Spent either way: keep the next one, or stop signing in by itself.
+            RememberedSignIn.ReplaceToken(signedIn ? _session.RememberToken : string.Empty);
+            return signedIn && await BrowseAfterSignInAsync();
         }
 
         private async Task<bool> RegisterAsync(string username, string password, string displayName)

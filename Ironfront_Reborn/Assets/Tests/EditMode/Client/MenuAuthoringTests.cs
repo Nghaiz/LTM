@@ -34,7 +34,10 @@ namespace Ironfront.Net.Unity.Client.Tests
             CanvasScaler scaler = root.GetComponent<CanvasScaler>();
             Assert.AreEqual(new Vector2(1920f, 1080f), scaler.referenceResolution);
             Assert.IsTrue(root.GetComponent<Canvas>().pixelPerfect);
-            Assert.NotNull(root.transform.Find("Sign In/ForgotPassword"));
+            // No control whose only job is to say it does nothing (owner's list of 2026-10-09).
+            Assert.IsNull(root.transform.Find("Sign In/ForgotPassword"), "Forgot password is back, with nothing behind it.");
+            Assert.IsEmpty(root.GetComponentsInChildren<MenuDevelopmentControls>(true),
+                "A menu control only announces that it is not built yet.");
             Assert.NotNull(root.GetComponentInChildren<MenuToast>(true));
 
             string allText = string.Join("\n", root.GetComponentsInChildren<Text>(true)

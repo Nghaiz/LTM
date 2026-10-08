@@ -84,3 +84,14 @@ Windows, macOS and Linux. Owner rule for this run: single-threaded, no subagents
   while the board is open, `HudInputClaims`). Every column head has a coloured icon (kills
   crosshair, deaths skull, K/D, headshots, streak flame, best crown, score star, ping bars, rank
   medal). Rendered at 1920x1080 with 6 players and 50 bots a side: 4 pages, nothing clipped.
+- **E (item 1):** every screen outside a match reworked. A label over every field (sign in,
+  create account, create room, practice, room chat). "Remember me" signs the computer in for 30
+  days with a master token, never the password (`TOKEN_LOGIN_REQ`, protocol 14.0.2, additive):
+  the master keeps only the token's SHA-256, spends it on use and returns the next one. Signing in
+  goes straight to the room list; the room list says who is signed in and has SIGN OUT. Dead
+  controls are gone or built: Forgot password and the region filter removed; the mode filter and
+  QUICK MATCH (fullest public room with a place) work; COPY INVITE, START GAME and the waiting
+  room's dead ROOMS link removed. HOW TO PLAY: an eight-tab guide (`HowToPlayPage`) whose
+  CONTROLS tab and every key in its text follow the player's bindings; a main-menu button under
+  Settings, the How to play key on every menu screen and on the deploy screen, and a row in the
+  in-match Esc menu.

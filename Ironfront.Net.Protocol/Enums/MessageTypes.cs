@@ -97,6 +97,20 @@ namespace Ironfront.Net.Protocol
         RegisterRequest  = 0x0003,
         RegisterResponse = 0x0004,
 
+        /// <summary>
+        /// Signs in with a remembered token instead of a password. Body
+        /// <c>{ "token", "clientVersion", "maps" }</c>; answered with <see cref="LoginResponse"/>.
+        /// </summary>
+        /// <remarks>
+        /// "Remember me" (owner's list of 2026-10-09, item 1). A <see cref="LoginRequest"/> with
+        /// <c>"remember": true</c> gets a <c>rememberToken</c> in its response; the client keeps
+        /// it and sends it here next time. Each use spends the token and the response carries the
+        /// next one. Not a <c>PROTOCOL_VERSION</c> bump, for <see cref="RoomTeamRequest"/>'s
+        /// reason: MSP bodies are JSON and an older master answers an unknown opcode with
+        /// <see cref="ErrorPush"/>.
+        /// </remarks>
+        TokenLoginRequest = 0x0005,
+
         RoomListRequest   = 0x0010,
         RoomListResponse  = 0x0011,
         RoomCreateRequest = 0x0012,

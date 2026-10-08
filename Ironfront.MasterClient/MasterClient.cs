@@ -109,15 +109,33 @@ namespace Ironfront.MasterClient
             => RequestAsync(MspMessageType.LoginRequest, new { username, passwordHash, clientVersion = ProtocolConstants.PROTOCOL_VERSION }, MspMessageType.LoginResponse, ToLoginResult, ct);
 
         public Task<LoginResult> LoginAsync(string username, string passwordHash, IReadOnlyList<ushort> loadableMapIds, CancellationToken ct = default)
+            => LoginAsync(username, passwordHash, loadableMapIds, remember: false, ct);
+
+        public Task<LoginResult> LoginAsync(string username, string passwordHash, IReadOnlyList<ushort> loadableMapIds, bool remember, CancellationToken ct = default)
+        {
+            ushort[] maps = MapList(loadableMapIds);
+            return remember
+                ? RequestAsync(MspMessageType.LoginRequest, new { username, passwordHash, clientVersion = ProtocolConstants.PROTOCOL_VERSION, maps, remember }, MspMessageType.LoginResponse, ToLoginResult, ct)
+                : RequestAsync(MspMessageType.LoginRequest, new { username, passwordHash, clientVersion = ProtocolConstants.PROTOCOL_VERSION, maps }, MspMessageType.LoginResponse, ToLoginResult, ct);
+        }
+
+        public Task<LoginResult> TokenLoginAsync(string token, IReadOnlyList<ushort> loadableMapIds, CancellationToken ct = default)
+        {
+            if (token is null) throw new ArgumentNullException(nameof(token));
+            ushort[] maps = MapList(loadableMapIds);
+            return RequestAsync(MspMessageType.TokenLoginRequest, new { token, clientVersion = ProtocolConstants.PROTOCOL_VERSION, maps }, MspMessageType.LoginResponse, ToLoginResult, ct);
+        }
+
+        private static ushort[] MapList(IReadOnlyList<ushort> loadableMapIds)
         {
             if (loadableMapIds is null) throw new ArgumentNullException(nameof(loadableMapIds));
             ushort[] maps = new ushort[loadableMapIds.Count];
             for (int i = 0; i < maps.Length; i++) maps[i] = loadableMapIds[i];
-            return RequestAsync(MspMessageType.LoginRequest, new { username, passwordHash, clientVersion = ProtocolConstants.PROTOCOL_VERSION, maps }, MspMessageType.LoginResponse, ToLoginResult, ct);
+            return maps;
         }
 
         private static LoginResult ToLoginResult(Response response)
-            => new LoginResult(response.Ok, response.ErrorCode, response.SessionToken ?? string.Empty, response.PlayerId, response.DisplayName ?? string.Empty, response.RetryAfterSec);
+            => new LoginResult(response.Ok, response.ErrorCode, response.SessionToken ?? string.Empty, response.PlayerId, response.DisplayName ?? string.Empty, response.RetryAfterSec, response.RememberToken ?? string.Empty);
 
         public Task<RegisterResult> RegisterAsync(string username, string passwordHash, string displayName, CancellationToken ct = default)
             => RequestAsync(MspMessageType.RegisterRequest, new { username, passwordHash, displayName }, MspMessageType.RegisterResponse, response => new RegisterResult(response.Ok, response.ErrorCode), ct);
@@ -367,6 +385,9 @@ namespace Ironfront.MasterClient
             /// <summary>Seconds until a refused login may be retried. 0 from a master that
             /// predates the field, which reads as "waiting will not help".</summary>
             public int RetryAfterSec { get; set; }
+
+            /// <summary>The next "remember me" token, or null from a master that predates it (14.0.2).</summary>
+            public string? RememberToken { get; set; }
 
             public int RoomId { get; set; }
             public int EstimatedWaitSec { get; set; }

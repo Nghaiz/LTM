@@ -37,8 +37,6 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Button? _backButton;
         [SerializeField] private Text? _errorText;
 
-        internal const string RememberedUsernameKey = "ironfront.menu.remembered-username";
-
         /// <summary>
         /// The colour the label was authored with. Every failure goes back to it.
         /// </summary>
@@ -70,7 +68,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_backButton != null) _backButton.onClick.AddListener(OnBack);
             if (_rememberMeToggle != null) _rememberMeToggle.onValueChanged.AddListener(OnRememberChanged);
 
-            string remembered = ReadRememberedUsername();
+            string remembered = RememberedSignIn.Username;
             if (_usernameField != null && remembered.Length > 0) _usernameField.text = remembered;
             if (_rememberMeToggle != null) _rememberMeToggle.isOn = remembered.Length > 0;
         }
@@ -112,9 +110,12 @@ namespace Ironfront.Net.Unity.Client.Menu
                 return;
             }
 
-            StoreRememberedUsername(_rememberMeToggle != null && _rememberMeToggle.isOn, username);
+            // Remembered in full only once the master has answered with a token
+            // (MenuScreenController); an unticked box forgets this machine's sign-in now.
+            bool remember = _rememberMeToggle != null && _rememberMeToggle.isOn;
+            if (!remember) RememberedSignIn.Forget();
 
-            _controller.SubmitLogin(username, password);
+            _controller.SubmitLogin(username, password, remember);
 
             // Dropped now rather than on success: a failed attempt is exactly the case where the
             // value would otherwise sit in the field for the rest of the session.
@@ -127,7 +128,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void OnRememberChanged(bool remember)
         {
-            if (!remember) StoreRememberedUsername(false, string.Empty);
+            if (!remember) RememberedSignIn.Forget();
         }
 
         private void SelectNext(bool backwards)
@@ -140,19 +141,6 @@ namespace Ironfront.Net.Unity.Client.Menu
             Selectable next = backwards ? current?.FindSelectableOnUp() : current?.FindSelectableOnDown();
             if (next == null) next = backwards ? _backButton : _usernameField;
             next?.Select();
-        }
-
-        internal static string ReadRememberedUsername()
-            => PlayerPrefs.GetString(RememberedUsernameKey, string.Empty);
-
-        internal static void StoreRememberedUsername(bool remember, string username)
-        {
-            if (remember && !string.IsNullOrWhiteSpace(username))
-                PlayerPrefs.SetString(RememberedUsernameKey, username.Trim());
-            else
-                PlayerPrefs.DeleteKey(RememberedUsernameKey);
-
-            PlayerPrefs.Save();
         }
 
         /// <inheritdoc />

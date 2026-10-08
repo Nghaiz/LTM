@@ -40,6 +40,11 @@ public class LoadoutUi : MonoBehaviour
 
 	public RectTransform scrollIndicator;
 
+	// "[H] HOW TO PLAY" beside the deploy heading, in the player's own key (RestyleIngameUi).
+	public UnityEngine.UI.Text howToPlayHint;
+
+	private string howToPlayKey;
+
 	public Sprite nothingSprite;
 
 	private bool hasBeenOpen;
@@ -107,6 +112,29 @@ public class LoadoutUi : MonoBehaviour
 		if (scrollIndicator.gameObject.activeInHierarchy)
 		{
 			scrollIndicator.anchoredPosition = new Vector2(10f, (1f + Mathf.Sin(Time.time * 3f)) * 10f);
+		}
+		if (uiCanvas != null && uiCanvas.enabled)
+		{
+			UpdateHowToPlay();
+		}
+	}
+
+	// The How to play key opens the guide from the deploy screen (owner's list of 2026-10-09,
+	// item 1); the hint is rewritten only when the binding changes.
+	private void UpdateHowToPlay()
+	{
+		string key = Ironfront.Net.Unity.GameKeys.Cap(Ironfront.Net.Unity.GameAction.HowToPlay);
+		if (howToPlayHint != null && key != howToPlayKey)
+		{
+			howToPlayKey = key;
+			howToPlayHint.text = "<color=#FFB23F>[" + key + "]</color>  HOW TO PLAY";
+		}
+		if (Ironfront.Net.Unity.GameOverlays.Current == Ironfront.Net.Unity.OverlayPage.None
+			&& !Ironfront.Net.Unity.LocalTextEntry.OwnsKeyboard
+			&& Ironfront.Net.Unity.GameKeys.Down(Ironfront.Net.Unity.GameAction.HowToPlay)
+			&& Ironfront.Net.Unity.GameOverlays.IsAvailable(Ironfront.Net.Unity.OverlayPage.HowToPlay))
+		{
+			Ironfront.Net.Unity.GameOverlays.Open(Ironfront.Net.Unity.OverlayPage.HowToPlay);
 		}
 	}
 

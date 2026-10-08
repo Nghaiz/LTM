@@ -78,8 +78,19 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         private void OnDestroy() => SettingRow.Focused -= ShowInfo;
 
+        private static SettingsCategory? _requested;
+
+        /// <summary>Opens on <paramref name="category"/> the next time the page is shown (the guide's CHANGE KEYS).</summary>
+        public static void RequestCategory(SettingsCategory category) => _requested = category;
+
         public override void OnShown()
         {
+            if (_requested.HasValue)
+            {
+                _category = _requested.Value;
+                _requested = null;
+            }
+
             _resolutions.Clear();
             var detected = new List<DisplayResolutionOption>();
             foreach (Resolution r in Screen.resolutions) detected.Add(new DisplayResolutionOption(r.width, r.height));
