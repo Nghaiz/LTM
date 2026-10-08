@@ -182,6 +182,47 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A full pool says an id is free again once a released one has served its quarantine,
+        /// though nothing has tried to acquire one in between.
+        /// </summary>
+        /// <remarks>
+        /// Every spawner asks this before it tries to spawn, so it is the only thing that can end
+        /// an exhaustion. It used to read the free list, which only an acquisition refills, and
+        /// an acquisition never happened while it said no: v4.5.0 playtest, 2026-10-07, Forest
+        /// Lake ran 22 minutes with no new vehicle after the pool first ran dry, until the round
+        /// reset returned every id at once.
+        /// </remarks>
+        [Fact]
+        public void AFullPoolSaysAnIdIsFreeOnceAReleasedOneHasCooled()
+        {
+            var clock = new Clock();
+            var sink  = new ServerVehicleLifecycleSink(
+                new RecordingSender(), clock.Now, new VehicleIdPool());
+
+            var live = new List<ushort>();
+            for (int i = 0; i < ProtocolConstants.MAX_VEHICLES; i++)
+                live.Add(sink.OnVehicleSpawned(Report((ushort)(i + 1))));
+
+            Assert.False(sink.CanAcquireId());
+
+            clock.Tick = 100;
+            sink.OnVehicleDespawned(live[3], VehicleDespawnReason.Destroyed);
+            sink.OnVehicleDespawned(live[7], VehicleDespawnReason.Destroyed);
+            Assert.False(sink.CanAcquireId());
+
+            clock.Tick = 100 + ProtocolConstants.VEHICLE_ID_QUARANTINE_TICKS - 1;
+            Assert.False(sink.CanAcquireId());
+
+            clock.Tick = 100 + ProtocolConstants.VEHICLE_ID_QUARANTINE_TICKS;
+            Assert.True(sink.CanAcquireId(), "an id that has served its quarantine must count as free");
+            Assert.Equal(2, sink.Ids.FreeCount);
+
+            Assert.Equal(live[3], sink.OnVehicleSpawned(Report()));
+            Assert.Equal(live[7], sink.OnVehicleSpawned(Report()));
+            Assert.False(sink.CanAcquireId());
+        }
+
+        /// <summary>
         /// An id that was allocated but never announced comes back immediately, and is NOT
         /// quarantined.
         /// </summary>

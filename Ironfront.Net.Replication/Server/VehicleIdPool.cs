@@ -91,8 +91,31 @@ namespace Ironfront.Net.Replication.Server
         /// <summary>Ids cooling down and not yet reissuable.</summary>
         public int QuarantinedCount => _quarantine.Count;
 
-        /// <summary>Ids available right now.</summary>
+        /// <summary>
+        /// Ids on the free list right now. Does NOT count ids whose quarantine has expired but
+        /// that no acquisition has drained yet: ask <see cref="CanAcquire"/> before a spawn.
+        /// </summary>
         public int FreeCount => _free.Count;
+
+        /// <summary>
+        /// Whether <see cref="TryAcquire"/> would hand out an id at <paramref name="nowTick"/>.
+        /// Releases every id whose quarantine has expired first, exactly as an acquisition does.
+        /// </summary>
+        /// <remarks>
+        /// <b>The question a spawner must ask instead of <see cref="FreeCount"/>.</b> The free list
+        /// is refilled from the quarantine only inside an acquisition, and every spawner asked
+        /// "is <see cref="FreeCount"/> above zero?" before trying one. The first time the free
+        /// list touched zero, every id released afterwards waited in quarantine for an acquisition
+        /// that the check itself forbade, so no pad on the map spawned again until the round
+        /// reset. v4.5.0 playtest, 2026-10-07, Forest Lake: all 21 pads gave up within four minutes
+        /// of the pool running dry, five wrecks freed ids nobody could take, and the map stayed
+        /// without a single new vehicle for the last 22 minutes of the round.
+        /// </remarks>
+        public bool CanAcquire(uint nowTick)
+        {
+            DrainExpiredQuarantine(nowTick);
+            return _free.Count > 0;
+        }
 
         /// <summary>
         /// Takes the next free id, releasing any whose quarantine has expired first.
