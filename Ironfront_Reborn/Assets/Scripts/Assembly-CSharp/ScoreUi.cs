@@ -99,7 +99,8 @@ public class ScoreUi : MonoBehaviour
 	// would leave the bar drawn to the previous round's scale.
 	private int lastVictoryPoints = -1;
 
-	// Protocol 14 (phase P32): 0 lead by victoryPoints, 1 first to them. Offline is always 0.
+	// Protocol 14 (phase P32): 0 lead by victoryPoints, 1 first to them. Offline, the practice
+	// screen chooses (MatchScoreboard.Rule).
 	private const int TargetRule = 1;
 
 	private int lastVictoryRule;
@@ -477,7 +478,8 @@ public class ScoreUi : MonoBehaviour
 		redScoreText.text = redScore.ToString();
 		blueFlagsText.text = board.BlueFlags.ToString();
 		redFlagsText.text = board.RedFlags.ToString();
-		ApplyScoreBars(this, blueScore, redScore, victoryPoints, firstTo: false);
+		ApplyScoreBars(this, blueScore, redScore, victoryPoints,
+			firstTo: board.Rule == Ironfront.Net.Protocol.VictoryRule.Target);
 	}
 
 	/// <summary>

@@ -630,7 +630,7 @@ namespace Ironfront.Net.Unity.EditorTools
             // `.practice-layout`: the map card beside the parameters column, both running from the
             // top of the parameters heading to the bottom of the deployment summary.
             const float contentTop = 224f;
-            const float contentBottom = -202f;
+            const float contentBottom = -312f;
             MapCard(panel, PanelContentLeft + 245f, contentTop, contentBottom, 490f, 32,
                 "Runs on this machine. No network required.", 0f, out Text practiceMapTitle);
 
@@ -641,35 +641,58 @@ namespace Ironfront.Net.Unity.EditorTools
             float two = (rightWidth - gap) * 0.5f;
             float leftTwo = rightCentre - ((two + gap) * 0.5f);
             float rightTwo = rightCentre + ((two + gap) * 0.5f);
+            var cell = new Vector2(two, 48f);
 
             ConfigHeading(panel, "SIMULATION PARAMETERS", "01",
                 new Vector2(rightCentre, contentTop - 22f), new Vector2(rightWidth, 44f));
-            // Two columns throughout, like Settings. A three-column middle band left 264px per
-            // button, which "AI DIFFICULTY // IN DEVELOPMENT" overran at the action type size, so
-            // those captions ran into the button strokes.
+            // Owner, 2026-10-08: the settings a multiplayer room is created with, which used to be
+            // IN DEVELOPMENT placeholders here. Two columns throughout, like Settings: the map and
+            // Create Room's mode, rule, points and night-vision battery, then the three only an
+            // offline match can choose. The placeholders with nothing behind them (AI difficulty,
+            // match time, weather, friendly fire) are gone.
             float firstRow = contentTop - 44f - gap - 24f;
-            Dropdown map = MakeDropdown(panel, "PracticeMap", new Vector2(leftTwo, firstRow),
-                new Vector2(two, 48f));
-            Button mode = MakeButton(panel, "PracticeMode", "GAME MODE // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow), new Vector2(two, 48f));
-            Button difficulty = MakeButton(panel, "Difficulty", "AI DIFFICULTY // IN DEVELOPMENT",
-                new Vector2(leftTwo, firstRow - row), new Vector2(two, 48f));
-            Button bots = MakeButton(panel, "BotCount", "BOT COUNT // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow - row), new Vector2(two, 48f));
-            Button matchTime = MakeButton(panel, "MatchTime", "MATCH TIME // IN DEVELOPMENT",
-                new Vector2(leftTwo, firstRow - (row * 2f)), new Vector2(two, 48f));
-            Button weather = MakeButton(panel, "Weather", "WEATHER // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow - (row * 2f)), new Vector2(two, 48f));
-            Button timeOfDay = MakeButton(panel, "TimeOfDay", "TIME OF DAY // IN DEVELOPMENT",
-                new Vector2(leftTwo, firstRow - (row * 3f)), new Vector2(two, 48f));
-            Button playerTeam = MakeButton(panel, "PlayerTeam", "PLAYER TEAM // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow - (row * 3f)), new Vector2(two, 48f));
-            Button vehicles = MakeButton(panel, "Vehicles", "VEHICLES // IN DEVELOPMENT",
-                new Vector2(leftTwo, firstRow - (row * 4f)), new Vector2(two, 48f));
-            Button friendlyFire = MakeButton(panel, "FriendlyFire", "FRIENDLY FIRE // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow - (row * 4f)), new Vector2(two, 48f));
+            Dropdown map = MakeDropdown(panel, "PracticeMap", new Vector2(leftTwo, firstRow), cell);
+            Dropdown mode = MakeDropdown(panel, "PracticeMode", new Vector2(rightTwo, firstRow), cell);
+            AuthorOptions(mode, System.Array.ConvertAll(RoomSettingsChoice.Modes, RoomSettingsChoice.ModeOption));
 
-            // `.practice-summary`: a framed box with a small key over the value.
+            Dropdown rule = MakeDropdown(panel, "PracticeVictoryRule", new Vector2(leftTwo, firstRow - row), cell);
+            AuthorOptions(rule, System.Array.ConvertAll(RoomSettingsChoice.Rules, RoomSettingsChoice.RuleOption));
+            InputField points = PackField(panel, "PracticeVictoryPoints",
+                RoomSettingsChoice.PointsPlaceholder(VictoryRule.Margin),
+                new Vector2(rightTwo, firstRow - row), cell, password: false);
+            points.contentType = InputField.ContentType.IntegerNumber;
+            points.characterLimit = 4;
+            points.text = RoomRules.DefaultMarginPoints.ToString();
+            FieldCaption(points, two, "POINTS");
+
+            Dropdown team = MakeDropdown(panel, "PlayerTeam", new Vector2(leftTwo, firstRow - (row * 2f)), cell);
+            AuthorOptions(team, PracticeChoice.TeamOptions);
+            InputField vision = PackField(panel, "PracticeNightVision", RoomSettingsChoice.VisionPlaceholder(),
+                new Vector2(rightTwo, firstRow - (row * 2f)), cell, password: false);
+            vision.contentType = InputField.ContentType.IntegerNumber;
+            vision.characterLimit = 3;
+            vision.interactable = false;
+            FieldCaption(vision, two, "SECONDS");
+
+            Dropdown vehicles = MakeDropdown(panel, "Vehicles", new Vector2(leftTwo, firstRow - (row * 3f)), cell);
+            AuthorOptions(vehicles, PracticeChoice.VehicleOptions);
+            InputField respawn = PackField(panel, "RespawnTime", PracticeChoice.RespawnPlaceholder(),
+                new Vector2(rightTwo, firstRow - (row * 3f)), cell, password: false);
+            respawn.contentType = InputField.ContentType.IntegerNumber;
+            respawn.characterLimit = 2;
+            respawn.text = PracticeSettings.DefaultRespawnSeconds.ToString();
+            FieldCaption(respawn, two, "RESPAWN S");
+
+            // Create Room's bot card, without the presets or the servers' ceiling an offline match
+            // does not have (MenuPracticeScreen never hands it a capacity).
+            const float botCardHeight = 150f;
+            float botCardTop = firstRow - (row * 3f) - 24f - gap;
+            MenuBotSlider bots = BuildBotSlider(panel,
+                new Vector2(rightCentre, botCardTop - (botCardHeight * 0.5f)),
+                new Vector2(rightWidth, botCardHeight), out Slider botTrack, compact: true);
+
+            // `.practice-summary`: a framed box with a small key over the value, the value now the
+            // match START will play.
             AngularPanel summary = Angular(panel, "PracticeSummary",
                 new Vector2(rightCentre, contentBottom + 27f), new Vector2(rightWidth, 54f), 0f,
                 Hex("071825"), AngularEdge.All, 1f, Hex("345A73"));
@@ -682,26 +705,40 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(0f, -8f), new Vector2(rightWidth - 34f, 20f));
             summaryValue.alignment = TextAnchor.MiddleLeft;
             summaryValue.fontStyle = FontStyle.Bold;
-            summaryValue.resizeTextForBestFit = false;
+            summaryValue.resizeTextForBestFit = true;
+            summaryValue.resizeTextMinSize = 9;
+            summaryValue.resizeTextMaxSize = 13;
             // Right-aligned to the parameters column, which is the content's right edge.
             back = PackButton(panel, "Back", "BACK", new Vector2(PanelContentRight - 280f - 16f - 110f, -365f),
                 new Vector2(220f, 50f), "secondary");
             Button start = PackButton(panel, "StartPractice", "START PRACTICE  ›",
                 new Vector2(PanelContentRight - 140f, -365f), new Vector2(280f, 50f), "primary");
+            // Beside the buttons, as on Create Room: a refusal is read next to the button that
+            // caused it.
+            Text error = Label(panel, "Error", string.Empty, 16,
+                new Vector2(PanelContentLeft + 430f, -365f), new Vector2(860f, 50f));
+            error.alignment = TextAnchor.MiddleLeft;
+            error.color = ErrorInk;
 
             MenuPracticeScreen screen = panel.AddComponent<MenuPracticeScreen>();
             var so = new SerializedObject(screen);
             Assign(so, "_controller", controller);
             Assign(so, "_mapDropdown", map);
             Assign(so, "_mapPreviewTitle", practiceMapTitle);
+            Assign(so, "_modeDropdown", mode);
+            Assign(so, "_ruleDropdown", rule);
+            Assign(so, "_pointsField", points);
+            Assign(so, "_visionField", vision);
+            Assign(so, "_botSlider", bots);
+            Assign(so, "_teamDropdown", team);
+            Assign(so, "_vehiclesDropdown", vehicles);
+            Assign(so, "_respawnField", respawn);
+            Assign(so, "_summaryText", summaryValue);
+            Assign(so, "_errorText", error);
             Assign(so, "_startButton", start);
-            AssignArray(so, "_unsupportedControls", new Object[] { mode, difficulty, bots,
-                matchTime, weather, timeOfDay, playerTeam, vehicles, friendlyFire });
-            Assign(so, "_toast", toast);
             so.ApplyModifiedPropertiesWithoutUndo();
             ConfigureKeyboard(panel,
-                new Selectable[] { map, mode, difficulty, bots, matchTime, weather, timeOfDay,
-                    playerTeam, vehicles, friendlyFire, back, start },
+                new Selectable[] { map, mode, rule, points, team, vision, vehicles, respawn, botTrack, back, start },
                 start, back);
             return panel;
         }
@@ -1275,8 +1312,13 @@ namespace Ironfront.Net.Unity.EditorTools
         /// Everything the runtime changes is handed to <see cref="MenuBotSlider"/> by reference;
         /// what it may choose and how it is worded are <see cref="RoomBotChoice"/>'s.
         /// </remarks>
+        /// <param name="compact">
+        /// The practice screen's card: no presets and no servers' ceiling (an offline match has
+        /// none), so it fits under the practice parameters. The value, the side split, the track and
+        /// its notches are the same as Create Room's.
+        /// </param>
         private static MenuBotSlider BuildBotSlider(GameObject parent, Vector2 position, Vector2 size,
-            out Slider slider)
+            out Slider slider, bool compact = false)
         {
             AngularPanel card = Angular(parent, "BotCard", position, size, CutCard, Hex("061522"),
                 AngularEdge.All, 1f, Hex("3F6986"));
@@ -1285,20 +1327,21 @@ namespace Ironfront.Net.Unity.EditorTools
             float left = -inner * 0.5f;
             float top = size.y * 0.5f;
 
+            float lift = compact ? 6f : 0f;
             Text kicker = Label(root, "Kicker", "BOTS IN THIS MATCH", 12,
-                new Vector2(left + 150f, top - 24f), new Vector2(300f, 20f));
+                new Vector2(left + 150f, top - 24f + lift), new Vector2(300f, 20f));
             kicker.alignment = TextAnchor.MiddleLeft;
             kicker.fontStyle = FontStyle.Bold;
             kicker.color = Orange;
             kicker.resizeTextForBestFit = false;
 
             Text value = Label(root, "Value", "50  BOTS", 20,
-                new Vector2(left + 170f, top - 62f), new Vector2(340f, 56f));
+                new Vector2(left + 170f, top - 62f + lift), new Vector2(340f, 56f));
             value.alignment = TextAnchor.MiddleLeft;
             value.resizeTextForBestFit = false;
             value.supportRichText = true;
 
-            Image chip = Plain(root, "TierChip", new Vector2(-left - 80f, top - 30f),
+            Image chip = Plain(root, "TierChip", new Vector2(-left - 80f, top - 30f + lift),
                 new Vector2(160f, 28f), new Color(0.21f, 0.71f, 1f, 0.22f));
             Text tier = Label(chip.gameObject, "Tier", "BATTLE", 13, Vector2.zero,
                 new Vector2(150f, 26f));
@@ -1306,13 +1349,13 @@ namespace Ironfront.Net.Unity.EditorTools
             tier.resizeTextForBestFit = false;
 
             Text perSide = Label(root, "PerSide", "25 per side, 25 vs 25", 14,
-                new Vector2(-left - 160f, top - 64f), new Vector2(320f, 24f));
+                new Vector2(-left - 160f, top - 64f + lift), new Vector2(320f, 24f));
             perSide.alignment = TextAnchor.MiddleRight;
             perSide.color = Hex("A9C2D3");
             perSide.resizeTextForBestFit = false;
 
             // The track: a Slider over 0..50 steps of two, so an odd total cannot be picked.
-            float trackY = top - 112f;
+            float trackY = top - 112f + (compact ? 14f : 0f);
             var trackObject = new GameObject("Track", typeof(RectTransform), typeof(Image), typeof(Slider));
             trackObject.transform.SetParent(root.transform, false);
             Centre(trackObject.GetComponent<RectTransform>(), new Vector2(0f, trackY), new Vector2(inner, 34f));
@@ -1389,8 +1432,9 @@ namespace Ironfront.Net.Unity.EditorTools
                 tickLabels[i] = number;
             }
 
-            // One-press presets, left to right, the owner's benchmark counts among them.
-            int presets = RoomBotChoice.Presets.Length;
+            // One-press presets, left to right, the owner's benchmark counts among them. Create
+            // Room's only: the compact card ends under the notches.
+            int presets = compact ? 0 : RoomBotChoice.Presets.Length;
             float chipWidth = 88f;
             float chipGap = 8f;
             float presetsY = trackY - 76f;
@@ -1413,14 +1457,18 @@ namespace Ironfront.Net.Unity.EditorTools
                 presetButtons[i] = button;
             }
 
-            float presetsRight = left + (presets * (chipWidth + chipGap)) - chipGap;
-            Text ceiling = Label(root, "Ceiling", string.Empty, 13,
-                new Vector2((presetsRight + 16f + (-left)) * 0.5f, presetsY),
-                new Vector2((-left) - presetsRight - 16f, 36f));
-            ceiling.alignment = TextAnchor.MiddleRight;
-            ceiling.resizeTextForBestFit = true;
-            ceiling.resizeTextMinSize = 10;
-            ceiling.resizeTextMaxSize = 13;
+            Text ceiling = null;
+            if (!compact)
+            {
+                float presetsRight = left + (presets * (chipWidth + chipGap)) - chipGap;
+                ceiling = Label(root, "Ceiling", string.Empty, 13,
+                    new Vector2((presetsRight + 16f + (-left)) * 0.5f, presetsY),
+                    new Vector2((-left) - presetsRight - 16f, 36f));
+                ceiling.alignment = TextAnchor.MiddleRight;
+                ceiling.resizeTextForBestFit = true;
+                ceiling.resizeTextMinSize = 10;
+                ceiling.resizeTextMaxSize = 13;
+            }
 
             MenuBotSlider component = root.AddComponent<MenuBotSlider>();
             var so = new SerializedObject(component);
@@ -1433,7 +1481,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_perSideText", perSide);
             Assign(so, "_tierChip", chip);
             Assign(so, "_tierText", tier);
-            Assign(so, "_ceilingText", ceiling);
+            if (ceiling != null) Assign(so, "_ceilingText", ceiling);
             AssignArray(so, "_tickLabels", tickLabels);
             AssignArray(so, "_tickMarks", tickMarks);
             AssignArray(so, "_presetButtons", presetButtons);

@@ -82,11 +82,48 @@ namespace Ironfront.Net.Unity.Bindings
         /// <inheritdoc/>
         public void HidePracticeMenu() => SetMenuActive(false);
 
-        public void LaunchMap(string sceneName)
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <c>StartLevel</c> copies the legacy menu's hidden controls into <c>GameManager</c> and
+        /// <c>ActorManager</c> (both live across scene loads) and asks for the map, which loads at
+        /// the end of the frame. The practice screen's choices are written over them straight
+        /// after, so they are what the map starts with; the two legacy toggles the screen does not
+        /// offer (assault and reverse) keep the legacy menu's values.
+        /// </remarks>
+        public void LaunchMap(string sceneName, in PracticeSettings settings)
         {
             MainMenu menu = Resolve();
             if (menu == null || string.IsNullOrWhiteSpace(sceneName)) return;
             menu.StartLevel(sceneName);
+            Apply(in settings);
+        }
+
+        private static void Apply(in PracticeSettings settings)
+        {
+            Ironfront.Net.Protocol.RoomSettings rules = settings.Rules;
+
+            GameManager game = GameManager.instance;
+            if (game != null)
+            {
+                game.nightMode = rules.Mode == Ironfront.Net.Protocol.GameMode.Night;
+                game.victoryPoints = rules.VictoryPoints;
+                game.victoryRule = rules.Rule;
+                if (rules.NightVisionSeconds > 0) game.nightVisionSeconds = rules.NightVisionSeconds;
+                game.noVehicles = !settings.Vehicles;
+                game.practiceTeam = settings.PlayerTeam;
+            }
+
+            ActorManager actors = ActorManager.instance;
+            if (actors != null)
+            {
+                actors.team0Bots = settings.Team0Bots;
+                actors.team1Bots = settings.Team1Bots;
+                actors.spawnTime = settings.RespawnSeconds;
+            }
+
+            Debug.Log($"[practice] {rules}: {settings.Team0Bots} + {settings.Team1Bots} bots, "
+                      + $"player on team {settings.PlayerTeam}, vehicles {(settings.Vehicles ? "on" : "off")}, "
+                      + $"respawn {settings.RespawnSeconds} s.");
         }
 
         private void SetMenuActive(bool active)

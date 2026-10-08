@@ -394,7 +394,8 @@ namespace Ironfront.Net.Unity.Client.Menu
             _dirty = true;
         }
 
-        public void LaunchPracticeMap(string sceneName)
+        /// <summary>Starts a practice match on <paramref name="sceneName"/>, played by <paramref name="settings"/>.</summary>
+        public void LaunchPracticeMap(string sceneName, in PracticeSettings settings)
         {
             IPracticeLauncher? practice = NetClientBindings.Practice;
             if (practice == null || !practice.IsAvailable) return;
@@ -409,7 +410,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             // a frozen score, and the player on no team (see NetContext.IsDeclaredOffline).
             NetContext.Clear();
             NetContext.DeclareOfflineProcess();
-            practice.LaunchMap(sceneName);
+            practice.LaunchMap(sceneName, settings);
         }
 
         /// <summary>Whether the Practice button should be offered at all.</summary>

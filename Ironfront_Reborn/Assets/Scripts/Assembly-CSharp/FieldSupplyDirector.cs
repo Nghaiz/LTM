@@ -102,6 +102,9 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 
 	private FieldParking parking;
 
+	/// <summary>The match is played with vehicles off: crates only.</summary>
+	private bool vehiclesOff;
+
 	public static FieldSupplyDirector EnsureOn(GameObject host)
 	{
 		FieldSupplyDirector director = host.GetComponent<FieldSupplyDirector>();
@@ -153,10 +156,14 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			config = null;
 			return;
 		}
-		if (GameManager.instance != null && GameManager.instance.noVehicles)
+		// Vehicles off (the practice screen's VEHICLES OFF) leaves the vehicles out and still
+		// scatters the crates, which are supplies rather than vehicles. It used to return here,
+		// before the random and the parking the crates use existed, and every frame of the match
+		// then threw from PlaceCrate.
+		vehiclesOff = GameManager.instance != null && GameManager.instance.noVehicles;
+		if (vehiclesOff)
 		{
-			Debug.Log("[supply] " + mapScene.name + ": vehicles are off for this match, none scattered.");
-			return;
+			Debug.Log("[supply] " + mapScene.name + ": vehicles are off for this match, none scattered; crates are.");
 		}
 
 		bases.Clear();
@@ -309,6 +316,10 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 	{
 		matchNumber++;
 		random = new System.Random(FieldSupplyLayout.MatchSeed(DateTime.UtcNow.Ticks, matchNumber, mapScene.name.GetHashCode()));
+		if (vehiclesOff)
+		{
+			return;
+		}
 
 		padPositions.Clear();
 		fieldPositions.Clear();

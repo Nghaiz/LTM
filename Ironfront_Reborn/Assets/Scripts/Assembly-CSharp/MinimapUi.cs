@@ -303,13 +303,13 @@ public class MinimapUi : MonoBehaviour
 
 	public static void UpdateSpawnPointButtons()
 	{
-		// The human is always team 0 offline, so this literal keeps offline single-player
-		// byte-for-byte unchanged (V10 D16). Otherwise the local team comes from the
-		// replicated snapshot, never from FpsActorController.playerTeam (V10 D17).
+		// Offline the human is on the side the practice screen chose (GameManager.OfflinePlayerTeam;
+		// it was a literal 0 when the human could only be blue, V10 D16). Otherwise the local team
+		// comes from the replicated snapshot, never from FpsActorController.playerTeam (V10 D17).
 		int localTeam;
 		if (NetContext.IsOffline)
 		{
-			localTeam = 0;
+			localTeam = GameManager.OfflinePlayerTeam;
 		}
 		else if (NetPresenterGate.TryResolveLocalTeam(out byte team))
 		{
