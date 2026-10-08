@@ -1111,11 +1111,11 @@ public class FpsActorController : ActorController
 
 		// Capture the edge every render frame. NetPredictionClock may or may not simulate a tick
 		// in this frame; OnNetworkTickSimulated clears it only after it reached C_INPUT.
-		bool fireHeldNow = Input.GetButton("Fire1") || Input.GetMouseButton(0);
+		bool fireHeldNow = GameKeys.Held(GameAction.Fire);
 		if (NetContext.IsClient && inputEnabled && !LocalTextEntry.Composing
 			&& !LoadoutUi.IsOpen())
 		{
-			if (Input.GetButtonDown("Fire1") || Input.GetMouseButtonDown(0))
+			if (GameKeys.Down(GameAction.Fire))
 			{
 				pendingNetworkFire = true;
 			}
@@ -1132,7 +1132,7 @@ public class FpsActorController : ActorController
 			sprintCannotFireAction.Start();
 		}
 		fpParent.lean = Lean();
-		if (Input.GetButtonDown("Fire2"))
+		if (GameKeys.Down(GameAction.Aim))
 		{
 			aimToggle = !aimToggle;
 		}
@@ -1209,7 +1209,7 @@ public class FpsActorController : ActorController
 		{
 			UpdateInput();
 		}
-		if (!Input.GetButtonDown("Use"))
+		if (!GameKeys.Down(GameAction.Use))
 		{
 			return;
 		}
@@ -1260,23 +1260,23 @@ public class FpsActorController : ActorController
 		{
 			return;
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha1))
+		if (GameKeys.Down(GameAction.Weapon1))
 		{
 			QueueWeaponSwitch(0);
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha2))
+		if (GameKeys.Down(GameAction.Weapon2))
 		{
 			QueueWeaponSwitch(1);
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha3))
+		if (GameKeys.Down(GameAction.Weapon3))
 		{
 			QueueWeaponSwitch(2);
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha4))
+		if (GameKeys.Down(GameAction.Weapon4))
 		{
 			QueueWeaponSwitch(3);
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha5))
+		if (GameKeys.Down(GameAction.Weapon5))
 		{
 			QueueWeaponSwitch(4);
 		}
@@ -1319,7 +1319,7 @@ public class FpsActorController : ActorController
 		{
 			actor.SwitchSeat(7);
 		}
-		if (OptionsUi.GetOptions().toggleCrouch && Input.GetButtonDown("Crouch"))
+		if (OptionsUi.GetOptions().toggleCrouch && GameKeys.Down(GameAction.Crouch))
 		{
 			crouchInput = !crouchInput;
 		}

@@ -84,8 +84,8 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>The round phase last seen, for the feed's round lines; -1 before the first.</summary>
         private int _lastPhase = -1;
 
-        [Tooltip("The key that opens and closes the scoreboard. P18 3.3; a toggle since 2026-09-29.")]
-        [SerializeField] private KeyCode _scoreboardKey = KeyCode.Tab;
+        // The key that opens and closes the scoreboard is the player's binding for
+        // GameAction.Scoreboard (GameKeys): Tab unless rebound. P18 3.3; a toggle since 2026-09-29.
 
         /// <summary>
         /// An extra way to hold the board open, for a run with no keyboard. P18 3.3.
@@ -523,7 +523,7 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void PushScoreboard()
         {
-            if (Input.GetKeyDown(_scoreboardKey) && !LocalTextEntry.OwnsKeyboard)
+            if (GameKeys.Down(GameAction.Scoreboard) && !LocalTextEntry.OwnsKeyboard)
                 _scoreboardOpen = !_scoreboardOpen;
 
             IMatchHud hud = NetClientBindings.MatchHud;

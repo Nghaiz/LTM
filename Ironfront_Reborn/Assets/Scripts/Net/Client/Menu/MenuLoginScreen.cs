@@ -77,6 +77,9 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void Update()
         {
+            // An overlay (settings, the guide) over this screen owns the keyboard.
+            if (GameOverlays.OwnsEscape) return;
+
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 OnBack();

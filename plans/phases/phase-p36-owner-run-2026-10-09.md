@@ -69,3 +69,11 @@ Windows, macOS and Linux. Owner rule for this run: single-threaded, no subagents
     tree casters are drawn in all four cascades (328 of 554 shadow-map events). That is phase
     P34 (`phase-p34-tree-shadows-per-cascade.md`), a spike-first design; it is the next CPU
     lever and is not part of this run.
+- **C (item 3):** every player action is rebindable, two keys each, from a Settings page the menu
+  and the match share (`SettingsPage`, an overlay; the menu's own Settings screen is gone). Actions
+  are data (`GameActionCatalog`): move, jump, crouch, sprint, lean, fire, aim, reload, five weapon
+  slots, use, night vision, map, scoreboard, chat, how-to-play and hide-HUD. Every gameplay read
+  goes through `GameKeys` (prediction, the local input source, the first-person controller, seats,
+  chat, map, scoreboard, night vision, HUD toggle), so a rebound key moves the soldier the server
+  simulates too. A key taken from another action leaves that action unbound and says so; Esc
+  cannot be bound. Bindings persist in `ironfront.keys.v1`; options keep their original keys.

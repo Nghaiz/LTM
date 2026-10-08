@@ -74,8 +74,18 @@ public class IngameMenuUi : MonoBehaviour
 		Hide();
 	}
 
+	/// <summary>
+	/// The SETTINGS row: the same settings screen as the main menu's, over the match
+	/// (<see cref="Ironfront.Net.Unity.GameOverlays"/>). The original options panel only where no
+	/// overlay is installed (a headless or test process).
+	/// </summary>
 	public void Options()
 	{
+		if (Ironfront.Net.Unity.GameOverlays.IsAvailable(Ironfront.Net.Unity.OverlayPage.Settings))
+		{
+			Ironfront.Net.Unity.GameOverlays.Open(Ironfront.Net.Unity.OverlayPage.Settings);
+			return;
+		}
 		OptionsUi.Show();
 	}
 
@@ -102,7 +112,9 @@ public class IngameMenuUi : MonoBehaviour
 	{
 		// Not the Esc that closes the chat box. The chat box reads it first, before any gameplay script,
 		// and OwnsKeyboard still answers true for the rest of that frame.
-		if (!Input.GetKeyDown(KeyCode.Escape) || Ironfront.Net.Unity.LocalTextEntry.OwnsKeyboard)
+		// Nor the Esc an overlay (settings, the guide) is closing on, this frame or while it is up.
+		if (!Input.GetKeyDown(KeyCode.Escape) || Ironfront.Net.Unity.LocalTextEntry.OwnsKeyboard
+			|| Ironfront.Net.Unity.GameOverlays.OwnsEscape)
 		{
 			return;
 		}

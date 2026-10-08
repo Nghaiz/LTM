@@ -47,19 +47,11 @@ namespace Ironfront.Net.Unity.Client
     [RequireComponent(typeof(RemoteVehicleRegistry))]
     public sealed class ClientSeatRequester : MonoBehaviour
     {
-        /// <summary>
-        /// The input-manager button that raises the intent from a keyboard.
-        /// </summary>
-        /// <remarks>
-        /// <b>The shipped "Use" button, read as an EDGE.</b> It is the key a player already
-        /// associates with getting into a vehicle and it is already rebindable, so inventing a
-        /// second one would ship a control nobody would find.
-        /// <c>FpsActorController.Update</c> reads the same edge and used to act on it locally —
-        /// see the guard this change added there, which is what stops one press producing both a
-        /// server request and an unsanctioned local seat entry.
-        /// </remarks>
-        [Tooltip("Input-manager button that asks to enter or leave a seat. Read as a rising edge.")]
-        [SerializeField] private string _seatButton = "Use";
+        // The key that raises the intent is the player's binding for GameAction.Use (GameKeys, F
+        // unless rebound), read as an EDGE: the key a player already associates with getting into
+        // a vehicle. FpsActorController.Update reads the same edge and used to act on it locally;
+        // its guard is what stops one press producing both a server request and an unsanctioned
+        // local seat entry.
 
         /// <summary>
         /// How long to wait for <c>S_SEAT_CHANGE</c> before letting the player ask again.
@@ -199,7 +191,7 @@ namespace Ironfront.Net.Unity.Client
             SendDueRetry();
 
             // Not while the chat box owns the keyboard: F is a letter people type.
-            bool pressed = Input.GetButtonDown(_seatButton) && !LocalTextEntry.OwnsKeyboard;
+            bool pressed = GameKeys.Down(GameAction.Use) && !LocalTextEntry.OwnsKeyboard;
             if (!TryReadLocalSeatIntent(pressed, out Vector3 standingAt))
                 return;
 

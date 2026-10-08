@@ -165,6 +165,7 @@ namespace Ironfront.Net.Unity.Client.Tests
         [Test]
         public void SerializedTopBarNavigationStillInvokesItsControllerAtRuntime()
         {
+            using FakeOverlays overlays = FakeOverlays.Install();
             MenuScreenController controller = Make("Controller").AddComponent<MenuScreenController>();
             GameObject item = Make("SettingsLink");
             Button button = item.AddComponent<Button>();

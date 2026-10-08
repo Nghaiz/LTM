@@ -201,7 +201,7 @@ namespace Ironfront.Net.Replication.Tests
             // Before the retry and before the key is read, so neither a fresh press nor a walk to
             // the next seat that a death interrupted can reach the wire.
             Assert.True(gate.SpanStart < Invocations(update, "SendDueRetry").Single().SpanStart);
-            Assert.True(gate.SpanStart < Invocations(update, "GetButtonDown").Single().SpanStart);
+            Assert.True(gate.SpanStart < Invocations(update, "Down").Single().SpanStart);
         }
 
         [Fact]

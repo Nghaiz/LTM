@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using UnityEngine;
-using UnityStandardAssets.CrossPlatformInput;
 using UnityStandardAssets.Utility;
 
 namespace UnityStandardAssets.Characters.FirstPerson
@@ -180,7 +179,7 @@ namespace UnityStandardAssets.Characters.FirstPerson
 			RotateView();
 			if (!m_Jump)
 			{
-				m_Jump = CrossPlatformInputManager.GetButtonDown("Jump") && inputEnabled;
+				m_Jump = Ironfront.Net.Unity.GameKeys.Down(Ironfront.Net.Unity.GameAction.Jump) && inputEnabled;
 			}
 			if (!m_PreviouslyGrounded && m_CharacterController.isGrounded)
 			{
@@ -305,8 +304,8 @@ namespace UnityStandardAssets.Characters.FirstPerson
 
 		private void GetInput(out float speed)
 		{
-			float axis = CrossPlatformInputManager.GetAxis("Horizontal");
-			float axis2 = CrossPlatformInputManager.GetAxis("Vertical");
+			float axis = Ironfront.Net.Unity.GameKeys.MoveX;
+			float axis2 = Ironfront.Net.Unity.GameKeys.MoveZ;
 			bool isWalking = m_IsWalking;
 			m_IsWalking = !sprinting;
 			speed = ((!m_IsWalking) ? m_RunSpeed : m_WalkSpeed);

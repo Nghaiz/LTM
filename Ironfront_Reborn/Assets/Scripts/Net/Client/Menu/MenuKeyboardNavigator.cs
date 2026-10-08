@@ -39,6 +39,9 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void Update()
         {
+            // An overlay (settings, the guide) over this screen owns the keyboard.
+            if (GameOverlays.OwnsEscape) return;
+
             if (Input.GetKeyDown(KeyCode.Tab))
                 Move(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
             else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))

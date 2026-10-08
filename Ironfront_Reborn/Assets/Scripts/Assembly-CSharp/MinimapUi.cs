@@ -165,7 +165,7 @@ public class MinimapUi : MonoBehaviour
 
 	private void Update()
 	{
-		bool held = (Input.GetKey(KeyCode.M) && !LocalTextEntry.OwnsKeyboard)
+		bool held = (GameKeys.Held(GameAction.Map) && !LocalTextEntry.OwnsKeyboard)
 			|| (HoldSource != null && HoldSource());
 		float target = (!held) ? 0f : 1f;
 		minimapOpenness = Mathf.MoveTowards(minimapOpenness, target, Time.deltaTime * 20f);

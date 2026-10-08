@@ -155,7 +155,9 @@ namespace Ironfront.Net.Unity.Client
 
             if (!_model.IsComposing)
             {
-                if (!enter) return;
+                // The chat key opens the line (Enter unless the player rebound it, GameKeys);
+                // once it is open, Enter sends whatever key opened it.
+                if (!GameKeys.Down(GameAction.Chat)) return;
 
                 // GetKeyDown as well as GetKey: a macro key or a remote-desktop client can press and
                 // release Shift inside the same frame as Enter, where GetKey already reads it as up.

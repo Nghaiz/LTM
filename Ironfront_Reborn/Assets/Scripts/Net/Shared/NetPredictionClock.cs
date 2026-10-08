@@ -364,7 +364,7 @@ namespace Ironfront.Net.Unity
             => MovementSimulation.FromUnityInput(
                 _cameraParent.eulerAngles.y,
                 CombatButtonSource != null ? CombatButtonSource() : InputButtons.None,
-                CrouchSource != null ? CrouchSource() : Input.GetButton("Crouch"),
-                SprintSource != null ? SprintSource() : Input.GetButton("Sprint"));
+                CrouchSource != null ? CrouchSource() : GameKeys.Held(GameAction.Crouch),
+                SprintSource != null ? SprintSource() : GameKeys.Held(GameAction.Sprint));
     }
 }
