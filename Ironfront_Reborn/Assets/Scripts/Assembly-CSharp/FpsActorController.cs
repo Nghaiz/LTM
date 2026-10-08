@@ -387,6 +387,12 @@ public class FpsActorController : ActorController
 			actor.SetTeam(GameManager.OfflinePlayerTeam);
 		}
 		SceneryCamera.instance.camera.enabled = true;
+		// Until the first deploy the scenery camera repaints the whole screen from the highest
+		// depth, so a first-person camera under it renders a frame nobody sees -- from the parked
+		// body at (0, 1000, 0), over the whole map, at the preset's quality. The joining screen ran
+		// at 0.8 to 5 fps on the owner's Ultra machine (phase P35, finding 2). SpawnAt and
+		// EnterDeployedView turn it back on (FirstPersonCamera).
+		fpCamera.enabled = false;
 		actorLocalOrigin = actor.transform.localPosition;
 		DisableInput();
 		defaultMix.TransitionTo(0f);
