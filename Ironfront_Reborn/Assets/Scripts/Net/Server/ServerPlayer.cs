@@ -384,10 +384,12 @@ namespace Ironfront.Net.Unity.Server
             else
             {
                 float landedAt = _fall.Observe(
-                    Session.State.IsGrounded, Session.State.Position.Y, Session.State.Velocity.Y);
+                    Session.State.IsGrounded, Session.State.Position.Y, Session.State.Velocity.Y,
+                    Session.State.Velocity.X, Session.State.Velocity.Z);
                 if (landedAt > 0f)
                 {
-                    ApplyLanding(landedAt);
+                    ApplyLanding(landedAt, LandingImpact.OnGroundBelow(
+                        agent.transform.position, landedAt, _fall.LandingHorizontalX, _fall.LandingHorizontalZ));
                 }
             }
 
@@ -411,8 +413,10 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
-        /// The fall damage of a landing at <paramref name="impactSpeed"/> m/s (<see cref="FallDamage"/>:
-        /// nothing from a 3 m fall, death from a 20 m one), and the death when it is enough.
+        /// The fall damage of a landing that hits the ground at <paramref name="impactSpeed"/> m/s
+        /// (<see cref="FallDamage"/>: nothing from a 3 m fall, death from a 20 m one), and the death
+        /// when it is enough. <paramref name="fallSpeed"/> is how fast the body was falling, for the
+        /// log: on a slope only the part into the ground hits (<see cref="LandingImpact"/>).
         /// </summary>
         /// <remarks>
         /// <para>
@@ -436,7 +440,7 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         private readonly FallTracker _fall = new FallTracker();
 
-        private void ApplyLanding(float impactSpeed)
+        private void ApplyLanding(float fallSpeed, float impactSpeed)
         {
             if (Actor == null || !Actor.IsAlive) return;
 
@@ -444,7 +448,8 @@ namespace Ironfront.Net.Unity.Server
             if (damage <= 0f) return;
 
             float remaining = Actor.Health - damage;
-            Debug.Log($"[net] actor {Actor.ActorId} (team {Actor.Team}) landed at {impactSpeed:F1} m/s: "
+            Debug.Log($"[net] actor {Actor.ActorId} (team {Actor.Team}) landed at {impactSpeed:F1} m/s "
+                      + $"(falling at {fallSpeed:F1}): "
                       + $"{damage:F0} fall damage" + (remaining > 0f ? $", {remaining:F0} health left." : ", killed."));
             if (remaining > 0f)
             {

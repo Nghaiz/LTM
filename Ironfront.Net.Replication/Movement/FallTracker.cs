@@ -31,6 +31,15 @@ namespace Ironfront.Net.Replication.Movement
         private float _takeoffUpSpeed;
         private bool _wasGrounded;
 
+        /// <summary>
+        /// The horizontal velocity the body carried through the air, m/s: what it was moving across
+        /// at its last airborne step, for <see cref="Combat.FallDamage.ImpactAlongNormal"/>.
+        /// </summary>
+        public float LandingHorizontalX { get; private set; }
+
+        /// <summary>See <see cref="LandingHorizontalX"/>.</summary>
+        public float LandingHorizontalZ { get; private set; }
+
         /// <summary>The height the current fall is measured from, or NaN while unknown.</summary>
         public float OriginY => _originY;
 
@@ -63,7 +72,20 @@ namespace Ironfront.Net.Replication.Movement
         /// zero.
         /// </summary>
         public float Observe(bool grounded, float y, float verticalSpeed)
+            => Observe(grounded, y, verticalSpeed, 0f, 0f);
+
+        /// <summary>
+        /// <see cref="Observe(bool, float, float)"/>, also given the body's horizontal velocity
+        /// (m/s), kept from its last airborne step in <see cref="LandingHorizontalX"/> and
+        /// <see cref="LandingHorizontalZ"/> for the landing.
+        /// </summary>
+        public float Observe(bool grounded, float y, float verticalSpeed, float horizontalX, float horizontalZ)
         {
+            if (!grounded)
+            {
+                LandingHorizontalX = horizontalX;
+                LandingHorizontalZ = horizontalZ;
+            }
             if (float.IsNaN(_originY))
             {
                 _originY = y;

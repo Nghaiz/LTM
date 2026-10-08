@@ -1067,8 +1067,10 @@ public class FpsActorController : ActorController
 			offlineFall.Rebase(y);
 			return;
 		}
-		float landedAt = offlineFall.Observe(controller.OnGround(), y, characterController.velocity.y);
-		float damage = Ironfront.Net.Replication.Combat.FallDamage.ForImpact(landedAt, -Ironfront.Net.Replication.Movement.MovementCore.Gravity);
+		Vector3 velocity = characterController.velocity;
+		float landedAt = offlineFall.Observe(controller.OnGround(), y, velocity.y, velocity.x, velocity.z);
+		float impact = Ironfront.Net.Unity.LandingImpact.OnGroundBelow(actor.transform.position, landedAt, offlineFall.LandingHorizontalX, offlineFall.LandingHorizontalZ);
+		float damage = Ironfront.Net.Replication.Combat.FallDamage.ForImpact(impact, -Ironfront.Net.Replication.Movement.MovementCore.Gravity);
 		if (damage <= 0f)
 		{
 			return;
