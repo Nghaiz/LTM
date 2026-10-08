@@ -58,6 +58,15 @@ Candidate fixes, to measure before choosing:
 - Or bake only the patches in the view frustum and within ~30 m at once, the rest under the budget.
 - The owner's log matches: `deploy requested` is followed by one 400 to 650 ms frame every time.
 
+**Fixed 2026-10-08 (prefetch at the picked spawn point).** While the player is dead with a spawn
+point picked, `FpsActorController` sets `InstancedDetailRenderer.PrefetchPoint`; the renderer reads
+the patches round it within 3 ms a frame, nearest first, and keeps them until the jump. The v4.5.0
+playtest log (2026-10-07) still showed it: 25 deploys, 25 frames of 196 to 706 ms right after.
+Editor, Forest Lake's own terrain at Ultra (120 m, density 1.0), an 800 m jump: 57.4 ms and 104
+patches read in the jump frame before; 0.1 ms and none after, the 128 patches read over 14 frames
+of the wait (worst 13.3 ms: one dense patch). Not yet measured in a player build. A deploy with no
+flag picked ("flag any") is not covered: the server chooses the spot.
+
 ### 2. The pre-deploy screen renders at 0.8 to 5 fps
 
 Measured on the joining client: GPU 157 to 1294 ms per frame, 2,000 to 3,300 draws and 3.4 to 5.7 M
