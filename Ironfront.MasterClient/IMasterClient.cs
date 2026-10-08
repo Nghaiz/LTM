@@ -29,6 +29,48 @@ namespace Ironfront.MasterClient
         public int RetryAfterSeconds { get; }
     }
     public readonly struct RegisterResult { public RegisterResult(bool ok, int errorCode) { Ok = ok; ErrorCode = errorCode; } public bool Ok { get; } public int ErrorCode { get; } }
+    /// <summary>One line of the global ranking (<c>LEADERBOARD_RES</c>, owner's list of 2026-10-09, item 4).</summary>
+    public sealed class LeaderboardRow
+    {
+        public int Rank { get; set; }
+        public int PlayerId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public long Score { get; set; }
+        public long Kills { get; set; }
+        public long Deaths { get; set; }
+        public long Headshots { get; set; }
+        public long Wins { get; set; }
+        public long Matches { get; set; }
+        public long BestStreak { get; set; }
+    }
+
+    /// <summary>The best hundred careers, the requester's own row (null before their first match), and how many players have one.</summary>
+    public sealed class Leaderboard
+    {
+        public LeaderboardRow[] Rows { get; set; } = Array.Empty<LeaderboardRow>();
+        public LeaderboardRow? You { get; set; }
+        public long Players { get; set; }
+    }
+
+    /// <summary>One achievement a player has, and when (Unix milliseconds).</summary>
+    public sealed class AchievementUnlock
+    {
+        public string Id { get; set; } = string.Empty;
+        public long At { get; set; }
+    }
+
+    /// <summary>
+    /// What a player has earned, how many players have each achievement, and the career numbers
+    /// progress is drawn from (<c>ACHIEVEMENTS_RES</c>).
+    /// </summary>
+    public sealed class AchievementState
+    {
+        public AchievementUnlock[] Unlocked { get; set; } = Array.Empty<AchievementUnlock>();
+        public Dictionary<string, long> Earned { get; set; } = new Dictionary<string, long>();
+        public long Players { get; set; }
+        public Dictionary<string, long> Career { get; set; } = new Dictionary<string, long>();
+    }
+
     public sealed class RoomInfo
     {
         public int RoomId { get; set; }
@@ -270,6 +312,18 @@ namespace Ironfront.MasterClient
         /// <c>SessionExpired</c>.
         /// </summary>
         Task<LoginResult> TokenLoginAsync(string token, IReadOnlyList<ushort> loadableMapIds, CancellationToken ct = default);
+
+        /// <summary>The global ranking (<c>LEADERBOARD_REQ</c>).</summary>
+        Task<Leaderboard> GetLeaderboardAsync(CancellationToken ct = default);
+
+        /// <summary>The signed-in player's achievements (<c>ACHIEVEMENTS_REQ</c>).</summary>
+        Task<AchievementState> GetAchievementsAsync(CancellationToken ct = default);
+
+        /// <summary>Reports practice achievements only this game could see (<c>ACHIEVEMENT_CLAIM_REQ</c>).</summary>
+        Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids, CancellationToken ct = default);
+
+        /// <summary>Achievements the master has just recorded for this player (<c>ACHIEVEMENT_UNLOCKED_PUSH</c>).</summary>
+        event Action<string[]>? OnAchievementsUnlocked;
         Task<RegisterResult> RegisterAsync(string username, string passwordHash, string displayName, CancellationToken ct = default);
         Task<RoomInfo[]> GetRoomsAsync(CancellationToken ct = default);
 

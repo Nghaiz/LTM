@@ -99,6 +99,24 @@ public class IngameMenuUi : MonoBehaviour
 		}
 	}
 
+	// The global ranking and the achievements over the paused match (owner's list of 2026-10-09,
+	// item 4), like the guide above.
+	public void Ranking()
+	{
+		if (Ironfront.Net.Unity.GameOverlays.IsAvailable(Ironfront.Net.Unity.OverlayPage.Ranking))
+		{
+			Ironfront.Net.Unity.GameOverlays.Open(Ironfront.Net.Unity.OverlayPage.Ranking);
+		}
+	}
+
+	public void Achievements()
+	{
+		if (Ironfront.Net.Unity.GameOverlays.IsAvailable(Ironfront.Net.Unity.OverlayPage.Achievements))
+		{
+			Ironfront.Net.Unity.GameOverlays.Open(Ironfront.Net.Unity.OverlayPage.Achievements);
+		}
+	}
+
 	public void Menu()
 	{
 		MouseLook.paused = false;

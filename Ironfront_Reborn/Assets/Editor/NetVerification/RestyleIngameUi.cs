@@ -364,18 +364,18 @@ namespace Ironfront.Net.Unity.EditorTools
             if (panelTransform == null) panelTransform = Child(menu, "Image");
             panelTransform.name = "Panel";
             AngularPanel panel = AsAngular(panelTransform.gameObject);
-            Centre(panel.rectTransform, Vector2.zero, new Vector2(460f, 540f));
+            Centre(panel.rectTransform, Vector2.zero, new Vector2(460f, 620f));
             StyleOperationsPanel(panel);
             panel.raycastTarget = true;
 
             Text kicker = EnsureLabel(panelTransform, "Kicker", "IRONFRONT REBORN", 11, bold: true);
             kicker.color = CyanSoft;
             kicker.alignment = TextAnchor.MiddleCenter;
-            Centre(kicker.rectTransform, new Vector2(0f, 232f), new Vector2(380f, 20f));
+            Centre(kicker.rectTransform, new Vector2(0f, 272f), new Vector2(380f, 20f));
 
             Text heading = EnsureLabel(panelTransform, "Heading", "PAUSED", 34, bold: true);
             heading.alignment = TextAnchor.MiddleCenter;
-            Centre(heading.rectTransform, new Vector2(0f, 194f), new Vector2(380f, 48f));
+            Centre(heading.rectTransform, new Vector2(0f, 236f), new Vector2(380f, 48f));
 
             // HOW TO PLAY is new (owner's list of 2026-10-09, item 1): a copy of the Options row
             // calling IngameMenuUi.HowToPlay, which opens the guide over the paused match.
@@ -385,13 +385,21 @@ namespace Ironfront.Net.Unity.EditorTools
                 typeof(UnityEngine.Events.UnityAction), menuUi, "HowToPlay");
             EnsureMenuRow(panelTransform, "How To Play Button", "Options Button", howToPlay);
 
-            MenuRow(panelTransform, "Resume Button", "RESUME", "primary", "icons/chevron.png", 104f);
-            MenuRow(panelTransform, "Options Button", "OPTIONS", "secondary", "icons/settings.png", 28f);
-            MenuRow(panelTransform, "How To Play Button", "HOW TO PLAY", "secondary", "icons/guide.png", -48f);
-            MenuRow(panelTransform, "Menu Button", "QUIT TO MENU", "danger", "icons/leave.png", -124f);
-            MenuRow(panelTransform, "Quit Button", "EXIT GAME", "secondary", "icons/power.png", -200f);
+            // The global ranking and the achievements (owner's list of 2026-10-09, item 4), the same way.
+            EnsureMenuRow(panelTransform, "Ranking Button", "Options Button", (UnityEngine.Events.UnityAction)
+                System.Delegate.CreateDelegate(typeof(UnityEngine.Events.UnityAction), menuUi, "Ranking"));
+            EnsureMenuRow(panelTransform, "Achievements Button", "Options Button", (UnityEngine.Events.UnityAction)
+                System.Delegate.CreateDelegate(typeof(UnityEngine.Events.UnityAction), menuUi, "Achievements"));
 
-            log.AppendLine("pause menu: operations panel, five menu rows, dimmed world.");
+            MenuRow(panelTransform, "Resume Button", "RESUME", "primary", "icons/chevron.png", 165f);
+            MenuRow(panelTransform, "Options Button", "OPTIONS", "secondary", "icons/settings.png", 97f);
+            MenuRow(panelTransform, "How To Play Button", "HOW TO PLAY", "secondary", "icons/guide.png", 29f);
+            MenuRow(panelTransform, "Ranking Button", "GLOBAL RANKING", "secondary", "icons/ranking.png", -39f);
+            MenuRow(panelTransform, "Achievements Button", "ACHIEVEMENTS", "secondary", "icons/achievements.png", -107f);
+            MenuRow(panelTransform, "Menu Button", "QUIT TO MENU", "danger", "icons/leave.png", -175f);
+            MenuRow(panelTransform, "Quit Button", "EXIT GAME", "secondary", "icons/power.png", -243f);
+
+            log.AppendLine("pause menu: operations panel, seven menu rows, dimmed world.");
         }
 
         /// <summary>
@@ -418,7 +426,7 @@ namespace Ironfront.Net.Unity.EditorTools
             string icon, float y)
         {
             const float Width = 380f;
-            const float Height = 64f;
+            const float Height = 58f;
 
             Transform row = Child(panel, name);
             Button button = row.GetComponent<Button>();

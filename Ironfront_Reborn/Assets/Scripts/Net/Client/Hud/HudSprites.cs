@@ -26,6 +26,7 @@ namespace Ironfront.Net.Unity.Client.Hud
         private static Sprite _flag;
         private static Sprite _fade;
         private static Sprite _vignette;
+        private static Sprite _glow;
         private static Sprite _rule;
         private static Sprite _caret;
         private static Sprite _bracket;
@@ -139,6 +140,26 @@ namespace Ironfront.Net.Unity.Client.Hud
             });
 
             return _vignette;
+        }
+
+        /// <summary>A soft round glow, full in the middle and gone at the edge: behind a badge that just landed.</summary>
+        public static Sprite Glow()
+        {
+            if (_glow != null) return _glow;
+
+            const int size = 128;
+            float centre = (size - 1) * 0.5f;
+
+            _glow = Draw("Hud Glow", size, size, (x, y) =>
+            {
+                float dx = (x - centre) / centre;
+                float dy = (y - centre) / centre;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                float fall = 1f - Mathf.SmoothStep(0f, 1f, r);
+                return fall * fall;
+            });
+
+            return _glow;
         }
 
         /// <summary>A horizontal rule that glows in the middle and fades to nothing at both ends.</summary>

@@ -169,6 +169,12 @@ public sealed class MatchScoreboard
 		}
 		GameEnded = true;
 		Ended?.Invoke(blue);
+		// A finished practice match is a practice achievement, and a won one with every bot
+		// another (owner's list of 2026-10-09, item 4). Blue is team 0.
+		if (Ironfront.Net.Unity.NetContext.IsOffline)
+		{
+			Ironfront.Net.Unity.PracticeFeats.MatchEnded(blue == (GameManager.OfflinePlayerTeam == 0));
+		}
 	}
 
 	/// <summary>A team's score multiplier at this flag count.</summary>

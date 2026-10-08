@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS match_results (
 );
 CREATE INDEX IF NOT EXISTS idx_results_player ON match_results(player_id);");
             CreateRememberTokenTable();
+            CreateCareerTables();
         }
 
         public AccountRecord? FindAccount(string username)

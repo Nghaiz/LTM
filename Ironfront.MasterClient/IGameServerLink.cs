@@ -79,6 +79,13 @@ namespace Ironfront.MasterClient
         public int Kills { get; set; }
         public int Deaths { get; set; }
         public int Score { get; set; }
+
+        /// <summary>
+        /// The round's career numbers by <c>CareerStats.Key</c>, zeros left out (protocol 14.0.3,
+        /// additive: an older master ignores the field). The master folds them into the player's
+        /// career and judges the achievements from that.
+        /// </summary>
+        public System.Collections.Generic.Dictionary<string, long>? Stats { get; set; }
     }
 
     /// <summary>

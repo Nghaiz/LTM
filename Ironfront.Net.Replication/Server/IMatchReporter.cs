@@ -30,12 +30,19 @@ namespace Ironfront.Net.Replication.Server
         public readonly int Deaths;
         public readonly int Score;
 
-        public MatchPlayerScore(int playerId, int kills, int deaths, int score)
+        /// <summary>
+        /// The round's career numbers, indexed by <c>CareerStat</c> (owner's list of 2026-10-09,
+        /// item 4), or null when the server did not collect them.
+        /// </summary>
+        public readonly long[]? Career;
+
+        public MatchPlayerScore(int playerId, int kills, int deaths, int score, long[]? career = null)
         {
             PlayerId = playerId;
             Kills    = kills;
             Deaths   = deaths;
             Score    = score;
+            Career   = career;
         }
     }
 

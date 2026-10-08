@@ -126,6 +126,9 @@ GLYPHS = {
                  "M30 44 v-12 C30 18 38 8 50 8 C62 8 70 18 70 32 v12 h-9 v-12 C61 22 57 16 50 16 "
                  "C43 16 39 22 39 32 v12 Z " + circle(50, 64, 7) + " M47 66 h6 v14 h-6 Z"),
     "clock": path(ring(50, 50, 44, 8) + " M46 22 h8 v28 h-8 Z M46 46 h26 v8 h-26 Z"),
+    # Reload a list (the ranking and the achievements, owner's list of 2026-10-09, item 4).
+    "refresh": ('<path fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" '
+                'd="M70 27 A31 31 0 1 0 81 55"/>' + path("M60 12 L90 22 L72 46 Z")),
     "rifles": path(
         "M8 16 L16 8 L60 52 L66 46 L74 54 L68 60 L84 76 L94 76 L94 86 L84 86 L84 94 L76 94 L76 84 "
         "L60 68 L54 74 L46 66 L52 60 Z "

@@ -122,6 +122,12 @@ public class GameManager : MonoBehaviour
 		// MatchStateMachine, `Changed` is subscribed offline only, and AddScore/AddFlag are
 		// already gated on NetContext.IsOffline at both call sites.
 		MatchScoreboard.Current.Reset();
+		// The practice achievements' match (owner's list of 2026-10-09, item 4): its kills start
+		// at zero, and how many bots it has decides one of them.
+		if (Ironfront.Net.Unity.NetContext.IsOffline && ActorManager.instance != null)
+		{
+			Ironfront.Net.Unity.PracticeFeats.MatchStarted(ActorManager.instance.team0Bots + ActorManager.instance.team1Bots);
+		}
 		// The HUD, the player and the decal pool are the client's half of a match. A dedicated
 		// server that instantiates them gets a Canvas nobody looks at, an FpsActorController
 		// reaching for SceneryCamera.instance in Start, and a null-instance singleton behind
