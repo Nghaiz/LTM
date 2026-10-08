@@ -1079,10 +1079,24 @@ public class FpsActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// While the player waits to deploy, points the grass renderer at the spawn point they picked
+	/// so it reads the patches there before the camera jumps
+	/// (<see cref="Ironfront.Rendering.InstancedDetailRenderer.PrefetchPoint"/>).
+	/// </summary>
+	private void UpdateDetailPrefetch()
+	{
+		Ironfront.Rendering.InstancedDetailRenderer.PrefetchPoint =
+			actor.dead && MinimapUi.TryGetPickedSpawnPoint(out SpawnPoint picked)
+				? picked.transform.position
+				: (Vector3?)null;
+	}
+
 	private void Update()
 	{
 		UpdateNetworkSwim();
 		TrackOfflineFall();
+		UpdateDetailPrefetch();
 
 		// Capture the edge every render frame. NetPredictionClock may or may not simulate a tick
 		// in this frame; OnNetworkTickSimulated clears it only after it reached C_INPUT.
