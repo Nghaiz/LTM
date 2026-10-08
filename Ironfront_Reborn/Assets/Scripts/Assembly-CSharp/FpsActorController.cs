@@ -308,9 +308,8 @@ public class FpsActorController : ActorController
 		// client the literal was simply wrong — a team-1 player believed it was team 0 — so the
 		// prefab now authors UNKNOWN_TEAM and the answer comes from whoever knows it.
 		//
-		// Offline, that is here, and the literal 0 is the same one MinimapUi.UpdateSpawnPointButtons
-		// already carries for the same reason (V10 D16): the human is always team 0 in
-		// single-player, so this keeps offline byte-for-byte what it was. Networked, the answer
+		// Offline, that is here, from GameManager.OfflinePlayerTeam, which MinimapUi.UpdateSpawnPointButtons
+		// reads too (V10 D16): blue, unless the practice screen chose red. Networked, the answer
 		// comes from the snapshot via NetClientLocalCombatDriver — deliberately not from here,
 		// because it has not arrived yet at Awake and that is the whole defect.
 		//
@@ -381,10 +380,11 @@ public class FpsActorController : ActorController
 
 	private void Start()
 	{
-		// See Awake's remark (P12 D-1): offline, the human is always team 0.
+		// See Awake's remark (P12 D-1): offline, the human is on the side the practice screen
+		// chose, blue unless it chose red (GameManager.OfflinePlayerTeam).
 		if (NetContext.IsOffline && actor != null && actor.team == UNKNOWN_TEAM)
 		{
-			actor.SetTeam(0);
+			actor.SetTeam(GameManager.OfflinePlayerTeam);
 		}
 		SceneryCamera.instance.camera.enabled = true;
 		actorLocalOrigin = actor.transform.localPosition;

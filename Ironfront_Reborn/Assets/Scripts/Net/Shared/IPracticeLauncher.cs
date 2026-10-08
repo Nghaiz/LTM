@@ -12,15 +12,13 @@ namespace Ironfront.Net.Unity
     /// <c>Assembly-CSharp</c>, so <c>Net/Client</c> cannot say any of them (contracts § 6.1).
     /// </para>
     /// <para>
-    /// <b>So this seam SHOWS a screen; it does not start a match.</b> That is the decision worth
-    /// recording, because the alternative reads more natural and is wrong. A
-    /// <c>Launch(scene, actorCount, botBalance, …)</c> signature would need the new Canvas to
-    /// re-author every one of those controls, which is a fourth screen P15 does not scope
-    /// (3.2 names three) and a second copy of a shipped screen — and criterion 5, "the
-    /// bot-balance slider still splits the two teams", would then have to be re-proven against
-    /// new controls instead of being true because nothing moved. Revealing the legacy menu keeps
-    /// the offline game bit-identical to what ships today and keeps <c>MainMenu.cs</c> untouched,
-    /// which 3.5 requires.
+    /// <b>The practice screen now chooses the match</b> (owner, 2026-10-08: "everything there says
+    /// IN DEVELOPMENT"). P15 kept this seam to showing the legacy screen so that
+    /// <c>MainMenu.cs</c> stayed untouched; the new screen has since replaced that screen, and it
+    /// passes a <see cref="PracticeSettings"/> that the implementation writes over what
+    /// <c>MainMenu.StartLevel</c> read from its hidden controls, in the same frame and before the
+    /// map loads. <c>MainMenu.cs</c> is still untouched, and the two legacy toggles the new screen
+    /// does not offer (assault and reverse) keep their authored values.
     /// </para>
     /// <para>
     /// <b>Why hiding is a method and not <c>SetActive</c> at the call site.</b>
@@ -62,7 +60,11 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         void HidePracticeMenu();
 
-        /// <summary>Launches one scene selected from the authoritative map catalogue.</summary>
-        void LaunchMap(string sceneName);
+        /// <summary>
+        /// Launches one scene selected from the authoritative map catalogue, played by
+        /// <paramref name="settings"/>: the practice screen's mode, victory rule, points, bots,
+        /// side, vehicles and respawn time (owner, 2026-10-08).
+        /// </summary>
+        void LaunchMap(string sceneName, in PracticeSettings settings);
     }
 }

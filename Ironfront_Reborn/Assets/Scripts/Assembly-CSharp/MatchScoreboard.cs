@@ -76,6 +76,12 @@ public sealed class MatchScoreboard
 	public int VictoryPoints =>
 		GameManager.instance != null ? GameManager.instance.victoryPoints : DefaultVictoryPoints;
 
+	/// <summary>
+	/// How <see cref="VictoryPoints"/> is played offline: lead by them (the original's rule) or be
+	/// first to them, as the practice screen chose (owner, 2026-10-08). Read through, like the points.
+	/// </summary>
+	public VictoryRule Rule =>
+		GameManager.instance != null ? GameManager.instance.victoryRule : VictoryRule.Margin;
 	/// <summary>Used only when no <c>GameManager</c> is present. Never a live-match value.</summary>
 	private const int DefaultVictoryPoints = 100;
 
@@ -115,7 +121,7 @@ public sealed class MatchScoreboard
 		// match and the networked one cannot end at different moments -- which they did, in
 		// opposite directions, until P11. Blue is team 0: Actor.Die passes the VICTIM's team,
 		// and a team-1 death is what credits blue.
-		byte winner = ConquestScoreRule.Decide(BlueScore, RedScore, VictoryPoints);
+		byte winner = ConquestScoreRule.Decide(BlueScore, RedScore, VictoryPoints, Rule);
 		if (winner == TeamId.Team0)
 		{
 			Win(true);

@@ -89,6 +89,10 @@
              Link="Linked\RoomBotChoice.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\RoomSettingsChoice.cs"
              Link="Linked\RoomSettingsChoice.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\PracticeChoice.cs"
+             Link="Linked\PracticeChoice.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\PracticeSettings.cs"
+             Link="Linked\PracticeSettings.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\NightVisionBattery.cs"
              Link="Linked\NightVisionBattery.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\EnemyMapReveal.cs"

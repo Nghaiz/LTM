@@ -53,7 +53,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             _menu = new GameObject("menu");
             MenuScreenController controller = _menu.AddComponent<MenuScreenController>();
 
-            controller.LaunchPracticeMap("Dustbowl");
+            controller.LaunchPracticeMap("Dustbowl", PracticeSettings.Default);
 
             Assert.AreEqual("Dustbowl", practice.Launched, "the practice map was not launched");
             Assert.IsFalse(practice.DeclaredClientAtLaunch,
@@ -77,7 +77,7 @@ namespace Ironfront.Net.Unity.Client.Tests
 
             public void HidePracticeMenu() { }
 
-            public void LaunchMap(string sceneName)
+            public void LaunchMap(string sceneName, in PracticeSettings settings)
             {
                 Launched = sceneName;
                 DeclaredClientAtLaunch = NetContext.IsDeclaredClient;
