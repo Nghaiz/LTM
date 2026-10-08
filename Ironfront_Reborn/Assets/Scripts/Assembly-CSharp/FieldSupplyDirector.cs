@@ -175,6 +175,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			}
 		}
 		parking = new FieldParking(config);
+		Debug.Log("[supply] " + mapScene.name + ": " + parking.IndexedTrees + " terrain tree(s) kept clear of every vehicle placed.");
 		Layout(firstMatch: true);
 		// The first crates a few seconds in: the server's projectile table is up by then, so each
 		// crate is replicated from its first frame rather than missed by the clients.
@@ -493,9 +494,10 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			float radius = Mathf.Lerp(config.flagRingInner, config.flagRingOuter, (float)random.NextDouble());
 			var outward = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
 			Vector3 probe = centre + outward * radius;
-			// Nose out, so a crew drives away from the walls rather than into them.
-			float yaw = Mathf.Atan2(outward.x, outward.z) * Mathf.Rad2Deg;
-			if (!parking.CanPark(probe, yaw, footprint, out Vector3 ground)
+			// Nose out, so a crew drives away from the walls rather than into them; another heading
+			// near it when the way out is blocked (FieldParking.TryPark).
+			float wish = Mathf.Atan2(outward.x, outward.z) * Mathf.Rad2Deg;
+			if (!parking.TryPark(probe, wish, footprint, out Vector3 ground, out float yaw)
 				|| !FieldSupplyLayout.FarFromAll(ToVec(ground), padPositions.ToArray(), PadSeparation * PadSeparation))
 			{
 				continue;
@@ -551,8 +553,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			{
 				continue;
 			}
-			float yaw = (float)(random.NextDouble() * 360.0);
-			if (!parking.CanPark(probe, yaw, footprint, out Vector3 ground))
+			if (!parking.TryPark(probe, (float)(random.NextDouble() * 360.0), footprint, out Vector3 ground, out float yaw))
 			{
 				continue;
 			}
