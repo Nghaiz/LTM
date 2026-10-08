@@ -65,20 +65,49 @@ namespace Ironfront.Net.Unity.Bindings
         private void Scan()
         {
             _scanned = true;
+            CollectMapVehicles(SceneManager.GetActiveScene().name, _prefabsByNetworkId);
+        }
 
+        /// <summary>
+        /// Every vehicle the map <paramref name="sceneName"/> can field, by network id: its pads'
+        /// prefabs, and the vehicles its field supply config scatters (<see cref="FieldSupplyConfig"/>).
+        /// </summary>
+        /// <remarks>
+        /// <b>The config, not only the pads.</b> <c>FieldSupplyDirector</c> builds its pads on the
+        /// server alone, so a client's scene holds none of them. v4.5.0 playtest, 2026-10-07: Forest
+        /// Lake's shore boat, the one vehicle on that map no authored pad fields, logged "S_VEHICLE_SPAWN
+        /// named a networkTypeId no vehicle prefab in this scene declares" on every online client and
+        /// was drawn by none of them.
+        /// </remarks>
+        internal static void CollectMapVehicles(string sceneName, Dictionary<byte, GameObject> into)
+        {
             VehicleSpawner[] spawners = Object.FindObjectsByType<VehicleSpawner>(
                 FindObjectsInactive.Include, FindObjectsSortMode.None);
 
             for (int i = 0; i < spawners.Length; i++)
             {
-                GameObject prefab = spawners[i] != null ? spawners[i].prefab : null;
-                if (prefab == null) continue;
-
-                Vehicle vehicle = prefab.GetComponent<Vehicle>();
-                if (vehicle == null || vehicle.NetworkId == 0) continue;
-
-                _prefabsByNetworkId[vehicle.NetworkId] = prefab;
+                Admit(spawners[i] != null ? spawners[i].prefab : null, into);
             }
+
+            FieldSupplyConfig config = FieldSupplyConfig.For(sceneName);
+            if (config == null) return;
+
+            var scattered = new List<GameObject>(8);
+            config.CollectVehiclePrefabs(scattered);
+            for (int i = 0; i < scattered.Count; i++)
+            {
+                Admit(scattered[i], into);
+            }
+        }
+
+        private static void Admit(GameObject prefab, Dictionary<byte, GameObject> into)
+        {
+            if (prefab == null) return;
+
+            Vehicle vehicle = prefab.GetComponent<Vehicle>();
+            if (vehicle == null || vehicle.NetworkId == 0) return;
+
+            into[vehicle.NetworkId] = prefab;
         }
     }
 

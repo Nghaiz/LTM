@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -112,4 +113,39 @@ public sealed class FieldSupplyConfig : ScriptableObject
 
 	/// <summary>Metres a parking place keeps from the nearest terrain tree.</summary>
 	public float treeClearance = 3.5f;
+
+	/// <summary>Where a map's config lives under <c>Resources</c>, followed by the scene name.</summary>
+	public const string ResourceFolder = "FieldSupply/";
+
+	/// <summary>The config the map scene <paramref name="sceneName"/> scatters with, or null when it scatters nothing.</summary>
+	public static FieldSupplyConfig For(string sceneName)
+	{
+		return string.IsNullOrEmpty(sceneName) ? null : Resources.Load<FieldSupplyConfig>(ResourceFolder + sceneName);
+	}
+
+	/// <summary>
+	/// Adds every vehicle prefab this config can put on the map -- at a flag, on the water by one,
+	/// out in the field or moored along a shore -- to <paramref name="into"/>.
+	/// </summary>
+	/// <remarks>
+	/// A networked client resolves a replicated vehicle's prefab from what its map can field
+	/// (<c>SceneVehiclePrefabDirectory</c>); the scene's own pads are not all of it, because these
+	/// vehicles come from no pad in the scene.
+	/// </remarks>
+	public void CollectVehiclePrefabs(List<GameObject> into)
+	{
+		Collect(flagVehicles, into);
+		Collect(waterVehicles, into);
+		Collect(fieldVehicles, into);
+		Collect(shoreVehicles, into);
+	}
+
+	private static void Collect(VehicleChoice[] choices, List<GameObject> into)
+	{
+		if (choices == null) return;
+		for (int i = 0; i < choices.Length; i++)
+		{
+			if (choices[i].prefab != null) into.Add(choices[i].prefab);
+		}
+	}
 }

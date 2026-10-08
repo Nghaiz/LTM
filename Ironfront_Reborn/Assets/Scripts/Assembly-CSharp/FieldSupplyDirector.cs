@@ -21,8 +21,10 @@ using Vec3 = Ironfront.Net.Replication.Movement.Vec3;
 /// </para>
 /// <para>
 /// <b>Server-side only.</b> Each place becomes an ordinary <see cref="VehicleSpawner"/>, so the
-/// vehicles reach every client through <c>S_VEHICLE_SPAWN</c> like any other and need no client
-/// change; a networked client never runs this. Offline practice runs it as the server it is.
+/// vehicles reach every client through <c>S_VEHICLE_SPAWN</c> like any other; a networked client
+/// never runs this. Offline practice runs it as the server it is. The client still has to know
+/// each prefab: no pad in its scene names them, so <c>SceneVehiclePrefabDirectory</c> reads this
+/// config too (v4.5.0, 2026-10-07: Forest Lake's shore boat was invisible to every online player).
 /// </para>
 /// <para>
 /// <b>Inside the vehicle-id budget.</b> <c>MAX_VEHICLES</c> is 24. Forest Lake authors 12 pads, four
@@ -39,8 +41,6 @@ using Vec3 = Ironfront.Net.Replication.Movement.Vec3;
 public sealed class FieldSupplyDirector : MonoBehaviour
 {
 	public static FieldSupplyDirector instance;
-
-	private const string ConfigFolder = "FieldSupply/";
 
 	/// <summary>Places tried for each vehicle before it is left out, and said to be.</summary>
 	private const int ParkingAttempts = 64;
@@ -136,10 +136,10 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		}
 
 		mapScene = SceneManager.GetActiveScene();
-		config = Resources.Load<FieldSupplyConfig>(ConfigFolder + mapScene.name);
+		config = FieldSupplyConfig.For(mapScene.name);
 		if (config == null)
 		{
-			Debug.Log("[supply] " + mapScene.name + " has no Resources/" + ConfigFolder + mapScene.name + ", so nothing is scattered.");
+			Debug.Log("[supply] " + mapScene.name + " has no Resources/" + FieldSupplyConfig.ResourceFolder + mapScene.name + ", so nothing is scattered.");
 			return;
 		}
 		if (ActorManager.instance == null || ActorManager.instance.spawnPoints == null)

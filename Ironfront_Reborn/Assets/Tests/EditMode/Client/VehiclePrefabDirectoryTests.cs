@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
@@ -48,6 +51,51 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.IsTrue(directory.TryGetPrefab(SecondMapVehicle, out GameObject prefab),
                 "the second map's vehicle was unknown: the directory kept the first map's scan");
             Assert.AreEqual("vehicle " + SecondMapVehicle, prefab.name);
+        }
+
+        /// <summary>
+        /// Every vehicle a map's field supply config can scatter resolves on that map, though no pad
+        /// in the client's scene fields it.
+        /// </summary>
+        /// <remarks>
+        /// v4.5.0 playtest, 2026-10-07: the server moored Forest Lake's shore boat, the one vehicle
+        /// there no authored pad fields, and every online client logged "S_VEHICLE_SPAWN named a
+        /// networkTypeId no vehicle prefab in this scene declares" and drew no boat. Run on an empty
+        /// scene, so only the config can answer.
+        /// </remarks>
+        [Test]
+        public void EveryVehicleAMapScattersResolvesOnThatMap()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            MethodInfo collect = Find("Ironfront.Net.Unity.Bindings.SceneVehiclePrefabDirectory")
+                .GetMethod("CollectMapVehicles", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.IsNotNull(collect, "SceneVehiclePrefabDirectory.CollectMapVehicles");
+            Type vehicleType = Find("Vehicle");
+            MethodInfo collectPrefabs = Find("FieldSupplyConfig").GetMethod("CollectVehiclePrefabs");
+
+            string[] configs = AssetDatabase.FindAssets("t:FieldSupplyConfig", new[] { "Assets/Resources/FieldSupply" });
+            Assert.IsNotEmpty(configs, "no field supply config to check");
+
+            foreach (string guid in configs)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                string map = Path.GetFileNameWithoutExtension(path);
+                var prefabs = new List<GameObject>();
+                collectPrefabs.Invoke(AssetDatabase.LoadAssetAtPath<ScriptableObject>(path), new object[] { prefabs });
+                Assert.IsNotEmpty(prefabs, map + " scatters no vehicle");
+
+                var known = new Dictionary<byte, GameObject>();
+                collect.Invoke(null, new object[] { map, known });
+
+                foreach (GameObject prefab in prefabs)
+                {
+                    var networkId = (byte)vehicleType.GetProperty("NetworkId").GetValue(prefab.GetComponent(vehicleType));
+                    Assert.Greater(networkId, 0, prefab.name + " has no network id");
+                    Assert.IsTrue(known.ContainsKey(networkId),
+                        $"{map} scatters {prefab.name} (network id {networkId}), which a client on that map cannot resolve");
+                }
+            }
         }
 
         /// <summary>A fresh scene with one spawner whose prefab carries <paramref name="networkId"/>.</summary>
