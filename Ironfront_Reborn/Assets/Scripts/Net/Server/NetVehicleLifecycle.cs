@@ -97,13 +97,17 @@ namespace Ironfront.Net.Unity.Server
         /// id there rather than a refusal.
         /// </para>
         /// <para>
-        /// Reads <c>FreeCount</c> without draining quarantine, so it is conservative by exactly
-        /// the ids that are about to come back. A pad that defers one tick too long respawns a
-        /// tick later; a pad that spawns anyway produces a vehicle no client can ever see.
+        /// <b>Drains the expired quarantine before it answers</b>
+        /// (<see cref="ServerVehicleLifecycleSink.CanAcquireId"/>). It used to read
+        /// <c>FreeCount</c>, reasoning that a pad deferring one tick too long respawns a tick
+        /// later. It never did: the quarantine drains only inside an acquisition, and this check
+        /// is what stops every acquisition, so once the free list touched zero no pad on the map
+        /// spawned again until the round reset (v4.5.0 playtest, 2026-10-07: 22 minutes of Forest
+        /// Lake with no new vehicle).
         /// </para>
         /// </remarks>
         public static bool CanReplicateAnotherVehicle
-            => !(_sink is ServerVehicleLifecycleSink server) || server.Ids.FreeCount > 0;
+            => !(_sink is ServerVehicleLifecycleSink server) || server.CanAcquireId();
 
         /// <summary>Installs the server's sink. Called from <c>ServerTickLoop.Bind</c>.</summary>
         public static void Install(IVehicleLifecycleSink sink)

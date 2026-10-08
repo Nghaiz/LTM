@@ -75,6 +75,9 @@ namespace Ironfront.Net.Replication.Tests
         /// <summary>The <c>VehicleSpawner</c> component's asset guid — the only honest way to
         /// count pads. Island holds FIFTEEN objects named "Vehicle Spawner…" and only fourteen
         /// of them carry the component, so counting by name overstates it by one.</summary>
+        private const string Lifecycle =
+            "Ironfront_Reborn/Assets/Scripts/Net/Server/NetVehicleLifecycle.cs";
+
         private const string SpawnerGuid = "0bd0bd09898c6f04a6ecee358352e3e4";
 
         /// <summary>How an <c>AfterMoved</c> pad appears in scene YAML.</summary>
@@ -169,6 +172,28 @@ namespace Ironfront.Net.Replication.Tests
                 "CanReplicateAnotherVehicle",
                 ReadUnitySource(Spawner),
                 StringComparison.Ordinal);
+
+        /// <summary>
+        /// The gate every spawner asks counts an id that has served its quarantine as free.
+        /// </summary>
+        /// <remarks>
+        /// Source-invariant, the Unity half of <c>VehicleIdExhaustionTests</c>'s
+        /// <c>AFullPoolSaysAnIdIsFreeOnceAReleasedOneHasCooled</c>. The gate read
+        /// <c>Ids.FreeCount</c>, which only an acquisition refills, and it is what stops every
+        /// acquisition: once the pool touched zero, no pad spawned again until the round reset
+        /// (v4.5.0 playtest, 2026-10-07, Forest Lake, 22 minutes).
+        /// </remarks>
+        [Fact]
+        public void TheSpawnGateCountsCooledIdsAsFree()
+        {
+            string source = ReadUnitySource(Lifecycle);
+            int gate = source.IndexOf("public static bool CanReplicateAnotherVehicle", StringComparison.Ordinal);
+            Assert.True(gate >= 0, "NetVehicleLifecycle.CanReplicateAnotherVehicle not found");
+            string expression = source.Substring(gate, source.IndexOf(';', gate) - gate);
+
+            Assert.Contains("CanAcquireId()", expression, StringComparison.Ordinal);
+            Assert.DoesNotContain("FreeCount", expression, StringComparison.Ordinal);
+        }
 
         /// <summary>
         /// A pad that already holds a live, replicated vehicle does not produce a second one

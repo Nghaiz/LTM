@@ -71,6 +71,12 @@ namespace Ironfront.Net.Replication.Server
         public int DespawnsSent { get; private set; }
 
         /// <inheritdoc />
+        /// <summary>
+        /// Whether a spawn now would be given an id: <see cref="VehicleIdPool.CanAcquire"/> at the
+        /// current tick, so an id whose quarantine has run out counts as free.
+        /// </summary>
+        public bool CanAcquireId() => _ids.CanAcquire(_currentTick());
+
         public ushort OnVehicleSpawned(in VehicleSpawnReport report)
         {
             if (!VehicleIds.TryGetKind(report.NetworkTypeId, out VehicleKind kind))
