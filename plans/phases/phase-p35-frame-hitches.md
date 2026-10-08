@@ -79,6 +79,12 @@ looking over the whole map at Ultra. The scenery camera paints over the FP camer
 that frame is pure waste. First thing to try: disable the FP camera (or its rendering) until
 `EnterDeployedView`.
 
+**Fixed 2026-10-08.** `FpsActorController.Start` turns the FP camera off with the scenery camera on;
+`SpawnAt` and `EnterDeployedView` turn it back on (`FirstPersonCamera`). Editor, Forest Lake's
+pre-deploy screen, toggled live: batches 1,695 to 1,075, SetPass calls 1,321 to 840, triangles 2.45 M
+to 1.99 M, `Camera.Render` 7.7 to about 5.2 ms a frame. The per-pixel cost that made the owner's
+GPU take 157 to 1,294 ms was this camera's whole frame; not yet measured in a player build.
+
 ### 3. With focus, most of a long frame is outside the player loop
 
 The single most important lead for the alive and dead long frames, found last:
