@@ -114,6 +114,20 @@ public sealed class FieldSupplyConfig : ScriptableObject
 	/// <summary>Metres a parking place keeps from the nearest terrain tree.</summary>
 	public float treeClearance = 3.5f;
 
+	/// <summary>
+	/// Metres of open ground a parked vehicle must have straight ahead of its nose: no tree, rock,
+	/// wall or water, nothing steeper than <see cref="maxLaneSlopeDegrees"/>. Owner, 2026-10-08:
+	/// vehicles placed at random were often boxed in among trees, hard for a player to get out and
+	/// hopeless for a bot.
+	/// </summary>
+	public float exitLaneMetres = 24f;
+
+	/// <summary>Metres of clearance either side of the vehicle's own width along that lane.</summary>
+	public float exitLaneMargin = 1.5f;
+
+	/// <summary>Steepest ground the lane may cross, in degrees: what the vehicles climb at a crawl.</summary>
+	public float maxLaneSlopeDegrees = 24f;
+
 	/// <summary>Where a map's config lives under <c>Resources</c>, followed by the scene name.</summary>
 	public const string ResourceFolder = "FieldSupply/";
 
