@@ -1328,21 +1328,10 @@ namespace Ironfront.Net.Unity.Server
         /// were" branch are both behaviours a snapshot bug would silently break.
         /// </remarks>
         internal static int ChooseSpawnIndex(ISpawnPointDirectory spawnPoints, int team)
-        {
-            int chosen = -1;
-            int candidates = 0;
-            int count = spawnPoints.Count;
-
-            for (int i = 0; i < count; i++)
-            {
-                if (!spawnPoints.IsEligible(i, team)) continue;
-
-                candidates++;
-                if (UnityEngine.Random.Range(0, candidates) == 0) chosen = i;
-            }
-
-            return chosen;
-        }
+            => DeployFlagDraw.Uniform(
+                spawnPoints.Count,
+                i => spawnPoints.IsEligible(i, team),
+                n => UnityEngine.Random.Range(0, n));
 
         /// <summary>
         /// <see cref="ChooseSpawnIndex"/>, biased toward the eligible point nearest a living

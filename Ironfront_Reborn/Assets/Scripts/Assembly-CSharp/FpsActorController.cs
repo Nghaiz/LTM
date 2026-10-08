@@ -783,6 +783,7 @@ public class FpsActorController : ActorController
 		FirstPersonCamera();
 		ForceEndCrouch();
 		deployedView = true;
+		MinimapUi.ForgetDrawnSpawnPoint();
 	}
 
 	/// <summary>
@@ -887,6 +888,7 @@ public class FpsActorController : ActorController
 		FirstPersonCamera();
 		ForceEndCrouch();
 		deployedView = true;
+		MinimapUi.ForgetDrawnSpawnPoint();
 	}
 
 	public override void ApplyRecoil(Vector3 impulse)
@@ -1088,15 +1090,16 @@ public class FpsActorController : ActorController
 	}
 
 	/// <summary>
-	/// While the player waits to deploy, points the grass renderer at the spawn point they picked
-	/// so it reads the patches there before the camera jumps
-	/// (<see cref="Ironfront.Rendering.InstancedDetailRenderer.PrefetchPoint"/>).
+	/// While the player waits to deploy, points the grass renderer at the spawn point the deploy
+	/// will use -- the one they picked, or the one drawn for them
+	/// (<see cref="MinimapUi.TryGetDeployTarget"/>) -- so it reads the patches there before the
+	/// camera jumps (<see cref="Ironfront.Rendering.InstancedDetailRenderer.PrefetchPoint"/>).
 	/// </summary>
 	private void UpdateDetailPrefetch()
 	{
 		Ironfront.Rendering.InstancedDetailRenderer.PrefetchPoint =
-			actor.dead && MinimapUi.TryGetPickedSpawnPoint(out SpawnPoint picked)
-				? picked.transform.position
+			actor.dead && MinimapUi.TryGetDeployTarget(out SpawnPoint target)
+				? target.transform.position
 				: (Vector3?)null;
 	}
 

@@ -138,9 +138,9 @@ namespace Ironfront.Net.Unity.Bindings
         public bool TryGetChosenSpawnPoint(out Vector3 position)
         {
             position = default;
-            if (!MinimapUi.TryGetPickedSpawnPoint(out SpawnPoint picked)) return false;
+            if (!MinimapUi.TryGetDeployTarget(out SpawnPoint target)) return false;
 
-            position = picked.transform.position;
+            position = target.transform.position;
             return true;
         }
 
