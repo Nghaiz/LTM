@@ -87,5 +87,28 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void ACarDoesNotStopForItsGunner()
             => Assert.False(VehicleRules.HoldStandoff(VehicleKind.Transport, true, 20f));
+
+        [Fact]
+        public void ASquadPrefersAHelicopterThenATankThenATransport()
+        {
+            var kinds = new[] { VehicleKind.Transport, VehicleKind.Boat, VehicleKind.Armour, VehicleKind.Aircraft };
+            System.Array.Sort(kinds, (a, b) => VehicleRules.ComparePreference(a, 1000f, 50f, b, 1000f, 50f));
+            Assert.Equal(new[] { VehicleKind.Aircraft, VehicleKind.Armour, VehicleKind.Transport, VehicleKind.Boat }, kinds);
+        }
+
+        [Fact]
+        public void TheBetterKindWinsOverANearerOne()
+            => Assert.True(VehicleRules.ComparePreference(
+                VehicleKind.Armour, 2000f, 120f, VehicleKind.Transport, 1000f, 5f) < 0);
+
+        [Fact]
+        public void AmongTransportsAJeepComesBeforeAQuadBike()
+            => Assert.True(VehicleRules.ComparePreference(
+                VehicleKind.Transport, 1000f, 60f, VehicleKind.Transport, 400f, 10f) < 0);
+
+        [Fact]
+        public void TwoOfTheSameVehicleAreTakenNearestFirst()
+            => Assert.True(VehicleRules.ComparePreference(
+                VehicleKind.Transport, 1000f, 10f, VehicleKind.Transport, 1000f, 60f) < 0);
     }
 }

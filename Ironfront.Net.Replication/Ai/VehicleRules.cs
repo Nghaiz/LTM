@@ -77,6 +77,38 @@ namespace Ironfront.Net.Replication.Ai
             return kind == VehicleKind.Armour || objectiveDistance >= RideDistance;
         }
 
+        /// <summary>
+        /// Where a kind of vehicle stands in a squad's choice, best first: a helicopter, then a
+        /// tank, then a transport, then a boat. Owner, 2026-10-08: bots should look for the best
+        /// vehicles first, helicopters and tanks, and only then jeeps and motorbikes.
+        /// </summary>
+        public static int PreferenceRank(VehicleKind kind)
+        {
+            switch (kind)
+            {
+                case VehicleKind.Aircraft: return 0;
+                case VehicleKind.Armour: return 1;
+                case VehicleKind.Transport: return 2;
+                default: return 3;
+            }
+        }
+
+        /// <summary>
+        /// Orders two vehicles a squad could take: the better kind first (<see cref="PreferenceRank"/>),
+        /// then the sturdier of the same kind (a jeep before a quad bike), then the nearer. The
+        /// original took whichever was nearest.
+        /// </summary>
+        public static int ComparePreference(
+            VehicleKind kindA, float maxHealthA, float distanceA,
+            VehicleKind kindB, float maxHealthB, float distanceB)
+        {
+            int rank = PreferenceRank(kindA).CompareTo(PreferenceRank(kindB));
+            if (rank != 0) return rank;
+            int sturdier = maxHealthB.CompareTo(maxHealthA);
+            if (sturdier != 0) return sturdier;
+            return distanceA.CompareTo(distanceB);
+        }
+
         /// <summary>Whether a vehicle's driver stops to let its gun work instead of driving on.</summary>
         public static bool HoldStandoff(VehicleKind kind, bool hasTarget, float targetDistance)
             => kind == VehicleKind.Armour && hasTarget && targetDistance < ArmourStandoff;
