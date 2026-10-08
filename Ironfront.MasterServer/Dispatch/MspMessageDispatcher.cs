@@ -61,6 +61,8 @@ namespace Ironfront.MasterServer.Dispatch
                         Register(connection, Deserialize<RegisterRequest>(body)); break;
                     case MspMessageType.LoginRequest:
                         Login(connection, Deserialize<LoginRequest>(body)); break;
+                    case MspMessageType.TokenLoginRequest:
+                        TokenLogin(connection, Deserialize<TokenLoginRequest>(body)); break;
                     case MspMessageType.RoomListRequest:
                         if (TryGetAuthenticatedSession(connection, out Session listSession)) ListRooms(connection, listSession);
                         break;
@@ -197,11 +199,41 @@ namespace Ironfront.MasterServer.Dispatch
                 Send(connection, MspMessageType.LoginResponse, new { ok = false, errorCode = (ushort)result.ErrorCode, sessionToken = string.Empty, playerId = 0, displayName = string.Empty, retryAfterSec = result.RetryAfterSeconds });
                 return;
             }
+            // "Remember me": a fresh token goes back with the session, never the password.
+            string rememberToken = request.Remember ? _auth.IssueRememberToken(result.Session.PlayerId) : string.Empty;
+            CompleteLogin(connection, result.Session, request.Maps, rememberToken);
+        }
+
+        /// <summary>
+        /// Signs in with a remembered token (owner's list of 2026-10-09, item 1). Answered with an
+        /// ordinary <see cref="MspMessageType.LoginResponse"/> carrying the NEXT token: the one sent
+        /// is spent (<see cref="AuthService.LoginWithRememberToken"/>).
+        /// </summary>
+        private void TokenLogin(ClientConnection connection, TokenLoginRequest request)
+        {
+            if (request.ClientVersion != ProtocolConstants.PROTOCOL_VERSION)
+            {
+                Send(connection, MspMessageType.LoginResponse, new { ok = false, errorCode = (ushort)ErrorCode.WrongClientVersion, sessionToken = string.Empty, playerId = 0, displayName = string.Empty, retryAfterSec = 0 });
+                return;
+            }
+
+            AuthResult result = _auth.LoginWithRememberToken(request.Token ?? string.Empty, connection.RemoteIpKey);
+            if (!result.Ok || result.Session is null)
+            {
+                Send(connection, MspMessageType.LoginResponse, new { ok = false, errorCode = (ushort)result.ErrorCode, sessionToken = string.Empty, playerId = 0, displayName = string.Empty, retryAfterSec = result.RetryAfterSeconds });
+                return;
+            }
+
+            CompleteLogin(connection, result.Session, request.Maps, _auth.IssueRememberToken(result.Session.PlayerId));
+        }
+
+        private void CompleteLogin(ClientConnection connection, Session session, ushort[]? maps, string rememberToken)
+        {
             // What this client can load, so it is never listed, joined, created or matchmade into
             // a room on a map it lacks (MapSupport). Absent on every client before P30.
-            result.Session.Maps = MapSupport.FromLogin(request.Maps);
-            connection.SetSession(result.Session);
-            _connectionsByPlayer[result.Session.PlayerId] = connection;
+            session.Maps = MapSupport.FromLogin(maps);
+            connection.SetSession(session);
+            _connectionsByPlayer[session.PlayerId] = connection;
             Logins.Increment();
 
             // The session token is deliberately absent. It is a bearer credential for 24
@@ -211,13 +243,15 @@ namespace Ironfront.MasterServer.Dispatch
             // minted fresh per login.
             StructuredLog.Event("login", new
             {
-                playerId = result.Session.PlayerId,
+                playerId = session.PlayerId,
                 ip = connection.RemoteAddress.ToString(),
                 tls = connection.IsTls,
-                maps = result.Session.Maps.ToString(),
+                maps = session.Maps.ToString(),
             });
 
-            Send(connection, MspMessageType.LoginResponse, new { ok = true, errorCode = (ushort)ErrorCode.Ok, sessionToken = result.Session.Token, playerId = result.Session.PlayerId, displayName = result.Session.DisplayName, retryAfterSec = 0 });
+            // rememberToken is new in this response and empty unless asked for; an older client
+            // ignores the field (MSP bodies are JSON, protocol-spec.md section 10).
+            Send(connection, MspMessageType.LoginResponse, new { ok = true, errorCode = (ushort)ErrorCode.Ok, sessionToken = session.Token, playerId = session.PlayerId, displayName = session.DisplayName, retryAfterSec = 0, rememberToken });
         }
 
         private void ListRooms(ClientConnection connection, Session session)
@@ -875,7 +909,8 @@ namespace Ironfront.MasterServer.Dispatch
         private void Send(ClientConnection connection, MspMessageType type, object response)
             => connection.Send(type, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response, _json)));
 
-        private sealed class LoginRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public int ClientVersion { get; set; } public ushort[]? Maps { get; set; } }
+        private sealed class LoginRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public int ClientVersion { get; set; } public ushort[]? Maps { get; set; } public bool Remember { get; set; } }
+        private sealed class TokenLoginRequest { public string? Token { get; set; } public int ClientVersion { get; set; } public ushort[]? Maps { get; set; } }
         private sealed class RegisterRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public string? DisplayName { get; set; } }
         private sealed class CreateRoomWireRequest { public string? Name { get; set; } public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? Password { get; set; } public byte GameMode { get; set; } public byte VictoryRule { get; set; } public ushort VictoryPoints { get; set; } public byte NightVisionSeconds { get; set; } }
         private sealed class JoinRoomRequest { public int RoomId { get; set; } public string? Password { get; set; } }

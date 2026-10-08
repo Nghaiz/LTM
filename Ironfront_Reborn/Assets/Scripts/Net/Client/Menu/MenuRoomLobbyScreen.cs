@@ -71,6 +71,8 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Text? _chatLog;
         [SerializeField] private InputField? _chatField;
         [SerializeField] private Button? _chatSendButton;
+        [Tooltip("How the match starts and the guide's key, in the player's own binding.")]
+        [SerializeField] private Text? _guideHint;
 
         private MenuChatInput? _chatInput;
 
@@ -169,6 +171,9 @@ namespace Ironfront.Net.Unity.Client.Menu
                 controller.PlayerId);
 
             if (_chatLog != null) _chatLog.text = NewestThatFit(_chatLog, controller.ChatLog);
+            if (_guideHint != null)
+                _guideHint.text = "READY UP when you are set: the match starts once two players are ready.     "
+                                  + "<color=#FFB23F>[" + GameKeys.Cap(GameAction.HowToPlay) + "]</color>  HOW TO PLAY";
 
             bool waiting = room != null && room.Lifecycle == RoomLifecycleState.Waiting;
             bool known = room != null && TryGetSelf(room, out _);

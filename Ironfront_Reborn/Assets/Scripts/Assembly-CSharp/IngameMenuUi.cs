@@ -89,6 +89,16 @@ public class IngameMenuUi : MonoBehaviour
 		OptionsUi.Show();
 	}
 
+	// The guide over the paused match (owner's list of 2026-10-09, item 1). Esc closes it back to
+	// this menu: the overlay owns Esc while it is up (GameOverlays.OwnsEscape below).
+	public void HowToPlay()
+	{
+		if (Ironfront.Net.Unity.GameOverlays.IsAvailable(Ironfront.Net.Unity.OverlayPage.HowToPlay))
+		{
+			Ironfront.Net.Unity.GameOverlays.Open(Ironfront.Net.Unity.OverlayPage.HowToPlay);
+		}
+	}
+
 	public void Menu()
 	{
 		MouseLook.paused = false;

@@ -323,6 +323,13 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>The account's display name, or empty.</summary>
         public string DisplayName { get; private set; } = string.Empty;
 
+        /// <summary>
+        /// The "remember me" token the last sign-in returned, or empty when none was asked for
+        /// (protocol 14.0.2). The menu keeps it on this machine; a token sign-in spends the one it
+        /// sent, so this is always the one to keep.
+        /// </summary>
+        public string RememberToken { get; private set; } = string.Empty;
+
         /// <summary>Whether a login has succeeded on this connection.</summary>
         public bool IsLoggedIn => SessionToken.Length > 0;
 
@@ -550,7 +557,13 @@ namespace Ironfront.Net.Unity.Client
         /// <c>LoginScreen</c> with <see cref="LastError"/> set. The plaintext password is never
         /// sent, TLS or not, and is never stored on this object.
         /// </remarks>
-        public async Task<bool> LoginAsync(string username, string password)
+        public Task<bool> LoginAsync(string username, string password) => LoginAsync(username, password, remember: false);
+
+        /// <summary>
+        /// Logs in as above; with <paramref name="remember"/> the master also returns a token
+        /// (<see cref="RememberToken"/>) that signs this machine in next time without the password.
+        /// </summary>
+        public async Task<bool> LoginAsync(string username, string password, bool remember)
         {
             // The maps this build can load go with every login (P30): the master then never lists,
             // joins, creates or matchmakes this client into a room on any other map, which is the
@@ -561,7 +574,7 @@ namespace Ironfront.Net.Unity.Client
             try
             {
                 string hash = PasswordHasher.Hash(password, username);
-                LoginResult result = await _master.LoginAsync(username, hash, LoadableMapIds).ConfigureAwait(false);
+                LoginResult result = await _master.LoginAsync(username, hash, LoadableMapIds, remember).ConfigureAwait(false);
                 NoteMasterAnswered();
 
                 if (!result.Ok)
@@ -574,12 +587,7 @@ namespace Ironfront.Net.Unity.Client
                     return false;
                 }
 
-                SessionToken = result.SessionToken ?? string.Empty;
-                PlayerId = result.PlayerId;
-                DisplayName = result.DisplayName ?? string.Empty;
-                LastError = string.Empty;
-
-                _flow.Transition(GameFlowState.Lobby);
+                SignedIn(result);
                 return true;
             }
             catch (MasterServerException ex)
@@ -595,6 +603,62 @@ namespace Ironfront.Net.Unity.Client
                 Recover(GameFlowState.LoginScreen);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Signs in with a token "remember me" kept on this machine (owner's list of 2026-10-09,
+        /// item 1). Drives <c>LoginScreen -&gt; Authenticating -&gt; Lobby</c> like a password login,
+        /// or back to <c>LoginScreen</c>; the caller then forgets a token the master refused.
+        /// </summary>
+        /// <remarks>
+        /// The token is spent by the attempt whatever the answer, and a success carries the next
+        /// one in <see cref="RememberToken"/>, so the caller must store that one in its place.
+        /// </remarks>
+        public async Task<bool> LoginWithTokenAsync(string token)
+        {
+            _flow.Transition(GameFlowState.Authenticating);
+
+            try
+            {
+                LoginResult result = await _master.TokenLoginAsync(token, LoadableMapIds).ConfigureAwait(false);
+                NoteMasterAnswered();
+
+                if (!result.Ok)
+                {
+                    RememberToken = string.Empty;
+                    Fail(MasterErrorText.DescribeRememberedFailure(result.ErrorCode, result.RetryAfterSeconds));
+                    Recover(GameFlowState.LoginScreen);
+                    return false;
+                }
+
+                SignedIn(result);
+                return true;
+            }
+            catch (MasterServerException ex)
+            {
+                NoteMasterAnswered();
+                RememberToken = string.Empty;
+                Fail(MasterErrorText.DescribeRememberedFailure(ex.ErrorCode, 0));
+                Recover(GameFlowState.LoginScreen);
+                return false;
+            }
+            catch (Exception ex) when (IsLinkFailure(ex))
+            {
+                Fail(LinkFailureText());
+                Recover(GameFlowState.LoginScreen);
+                return false;
+            }
+        }
+
+        private void SignedIn(LoginResult result)
+        {
+            SessionToken = result.SessionToken ?? string.Empty;
+            PlayerId = result.PlayerId;
+            DisplayName = result.DisplayName ?? string.Empty;
+            RememberToken = result.RememberToken ?? string.Empty;
+            LastError = string.Empty;
+
+            _flow.Transition(GameFlowState.Lobby);
         }
 
         /// <summary>

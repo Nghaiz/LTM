@@ -74,6 +74,33 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        /// <summary>
+        /// Why a "remember me" sign-in did not work, worded for the form it returns to: the
+        /// password is needed again (owner's list of 2026-10-09, item 1).
+        /// </summary>
+        /// <remarks>
+        /// A spent, expired or unknown token is not a wrong password, and an older master that
+        /// does not know the request answers it with a generic error: both read the same to the
+        /// player, who only has to type the password once. A wait, a ban or an outdated build still
+        /// say what they are, since typing the password will not help with those.
+        /// </remarks>
+        public static string DescribeRememberedFailure(int errorCode, int retryAfterSeconds)
+        {
+            switch ((ErrorCode)errorCode)
+            {
+                case ErrorCode.RateLimited:
+                case ErrorCode.AccountLocked:
+                case ErrorCode.AccountBanned:
+                case ErrorCode.WrongClientVersion:
+                    return DescribeFailure(errorCode, retryAfterSeconds);
+                default:
+                    return RememberedSignInExpired;
+            }
+        }
+
+        /// <summary>What the sign-in form says when the saved sign-in could not be used.</summary>
+        public const string RememberedSignInExpired = "Your saved sign-in has expired. Enter your password to continue.";
+
         /// <summary>Whole seconds as something a player reads without converting it.</summary>
         private static string FormatWait(int seconds)
         {

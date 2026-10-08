@@ -204,5 +204,54 @@ namespace Ironfront.Net.Unity.Client.Tests
                 Assert.IsTrue(join.transform.IsChildOf(section.transform), $"rejoin row {i} is outside its section");
             }
         }
+
+        // ------------------------------------------------ mode filter and quick match (2026-10-09)
+
+        [Test]
+        public void TheModeFilterCyclesEveryModeAndBackToAll()
+        {
+            int filter = -1;
+            Assert.AreEqual("ALL MODES", MenuRoomBrowserScreen.ModeFilterLabel(filter));
+            for (int i = 0; i < RoomSettingsChoice.Modes.Length; i++)
+            {
+                filter = MenuRoomBrowserScreen.NextModeFilter(filter);
+                Assert.AreEqual(RoomSettingsChoice.ModeOption(RoomSettingsChoice.Modes[i]), MenuRoomBrowserScreen.ModeFilterLabel(filter));
+            }
+            Assert.AreEqual(-1, MenuRoomBrowserScreen.NextModeFilter(filter));
+        }
+
+        [Test]
+        public void TheModeFilterHidesOnlyOtherModes()
+        {
+            RoomInfo night = Listed("Night", RoomLifecycleState.Waiting);
+            night.GameMode = (byte)GameMode.Night;
+            RoomInfo points = Listed("Points", RoomLifecycleState.Waiting);
+            points.GameMode = (byte)GameMode.PointMatch;
+            int nightOnly = System.Array.IndexOf(RoomSettingsChoice.Modes, GameMode.Night);
+
+            MenuRoomBrowserScreen.Split(new[] { night, points }, string.Empty, nightOnly, out _, out RoomInfo[] open);
+
+            CollectionAssert.AreEqual(new[] { night }, open);
+        }
+
+        [Test]
+        public void QuickMatchJoinsTheFullestPublicRoomWithAPlace()
+        {
+            RoomInfo empty = Listed("Empty", RoomLifecycleState.Waiting);
+            RoomInfo busy = Listed("Busy", RoomLifecycleState.Waiting);
+            busy.Players = 5;
+            busy.RoomId = 2;
+            RoomInfo full = Listed("Full", RoomLifecycleState.Waiting);
+            full.Players = 8;
+            RoomInfo locked = Listed("Locked", RoomLifecycleState.Waiting);
+            locked.Players = 7;
+            locked.IsPrivate = true;
+            RoomInfo started = Listed("Started", RoomLifecycleState.InMatch);
+            started.Players = 6;
+
+            Assert.AreSame(busy, MenuRoomBrowserScreen.QuickMatchPick(new[] { empty, busy, full, locked, started }));
+            Assert.IsNull(MenuRoomBrowserScreen.QuickMatchPick(new[] { full, locked, started }));
+            Assert.IsNull(MenuRoomBrowserScreen.QuickMatchPick(null));
+        }
     }
 }

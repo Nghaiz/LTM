@@ -364,25 +364,53 @@ namespace Ironfront.Net.Unity.EditorTools
             if (panelTransform == null) panelTransform = Child(menu, "Image");
             panelTransform.name = "Panel";
             AngularPanel panel = AsAngular(panelTransform.gameObject);
-            Centre(panel.rectTransform, Vector2.zero, new Vector2(460f, 460f));
+            Centre(panel.rectTransform, Vector2.zero, new Vector2(460f, 540f));
             StyleOperationsPanel(panel);
             panel.raycastTarget = true;
 
             Text kicker = EnsureLabel(panelTransform, "Kicker", "IRONFRONT REBORN", 11, bold: true);
             kicker.color = CyanSoft;
             kicker.alignment = TextAnchor.MiddleCenter;
-            Centre(kicker.rectTransform, new Vector2(0f, 192f), new Vector2(380f, 20f));
+            Centre(kicker.rectTransform, new Vector2(0f, 232f), new Vector2(380f, 20f));
 
             Text heading = EnsureLabel(panelTransform, "Heading", "PAUSED", 34, bold: true);
             heading.alignment = TextAnchor.MiddleCenter;
-            Centre(heading.rectTransform, new Vector2(0f, 154f), new Vector2(380f, 48f));
+            Centre(heading.rectTransform, new Vector2(0f, 194f), new Vector2(380f, 48f));
 
-            MenuRow(panelTransform, "Resume Button", "RESUME", "primary", "icons/chevron.png", 64f);
-            MenuRow(panelTransform, "Options Button", "OPTIONS", "secondary", "icons/settings.png", -12f);
-            MenuRow(panelTransform, "Menu Button", "QUIT TO MENU", "danger", "icons/leave.png", -88f);
-            MenuRow(panelTransform, "Quit Button", "EXIT GAME", "secondary", "icons/power.png", -164f);
+            // HOW TO PLAY is new (owner's list of 2026-10-09, item 1): a copy of the Options row
+            // calling IngameMenuUi.HowToPlay, which opens the guide over the paused match.
+            // By name: this assembly cannot reference Assembly-CSharp, where IngameMenuUi lives.
+            Component menuUi = menu.GetComponent("IngameMenuUi");
+            var howToPlay = (UnityEngine.Events.UnityAction)System.Delegate.CreateDelegate(
+                typeof(UnityEngine.Events.UnityAction), menuUi, "HowToPlay");
+            EnsureMenuRow(panelTransform, "How To Play Button", "Options Button", howToPlay);
 
-            log.AppendLine("pause menu: operations panel, four menu rows, dimmed world.");
+            MenuRow(panelTransform, "Resume Button", "RESUME", "primary", "icons/chevron.png", 104f);
+            MenuRow(panelTransform, "Options Button", "OPTIONS", "secondary", "icons/settings.png", 28f);
+            MenuRow(panelTransform, "How To Play Button", "HOW TO PLAY", "secondary", "icons/guide.png", -48f);
+            MenuRow(panelTransform, "Menu Button", "QUIT TO MENU", "danger", "icons/leave.png", -124f);
+            MenuRow(panelTransform, "Quit Button", "EXIT GAME", "secondary", "icons/power.png", -200f);
+
+            log.AppendLine("pause menu: operations panel, five menu rows, dimmed world.");
+        }
+
+        /// <summary>
+        /// Makes sure the pause menu has a row named <paramref name="name"/>, cloned from
+        /// <paramref name="template"/> the first time, whose one persistent call is <paramref name="call"/>.
+        /// </summary>
+        private static void EnsureMenuRow(Transform panel, string name, string template, UnityEngine.Events.UnityAction call)
+        {
+            Transform row = panel.Find(name);
+            if (row == null)
+            {
+                row = Object.Instantiate(Child(panel, template).gameObject, panel).transform;
+                row.name = name;
+            }
+
+            Button button = row.GetComponent<Button>();
+            for (int i = button.onClick.GetPersistentEventCount() - 1; i >= 0; i--)
+                UnityEditor.Events.UnityEventTools.RemovePersistentListener(button.onClick, i);
+            UnityEditor.Events.UnityEventTools.AddPersistentListener(button.onClick, call);
         }
 
         /// <summary>One <c>.menu-button</c> row, on an existing legacy button.</summary>
@@ -1159,6 +1187,24 @@ namespace Ironfront.Net.Unity.EditorTools
             EnsureShadow(title);
             Pin(title.rectTransform, new Vector2(0f, 1f), Vector2.zero, new Vector2(0f, HeadingGap + 30f),
                 new Vector2(900f, 56f));
+
+            // The guide's key, written by LoadoutUi in the player's own binding.
+            Text guide = EnsureLabel(surface, "Deploy Guide Hint", "<color=#FFB23F>[H]</color>  HOW TO PLAY", 15, bold: true);
+            guide.color = Hex("D7E6EF");
+            guide.alignment = TextAnchor.MiddleRight;
+            guide.supportRichText = true;
+            Pin(guide.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 0f), new Vector2(0f, HeadingGap),
+                new Vector2(320f, 24f));
+            // LoadoutUi is in Assembly-CSharp, out of this assembly's reach: assigned by name.
+            for (Transform up = surface; up != null; up = up.parent)
+            {
+                Component loadout = up.GetComponent("LoadoutUi");
+                if (loadout == null) continue;
+                var so = new SerializedObject(loadout);
+                so.FindProperty("howToPlayHint").objectReferenceValue = guide;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                break;
+            }
 
             Text kicker = EnsureLabel(surface, "Deploy Kicker", "IRONFRONT REBORN  •  DEPLOYMENT", 13, bold: true);
             kicker.color = Hex("8FC8E4");

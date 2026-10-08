@@ -37,6 +37,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Button? _multiplayerButton;
         [SerializeField] private Button? _practiceButton;
         [SerializeField] private Button? _settingsButton;
+        [SerializeField] private Button? _howToPlayButton;
         [SerializeField] private Button? _exitButton;
 
         private void Awake()
@@ -49,6 +50,9 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (_settingsButton != null)
                 _settingsButton.onClick.AddListener(OnSettings);
+
+            if (_howToPlayButton != null)
+                _howToPlayButton.onClick.AddListener(MenuScreenController.OpenHowToPlay);
 
             if (_exitButton != null)
                 _exitButton.onClick.AddListener(ExitGame);
@@ -70,6 +74,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_multiplayerButton != null) _multiplayerButton.interactable = !controller.IsBusy;
             if (_practiceButton != null) _practiceButton.interactable = controller.IsPracticeAvailable;
             if (_settingsButton != null) _settingsButton.interactable = !controller.IsBusy;
+            if (_howToPlayButton != null) _howToPlayButton.interactable = !controller.IsBusy;
             if (_exitButton != null) _exitButton.interactable = !controller.IsBusy;
         }
     }

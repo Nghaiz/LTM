@@ -57,7 +57,7 @@ namespace Ironfront.MasterServer.Auth
         public int Attempts { get; set; }
     }
 
-    public sealed class AuthService
+    public sealed partial class AuthService
     {
         private const int BcryptCost = 11;
         private const int MaxFailedLogins = 10;
@@ -248,6 +248,8 @@ namespace Ironfront.MasterServer.Auth
 
         public void ReapExpiredSessions(long now)
         {
+            ReapExpiredRememberTokens(now);
+
             var expired = new List<string>();
             foreach (KeyValuePair<string, Session> item in _sessions)
                 if (item.Value.ExpiresAt <= now) expired.Add(item.Key);

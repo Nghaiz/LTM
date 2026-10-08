@@ -115,7 +115,7 @@ foreach ($screenName in @('Main Menu', 'Sign In', 'Create Account', 'Practice', 
         $failures.Add("Generated Menu scene is missing screen $screenName")
     }
 }
-foreach ($nodeName in @('ForgotPassword', 'Versus')) {
+foreach ($nodeName in @('Versus', 'RememberMe', 'HowToPlay')) {
     if ($scene -notmatch ('m_Name: ' + [regex]::Escape($nodeName) + '(\r?\n)')) {
         $failures.Add("Generated Menu scene is missing node $nodeName")
     }
