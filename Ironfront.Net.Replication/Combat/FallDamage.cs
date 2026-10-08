@@ -81,6 +81,43 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>
+        /// The speed a landing hits the ground with: the part of the body's velocity INTO the ground,
+        /// along the ground's normal. <paramref name="landingSpeed"/> is how fast it was falling
+        /// (<see cref="LandingSpeed"/>), <paramref name="horizontalX"/> and
+        /// <paramref name="horizontalZ"/> how fast it was moving across, and
+        /// <paramref name="normalX"/>..<paramref name="normalZ"/> the ground's normal where it landed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Flat ground changes nothing</b>: the normal is straight up and the impact is the fall
+        /// itself, so the owner's 3 m / 20 m scale holds exactly.
+        /// </para>
+        /// <para>
+        /// <b>A slope does.</b> A soldier who jumps while running down a hillside lands well below
+        /// where they left the ground, and the fall alone read as a 6 m drop: 25 damage for a jump.
+        /// But they land moving along the slope, and only the part of their velocity into it
+        /// is stopped. The v4.5.0 playtest of 2026-10-07 logged 40 such landings for one player in an
+        /// hour on Forest Lake's hills, 1 to 19 damage each, with nobody falling off anything.
+        /// Landing on a slope that rises toward the body hits harder, as it should.
+        /// </para>
+        /// </remarks>
+        public static float ImpactAlongNormal(float landingSpeed, float horizontalX, float horizontalZ,
+            float normalX, float normalY, float normalZ)
+        {
+            float length = (float)Math.Sqrt(normalX * normalX + normalY * normalY + normalZ * normalZ);
+            if (!(landingSpeed > 0f) || !(length > 1e-4f) || !(normalY / length > 0.05f))
+            {
+                return Math.Max(0f, landingSpeed);
+            }
+            normalX /= length;
+            normalY /= length;
+            normalZ /= length;
+            // The velocity at impact is (hx, -landingSpeed, hz); what the ground stops is -v . n.
+            float into = landingSpeed * normalY - (horizontalX * normalX + horizontalZ * normalZ);
+            return Math.Max(0f, into);
+        }
+
+        /// <summary>
         /// The speed a body lands at after falling <paramref name="dropMetres"/> from where it left
         /// the ground at <paramref name="takeoffUpSpeed"/> upward, under <paramref name="gravity"/>
         /// m/s² (a magnitude): √(v0² + 2gh).
