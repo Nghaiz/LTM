@@ -1868,6 +1868,13 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(
 				this, impactForce, attacker, DeathContext.Cause,
 				DeathContext.WeaponId, DeathContext.Vehicle, DeathContext.Detail);
+			// The practice achievements (owner's list of 2026-10-09, item 4) count the player's
+			// kills in an offline match; online, the server's career tally does.
+			if (Ironfront.Net.Unity.NetContext.IsOffline && attacker != null && attacker != this
+				&& !attacker.aiControlled && attacker.team != team)
+			{
+				Ironfront.Net.Unity.PracticeFeats.PlayerKilledEnemy();
+			}
 		}
 		else if (ragdoll.IsRagdoll())
 		{

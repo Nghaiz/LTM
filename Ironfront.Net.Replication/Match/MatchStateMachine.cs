@@ -19,11 +19,18 @@ namespace Ironfront.Net.Replication.Match
         public readonly byte Team;
         public readonly bool IsAlive;
 
-        public ActorPresence(in Vec3 position, byte team, bool isAlive)
+        /// <summary>The actor, for crediting a capture; <see cref="NoActor"/> when the caller did not say.</summary>
+        public readonly ushort ActorId;
+
+        /// <summary>The <see cref="ActorId"/> of a presence that names no actor.</summary>
+        public const ushort NoActor = ushort.MaxValue;
+
+        public ActorPresence(in Vec3 position, byte team, bool isAlive, ushort actorId = NoActor)
         {
             Position = position;
             Team     = team;
             IsAlive  = isAlive;
+            ActorId  = actorId;
         }
     }
 
@@ -177,6 +184,15 @@ namespace Ironfront.Net.Replication.Match
         /// for a draw). This is where GS_MATCH_ENDED is reported to the master.
         /// </summary>
         public event Action<byte>? MatchEnded;
+
+        /// <summary>
+        /// A flag turned to a side: the point, the side, and the live actors of that side standing
+        /// in it when it turned (owner's list of 2026-10-09, item 4: flags captured is a career
+        /// stat). The list is reused; read it inside the handler.
+        /// </summary>
+        public event Action<byte, byte, IReadOnlyList<ushort>>? PointCaptured;
+
+        private readonly List<ushort> _capturers = new List<ushort>();
 
         public MatchPhase Phase { get; private set; } = MatchPhase.WaitingForPlayers;
 
@@ -460,8 +476,23 @@ namespace Ironfront.Net.Replication.Match
                     else if (actor.Team == TeamId.Team1) count1++;
                 }
 
+                byte ownerBefore = point.OwningTeam;
                 if (point.Tick(count0, count1, deltaSeconds, _rules))
                     _dirtyPoints.Add(point.PointId);
+
+                byte ownerAfter = point.OwningTeam;
+                if (ownerAfter != ownerBefore && ownerAfter != TeamId.None && PointCaptured != null)
+                {
+                    _capturers.Clear();
+                    for (int a = 0; a < actors.Length; a++)
+                    {
+                        ref readonly ActorPresence actor = ref actors[a];
+                        if (actor.IsAlive && actor.Team == ownerAfter && actor.ActorId != ActorPresence.NoActor
+                            && point.Contains(actor.Position))
+                            _capturers.Add(actor.ActorId);
+                    }
+                    PointCaptured(point.PointId, ownerAfter, _capturers);
+                }
             }
         }
 

@@ -205,6 +205,12 @@ namespace Ironfront.Tools.ClientWiringGate
                 ("_howToPlayButton",
                  "the guide has no button on the main menu, where the owner asked for it "
                  + "(list of 2026-10-09, item 1)"),
+                ("_rankingButton",
+                 "the global ranking has no button on the main menu, where the owner asked for "
+                 + "it above Exit (list of 2026-10-09, item 4)"),
+                ("_achievementsButton",
+                 "the achievements have no button on the main menu, where the owner asked for "
+                 + "them above Exit (list of 2026-10-09, item 4)"),
                 ("_exitButton",
                  "Exit renders but cannot reach the application's single quit path")),
 

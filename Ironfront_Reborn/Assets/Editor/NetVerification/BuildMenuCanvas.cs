@@ -325,8 +325,13 @@ namespace Ironfront.Net.Unity.EditorTools
             // opens it from every other menu screen.
             Button howToPlay = PackButton(panel, "HowToPlay", "HOW TO PLAY",
                 new Vector2(-560f, -102f), new Vector2(480f, 68f), "menu", "icons/guide.png");
+            // The global ranking and the achievements, above Exit (owner's list of 2026-10-09, item 4).
+            Button ranking = PackButton(panel, "Ranking", "GLOBAL RANKING",
+                new Vector2(-560f, -182f), new Vector2(480f, 68f), "menu", "icons/ranking.png");
+            Button achievements = PackButton(panel, "Achievements", "ACHIEVEMENTS",
+                new Vector2(-560f, -262f), new Vector2(480f, 68f), "menu", "icons/achievements.png");
             Button exit = PackButton(panel, "Exit", "EXIT",
-                new Vector2(-560f, -182f), new Vector2(480f, 68f), "menu", "icons/power.png");
+                new Vector2(-560f, -342f), new Vector2(480f, 68f), "menu", "icons/power.png");
 
             Text footer = Label(panel, "Tagline", "SIMPLE BATTLES\nENDLESS POSSIBILITIES", 12,
                 new Vector2(-796f + 260f, -450f), new Vector2(520f, 48f));
@@ -347,8 +352,9 @@ namespace Ironfront.Net.Unity.EditorTools
             Anchor(build.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f),
                 new Vector2(-22f, 16f), new Vector2(420f, 22f));
 
-            SetVerticalNavigation(multiplayer, practice, settings, howToPlay, exit);
-            ConfigureKeyboard(panel, new Selectable[] { multiplayer, practice, settings, howToPlay, exit }, multiplayer, null);
+            SetVerticalNavigation(multiplayer, practice, settings, howToPlay, ranking, achievements, exit);
+            ConfigureKeyboard(panel, new Selectable[] { multiplayer, practice, settings, howToPlay, ranking, achievements, exit },
+                multiplayer, null);
 
             MenuTitleScreen screen = panel.AddComponent<MenuTitleScreen>();
             var so = new SerializedObject(screen);
@@ -357,10 +363,12 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_practiceButton", practice);
             Assign(so, "_settingsButton", settings);
             Assign(so, "_howToPlayButton", howToPlay);
+            Assign(so, "_rankingButton", ranking);
+            Assign(so, "_achievementsButton", achievements);
             Assign(so, "_exitButton", exit);
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            log.AppendLine("title: supplied background/logo and four fully wired actions.");
+            log.AppendLine("title: supplied background/logo and seven fully wired actions.");
             return panel;
         }
 

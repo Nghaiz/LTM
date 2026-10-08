@@ -43,6 +43,11 @@ namespace Ironfront.Net.Unity.Client.Overlay
             new List<(GameAction, Text, Text)>();
         private int _tab;
 
+        // Whether the player has the guide open: a tab shown then counts as read, for the
+        // STUDENT OF WAR achievement (owner's list of 2026-10-09, item 4). The page builds, and
+        // shows its first tab, before anyone opens it.
+        private bool _shown;
+
         public override OverlayPage Page => OverlayPage.HowToPlay;
         public override string Title => "HOW TO PLAY";
         public override string Kicker => "FIELD MANUAL // EVERYTHING A NEW SOLDIER NEEDS";
@@ -72,7 +77,14 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         private void OnDestroy() => GameKeys.Changed -= Redraw;
 
-        public override void OnShown() => Redraw();
+        public override void OnShown()
+        {
+            _shown = true;
+            Redraw();
+            PracticeFeats.GuideTabRead(_tab, _bodies.Count);
+        }
+
+        public override void OnHidden() => _shown = false;
 
         // ------------------------------------------------------------------ layout
 
@@ -238,6 +250,8 @@ namespace Ironfront.Net.Unity.Client.Overlay
                 // As Settings marks its tab: the chosen one is the disabled face with the bar.
                 _tabs[i].Button.interactable = !on;
             }
+
+            if (_shown) PracticeFeats.GuideTabRead(_tab, _bodies.Count);
         }
 
         /// <summary>Rewrites every key the guide mentions from the player's current bindings.</summary>

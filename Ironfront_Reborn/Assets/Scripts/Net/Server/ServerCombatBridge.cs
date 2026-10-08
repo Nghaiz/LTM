@@ -583,6 +583,7 @@ namespace Ironfront.Net.Unity.Server
             if (!_respawnGate.MayRespawn(session.ActorId, now)) return false;
 
             _respawnGate.MarkRespawned(session.ActorId);
+            _loop.NoteDeployed(session.ActorId);
 
             PlaceAtSpawn(player, request);
             return true;

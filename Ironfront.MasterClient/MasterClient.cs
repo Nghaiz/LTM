@@ -32,6 +32,9 @@ namespace Ironfront.MasterClient
         public bool IsTls { get; private set; }
         public event Action<RoomState>? OnRoomStatePush;
         public event Action<ChatMessage>? OnChat;
+        public event Action<string[]>? OnAchievementsUnlocked;
+
+        private int _disposed;
         public event Action<int, string>? OnError;
         public event Action? OnDisconnected;
 
@@ -125,6 +128,24 @@ namespace Ironfront.MasterClient
             ushort[] maps = MapList(loadableMapIds);
             return RequestAsync(MspMessageType.TokenLoginRequest, new { token, clientVersion = ProtocolConstants.PROTOCOL_VERSION, maps }, MspMessageType.LoginResponse, ToLoginResult, ct);
         }
+
+        public Task<Leaderboard> GetLeaderboardAsync(CancellationToken ct = default)
+            => RequestAsync(MspMessageType.LeaderboardRequest, new { }, MspMessageType.LeaderboardResponse,
+                response => new Leaderboard { Rows = response.Rows ?? Array.Empty<LeaderboardRow>(), You = response.You, Players = response.Players }, ct);
+
+        public Task<AchievementState> GetAchievementsAsync(CancellationToken ct = default)
+            => RequestAsync(MspMessageType.AchievementsRequest, new { }, MspMessageType.AchievementsResponse, ToAchievementState, ct);
+
+        public Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids, CancellationToken ct = default)
+            => RequestAsync(MspMessageType.AchievementClaimRequest, new { ids }, MspMessageType.AchievementsResponse, ToAchievementState, ct);
+
+        private static AchievementState ToAchievementState(Response response) => new AchievementState
+        {
+            Unlocked = response.Unlocked ?? Array.Empty<AchievementUnlock>(),
+            Earned = response.Earned ?? new Dictionary<string, long>(),
+            Players = response.Players,
+            Career = response.Career ?? new Dictionary<string, long>(),
+        };
 
         private static ushort[] MapList(IReadOnlyList<ushort> loadableMapIds)
         {
@@ -342,6 +363,11 @@ namespace Ironfront.MasterClient
                 });
                 return;
             }
+            if (type == MspMessageType.AchievementUnlockedPush)
+            {
+                OnAchievementsUnlocked?.Invoke(response.Ids ?? Array.Empty<string>());
+                return;
+            }
             if (type == MspMessageType.ErrorPush)
             {
                 string message = response.Message ?? string.Empty;
@@ -362,6 +388,10 @@ namespace Ironfront.MasterClient
 
         public void Dispose()
         {
+            // Idempotent, as Dispose must be: a second call used to throw ObjectDisposedException
+            // from the already-disposed cancellation source (found 2026-10-09 by a probe that
+            // disposed inside a using block).
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             _receiveCts?.Cancel(); _receiveCts?.Dispose();
             // Transport first: disposing the TcpClient underneath a live SslStream leaves the
             // SslStream writing its close_notify into a closed socket.
@@ -417,6 +447,15 @@ namespace Ironfront.MasterClient
             public string? FromName { get; set; }
             public string? Text { get; set; }
             public long Timestamp { get; set; }
+
+            // The career bodies (item 4): LEADERBOARD_RES, ACHIEVEMENTS_RES and the unlock push.
+            public LeaderboardRow[]? Rows { get; set; }
+            public LeaderboardRow? You { get; set; }
+            public long Players { get; set; }
+            public AchievementUnlock[]? Unlocked { get; set; }
+            public Dictionary<string, long>? Earned { get; set; }
+            public Dictionary<string, long>? Career { get; set; }
+            public string[]? Ids { get; set; }
         }
     }
 }

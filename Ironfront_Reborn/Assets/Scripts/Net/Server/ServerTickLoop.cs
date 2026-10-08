@@ -460,6 +460,7 @@ namespace Ironfront.Net.Unity.Server
         {
             _respawnGate.MarkRespawned(actorId);
             _corpses.NoteRespawn(actorId);
+            NoteDeployed(actorId);
 
             for (int i = 0; i < _players.Count; i++)
             {
@@ -684,6 +685,7 @@ namespace Ironfront.Net.Unity.Server
             // ServerMasterReporter has already read this by the time the round turns over.
             // Clearing it anywhere earlier would report an empty scoreboard for every match.
             _scoreTally.Clear();
+            _careerTally.Clear();
             _vehicleInputBridge.Reset();
 
             if (Transport == null) return;
@@ -1547,13 +1549,14 @@ namespace Ironfront.Net.Unity.Server
             // Always with both tails, even when every byte of them is zero: a 1.0 client reads its
             // twelve bytes and stops, a 1.1 client its fifteen, and a newer one then knows "no
             // weapon" or "no range" was said rather than left unsaid. protocol-spec.md section 4.6.
+            ushort distanceMetres = KillDistanceMetres(victimActorId, killerActorId);
             var message = new DeathMessage(
                 victimActorId, killerActorId, cause,
                 Quantize.PackVel16(force.X),
                 Quantize.PackVel16(force.Y),
                 Quantize.PackVel16(force.Z),
                 hitbox, weaponId, vehicleType, detail,
-                KillDistanceMetres(victimActorId, killerActorId));
+                distanceMetres);
 
             int written = ServerEventWriter.WriteDeath(_eventPayload, in message);
             if (written >= 0)
@@ -1593,11 +1596,42 @@ namespace Ironfront.Net.Unity.Server
             // number of times. A tally reading the wire would count one kill per lost ack.
             _scoreTally.RecordDeath(victimActorId, killerActorId);
             CreditKillExtras(victimActorId, killerActorId, hitbox, match, score0Before, score1Before);
+            RecordCareer(victimActorId, killerActorId, hitbox, cause, weaponId, vehicleType, detail, distanceMetres, now, match);
 
             // P18 task 3.1. The tally moved, so the scoreboard is stale until the next snapshot
             // stage flushes it. Set here rather than sent here: see _scoresDirty for why one
             // explosion must not become four reliable broadcasts.
             _scoresDirty = true;
+        }
+
+        /// <summary>
+        /// Feeds one resolved death to the round's career tally (owner's list of 2026-10-09,
+        /// item 4): what kind of kill it was, and the score after it for the comeback feat.
+        /// </summary>
+        private void RecordCareer(ushort victimActorId, ushort killerActorId, byte hitbox, CauseOfDeath cause,
+            byte weaponId, byte vehicleType, DeathDetail detail, ushort distanceMetres, float now, MatchStateMachine match)
+        {
+            bool sameTeam = false;
+            if (killerActorId != DeathMessage.EnvironmentKiller && killerActorId != victimActorId)
+            {
+                ServerActorRegistry registry = ServerActorRegistry.Instance;
+                sameTeam = registry.TryFind(killerActorId, out NetServerActor killer) && killer != null
+                           && registry.TryFind(victimActorId, out NetServerActor victim) && victim != null
+                           && killer.Team == victim.Team;
+            }
+
+            var kill = new CareerKill(killerActorId, victimActorId, sameTeam, !IsPlayerActor(victimActorId),
+                (HitboxType)hitbox == HitboxType.Head, distanceMetres, cause, weaponId, vehicleType, detail);
+            _careerTally.RecordKill(in kill, now);
+            if (match != null) _careerTally.NoteScores(match.Score0, match.Score1);
+        }
+
+        /// <summary>Whether a connected player drives <paramref name="actorId"/> (otherwise it is a bot).</summary>
+        private bool IsPlayerActor(ushort actorId)
+        {
+            for (int i = 0; i < _players.Count; i++)
+                if (_players[i].Session.ActorId == actorId) return true;
+            return false;
         }
 
         /// <summary>
@@ -1827,6 +1861,15 @@ namespace Ironfront.Net.Unity.Server
         /// once the post-match seconds have run out.
         /// </remarks>
         public MatchScoreTally Scores => _scoreTally;
+
+        /// <summary>The round's career numbers (owner's list of 2026-10-09, item 4); read by the master report.</summary>
+        public MatchCareerTally Career => _careerTally;
+
+        private readonly MatchCareerTally _careerTally = new MatchCareerTally();
+
+        /// <summary>The actor deployed now, for the quick-kill feat.</summary>
+        public void NoteDeployed(ushort actorId)
+            => _careerTally.NoteSpawn(actorId, _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
         /// <summary>
         /// One connected player's identity, for the end-of-match report. Phase P6.
@@ -2277,6 +2320,7 @@ namespace Ironfront.Net.Unity.Server
             // it: without this, a player who joined into a leaver's slot wore the leaver's kills
             // and deaths on every board and in the end-of-match report to the master.
             _scoreTally.Forget(actor.ActorId);
+            _careerTally.Forget(actor.ActorId);
 
             var player = new ServerPlayer(
                 connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),

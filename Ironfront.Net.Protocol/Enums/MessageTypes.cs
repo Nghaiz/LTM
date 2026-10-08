@@ -149,6 +149,42 @@ namespace Ironfront.Net.Protocol
         MatchmakeResponse = 0x0031,
         MatchmakeCancel   = 0x0032,
 
+        // ----- Career: global ranking and achievements (owner's list of 2026-10-09, item 4).
+        // Additive opcodes, not a PROTOCOL_VERSION bump, for RoomTeamRequest's reason.
+
+        /// <summary>The global ranking. Body <c>{}</c>; answered with <see cref="LeaderboardResponse"/>.</summary>
+        LeaderboardRequest  = 0x0040,
+
+        /// <summary>
+        /// The best hundred careers by score and the requester's own row. Body
+        /// <c>{ "rows": [ { "rank", "playerId", "name", "score", "kills", "deaths", "headshots",
+        /// "wins", "matches", "bestStreak" } ], "you": row | null, "players" }</c>.
+        /// </summary>
+        LeaderboardResponse = 0x0041,
+
+        /// <summary>The requester's achievements. Body <c>{}</c>; answered with <see cref="AchievementsResponse"/>.</summary>
+        AchievementsRequest  = 0x0042,
+
+        /// <summary>
+        /// Body <c>{ "unlocked": [ { "id", "at" } ], "earned": { id: players }, "players",
+        /// "career": { statKey: value } }</c>: what the requester has, how many players have each
+        /// one (the page's share), and the career numbers progress is drawn from.
+        /// </summary>
+        AchievementsResponse = 0x0043,
+
+        /// <summary>
+        /// The client reports practice achievements, which only it can see happen. Body
+        /// <c>{ "ids": [ ... ] }</c>; the master keeps only ids the catalogue marks as claimed by
+        /// the client, and answers with <see cref="AchievementsResponse"/>.
+        /// </summary>
+        AchievementClaimRequest = 0x0044,
+
+        /// <summary>
+        /// Master → client, unasked: achievements just earned. Body <c>{ "ids": [ ... ] }</c>.
+        /// Sent at the end of a round for the ones the round earned, so the toast shows in the match.
+        /// </summary>
+        AchievementUnlockedPush = 0x0045,
+
         Heartbeat = 0x00F0,
         ErrorPush = 0x00F1,
 

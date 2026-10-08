@@ -56,6 +56,33 @@ namespace Ironfront.Client.Flow.Tests
 
         public event Action<RoomState>? OnRoomStatePush;
         public event Action<ChatMessage>? OnChat;
+        public event Action<string[]>? OnAchievementsUnlocked;
+
+        public Leaderboard NextLeaderboard { get; set; } = new Leaderboard();
+        public AchievementState NextAchievements { get; set; } = new AchievementState();
+        public IReadOnlyList<string>? LastClaim { get; private set; }
+
+        public Task<Leaderboard> GetLeaderboardAsync(CancellationToken ct = default)
+        {
+            Throw();
+            return Task.FromResult(NextLeaderboard);
+        }
+
+        public Task<AchievementState> GetAchievementsAsync(CancellationToken ct = default)
+        {
+            Throw();
+            return Task.FromResult(NextAchievements);
+        }
+
+        public Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids, CancellationToken ct = default)
+        {
+            Throw();
+            LastClaim = ids;
+            return Task.FromResult(NextAchievements);
+        }
+
+        /// <summary>Raises the unlock push as the master would.</summary>
+        public void PushUnlocked(params string[] ids) => OnAchievementsUnlocked?.Invoke(ids);
         public event Action<int, string>? OnError;
         public event Action? OnDisconnected;
 

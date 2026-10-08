@@ -95,3 +95,20 @@ Windows, macOS and Linux. Owner rule for this run: single-threaded, no subagents
   CONTROLS tab and every key in its text follow the player's bindings; a main-menu button under
   Settings, the How to play key on every menu screen and on the deploy screen, and a row in the
   in-match Esc menu.
+- **F (item 4):** a career per account, a global ranking and fifty achievements. Every online
+  round the game server reports each signed-in player's numbers (`MatchCareerTally`: kill kinds,
+  multi-kills, streaks, revenge, long shots, vehicles, flags helped capture, MVP, comebacks) in
+  `GS_MATCH_ENDED.stats`; the master adds them to the account and unlocks from
+  `AchievementCatalog` (shared by master and client, protocol 14.0.3, additive). Six new MSP
+  opcodes: the ranking (`0x0040`/`0x0041`, top 100 and the requester's own rank), achievements
+  (`0x0042`/`0x0043`), the practice claim (`0x0044`) and the unlock push (`0x0045`). Four practice
+  achievements are seen by the player's own game (`PracticeFeats`: finish a practice match, 25
+  kills in one, win with 100 bots, read every guide tab), kept on the machine and claimed at the
+  next sign-in. Client: GLOBAL RANKING (20 rows a page, five pages, the Tab board's columns and
+  colours, the player's own row pinned in gold when off the page) and ACHIEVEMENTS (badge, title,
+  one line, metal, share of players, commonest first; hidden ones sealed as "???"; progress bars;
+  filters by earned and by family) as overlay pages, from the main menu above Exit and from the
+  in-match Esc menu. The unlock banner drops in at the top middle with the badge, the metal's
+  colour, a sheen and a synthesised chime (`tools/ui/make_achievement_sound.py`). The wiki page
+  `docs/achievements.md` is generated from the catalogue (`tools/ui/write_achievements_doc.py`)
+  and a master test fails if it drifts.
