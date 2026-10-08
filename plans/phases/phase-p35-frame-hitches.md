@@ -101,6 +101,29 @@ reproduce focused with cua-driver stopped and overlays off, then attribute with 
 and the Profiler (`build-player.ps1 -Development`), whose timeline shows the main thread between
 `PlayerLoop` calls.
 
+### 2026-10-09: measured in a player build
+
+Release IL2CPP player with diagnostics (`-KeepDiagnostics`), the owner's machine, two autopilot
+clients in a live Azure room (Forest Lake, night, 50 bots a side), the measured one focused.
+
+- **Finding 3 did not reproduce.** About 190 s focused with cua-driver running idle, then three
+  cua-driver reads of the window (UIA tree, screenshot): no frame over 168 ms, no dropped tick, and
+  every long frame (50 to 66 ms) inside the player loop (physics and scripts in a fight). The
+  2026-10-07 probe's focused stalls remain unexplained; the autopilot stands still, the owner plays.
+- **Reading grass patches is the terrain's own `ComputeDetailInstanceTransforms`**, main thread
+  only (it throws on a worker), and costs 2 to 3 microseconds a detail in this player once a match
+  is under way (0.4 at the very first deploy, and in the Editor): a "flag any" respawn read 88 to 96
+  patch prototypes, 117 to 154 thousand details, in 332 to 440 ms, of which the terrain's read was
+  298 ms, packing 33 and upload 1. While moving, one dense patch alone is 20 to 60 ms, past the
+  1 ms budget (at least one is read a frame).
+- **Kept off the GPU (2026-10-09).** `DetailPatchCache` keeps a patch's packed details in memory
+  when it leaves the GPU (at most 1.5 M details, about 30 MB, oldest forgotten first), so reading
+  it again costs only its upload. Editor, Forest Lake at Ultra: returning to a place left 800 m
+  behind, 56.6 ms and 104 terrain reads became 0.6 ms and none.
+- A frame that spends 20 ms or more reading patches now logs `[details] ... read N patch
+  prototype(s) ... in X ms` with the split (at most once in 5 s), in every build, so the next
+  playtest's logs say how much of the stutter is grass.
+
 ### Not the cause (measured)
 
 - Night Mode: the 153-drop `Player.log` is a day match.

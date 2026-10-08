@@ -60,15 +60,59 @@ namespace Ironfront.Rendering
             public Vector2 ScaleMin, ScaleRange;
             public int[] Pages;
             public Packed[] Instances;
+
+            /// <summary>Its place among the entries kept in memory off the GPU, or null.</summary>
+            public LinkedListNode<Entry> Kept;
         }
+
+        /// <summary>
+        /// Details kept in memory, at most, after their patches leave the GPU: about 30 MB.
+        /// </summary>
+        /// <remarks>
+        /// <b>Why keep them.</b> Reading a patch is the terrain's own
+        /// <see cref="TerrainData.ComputeDetailInstanceTransforms"/>, which runs on the main thread
+        /// only and costs 2 to 3 microseconds a detail in the player: a dense patch is 20 to 60 ms,
+        /// and a respawn reads 90 to 100 of them, 300 to 440 ms (phase P35, measured 2026-10-09 on
+        /// the owner's machine). The terrain gives the same details every time it is asked
+        /// (<c>DetailPatchCacheTests</c>), so a patch read once and left behind is kept, oldest
+        /// forgotten first, and reading it again costs only its upload.
+        /// </remarks>
+        internal const int DefaultKeptDetails = 1_500_000;
 
         private readonly TerrainData _data;
         private readonly Vector3 _origin;
         private readonly DetailCatalog _catalog;
         private readonly Entry[] _entries;
         private readonly List<Entry> _resident = new List<Entry>();
+        private readonly LinkedList<Entry> _kept = new LinkedList<Entry>();
         private readonly Stack<int> _freePages = new Stack<int>();
         private GraphicsBuffer _pool;
+        private readonly System.Diagnostics.Stopwatch _part = new System.Diagnostics.Stopwatch();
+
+        /// <summary>Milliseconds spent in the terrain's own read, packing, and uploading, since <see cref="ResetCosts"/>.</summary>
+        internal double ComputeMs, PackMs, UploadMs;
+
+        /// <summary>Times the pool has grown since <see cref="ResetCosts"/>.</summary>
+        internal int Grows;
+
+        /// <summary>Entries made resident from memory, not the terrain, since <see cref="ResetCosts"/>.</summary>
+        internal int Reused;
+
+        internal void ResetCosts()
+        {
+            ComputeMs = PackMs = UploadMs = 0;
+            Grows = 0;
+            Reused = 0;
+        }
+
+        /// <summary>Times the terrain was asked for a patch's details, since this cache was made.</summary>
+        internal int TerrainReads { get; private set; }
+
+        /// <summary>Details kept in memory off the GPU now.</summary>
+        internal int KeptDetails { get; private set; }
+
+        /// <summary>The most details kept in memory off the GPU (<see cref="DefaultKeptDetails"/>).</summary>
+        internal int KeptBudget { get; set; } = DefaultKeptDetails;
         private int _poolPages;
 
         internal DetailPatchCache(Terrain terrain, DetailCatalog catalog)
@@ -113,16 +157,31 @@ namespace Ironfront.Rendering
         {
             for (int i = _resident.Count - 1; i >= 0; i--) Drop(_resident[i]);
             _resident.Clear();
+            // Another density is another set of details.
+            while (_kept.First != null) Forget(_kept.First.Value);
             Density = density;
         }
 
         /// <summary>Reads the entry's details from the terrain and makes them resident.</summary>
         internal void Bake(Entry entry)
         {
+            if (entry.Kept != null)
+            {
+                Unkeep(entry);
+                entry.Baked = true;
+                _resident.Add(entry);
+                Reused++;
+                if (entry.Count > 0) Place(entry);
+                return;
+            }
+
             DetailCatalog.Prototype prototype = _catalog.Prototypes[entry.Prototype];
             float density = prototype.ScalesWithDensity ? Density : 1f;
+            _part.Restart();
             DetailInstanceTransform[] instances = _data.ComputeDetailInstanceTransforms(
                 entry.PatchX, entry.PatchZ, prototype.Layer, density, out Bounds local);
+            ComputeMs += _part.Elapsed.TotalMilliseconds;
+            TerrainReads++;
 
             entry.Baked = true;
             entry.Count = instances.Length;
@@ -130,20 +189,55 @@ namespace Ironfront.Rendering
             _resident.Add(entry);
             if (instances.Length == 0) return;
 
+            _part.Restart();
             entry.Instances = Pack(instances, _origin, out entry.ScaleMin, out entry.ScaleRange);
+            PackMs += _part.Elapsed.TotalMilliseconds;
+            Place(entry);
+        }
+
+        /// <summary>Gives the entry pages in the pool and uploads its details into them.</summary>
+        private void Place(Entry entry)
+        {
             // Assigned only once allocated: a pool that grows meanwhile re-uploads every entry
             // that has pages, and this one has none of its own yet.
-            var pages = new int[(instances.Length + PageSize - 1) / PageSize];
+            var pages = new int[(entry.Count + PageSize - 1) / PageSize];
+            _part.Restart();
             Allocate(pages);
             entry.Pages = pages;
             Upload(entry);
+            UploadMs += _part.Elapsed.TotalMilliseconds;
         }
 
-        /// <summary>Gives back the entry's pages; it is read again if needed again.</summary>
+        /// <summary>
+        /// Gives back the entry's pages and keeps its details in memory, within
+        /// <see cref="KeptBudget"/>, so reading it again does not ask the terrain.
+        /// </summary>
         internal void Evict(Entry entry)
         {
-            Drop(entry);
+            if (entry.Pages != null)
+                foreach (int page in entry.Pages) _freePages.Push(page);
+            entry.Pages = null;
+            entry.Baked = false;
             _resident.Remove(entry);
+
+            entry.Kept = _kept.AddLast(entry);
+            KeptDetails += entry.Count;
+            while (KeptDetails > KeptBudget && _kept.First != null) Forget(_kept.First.Value);
+        }
+
+        private void Unkeep(Entry entry)
+        {
+            _kept.Remove(entry.Kept);
+            entry.Kept = null;
+            KeptDetails -= entry.Count;
+        }
+
+        /// <summary>Forgets a kept entry's details: it is read from the terrain if needed again.</summary>
+        private void Forget(Entry entry)
+        {
+            Unkeep(entry);
+            entry.Count = 0;
+            entry.Instances = null;
         }
 
         public void Dispose()
@@ -217,6 +311,7 @@ namespace Ironfront.Rendering
         /// </summary>
         private void Grow(int more)
         {
+            Grows++;
             int pages = Mathf.Max(InitialPages, _poolPages * 2);
             while (pages - _poolPages < more) pages *= 2;
 

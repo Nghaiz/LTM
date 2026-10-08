@@ -236,6 +236,41 @@ namespace Ironfront.Rendering.Tests
         // beside the grass 380 m ahead.
         private static readonly Vector3 SpawnPoint = new Vector3(Side * 0.5f + Cell * 0.5f, 0f, 470f);
 
+        [Test]
+        public void APatchReadBeforeIsNotAskedOfTheTerrainAgain()
+        {
+            Vector3 start = _viewer.transform.position;
+            TakeOver();
+            _viewer.transform.position = new Vector3(Side * 0.5f, 2f, Side - 10f);
+            TakeOver();
+            int reads = _details.Cache.TerrainReads;
+
+            _viewer.transform.position = start;
+            TakeOver();
+
+            Assert.AreEqual(reads, _details.Cache.TerrainReads,
+                "a patch read before was read from the terrain again (phase P35: 20 to 60 ms each in the player)");
+            Assert.AreEqual(8, _details.Kept(0, caster: false), "the grass came back different");
+        }
+
+        [Test]
+        public void WithNoRoomToKeepThemPatchesAreReadFromTheTerrainAgain()
+        {
+            _details.Cache.KeptBudget = 0;
+            Vector3 start = _viewer.transform.position;
+            TakeOver();
+            _viewer.transform.position = new Vector3(Side * 0.5f, 2f, Side - 10f);
+            TakeOver();
+            int reads = _details.Cache.TerrainReads;
+
+            _viewer.transform.position = start;
+            TakeOver();
+
+            Assert.Greater(_details.Cache.TerrainReads, reads, "details were kept past the budget");
+            Assert.AreEqual(0, _details.Cache.KeptDetails);
+            Assert.AreEqual(8, _details.Kept(0, caster: false), "the grass came back different");
+        }
+
         private void TakeOver()
         {
             for (int frame = 0; frame < 20 && !_details.IsHolding; frame++) _details.Frame(_camera);
