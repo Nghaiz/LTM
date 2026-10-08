@@ -1323,9 +1323,10 @@ public class FpsActorController : ActorController
 		{
 			crouchInput = !crouchInput;
 		}
-		// While the map is held open the wheel zooms it (MinimapUi); switching weapons with the
-		// same notch would change the gun in the player's hands every time they zoom.
-		float wheel = MinimapUi.OwnsScrollWheel ? 0f : Input.mouseScrollDelta.y;
+		// While the map is held open the wheel zooms it (MinimapUi), and while the Tab board is open it
+		// turns the board's pages (HudInputClaims); switching weapons with the same notch would change
+		// the gun in the player's hands every time.
+		float wheel = MinimapUi.OwnsScrollWheel || HudInputClaims.ScoreboardOwnsWheel ? 0f : Input.mouseScrollDelta.y;
 		if (wheel < 0f)
 		{
 			QueueWeaponSwitch(actor.FindWeaponSlot(1, skipToggleable: true));

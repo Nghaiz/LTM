@@ -77,3 +77,10 @@ Windows, macOS and Linux. Owner rule for this run: single-threaded, no subagents
   chat, map, scoreboard, night vision, HUD toggle), so a rebound key moves the soldier the server
   simulates too. A key taken from another action leaves that action unbound and says so; Esc
   cannot be bound. Bindings persist in `ironfront.keys.v1`; options keep their original keys.
+- **D (item 2):** the Tab board pages instead of shrinking its rows (`ScoreboardPaging`): a
+  player's row stays 42 px and a bot's 32 px, a page that opens mid-group repeats its heading, both
+  sides page together so rows still read across, the board opens on the page with the player's
+  own row, and the mouse wheel or Page Up / Page Down turns it (the wheel stops switching weapons
+  while the board is open, `HudInputClaims`). Every column head has a coloured icon (kills
+  crosshair, deaths skull, K/D, headshots, streak flame, best crown, score star, ping bars, rank
+  medal). Rendered at 1920x1080 with 6 players and 50 bots a side: 4 pages, nothing clipped.

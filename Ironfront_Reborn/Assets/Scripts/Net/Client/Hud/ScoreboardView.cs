@@ -70,6 +70,11 @@ namespace Ironfront.Net.Unity.Client.Hud
         [Header("Foot")]
         [SerializeField] private Text _rules;
 
+        [Header("Pages")]
+        [Tooltip("PAGE 1 / 3, with the keys that turn it. Hidden while one page holds everyone.")]
+        [SerializeField] private GameObject _pager;
+        [SerializeField] private Text _pageLabel;
+
         private bool _complete;
         private bool _visible;
         private float _open;
@@ -91,6 +96,13 @@ namespace Ironfront.Net.Unity.Client.Hud
 
         /// <summary>The first columns after opening play in; later ones only update.</summary>
         private bool _staggerNext;
+
+        // Paging (owner's list of 2026-10-09, item 2): the page on screen, how many there are, and
+        // the counts the last layout was made for, so a page turn lays out the same rows again.
+        private int _page;
+        private int _pageCount = 1;
+        private int _sizingHumans;
+        private int _sizingBots;
 
         private void Awake()
         {
@@ -148,12 +160,15 @@ namespace Ironfront.Net.Unity.Client.Hud
                 // board was shut is not news the moment it opens.
                 System.Array.Clear(_lastSeen, 0, _lastSeen.Length);
             }
+
+            HudInputClaims.ScoreboardOwnsWheel = visible;
         }
 
         /// <summary>Takes the board down at once, no fade. For a HUD being reset.</summary>
         public void HideImmediately()
         {
             _visible = false;
+            HudInputClaims.ScoreboardOwnsWheel = false;
             _open = 0f;
             if (_group != null) _group.alpha = 0f;
             gameObject.SetActive(false);
@@ -221,14 +236,58 @@ namespace Ironfront.Net.Unity.Client.Hud
             // heading and every bot row line up across the board.
             int humans0 = _team0.PendingHumans;
             int humans1 = _team1.PendingHumans;
-            int sizingHumans = Mathf.Max(humans0, humans1);
-            int sizingBots = Mathf.Max(_team0.PendingCount - humans0, _team1.PendingCount - humans1);
-            _team0.End(Scored, stagger, sizingHumans, sizingBots);
-            _team1.End(Scored, stagger, sizingHumans, sizingBots);
+            _sizingHumans = Mathf.Max(humans0, humans1);
+            _sizingBots = Mathf.Max(_team0.PendingCount - humans0, _team1.PendingCount - humans1);
+
+            // A board that opens shows the page with the player's own row on it.
+            if (stagger)
+            {
+                int own = Mathf.Max(_team0.PageOfLocal(_sizingHumans, _sizingBots), _team1.PageOfLocal(_sizingHumans, _sizingBots));
+                _page = Mathf.Max(0, own);
+            }
+
+            LayOut(stagger);
 
             System.Array.Copy(_nextKills, _lastKills, _lastKills.Length);
             System.Array.Copy(_nextSeen, _lastSeen, _lastSeen.Length);
             System.Array.Clear(_nextSeen, 0, _nextSeen.Length);
+        }
+
+        /// <summary>Lays both sides out on the current page and redraws the pager.</summary>
+        private void LayOut(bool stagger)
+        {
+            int pages0 = _team0.End(Scored, stagger, _sizingHumans, _sizingBots, _page);
+            int pages1 = _team1.End(Scored, stagger, _sizingHumans, _sizingBots, _page);
+            _pageCount = Mathf.Max(1, Mathf.Max(pages0, pages1));
+            _page = Mathf.Clamp(_page, 0, _pageCount - 1);
+
+            if (_pager != null) _pager.SetActive(_pageCount > 1);
+            if (_pageLabel != null)
+                _pageLabel.text = PageLine(_page, _pageCount);
+        }
+
+        /// <summary>"PAGE 2 / 4".</summary>
+        public static string PageLine(int page, int pages)
+            => "PAGE " + (page + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+               + " / " + pages.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        /// <summary>Turns to the next (+1) or the previous (-1) page, if there is one.</summary>
+        public void TurnPage(int direction)
+        {
+            if (!_complete || _pageCount < 2) return;
+            int next = Mathf.Clamp(_page + direction, 0, _pageCount - 1);
+            if (next == _page) return;
+            _page = next;
+            LayOut(stagger: true);
+        }
+
+        private void ReadPageKeys()
+        {
+            if (!_visible || _pageCount < 2 || LocalTextEntry.OwnsKeyboard) return;
+
+            float wheel = Input.mouseScrollDelta.y;
+            if (wheel < 0f || Input.GetKeyDown(KeyCode.PageDown)) TurnPage(1);
+            else if (wheel > 0f || Input.GetKeyDown(KeyCode.PageUp)) TurnPage(-1);
         }
 
         private bool Scored(ushort actorId)
@@ -237,7 +296,11 @@ namespace Ironfront.Net.Unity.Client.Hud
         private ScoreboardTeamView Column(int team)
             => team == TeamId.Team0 ? _team0 : team == TeamId.Team1 ? _team1 : null;
 
-        private void Update() => Tick(Time.unscaledDeltaTime);
+        private void Update()
+        {
+            ReadPageKeys();
+            Tick(Time.unscaledDeltaTime);
+        }
 
         /// <summary>
         /// Advances every motion on the board by <paramref name="delta"/> seconds. Driven by

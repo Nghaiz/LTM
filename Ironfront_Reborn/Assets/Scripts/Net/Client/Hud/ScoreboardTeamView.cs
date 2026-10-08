@@ -17,10 +17,10 @@ namespace Ironfront.Net.Unity.Client.Hud
     /// thirty-two and a restyle is one edit.
     /// </para>
     /// <para>
-    /// <b>Rows fit the column.</b> A player's row is a third taller than a bot's, and both shrink
-    /// together until the side fits, up to a comfortable ceiling; there is deliberately no floor,
-    /// which on the first full board pushed rows through the rules line. The two sides size from
-    /// the larger count of each group, so the two BOTS headings and every row line up across.
+    /// <b>Rows keep their size and the board pages.</b> A player's row is taller than a bot's and
+    /// neither shrinks; what does not fit goes on the next page (<see cref="ScoreboardPaging"/>,
+    /// owner's list of 2026-10-09, item 2). The two sides page from the larger count of each group,
+    /// so the two BOTS headings and every row line up across.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
@@ -51,6 +51,7 @@ namespace Ironfront.Net.Unity.Client.Hud
         [SerializeField] private ScoreboardSectionView _botsSection;
 
         private readonly List<ScoreboardRowView> _rowViews = new List<ScoreboardRowView>();
+        private bool[] _shown = new bool[0];
         private readonly ScoreboardRow[] _pending = new ScoreboardRow[MatchHud.ScoreboardRowsPerTeam];
         private int _pendingCount;
         private int _shownCount;
@@ -129,15 +130,30 @@ namespace Ironfront.Net.Unity.Client.Hud
             }
         }
 
+        /// <summary>A player's row: the height a name reads at in a glance.</summary>
+        public const float PlayerPitch = MaxHumanRowHeight + RowGap;
+
+        /// <summary>A bot's row: quieter and a little smaller.</summary>
+        public const float BotPitch = MaxBotRowHeight + RowGap;
+
+        /// <summary>A group heading and the gap under it.</summary>
+        public const float HeadingPitch = SectionHeight + SectionGap;
+
         /// <summary>
-        /// Lays the queued rows out. <paramref name="scored"/> says which actors just gained a
-        /// kill; <paramref name="stagger"/> plays the rows in one after another, for an opening.
-        /// <paramref name="sizingHumans"/> and <paramref name="sizingBots"/> are the larger side's
-        /// counts, so both sides share one layout and read across as a table.
+        /// Lays out page <paramref name="page"/> of the queued rows and answers how many pages there
+        /// are (<see cref="ScoreboardPaging"/>). <paramref name="scored"/> says which actors just
+        /// gained a kill; <paramref name="stagger"/> plays the rows in one after another, for an
+        /// opening. <paramref name="sizingHumans"/> and <paramref name="sizingBots"/> are the larger
+        /// side's counts, so both sides page alike and read across as one table.
         /// </summary>
-        public void End(System.Func<ushort, bool> scored, bool stagger, int sizingHumans, int sizingBots)
+        /// <remarks>
+        /// Rows keep a fixed, readable height and the board pages, where it used to shrink every row
+        /// until a full side fitted: with 100 bots and a dozen players that was type no one could read
+        /// (owner's list of 2026-10-09, item 2).
+        /// </remarks>
+        public int End(System.Func<ushort, bool> scored, bool stagger, int sizingHumans, int sizingBots, int page)
         {
-            if (!_complete) return;
+            if (!_complete) return 1;
 
             EnsureRows(_pendingCount);
 
@@ -146,73 +162,85 @@ namespace Ironfront.Net.Unity.Client.Hud
             sizingHumans = Mathf.Max(sizingHumans, humans);
             sizingBots = Mathf.Max(sizingBots, bots);
 
-            int sections = (sizingHumans > 0 ? 1 : 0) + (sizingBots > 0 ? 1 : 0);
-            float usable = _rows.rect.height - sections * (SectionHeight + SectionGap);
-            float units = sizingHumans * HumanRowScale + sizingBots;
-            float botPitch = units > 0f ? Mathf.Min(usable / units, MaxBotRowHeight + RowGap) : MaxBotRowHeight;
-            float humanPitch = Mathf.Min(botPitch * HumanRowScale, MaxHumanRowHeight + RowGap);
+            List<List<ScoreboardPaging.Slot>> pages = ScoreboardPaging.Paginate(
+                sizingHumans, sizingBots, _rows.rect.height, HeadingPitch, PlayerPitch, BotPitch);
+            page = Mathf.Clamp(page, 0, pages.Count - 1);
 
-            float botHeight = botPitch - (botPitch >= 20f ? RowGap : 1f);
-            float humanHeight = humanPitch - (humanPitch >= 20f ? RowGap : 1f);
-            int botFont = Mathf.Clamp(Mathf.RoundToInt(botHeight * 0.56f), 12, 17);
-            int humanFont = Mathf.Clamp(Mathf.RoundToInt(humanHeight * 0.5f), 14, 20);
+            float humanHeight = PlayerPitch - RowGap;
+            float botHeight = BotPitch - RowGap;
+            int humanFont = Mathf.Clamp(Mathf.RoundToInt(humanHeight * 0.48f), 14, 20);
+            int botFont = Mathf.Clamp(Mathf.RoundToInt(botHeight * 0.52f), 12, 17);
 
-            float top = 0f;
+            bool humansHeading = false;
+            bool botsHeading = false;
+            if (_shown.Length < _rowViews.Count) _shown = new bool[_rowViews.Count];
+            bool[] shown = _shown;
+            System.Array.Clear(shown, 0, shown.Length);
 
-            if (humans > 0)
-                _humansSection.Show(HudSprites.Person(), "PLAYERS  ·  " + humans.ToString(CultureInfo.InvariantCulture), _teamColour);
-            else
-                _humansSection.Hide();
-
-            if (sizingHumans > 0)
+            foreach (ScoreboardPaging.Slot slot in pages[page])
             {
-                _humansSection.Place(top, SectionHeight);
-                top -= SectionHeight + SectionGap;
-            }
-
-            float botsTop = top - sizingHumans * humanPitch;
-
-            if (bots > 0)
-            {
-                _botsSection.Show(HudSprites.Bot(), "BOTS  ·  " + bots.ToString(CultureInfo.InvariantCulture), _teamColour);
-                _botsSection.Place(botsTop, SectionHeight);
-            }
-            else
-            {
-                _botsSection.Hide();
-            }
-
-            float botRowsTop = botsTop - (sizingBots > 0 ? SectionHeight + SectionGap : 0f);
-
-            for (int i = 0; i < _rowViews.Count; i++)
-            {
-                ScoreboardRowView view = _rowViews[i];
-
-                if (i >= _pendingCount)
+                switch (slot.Kind)
                 {
-                    if (view.gameObject.activeSelf) view.gameObject.SetActive(false);
-                    continue;
+                    case ScoreboardPaging.SlotKind.PlayersHeading:
+                        if (humans == 0) break;
+                        _humansSection.Show(HudSprites.Person(), "PLAYERS  ·  " + humans.ToString(CultureInfo.InvariantCulture), _teamColour);
+                        _humansSection.Place(-slot.Top, SectionHeight);
+                        humansHeading = true;
+                        break;
+                    case ScoreboardPaging.SlotKind.BotsHeading:
+                        if (bots == 0) break;
+                        _botsSection.Show(HudSprites.Bot(), "BOTS  ·  " + bots.ToString(CultureInfo.InvariantCulture), _teamColour);
+                        _botsSection.Place(-slot.Top, SectionHeight);
+                        botsHeading = true;
+                        break;
+                    case ScoreboardPaging.SlotKind.Player:
+                        if (slot.Index < humans) PlaceRow(slot.Index, slot.Index, -slot.Top, humanHeight, humanFont);
+                        break;
+                    case ScoreboardPaging.SlotKind.Bot:
+                        if (slot.Index < bots) PlaceRow(humans + slot.Index, slot.Index, -slot.Top, botHeight, botFont);
+                        break;
                 }
+            }
 
+            if (!humansHeading) _humansSection.Hide();
+            if (!botsHeading) _botsSection.Hide();
+            for (int i = 0; i < _rowViews.Count; i++)
+                if (!shown[i] && _rowViews[i].gameObject.activeSelf) _rowViews[i].gameObject.SetActive(false);
+
+            _shownCount = _rowViews.Count;
+            _empty.gameObject.SetActive(_pendingCount == 0);
+            return pages.Count;
+
+            void PlaceRow(int pendingIndex, int indexInGroup, float top, float height, int font)
+            {
+                ScoreboardRowView view = _rowViews[pendingIndex];
                 bool appearing = stagger || !view.gameObject.activeSelf;
                 if (!view.gameObject.activeSelf) view.gameObject.SetActive(true);
 
-                ScoreboardRow row = _pending[i];
-                bool human = !row.IsBot;
-                int indexInGroup = human ? i : i - humans;
-
+                ScoreboardRow row = _pending[pendingIndex];
                 view.Bind(in row, _teamColour, indexInGroup, scored(row.ActorId));
-
-                if (human)
-                    view.Place(top - indexInGroup * humanPitch, humanHeight, humanFont);
-                else
-                    view.Place(botRowsTop - indexInGroup * botPitch, botHeight, botFont);
-
-                if (appearing) view.Appear(stagger ? i * StaggerSeconds : 0f);
+                view.Place(top, height, font);
+                if (appearing) view.Appear(stagger ? indexInGroup * StaggerSeconds : 0f);
+                shown[pendingIndex] = true;
             }
+        }
 
-            _shownCount = _pendingCount;
-            _empty.gameObject.SetActive(_pendingCount == 0);
+        /// <summary>Which page holds this player's own row, or -1 when it is not on this side.</summary>
+        public int PageOfLocal(int sizingHumans, int sizingBots)
+        {
+            if (!_complete) return -1;
+            int humans = PendingHumans;
+            for (int i = 0; i < _pendingCount; i++)
+            {
+                if (!_pending[i].IsLocal) continue;
+                List<List<ScoreboardPaging.Slot>> pages = ScoreboardPaging.Paginate(
+                    Mathf.Max(sizingHumans, humans), Mathf.Max(sizingBots, _pendingCount - humans),
+                    _rows.rect.height, HeadingPitch, PlayerPitch, BotPitch);
+                return _pending[i].IsBot
+                    ? ScoreboardPaging.PageOf(pages, ScoreboardPaging.SlotKind.Bot, i - humans)
+                    : ScoreboardPaging.PageOf(pages, ScoreboardPaging.SlotKind.Player, i);
+            }
+            return -1;
         }
 
         /// <summary>Advances the rows' motion.</summary>
@@ -221,7 +249,7 @@ namespace Ironfront.Net.Unity.Client.Hud
             if (!_complete) return;
 
             for (int i = 0; i < _shownCount && i < _rowViews.Count; i++)
-                _rowViews[i].Tick(deltaSeconds);
+                if (_rowViews[i].gameObject.activeSelf) _rowViews[i].Tick(deltaSeconds);
         }
 
         /// <summary>Clones rows from the template until there are <paramref name="needed"/>.</summary>
