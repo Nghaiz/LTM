@@ -189,6 +189,13 @@ namespace Ironfront.Rendering
         private float _shadowRange;
         private int _builtFrame = -1;
         private bool _announced;
+        private float _slowReadLogAt;
+        private int _slowReadsUnlogged;
+
+        /// <summary>A frame reading patches for this long or more says so (at most once in <see cref="SlowReadLogSeconds"/>).</summary>
+        internal const double SlowReadMs = 20.0;
+
+        private const float SlowReadLogSeconds = 5f;
 
         internal bool IsBuilt => _catalog != null;
 
@@ -336,7 +343,9 @@ namespace Ironfront.Rendering
             }
 
             _watch.Restart();
+            _cache.ResetCosts();
             bool ready = true;
+            int urgentRead = 0, instancesRead = 0;
             Collect(eye, reach, _missing);
             if (_missing.Count > 0)
             {
@@ -353,6 +362,8 @@ namespace Ironfront.Rendering
                     }
                     _cache.Bake(missing.Entry);
                     Baked++;
+                    instancesRead += missing.Entry.Count;
+                    if (urgent) urgentRead++;
                 }
             }
 
@@ -367,9 +378,32 @@ namespace Ironfront.Rendering
                     _cache.Bake(missing.Entry);
                     Baked++;
                     Prefetched++;
+                    instancesRead += missing.Entry.Count;
                 }
             }
+            ReportSlowRead(_watch.Elapsed.TotalMilliseconds, urgentRead, instancesRead);
             return ready;
+        }
+
+        /// <summary>
+        /// Says when a frame spent <see cref="SlowReadMs"/> or more reading patches: the cost a
+        /// player feels as a hitch, which no other line in a release player's log can attribute
+        /// (phase P35).
+        /// </summary>
+        private void ReportSlowRead(double ms, int urgentRead, int instancesRead)
+        {
+            if (ms < SlowReadMs) return;
+            if (Time.unscaledTime < _slowReadLogAt)
+            {
+                _slowReadsUnlogged++;
+                return;
+            }
+            Debug.Log($"[details] '{name}': read {Baked} patch prototype(s), {instancesRead} details, in {ms:F0} ms; {urgentRead} of them "
+                + $"needed at once and {Prefetched} for a respawn (terrain {_cache.ComputeMs:F0} ms, {_cache.Reused} from memory, pack {_cache.PackMs:F0}, "
+                + $"upload {_cache.UploadMs:F0}, pool grown {_cache.Grows}x)"
+                + (_slowReadsUnlogged > 0 ? $"; {_slowReadsUnlogged} more slow read(s) since the last line." : "."));
+            _slowReadLogAt = Time.unscaledTime + SlowReadLogSeconds;
+            _slowReadsUnlogged = 0;
         }
 
         /// <summary>
