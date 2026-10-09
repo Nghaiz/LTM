@@ -86,7 +86,7 @@ if ($Development -and $KeepDiagnostics) {
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $isMac = $Platform -eq "macos"
-$isLinux = $Platform -eq "linux"
+$isLinuxPlayer = $Platform -eq "linux"
 if (-not $OutputDirectory) { $OutputDirectory = "build/$Platform" }
 
 . "$PSScriptRoot/lib/build-stamp.ps1"
@@ -228,7 +228,7 @@ if ($isMac) {
     $executeMethod  = "Ironfront.EditorBuildWindowsHarness.BuildMacPlayer"
     $completionLine = "[build] macos player complete ->"
 }
-elseif ($isLinux) {
+elseif ($isLinuxPlayer) {
     $exe            = Join-Path $buildOut "Ironfront.x86_64"
     $executeMethod  = "Ironfront.EditorBuildWindowsHarness.BuildLinuxPlayer"
     $completionLine = "[build] linux player complete ->"
@@ -346,7 +346,7 @@ if (-not (Test-Path $exe)) {
 $after = (Get-Item $exe).LastWriteTime
 $code = if ($isMac) { Join-Path $buildOut "Ironfront.app/Contents/Resources/Data/Managed/Assembly-CSharp.dll" }
         elseif ($Development) { Join-Path $buildOut "Ironfront_Data/Managed/Assembly-CSharp.dll" }
-        elseif ($isLinux) { Join-Path $buildOut "GameAssembly.so" }
+        elseif ($isLinuxPlayer) { Join-Path $buildOut "GameAssembly.so" }
         else { Join-Path $buildOut "GameAssembly.dll" }
 $codeStamp = if (Test-Path $code) { (Get-Item $code).LastWriteTime } else { "MISSING" }
 
@@ -356,7 +356,7 @@ Write-Host "[build] $exe"
 Write-Host "[build]   exe  last written $after$(if ($before -eq $after) { '  (unchanged -- expected)' })"
 Write-Host "[build]   $(Split-Path -Leaf $code) last written $codeStamp  <- judge the build by this"
 Write-Host ""
-if ($isMac -or $isLinux) {
+if ($isMac -or $isLinuxPlayer) {
     Write-Host "[build] next: pwsh tools/package-release.ps1 -Platform $Platform -Version <vX.Y.Z>"
 }
 else {

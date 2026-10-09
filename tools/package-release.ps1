@@ -77,7 +77,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $isMac = $Platform -eq "macos"
-$isLinux = $Platform -eq "linux"
+$isLinuxPlayer = $Platform -eq "linux"
 . "$PSScriptRoot/lib/mac-bundle.ps1"
 if (-not $BuildDirectory) { $BuildDirectory = "build/$Platform" }
 
@@ -173,9 +173,9 @@ else {
     # --- Windows or Linux release player (IL2CPP, a flat folder) ---------------------------------
     # The same checks on both: Linux names the executable Ironfront.x86_64 and the native code
     # GameAssembly.so, and its executable must be an x86_64 ELF file.
-    $exeName      = if ($isLinux) { "Ironfront.x86_64" } else { "Ironfront.exe" }
-    $gameAssembly = if ($isLinux) { "GameAssembly.so" } else { "GameAssembly.dll" }
-    $buildHint    = if ($isLinux) { "tools/build-player.ps1 -Platform linux" } else { "tools/build-player.ps1" }
+    $exeName      = if ($isLinuxPlayer) { "Ironfront.x86_64" } else { "Ironfront.exe" }
+    $gameAssembly = if ($isLinuxPlayer) { "GameAssembly.so" } else { "GameAssembly.dll" }
+    $buildHint    = if ($isLinuxPlayer) { "tools/build-player.ps1 -Platform linux" } else { "tools/build-player.ps1" }
     $exe      = Join-Path $buildDir $exeName
     $metadata = Join-Path $buildDir "Ironfront_Data/il2cpp_data/Metadata/global-metadata.dat"
 
@@ -188,7 +188,7 @@ else {
                "Build the release player with $buildHint, without -Development.")
     }
 
-    if ($isLinux) {
+    if ($isLinuxPlayer) {
         # ELF magic, 64-bit class (2), machine x86-64 (0x3E at offset 18).
         $head = [System.IO.File]::ReadAllBytes($exe)[0..19]
         if ($head[0] -ne 0x7F -or $head[1] -ne 0x45 -or $head[2] -ne 0x4C -or $head[3] -ne 0x46 -or
@@ -233,7 +233,7 @@ if ($forbidden) {
 # --- stage -----------------------------------------------------------------------------------
 $name     = "IronfrontReborn-$Version"
 $staging  = Join-Path $outDir $name
-$zipPath  = Join-Path $outDir $(if ($isMac) { "$name-macos.zip" } elseif ($isLinux) { "$name-linux-x64.zip" } else { "$name-windows-x64.zip" })
+$zipPath  = Join-Path $outDir $(if ($isMac) { "$name-macos.zip" } elseif ($isLinuxPlayer) { "$name-linux-x64.zip" } else { "$name-windows-x64.zip" })
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
@@ -248,19 +248,19 @@ robocopy $shipFrom $copyTo /E /NFL /NDL /NJH /NJS /NP /XD "*_DoNotShip" "*_ButDo
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE." }
 $global:LASTEXITCODE = 0
 
-$readmeTemplate = if ($isMac) { "release/README-macos.txt" } elseif ($isLinux) { "release/README-linux.txt" } else { "release/README.txt" }
+$readmeTemplate = if ($isMac) { "release/README-macos.txt" } elseif ($isLinuxPlayer) { "release/README-linux.txt" } else { "release/README.txt" }
 $readme = Get-Content -Raw (Join-Path $PSScriptRoot $readmeTemplate)
 $readme = $readme.Replace("{{VERSION}}", $Version).Replace("{{COMMIT}}", $Commit)
 # Windows: CRLF so Notepad on an old Windows shows lines, not one run-on paragraph. macOS and
 # Linux: LF. UTF-8 WITH a BOM on Windows and macOS, so neither Notepad nor TextEdit guesses a
 # legacy code page and mangles the Vietnamese; without one on Linux, where every editor reads
 # UTF-8 and `cat` would print the BOM's bytes.
-$readme = if ($isMac -or $isLinux) { $readme -replace "`r?`n", "`n" } else { $readme -replace "`r?`n", "`r`n" }
+$readme = if ($isMac -or $isLinuxPlayer) { $readme -replace "`r?`n", "`n" } else { $readme -replace "`r?`n", "`r`n" }
 [System.IO.File]::WriteAllText((Join-Path $staging "README.txt"), $readme,
-                               [System.Text.UTF8Encoding]::new(-not $isLinux))
+                               [System.Text.UTF8Encoding]::new(-not $isLinuxPlayer))
 
 # --- zip -------------------------------------------------------------------------------------
-if ($isMac -or $isLinux) {
+if ($isMac -or $isLinuxPlayer) {
     & python (Join-Path $PSScriptRoot "release/zip_unix_release.py") $Platform $staging $zipPath
     if ($LASTEXITCODE -ne 0) { throw "zip_unix_release.py failed ($LASTEXITCODE)." }
 }
@@ -293,7 +293,7 @@ Ironfront: Reborn $Version for macOS 12+ (Intel and Apple silicon), built from `
 SHA-256: ``$hash``
 "@ | Set-Content -Encoding utf8NoBOM $NotesFile
     }
-    elseif ($isLinux) {
+    elseif ($isLinuxPlayer) {
         @"
 Ironfront: Reborn $Version for 64-bit Linux (x86_64), built from ``$Commit``.
 
