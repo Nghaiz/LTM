@@ -180,6 +180,19 @@ namespace Ironfront.Net.Protocol.Achievements
             ? MeasureOf(career) >= Target
             : false;
 
+        /// <summary>
+        /// The career numbers <see cref="MeasureOf"/> reads; none for IRONCLAD, which counts what is
+        /// held. The master uses it to keep a hidden achievement's progress from other players.
+        /// </summary>
+        public IEnumerable<CareerStat> StatsRead()
+        {
+            if (Stat != null) yield return Stat.Value;
+            if (Measure != AchievementMeasure.WinsOnEveryMap) yield break;
+            yield return CareerStat.WinsDustbowl;
+            yield return CareerStat.WinsIsland;
+            yield return CareerStat.WinsForestLake;
+        }
+
         /// <summary>The bar's value: the measure, capped at the target.</summary>
         public long ProgressOf(ICareerView career)
         {

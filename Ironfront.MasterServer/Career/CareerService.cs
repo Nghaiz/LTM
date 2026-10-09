@@ -13,6 +13,29 @@ namespace Ironfront.MasterServer.Career
         public List<(int Rank, CareerRow Row)> Top { get; } = new List<(int, CareerRow)>();
         public (int Rank, CareerRow Row)? You { get; set; }
         public int Players { get; set; }
+
+        /// <summary>What each listed player holds, hidden achievements included (counts only).</summary>
+        public Dictionary<int, AchievementTotals> Totals { get; } = new Dictionary<int, AchievementTotals>();
+    }
+
+    /// <summary>
+    /// Another player as one viewer may see them (achievements v2, section 6.2): the ranking row,
+    /// what they hold in all, and only the achievements and career numbers the hidden rule lets
+    /// the viewer see.
+    /// </summary>
+    public sealed class ProfileView
+    {
+        /// <summary>Their place in the ranking; 0 before their first online match.</summary>
+        public int Rank { get; set; }
+
+        public CareerRow Row { get; set; } = new CareerRow();
+
+        /// <summary>Everything they hold, hidden achievements included: counts only.</summary>
+        public AchievementTotals Totals { get; set; } = AchievementTotals.None;
+
+        public List<(string Id, long At)> Unlocked { get; set; } = new List<(string, long)>();
+
+        public Dictionary<string, long> Career { get; set; } = new Dictionary<string, long>();
     }
 
     /// <summary>The first player to earn a Mythic achievement.</summary>
@@ -193,8 +216,40 @@ namespace Ironfront.MasterServer.Career
                 if (i < LeaderboardSize) view.Top.Add((i + 1, rows[i]));
                 if (rows[i].PlayerId == requester) view.You = (i + 1, rows[i]);
             }
+
+            Dictionary<int, List<string>> held = _database.ReadAchievementIdsByPlayer();
+            foreach ((int _, CareerRow row) in view.Top) view.Totals[row.PlayerId] = TotalsOf(held, row.PlayerId);
+            if (view.You.HasValue) view.Totals[view.You.Value.Row.PlayerId] = TotalsOf(held, view.You.Value.Row.PlayerId);
             return view;
         }
+
+        /// <summary>
+        /// <paramref name="playerId"/> as <paramref name="requester"/> may see them, or null when
+        /// there is no such account. The hidden rule is applied here, not by the client: a hidden
+        /// achievement is listed only when the requester holds it too, and a career number that
+        /// serves only hidden achievements the requester lacks is left out (<see cref="CareerPrivacy"/>).
+        /// </summary>
+        public ProfileView? Profile(int requester, int playerId)
+        {
+            AccountRecord? account = _database.FindAccountById(playerId);
+            if (account == null) return null;
+
+            LeaderboardView board = Leaderboard(playerId);
+            List<(string Id, long At)> theirs = _database.ReadAchievements(playerId);
+            var mine = new HashSet<string>(_database.ReadAchievements(requester).Select(a => a.Id), StringComparer.Ordinal);
+
+            return new ProfileView
+            {
+                Rank = board.You?.Rank ?? 0,
+                Row = board.You?.Row ?? new CareerRow { PlayerId = playerId, Name = account.DisplayName },
+                Totals = AchievementTotals.Of(theirs.Select(u => u.Id)),
+                Unlocked = CareerPrivacy.VisibleUnlocks(theirs, mine),
+                Career = CareerPrivacy.VisibleCareer(_database.ReadCareer(playerId), mine),
+            };
+        }
+
+        private static AchievementTotals TotalsOf(Dictionary<int, List<string>> held, int playerId)
+            => held.TryGetValue(playerId, out List<string>? ids) ? AchievementTotals.Of(ids) : AchievementTotals.None;
 
         /// <summary>What <paramref name="requester"/> has earned, how common each achievement is, and the career behind them.</summary>
         public AchievementsView Achievements(int requester)

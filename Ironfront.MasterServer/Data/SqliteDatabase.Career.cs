@@ -147,6 +147,22 @@ CREATE INDEX IF NOT EXISTS idx_achievements_id ON achievements(achievement_id);"
             return counts;
         }
 
+        /// <summary>Every player's achievement ids, by player: the ranking's achievement columns.</summary>
+        public Dictionary<int, List<string>> ReadAchievementIdsByPlayer()
+        {
+            var held = new Dictionary<int, List<string>>();
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT player_id, achievement_id FROM achievements";
+            using SqliteDataReader reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                int id = reader.GetInt32(0);
+                if (!held.TryGetValue(id, out List<string>? ids)) held[id] = ids = new List<string>();
+                ids.Add(reader.GetString(1));
+            }
+            return held;
+        }
+
         /// <summary>Players who have played online or earned anything: the share's denominator.</summary>
         public long CountCareerPlayers()
         {

@@ -42,6 +42,15 @@ namespace Ironfront.MasterClient
         public long Wins { get; set; }
         public long Matches { get; set; }
         public long BestStreak { get; set; }
+
+        /// <summary>Achievements held, hidden ones included (14.0.5); 0 from an older master.</summary>
+        public int Achievements { get; set; }
+
+        /// <summary>The points those achievements are worth (14.0.5).</summary>
+        public int Points { get; set; }
+
+        /// <summary>Mythic achievements held (14.0.5).</summary>
+        public int Mythics { get; set; }
     }
 
     /// <summary>The best hundred careers, the requester's own row (null before their first match), and how many players have one.</summary>
@@ -75,6 +84,28 @@ namespace Ironfront.MasterClient
         /// holds it too. Keyed by achievement id.
         /// </summary>
         public Dictionary<string, FirstHolderInfo> Firsts { get; set; } = new Dictionary<string, FirstHolderInfo>();
+    }
+
+    /// <summary>
+    /// Another player as this one may see them (<c>PLAYER_PROFILE_RES</c>, 14.0.5): their ranking
+    /// row, the achievements the master lets this player see, and the career numbers behind them.
+    /// </summary>
+    public sealed class PlayerProfile
+    {
+        /// <summary>Their row; its rank is 0 before their first online match. Null when the account does not exist.</summary>
+        public LeaderboardRow? Player { get; set; }
+
+        /// <summary>What they hold that this player may see: a hidden achievement only when this player holds it too.</summary>
+        public AchievementUnlock[] Unlocked { get; set; } = Array.Empty<AchievementUnlock>();
+
+        /// <summary>How many hidden achievements they hold in all, seen or not.</summary>
+        public int Hidden { get; set; }
+
+        /// <summary>Held per metal, Bronze to Mythic, hidden ones included.</summary>
+        public int[] Tiers { get; set; } = Array.Empty<int>();
+
+        /// <summary>Their career numbers, less any that would show a hidden achievement's progress.</summary>
+        public Dictionary<string, long> Career { get; set; } = new Dictionary<string, long>();
     }
 
     /// <summary>The first player to earn an achievement, and when (Unix milliseconds).</summary>
@@ -331,6 +362,9 @@ namespace Ironfront.MasterClient
 
         /// <summary>The signed-in player's achievements (<c>ACHIEVEMENTS_REQ</c>).</summary>
         Task<AchievementState> GetAchievementsAsync(CancellationToken ct = default);
+
+        /// <summary>Another player as this one may see them (<c>PLAYER_PROFILE_REQ</c>, 14.0.5).</summary>
+        Task<PlayerProfile> GetPlayerProfileAsync(int playerId, CancellationToken ct = default);
 
         /// <summary>Reports practice achievements only this game could see (<c>ACHIEVEMENT_CLAIM_REQ</c>).</summary>
         Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids, CancellationToken ct = default)
