@@ -66,6 +66,13 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         bool IsFlooded => false;
 
+        /// <summary>
+        /// Metres from the vehicle down to the first ground below it (terrain, water bed, a roof),
+        /// its own colliders and soldiers skipped; -1 when nothing is below within range.
+        /// Achievements v2: a helicopter "in the air" is 5 m or more up.
+        /// </summary>
+        float HeightAboveGround => -1f;
+
         /// <summary>Maps to <c>Vehicle.burning</c>.</summary>
         bool IsBurning { get; }
 

@@ -24,7 +24,7 @@ public class Hitbox : MonoBehaviour
 		Actor actor = parent as Actor;
 		if (actor != null)
 		{
-			return actor.DamageAttributed(
+			bool hurt = actor.DamageAttributed(
 				p.Damage() * multiplier,
 				p.BalanceDamage(),
 				p.configuration.piercing,
@@ -32,6 +32,12 @@ public class Hitbox : MonoBehaviour
 				p.transform.forward,
 				p.configuration.impactForce * p.transform.forward,
 				p.source);
+			// Achievements v2: a bullet that hurt a soldier is a hit for its shooter's accuracy.
+			if (hurt && p.source != null)
+			{
+				Ironfront.Net.Unity.Server.ServerCombatEvents.ReportHit(p.source, actor, p.sourceWeaponId, p.shotSerial);
+			}
+			return hurt;
 		}
 
 		return parent.Damage(p.Damage() * multiplier, p.BalanceDamage(), p.configuration.piercing, position, p.transform.forward, p.configuration.impactForce * p.transform.forward);

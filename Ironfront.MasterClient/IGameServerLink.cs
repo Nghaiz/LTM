@@ -81,9 +81,9 @@ namespace Ironfront.MasterClient
         public int Score { get; set; }
 
         /// <summary>
-        /// The round's career numbers by <c>CareerStats.Key</c>, zeros left out (protocol 14.0.3,
-        /// additive: an older master ignores the field). The master folds them into the player's
-        /// career and judges the achievements from that.
+        /// The round's facts by <c>RoundFacts.Key</c>, zeros included (achievements v2, 14.0.4;
+        /// 14.0.3 sent career numbers here under the same keys for the facts both share). The
+        /// master folds them into the player's career and judges the achievements from that.
         /// </summary>
         public System.Collections.Generic.Dictionary<string, long>? Stats { get; set; }
     }
@@ -136,6 +136,12 @@ namespace Ironfront.MasterClient
         void MatchStarted(int roomId);
 
         void MatchEnded(int roomId, MatchPlayerResult[] results);
+
+        /// <summary>
+        /// GS_MATCH_PROGRESS (14.0.4): a round in progress, or with <paramref name="final"/> the
+        /// rounds of players who left before its end.
+        /// </summary>
+        void MatchProgress(int roomId, MatchPlayerResult[] results, bool final);
 
         /// <summary>
         /// Drains anything received since the last call, on the calling thread. A Unity server

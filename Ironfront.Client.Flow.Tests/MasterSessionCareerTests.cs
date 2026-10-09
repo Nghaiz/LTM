@@ -66,8 +66,8 @@ namespace Ironfront.Client.Flow.Tests
         {
             (FakeMasterClient master, MasterSession session) = await SignedInAsync();
 
-            Assert.NotNull(await session.ClaimAchievementsAsync(new[] { "basic_training", "student_of_war" }));
-            Assert.Equal(new[] { "basic_training", "student_of_war" }, master.LastClaim);
+            Assert.NotNull(await session.ClaimAchievementsAsync(new[] { "cadet", "by_the_book" }));
+            Assert.Equal(new[] { "cadet", "by_the_book" }, master.LastClaim);
 
             Assert.NotNull(await session.ClaimAchievementsAsync(Array.Empty<string>()));
             Assert.Equal(2, master.LastClaim!.Count);
@@ -95,10 +95,10 @@ namespace Ironfront.Client.Flow.Tests
             var heard = new List<string>();
             session.OnAchievementsUnlocked += ids => heard.AddRange(ids);
 
-            master.PushUnlocked("first_blood", "victory");
+            master.PushUnlocked("roll_call", "steady_hand");
             master.PushUnlocked();
 
-            Assert.Equal(new[] { "first_blood", "victory" }, heard);
+            Assert.Equal(new[] { "roll_call", "steady_hand" }, heard);
         }
     }
 }

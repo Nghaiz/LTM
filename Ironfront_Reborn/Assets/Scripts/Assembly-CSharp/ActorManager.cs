@@ -1233,7 +1233,12 @@ public class ActorManager : MonoBehaviour
 					// The attacker slot Vehicle.Damage(float, int) opens is threaded here in V1,
 					// now that Explode is a server-authoritative path. V0 opened the parameter;
 					// this is what fills it.
-					vehicle.Damage(configuration.damage * num4, ResolveAttackerId(source));
+					// Inside a blast scope, so the server can tell a shell from a bullet when a
+					// vehicle goes down (achievements v2, IMPOSSIBLE ANGLE).
+					using (DeathContext.Explosion())
+					{
+						vehicle.Damage(configuration.damage * num4, ResolveAttackerId(source));
+					}
 					result = true;
 				}
 			}

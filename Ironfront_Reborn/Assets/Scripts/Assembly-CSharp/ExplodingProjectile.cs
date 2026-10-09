@@ -71,7 +71,12 @@ public class ExplodingProjectile : Projectile
 			// the one that empties the vehicle the burn has already started by the time the blast
 			// names the shooter -- and the crew that dies in that burn was credited to nobody
 			// (feature 2, 2026-09-29).
-			componentInParent.Damage(Damage(), ActorManager.ResolveAttackerId(source));
+			// A shell's impact is a blast too: the server tells a tank's main gun from its machine
+			// gun by this when a vehicle goes down (achievements v2, IMPOSSIBLE ANGLE).
+			using (DeathContext.Explosion())
+			{
+				componentInParent.Damage(Damage(), ActorManager.ResolveAttackerId(source));
+			}
 		}
 		// The hitmarker belongs to a human shooter. No source means nobody local fired this, so
 		// there is no one to mark for -- the real marker reaches the real shooter as

@@ -30,6 +30,13 @@ namespace Ironfront.Net.Protocol
         SeatRequest   = 0x26,
         /// <summary>Confirms snapshot tick N was received, for delta encoding. Channel 2.</summary>
         AckBaseline   = 0x27,
+        /// <summary>
+        /// Night vision turned on (1) or off (0); one byte, channel 2 (14.0.4). Sent at every deploy
+        /// and every toggle, so a session that sent one is known to report it: NAKED EYE and
+        /// CREATURE OF THE NIGHT are earned only by a player whose game says it never turned it on.
+        /// An older server counts it as an unknown message and moves on.
+        /// </summary>
+        NightVision   = 0x28,
     }
 
     /// <summary>
@@ -225,5 +232,13 @@ namespace Ironfront.Net.Protocol
         /// </para>
         /// </remarks>
         GsRoomAssigned    = 0x0107,
+
+        /// <summary>
+        /// A round in progress (14.0.4), G→M, the same rows as <see cref="GsMatchEnded"/> plus
+        /// <c>final</c>. Sent every 15 seconds with <c>final: false</c>, so the master can unlock
+        /// what can no longer be taken back while the round runs; and with <c>final: true</c> for a
+        /// player who left, whose round is over before the round's end.
+        /// </summary>
+        GsMatchProgress   = 0x0108,
     }
 }

@@ -243,7 +243,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
             }
             if (_tier != null)
             {
-                _tier.text = AchievementBoard.TierName(achievement.Tier) + "  //  " + AchievementCatalog.CategoryName(achievement.Category);
+                _tier.text = AchievementBoard.TierName(achievement.Tier) + "  //  +" + achievement.Points + " PTS";
                 _tier.color = UiStyle.WithAlpha(metal, 0.85f);
             }
             if (_title != null) _title.text = achievement.Title;

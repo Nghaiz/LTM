@@ -51,6 +51,13 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>Damage applications that named no registered vehicle.</summary>
+        /// <summary>
+        /// A vehicle's health reached zero (the hit that starts its burn, or kills it outright),
+        /// with the actor last credited with damaging it, 0 when nobody. Achievements v2:
+        /// CAN OPENER, AIR DEFENSE, DOGFIGHT, IMPOSSIBLE ANGLE.
+        /// </summary>
+        public event Action<ushort, ushort> Downed;
+
         public long UnknownVehicles { get; private set; }
 
         /// <summary>Damage applied to vehicles that were already dead. Free; nothing happens.</summary>
@@ -104,14 +111,17 @@ namespace Ironfront.Net.Unity.Server
             // place — two death paths is how a wreck ends up announced twice or not at all.
             // A hull the water drowned (Vehicle.IsFlooded) does not catch fire either: it dies here,
             // and every client draws it settling where it sank, without a blast.
+            ushort credited = TryGetRecentAttacker(vehicleId, Ironfront.Net.Replication.Server.DeathAttribution.DestroyerCreditTicks, out ushort lastAttacker) ? lastAttacker : (ushort)0;
             if (source != null && (source.CrashSkipsBurn || source.IsFlooded))
             {
                 _burnClock.KillImmediately(vehicleId);
+                Downed?.Invoke(vehicleId, credited);
                 return new VehicleDamageOutcome(0f, startedBurning: false, died: true);
             }
 
             int burnTicks = (int)(BurnSeconds(source) * ProtocolConstants.SIM_TICK_RATE);
             _burnClock.StartBurning(vehicleId, burnTicks, _currentTick());
+            Downed?.Invoke(vehicleId, credited);
 
             return new VehicleDamageOutcome(0f, startedBurning: true, died: false);
         }

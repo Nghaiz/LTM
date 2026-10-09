@@ -155,6 +155,8 @@ public sealed class NightVisionGoggles : MonoBehaviour
 
 	private void SwitchOn()
 	{
+		// Achievements v2: NAKED EYE, CREATURE OF THE NIGHT and GRAVEYARD SHIFT reward never doing this.
+		Ironfront.Net.Unity.NightVisionReport.TurnedOn();
 		if (TimeOfDay.instance != null)
 		{
 			TimeOfDay.instance.ApplyNightvision();
@@ -168,6 +170,7 @@ public sealed class NightVisionGoggles : MonoBehaviour
 
 	private void SwitchOff(bool playClip)
 	{
+		Ironfront.Net.Unity.NightVisionReport.TurnedOff();
 		battery.SwitchOff();
 		if (TimeOfDay.instance != null)
 		{

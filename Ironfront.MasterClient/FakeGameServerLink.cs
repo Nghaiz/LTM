@@ -95,6 +95,13 @@ namespace Ironfront.MasterClient
         public void MatchEnded(int roomId, MatchPlayerResult[] results)
             => _matchEnds.Add(new MatchReport(roomId, results ?? Array.Empty<MatchPlayerResult>()));
 
+        /// <summary>Every GS_MATCH_PROGRESS sent, in order, with its <c>final</c> flag.</summary>
+        public System.Collections.Generic.List<(MatchReport Report, bool Final)> Progress { get; } =
+            new System.Collections.Generic.List<(MatchReport, bool)>();
+
+        public void MatchProgress(int roomId, MatchPlayerResult[] results, bool final)
+            => Progress.Add((new MatchReport(roomId, results ?? Array.Empty<MatchPlayerResult>()), final));
+
         public void Poll() { }
 
         /// <summary>Simulates the master going away, for the standalone-fallback test.</summary>

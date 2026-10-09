@@ -42,7 +42,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender, IShotAnnouncer
+    public sealed partial class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender, IShotAnnouncer
     {
         /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the list's own ceiling, a row per connection.</summary>
         private readonly PlayerListEntry[] _playerListEntries =
@@ -300,6 +300,7 @@ namespace Ironfront.Net.Unity.Server
             _burnClock = new VehicleBurnClock(ServerVehicleRegistry.Instance.Registry);
             _vehicleDamageSink = new ServerVehicleDamageSink(
                 ServerVehicleRegistry.Instance, _burnClock, () => _scheduler.CurrentTick);
+            _vehicleDamageSink.Downed += OnCareerVehicleDowned;
             _seatBridge = new ServerSeatBridge(
                 _seatArbiter, ServerVehicleRegistry.Instance, ServerActorRegistry.Instance,
                 () => _scheduler.CurrentTick, SendSeatChange);
@@ -321,6 +322,7 @@ namespace Ironfront.Net.Unity.Server
             // is why the client shipped no sender for four phases -- a chat message would have
             // been counted as corruption on every send (ledger X-8).
             _router.Chat = this;
+            _router.NightVision = this;
 
             // Before V5 this stayed null and every C_VEHICLE_INPUT was counted and dropped --
             // which was V4's honest shipped state, because nothing could drive a vehicle yet.
@@ -460,7 +462,6 @@ namespace Ironfront.Net.Unity.Server
         {
             _respawnGate.MarkRespawned(actorId);
             _corpses.NoteRespawn(actorId);
-            NoteDeployed(actorId);
 
             for (int i = 0; i < _players.Count; i++)
             {
@@ -821,6 +822,9 @@ namespace Ironfront.Net.Unity.Server
 
                 if (_scheduler.ShouldSendSnapshot()) BuildAndSendSnapshots();
             }
+
+            // Achievements v2: health (damage taken, heals) and vehicle stints, once per step.
+            WatchCareer();
 
             _ticksOwedThisStep = 0;
 
@@ -1605,25 +1609,44 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
-        /// Feeds one resolved death to the round's career tally (owner's list of 2026-10-09,
-        /// item 4): what kind of kill it was, and the score after it for the comeback feat.
+        /// Feeds one resolved death to the round's career tally (achievements v2): what kind of
+        /// kill it was, where the killer sat, what the victim held, and the score after it.
         /// </summary>
         private void RecordCareer(ushort victimActorId, ushort killerActorId, byte hitbox, CauseOfDeath cause,
             byte weaponId, byte vehicleType, DeathDetail detail, ushort distanceMetres, float now, MatchStateMachine match)
         {
-            bool sameTeam = false;
-            if (killerActorId != DeathMessage.EnvironmentKiller && killerActorId != victimActorId)
+            ServerActorRegistry registry = ServerActorRegistry.Instance;
+            registry.TryFind(victimActorId, out NetServerActor victim);
+            NetServerActor killer = null;
+            bool hasKiller = killerActorId != DeathMessage.EnvironmentKiller && killerActorId != victimActorId
+                             && registry.TryFind(killerActorId, out killer) && killer != null;
+
+            var kill = new CareerKill
             {
-                ServerActorRegistry registry = ServerActorRegistry.Instance;
-                sameTeam = registry.TryFind(killerActorId, out NetServerActor killer) && killer != null
-                           && registry.TryFind(victimActorId, out NetServerActor victim) && victim != null
-                           && killer.Team == victim.Team;
+                Killer = killerActorId,
+                Victim = victimActorId,
+                SameTeam = hasKiller && victim != null && killer.Team == victim.Team,
+                VictimIsBot = !IsPlayerActor(victimActorId),
+                Headshot = (HitboxType)hitbox == HitboxType.Head,
+                DistanceMetres = distanceMetres,
+                Cause = cause,
+                WeaponId = weaponId,
+                VehicleType = vehicleType,
+                Detail = detail,
+                VictimWeaponId = victim != null ? victim.WeaponId : WeaponIds.NONE,
+                VictimPilotHeightMetres = PilotHeightOf(victimActorId),
+            };
+
+            if (hasKiller && ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(killerActorId, out ushort seatedIn, out byte seat))
+            {
+                kill.KillerVehicleId = seatedIn;
+                kill.KillerSeat = seat;
+                kill.KillerVehicleType = VehicleTypeOf(seatedIn);
             }
 
-            var kill = new CareerKill(killerActorId, victimActorId, sameTeam, !IsPlayerActor(victimActorId),
-                (HitboxType)hitbox == HitboxType.Head, distanceMetres, cause, weaponId, vehicleType, detail);
             _careerTally.RecordKill(in kill, now);
-            if (match != null) _careerTally.NoteScores(match.Score0, match.Score1);
+            if (match != null)
+                _careerTally.NoteScores(match.Score0, match.Score1, match.Rules.Rule == VictoryRule.Target, match.VictoryPoints);
         }
 
         /// <summary>Whether a connected player drives <paramref name="actorId"/> (otherwise it is a bot).</summary>
@@ -1810,6 +1833,9 @@ namespace Ironfront.Net.Unity.Server
             NetServerActor replicated = shooter.GetComponent<NetServerActor>();
             if (replicated == null || replicated.IsClaimed) return;
 
+            // A bot's trigger pull, for accuracy (achievements v2): bots are ranked too.
+            if (CareerCounting) _careerTally.RecordShot(replicated.ActorId, replicated.WeaponId);
+
             EmitWeaponFire(
                 replicated.ActorId,
                 replicated.WeaponId,
@@ -1867,9 +1893,6 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly MatchCareerTally _careerTally = new MatchCareerTally();
 
-        /// <summary>The actor deployed now, for the quick-kill feat.</summary>
-        public void NoteDeployed(ushort actorId)
-            => _careerTally.NoteSpawn(actorId, _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
         /// <summary>
         /// One connected player's identity, for the end-of-match report. Phase P6.
@@ -2228,6 +2251,7 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         private void ForgetActor(ushort actorId)
         {
+            ForgetCareerActor(actorId);
             _interest.Forget(actorId);
             _spawnAcks.Forget(actorId);
             _hitboxHistory.Forget(actorId);
@@ -2320,7 +2344,7 @@ namespace Ironfront.Net.Unity.Server
             // it: without this, a player who joined into a leaver's slot wore the leaver's kills
             // and deaths on every board and in the end-of-match report to the master.
             _scoreTally.Forget(actor.ActorId);
-            _careerTally.Forget(actor.ActorId);
+            _careerTally.NoteJoined(actor.ActorId, CareerNow);
 
             var player = new ServerPlayer(
                 connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),
@@ -2401,6 +2425,10 @@ namespace Ironfront.Net.Unity.Server
             {
                 Debug.LogError($"[net] despawn for actor {player.Session.ActorId} did not frame");
             }
+
+            // Achievements v2: a signed-in player's round ends when they leave; report it now,
+            // before the slot (and its tally) can go to the next player.
+            PlayerLeavingRound?.Invoke(player.Session.ActorId, (int)player.PlayerId);
 
             // Before the slot goes back to the pool: this ServerPlayer is the only record of what
             // it switched on the body (a seated capsule, an exit-grace collision pair), and the

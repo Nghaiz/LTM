@@ -514,6 +514,16 @@ public class CapturePoint : SpawnPoint
 				num--;
 			}
 		}
+		// Practice achievements (ISLAND HOPPER): the player stood in the zone as it turned to them.
+		if (NetContext.IsOffline && team != owner && team >= 0)
+		{
+			Actor player = ActorManager.instance != null ? ActorManager.instance.player : null;
+			if (player != null && !player.dead && player.team == team
+				&& (player.Position() - base.transform.position).sqrMagnitude <= captureRange * captureRange)
+			{
+				Ironfront.Net.Unity.PracticeFeats.PlayerHelpedCapture(GetInstanceID());
+			}
+		}
 		owner = team;
 		pendingOwner = team;
 		// Null-guarded: SetOwner is now on the SERVER's path (it is how a flip reaches

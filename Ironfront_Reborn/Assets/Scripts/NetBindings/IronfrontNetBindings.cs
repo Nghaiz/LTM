@@ -438,6 +438,39 @@ namespace Ironfront.Net.Unity.Bindings
 
         public bool IsFlooded => _vehicle.IsFlooded;
 
+        private static readonly RaycastHit[] GroundHits = new RaycastHit[16];
+
+        /// <summary>The longest drop measured, metres: well past any map's tallest flight.</summary>
+        private const float GroundProbeMetres = 2000f;
+
+        /// <inheritdoc />
+        /// <remarks>
+        /// The terrain COLLIDER, not the heightmap: <c>Terrain.activeTerrain</c> reads found no
+        /// shore on the dedicated server (#562). Rare (once per vehicle that goes down, once per
+        /// pilot killed), so a non-allocating cast over every layer is affordable.
+        /// </remarks>
+        public float HeightAboveGround
+        {
+            get
+            {
+                if (_vehicle == null) return -1f;
+                Rigidbody own = _vehicle.rigidbody;
+                Vector3 from = _vehicle.transform.position + Vector3.up * 0.5f;
+                int count = Physics.RaycastNonAlloc(from, Vector3.down, GroundHits, GroundProbeMetres,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                float best = float.MaxValue;
+                for (int i = 0; i < count; i++)
+                {
+                    RaycastHit hit = GroundHits[i];
+                    if (own != null && hit.rigidbody == own) continue;
+                    if (hit.collider.GetComponentInParent<Actor>() != null) continue;
+                    if (hit.collider.GetComponentInParent<Vehicle>() == _vehicle) continue;
+                    if (hit.distance < best) best = hit.distance;
+                }
+                return best == float.MaxValue ? -1f : Mathf.Max(0f, best - 0.5f);
+            }
+        }
+
         public bool IsBurning => _vehicle.burning;
 
         public bool IsDead => _vehicle.dead;
