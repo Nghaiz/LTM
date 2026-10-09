@@ -2,12 +2,14 @@
 """Renders the game's UI icons and achievement badges from tools/ui/glyphs.py and badges.py.
 
     python tools/ui/make_icons.py            # every icon and badge
+    python tools/ui/make_icons.py --badges   # the achievement badges only
     python tools/ui/make_icons.py --check    # fail if a rendered PNG is missing
 
 UI icons are white glyphs on transparency (tinted in Unity), 128 px, into
 ``Ironfront_Reborn/Assets/Resources/IronfrontUi/Icons``. Achievement badges are full-colour
-256 px emblems into ``.../IronfrontUi/Achievements``, one per entry of ACHIEVEMENT_ART in
-badges.py, plus the hidden-achievement badge.
+256 px emblems into ``.../IronfrontUi/Achievements``: one per achievement of the catalogue, a
+black silhouette (``<id>_shadow``) per hidden one, and the generic hidden seal. A badge for an id
+the catalogue no longer has is deleted with its ``.meta``; ``--check`` fails on one instead.
 
 SVG goes through ImageMagick's librsvg delegate (``magick``), which is on the build PC; the PNGs
 are committed, so nobody else needs it. Re-run after editing a glyph or a badge.
@@ -37,7 +39,7 @@ def render(svg, out_png, size):
         # 128 px leaves stair-steps on the curves.
         subprocess.run(["magick", "-background", "none", "-density", "384", tmp,
                         "-filter", "Lanczos", "-resize", f"{size}x{size}", "-define",
-                        "png:color-type=6", out_png], check=True)
+                        "png:color-type=6", "-define", "png:exclude-chunks=date,time", out_png], check=True)
     finally:
         os.unlink(tmp)
 
@@ -49,11 +51,12 @@ def icon_svg(name):
 
 def main():
     check = "--check" in sys.argv
+    badges_only = "--badges" in sys.argv
     os.makedirs(ICONS, exist_ok=True)
     os.makedirs(BADGES, exist_ok=True)
     missing = []
 
-    for name in sorted(GLYPHS):
+    for name in sorted(GLYPHS) if not badges_only else []:
         out = os.path.join(ICONS, name + ".png")
         if check:
             if not os.path.exists(out):
@@ -61,13 +64,24 @@ def main():
             continue
         render(icon_svg(name), out, 128)
 
+    wanted = set()
     for key, svg in badges.all_badges():
+        wanted.add(key + ".png")
         out = os.path.join(BADGES, key + ".png")
         if check:
             if not os.path.exists(out):
                 missing.append(out)
             continue
         render(svg, out, 256)
+
+    for name in sorted(n for n in os.listdir(BADGES) if n.endswith(".png") and n not in wanted):
+        if check:
+            missing.append("stale: " + os.path.join(BADGES, name))
+            continue
+        for path in (os.path.join(BADGES, name), os.path.join(BADGES, name + ".meta")):
+            if os.path.exists(path):
+                os.remove(path)
+        print("removed retired badge " + name)
 
     if missing:
         print("missing:\n  " + "\n  ".join(missing))
