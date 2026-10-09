@@ -65,7 +65,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
                 {
                     new Card("flag", "THE GOAL", "Hold flags and win fights. Every enemy who dies scores your side as many points as you hold flags, so a side that holds the map wins the war of numbers."),
                     new Card("trophy", "WINNING A ROUND", "A room plays to its own rule: <b>LEAD BY</b> a margin (200 points unless the host chose otherwise), or <b>FIRST TO</b> a total (500 by default). The round ends the moment a side gets there, and the next round starts on the same map."),
-                    new Card("people", "YOUR FIRST MATCH", "MULTIPLAYER, sign in or create an account, BROWSE ROOMS, then join a room or CREATE ROOM. In the waiting room press READY UP; a match starts when at least two players are ready."),
+                    new Card("people", "YOUR FIRST MATCH", "MULTIPLAYER, then sign in or create an account, and the room list opens. JOIN a room, QUICK MATCH into the fullest one, or CREATE ROOM. In the waiting room press READY UP; a match starts when at least two players are ready."),
                     new Card("target", "PRACTICE FIRST", "PRACTICE OFFLINE plays the same battle on this machine, against bots, with no account and no network. A good place to learn the maps and the vehicles."),
                 }),
             new Tab("objectives", "OBJECTIVES", "flag",
