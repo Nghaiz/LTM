@@ -76,6 +76,9 @@ jobs:
 
       - name: Menu, then a practice match
         run: |
+          # Not -e (GitHub's default for bash): every check below is explicit, and an xdotool search
+          # that finds nothing must not end the step without saying why (run 1 did exactly that).
+          set +e
           set -uo pipefail
           export DISPLAY=:99
           Xvfb :99 -screen 0 1280x720x24 >/dev/null 2>&1 &
@@ -94,11 +97,14 @@ jobs:
             return 1
           }
           shot() { import -window root "$1" 2>/dev/null || true; }
-          keys() {
-            local win
-            win=$(xdotool search --onlyvisible --class Ironfront 2>/dev/null | head -1)
-            [ -n "$win" ] && xdotool windowactivate --sync "$win" 2>/dev/null
-            local key
+          keys() {  # to the player's own window, found by its process id
+            local win key
+            win=$(xdotool search --onlyvisible --pid "$pid" 2>/dev/null | head -1)
+            if [ -n "$win" ]; then
+              xdotool windowactivate --sync "$win" 2>/dev/null || xdotool windowfocus "$win" 2>/dev/null
+            else
+              echo "::warning::no visible window for pid $pid; sending keys to whatever has focus"
+            fi
             for key in "$@"; do xdotool key "$key"; sleep 2; done
           }
 
