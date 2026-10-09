@@ -26,7 +26,11 @@
 # necessity (IL2CPP for macOS can only be built on a Mac), so instead of the IL2CPP check it must
 # be a universal binary (Intel + Apple silicon) and carry the ad-hoc code signature Unity writes,
 # without which an Apple silicon Mac kills it at launch. The zip is written by
-# tools/release/zip_macos_bundle.py, which keeps the executable bit a Windows zip would lose.
+# tools/release/zip_unix_release.py, which keeps the executable bit a Windows zip would lose.
+#
+# -Platform linux (since 2026-10-09) packages build/linux/Ironfront.x86_64, an IL2CPP player like
+# the Windows one and checked the same way, plus an x86_64 ELF check. It is zipped by the same
+# script, which marks every ELF file executable; .github/workflows/linux-smoke.yml starts it.
 #
 # Usage:
 #   pwsh tools/build-player.ps1                                   # first, from a clean checkout
@@ -34,6 +38,8 @@
 #   pwsh tools/package-release.ps1 -Version v1.1.0 -Publish       # ...and create the GitHub release
 #   pwsh tools/build-player.ps1 -Platform macos
 #   pwsh tools/package-release.ps1 -Version v1.1.0 -Platform macos
+#   pwsh tools/build-player.ps1 -Platform linux
+#   pwsh tools/package-release.ps1 -Version v1.1.0 -Platform linux
 #
 # Full procedure: docs/releasing.md.
 
@@ -44,8 +50,9 @@ param(
     [ValidatePattern('^v\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$')]
     [string] $Version,
 
-    # windows (build/windows/Ironfront.exe) or macos (build/macos/Ironfront.app).
-    [ValidateSet("windows", "macos")]
+    # windows (build/windows/Ironfront.exe), macos (build/macos/Ironfront.app) or linux
+    # (build/linux/Ironfront.x86_64).
+    [ValidateSet("windows", "macos", "linux")]
     [string] $Platform = "windows",
 
     # Default build/<platform>.
@@ -70,6 +77,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $isMac = $Platform -eq "macos"
+$isLinux = $Platform -eq "linux"
 . "$PSScriptRoot/lib/mac-bundle.ps1"
 if (-not $BuildDirectory) { $BuildDirectory = "build/$Platform" }
 
@@ -162,17 +170,32 @@ if ($isMac) {
     $shipFrom = $app
 }
 else {
-    # --- Windows release player -----------------------------------------------------------------
-    $exe      = Join-Path $buildDir "Ironfront.exe"
+    # --- Windows or Linux release player (IL2CPP, a flat folder) ---------------------------------
+    # The same checks on both: Linux names the executable Ironfront.x86_64 and the native code
+    # GameAssembly.so, and its executable must be an x86_64 ELF file.
+    $exeName      = if ($isLinux) { "Ironfront.x86_64" } else { "Ironfront.exe" }
+    $gameAssembly = if ($isLinux) { "GameAssembly.so" } else { "GameAssembly.dll" }
+    $buildHint    = if ($isLinux) { "tools/build-player.ps1 -Platform linux" } else { "tools/build-player.ps1" }
+    $exe      = Join-Path $buildDir $exeName
     $metadata = Join-Path $buildDir "Ironfront_Data/il2cpp_data/Metadata/global-metadata.dat"
 
-    if (-not (Test-Path $exe)) { throw "No player at $exe. Run tools/build-player.ps1 first." }
+    if (-not (Test-Path $exe)) { throw "No player at $exe. Run $buildHint first." }
 
-    # IL2CPP compiles every assembly into GameAssembly.dll and keeps the string literals and type
+    # IL2CPP compiles every assembly into GameAssembly and keeps the string literals and type
     # names in global-metadata.dat; a Mono player has Ironfront_Data/Managed/ instead.
-    if (-not (Test-Path (Join-Path $buildDir "GameAssembly.dll")) -or -not (Test-Path $metadata)) {
-        throw ("$BuildDirectory is not an IL2CPP player (no GameAssembly.dll / global-metadata.dat). " +
-               "Build the release player with tools/build-player.ps1, without -Development.")
+    if (-not (Test-Path (Join-Path $buildDir $gameAssembly)) -or -not (Test-Path $metadata)) {
+        throw ("$BuildDirectory is not an IL2CPP player (no $gameAssembly / global-metadata.dat). " +
+               "Build the release player with $buildHint, without -Development.")
+    }
+
+    if ($isLinux) {
+        # ELF magic, 64-bit class (2), machine x86-64 (0x3E at offset 18).
+        $head = [System.IO.File]::ReadAllBytes($exe)[0..19]
+        if ($head[0] -ne 0x7F -or $head[1] -ne 0x45 -or $head[2] -ne 0x4C -or $head[3] -ne 0x46 -or
+            $head[4] -ne 2 -or $head[18] -ne 0x3E) {
+            throw "$exe is not an x86_64 ELF executable."
+        }
+        Write-Host "[release] x86_64 ELF executable"
     }
     if (Test-Path (Join-Path $buildDir "Ironfront_Data/Managed")) {
         throw "$BuildDirectory also holds a Mono player's Managed/ folder; rebuild it into an empty folder."
@@ -183,7 +206,7 @@ else {
     $metadataText = Read-Latin1 $metadata
     if ($metadataText.Contains("LaneBHarness")) {
         throw ("$BuildDirectory still contains Net/Diagnostics (LaneBHarness). That is a -KeepDiagnostics " +
-               "measuring build; rebuild with plain tools/build-player.ps1.")
+               "measuring build; rebuild with plain $buildHint.")
     }
     Write-Host "[release] IL2CPP release player, diagnostics compiled out"
 
@@ -191,7 +214,7 @@ else {
     # bytes. (A Mono assembly keeps them as UTF-16, which is why the macOS check decodes Unicode.)
     if (-not $metadataText.Contains($Commit)) {
         throw ("The build in $BuildDirectory is not stamped with $Commit. Rebuild it with " +
-               "tools/build-player.ps1 from that commit, or pass -Commit with the one it was built from.")
+               "$buildHint from that commit, or pass -Commit with the one it was built from.")
     }
     Write-Host "[release] build stamped with $Commit"
     $shipFrom = $buildDir
@@ -210,7 +233,7 @@ if ($forbidden) {
 # --- stage -----------------------------------------------------------------------------------
 $name     = "IronfrontReborn-$Version"
 $staging  = Join-Path $outDir $name
-$zipPath  = Join-Path $outDir $(if ($isMac) { "$name-macos.zip" } else { "$name-windows-x64.zip" })
+$zipPath  = Join-Path $outDir $(if ($isMac) { "$name-macos.zip" } elseif ($isLinux) { "$name-linux-x64.zip" } else { "$name-windows-x64.zip" })
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
@@ -225,20 +248,21 @@ robocopy $shipFrom $copyTo /E /NFL /NDL /NJH /NJS /NP /XD "*_DoNotShip" "*_ButDo
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE." }
 $global:LASTEXITCODE = 0
 
-$readmeTemplate = if ($isMac) { "release/README-macos.txt" } else { "release/README.txt" }
+$readmeTemplate = if ($isMac) { "release/README-macos.txt" } elseif ($isLinux) { "release/README-linux.txt" } else { "release/README.txt" }
 $readme = Get-Content -Raw (Join-Path $PSScriptRoot $readmeTemplate)
 $readme = $readme.Replace("{{VERSION}}", $Version).Replace("{{COMMIT}}", $Commit)
-# Windows: CRLF so Notepad on an old Windows shows lines, not one run-on paragraph. macOS: LF.
-# UTF-8 WITH a BOM on both, so neither Notepad nor TextEdit guesses a legacy code page and
-# mangles the Vietnamese.
-$readme = if ($isMac) { $readme -replace "`r?`n", "`n" } else { $readme -replace "`r?`n", "`r`n" }
+# Windows: CRLF so Notepad on an old Windows shows lines, not one run-on paragraph. macOS and
+# Linux: LF. UTF-8 WITH a BOM on Windows and macOS, so neither Notepad nor TextEdit guesses a
+# legacy code page and mangles the Vietnamese; without one on Linux, where every editor reads
+# UTF-8 and `cat` would print the BOM's bytes.
+$readme = if ($isMac -or $isLinux) { $readme -replace "`r?`n", "`n" } else { $readme -replace "`r?`n", "`r`n" }
 [System.IO.File]::WriteAllText((Join-Path $staging "README.txt"), $readme,
-                               [System.Text.UTF8Encoding]::new($true))
+                               [System.Text.UTF8Encoding]::new(-not $isLinux))
 
 # --- zip -------------------------------------------------------------------------------------
-if ($isMac) {
-    & python (Join-Path $PSScriptRoot "release/zip_macos_bundle.py") $staging $zipPath
-    if ($LASTEXITCODE -ne 0) { throw "zip_macos_bundle.py failed ($LASTEXITCODE)." }
+if ($isMac -or $isLinux) {
+    & python (Join-Path $PSScriptRoot "release/zip_unix_release.py") $Platform $staging $zipPath
+    if ($LASTEXITCODE -ne 0) { throw "zip_unix_release.py failed ($LASTEXITCODE)." }
 }
 else {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -265,6 +289,17 @@ Ironfront: Reborn $Version for macOS 12+ (Intel and Apple silicon), built from `
 **Cài đặt:** tải ``$($zip.Name)``, mở file zip, kéo ``Ironfront.app`` vào Applications rồi mở. Game chưa được Apple công chứng nên lần đầu macOS sẽ chặn: vào System Settings > Privacy & Security, bấm "Open Anyway". Hướng dẫn đầy đủ nằm trong ``README.txt`` bên trong file zip.
 
 **Install:** download ``$($zip.Name)``, open it, drag ``Ironfront.app`` into Applications and open it. The game is not notarized, so the first launch is blocked: System Settings > Privacy & Security > "Open Anyway". See ``README.txt`` inside the zip.
+
+SHA-256: ``$hash``
+"@ | Set-Content -Encoding utf8NoBOM $NotesFile
+    }
+    elseif ($isLinux) {
+        @"
+Ironfront: Reborn $Version for 64-bit Linux (x86_64), built from ``$Commit``.
+
+**Cài đặt:** tải ``$($zip.Name)``, giải nén ra một thư mục mới (``unzip $($zip.Name) -d ~/Games``) rồi chạy ``Ironfront.x86_64``. Hướng dẫn đầy đủ nằm trong ``README.txt`` bên trong file zip.
+
+**Install:** download ``$($zip.Name)``, unzip it into a new folder and run ``Ironfront.x86_64``. See ``README.txt`` inside the zip.
 
 SHA-256: ``$hash``
 "@ | Set-Content -Encoding utf8NoBOM $NotesFile

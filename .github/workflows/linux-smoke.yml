@@ -1,0 +1,172 @@
+name: Linux smoke
+
+# Opens a packaged Linux release zip on a real Linux machine. The machine that builds the Linux
+# player is Windows: it can write Ironfront.x86_64 but never start it, so everything Linux decides
+# at launch is checked here instead -- the executable bit the zip has to carry, the player reaching
+# its menu and master endpoint, and then a practice match: a map loaded and played against bots.
+#
+# GitHub's runners have no GPU, so the player draws through Mesa's software OpenGL (llvmpipe) on a
+# virtual X display (Xvfb). That is slow -- seconds per frame while a map loads -- which is why the
+# waits below are generous; it says nothing about the frame rate a player will see.
+#
+# How to run it on a zip that is not public yet (docs/releasing.md § 8):
+#   gh release create linux-smoke-<n> --draft --title "Linux smoke <n>" artifacts/release/<zip>
+#   git tag linux-smoke-<n> <commit> && git push origin linux-smoke-<n>     # starts this run
+# or, for any release that holds a *-linux-x64.zip (drafts included):
+#   gh workflow run linux-smoke.yml -f release=v4.6.0
+#
+# It reads the release through the API rather than its download URL because a draft has no
+# public URL, and that is also why the token needs contents: write.
+
+on:
+  push:
+    tags: ['linux-smoke-*']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release tag holding the *-linux-x64.zip (a draft release works)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.release }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Linux x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE: ${{ inputs.release || github.ref_name }}
+    steps:
+      - name: Download the Linux zip
+        run: |
+          set -euo pipefail
+          url=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$RELEASE\")][0].assets[] | select(.name | endswith(\"-linux-x64.zip\")) | .url")
+          if [ -z "$url" ]; then echo "::error::release $RELEASE has no *-linux-x64.zip"; exit 1; fi
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" -o ironfront.zip "$url"
+          ls -l ironfront.zip
+
+      - name: X server, software OpenGL and input tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb xdotool imagemagick mesa-utils libgl1-mesa-dri libglu1-mesa \
+            libxrandr2 libxcursor1 libxinerama1 libxi6 libasound2t64 >/dev/null
+
+      - name: Unzip it the way a player does
+        run: |
+          set -euo pipefail
+          unzip -q ironfront.zip -d extracted
+          exe=$(find "$PWD/extracted" -maxdepth 2 -name Ironfront.x86_64 -type f | head -1)
+          if [ -z "$exe" ]; then echo "::error::no Ironfront.x86_64 in the zip"; exit 1; fi
+          echo "EXE=$exe" >> "$GITHUB_ENV"
+          ls -la "$(dirname "$exe")"
+          file "$exe"
+          # unzip restores the mode package-release.ps1 recorded; without it the shell answers
+          # "Permission denied" and a player has no idea why.
+          if [ ! -x "$exe" ]; then echo "::error::$exe is not executable after unzipping"; exit 1; fi
+          case "$(file -b "$exe")" in *"ELF 64-bit"*"x86-64"*) ;; *) echo "::error::not an x86_64 ELF executable"; exit 1;; esac
+
+      - name: Menu, then a practice match
+        run: |
+          set -uo pipefail
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1280x720x24 >/dev/null 2>&1 &
+          sleep 2
+          glxinfo -B | grep -E "OpenGL (renderer|core profile version)" || true
+
+          log="$PWD/player.log"
+          alive() { kill -0 "$pid" 2>/dev/null; }
+          # The Linux player writes its log as it goes (unlike the macOS one), so waits poll it.
+          wait_for() {  # pattern, seconds
+            for _ in $(seq 1 "$2"); do
+              grep -q "$1" "$log" 2>/dev/null && return 0
+              alive || return 1
+              sleep 1
+            done
+            return 1
+          }
+          shot() { import -window root "$1" 2>/dev/null || true; }
+          keys() {
+            local win
+            win=$(xdotool search --onlyvisible --class Ironfront 2>/dev/null | head -1)
+            [ -n "$win" ] && xdotool windowactivate --sync "$win" 2>/dev/null
+            local key
+            for key in "$@"; do xdotool key "$key"; sleep 2; done
+          }
+
+          "$EXE" -logFile "$log" -force-glcore -screen-fullscreen 0 -screen-width 1280 -screen-height 720 &
+          pid=$!
+
+          if ! wait_for '\[flow\] client flow up; title screen ready' 180; then
+            shot shot-menu.png
+            echo "::error::the title screen never came up"; tail -80 "$log"; kill -9 "$pid" 2>/dev/null; exit 1
+          fi
+          sleep 5
+          shot shot-menu.png
+
+          # Into practice from the keyboard (MenuKeyboardNavigator): MULTIPLAYER has focus, Tab
+          # moves to PRACTICE OFFLINE, Return opens it, and Return on the map dropdown falls through
+          # to the panel's primary button, START PRACTICE.
+          keys Tab Return Return
+          practice=yes
+          if ! wait_for "\[vegetation\] 'Terrain" 420; then
+            practice=no
+            shot shot-practice.png
+            echo "::error::the practice map did not load"; tail -80 "$log"
+          else
+            sleep 20
+            shot shot-practice.png
+            # The map opens on the loadout screen; DEPLOY sits bottom right at this size. Whether
+            # the click landed is judged from the next screenshot, not here.
+            xdotool mousemove 1000 650 click 1 2>/dev/null || true
+            sleep 30
+            shot shot-deployed.png
+          fi
+          if ! alive; then
+            wait "$pid"; echo "::error::the player exited on its own (status $?)"; tail -80 "$log"; exit 1
+          fi
+
+          # SIGTERM is how a Linux desktop asks an application to close; Unity answers it by quitting.
+          started=$(date +%s)
+          kill -TERM "$pid"
+          for _ in $(seq 1 30); do alive || break; sleep 1; done
+          if alive; then
+            kill -9 "$pid"; echo "::warning::the player did not quit on SIGTERM within 30 s"
+          fi
+          wait "$pid"; status=$?
+          echo "stopped in $(( $(date +%s) - started )) s, exit status $status"
+
+          echo "--- player log markers"
+          grep -E '\[(flow|net|vegetation)\]|Exception|Crash' "$log" | head -80 || true
+          failed=no
+          need() {
+            if grep -q "$1" "$log"; then echo "ok   $2"; else echo "::error::missing from the player log: $2"; failed=yes; fi
+          }
+          need '\[flow\] master = kien-master-2026.fly.dev:443 (TLS' "[flow] master = kien-master-2026.fly.dev:443 (TLS ..."
+          need '\[flow\] client flow up; title screen ready' "[flow] client flow up; title screen ready"
+          need '\[net\] this process plays offline' "[net] this process plays offline (practice started)"
+          need "\[vegetation\] 'Terrain" "[vegetation] 'Terrain ...' (the map's terrain loaded)"
+          exceptions=$(grep -c 'Exception' "$log" || true)
+          echo "exception lines in the log: $exceptions"
+          if [ "$exceptions" -gt 0 ]; then echo "::error::the player log holds $exceptions exception line(s)"; failed=yes; fi
+          [ "$practice" = yes ] || failed=yes
+          [ "$failed" = no ]
+
+      - name: Keep the log and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-smoke
+          path: |
+            player.log
+            shot-*.png
+          if-no-files-found: ignore
+          retention-days: 14

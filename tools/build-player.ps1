@@ -33,9 +33,15 @@
 # (Mono)" module, installed through Unity Hub. The first macOS build compiles every shader for
 # Metal and takes far longer than a Windows build; later ones reuse the shader cache in Library/.
 #
+# -Platform linux (since 2026-10-09) builds build/linux/Ironfront.x86_64: the Windows recipe for
+# x86_64 Linux, IL2CPP cross-compiled from Windows with the com.unity.toolchain.win-x86_64-linux
+# package the project carries. It needs the "Linux Build Support (IL2CPP)" module. IL2CPP is not a
+# choice here: Unity ships no non-development Mono player for Linux.
+#
 # Usage:
 #   pwsh tools/build-player.ps1
 #   pwsh tools/build-player.ps1 -Platform macos
+#   pwsh tools/build-player.ps1 -Platform linux
 #   pwsh tools/build-player.ps1 -Development
 #   pwsh tools/build-player.ps1 -UnityPath "D:\UnityEditor\6000.3.21f1\Editor\Unity.exe"
 #   pwsh tools/build-player.ps1 -OutputDirectory build/windows -LogFile tmp/build-player.log
@@ -46,8 +52,9 @@ param(
     # Same variable tools/build-server.ps1 and run-lane-b.ps1 read.
     [string] $UnityPath = $env:UNITY_PATH,
 
-    # windows (Ironfront.exe, IL2CPP) or macos (Ironfront.app, Mono, universal). See the header.
-    [ValidateSet("windows", "macos")]
+    # windows (Ironfront.exe, IL2CPP), macos (Ironfront.app, Mono, universal) or linux
+    # (Ironfront.x86_64, IL2CPP cross-compiled from Windows). See the header.
+    [ValidateSet("windows", "macos", "linux")]
     [string] $Platform = "windows",
 
     # Where the player lands. Default build/windows -- the contract with run-lane-b.ps1 and
@@ -79,6 +86,7 @@ if ($Development -and $KeepDiagnostics) {
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $isMac = $Platform -eq "macos"
+$isLinux = $Platform -eq "linux"
 if (-not $OutputDirectory) { $OutputDirectory = "build/$Platform" }
 
 . "$PSScriptRoot/lib/build-stamp.ps1"
@@ -203,7 +211,9 @@ if ($isMac) {
 else {
     $holdsMono   = (Test-Path (Join-Path $buildOut "MonoBleedingEdge")) -or
                    (Test-Path (Join-Path $buildOut "Ironfront_Data/Managed"))
-    $holdsIl2cpp = Test-Path (Join-Path $buildOut "GameAssembly.dll")
+    # GameAssembly.dll on Windows, GameAssembly.so on Linux.
+    $holdsIl2cpp = (Test-Path (Join-Path $buildOut "GameAssembly.dll")) -or
+                   (Test-Path (Join-Path $buildOut "GameAssembly.so"))
     if (($Development -and $holdsIl2cpp) -or (-not $Development -and $holdsMono)) {
         Write-Host "[build] $buildOut holds the other scripting backend's player; emptying it first"
         Get-ChildItem -LiteralPath $buildOut -Force | Remove-Item -Recurse -Force
@@ -217,6 +227,11 @@ if ($isMac) {
     $exe            = Join-Path $buildOut "Ironfront.app/Contents/Info.plist"
     $executeMethod  = "Ironfront.EditorBuildWindowsHarness.BuildMacPlayer"
     $completionLine = "[build] macos player complete ->"
+}
+elseif ($isLinux) {
+    $exe            = Join-Path $buildOut "Ironfront.x86_64"
+    $executeMethod  = "Ironfront.EditorBuildWindowsHarness.BuildLinuxPlayer"
+    $completionLine = "[build] linux player complete ->"
 }
 else {
     $exe            = Join-Path $buildOut "Ironfront.exe"
@@ -331,6 +346,7 @@ if (-not (Test-Path $exe)) {
 $after = (Get-Item $exe).LastWriteTime
 $code = if ($isMac) { Join-Path $buildOut "Ironfront.app/Contents/Resources/Data/Managed/Assembly-CSharp.dll" }
         elseif ($Development) { Join-Path $buildOut "Ironfront_Data/Managed/Assembly-CSharp.dll" }
+        elseif ($isLinux) { Join-Path $buildOut "GameAssembly.so" }
         else { Join-Path $buildOut "GameAssembly.dll" }
 $codeStamp = if (Test-Path $code) { (Get-Item $code).LastWriteTime } else { "MISSING" }
 
@@ -340,8 +356,8 @@ Write-Host "[build] $exe"
 Write-Host "[build]   exe  last written $after$(if ($before -eq $after) { '  (unchanged -- expected)' })"
 Write-Host "[build]   $(Split-Path -Leaf $code) last written $codeStamp  <- judge the build by this"
 Write-Host ""
-if ($isMac) {
-    Write-Host "[build] next: pwsh tools/package-release.ps1 -Platform macos -Version <vX.Y.Z>"
+if ($isMac -or $isLinux) {
+    Write-Host "[build] next: pwsh tools/package-release.ps1 -Platform $Platform -Version <vX.Y.Z>"
 }
 else {
     Write-Host "[build] next: pwsh tools/play-lan.ps1 -PlayerId <id>   (joins the live fly master)"
