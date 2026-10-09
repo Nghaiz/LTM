@@ -232,10 +232,9 @@ namespace Ironfront.Net.Unity
             if (_match.AlliedBots == 0 && _match.EnemyBots >= 20 && _match.HardRule) Raise(DrillSergeant);
 
             if (_match.HardRule && _match.MapId >= 1 && _match.MapId <= 3)
-            {
                 Or(CareerStat.PrGrandTour, 1L << (2 * (_match.MapId - 1) + (_match.Rule == VictoryRule.Target ? 1 : 0)));
-                if (_match.Night) Or(CareerStat.PrGrandTour, 1L << 6);
-            }
+            // "...and win a Night Mode practice round": under any rule, unlike the six map wins.
+            if (_match.Night) Or(CareerStat.PrGrandTour, 1L << 6);
             if (Has(CareerStat.PrGrandTour, 0x7F)) Raise(GrandTour);
         }
 

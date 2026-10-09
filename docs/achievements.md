@@ -448,17 +448,20 @@ Steam chỉ cho so với bạn bè; ở đây so được với **mọi người
 
 ### 7.2 Kiểm tra khả thi trước khi phát hành
 
-| Thành tựu | Kiểm tra | Nếu không làm được |
-|---|---|---|
-| CURVATURE | Có tầm nhìn thật trên Forest Lake dài hơn 900 m; súng ngắm còn giết được bằng headshot ở 900 m | Hạ về mức xa nhất còn giết được, ghi số vào đây |
-| COUNTER-SNIPER | Súng ngắn còn gây sát thương ở 150 m (tầm 200 m) | Hạ khoảng cách, ghi số |
-| MID-AIR | Phi công trực thăng có trúng đạn được không | Đổi thành headshot người ngồi súng trên trực thăng |
-| IMPOSSIBLE ANGLE | Nòng pháo tăng ngóc đủ cao để trúng trực thăng cách đất 10 m | Hạ độ cao xuống mức trúng được |
-| OUTNUMBERED | Phòng 1 người đấu 3 người bắt đầu và cả 4 vào được | Bắt buộc phải được sau khi sửa chọn đội |
-| DRILL SERGEANT | Tự chơi thử một mình trước 20 bot | Hạ số bot, ghi lại |
-| GOLD STANDARD | Gõ ISEEGOLD ở menu mở được cờ lê, mang vào practice và giết được lính | Bắt buộc phải được |
-| DEAD EYE, ABSOLUTE DOMINANCE | Server đếm đủ phát bắn của mọi súng, kể cả bot | Bắt buộc phải đủ trước khi phát hành |
-| UNTOUCHABLE | Server đếm đủ mọi nguồn sát thương | Bắt buộc phải đủ trước khi phát hành |
+| Thành tựu | Kiểm tra | Nếu không làm được | Kết quả (2026-10-10) |
+|---|---|---|---|
+| CURVATURE | Có tầm nhìn thật trên Forest Lake dài hơn 900 m; súng ngắm còn giết được bằng headshot ở 900 m | Hạ về mức xa nhất còn giết được, ghi số vào đây | **Giữ 900 m.** SL-DEFENDER tầm 1.000 m, quá 500 m còn 90% sát thương (72). Forest Lake 3.060 m và Dustbowl 3.000 m vuông nên có đường ngắm trên 900 m; sương mù ở 900 m vẫn còn thấy 44% (Forest Lake) đến 67% (Dustbowl). Island chỉ 540 m nên không làm được ở Island. Kiểm từ số liệu game, chưa bắn thử |
+| COUNTER-SNIPER | Súng ngắn còn gây sát thương ở 150 m (tầm 200 m) | Hạ khoảng cách, ghi số | **Giữ nguyên.** S-IND7 tầm 200 m; ở 150 m mỗi viên còn khoảng 26 (giảm dần từ 99 m, tới 200 m còn 75%) |
+| MID-AIR | Phi công trực thăng có trúng đạn được không | Đổi thành headshot người ngồi súng trên trực thăng | **Giữ nguyên, chỉ bằng SL-DEFENDER.** Ghế trực thăng là ghế kín: đạn thường không tới người ngồi trong, chỉ đạn xuyên của SL-DEFENDER (tầm 1.000 m) tới được |
+| DOGFIGHT | (thêm) Phi công có vũ khí không | | **Có:** ghế phi công điều khiển rocket pod |
+| IMPOSSIBLE ANGLE | Nòng pháo tăng ngóc đủ cao để trúng trực thăng cách đất 10 m | Hạ độ cao xuống mức trúng được | **Giữ 10 m.** Khớp nòng pháo giới hạn −40° / +11°, nên ít nhất ngóc được 11°: trực thăng cao hơn nòng 10 m trúng được từ 52 m trở ra. Đạn tăng 1.200 sát thương, trực thăng 1.000 máu: một phát là rơi |
+| OUTNUMBERED | Phòng 1 người đấu 3 người bắt đầu và cả 4 vào được | Bắt buộc phải được sau khi sửa chọn đội | **Xong** ở PR #588 (phòng 1 xanh đấu 10 đỏ bắt đầu và chơi bình thường) |
+| DRILL SERGEANT | Tự chơi thử một mình trước 20 bot | Hạ số bot, ghi lại | Practice có "BLUE / RED, ALONE VS ALL BOTS" (PR #591), tối đa 50 bot địch; luật có test. Chưa tự chơi thắng thử |
+| GOLD STANDARD | Gõ ISEEGOLD ở menu mở được cờ lê, mang vào practice và giết được lính | Bắt buộc phải được | ISEEGOLD và cờ lê đã kiểm ở PR #589; mạng giết bằng cờ lê vàng được chấm (test `PracticeFeatsTests`). Practice phải mở từ menu (chạy Offline) mới chấm, đúng như người chơi mở |
+| DEAD EYE, ABSOLUTE DOMINANCE | Server đếm đủ phát bắn của mọi súng, kể cả bot | Bắt buộc phải đủ trước khi phát hành | **Xong** ở PR #590 (đếm cả phát bắn của bot) |
+| UNTOUCHABLE | Server đếm đủ mọi nguồn sát thương | Bắt buộc phải đủ trước khi phát hành | **Xong** ở PR #590 |
+
+Khi rà luật practice còn tìm ra một lỗi: GRAND TOUR chỉ ghi trận thắng ban đêm nếu trận đó dùng luật khó, trong khi mô tả chỉ yêu cầu "thắng một trận Night Mode". Đã sửa; 15 thành tựu practice giờ có test ở ngưỡng và thiếu một.
 
 ### 7.3 Test
 
