@@ -43,6 +43,10 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         private static AchievementToast? _instance;
 
+        /// <summary>A golden wrench found on the menu, waiting for its banner (<see cref="GoldenWrench"/>).</summary>
+        private static bool _wrenchNoticePending;
+        private static Sprite? _wrenchPicture;
+
         private RectTransform? _panel;
         private CanvasGroup? _group;
         private AngularPanel? _face;
@@ -66,6 +70,11 @@ namespace Ironfront.Net.Unity.Client.Overlay
         {
             if (Application.isBatchMode || _instance != null) return;
             _instance = Create();
+            GoldenWrench.Revealed += picture =>
+            {
+                _wrenchPicture = picture;
+                _wrenchNoticePending = true;
+            };
             DontDestroyOnLoad(_instance.gameObject);
         }
 
@@ -181,7 +190,43 @@ namespace Ironfront.Net.Unity.Client.Overlay
             }
 
             _idle += Time.unscaledDeltaTime;
-            if (_idle >= GapSeconds && AchievementLedger.TryNextToast(out Achievement next)) Begin(next, playSound: true);
+            if (_idle < GapSeconds) return;
+            if (_wrenchNoticePending)
+            {
+                _wrenchNoticePending = false;
+                BeginWrenchNotice();
+            }
+            else if (AchievementLedger.TryNextToast(out Achievement next)) Begin(next, playSound: true);
+        }
+
+        /// <summary>
+        /// The golden wrench's banner: the secret the original game kept behind <c>ISEEGOLD</c>.
+        /// Gold, like the wrench; no chime, because the original's own unlock sound plays with it.
+        /// </summary>
+        private void BeginWrenchNotice()
+        {
+            Color gold = AchievementArt.TierColour(AchievementTier.Gold);
+            if (_face != null) _face.Configure(14f, AngularEdge.All, 2f, UiStyle.WithAlpha(gold, 0.9f));
+            if (_glow != null) _glow.color = UiStyle.WithAlpha(gold, 0.5f);
+            if (_badge != null) _badge.sprite = _wrenchPicture;
+            if (_trophy != null) _trophy.color = gold;
+            if (_kicker != null)
+            {
+                _kicker.text = "SECRET FOUND";
+                _kicker.color = gold;
+            }
+            if (_tier != null)
+            {
+                _tier.text = "PRACTICE ONLY";
+                _tier.color = UiStyle.WithAlpha(gold, 0.85f);
+            }
+            if (_title != null) _title.text = "THE GOLDEN WRENCH IS YOURS";
+            if (_line != null) _line.text = "Pick it from GEAR on the loadout screen of a practice match.";
+            if (_timer != null) _timer.color = gold;
+
+            _showing = true;
+            _age = 0f;
+            Animate();
         }
 
         private void Begin(Achievement achievement, bool playSound)
@@ -191,7 +236,11 @@ namespace Ironfront.Net.Unity.Client.Overlay
             if (_glow != null) _glow.color = UiStyle.WithAlpha(metal, 0.5f);
             if (_badge != null) _badge.sprite = AchievementArt.Badge(achievement, revealed: true);
             if (_trophy != null) _trophy.color = metal;
-            if (_kicker != null) _kicker.color = metal;
+            if (_kicker != null)
+            {
+                _kicker.text = "ACHIEVEMENT UNLOCKED";
+                _kicker.color = metal;
+            }
             if (_tier != null)
             {
                 _tier.text = AchievementBoard.TierName(achievement.Tier) + "  //  " + AchievementCatalog.CategoryName(achievement.Category);
