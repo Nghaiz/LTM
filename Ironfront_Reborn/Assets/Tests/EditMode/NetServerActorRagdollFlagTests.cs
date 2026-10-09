@@ -52,6 +52,8 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             public void ApplyBalanceDamage(float balanceDamage) { }
 
+            public void SetTeam(byte team) { }
+
             public bool TryGetActiveWeaponNetworkId(out byte networkId)
             {
                 networkId = 0;

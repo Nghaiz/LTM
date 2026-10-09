@@ -468,43 +468,59 @@ namespace Ironfront.Net.Unity.Server.Tests
         }
 
         /// <summary>
-        /// Everyone asking for the same side fills that side and then stops — with the other
-        /// side still empty. Criterion 6's unit half.
+        /// Everyone asking for the same side gets a body on that side, past half the seats, until
+        /// the server is full. Owner's ruling of 2026-10-09: players choose their side freely,
+        /// even 1 v 10.
         /// </summary>
         /// <remarks>
-        /// <b>This is the intended behaviour, not a defect</b>, and it is exactly why
-        /// <c>ConnectDenyReason.TeamFull</c> and <c>DisconnectReason.TeamFull</c> exist. A
-        /// server refusing a player with eight empty bodies standing on the other side must
-        /// say which of the two facts it is, because only one of them has a remedy.
+        /// Until that ruling the ninth team-0 joiner was refused with <c>TeamFull</c> while eight
+        /// bodies stood idle on team 1. Now a full side borrows a free body from the other side
+        /// and moves it across, so every connection is admitted and every body ends on the side
+        /// its player asked for.
         /// </remarks>
         [Test]
-        public void OneSideFillsAtHalfCapacity_AndTheServerIsNotFull()
+        public void OneSideTakesEveryBody_PastHalfTheSeats()
         {
             Assert.IsTrue(_pool.Fill(MaxConnections, CreateBody, _registry), "pool did not fill");
 
-            int perSide = MaxConnections / 2;
-
-            for (int i = 0; i < perSide; i++)
+            var claimed = new HashSet<ushort>();
+            for (int i = 0; i < MaxConnections; i++)
             {
                 Assert.IsTrue(
-                    _registry.TryClaimPlayerSlot(0, out NetServerActor _),
-                    $"team 0 joiner {i + 1} of {perSide} found no body");
+                    _registry.TryClaimPlayerSlot(0, out NetServerActor actor),
+                    $"team 0 joiner {i + 1} of {MaxConnections} found no body");
+                Assert.AreEqual(0, actor.Team, $"team 0 joiner {i + 1} was given a team-1 body");
+                Assert.IsTrue(claimed.Add(actor.ActorId), $"actor {actor.ActorId} handed out twice");
             }
 
             Assert.IsFalse(
-                _registry.TryClaimPlayerSlot(0, out NetServerActor _),
-                $"team 0 admitted a {perSide + 1}th player; the pool holds {perSide} a side");
+                _registry.TryClaimPlayerSlot(1, out NetServerActor _),
+                "a full server admitted one more player");
+            Assert.IsFalse(_registry.HasFreePlayerSlotOnAnyTeam(), "a full server reported a free body");
+        }
 
-            // The distinction the player is owed: this refusal is NOT "the server is full".
-            Assert.IsTrue(
-                _registry.HasFreePlayerSlotOnAnyTeam(),
-                "a full side was reported as a full server — TeamFull would render as "
-                + "ServerFull and the player would be told a remediless lie");
+        /// <summary>
+        /// A balanced room moves no body: same-side bodies are used before any is borrowed.
+        /// </summary>
+        [Test]
+        public void ABalancedRoomUsesEachSidesOwnBodies()
+        {
+            Assert.IsTrue(_pool.Fill(MaxConnections, CreateBody, _registry), "pool did not fill");
 
-            Assert.IsTrue(
-                _registry.TryClaimPlayerSlot(1, out NetServerActor other),
-                "the empty side refused a joiner");
-            Assert.AreEqual(1, other.Team);
+            var bornOn = new Dictionary<ushort, byte>();
+            foreach (GameObject go in _spawned)
+            {
+                var body = go.GetComponent<NetServerActor>();
+                bornOn[body.ActorId] = body.Team;
+            }
+
+            for (int i = 0; i < MaxConnections; i++)
+            {
+                byte want = (byte)(i % 2);
+                Assert.IsTrue(_registry.TryClaimPlayerSlot(want, out NetServerActor actor));
+                Assert.AreEqual(bornOn[actor.ActorId], actor.Team,
+                    $"a balanced room moved actor {actor.ActorId} to the other side");
+            }
         }
 
         /// <summary>

@@ -926,6 +926,17 @@ namespace Ironfront.Net.Unity.Bindings
             if (_actor.balance < 0f) _actor.KnockOver(Vector3.up * 100f);
         }
 
+        public void SetTeam(byte team)
+        {
+            // The alive registers are keyed by team. An unclaimed body is dead (a fresh Actor
+            // starts dead, a leaver's body is killed when parked) and so is in neither; one that
+            // is alive moves registers with its team, or the old side would keep a ghost target.
+            bool alive = !_actor.dead;
+            if (alive) ActorManager.SetDead(_actor);
+            _actor.SetTeam(team);
+            if (alive) ActorManager.SetAlive(_actor);
+        }
+
         /// <summary>
         /// <c>Actor.SpawnWeapon</c> stamps <c>WeaponManager.NetworkIdOf(entry)</c> onto
         /// <c>Weapon.NetworkId</c> at spawn, and <c>activeWeapon</c> is whichever one is
