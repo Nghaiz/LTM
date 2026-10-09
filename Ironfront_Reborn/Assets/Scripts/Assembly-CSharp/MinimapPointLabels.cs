@@ -31,7 +31,7 @@ public sealed class MinimapPointLabels : MonoBehaviour
 
 	private static readonly Color LabelEdge = new Color(0.02f, 0.03f, 0.05f, 0.9f);
 
-	private sealed class Label
+	private sealed class PointLabel
 	{
 		public Transform point;
 
@@ -40,7 +40,7 @@ public sealed class MinimapPointLabels : MonoBehaviour
 		public RectTransform rect;
 	}
 
-	private readonly List<Label> labels = new List<Label>();
+	private readonly List<PointLabel> labels = new List<PointLabel>();
 
 	private RectTransform layer;
 
@@ -88,7 +88,7 @@ public sealed class MinimapPointLabels : MonoBehaviour
 		return view;
 	}
 
-	private static Label BuildLabel(RectTransform layer, CapturePoint point, Font font)
+	private static PointLabel BuildLabel(RectTransform layer, CapturePoint point, Font font)
 	{
 		Text text = new GameObject("Label " + point.name, typeof(RectTransform)).AddComponent<Text>();
 		RectTransform rect = text.rectTransform;
@@ -106,7 +106,7 @@ public sealed class MinimapPointLabels : MonoBehaviour
 		Outline edge = text.gameObject.AddComponent<Outline>();
 		edge.effectColor = LabelEdge;
 		edge.effectDistance = new Vector2(1f, -1f);
-		return new Label { point = point.transform, text = text, rect = rect };
+		return new PointLabel { point = point.transform, text = text, rect = rect };
 	}
 
 	private void LateUpdate()
@@ -127,7 +127,7 @@ public sealed class MinimapPointLabels : MonoBehaviour
 
 		for (int i = 0; i < labels.Count; i++)
 		{
-			Label label = labels[i];
+			PointLabel label = labels[i];
 			if (label.point == null)
 			{
 				SetVisible(label, false);
@@ -162,7 +162,7 @@ public sealed class MinimapPointLabels : MonoBehaviour
 		}
 	}
 
-	private static void SetVisible(Label label, bool visible)
+	private static void SetVisible(PointLabel label, bool visible)
 	{
 		if (label.text.enabled != visible)
 		{
