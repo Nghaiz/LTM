@@ -35,7 +35,7 @@ public class Hitbox : MonoBehaviour
 			// Achievements v2: a bullet that hurt a soldier is a hit for its shooter's accuracy.
 			if (hurt && p.source != null)
 			{
-				Ironfront.Net.Unity.Server.ServerCombatEvents.ReportHit(p.source, actor, p.sourceWeaponId, p.shotSerial);
+				Ironfront.Net.Unity.NetCareerEvents.Hit(p.source, actor, p.sourceWeaponId, p.shotSerial);
 			}
 			return hurt;
 		}

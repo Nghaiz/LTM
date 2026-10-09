@@ -615,6 +615,12 @@ namespace Ironfront.Net.Unity.Server
             // cannot name this assembly. Cleared in Unbind with the other weapon seams.
             NetShotAnnouncements.Announcer = this;
 
+            // Achievements v2: the legacy game's damage, hits and horns reach the career tally
+            // through the Shared seam, never by naming this assembly.
+            NetCareerEvents.DamageSink = ServerCombatEvents.ReportDamage;
+            NetCareerEvents.HitSink = ServerCombatEvents.ReportHit;
+            NetCareerEvents.HornSink = ServerCombatEvents.ReportHorn;
+
             // The room the tickets name, for ActorManager's bot release: the master's
             // GS_ROOM_ASSIGNED is applied only to this room. Cleared in Unbind.
             _hostedRoom ??= () => RoomIdentity.RoomId;
@@ -705,6 +711,7 @@ namespace Ironfront.Net.Unity.Server
             NetTurretAim.Clear();
             NetWeaponAuthority.Clear();
             NetShotAnnouncements.Clear();
+            NetCareerEvents.Clear();
             if (NetBotRelease.HostedRoom == _hostedRoom) NetBotRelease.HostedRoom = null;
             if (NetResupply.GiveAmmo == _giveSupplyAmmo) NetResupply.GiveAmmo = null;
         }

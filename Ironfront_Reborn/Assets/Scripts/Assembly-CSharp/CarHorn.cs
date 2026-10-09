@@ -90,7 +90,7 @@ public class CarHorn : MountedWeapon
 			}
 			Honked?.Invoke(this);
 			// Achievements v2 (VICTORY LAP): any driver's honk, bot or player. A no-op off the server.
-			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportHorn(user);
+			if (user != null) NetCareerEvents.Horn(user);
 		}
 		lastFired = Time.time;
 	}

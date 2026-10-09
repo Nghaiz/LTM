@@ -1850,7 +1850,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			health -= healthDamage;
 			// Achievements v2 (ON BORROWED TIME): who brought this actor how low. Server only.
-			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDamage(this, attacker, health, DeathContext.Cause);
+			Ironfront.Net.Unity.NetCareerEvents.Damage(this, attacker, health, DeathContext.Cause);
 		}
 		if (!flag)
 		{
