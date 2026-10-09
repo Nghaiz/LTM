@@ -221,6 +221,9 @@ public class MinimapUi : MonoBehaviour
 		{
 			CornerMinimap.Create((RectTransform)base.transform, minimap.texture, this);
 		}
+		// The bases' names, under every icon layer (owner request 2026-10-09); nothing on a map
+		// whose points carry no mapLabel.
+		MinimapPointLabels.Create(minimap.rectTransform, vehicleLayer);
 		UpdateSpawnPointButtons();
 	}
 

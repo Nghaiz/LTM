@@ -543,7 +543,8 @@ public class CornerMinimap : MonoBehaviour
 		rect.sizeDelta = size;
 	}
 
-	private static Font HudFont()
+	/// <summary>The HUD's own font, for code-built text: this radar's letters and the map's point labels.</summary>
+	internal static Font HudFont()
 	{
 		IngameUi hud = IngameUi.instance;
 		if (hud != null && hud.health != null && hud.health.font != null)
