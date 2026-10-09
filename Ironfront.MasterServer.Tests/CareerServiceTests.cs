@@ -494,6 +494,35 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
+        public void EveryAchievementHasItsBadgeEveryHiddenOneItsSilhouetteAndNothingIsLeftOver()
+        {
+            // Rendered by tools/ui/make_icons.py --badges from tools/ui/badges.py; the game loads them
+            // from Resources by id (AchievementArt.Badge), so a missing file is a blank square in game.
+            string folder = System.IO.Path.Combine(RepoRoot(), "Ironfront_Reborn", "Assets", "Resources", "IronfrontUi", "Achievements");
+            var expected = new HashSet<string> { "_hidden" };
+            foreach (Achievement achievement in AchievementCatalog.All)
+            {
+                expected.Add(achievement.Id);
+                if (achievement.Hidden) expected.Add(achievement.Id + "_shadow");
+            }
+            var present = new HashSet<string>(System.IO.Directory.GetFiles(folder, "*.png")
+                .Select(path => System.IO.Path.GetFileNameWithoutExtension(path)!));
+
+            Assert.Empty(expected.Except(present).OrderBy(x => x));
+            Assert.Empty(present.Except(expected).OrderBy(x => x));
+            foreach (string name in present) Assert.True(System.IO.File.Exists(System.IO.Path.Combine(folder, name + ".png.meta")), name);
+        }
+
+        [Fact]
+        public void EveryMetalAndTheDisastersHaveTheirSound()
+        {
+            // AchievementToast plays IronfrontUi/achievement-<metal> (or -disaster), falling back to the chime.
+            string folder = System.IO.Path.Combine(RepoRoot(), "Ironfront_Reborn", "Assets", "Resources", "IronfrontUi");
+            foreach (string name in new[] { "bronze", "silver", "gold", "platinum", "mythic", "disaster", "unlocked" })
+                Assert.True(System.IO.File.Exists(System.IO.Path.Combine(folder, "achievement-" + name + ".wav")), name);
+        }
+
+        [Fact]
         public void TheDesignDocumentNamesEveryAchievement()
         {
             string page = System.IO.File.ReadAllText(System.IO.Path.Combine(RepoRoot(), "docs", "achievements.md"));
