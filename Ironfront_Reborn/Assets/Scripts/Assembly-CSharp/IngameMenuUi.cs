@@ -17,7 +17,7 @@ public class IngameMenuUi : MonoBehaviour
 		{
 			return;
 		}
-		instance.canvas.enabled = true;
+		MenuCanvas.SetShown(instance.canvas, true);
 		MouseLook.paused = true;
 		Cursor.lockState = CursorLockMode.None;
 		Cursor.visible = true;
@@ -41,7 +41,7 @@ public class IngameMenuUi : MonoBehaviour
 		{
 			return;
 		}
-		instance.canvas.enabled = false;
+		MenuCanvas.SetShown(instance.canvas, false);
 		MouseLook.paused = false;
 		// PhysicsRate, not a second `Time.timeScale / 60f`. That literal made this UI script
 		// an authority on the project's physics rate, and a peer that never constructed it --
