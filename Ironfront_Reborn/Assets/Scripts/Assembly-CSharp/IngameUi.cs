@@ -366,4 +366,98 @@ public class IngameUi : MonoBehaviour
 	{
 		flagIndicatorParent.gameObject.SetActive(false);
 	}
+
+	/// <summary>
+	/// The capture-point name line: right-aligned under the top-right row (the side chip and the
+	/// flag indicator), as wide as that row, so it reads as the row's caption and stays clear of the
+	/// killfeed below (which starts 190 canvas units down; this ends near 122).
+	/// </summary>
+	/// <remarks>
+	/// The row is <c>BuildMatchHud</c>'s: a 62-unit flag, a 10-unit gap and a 220-unit chip. Those
+	/// constants live in the Editor assembly, which this cannot reference, hence the plain number.
+	/// </remarks>
+	private const float FlagNameWidth = 292f;
+
+	private const float FlagNameHeight = 30f;
+
+	private const float FlagNameGap = 6f;
+
+	private const int FlagNameFontSize = 20;
+
+	private static readonly Color FlagNameInk = new Color(0.95f, 0.96f, 0.93f);
+
+	private static readonly Color FlagNameEdge = new Color(0f, 0f, 0f, 0.85f);
+
+	private Text flagName;
+
+	/// <summary>The point whose name the line shows, so leaving another point cannot clear it.</summary>
+	private Object flagNameOwner;
+
+	/// <summary>
+	/// Names the capture point the player just stepped onto, under the flag indicator; a point with
+	/// no name (<paramref name="wording"/> null) shows no line. Owner request 2026-10-09.
+	/// </summary>
+	/// <remarks>
+	/// <b>A child of the flag indicator</b>, so it comes and goes with it and moves with it if the
+	/// corner is ever rearranged, and built here in code (as <c>CornerMinimap</c> is) rather than
+	/// in the prefab, which only the Editor can rebuild.
+	/// </remarks>
+	public void ShowFlagName(Object point, string wording)
+	{
+		flagNameOwner = point;
+		if (string.IsNullOrEmpty(wording))
+		{
+			if (flagName != null)
+			{
+				flagName.gameObject.SetActive(false);
+			}
+			return;
+		}
+		if (flagName == null)
+		{
+			flagName = BuildFlagName();
+		}
+		flagName.text = wording;
+		flagName.gameObject.SetActive(true);
+	}
+
+	/// <summary>Takes the line down, if it is still naming <paramref name="point"/>.</summary>
+	public void ClearFlagName(Object point)
+	{
+		if (flagNameOwner != point)
+		{
+			return;
+		}
+		flagNameOwner = null;
+		if (flagName != null)
+		{
+			flagName.gameObject.SetActive(false);
+		}
+	}
+
+	private Text BuildFlagName()
+	{
+		Text text = new GameObject("Flag Name", typeof(RectTransform)).AddComponent<Text>();
+		RectTransform rect = text.rectTransform;
+		rect.SetParent(flagIndicatorParent.rectTransform, false);
+		rect.anchorMin = new Vector2(1f, 0f);
+		rect.anchorMax = new Vector2(1f, 0f);
+		rect.pivot = new Vector2(1f, 1f);
+		rect.anchoredPosition = new Vector2(0f, -FlagNameGap);
+		rect.sizeDelta = new Vector2(FlagNameWidth, FlagNameHeight);
+		text.font = health != null && health.font != null
+			? health.font
+			: Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+		text.fontSize = FlagNameFontSize;
+		text.fontStyle = FontStyle.Bold;
+		text.alignment = TextAnchor.UpperRight;
+		text.horizontalOverflow = HorizontalWrapMode.Overflow;
+		text.verticalOverflow = VerticalWrapMode.Overflow;
+		text.color = FlagNameInk;
+		text.raycastTarget = false;
+		Outline edge = text.gameObject.AddComponent<Outline>();
+		edge.effectColor = FlagNameEdge;
+		edge.effectDistance = new Vector2(1.2f, -1.2f);
+		return text;
+	}
 }

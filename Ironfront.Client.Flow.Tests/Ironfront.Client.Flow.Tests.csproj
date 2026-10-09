@@ -111,6 +111,8 @@
              Link="Linked\PresetGrassScale.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\CpuBudgetRules.cs"
              Link="Linked\CpuBudgetRules.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\CapturePointLabelRules.cs"
+             Link="Linked\CapturePointLabelRules.cs" />
   </ItemGroup>
 
 </Project>

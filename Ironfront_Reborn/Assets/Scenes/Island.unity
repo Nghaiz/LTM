@@ -203905,6 +203905,7 @@ MonoBehaviour:
   flagParent: {fileID: 2843}
   lqFlag: {fileID: 1424}
   hqFlag: {fileID: 879}
+  mapLabel: Backside
 --- !u!114 &7835
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -204539,6 +204540,7 @@ MonoBehaviour:
   flagParent: {fileID: 2722}
   lqFlag: {fileID: 592}
   hqFlag: {fileID: 2548}
+  mapLabel: Landing
 --- !u!114 &7879
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -209054,6 +209056,7 @@ MonoBehaviour:
   flagParent: {fileID: 3097}
   lqFlag: {fileID: 2417}
   hqFlag: {fileID: 834}
+  mapLabel: Farm
 --- !u!114 &8201
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -217440,6 +217443,7 @@ MonoBehaviour:
   flagParent: {fileID: 3582}
   lqFlag: {fileID: 754}
   hqFlag: {fileID: 1285}
+  mapLabel: Fort
 --- !u!114 &8817
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -217621,6 +217625,7 @@ MonoBehaviour:
   flagParent: {fileID: 4691}
   lqFlag: {fileID: 2615}
   hqFlag: {fileID: 2258}
+  mapLabel: Beach
 --- !u!114 &8830
 MonoBehaviour:
   m_ObjectHideFlags: 0

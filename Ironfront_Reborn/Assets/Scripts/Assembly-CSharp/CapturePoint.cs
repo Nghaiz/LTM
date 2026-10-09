@@ -97,6 +97,16 @@ public class CapturePoint : SpawnPoint
 
 	public GameObject hqFlag;
 
+	/// <summary>
+	/// The point's name as players see it: under its flag on the map, and top-right while the
+	/// player stands on it. Blank draws neither (owner request 2026-10-09; every point on Forest
+	/// Lake, Dustbowl and Island is named); see <see cref="CapturePointLabelRules"/>.
+	/// </summary>
+	public string mapLabel = string.Empty;
+
+	/// <summary>What <see cref="mapLabel"/> reads as on screen, or null for a point with no name.</summary>
+	public string MapLabelWording => CapturePointLabelRules.Wording(mapLabel);
+
 	private float control = 1f;
 
 	private int pendingOwner;
@@ -327,10 +337,12 @@ public class CapturePoint : SpawnPoint
 		if (inRadius && !playerWasInRadius)
 		{
 			IngameUi.instance.ShowFlagIndicator();
+			IngameUi.instance.ShowFlagName(this, MapLabelWording);
 		}
 		else if (!inRadius && playerWasInRadius)
 		{
 			IngameUi.instance.HideFlagIndicator();
+			IngameUi.instance.ClearFlagName(this);
 		}
 		if (inRadius)
 		{
