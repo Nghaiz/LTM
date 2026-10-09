@@ -79,6 +79,10 @@ namespace Ironfront.Net.Unity.Bindings
             NetClientBindings.ChatPointer = FreePointerForChat;
             NetClientBindings.HornHeard = CarHorn.PlayNearest;
 
+            // The keys reach a menu only while one is on screen (MatchMenuKeyGuard); these three
+            // are the match's own, and the client assembly may not name them.
+            NetClientBindings.MatchMenuShowing = () => IngameMenuUi.IsOpen() || LoadoutUi.IsOpen() || OptionsUi.IsOpen();
+
             // C4d. The lane-B recorder observes the scoreboard HUD, the offline scoreboard and
             // the scene's capture points, and may name none of them now that Net/Diagnostics is
             // an assembly. Registered unconditionally: the probe resolves its singletons per call

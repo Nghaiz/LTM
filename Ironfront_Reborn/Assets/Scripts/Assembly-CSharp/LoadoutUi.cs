@@ -402,7 +402,7 @@ public class LoadoutUi : MonoBehaviour
 		if (!uiCanvas.enabled)
 		{
 			MinimapUi.PinToLoadoutScreen();
-			uiCanvas.enabled = true;
+			MenuCanvas.SetShown(uiCanvas, true);
 			Cursor.lockState = CursorLockMode.None;
 			Cursor.visible = true;
 			loadoutContainer.gameObject.SetActive(true);
@@ -421,7 +421,7 @@ public class LoadoutUi : MonoBehaviour
 			FinalizeSelection();
 		}
 		MinimapUi.PinToIngameScreen();
-		uiCanvas.enabled = false;
+		MenuCanvas.SetShown(uiCanvas, false);
 		Cursor.lockState = CursorLockMode.Locked;
 		Cursor.visible = false;
 	}

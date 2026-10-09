@@ -2504,6 +2504,7 @@ GameObject:
   - component: {fileID: 114915950506565894}
   - component: {fileID: 222196399618437526}
   - component: {fileID: 114587315582662878}
+  - component: {fileID: 2407182595633454904}
   m_Layer: 5
   m_Name: Menu UI
   m_TagString: Untagged
@@ -2616,6 +2617,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mixer: {fileID: 24100000, guid: 0943a2253d391fc4ba5ba84c12fc0eb6, type: 2}
+--- !u!225 &2407182595633454904
+CanvasGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1288205628259750}
+  m_Enabled: 1
+  m_Alpha: 1
+  m_Interactable: 1
+  m_BlocksRaycasts: 1
+  m_IgnoreParentGroups: 0
 --- !u!1 &1310003694539323
 GameObject:
   m_ObjectHideFlags: 0
@@ -2914,6 +2927,7 @@ GameObject:
   - component: {fileID: 114823691460718822}
   - component: {fileID: 114769835156639253}
   - component: {fileID: 114982503327780756}
+  - component: {fileID: 5186437019512798949}
   m_Layer: 5
   m_Name: Loadout UI Canvas
   m_TagString: Untagged
@@ -3036,6 +3050,18 @@ MonoBehaviour:
   scrollIndicator: {fileID: 224399528792310323}
   howToPlayHint: {fileID: 5874509543147504390}
   nothingSprite: {fileID: 21300000, guid: 38fd9c5e6995e664594a3f2e51f2244c, type: 2}
+--- !u!225 &5186437019512798949
+CanvasGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1329629003158636}
+  m_Enabled: 1
+  m_Alpha: 1
+  m_Interactable: 1
+  m_BlocksRaycasts: 1
+  m_IgnoreParentGroups: 0
 --- !u!1 &1331611675314427
 GameObject:
   m_ObjectHideFlags: 0
@@ -3883,6 +3909,7 @@ GameObject:
   - component: {fileID: 114684015621185100}
   - component: {fileID: 114288973821970362}
   - component: {fileID: 114585095378004349}
+  - component: {fileID: 3564596550209253754}
   m_Layer: 0
   m_Name: EventSystem
   m_TagString: Untagged
@@ -3954,6 +3981,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_SendPointerHoverToParent: 1
   m_ForceModuleActive: 0
+--- !u!114 &3564596550209253754
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1421829645323954}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 07903ef8b78073d45941da53de75881a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ironfront.Net.Unity.Client::Ironfront.Net.Unity.Client.Hud.MatchMenuKeyGuard
 --- !u!1 &1422767315956046
 GameObject:
   m_ObjectHideFlags: 0
