@@ -90,7 +90,10 @@ namespace Ironfront.Net.Unity.Server
                 HitscanBullets = true,
             };
 
-            _deployables = new ServerDeployableAuthority(pool, damageSink, spareAmmo);
+            _deployables = new ServerDeployableAuthority(pool, damageSink, spareAmmo)
+            {
+                Resupplied = (owner, target) => _loop.NoteCareerResupply(owner, target),
+            };
         }
 
         public ServerProjectileAuthority Projectiles => _projectiles;

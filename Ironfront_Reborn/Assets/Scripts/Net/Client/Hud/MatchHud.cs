@@ -447,6 +447,9 @@ namespace Ironfront.Net.Unity.Client.Hud
             _shownSeconds = int.MinValue;
         }
 
+        /// <summary>Whether the Tab board is open. The round's achievement summary steps aside for it.</summary>
+        public bool IsScoreboardVisible => _scoreboardVisible;
+
         /// <inheritdoc/>
         public void SetScoreboardVisible(bool visible)
         {

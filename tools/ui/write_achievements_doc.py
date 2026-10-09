@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Writes docs/achievements.md, the wiki page of every achievement, from the catalogue.
+"""Writes docs/achievements-wiki.md, the players' page of every achievement, from the catalogue.
 
     python tools/ui/write_achievements_doc.py           # rewrite the page
     python tools/ui/write_achievements_doc.py --check   # fail if the page is out of date
 
 The catalogue (Ironfront.Net.Protocol/Achievements/AchievementCatalog.cs) is the one list the
-master unlocks from and the game draws; this page is generated from it so a title or a target
-cannot differ between the game and its documentation. CareerServiceTests also checks that the
-page names every achievement.
+master unlocks from and the game draws; this page is generated from it so a title or a rule cannot
+differ between the game and its documentation. CareerServiceTests checks the page names every
+achievement. docs/achievements.md is the owner's design document (Vietnamese) and is written by hand.
 """
 import os
 import re
@@ -15,105 +15,105 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 CATALOG = os.path.join(ROOT, "Ironfront.Net.Protocol", "Achievements", "AchievementCatalog.cs")
-OUT = os.path.join(ROOT, "docs", "achievements.md")
+OUT = os.path.join(ROOT, "docs", "achievements-wiki.md")
 BADGES = "../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/"
 
-ENTRY = re.compile(
-    r'new Achievement\("(?P<id>[a-z_]+)", "(?P<title>[^"]+)", "(?P<line>[^"]+)", '
-    r'AchievementCategory\.(?P<category>\w+), AchievementTier\.(?P<tier>\w+), '
-    r'(?:CareerStat\.(?P<stat>\w+)|null), (?P<target>[^,)]+)(?P<hidden>, hidden: true)?\)')
-
-ORDER = ["Multiplayer", "Combat", "Vehicles", "Honor", "Hard", "Secret", "Practice"]
-
+CALL = re.compile(r'(?P<helper>Feat|Counter|Best|PartsOf|Claimed|new Achievement)\((?P<number>\d+), (?P<body>.*?)\),\n',
+                  re.S)
+STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+TIERS = {"B": "Bronze", "S": "Silver", "G": "Gold", "P": "Platinum", "M": "Mythic"}
+POINTS = {"Bronze": 10, "Silver": 25, "Gold": 50, "Platinum": 100, "Mythic": 250}
+ORDER = ["Bronze", "Silver", "Gold", "Platinum", "Mythic"]
 INTRO = {
-    "Multiplayer": "Playing online: matches, rounds won, time served, every map.",
-    "Combat": "Kills and how they were made: multi-kills, streaks, headshots, long shots, blades and grenades.",
-    "Vehicles": "Fighting from the jeeps, tanks, helicopters and boats, and against them.",
-    "Honor": "Playing for the side: flags taken, rounds carried, comebacks.",
-    "Hard": "The long grind and the rare feat. Most players never see these.",
-    "Secret": "Hidden in the game until earned: the page shows a sealed badge and \"???\".",
-    "Practice": "Earned offline, against bots, and on the How to play guide. Claimed for your account the next time you sign in.",
+    "Bronze": "A few hours of play, and the funny disasters.",
+    "Silver": "Regular play with some skill behind it.",
+    "Gold": "Real skill, or real persistence.",
+    "Platinum": "The top of a skill, a role, or a rare situation.",
+    "Mythic": "The moments players talk about for years.",
 }
-
-
-def tracks(stat, target):
-    """How the page and the master measure progress, in a reader's words."""
-    if stat is None:
-        return "Seen by your game"
-    value = int(eval(target, {"__builtins__": {}}))  # the catalogue's own constant, e.g. 24 * 60 * 60
-    if stat == "SecondsPlayed":
-        return f"time played, {value // 3600:,} h"
-    if stat.endswith("Metres"):
-        words = re.sub(r"(?<!^)(?=[A-Z])", " ", stat[:-len("Metres")]).lower()
-        return f"{words}, {value:,} m"
-    words = re.sub(r"(?<!^)(?=[A-Z])", " ", stat).lower()
-    return f"{words}, {value:,}"
 
 
 def load():
     source = open(CATALOG, encoding="utf-8-sig").read()
-    entries = [m.groupdict() for m in ENTRY.finditer(source)]
-    if len(entries) != 50:
-        sys.exit(f"expected 50 achievements in the catalogue, parsed {len(entries)}")
+    start = source.index("public static readonly IReadOnlyList<Achievement> All")
+    entries = []
+    for m in CALL.finditer(source, start):
+        body = m.group("body")
+        strings = STRING.findall(body)
+        if m.group("helper") == "Best":
+            title_id, unit, description, teaser = strings[0], strings[2], strings[3], strings[4] if len(strings) > 4 else ""
+        else:
+            title_id, unit, description, teaser = strings[0], "", strings[2], strings[3] if len(strings) > 3 else ""
+        tier_token = re.search(r'"[^"]*", "[^"]*", (\w+),', body).group(1)
+        tags = re.search(r'"[^"]*", "[^"]*", \w+, ([\w |]+),', body).group(1)
+        tier = TIERS.get(tier_token, tier_token)
+        entries.append({
+            "number": int(m.group("number")),
+            "id": title_id,
+            "title": strings[1],
+            "tier": tier,
+            "description": description,
+            "teaser": teaser,
+            "online": "On" in tags.split(" | "),
+            "practice": "Pr" in tags.split(" | "),
+            "night": "Night" in tags.split(" | "),
+            "hidden": "Hid" in tags.split(" | "),
+        })
+    entries.sort(key=lambda e: e["number"])
+    if len(entries) != 80 or [e["number"] for e in entries] != list(range(1, 81)):
+        sys.exit(f"expected achievements 1 to 80 in the catalogue, parsed {len(entries)}")
     return entries
 
 
+def tag_words(e):
+    words = ["Online" if e["online"] else "Practice"]
+    if e["night"]:
+        words.append("Night Mode")
+    if e["hidden"]:
+        words.append("Hidden")
+    return ", ".join(words)
+
+
 def render(entries):
+    total = sum(POINTS[e["tier"]] for e in entries)
     lines = [
         "# Achievements",
         "",
-        "Fifty achievements, earned online and in practice (owner's list of 2026-10-09, item 4).",
-        "Open them from **ACHIEVEMENTS** on the main menu or in the Esc menu during a match;",
-        "the **GLOBAL RANKING** sits beside them.",
+        f"Eighty achievements worth {total:,} points, earned online and in practice. Open them from",
+        "**ACHIEVEMENTS** on the main menu or the Esc menu in a match; compare yours with any player",
+        "from **GLOBAL RANKING**.",
         "",
         "## How they work",
         "",
-        "- **Online achievements are judged by the master server.** At the end of every online round",
-        "  the game server reports each player's numbers (kills, flags, the longest shot, the best",
-        "  multi-kill...) and the master adds them to the account's career. An achievement unlocks the",
-        "  moment its career number reaches the target, and a banner drops in at the top of the screen.",
-        "- **Practice achievements are seen by your own game.** No server watches an offline match, so",
-        "  the game records them on this computer, shows the banner at once, and claims them for your",
-        "  account the next time you sign in to multiplayer.",
-        "- **The list is sorted by how many players hold each one**, commonest first, like a store's",
-        "  global achievement list. The share is out of every player with a career; the rarer ones are",
-        "  marked RARE and ULTRA RARE.",
-        "- **Hidden achievements** show a sealed badge and \"???\" until earned. Their descriptions are",
-        "  below, folded away: open the Secret section only if you want the spoilers.",
-        "- **Badges** are generated from `tools/ui/badges.py` by `tools/ui/make_icons.py`; this page is",
+        "- **Online achievements are judged by the master server** from what the game server saw in",
+        "  each round. Unlocks arrive within seconds, as a banner at the top of the screen; only you see",
+        "  yours.",
+        "- **A round counts** for \"finish\" and \"win\" when you are in it at its end and played at least",
+        "  5 minutes of it. Achievements that ask for longer say how long.",
+        "- **Practice achievements are judged by your own game** in offline matches, kept on your",
+        "  computer and claimed for your account the next time you sign in.",
+        "- **Hidden achievements** show their name, a black silhouette and a hint. The rule appears",
+        "  once you earn it; this page shows the hint only.",
+        "- **Points**: Bronze 10, Silver 25, Gold 50, Platinum 100, Mythic 250.",
+        "- Badges come from `tools/ui/badges.py` (rendered by `tools/ui/make_icons.py`); this page is",
         "  generated from the catalogue by `tools/ui/write_achievements_doc.py`. Do not edit it by hand.",
         "",
-        "Metals, easiest to hardest: Bronze, Silver, Gold, Platinum.",
-        "",
+        "| Metal | Achievements | Points each |",
+        "|---|---|---|",
     ]
+    for tier in ORDER:
+        lines.append(f"| {tier} | {sum(1 for e in entries if e['tier'] == tier)} | {POINTS[tier]} |")
+    lines += [f"| **All** | **{len(entries)}** | **{total:,} in all** |", ""]
 
-    counts = {c: sum(1 for e in entries if e["category"] == c) for c in ORDER}
-    lines += ["| Family | Achievements |", "|---|---|"]
-    lines += [f"| {c} | {counts[c]} |" for c in ORDER]
-    lines += [f"| **All** | **{len(entries)}** |", ""]
-
-    for category in ORDER:
-        group = [e for e in entries if e["category"] == category]
-        lines += [f"## {category}", "", INTRO[category], ""]
-        secret = category == "Secret"
-        if secret:
-            lines += ["<details>", "<summary>Spoilers: the hidden achievements</summary>", ""]
-        lines += ["| Badge | Achievement | How to earn it | Metal | Tracked by |", "|---|---|---|---|---|"]
-        for e in group:
-            badge = f'<img src="{BADGES}{e["id"]}.png" width="64" alt="{e["title"]}">'
-            lines.append(f'| {badge} | **{e["title"]}**<br>`{e["id"]}` | {e["line"]} | {e["tier"]} | '
-                         f'{tracks(e["stat"], e["target"])} |')
+    for tier in ORDER:
+        lines += [f"## {tier}", "", INTRO[tier], "",
+                  "| # | Badge | Achievement | How to earn it | Kind |", "|---|---|---|---|---|"]
+        for e in (x for x in entries if x["tier"] == tier):
+            badge = e["id"] + ("_shadow" if e["hidden"] else "")
+            img = f'<img src="{BADGES}{badge}.png" width="64" alt="{e["title"]}">'
+            rule = f'*{e["teaser"]}*' if e["hidden"] else e["description"]
+            lines.append(f'| {e["number"]} | {img} | **{e["title"]}**<br>`{e["id"]}` | {rule} | {tag_words(e)} |')
         lines.append("")
-        if secret:
-            lines += ["</details>", ""]
-
-    lines += [
-        "## The hidden badge",
-        "",
-        f'<img src="{BADGES}_hidden.png" width="64" alt="Hidden achievement"> What every secret',
-        "achievement shows until it is earned.",
-        "",
-    ]
     return "\n".join(lines)
 
 
@@ -122,8 +122,8 @@ def main():
     if "--check" in sys.argv:
         current = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else ""
         if current != page:
-            sys.exit("docs/achievements.md is out of date: run python tools/ui/write_achievements_doc.py")
-        print("docs/achievements.md is up to date")
+            sys.exit("docs/achievements-wiki.md is out of date: run python tools/ui/write_achievements_doc.py")
+        print("docs/achievements-wiki.md is up to date")
         return
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(page)

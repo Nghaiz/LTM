@@ -297,7 +297,7 @@ namespace Ironfront.Net.Unity.Server
         private void OnPointCaptured(byte pointId, byte team, IReadOnlyList<ushort> capturers)
         {
             if (_loop == null || _match == null || !_match.CountsDeaths) return;
-            for (int i = 0; i < capturers.Count; i++) _loop.Career.CreditCapture(capturers[i]);
+            for (int i = 0; i < capturers.Count; i++) _loop.Career.CreditCapture(capturers[i], pointId);
         }
 
         private void OnDestroy()
@@ -565,8 +565,13 @@ namespace Ironfront.Net.Unity.Server
         }
 
         private void OnPhaseChanged(MatchPhase phase)
-            => Debug.Log($"[net] match phase -> {phase} "
-                         + $"({_match.Score0} / {_match.Score1}, {VictoryWords()})");
+        {
+            Debug.Log($"[net] match phase -> {phase} "
+                      + $"({_match.Score0} / {_match.Score1}, {VictoryWords()})");
+
+            // Achievements v2: the round's facts start with its Playing phase.
+            if (phase == MatchPhase.Playing && _loop != null) _loop.BeginCareerRound(_match.CapturePoints.Count);
+        }
 
         private void OnResetRequested()
         {

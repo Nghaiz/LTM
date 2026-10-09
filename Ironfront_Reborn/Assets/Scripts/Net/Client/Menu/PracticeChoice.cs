@@ -20,7 +20,7 @@ namespace Ironfront.Net.Unity.Client.Menu
     public static class PracticeChoice
     {
         /// <summary>The sides in the order the team dropdown lists them.</summary>
-        public static readonly string[] TeamOptions = { "BLUE TEAM", "RED TEAM" };
+        public static readonly string[] TeamOptions = { "BLUE TEAM", "RED TEAM", "BLUE, ALONE VS ALL BOTS", "RED, ALONE VS ALL BOTS" };
 
         /// <summary>The vehicle options in the order the vehicles dropdown lists them.</summary>
         public static readonly string[] VehicleOptions = { "VEHICLES ON", "VEHICLES OFF" };
@@ -68,7 +68,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             }
 
             settings = new PracticeSettings(
-                rules, bots, team == 1 ? 1 : 0, vehicles: vehicleOption != 1, respawn);
+                rules, bots, team == 1 || team == 3 ? 1 : 0, vehicles: vehicleOption != 1, respawn, alone: team >= 2);
             return true;
         }
 
@@ -80,7 +80,10 @@ namespace Ironfront.Net.Unity.Client.Menu
             RoomSettings rules = settings.Rules;
             string side = settings.PlayerTeam == 1 ? "RED" : "BLUE";
             string vehicles = settings.Vehicles ? string.Empty : "  ·  NO VEHICLES";
-            return RoomSettingsChoice.Describe(in rules) + "  ·  " + RoomBotChoice.Readout(settings.Bots)
+            string bots = settings.Alone
+                ? "ALONE VS " + (settings.Team0Bots + settings.Team1Bots) + " BOTS"
+                : RoomBotChoice.Readout(settings.Bots);
+            return RoomSettingsChoice.Describe(in rules) + "  ·  " + bots
                    + "  ·  " + side + vehicles + "  ·  RESPAWN " + settings.RespawnSeconds + " S";
         }
     }

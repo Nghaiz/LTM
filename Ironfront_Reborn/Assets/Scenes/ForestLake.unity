@@ -161637,6 +161637,7 @@ MonoBehaviour:
   flagParent: {fileID: 1232572963}
   lqFlag: {fileID: 70000111}
   hqFlag: {fileID: 1543123706}
+  mapLabel: Ford
 --- !u!4 &722940546
 Transform:
   m_ObjectHideFlags: 0
@@ -225917,6 +225918,7 @@ MonoBehaviour:
   flagParent: {fileID: 2113328179}
   lqFlag: {fileID: 1116502617}
   hqFlag: {fileID: 1037224217}
+  mapLabel: Island
 --- !u!4 &1086069163
 Transform:
   m_ObjectHideFlags: 0
@@ -265476,6 +265478,7 @@ MonoBehaviour:
   flagParent: {fileID: 298976887}
   lqFlag: {fileID: 1375497877}
   hqFlag: {fileID: 1189694196}
+  mapLabel: Valley Camp
 --- !u!4 &1245976865
 Transform:
   m_ObjectHideFlags: 0
@@ -274364,6 +274367,7 @@ MonoBehaviour:
   flagParent: {fileID: 1762953583}
   lqFlag: {fileID: 753080018}
   hqFlag: {fileID: 1496775059}
+  mapLabel: Ridge Camp
 --- !u!4 &1306880461
 Transform:
   m_ObjectHideFlags: 0
@@ -275931,6 +275935,7 @@ MonoBehaviour:
   flagParent: {fileID: 48000670}
   lqFlag: {fileID: 713349062}
   hqFlag: {fileID: 1327266164}
+  mapLabel: Lakeshore
 --- !u!4 &1315871261
 Transform:
   m_ObjectHideFlags: 0
@@ -323361,6 +323366,7 @@ MonoBehaviour:
   flagParent: {fileID: 77381639}
   lqFlag: {fileID: 378368869}
   hqFlag: {fileID: 747215533}
+  mapLabel: Quarry
 --- !u!4 &1635790088
 Transform:
   m_ObjectHideFlags: 0
@@ -363738,6 +363744,7 @@ MonoBehaviour:
   flagParent: {fileID: 726741351}
   lqFlag: {fileID: 1859096877}
   hqFlag: {fileID: 1970565917}
+  mapLabel: Meadow
 --- !u!4 &1872448859
 Transform:
   m_ObjectHideFlags: 0
@@ -371946,6 +371953,7 @@ MonoBehaviour:
   flagParent: {fileID: 108150291}
   lqFlag: {fileID: 1767372273}
   hqFlag: {fileID: 1527643723}
+  mapLabel: Lumber Camp
 --- !u!1 &1924277768
 GameObject:
   m_ObjectHideFlags: 0

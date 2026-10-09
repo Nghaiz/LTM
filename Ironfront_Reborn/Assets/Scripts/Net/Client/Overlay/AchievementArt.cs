@@ -20,11 +20,20 @@ namespace Ironfront.Net.Unity.Client.Overlay
             AchievementTier.Silver => new Color(0.8f, 0.85f, 0.92f),
             AchievementTier.Gold => new Color(1f, 0.8f, 0.24f),
             AchievementTier.Platinum => new Color(0.56f, 0.9f, 1f),
-            _ => new Color(0.9f, 0.58f, 0.32f),
+            AchievementTier.Mythic => new Color(1f, 0.24f, 0.24f),
+            _ => new Color(0.8f, 0.5f, 0.2f),
         };
 
-        /// <summary>The badge to show: the achievement's own, or the hidden one while it is secret.</summary>
+        /// <summary>
+        /// The badge to show: the achievement's own, or, for a hidden one not yet earned, the black
+        /// silhouette of that same art (<c>&lt;id&gt;_shadow</c>), falling back to the generic seal.
+        /// </summary>
         public static Sprite? Badge(Achievement achievement, bool revealed)
-            => UiSkin.Badge(revealed ? achievement.Id : HiddenBadge);
+            => revealed
+                ? UiSkin.Badge(achievement.Id)
+                : UiSkin.Badge(achievement.Id + ShadowSuffix) ?? UiSkin.Badge(HiddenBadge);
+
+        /// <summary>The suffix of a hidden achievement's silhouette badge.</summary>
+        public const string ShadowSuffix = "_shadow";
     }
 }

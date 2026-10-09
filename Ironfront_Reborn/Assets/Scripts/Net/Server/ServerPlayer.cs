@@ -454,6 +454,8 @@ namespace Ironfront.Net.Unity.Server
             if (remaining > 0f)
             {
                 Actor.Health = remaining;
+                ServerTickLoop loop = ServerTickLoop.Current;
+                if (loop != null) loop.NoteCareerLanding(Actor.ActorId, remaining);
                 return;
             }
 

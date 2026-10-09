@@ -224,6 +224,7 @@ namespace Ironfront.Net.Unity.Client
 
         private void OnDestroy()
         {
+            if (_nightVision != null && NightVisionReport.Sender == (Action<bool>)_nightVision.Send) NightVisionReport.Sender = null;
             Router.OnSpawnActor -= OnSpawnActor;
             Router.OnSnapshotApplied -= OnSnapshotApplied;
             if (ReferenceEquals(Current, this)) Current = null;
@@ -645,12 +646,20 @@ namespace Ironfront.Net.Unity.Client
         private void OnConnected(ConnectResult result)
         {
             ConnectionId = result.ConnectionId;
+
+            // Achievements v2: tell the server this game reports night vision, and its state now.
+            _nightVision ??= new ClientNightVisionSender(this);
+            NightVisionReport.Sender = _nightVision.Send;
+            _nightVision.Send(NightVisionReport.IsOn);
             NetContext.CurrentTick = result.ServerTick;
             NetPredictionClock.Current?.SeedInputTick(result.ServerTick);
 
             if (Config.Verbose)
                 Debug.Log($"[net] connected as {ConnectionId}, server tick {result.ServerTick}");
         }
+
+        /// <summary>Sends C_NIGHT_VISION; made when the first connection opens.</summary>
+        private ClientNightVisionSender _nightVision;
 
         private void OnDisconnected(DisconnectReason reason)
         {

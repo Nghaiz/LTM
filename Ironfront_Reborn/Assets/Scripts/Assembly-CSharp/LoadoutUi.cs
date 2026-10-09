@@ -83,7 +83,14 @@ public class LoadoutUi : MonoBehaviour
 			{
 				return null;
 			}
-			return WeaponManager.instance.weapons[@int];
+			// A golden wrench saved from a practice loadout is not carried into an online match,
+			// where the screen does not offer it and the server treats it as inert.
+			WeaponManager.WeaponEntry saved = WeaponManager.instance.weapons[@int];
+			if (!Ironfront.Net.Unity.GoldenWrench.IsOffered(saved.hidden, Ironfront.Net.Unity.NetContext.IsOffline))
+			{
+				return null;
+			}
+			return saved;
 		}
 		if (slot == "primary")
 		{
@@ -144,7 +151,7 @@ public class LoadoutUi : MonoBehaviour
 		float num2 = num + 10f;
 		foreach (WeaponManager.WeaponEntry item in WeaponManager.GetWeaponEntriesOfSlot(WeaponManager.WeaponSlot.Primary))
 		{
-			if (!item.hidden)
+			if (Ironfront.Net.Unity.GoldenWrench.IsOffered(item.hidden, Ironfront.Net.Unity.NetContext.IsOffline))
 			{
 				AddArsenalButton(item, num2, primaryContainer);
 				num2 += num + 10f;
@@ -156,7 +163,7 @@ public class LoadoutUi : MonoBehaviour
 		num2 = num + 10f;
 		foreach (WeaponManager.WeaponEntry item2 in WeaponManager.GetWeaponEntriesOfSlot(WeaponManager.WeaponSlot.Secondary))
 		{
-			if (!item2.hidden)
+			if (Ironfront.Net.Unity.GoldenWrench.IsOffered(item2.hidden, Ironfront.Net.Unity.NetContext.IsOffline))
 			{
 				AddArsenalButton(item2, num2, secondaryContainer);
 				num2 += num + 10f;
@@ -168,7 +175,7 @@ public class LoadoutUi : MonoBehaviour
 		num2 = num + 10f;
 		foreach (WeaponManager.WeaponEntry item3 in WeaponManager.GetWeaponEntriesOfSlot(WeaponManager.WeaponSlot.Gear))
 		{
-			if (!item3.hidden)
+			if (Ironfront.Net.Unity.GoldenWrench.IsOffered(item3.hidden, Ironfront.Net.Unity.NetContext.IsOffline))
 			{
 				AddArsenalButton(item3, num2, gearContainer);
 				num2 += num + 10f;
@@ -176,7 +183,7 @@ public class LoadoutUi : MonoBehaviour
 		}
 		foreach (WeaponManager.WeaponEntry item4 in WeaponManager.GetWeaponEntriesOfSlot(WeaponManager.WeaponSlot.LargeGear))
 		{
-			if (!item4.hidden)
+			if (Ironfront.Net.Unity.GoldenWrench.IsOffered(item4.hidden, Ironfront.Net.Unity.NetContext.IsOffline))
 			{
 				AddArsenalButton(item4, num2, gearContainer);
 				num2 += num + 10f;
@@ -402,7 +409,7 @@ public class LoadoutUi : MonoBehaviour
 		if (!uiCanvas.enabled)
 		{
 			MinimapUi.PinToLoadoutScreen();
-			uiCanvas.enabled = true;
+			MenuCanvas.SetShown(uiCanvas, true);
 			Cursor.lockState = CursorLockMode.None;
 			Cursor.visible = true;
 			loadoutContainer.gameObject.SetActive(true);
@@ -421,7 +428,7 @@ public class LoadoutUi : MonoBehaviour
 			FinalizeSelection();
 		}
 		MinimapUi.PinToIngameScreen();
-		uiCanvas.enabled = false;
+		MenuCanvas.SetShown(uiCanvas, false);
 		Cursor.lockState = CursorLockMode.Locked;
 		Cursor.visible = false;
 	}

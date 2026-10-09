@@ -125,6 +125,18 @@
         void ApplyBalanceDamage(float balanceDamage);
 
         /// <summary>
+        /// Moves this actor to <paramref name="team"/>: the side it fights for, its colour and the
+        /// team it replicates.
+        /// </summary>
+        /// <remarks>
+        /// Used on an unclaimed player body only, so a side can take more players than half the
+        /// seats (owner's ruling, 2026-10-09: players choose their side freely, even 1 v 10).
+        /// The game's own <c>Actor.SetTeam</c> does the work, so the colour and the replicated
+        /// team cannot come from two different assignments.
+        /// </remarks>
+        void SetTeam(byte team);
+
+        /// <summary>
         /// The network id of the weapon currently held, when one is held at all.
         /// </summary>
         /// <remarks>

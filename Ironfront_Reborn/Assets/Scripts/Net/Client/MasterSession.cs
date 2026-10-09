@@ -1051,13 +1051,26 @@ namespace Ironfront.Net.Unity.Client
         public Task<AchievementState?> GetAchievementsAsync() => CareerAsync(() => _master.GetAchievementsAsync());
 
         /// <summary>
+        /// Another player as this one may see them, for the ranking's player card and comparison.
+        /// Null when it could not be had or the account does not exist; <see cref="CareerError"/> says which.
+        /// </summary>
+        public async Task<PlayerProfile?> GetPlayerProfileAsync(int playerId)
+        {
+            PlayerProfile? profile = await CareerAsync(() => _master.GetPlayerProfileAsync(playerId)).ConfigureAwait(false);
+            if (profile == null || profile.Player != null) return profile;
+            CareerError = "That player could not be found.";
+            return null;
+        }
+
+        /// <summary>
         /// Reports practice achievements this game saw earned; the master records the ones the
         /// account lacks and answers with the account's achievements.
         /// </summary>
-        public Task<AchievementState?> ClaimAchievementsAsync(IReadOnlyList<string> ids)
-            => ids == null || ids.Count == 0
+        public Task<AchievementState?> ClaimAchievementsAsync(IReadOnlyList<string> ids,
+            IReadOnlyDictionary<string, long>? progress = null)
+            => (ids == null || ids.Count == 0) && (progress == null || progress.Count == 0)
                 ? GetAchievementsAsync()
-                : CareerAsync(() => _master.ClaimAchievementsAsync(ids));
+                : CareerAsync(() => _master.ClaimAchievementsAsync(ids ?? Array.Empty<string>(), progress));
 
         private async Task<T?> CareerAsync<T>(Func<Task<T>> request) where T : class
         {

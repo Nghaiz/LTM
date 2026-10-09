@@ -94,7 +94,7 @@ namespace Ironfront.Net.Unity.Server
         /// itself. False offline, on a client, and for a vehicle that was never replicated —
         /// every one of which is a case where the shipped path is the correct one.
         /// </returns>
-        public static bool TryApplyDamage(GameObject vehicle, float amount, int attackerActorId)
+        public static bool TryApplyDamage(GameObject vehicle, float amount, int attackerActorId, bool explosive = false)
         {
             if (!IsInstalled) return false;
 
@@ -105,9 +105,24 @@ namespace Ironfront.Net.Unity.Server
                 ? (ushort)attackerActorId
                 : (ushort)0;
 
-            _damageSink.ApplyDamage(vehicleId, amount, attacker);
+            DamageIsExplosive = explosive;
+            try
+            {
+                _damageSink.ApplyDamage(vehicleId, amount, attacker);
+            }
+            finally
+            {
+                DamageIsExplosive = false;
+            }
             return true;
         }
+
+        /// <summary>
+        /// Whether the damage being applied right now is a blast (a tank shell, a rocket), for the
+        /// achievements read at the moment a vehicle goes down (IMPOSSIBLE ANGLE: a tank's main gun
+        /// fires shells; its machine gun does not explode). Main thread only.
+        /// </summary>
+        public static bool DamageIsExplosive { get; private set; }
 
         /// <summary>
         /// Routes a repair through the authoritative health record.

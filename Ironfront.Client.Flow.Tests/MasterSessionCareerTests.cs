@@ -62,12 +62,34 @@ namespace Ironfront.Client.Flow.Tests
         }
 
         [Fact]
+        public async Task AProfileIsAskedForByIdAndAnUnknownPlayerSaysSo()
+        {
+            (FakeMasterClient master, MasterSession session) = await SignedInAsync();
+            master.NextProfile = new PlayerProfile
+            {
+                Player = new LeaderboardRow { Rank = 3, PlayerId = 7, Name = "ace", Achievements = 12, Points = 640, Mythics = 1 },
+                Unlocked = new[] { new AchievementUnlock { Id = "roll_call", At = 5 } },
+                Hidden = 2,
+            };
+
+            PlayerProfile? profile = await session.GetPlayerProfileAsync(7);
+            Assert.Equal(7, master.LastProfileAsked);
+            Assert.Equal("ace", profile!.Player!.Name);
+            Assert.Equal(2, profile.Hidden);
+            Assert.Equal(string.Empty, session.CareerError);
+
+            master.NextProfile = new PlayerProfile { Player = null };
+            Assert.Null(await session.GetPlayerProfileAsync(99));
+            Assert.Equal("That player could not be found.", session.CareerError);
+        }
+
+        [Fact]
         public async Task AClaimSendsTheIdsAndAnEmptyOneOnlyAsks()
         {
             (FakeMasterClient master, MasterSession session) = await SignedInAsync();
 
-            Assert.NotNull(await session.ClaimAchievementsAsync(new[] { "basic_training", "student_of_war" }));
-            Assert.Equal(new[] { "basic_training", "student_of_war" }, master.LastClaim);
+            Assert.NotNull(await session.ClaimAchievementsAsync(new[] { "cadet", "by_the_book" }));
+            Assert.Equal(new[] { "cadet", "by_the_book" }, master.LastClaim);
 
             Assert.NotNull(await session.ClaimAchievementsAsync(Array.Empty<string>()));
             Assert.Equal(2, master.LastClaim!.Count);
@@ -95,10 +117,10 @@ namespace Ironfront.Client.Flow.Tests
             var heard = new List<string>();
             session.OnAchievementsUnlocked += ids => heard.AddRange(ids);
 
-            master.PushUnlocked("first_blood", "victory");
+            master.PushUnlocked("roll_call", "steady_hand");
             master.PushUnlocked();
 
-            Assert.Equal(new[] { "first_blood", "victory" }, heard);
+            Assert.Equal(new[] { "roll_call", "steady_hand" }, heard);
         }
     }
 }

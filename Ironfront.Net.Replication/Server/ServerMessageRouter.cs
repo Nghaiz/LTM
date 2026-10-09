@@ -76,6 +76,9 @@ namespace Ironfront.Net.Replication.Server
         /// </remarks>
         public IChatHandler? Chat { get; set; }
 
+        /// <summary>Receives <c>C_NIGHT_VISION</c> (14.0.4).</summary>
+        public INightVisionHandler? NightVision { get; set; }
+
         /// <summary>C_SEAT_REQUEST messages received, whether accepted or refused.</summary>
         public long SeatRequestsReceived { get; private set; }
 
@@ -239,6 +242,19 @@ namespace Ironfront.Net.Replication.Server
 
                             VehicleInputsAccepted++;
                             VehicleInputs?.OnVehicleInput(session, in clamped);
+                            handled++;
+                        }
+                        else
+                        {
+                            MalformedMessages++;
+                        }
+
+                        break;
+
+                    case ClientMessageType.NightVision:
+                        if (body.Length == 1 && body[0] <= 1)
+                        {
+                            NightVision?.OnNightVision(session, body[0] == 1);
                             handled++;
                         }
                         else

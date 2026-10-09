@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Ironfront.MasterServer.Auth;
@@ -9,6 +10,7 @@ using Ironfront.MasterServer.GameServers;
 using Ironfront.MasterServer.Lobby;
 using Ironfront.MasterServer.Net;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Protocol.Achievements;
 
 namespace Ironfront.MasterServer.Dispatch
 {
@@ -78,6 +80,10 @@ namespace Ironfront.MasterServer.Dispatch
                         if (TryGetAuthenticatedSession(connection, out Session claimSession))
                             ClaimAchievements(connection, claimSession, Deserialize<AchievementClaimRequest>(body));
                         break;
+                    case MspMessageType.PlayerProfileRequest:
+                        if (TryGetAuthenticatedSession(connection, out Session profileSession))
+                            SendPlayerProfile(connection, profileSession, Deserialize<PlayerProfileRequest>(body));
+                        break;
                     case MspMessageType.RoomCreateRequest:
                     {
                         CreateRoomWireRequest request = Deserialize<CreateRoomWireRequest>(body);
@@ -128,6 +134,8 @@ namespace Ironfront.MasterServer.Dispatch
                         HandleMatchStarted(connection, Deserialize<MatchStartedRequest>(body)); break;
                     case MspMessageType.GsMatchEnded:
                         HandleMatchEnded(connection, Deserialize<MatchEndedRequest>(body)); break;
+                    case MspMessageType.GsMatchProgress:
+                        HandleMatchProgress(connection, Deserialize<MatchProgressRequest>(body)); break;
                     default:
                         SendError(connection, ErrorCode.InternalServerError, "Unsupported MSP message."); break;
                 }
@@ -839,7 +847,7 @@ namespace Ironfront.MasterServer.Dispatch
                 // The career and the achievements it earns (owner's list of 2026-10-09, item 4).
                 // The map and the mode are the room's, never the server's word.
                 List<string> earned = _career.RecordRound(result.PlayerId, result.Stats, result.Kills, result.Deaths,
-                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, endedAt);
+                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, final: true, endedAt);
                 PushUnlocked(result.PlayerId, earned);
             }
 
@@ -854,23 +862,71 @@ namespace Ironfront.MasterServer.Dispatch
             // when its last player leaves.
         }
 
+        /// <summary>
+        /// GS_MATCH_PROGRESS (14.0.4): a round in progress is judged so its unlocks arrive within
+        /// seconds; a <c>final</c> row is a player who left, whose round goes into the career now.
+        /// </summary>
+        /// <remarks>
+        /// Not gated on room membership, unlike the end report: a player who left the match has
+        /// often left the room too by the time their row arrives, and the server that owns the
+        /// room is the authority on who played in it.
+        /// </remarks>
+        private void HandleMatchProgress(ClientConnection connection, MatchProgressRequest request)
+        {
+            if (!_gameServers.OwnsRoom(connection.Id, request.ServerId, request.RoomId)) return;
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _lobby.TryGetRoomById(request.RoomId, out Room? room);
+            foreach (MatchPlayerResult result in request.Results ?? Array.Empty<MatchPlayerResult>())
+            {
+                if (result.PlayerId <= 0) continue;
+                List<string> earned = _career.RecordRound(result.PlayerId, result.Stats, result.Kills, result.Deaths,
+                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, request.Final, now);
+                PushUnlocked(result.PlayerId, earned);
+            }
+        }
+
         // ------------------------------------------------------------------ career (item 4)
 
         private void SendLeaderboard(ClientConnection connection, Session session)
         {
             Career.LeaderboardView view = _career.Leaderboard(session.PlayerId);
             var rows = new List<object>(view.Top.Count);
-            foreach ((int rank, CareerRow row) in view.Top) rows.Add(RankRow(rank, row));
-            object? you = view.You.HasValue ? RankRow(view.You.Value.Rank, view.You.Value.Row) : null;
+            foreach ((int rank, CareerRow row) in view.Top) rows.Add(RankRow(rank, row, view.Totals.GetValueOrDefault(row.PlayerId)));
+            object? you = view.You.HasValue
+                ? RankRow(view.You.Value.Rank, view.You.Value.Row, view.Totals.GetValueOrDefault(view.You.Value.Row.PlayerId))
+                : null;
             Send(connection, MspMessageType.LeaderboardResponse, new { rows, you, players = view.Players });
         }
 
-        private static object RankRow(int rank, CareerRow row) => new
+        private static object RankRow(int rank, CareerRow row, AchievementTotals? totals) => new
         {
             rank, playerId = row.PlayerId, name = row.Name, score = row.Score, kills = row.Kills,
             deaths = row.Deaths, headshots = row.Headshots, wins = row.Wins, matches = row.Matches,
             bestStreak = row.BestStreak,
+            achievements = totals?.Count ?? 0, points = totals?.Points ?? 0, mythics = totals?.Mythics ?? 0,
         };
+
+        /// <summary>
+        /// Another player for the ranking's card and comparison (14.0.5). <see cref="Career.CareerService.Profile"/>
+        /// has already applied the hidden rule; an unknown id answers <c>player: null</c>.
+        /// </summary>
+        private void SendPlayerProfile(ClientConnection connection, Session session, PlayerProfileRequest request)
+        {
+            Career.ProfileView? view = _career.Profile(session.PlayerId, request.PlayerId);
+            if (view == null)
+            {
+                Send(connection, MspMessageType.PlayerProfileResponse, new { player = (object?)null });
+                return;
+            }
+
+            var unlocked = new List<object>(view.Unlocked.Count);
+            foreach ((string id, long at) in view.Unlocked) unlocked.Add(new { id, at });
+            Send(connection, MspMessageType.PlayerProfileResponse, new
+            {
+                player = RankRow(view.Rank, view.Row, view.Totals),
+                unlocked, hidden = view.Totals.Hidden, tiers = view.Totals.PerTier, career = view.Career,
+            });
+        }
 
         private void SendAchievements(ClientConnection connection, Session session)
         {
@@ -880,12 +936,13 @@ namespace Ironfront.MasterServer.Dispatch
             Send(connection, MspMessageType.AchievementsResponse, new
             {
                 unlocked, earned = view.Holders, players = view.Players, career = view.Career,
+                firsts = view.Firsts.ToDictionary(f => f.Key, f => new { name = f.Value.Name, at = f.Value.At }),
             });
         }
 
         private void ClaimAchievements(ClientConnection connection, Session session, AchievementClaimRequest request)
         {
-            List<string> earned = _career.Claim(session.PlayerId, request.Ids, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            List<string> earned = _career.Claim(session.PlayerId, request.Ids, request.Progress, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             PushUnlocked(session.PlayerId, earned);
             SendAchievements(connection, session);
         }
@@ -975,7 +1032,8 @@ namespace Ironfront.MasterServer.Dispatch
 
         private sealed class LoginRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public int ClientVersion { get; set; } public ushort[]? Maps { get; set; } public bool Remember { get; set; } }
         private sealed class TokenLoginRequest { public string? Token { get; set; } public int ClientVersion { get; set; } public ushort[]? Maps { get; set; } }
-        private sealed class AchievementClaimRequest { public string[]? Ids { get; set; } }
+        private sealed class AchievementClaimRequest { public string[]? Ids { get; set; } public Dictionary<string, long>? Progress { get; set; } }
+        private sealed class PlayerProfileRequest { public int PlayerId { get; set; } }
         private sealed class RegisterRequest { public string? Username { get; set; } public string? PasswordHash { get; set; } public string? DisplayName { get; set; } }
         private sealed class CreateRoomWireRequest { public string? Name { get; set; } public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? Password { get; set; } public byte GameMode { get; set; } public byte VictoryRule { get; set; } public ushort VictoryPoints { get; set; } public byte NightVisionSeconds { get; set; } }
         private sealed class JoinRoomRequest { public int RoomId { get; set; } public string? Password { get; set; } }
@@ -986,6 +1044,7 @@ namespace Ironfront.MasterServer.Dispatch
         private sealed class ChatRequest { public byte Channel { get; set; } public string? Text { get; set; } }
         private sealed class MatchmakeRequest { public ushort PreferredMapId { get; set; } }
         private sealed class MatchStartedRequest { public ushort ServerId { get; set; } public int RoomId { get; set; } }
+        private sealed class MatchProgressRequest { public ushort ServerId { get; set; } public int RoomId { get; set; } public bool Final { get; set; } public MatchPlayerResult[]? Results { get; set; } }
         private sealed class MatchEndedRequest { public ushort ServerId { get; set; } public int RoomId { get; set; } public MatchPlayerResult[]? Results { get; set; } }
         private sealed class MatchPlayerResult { public int PlayerId { get; set; } public int Kills { get; set; } public int Deaths { get; set; } public int Score { get; set; } public Dictionary<string, long>? Stats { get; set; } }
     }

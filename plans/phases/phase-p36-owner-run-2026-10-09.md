@@ -112,3 +112,17 @@ Windows, macOS and Linux. Owner rule for this run: single-threaded, no subagents
   colour, a sheen and a synthesised chime (`tools/ui/make_achievement_sound.py`). The wiki page
   `docs/achievements.md` is generated from the catalogue (`tools/ui/write_achievements_doc.py`)
   and a master test fails if it drifts.
+- **Deployed:** master on Fly at revision 64705e00 (`tools/deploy-master-fly.ps1`, #581), and the
+  Azure game servers on a stamped 64705e0 build (ids Dustbowl 5, Island 4, Forest Lake 6). Every
+  later change (#582-#584) is client or tooling only, so neither was redeployed for the release.
+- **Found on the way:** Menu.unity held 21 EventSystems because edit-mode overlay captures created
+  one in the open scene each time (#583: play mode only, scene cleaned, a test reads the scene);
+  the guide's first card still said BROWSE ROOMS (#584).
+- **G (release): v4.6.0** published 2026-10-09 from develop 3fe142c3, main promoted to 195d0747
+  (tree == develop), for Windows, macOS and, new, Linux (#582: IL2CPP cross-compiled from
+  Windows; a batch build has to start on Linux64 or the toolchain packages never register).
+  Checks before publishing: Windows zip from its own %TEMP% folder (title screen, TLS master,
+  0 EventSystem warnings, 0 exceptions, exit 0) and a live sign-in through the release player;
+  `macos-smoke.yml` on arm64 and x86_64 and `linux-smoke.yml` (llvmpipe) on the draft release,
+  each through a practice match with no exception. Zips: windows 3ff23d3d..., macos 979b78bb...,
+  linux 5d3990b5..., matching GitHub's asset digests.

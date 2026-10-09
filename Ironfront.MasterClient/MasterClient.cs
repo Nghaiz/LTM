@@ -136,8 +136,20 @@ namespace Ironfront.MasterClient
         public Task<AchievementState> GetAchievementsAsync(CancellationToken ct = default)
             => RequestAsync(MspMessageType.AchievementsRequest, new { }, MspMessageType.AchievementsResponse, ToAchievementState, ct);
 
-        public Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids, CancellationToken ct = default)
-            => RequestAsync(MspMessageType.AchievementClaimRequest, new { ids }, MspMessageType.AchievementsResponse, ToAchievementState, ct);
+        public Task<PlayerProfile> GetPlayerProfileAsync(int playerId, CancellationToken ct = default)
+            => RequestAsync(MspMessageType.PlayerProfileRequest, new { playerId }, MspMessageType.PlayerProfileResponse,
+                response => new PlayerProfile
+                {
+                    Player = response.Player,
+                    Unlocked = response.Unlocked ?? Array.Empty<AchievementUnlock>(),
+                    Hidden = response.Hidden,
+                    Tiers = response.Tiers ?? Array.Empty<int>(),
+                    Career = response.Career ?? new Dictionary<string, long>(),
+                }, ct);
+
+        public Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids,
+            IReadOnlyDictionary<string, long>? progress, CancellationToken ct = default)
+            => RequestAsync(MspMessageType.AchievementClaimRequest, new { ids, progress }, MspMessageType.AchievementsResponse, ToAchievementState, ct);
 
         private static AchievementState ToAchievementState(Response response) => new AchievementState
         {
@@ -145,6 +157,7 @@ namespace Ironfront.MasterClient
             Earned = response.Earned ?? new Dictionary<string, long>(),
             Players = response.Players,
             Career = response.Career ?? new Dictionary<string, long>(),
+            Firsts = response.Firsts ?? new Dictionary<string, FirstHolderInfo>(),
         };
 
         private static ushort[] MapList(IReadOnlyList<ushort> loadableMapIds)
@@ -455,7 +468,13 @@ namespace Ironfront.MasterClient
             public AchievementUnlock[]? Unlocked { get; set; }
             public Dictionary<string, long>? Earned { get; set; }
             public Dictionary<string, long>? Career { get; set; }
+            public Dictionary<string, FirstHolderInfo>? Firsts { get; set; }
             public string[]? Ids { get; set; }
+
+            // PLAYER_PROFILE_RES (14.0.5); Unlocked and Career are shared with ACHIEVEMENTS_RES.
+            public LeaderboardRow? Player { get; set; }
+            public int Hidden { get; set; }
+            public int[]? Tiers { get; set; }
         }
     }
 }

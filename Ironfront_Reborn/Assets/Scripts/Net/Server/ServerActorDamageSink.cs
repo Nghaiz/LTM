@@ -76,6 +76,11 @@ namespace Ironfront.Net.Unity.Server
 
             victim.Health = remaining;
 
+            // Achievements v2 (ON BORROWED TIME): hitscan and deployables arrive here, not
+            // through Actor.DamageAttributed.
+            ServerTickLoop loop = ServerTickLoop.Current;
+            if (loop != null) loop.NoteCareerDamage(victimId, attackerId, remaining, Ironfront.Net.Protocol.CauseOfDeath.Bullet);
+
             if (remaining > 0f) return new DamageOutcome(remaining, died: false);
 
             // Flipped here rather than left to the caller, so the next call for the same actor

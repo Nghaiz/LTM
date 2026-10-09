@@ -190,6 +190,22 @@ namespace Ironfront.Net.Unity
         public static bool TryLeaveMatch() => LeaveMatch != null && LeaveMatch();
 
         /// <summary>
+        /// Whether one of the match's own menus is on screen: the Esc menu, the deploy screen or
+        /// the original options panel. Installed by Assembly-CSharp, which owns them; null where
+        /// there is none (a dedicated server), which reads as no menu.
+        /// </summary>
+        public static Func<bool> MatchMenuShowing { get; set; }
+
+        /// <summary>
+        /// True while the player is looking at a menu in the match -- one of
+        /// <see cref="MatchMenuShowing"/>'s, or an overlay page (settings, the guide, the ranking)
+        /// -- and false while they are playing. <c>MatchMenuKeyGuard</c> lets the keys reach a menu
+        /// only while this is true.
+        /// </summary>
+        public static bool IsMatchMenuShowing
+            => (MatchMenuShowing != null && MatchMenuShowing()) || GameOverlays.IsOpen;
+
+        /// <summary>
         /// The colour for <paramref name="team"/> as <c>0xRRGGBB</c>, or a neutral grey when no
         /// palette is registered.
         /// </summary>

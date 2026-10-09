@@ -190,7 +190,9 @@ public class WeaponManager : MonoBehaviour
 
 	private void Update()
 	{
-		if (GameManager.instance.ingame)
+		// The original's secret: typed on the menu, never inside a map, and never into a text field
+		// (a username that happens to spell it is not a player looking for the wrench).
+		if (GameManager.instance.ingame || Ironfront.Net.Unity.LocalTextEntry.OwnsKeyboard || TypingIntoAField())
 		{
 			return;
 		}
@@ -203,7 +205,7 @@ public class WeaponManager : MonoBehaviour
 				return;
 			}
 			sequenceIndex = 0;
-			ShowAllWeapons();
+			RevealGoldenWrench();
 			GetComponent<AudioSource>().Play();
 		}
 		else if (Input.anyKeyDown)
@@ -212,12 +214,23 @@ public class WeaponManager : MonoBehaviour
 		}
 	}
 
-
-	private void ShowAllWeapons()
+	/// <summary>
+	/// The original set every hidden entry's flag to false for the rest of the run, which also
+	/// offered the wrench online, where the server treats it as inert. The entries now stay as
+	/// authored and <see cref="Ironfront.Net.Unity.GoldenWrench"/> decides what the loadout screen
+	/// offers: the golden wrench, in practice, from now on.
+	/// </summary>
+	private void RevealGoldenWrench()
 	{
-		foreach (WeaponEntry weapon in weapons)
-		{
-			weapon.hidden = false;
-		}
+		WeaponEntry secret = weapons.Find((WeaponEntry entry) => entry.hidden);
+		Ironfront.Net.Unity.GoldenWrench.Unlock(secret != null ? secret.image : null);
+	}
+
+	private static bool TypingIntoAField()
+	{
+		UnityEngine.EventSystems.EventSystem events = UnityEngine.EventSystems.EventSystem.current;
+		GameObject selected = events != null ? events.currentSelectedGameObject : null;
+		UnityEngine.UI.InputField field = selected != null ? selected.GetComponent<UnityEngine.UI.InputField>() : null;
+		return field != null && field.isFocused;
 	}
 }

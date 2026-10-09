@@ -20,7 +20,7 @@ Tài liệu này liệt kê **17 trang bị trong loadout của nhân vật** �
 | 14 | N.V. GOGGLES | Gear | Kính nhìn đêm | Bật hoặc tắt hiệu ứng nhìn đêm để quan sát trong môi trường tối. |
 | 15 | RECON LRR | Vũ khí chính | Súng trường có ống ngắm | Bắn từng phát chính xác ở cự ly xa. |
 | 16 | WRENCH | Gear | Vũ khí cận chiến kiêm dụng cụ sửa chữa | Đánh ở cự ly gần và sửa chữa phương tiện khi đánh trúng. |
-| 17 | SUPER WRENCH | Gear | Cờ lê đặc biệt | Biến thể mạnh hơn của WRENCH, có hiệu ứng tác động vật lý và đổi bề mặt vật trúng sang màu vàng. **Đang ẩn khỏi màn hình chọn trang bị thông thường.** |
+| 17 | SUPER WRENCH | Gear | Cờ lê đặc biệt | Biến thể mạnh hơn của WRENCH, có hiệu ứng tác động vật lý và đổi bề mặt vật trúng sang màu vàng. **Ẩn khỏi màn hình chọn trang bị** cho tới khi gõ mã `ISEEGOLD` ở menu chính (bí mật của game gốc); sau đó chỉ xuất hiện trong practice. |
 
 ## Tóm tắt theo ô trang bị
 
