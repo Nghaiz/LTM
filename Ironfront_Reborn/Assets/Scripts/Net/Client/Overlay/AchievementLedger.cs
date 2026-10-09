@@ -5,52 +5,72 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Protocol.Achievements;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Client.Overlay
 {
     /// <summary>
-    /// What this player has earned, as the game knows it (owner's list of 2026-10-09, item 4):
-    /// the master's answer for the signed-in account, and the practice achievements this machine
-    /// saw. Feeds the achievement page and the unlock toast.
+    /// What this player has earned, as the game knows it (achievements v2): the master's answer for
+    /// the signed-in account and the practice achievements this machine saw. Feeds the achievement
+    /// page, the unlock banners and the end-of-round summary.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Practice achievements are kept here first and claimed after.</b> An offline match has
-    /// no master to tell, so <see cref="PracticeFeats"/>' ids are stored in PlayerPrefs, toasted at
-    /// once, and claimed from the master the next time an account is signed in. The whole set is
-    /// claimed for each account that signs in on this machine: the master records only what the
-    /// account lacks, so a second claim costs one answer and loses nothing.
+    /// <b>Practice achievements are kept here first and claimed after.</b> An offline match has no
+    /// master to tell, so <see cref="PracticeFeats"/>' ids are stored in PlayerPrefs, shown at once,
+    /// and claimed from the master the next time an account is signed in, with the practice numbers
+    /// behind their progress. The master records only what the account lacks.
     /// </para>
     /// <para>
-    /// <b>One toast per achievement per machine.</b> The master pushes what it records -- after a
-    /// round, and after a claim. A claimed practice achievement was toasted when it was earned,
-    /// so its echo is not toasted again; nor is anything already toasted in this run.
+    /// <b>One queue, and nothing in it is lost</b> (section 5.2): every unlock is one banner, shown
+    /// in turn; the queue is written to PlayerPrefs until a banner has played, so a banner a scene
+    /// change or a quit cut short plays at the next start. A claimed practice achievement's echo
+    /// from the master is not shown twice.
     /// </para>
     /// <para>
-    /// Driven by <see cref="Tick"/> from the toast's host, every frame, on the main thread. The
-    /// master's push arrives on the link's thread and is queued until then.
+    /// <b>The round summary.</b> When a round starts the career is snapshotted; when it ends the
+    /// master is asked again and <see cref="AchievementRoundSummary"/> says what changed. Practice
+    /// rounds do the same with this machine's practice numbers.
     /// </para>
+    /// <para>Driven by <see cref="Tick"/> from the banner's host, every frame, on the main thread.</para>
     /// </remarks>
     public static class AchievementLedger
     {
         /// <summary>The practice achievements earned on this machine, comma-separated.</summary>
         public const string EarnedKey = "ironfront.achievements.earned";
 
+        /// <summary>Banners not yet played, comma-separated ids, oldest first.</summary>
+        public const string QueueKey = "ironfront.achievements.toast-queue";
+
         /// <summary>Seconds before a claim that failed is tried again.</summary>
         private const float RetrySeconds = 30f;
 
+        /// <summary>Seconds after a round ends before the master is asked for its final numbers.</summary>
+        private const float SummaryDelaySeconds = 4f;
+
         private static readonly HashSet<string> Local = new HashSet<string>(StringComparer.Ordinal);
         private static readonly ConcurrentQueue<string> Pushed = new ConcurrentQueue<string>();
-        private static readonly Queue<Achievement> Toasts = new Queue<Achievement>();
+        private static readonly List<string> Queue = new List<string>();
         private static readonly HashSet<string> Toasted = new HashSet<string>(StringComparer.Ordinal);
+        private static readonly List<string> RoundUnlocks = new List<string>();
 
         private static MasterSession? _session;
         private static bool _loaded;
         private static bool _busy;
         private static int _claimedFor;
         private static float _nextClaimAt;
+        private static int _burstShown;
+
+        /// <summary>The banner on screen: out of the queue, still saved until it has played.</summary>
+        private static string? _inFlight;
+
+        private static Dictionary<string, long>? _roundBefore;
+        private static HashSet<string>? _heldBefore;
+        private static bool _roundRunning;
+        private static bool _roundIsPractice;
+        private static float _summaryDueAt = -1f;
 
         /// <summary>The master's last answer for <see cref="StatePlayerId"/>, or null.</summary>
         public static AchievementState? State { get; private set; }
@@ -58,8 +78,14 @@ namespace Ironfront.Net.Unity.Client.Overlay
         /// <summary>The account <see cref="State"/> belongs to.</summary>
         public static int StatePlayerId { get; private set; }
 
+        /// <summary>The last round's summary, or null before one has ended.</summary>
+        public static List<RoundSummaryLine>? RoundSummary { get; private set; }
+
         /// <summary>Something earned or loaded; pages redraw. Main thread.</summary>
         public static event Action? Changed;
+
+        /// <summary>A round's summary is ready (<see cref="RoundSummary"/>). Main thread.</summary>
+        public static event Action? RoundSummaryReady;
 
         /// <summary>The practice achievements earned on this machine.</summary>
         public static ICollection<string> LocalEarned
@@ -81,21 +107,34 @@ namespace Ironfront.Net.Unity.Client.Overlay
         public static AchievementState? CurrentState
             => State != null && Session != null && Session.IsLoggedIn && Session.PlayerId == StatePlayerId ? State : null;
 
+        /// <summary>Banners waiting, the one on screen excluded.</summary>
+        public static int Waiting => Queue.Count;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetOnLoad()
         {
             Local.Clear();
             while (Pushed.TryDequeue(out _)) { }
-            Toasts.Clear();
+            Queue.Clear();
             Toasted.Clear();
+            RoundUnlocks.Clear();
             _session = null;
             _loaded = false;
             _busy = false;
             _claimedFor = 0;
             _nextClaimAt = 0f;
+            _burstShown = 0;
+            _inFlight = null;
+            _roundBefore = null;
+            _heldBefore = null;
+            _roundRunning = false;
+            _roundIsPractice = false;
+            _summaryDueAt = -1f;
             State = null;
             StatePlayerId = 0;
+            RoundSummary = null;
             Changed = null;
+            RoundSummaryReady = null;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -103,11 +142,14 @@ namespace Ironfront.Net.Unity.Client.Overlay
         {
             if (Application.isBatchMode) return;
             PracticeFeats.Earned += OnPracticeEarned;
+            PracticeFeats.RoundBegan += () => BeginRound(practice: true);
+            PracticeFeats.RoundOver += () => EndRound();
         }
 
-        /// <summary>Follows the session, takes the master's pushes, and claims practice achievements. Every frame.</summary>
+        /// <summary>Follows the session, takes the master's pushes, claims practice achievements, ends rounds. Every frame.</summary>
         public static void Tick()
         {
+            Load();
             MasterSession? session = Session;
             if (!ReferenceEquals(session, _session))
             {
@@ -121,18 +163,60 @@ namespace Ironfront.Net.Unity.Client.Overlay
             if (session != null && session.IsLoggedIn && !_busy && _claimedFor != session.PlayerId
                 && Time.realtimeSinceStartup >= _nextClaimAt)
                 _ = ClaimAsync(session);
+
+            if (_summaryDueAt >= 0f && Time.realtimeSinceStartup >= _summaryDueAt)
+            {
+                _summaryDueAt = -1f;
+                _ = SummariseAsync();
+            }
         }
 
-        /// <summary>The next achievement to toast, if one is waiting.</summary>
-        public static bool TryNextToast(out Achievement achievement)
+        /// <summary>
+        /// The next banner, if one is waiting, with its place in the run of banners shown back to
+        /// back: "2 of 3". Call <see cref="Played"/> once it has been shown in full.
+        /// </summary>
+        public static bool TryNextToast(out Achievement achievement, out int place, out int of)
         {
-            if (Toasts.Count > 0)
+            Load();
+            while (Queue.Count > 0)
             {
-                achievement = Toasts.Dequeue();
+                string id = Queue[0];
+                Queue.RemoveAt(0);
+                Achievement? next = AchievementCatalog.Find(id);
+                if (next == null)
+                {
+                    SaveQueue();
+                    continue;
+                }
+                _inFlight = id;
+                _burstShown++;
+                achievement = next;
+                place = _burstShown;
+                of = _burstShown + Queue.Count;
                 return true;
             }
+            _burstShown = 0;
             achievement = null!;
+            place = 0;
+            of = 0;
             return false;
+        }
+
+        /// <summary>The banner for <paramref name="id"/> played in full: it leaves the saved queue.</summary>
+        public static void Played(string id)
+        {
+            if (_inFlight == id) _inFlight = null;
+            SaveQueue();
+        }
+
+        /// <summary>
+        /// The online round moved to <paramref name="phase"/> (the client's view of S_MATCH_STATE):
+        /// Playing snapshots the career; Ended asks the master for the round's outcome.
+        /// </summary>
+        public static void NoteRoundPhase(MatchPhase phase)
+        {
+            if (phase == MatchPhase.Playing) BeginRound(practice: false);
+            else if (phase == MatchPhase.Ended) EndRound();
         }
 
         /// <summary>Asks the master again, for a page being opened. False with the reason in <paramref name="error"/>.</summary>
@@ -148,13 +232,57 @@ namespace Ironfront.Net.Unity.Client.Overlay
             return (true, string.Empty);
         }
 
+        private static void BeginRound(bool practice)
+        {
+            _roundRunning = true;
+            _roundIsPractice = practice;
+            _summaryDueAt = -1f;
+            RoundUnlocks.Clear();
+            _roundBefore = practice ? PracticeFeats.Progress() : Copy(CurrentState?.Career);
+            _heldBefore = Held();
+        }
+
+        private static void EndRound()
+        {
+            if (!_roundRunning) return;
+            _roundRunning = false;
+            if (_roundIsPractice)
+            {
+                Summarise(PracticeFeats.Progress());
+                return;
+            }
+            _summaryDueAt = Time.realtimeSinceStartup + SummaryDelaySeconds;
+        }
+
+        private static async Task SummariseAsync()
+        {
+            if (SignedIn) await RefreshAsync();
+            Summarise(CurrentState?.Career);
+        }
+
+        private static void Summarise(IReadOnlyDictionary<string, long>? after)
+        {
+            RoundSummary = AchievementRoundSummary.Build(_roundBefore, after, _heldBefore ?? Held(), RoundUnlocks);
+            RoundSummaryReady?.Invoke();
+        }
+
+        private static HashSet<string> Held()
+        {
+            var held = new HashSet<string>(LocalEarned, StringComparer.Ordinal);
+            AchievementState? state = CurrentState;
+            if (state?.Unlocked != null)
+                foreach (AchievementUnlock unlock in state.Unlocked)
+                    if (unlock?.Id != null) held.Add(unlock.Id);
+            return held;
+        }
+
         private static async Task ClaimAsync(MasterSession session)
         {
             _busy = true;
             int player = session.PlayerId;
             try
             {
-                AchievementState? state = await session.ClaimAchievementsAsync(new List<string>(LocalEarned));
+                AchievementState? state = await session.ClaimAchievementsAsync(new List<string>(LocalEarned), PracticeFeats.Progress());
                 if (state != null && session.IsLoggedIn && session.PlayerId == player)
                 {
                     _claimedFor = player;
@@ -210,9 +338,13 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
             Changed?.Invoke();
 
-            // The echo of a claim: toasted when it was earned, in this run or an earlier one.
+            // The echo of a claim: shown when it was earned, in this run or an earlier one.
             if (fromMaster && LocalEarned.Contains(id)) return;
-            if (Toasted.Add(id)) Toasts.Enqueue(achievement);
+            if (!Toasted.Add(id)) return;
+
+            if (_roundRunning || _summaryDueAt >= 0f) RoundUnlocks.Add(id);
+            Queue.Add(id);
+            SaveQueue();
         }
 
         private static AchievementUnlock[] Append(AchievementUnlock[]? unlocked, string id)
@@ -227,13 +359,31 @@ namespace Ironfront.Net.Unity.Client.Overlay
             return grown;
         }
 
+        private static Dictionary<string, long>? Copy(Dictionary<string, long>? career)
+            => career == null ? null : new Dictionary<string, long>(career, StringComparer.Ordinal);
+
+        private static void SaveQueue()
+        {
+            string queued = string.Join(",", Queue);
+            PlayerPrefs.SetString(QueueKey, _inFlight == null ? queued : queued.Length == 0 ? _inFlight : _inFlight + "," + queued);
+            PlayerPrefs.Save();
+        }
+
         private static void Load()
         {
             if (_loaded) return;
             _loaded = true;
+
+            // Ids of the retired list are dropped here and the key rewritten without them.
             string stored = PlayerPrefs.GetString(EarnedKey, string.Empty);
             foreach (string id in stored.Split(','))
                 if (id.Length > 0 && AchievementCatalog.Find(id) != null) Local.Add(id);
+            string kept = string.Join(",", Local);
+            if (kept != stored) PlayerPrefs.SetString(EarnedKey, kept);
+
+            // Banners a quit or a crash cut short play now.
+            foreach (string id in PlayerPrefs.GetString(QueueKey, string.Empty).Split(','))
+                if (id.Length > 0 && AchievementCatalog.Find(id) != null && Toasted.Add(id)) Queue.Add(id);
         }
     }
 }

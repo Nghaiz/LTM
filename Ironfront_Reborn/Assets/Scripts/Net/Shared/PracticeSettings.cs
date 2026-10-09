@@ -36,14 +36,22 @@ namespace Ironfront.Net.Unity
         /// <summary>Longest respawn time a practice match may set, in seconds.</summary>
         public const int MaxRespawnSeconds = 60;
 
-        public PracticeSettings(RoomSettings rules, int bots, int playerTeam, bool vehicles, int respawnSeconds)
+        public PracticeSettings(RoomSettings rules, int bots, int playerTeam, bool vehicles, int respawnSeconds,
+            bool alone = false)
         {
             Rules = rules;
             Bots = bots;
             PlayerTeam = playerTeam;
             Vehicles = vehicles;
             RespawnSeconds = respawnSeconds;
+            Alone = alone;
         }
+
+        /// <summary>
+        /// The player fights alone: every bot is on the other side, up to a side's limit
+        /// (achievements v2: DRILL SERGEANT is won with no allied bots).
+        /// </summary>
+        public bool Alone { get; }
 
         /// <summary>Mode, victory rule, points and night-vision battery: a room's own settings.</summary>
         public RoomSettings Rules { get; }
@@ -60,11 +68,13 @@ namespace Ironfront.Net.Unity
         /// <summary>Seconds between respawn waves, for bots and the player alike.</summary>
         public int RespawnSeconds { get; }
 
-        /// <summary>Blue's bots: half the total, rounded down.</summary>
-        public int Team0Bots => Bots / 2;
+        /// <summary>Blue's bots: half the total, rounded down; alone, none on the player's side and the rest opposite.</summary>
+        public int Team0Bots => Alone ? (PlayerTeam == 0 ? 0 : EnemyWhenAlone) : Bots / 2;
 
         /// <summary>Red's bots: the rest.</summary>
-        public int Team1Bots => Bots - Team0Bots;
+        public int Team1Bots => Alone ? (PlayerTeam == 1 ? 0 : EnemyWhenAlone) : Bots - Bots / 2;
+
+        private int EnemyWhenAlone => Bots < ProtocolConstants.MAX_BOTS_PER_TEAM ? Bots : ProtocolConstants.MAX_BOTS_PER_TEAM;
 
         /// <summary>What the practice screen opens with: today's room defaults, blue, vehicles on.</summary>
         public static PracticeSettings Default
