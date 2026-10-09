@@ -25,6 +25,14 @@ namespace Ironfront.Net.Unity.Client.Menu
     /// <see cref="Graphic.enabled"/> rather than an alpha fade, so the strokes are removed from the
     /// canvas entirely when unchecked instead of drawn at zero alpha.
     /// </para>
+    /// <para>
+    /// <b>Subscribed at runtime, in <see cref="OnEnable"/>.</b> <c>BuildMenuCanvas</c> calls
+    /// <see cref="Configure"/> in the Editor, and a listener added there with
+    /// <c>AddListener</c> is never saved into the scene. That is how the tick used to work only in
+    /// the run that built the menu: in the game the Remember me box took the click, turned on, and
+    /// stayed visibly empty, so players clicked it again and turned it back off (owner's report of
+    /// 2026-10-09, "Remember me does not work").
+    /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
     public sealed class MenuTickGraphic : MonoBehaviour
@@ -41,13 +49,20 @@ namespace Ironfront.Net.Unity.Client.Menu
             _toggle = toggle;
             _graphics = graphics;
             Apply(toggle.isOn);
-            toggle.onValueChanged.AddListener(Apply);
         }
 
-        private void OnDestroy()
+        private void OnEnable()
         {
-            // The listener outlives this component otherwise, and a static scene reload with
-            // domain reload disabled would hand the next run a callback into a destroyed object.
+            if (_toggle == null) return;
+            _toggle.onValueChanged.AddListener(Apply);
+            Apply(_toggle.isOn);
+        }
+
+        private void OnDisable()
+        {
+            // Paired with OnEnable, so a screen shown again does not stack a second listener, and a
+            // static scene reload with domain reload disabled is not handed a callback into a
+            // destroyed object.
             if (_toggle != null) _toggle.onValueChanged.RemoveListener(Apply);
         }
 
