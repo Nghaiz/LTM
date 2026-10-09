@@ -74,6 +74,16 @@ namespace Ironfront.Client.Flow.Tests
             return Task.FromResult(NextAchievements);
         }
 
+        public PlayerProfile NextProfile { get; set; } = new PlayerProfile();
+        public int LastProfileAsked { get; private set; }
+
+        public Task<PlayerProfile> GetPlayerProfileAsync(int playerId, CancellationToken ct = default)
+        {
+            LastProfileAsked = playerId;
+            Throw();
+            return Task.FromResult(NextProfile);
+        }
+
         /// <summary>The practice numbers sent with the last claim.</summary>
         public IReadOnlyDictionary<string, long>? LastClaimProgress { get; private set; }
 

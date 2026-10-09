@@ -165,7 +165,8 @@ namespace Ironfront.Net.Protocol
         /// <summary>
         /// The best hundred careers by score and the requester's own row. Body
         /// <c>{ "rows": [ { "rank", "playerId", "name", "score", "kills", "deaths", "headshots",
-        /// "wins", "matches", "bestStreak" } ], "you": row | null, "players" }</c>.
+        /// "wins", "matches", "bestStreak", "achievements", "points", "mythics" } ], "you": row | null,
+        /// "players" }</c>; the last three (14.0.5) count what the player holds, hidden ones included.
         /// </summary>
         LeaderboardResponse = 0x0041,
 
@@ -191,6 +192,23 @@ namespace Ironfront.Net.Protocol
         /// Sent at the end of a round for the ones the round earned, so the toast shows in the match.
         /// </summary>
         AchievementUnlockedPush = 0x0045,
+
+        /// <summary>
+        /// Another player as the requester may see them (14.0.5), for the global ranking's player
+        /// card and side-by-side comparison. Body <c>{ "playerId" }</c>; answered with
+        /// <see cref="PlayerProfileResponse"/>.
+        /// </summary>
+        PlayerProfileRequest = 0x0046,
+
+        /// <summary>
+        /// Body <c>{ "player": row | null, "unlocked": [ { "id", "at" } ], "hidden", "tiers": [ 5 ],
+        /// "career": { statKey: value } }</c>, the row shaped like a ranking row (rank 0 before a
+        /// first online match). The master keeps the hidden rule: a hidden achievement is listed only
+        /// when the requester holds it too, and a career number that serves only hidden achievements
+        /// the requester lacks is left out. <c>hidden</c> and <c>tiers</c> count everything held.
+        /// <c>player</c> is null when there is no such account.
+        /// </summary>
+        PlayerProfileResponse = 0x0047,
 
         Heartbeat = 0x00F0,
         ErrorPush = 0x00F1,

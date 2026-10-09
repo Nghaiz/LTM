@@ -391,6 +391,91 @@ namespace Ironfront.MasterServer.Tests
             Assert.Equal(3, board.You!.Value.Rank);
         }
 
+        // ------------------------------------------------------------------ comparing players (section 6.2)
+
+        [Fact]
+        public void AProfileKeepsAHiddenAchievementAndItsProgressFromAViewerWhoLacksIt()
+        {
+            (CareerService career, SqliteDatabase db, int[] ids) = Players(3);
+            int target = ids[0], stranger = ids[1], holder = ids[2];
+            Round(career, target, Facts(("kills", 12), ("finished", 1), ("secondsPlayed", 400)));
+            db.WriteCareer(target, new Dictionary<string, long> { ["longestShotgunKillMetres"] = 40 });
+            Assert.True(db.InsertAchievement(target, "buckshot_sniper", 7));
+            Assert.True(db.InsertAchievement(holder, "buckshot_sniper", 9));
+            Assert.True(AchievementCatalog.Find("buckshot_sniper")!.Hidden);
+
+            ProfileView seenByStranger = career.Profile(stranger, target)!;
+            ProfileView seenByHolder = career.Profile(holder, target)!;
+
+            Assert.DoesNotContain(seenByStranger.Unlocked, u => u.Id == "buckshot_sniper");
+            Assert.False(seenByStranger.Career.ContainsKey("longestShotgunKillMetres"));
+            Assert.Equal(12, seenByStranger.Career["kills"]);
+            Assert.Equal(1, seenByStranger.Totals.Hidden);
+            Assert.Contains(seenByStranger.Unlocked, u => u.Id == "roll_call");
+            Assert.Equal(seenByStranger.Unlocked.Count + 1, seenByStranger.Totals.Count);
+
+            Assert.Contains(seenByHolder.Unlocked, u => u.Id == "buckshot_sniper" && u.At == 7);
+            Assert.Equal(40, seenByHolder.Career["longestShotgunKillMetres"]);
+        }
+
+        [Fact]
+        public void AStatAnOpenAchievementAlsoReadsIsNeverHidden()
+        {
+            var open = new HashSet<CareerStat>(AchievementCatalog.All.Where(a => !a.Hidden).SelectMany(a => a.StatsRead()));
+            (CareerService career, SqliteDatabase db, int[] ids) = Players(2);
+            var everything = new Dictionary<string, long>();
+            for (int i = 0; i < CareerStats.Count; i++) everything[CareerStats.Key((CareerStat)i)] = 1;
+            db.WriteCareer(ids[0], everything);
+
+            ProfileView view = career.Profile(ids[1], ids[0])!;
+
+            foreach (CareerStat stat in open) Assert.True(view.Career.ContainsKey(CareerStats.Key(stat)), CareerStats.Key(stat));
+            Assert.Contains(AchievementCatalog.All.Where(a => a.Hidden).SelectMany(a => a.StatsRead()),
+                stat => !view.Career.ContainsKey(CareerStats.Key(stat)));
+        }
+
+        [Fact]
+        public void AProfileOfNoSuchAccountIsNullAndAnUnrankedOneHasRankZero()
+        {
+            (CareerService career, _, int[] ids) = Players(2);
+
+            Assert.Null(career.Profile(ids[0], 999_999));
+            ProfileView fresh = career.Profile(ids[0], ids[1])!;
+            Assert.Equal(0, fresh.Rank);
+            Assert.Equal("Player1", fresh.Row.Name);
+            Assert.Equal(0, fresh.Totals.Count);
+        }
+
+        [Fact]
+        public void TheRankingCountsEachPlayersAchievementsPointsAndMythics()
+        {
+            (CareerService career, SqliteDatabase db, int[] ids) = Players(2);
+            Round(career, ids[0], Facts(("score", 10), ("finished", 1)));
+            Round(career, ids[1], Facts(("score", 5), ("finished", 1)));
+            Assert.True(db.InsertAchievement(ids[0], "curvature", 3));
+            Assert.True(db.InsertAchievement(ids[0], "buckshot_sniper", 4));
+
+            LeaderboardView board = career.Leaderboard(ids[1]);
+            AchievementTotals first = board.Totals[ids[0]];
+            List<string> held = db.ReadAchievements(ids[0]).Select(a => a.Id).ToList();
+
+            Assert.Equal(held.Count, first.Count);
+            Assert.Equal(held.Sum(id => AchievementCatalog.Find(id)!.Points), first.Points);
+            Assert.Equal(1, first.Mythics);
+            Assert.Equal(1, first.Hidden);
+            Assert.True(board.Totals.ContainsKey(ids[1]));
+        }
+
+        [Fact]
+        public void TotalsIgnoreUnknownIdsAndRepeats()
+        {
+            AchievementTotals totals = AchievementTotals.Of(new[] { "roll_call", "roll_call", "no_such_thing", "curvature" });
+
+            Assert.Equal(2, totals.Count);
+            Assert.Equal(AchievementCatalog.Find("roll_call")!.Points + AchievementCatalog.Find("curvature")!.Points, totals.Points);
+            Assert.Equal(new[] { 1, 0, 0, 0, 1 }, totals.PerTier);
+        }
+
         // ------------------------------------------------------------------ docs and the game
 
         [Fact]

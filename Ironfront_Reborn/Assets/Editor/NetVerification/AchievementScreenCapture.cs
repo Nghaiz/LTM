@@ -39,6 +39,29 @@ namespace Ironfront.Net.Unity.EditorTools
             }));
         }
 
+        [MenuItem("Ironfront/Net/Capture ranking screens")]
+        public static void CaptureRanking()
+        {
+            OverlayHost.RegisterPage<RankingPage>(OverlayPage.Ranking);
+            Debug.Log("[achievement-capture] " + string.Join(", ", new[]
+            {
+                CaptureOverlays.Capture(OverlayPage.Ranking, host => Ranking(host).ShowForTool(SampleBoard(), 7, 0),
+                    "ranking-table.png"),
+                CaptureOverlays.Capture(OverlayPage.Ranking, host =>
+                {
+                    RankingPage page = Ranking(host);
+                    page.ShowForTool(SampleBoard(), 7, 0);
+                    page.ShowCardForTool(SampleProfile(), SampleState());
+                }, "ranking-card.png"),
+                CaptureOverlays.Capture(OverlayPage.Ranking, host =>
+                {
+                    RankingPage page = Ranking(host);
+                    page.ShowForTool(SampleBoard(), 7, 0);
+                    page.ShowCompareForTool("Nghaiz", SampleState(), SampleProfile());
+                }, "ranking-compare.png"),
+            }));
+        }
+
         /// <summary>The page, over a sample career.</summary>
         public static string CapturePage()
             => CaptureOverlays.Capture(OverlayPage.Achievements, host => Page(host).ShowForTool(SampleState(), SampleLocal()),
@@ -80,6 +103,60 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         private static AchievementsPage Page(OverlayHost host) => host.GetComponentInChildren<AchievementsPage>(true);
+
+        private static RankingPage Ranking(OverlayHost host) => host.GetComponentInChildren<RankingPage>(true);
+
+        /// <summary>A ranking page of twenty with the viewer, #7, on it.</summary>
+        private static Leaderboard SampleBoard()
+        {
+            string[] names =
+            {
+                "Kien", "Lumen", "Vy", "Hoang", "Ash", "Duc", "Nghaiz", "Ranger", "Minh", "Tuan",
+                "Ozzy", "Bao", "Fox", "Linh", "Quan", "Tank", "Sora", "Phuc", "Echo", "Long",
+            };
+            var rows = new List<LeaderboardRow>();
+            for (int i = 0; i < names.Length; i++)
+            {
+                rows.Add(new LeaderboardRow
+                {
+                    Rank = i + 1, PlayerId = i + 1, Name = names[i], Score = 48_000 - i * 1_900, Kills = 3_900 - i * 150,
+                    Deaths = 2_100 - i * 40, Headshots = 520 - i * 18, Wins = 160 - i * 6, Matches = 260 - i * 7,
+                    BestStreak = 44 - i, Achievements = 41 - i * 2, Points = 2_910 - i * 130, Mythics = i < 3 ? 3 - i : 0,
+                });
+            }
+            return new Leaderboard { Rows = rows.ToArray(), You = rows[6], Players = 214 };
+        }
+
+        /// <summary>#1 as the viewer may see them: one hidden achievement both hold, two more counted but not named.</summary>
+        private static PlayerProfile SampleProfile()
+        {
+            var unlocked = new List<AchievementUnlock>();
+            long at = 1_759_000_000_000;
+            foreach (string id in new[]
+                     {
+                         "roll_call", "lights_out", "baptism_of_fire", "steady_hand", "flag_runner", "victory_lap",
+                         "three_fronts", "overwatch", "nine_lives", "rampage", "grim_arithmetic", "curvature",
+                     })
+                unlocked.Add(new AchievementUnlock { Id = id, At = at += 172_800_000 });
+
+            return new PlayerProfile
+            {
+                Player = new LeaderboardRow
+                {
+                    Rank = 1, PlayerId = 1, Name = "Kien", Score = 48_000, Kills = 3_900, Deaths = 2_100, Headshots = 520,
+                    Wins = 160, Matches = 260, BestStreak = 44, Achievements = 14, Points = 1_190, Mythics = 2,
+                },
+                Unlocked = unlocked.ToArray(),
+                Hidden = 3,
+                Tiers = new[] { 5, 3, 3, 1, 2 },
+                Career = new Dictionary<string, long>
+                {
+                    [CareerStats.Key(CareerStat.Kills)] = 10_400, [CareerStats.Key(CareerStat.Headshots)] = 1_210,
+                    [CareerStats.Key(CareerStat.LongestHeadshotMetres)] = 931, [CareerStats.Key(CareerStat.BestStreak)] = 44,
+                    [CareerStats.Key(CareerStat.RoundsWon)] = 160, [CareerStats.Key(CareerStat.Deaths)] = 2_100,
+                },
+            };
+        }
 
         private static string CaptureCanvas(string fileName, System.Action<AchievementToast> show)
         {

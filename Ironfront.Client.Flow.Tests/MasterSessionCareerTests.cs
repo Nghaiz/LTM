@@ -62,6 +62,28 @@ namespace Ironfront.Client.Flow.Tests
         }
 
         [Fact]
+        public async Task AProfileIsAskedForByIdAndAnUnknownPlayerSaysSo()
+        {
+            (FakeMasterClient master, MasterSession session) = await SignedInAsync();
+            master.NextProfile = new PlayerProfile
+            {
+                Player = new LeaderboardRow { Rank = 3, PlayerId = 7, Name = "ace", Achievements = 12, Points = 640, Mythics = 1 },
+                Unlocked = new[] { new AchievementUnlock { Id = "roll_call", At = 5 } },
+                Hidden = 2,
+            };
+
+            PlayerProfile? profile = await session.GetPlayerProfileAsync(7);
+            Assert.Equal(7, master.LastProfileAsked);
+            Assert.Equal("ace", profile!.Player!.Name);
+            Assert.Equal(2, profile.Hidden);
+            Assert.Equal(string.Empty, session.CareerError);
+
+            master.NextProfile = new PlayerProfile { Player = null };
+            Assert.Null(await session.GetPlayerProfileAsync(99));
+            Assert.Equal("That player could not be found.", session.CareerError);
+        }
+
+        [Fact]
         public async Task AClaimSendsTheIdsAndAnEmptyOneOnlyAsks()
         {
             (FakeMasterClient master, MasterSession session) = await SignedInAsync();

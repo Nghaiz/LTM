@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Ironfront.MasterClient;
 using Ironfront.MasterServer.Lobby;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Protocol.Achievements;
 using Xunit;
 
 namespace Ironfront.MasterServer.Tests
@@ -164,6 +165,45 @@ namespace Ironfront.MasterServer.Tests
             Assert.Equal(16, after.Career["kills"]);
             Assert.False(after.Career.ContainsKey("roundsFinished"));
             Assert.Single(after.Unlocked, u => u.Id == "unbroken");
+        }
+
+        [Fact]
+        public async Task AnotherPlayersProfileArrivesWithTheHiddenRuleKept()
+        {
+            using var cts = new CancellationTokenSource(Timeout);
+            await using var server = new Phase03ServerHarness();
+
+            using var rival = new MasterClient.MasterClient();
+            await rival.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            int rivalId = await SignIn(rival, "rival");
+            using var viewer = new MasterClient.MasterClient();
+            await viewer.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            await SignIn(viewer, "viewer");
+
+            server.Database.WriteCareer(rivalId, new Dictionary<string, long>
+            {
+                ["matches"] = 3, ["score"] = 40, ["kills"] = 12, ["longestShotgunKillMetres"] = 41,
+            });
+            Assert.True(server.Database.InsertAchievement(rivalId, "roll_call", 5));
+            Assert.True(server.Database.InsertAchievement(rivalId, "buckshot_sniper", 6));
+
+            PlayerProfile profile = await Pump(viewer.GetPlayerProfileAsync(rivalId, cts.Token), viewer);
+            Assert.Equal("rival", profile.Player!.Name);
+            Assert.Equal(1, profile.Player.Rank);
+            Assert.Equal(2, profile.Player.Achievements);
+            Assert.Equal(new[] { "roll_call" }, profile.Unlocked.Select(u => u.Id));
+            Assert.Equal(1, profile.Hidden);
+            Assert.Equal(5, profile.Tiers.Length);
+            Assert.Equal(12, profile.Career["kills"]);
+            Assert.False(profile.Career.ContainsKey("longestShotgunKillMetres"));
+
+            Leaderboard board = await Pump(viewer.GetLeaderboardAsync(cts.Token), viewer);
+            LeaderboardRow row = Assert.Single(board.Rows);
+            Assert.Equal(2, row.Achievements);
+            Assert.Equal(AchievementTotals.Of(new[] { "roll_call", "buckshot_sniper" }).Points, row.Points);
+
+            PlayerProfile nobody = await Pump(viewer.GetPlayerProfileAsync(987_654, cts.Token), viewer);
+            Assert.Null(nobody.Player);
         }
 
         private static Auth.Session Session(int playerId) => new Auth.Session
