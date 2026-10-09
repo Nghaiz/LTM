@@ -1054,10 +1054,11 @@ namespace Ironfront.Net.Unity.Client
         /// Reports practice achievements this game saw earned; the master records the ones the
         /// account lacks and answers with the account's achievements.
         /// </summary>
-        public Task<AchievementState?> ClaimAchievementsAsync(IReadOnlyList<string> ids)
-            => ids == null || ids.Count == 0
+        public Task<AchievementState?> ClaimAchievementsAsync(IReadOnlyList<string> ids,
+            IReadOnlyDictionary<string, long>? progress = null)
+            => (ids == null || ids.Count == 0) && (progress == null || progress.Count == 0)
                 ? GetAchievementsAsync()
-                : CareerAsync(() => _master.ClaimAchievementsAsync(ids));
+                : CareerAsync(() => _master.ClaimAchievementsAsync(ids ?? Array.Empty<string>(), progress));
 
         private async Task<T?> CareerAsync<T>(Func<Task<T>> request) where T : class
         {

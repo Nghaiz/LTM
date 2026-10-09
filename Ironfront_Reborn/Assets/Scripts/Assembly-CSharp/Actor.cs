@@ -1849,6 +1849,8 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (ownsHealth)
 		{
 			health -= healthDamage;
+			// Achievements v2 (ON BORROWED TIME): who brought this actor how low. Server only.
+			Ironfront.Net.Unity.NetCareerEvents.Damage(this, attacker, health, DeathContext.Cause);
 		}
 		if (!flag)
 		{
@@ -1868,12 +1870,19 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(
 				this, impactForce, attacker, DeathContext.Cause,
 				DeathContext.WeaponId, DeathContext.Vehicle, DeathContext.Detail);
-			// The practice achievements (owner's list of 2026-10-09, item 4) count the player's
-			// kills in an offline match; online, the server's career tally does.
-			if (Ironfront.Net.Unity.NetContext.IsOffline && attacker != null && attacker != this
-				&& !attacker.aiControlled && attacker.team != team)
+			// The practice achievements (achievements v2) count every death of an offline match:
+			// the player's kills and how they were made, everyone's kills for "the most of anyone",
+			// and the player's own deaths. Online, the server's career tally does this.
+			if (Ironfront.Net.Unity.NetContext.IsOffline)
 			{
-				Ironfront.Net.Unity.PracticeFeats.PlayerKilledEnemy();
+				bool byAttacker = attacker != null && attacker != this;
+				Ironfront.Net.Unity.PracticeFeats.ActorKilled(
+					byAttacker ? attacker.GetInstanceID() : 0,
+					byAttacker && !attacker.aiControlled,
+					!aiControlled,
+					byAttacker && attacker.team != team,
+					DeathContext.WeaponId,
+					byAttacker && attacker.IsSeated() && attacker.seat.vehicle != null ? attacker.seat.vehicle.NetworkId : (byte)0);
 			}
 		}
 		else if (ragdoll.IsRagdoll())

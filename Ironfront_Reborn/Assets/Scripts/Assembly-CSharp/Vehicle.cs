@@ -925,7 +925,8 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		// to be asked here as well, with no deadline for an empty vehicle, which made every
 		// driverless vehicle on a server immune to everything for the whole match: the
 		// "vehicles are invulnerable" report of 2026-09-23. The original damages empty vehicles.
-		if (NetVehicleAuthority.TryApplyDamage(base.gameObject, amount, attackerActorId))
+		if (NetVehicleAuthority.TryApplyDamage(base.gameObject, amount, attackerActorId,
+			DeathContext.Cause == Ironfront.Net.Protocol.CauseOfDeath.Explosion))
 		{
 			return;
 		}

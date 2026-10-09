@@ -63,8 +63,8 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         private readonly List<Card> _cards = new List<Card>();
         private readonly List<(EarnedFilter Filter, Button Button, Image Bar)> _showButtons = new List<(EarnedFilter, Button, Image)>();
-        private readonly List<(AchievementCategory? Category, Button Button, Image Bar)> _categoryButtons =
-            new List<(AchievementCategory?, Button, Image)>();
+        private readonly List<(AchievementTags? Category, Button Button, Image Bar)> _categoryButtons =
+            new List<(AchievementTags?, Button, Image)>();
         private readonly List<(AchievementTier Tier, Text Count)> _tierCounts = new List<(AchievementTier, Text)>();
 
         private RectTransform? _list;
@@ -75,7 +75,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
         private Text? _status;
         private Button? _refresh;
         private EarnedFilter _show = EarnedFilter.All;
-        private AchievementCategory? _category;
+        private AchievementTags? _category;
         private bool _loading;
         private string _error = string.Empty;
         private bool _forTool;
@@ -162,12 +162,12 @@ namespace Ironfront.Net.Unity.Client.Overlay
             Image rule = Ui.Fill(rect, "Rule", UiStyle.WithAlpha(UiStyle.Hairline, 0.45f));
             Ui.TopLeft(rule.rectTransform, new Vector2(846f, 16f), new Vector2(1f, 56f));
 
-            AchievementTier[] tiers = { AchievementTier.Bronze, AchievementTier.Silver, AchievementTier.Gold, AchievementTier.Platinum };
+            AchievementTier[] tiers = { AchievementTier.Bronze, AchievementTier.Silver, AchievementTier.Gold, AchievementTier.Platinum, AchievementTier.Mythic };
             for (int i = 0; i < tiers.Length; i++)
             {
                 AchievementTier tier = tiers[i];
                 Color metal = AchievementArt.TierColour(tier);
-                float x = 876f + i * 168f;
+                float x = 876f + i * 138f;
                 Image medal = Ui.Icon(rect, "Medal " + tier, "medal", metal);
                 Ui.TopLeft(medal.rectTransform, new Vector2(x, 24f), new Vector2(38f, 38f));
                 Text name = Ui.Label(rect, "Tier " + tier, AchievementBoard.TierName(tier), 12, Ui.Weight.Bold, metal);
@@ -196,20 +196,17 @@ namespace Ironfront.Net.Unity.Client.Overlay
             }
 
             x += 24f;
-            (AchievementCategory? Category, string Caption)[] categories =
+            (AchievementTags? Category, string Caption)[] categories =
             {
                 (null, "ALL TYPES"),
-                (AchievementCategory.Multiplayer, AchievementCatalog.CategoryName(AchievementCategory.Multiplayer)),
-                (AchievementCategory.Combat, AchievementCatalog.CategoryName(AchievementCategory.Combat)),
-                (AchievementCategory.Vehicles, AchievementCatalog.CategoryName(AchievementCategory.Vehicles)),
-                (AchievementCategory.Honor, AchievementCatalog.CategoryName(AchievementCategory.Honor)),
-                (AchievementCategory.Hard, AchievementCatalog.CategoryName(AchievementCategory.Hard)),
-                (AchievementCategory.Secret, AchievementCatalog.CategoryName(AchievementCategory.Secret)),
-                (AchievementCategory.Practice, AchievementCatalog.CategoryName(AchievementCategory.Practice)),
+                (AchievementTags.Online, "ONLINE"),
+                (AchievementTags.Practice, "PRACTICE"),
+                (AchievementTags.Night, "NIGHT MODE"),
+                (AchievementTags.Hidden, "HIDDEN"),
             };
-            foreach ((AchievementCategory? category, string caption) in categories)
+            foreach ((AchievementTags? category, string caption) in categories)
             {
-                AchievementCategory? chosen = category;
+                AchievementTags? chosen = category;
                 (Button button, Image bar) = FilterButton(content, "Type " + caption, caption, x, 128f);
                 button.onClick.AddListener(() =>
                 {
@@ -341,7 +338,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
                 bar.enabled = on;
                 button.interactable = !on;
             }
-            foreach ((AchievementCategory? category, Button button, Image bar) in _categoryButtons)
+            foreach ((AchievementTags? category, Button button, Image bar) in _categoryButtons)
             {
                 bool on = category == _category;
                 bar.enabled = on;
@@ -372,7 +369,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
         {
             if (_show == EarnedFilter.Earned && !entry.Earned) return false;
             if (_show == EarnedFilter.Locked && entry.Earned) return false;
-            return _category == null || entry.Achievement.Category == _category;
+            return _category == null || (entry.Achievement.Tags & _category.Value) != 0;
         }
 
         private string StatusText(List<AchievementEntry> entries)
@@ -384,7 +381,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
             long players = entries.Count > 0 ? entries[0].Players : 0;
             return players > 0
-                ? "Share of " + players.ToString("N0", CultureInfo.InvariantCulture) + " players with a career, commonest first."
+                ? "Share of " + players.ToString("N0", CultureInfo.InvariantCulture) + " players with a career. Easiest first; a round counts when you play at least 5 minutes of it."
                 : "No one has a career yet. Play an online match to start yours.";
         }
 
@@ -405,13 +402,12 @@ namespace Ironfront.Net.Unity.Client.Overlay
             card.Badge.color = earned ? Color.white : revealed ? AchievementArt.LockedTint : new Color(0.62f, 0.68f, 0.76f, 1f);
             card.Lock.enabled = !earned;
 
-            card.Title.text = revealed ? achievement.Title : "???";
+            card.Title.text = achievement.Title;
             card.Title.color = earned ? UiStyle.Ink : UiStyle.WithAlpha(UiStyle.Ink, 0.72f);
-            card.Tag.text = revealed
-                ? AchievementCatalog.CategoryName(achievement.Category) + "  ·  " + AchievementBoard.TierName(achievement.Tier)
-                : AchievementCatalog.CategoryName(AchievementCategory.Secret) + "  ·  HIDDEN";
+            card.Tag.text = AchievementBoard.TierName(achievement.Tier) + "  ·  " + achievement.Points + " PTS"
+                            + (achievement.Hidden ? "  ·  HIDDEN" : achievement.IsPractice ? "  ·  PRACTICE" : string.Empty);
             card.Tag.color = earned ? metal : UiStyle.Faint;
-            card.Blurb.text = revealed ? achievement.Description : "A hidden achievement. Keep playing to reveal it.";
+            card.Blurb.text = AchievementBoard.DescriptionText(entry);
 
             bool progress = entry.ShowsProgress;
             card.Track.gameObject.SetActive(progress);

@@ -173,7 +173,9 @@ public sealed class MatchScoreboard
 		// another (owner's list of 2026-10-09, item 4). Blue is team 0.
 		if (Ironfront.Net.Unity.NetContext.IsOffline)
 		{
-			Ironfront.Net.Unity.PracticeFeats.MatchEnded(blue == (GameManager.OfflinePlayerTeam == 0));
+			Actor player = ActorManager.instance != null ? ActorManager.instance.player : null;
+			Ironfront.Net.Unity.PracticeFeats.MatchEnded(blue == (GameManager.OfflinePlayerTeam == 0),
+				player != null ? player.GetInstanceID() : 0, UnityEngine.Time.time);
 		}
 	}
 

@@ -87,6 +87,12 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 	public byte sourceWeaponId;
 
 	/// <summary>
+	/// The trigger pull this projectile left with: every pellet of one shotgun shot shares it, so
+	/// accuracy counts one hit per shot however many pellets land (achievements v2).
+	/// </summary>
+	public long shotSerial;
+
+	/// <summary>
 	/// Whether this projectile warns enemy AI that fire is incoming. V7 task 3.
 	/// </summary>
 	/// <remarks>

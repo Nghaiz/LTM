@@ -189,6 +189,15 @@ namespace Ironfront.MasterClient
                 results = results ?? Array.Empty<MatchPlayerResult>(),
             });
 
+        public void MatchProgress(int roomId, MatchPlayerResult[] results, bool final)
+            => FireAndForget(MspMessageType.GsMatchProgress, new
+            {
+                serverId = ServerId,
+                roomId,
+                final,
+                results = results ?? Array.Empty<MatchPlayerResult>(),
+            });
+
         public void Poll()
         {
             while (_mainThreadQueue.TryDequeue(out Action? action)) action();

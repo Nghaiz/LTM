@@ -26,11 +26,6 @@ namespace Ironfront.Net.MasterLink
         private readonly IGameServerLink _link;
         private readonly bool _ownsLink;
 
-        // Reused across reports: MatchEnded is called once a round, but allocating a fresh
-        // array per call for a list that is at most MAX_PLAYERS long is avoidable, and the
-        // adapter is the right place to absorb the shape difference between the port's
-        // IReadOnlyList and the link's array.
-        private MatchPlayerResult[] _scratch = Array.Empty<MatchPlayerResult>();
 
         public GameServerMatchReporter(IGameServerLink link, bool ownsLink = false)
         {
@@ -135,39 +130,43 @@ namespace Ironfront.Net.MasterLink
                 return;
             }
 
-            int count = scores?.Count ?? 0;
-            if (_scratch.Length < count) _scratch = new MatchPlayerResult[count];
+            _link.MatchEnded(roomId, ResultsOf(scores));
+        }
 
+        /// <inheritdoc />
+        public void MatchProgress(int roomId, IReadOnlyList<MatchPlayerScore> scores, bool final)
+        {
+            if (!IsConnected)
+            {
+                DroppedWhileDisconnected++;
+                return;
+            }
+
+            if (scores == null || scores.Count == 0) return;
+            _link.MatchProgress(roomId, ResultsOf(scores), final);
+        }
+
+        /// <summary>
+        /// The wire rows. A fresh, right-sized array each time: the link serialises what it is
+        /// handed, possibly later, and a reused buffer would report another call's players.
+        /// </summary>
+        private static MatchPlayerResult[] ResultsOf(IReadOnlyList<MatchPlayerScore> scores)
+        {
+            int count = scores?.Count ?? 0;
+            var payload = new MatchPlayerResult[count];
             for (int i = 0; i < count; i++)
             {
                 MatchPlayerScore score = scores![i];
-                _scratch[i] = new MatchPlayerResult
+                payload[i] = new MatchPlayerResult
                 {
                     PlayerId = score.PlayerId,
                     Kills    = score.Kills,
                     Deaths   = score.Deaths,
                     Score    = score.Score,
-                    Stats    = CareerStatsOf(score.Career),
+                    Stats    = score.Round?.ToDictionary(),
                 };
             }
-
-            // A right-sized copy, because the link serialises whatever it is handed and a
-            // scratch array with stale trailing entries would report last round's players.
-            var payload = new MatchPlayerResult[count];
-            Array.Copy(_scratch, payload, count);
-            _link.MatchEnded(roomId, payload);
-        }
-
-        /// <summary>The non-zero career numbers by name, or null when there are none.</summary>
-        internal static System.Collections.Generic.Dictionary<string, long>? CareerStatsOf(long[]? career)
-        {
-            if (career == null) return null;
-            var stats = new System.Collections.Generic.Dictionary<string, long>();
-            int count = Math.Min(career.Length, Ironfront.Net.Protocol.Achievements.CareerStats.Count);
-            for (int i = 0; i < count; i++)
-                if (career[i] != 0)
-                    stats[Ironfront.Net.Protocol.Achievements.CareerStats.Key((Ironfront.Net.Protocol.Achievements.CareerStat)i)] = career[i];
-            return stats.Count > 0 ? stats : null;
+            return payload;
         }
 
         /// <summary>Pumps the link's inbound queue. Call once per frame.</summary>

@@ -89,6 +89,8 @@ public class CarHorn : MountedWeapon
 				NetShotAnnouncements.AnnounceHorn(user.gameObject);
 			}
 			Honked?.Invoke(this);
+			// Achievements v2 (VICTORY LAP): any driver's honk, bot or player. A no-op off the server.
+			if (user != null) NetCareerEvents.Horn(user);
 		}
 		lastFired = Time.time;
 	}

@@ -194,6 +194,7 @@ namespace Ironfront.Net.Unity.Server
             // decision the server has made. BEFORE the cosmetic emit, so the ordering reads the
             // way it happens.
             if (result.LaunchedProjectile) LaunchCarriedProjectile(session, actor, in result);
+            else _loop.NoteCareerShot(session.ActorId, session.WeaponId, _hits, result.HitCount);
 
             EmitWeaponFire(session, actor, in result);
             EmitHitConfirms(session, in result);
@@ -583,7 +584,6 @@ namespace Ironfront.Net.Unity.Server
             if (!_respawnGate.MayRespawn(session.ActorId, now)) return false;
 
             _respawnGate.MarkRespawned(session.ActorId);
-            _loop.NoteDeployed(session.ActorId);
 
             PlaceAtSpawn(player, request);
             return true;

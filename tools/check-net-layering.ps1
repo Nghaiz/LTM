@@ -261,6 +261,16 @@ $ClientBaseline = @(
                 'HudSprites.Board.cs and HudSprites.Killfeed.cs. It collides with WaterLevel.Coverage, ' +
                 'an enum NESTED inside WaterLevel in Assembly-CSharp, which this assembly cannot ' +
                 'reference -- the green compile is the proof' }
+    # Found by achievements v2 (2026-10-09).
+    @{ Type = 'NightVision'             ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'ClientMessageType.NightVision, an enum MEMBER on the protocol message-type enum, in ' +
+                'ClientNightVisionSender.cs writing C_NIGHT_VISION. It collides with the legacy NightVision ' +
+                'item (Assembly-CSharp/NightVision.cs), which this assembly never references' }
+    @{ Type = 'Progress'                ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'Achievement.Progress, a PROPERTY on the protocol library achievement type, and ' +
+                'PracticeFeats.Progress(), a Shared METHOD, in AchievementBoard.cs and the overlay pages. ' +
+                'It collides with Pathfinding.Progress, a struct in the A* code in Assembly-CSharp, which ' +
+                'this assembly never references' }
 )
 
 # RULE 7's allow-list: the legacy names Net/Diagnostics still contains, one row per NAME.

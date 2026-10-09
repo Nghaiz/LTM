@@ -31,18 +31,18 @@ namespace Ironfront.Net.Replication.Server
         public readonly int Score;
 
         /// <summary>
-        /// The round's career numbers, indexed by <c>CareerStat</c> (owner's list of 2026-10-09,
-        /// item 4), or null when the server did not collect them.
+        /// The round's facts (achievements v2, <c>RoundFact</c>), or null when none were counted.
         /// </summary>
-        public readonly long[]? Career;
+        public readonly Ironfront.Net.Protocol.Achievements.RoundSheet? Round;
 
-        public MatchPlayerScore(int playerId, int kills, int deaths, int score, long[]? career = null)
+        public MatchPlayerScore(int playerId, int kills, int deaths, int score,
+            Ironfront.Net.Protocol.Achievements.RoundSheet? round = null)
         {
             PlayerId = playerId;
             Kills    = kills;
             Deaths   = deaths;
             Score    = score;
-            Career   = career;
+            Round    = round;
         }
     }
 
@@ -87,6 +87,12 @@ namespace Ironfront.Net.Replication.Server
         void MatchStarted(int roomId);
 
         void MatchEnded(int roomId, IReadOnlyList<MatchPlayerScore> scores);
+
+        /// <summary>
+        /// A round in progress (<c>GS_MATCH_PROGRESS</c>, 14.0.4): every 15 seconds with
+        /// <paramref name="final"/> false, and with it true for players who left mid-round.
+        /// </summary>
+        void MatchProgress(int roomId, IReadOnlyList<MatchPlayerScore> scores, bool final);
     }
 
     /// <summary>
@@ -117,6 +123,11 @@ namespace Ironfront.Net.Replication.Server
 
         public void MatchEnded(int roomId, IReadOnlyList<MatchPlayerScore> scores)
             => MatchEndsDropped++;
+
+        public long ProgressDropped { get; private set; }
+
+        public void MatchProgress(int roomId, IReadOnlyList<MatchPlayerScore> scores, bool final)
+            => ProgressDropped++;
     }
 
     /// <summary>

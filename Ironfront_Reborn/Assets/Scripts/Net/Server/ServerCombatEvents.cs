@@ -116,6 +116,58 @@ namespace Ironfront.Net.Unity.Server
                 attribution.Detail);
         }
 
+        /// <summary>
+        /// The engine's damage path left <paramref name="victim"/> on <paramref name="healthAfter"/>
+        /// (achievements v2: ON BORROWED TIME starts when an enemy leaves a player on 5 or less).
+        /// A no-op off the server.
+        /// </summary>
+        public static void ReportDamage(Component victim, Component attacker, float healthAfter, CauseOfDeath cause)
+        {
+            if (!NetContext.IsServer || victim == null) return;
+            // Only a blow that leaves 1 to 5 health matters, so most damage costs no lookup at all.
+            if (healthAfter <= 0f || healthAfter > Ironfront.Net.Protocol.Achievements.CareerRules.LowHealth) return;
+            ServerTickLoop loop = ServerTickLoop.Current;
+            if (loop == null || !loop.CareerCounting) return;
+            ushort victimId = IdOf(victim);
+            if (victimId == 0) return;
+            loop.NoteCareerDamage(victimId, IdOf(attacker), healthAfter, cause);
+        }
+
+        /// <summary>
+        /// A projectile from shot <paramref name="shotSerial"/> of <paramref name="shooter"/>'s
+        /// weapon <paramref name="weaponId"/> hurt <paramref name="victim"/> (accuracy: bots' bullets
+        /// are engine projectiles). A no-op off the server.
+        /// </summary>
+        public static void ReportHit(Component shooter, Component victim, byte weaponId, long shotSerial)
+        {
+            if (!NetContext.IsServer || shooter == null || victim == null) return;
+            if (!Ironfront.Net.Replication.Match.CareerWeapons.IsFirearm(weaponId)) return;
+            ServerTickLoop loop = ServerTickLoop.Current;
+            if (loop == null || !loop.CareerCounting) return;
+            ushort shooterId = IdOf(shooter);
+            ushort victimId = IdOf(victim);
+            if (shooterId == 0 || victimId == 0) return;
+            loop.NoteCareerHit(shooterId, victimId, weaponId, shotSerial);
+        }
+
+        /// <summary>A horn sounded with <paramref name="driver"/> at the wheel (VICTORY LAP). A no-op off the server.</summary>
+        public static void ReportHorn(Component driver)
+        {
+            if (!NetContext.IsServer || driver == null) return;
+            ServerTickLoop loop = ServerTickLoop.Current;
+            if (loop == null) return;
+            ushort driverId = IdOf(driver);
+            if (driverId != 0) loop.NoteCareerHorn(driverId);
+        }
+
+        /// <summary>The wire id of a replicated actor's component, or 0.</summary>
+        private static ushort IdOf(Component component)
+        {
+            if (component == null) return 0;
+            var replicated = component.GetComponent<NetServerActor>();
+            return replicated != null ? replicated.ActorId : (ushort)0;
+        }
+
         /// <summary>The wire type of a registered vehicle, or <c>NONE</c>.</summary>
         private static byte TypeOf(ServerVehicleRegistry vehicles, ushort vehicleId)
             => vehicleId != 0 && vehicles.TryFind(vehicleId, out IGameplayVehicleSource source)

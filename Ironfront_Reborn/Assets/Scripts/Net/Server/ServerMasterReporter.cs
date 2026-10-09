@@ -94,6 +94,11 @@ namespace Ironfront.Net.Unity.Server
             _controller.Match.PhaseChanged -= OnPhaseChanged;
             _controller.Match.MatchEnded   += OnMatchEnded;
             _controller.Match.PhaseChanged += OnPhaseChanged;
+            if (_loop != null)
+            {
+                _loop.PlayerLeavingRound -= OnPlayerLeavingRound;
+                _loop.PlayerLeavingRound += OnPlayerLeavingRound;
+            }
         }
 
         private void OnDisable()
@@ -102,6 +107,7 @@ namespace Ironfront.Net.Unity.Server
 
             _controller.Match.MatchEnded   -= OnMatchEnded;
             _controller.Match.PhaseChanged -= OnPhaseChanged;
+            if (_loop != null) _loop.PlayerLeavingRound -= OnPlayerLeavingRound;
         }
 
         /// <summary>
@@ -120,6 +126,7 @@ namespace Ironfront.Net.Unity.Server
         private void Update()
         {
             if (_loop == null || _controller == null || _controller.Match == null) return;
+            ReportProgressWhenDue();
             if (!_pacer.IsDue(Time.unscaledDeltaTime)) return;
 
             ServerTickScheduler scheduler = _loop.Scheduler;
@@ -165,8 +172,7 @@ namespace Ironfront.Net.Unity.Server
         {
             if (phase != MatchPhase.Playing) return;
 
-            // The round's clock for the career's time played (owner's list of 2026-10-09, item 4).
-            _roundStartedAt = Time.realtimeSinceStartup;
+            _nextProgressAt = Time.realtimeSinceStartup + ProgressSeconds;
 
             int roomId = RoomId;
             Reporter.MatchStarted(roomId);
@@ -228,9 +234,6 @@ namespace Ironfront.Net.Unity.Server
             if (_loop == null) return;
 
             MatchScoreTally tally = _loop.Scores;
-            MatchCareerTally career = _loop.Career;
-            int mostPoints = MostPoints(tally);
-            int seconds = Mathf.Max(0, Mathf.RoundToInt(Time.realtimeSinceStartup - _roundStartedAt));
 
             IReadOnlyList<ServerTickLoop.ServerPlayerScoreRow> rows = _loop.ScoreRows;
             for (int i = 0; i < rows.Count; i++)
@@ -244,11 +247,7 @@ namespace Ironfront.Net.Unity.Server
                 if (rows[i].PlayerId <= 0 && tally.IsUntouched(actorId)) continue;
 
                 int kills = tally.KillsOf(actorId);
-                byte team = ServerActorRegistry.Instance.TryFind(actorId, out NetServerActor body) && body != null
-                    ? body.Team
-                    : TeamId.None;
-                var stats = new long[Ironfront.Net.Protocol.Achievements.CareerStats.Count];
-                career.Fill(actorId, tally, team, winningTeam, seconds, tally.PointsOf(actorId) >= mostPoints, stats);
+                Ironfront.Net.Protocol.Achievements.RoundSheet round = _loop.BuildRoundSheet(actorId, winningTeam, finished: true);
 
                 _scores.Add(new MatchPlayerScore(
                     rows[i].PlayerId,
@@ -262,20 +261,59 @@ namespace Ironfront.Net.Unity.Server
                     // the rule lands in MatchStateMachine with every other rule and this line
                     // reads it.
                     kills * PointsPerKill,
-                    stats));
+                    round));
             }
         }
 
-        /// <summary>The most points any actor scored this round, bots included: the MVP's bar.</summary>
-        private static int MostPoints(MatchScoreTally tally)
+
+        /// <summary>Seconds between reports of a round in progress (achievements v2: unlocks within seconds).</summary>
+        private const float ProgressSeconds = 15f;
+
+        private float _nextProgressAt = float.MaxValue;
+        private readonly List<MatchPlayerScore> _progress = new List<MatchPlayerScore>(ProtocolConstants.MAX_PLAYERS);
+
+        /// <summary>
+        /// Every <see cref="ProgressSeconds"/> of Playing, the round so far for each signed-in player
+        /// (<c>GS_MATCH_PROGRESS</c>, not final): the master unlocks what can no longer be taken back.
+        /// </summary>
+        private void ReportProgressWhenDue()
         {
-            int most = 0;
-            for (ushort a = 0; a < ProtocolConstants.MAX_ACTORS; a++) most = Mathf.Max(most, tally.PointsOf(a));
-            return most;
+            if (_controller.Match.Phase != MatchPhase.Playing) return;
+            if (Time.realtimeSinceStartup < _nextProgressAt) return;
+            _nextProgressAt = Time.realtimeSinceStartup + ProgressSeconds;
+
+            _progress.Clear();
+            MatchScoreTally tally = _loop.Scores;
+            IReadOnlyList<ServerTickLoop.ServerPlayerScoreRow> rows = _loop.ScoreRows;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i].PlayerId <= 0) continue;
+                ushort actorId = rows[i].ActorId;
+                Ironfront.Net.Protocol.Achievements.RoundSheet round = _loop.BuildRoundSheet(actorId, TeamId.None, finished: false);
+                if (round == null) continue;
+                int kills = tally.KillsOf(actorId);
+                _progress.Add(new MatchPlayerScore(rows[i].PlayerId, kills, tally.DeathsOf(actorId), kills * PointsPerKill, round));
+            }
+            Reporter.MatchProgress(RoomId, _progress, final: false);
         }
 
-        /// <summary>When the round's Playing phase began, in realtime seconds.</summary>
-        private float _roundStartedAt;
+        /// <summary>
+        /// A signed-in player left: their round is over now, and is reported as final (not
+        /// finished) before the slot and its numbers can pass to someone else.
+        /// </summary>
+        private void OnPlayerLeavingRound(ushort actorId, int playerId)
+        {
+            if (playerId <= 0 || _controller == null || _controller.Match == null) return;
+            if (_controller.Match.Phase != MatchPhase.Playing) return;
+            Ironfront.Net.Protocol.Achievements.RoundSheet round = _loop.BuildRoundSheet(actorId, TeamId.None, finished: false);
+            if (round == null) return;
+            MatchScoreTally tally = _loop.Scores;
+            int kills = tally.KillsOf(actorId);
+            _progress.Clear();
+            _progress.Add(new MatchPlayerScore(playerId, kills, tally.DeathsOf(actorId), kills * PointsPerKill, round));
+            Reporter.MatchProgress(RoomId, _progress, final: true);
+            Debug.Log($"[net] player {playerId} left mid-round; their round was reported to the master");
+        }
 
         /// <summary>
         /// What one kill is worth on the end-of-match report.

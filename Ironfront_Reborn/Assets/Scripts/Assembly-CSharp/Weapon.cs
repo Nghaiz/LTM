@@ -144,6 +144,12 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	[NonSerialized]
 	public byte NetworkId;
 
+	/// <summary>The last trigger pull's serial; every projectile it spawns carries it.</summary>
+	private long currentShotSerial;
+
+	/// <summary>Serials for every weapon in the process, so two weapons never share one.</summary>
+	private static long nextShotSerial;
+
 	[NonSerialized]
 	public bool reloading;
 
@@ -449,6 +455,8 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		{
 			animator.SetTrigger("fire");
 		}
+		// One serial per trigger pull, shared by every pellet it fires (achievements v2 accuracy).
+		currentShotSerial = ++nextShotSerial;
 		for (int i = 0; i < configuration.projectilesPerShot; i++)
 		{
 			SpawnProjectile(direction);
@@ -621,6 +629,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 
 			component.source = user;
 			component.sourceWeaponId = NetworkId;
+			component.shotSerial = currentShotSerial;
 			// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
 			// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
 			// the direction announced is the direction fired. A no-op off the server.

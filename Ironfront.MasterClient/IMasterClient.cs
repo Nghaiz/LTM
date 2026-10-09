@@ -69,6 +69,19 @@ namespace Ironfront.MasterClient
         public Dictionary<string, long> Earned { get; set; } = new Dictionary<string, long>();
         public long Players { get; set; }
         public Dictionary<string, long> Career { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
+        /// Who earned each Mythic achievement first (14.0.4); a hidden one only when this player
+        /// holds it too. Keyed by achievement id.
+        /// </summary>
+        public Dictionary<string, FirstHolderInfo> Firsts { get; set; } = new Dictionary<string, FirstHolderInfo>();
+    }
+
+    /// <summary>The first player to earn an achievement, and when (Unix milliseconds).</summary>
+    public sealed class FirstHolderInfo
+    {
+        public string Name { get; set; } = string.Empty;
+        public long At { get; set; }
     }
 
     public sealed class RoomInfo
@@ -320,7 +333,15 @@ namespace Ironfront.MasterClient
         Task<AchievementState> GetAchievementsAsync(CancellationToken ct = default);
 
         /// <summary>Reports practice achievements only this game could see (<c>ACHIEVEMENT_CLAIM_REQ</c>).</summary>
-        Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids, CancellationToken ct = default);
+        Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids, CancellationToken ct = default)
+            => ClaimAchievementsAsync(ids, null, ct);
+
+        /// <summary>
+        /// Claims practice achievements and reports the practice numbers behind their progress
+        /// (<c>Pr</c> career stats, 14.0.4), so other players can compare against them.
+        /// </summary>
+        Task<AchievementState> ClaimAchievementsAsync(IReadOnlyList<string> ids,
+            IReadOnlyDictionary<string, long>? progress, CancellationToken ct = default);
 
         /// <summary>Achievements the master has just recorded for this player (<c>ACHIEVEMENT_UNLOCKED_PUSH</c>).</summary>
         event Action<string[]>? OnAchievementsUnlocked;

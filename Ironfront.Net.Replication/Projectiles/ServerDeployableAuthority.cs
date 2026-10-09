@@ -173,6 +173,12 @@ namespace Ironfront.Net.Replication.Projectiles
         /// <summary>Deployables on the ground or in the air right now.</summary>
         public int LiveCount => _liveCount;
 
+        /// <summary>
+        /// A pulse gave an actor something: (the pack's owner, the actor). Once per actor per pulse,
+        /// heal or ammo. Achievements v2: FORWARD SUPPLY counts the teammates among them.
+        /// </summary>
+        public Action<ushort, ushort>? Resupplied { get; set; }
+
         /// <summary>Ammo-bag pulses that granted nothing because every slot was already full.</summary>
         public long EmptyResupplies { get; private set; }
 
@@ -459,7 +465,11 @@ namespace Ironfront.Net.Replication.Projectiles
                 Vec3 to = actor.Present.Torso.Center - _position[slot];
                 if (to.SqrMagnitude > rangeSquared) continue;
 
-                if (_damageSink.ApplyHeal(actor.ActorId, HealPerPulse) > 0f) healed++;
+                if (_damageSink.ApplyHeal(actor.ActorId, HealPerPulse) > 0f)
+                {
+                    healed++;
+                    Resupplied?.Invoke(_owner[slot], actor.ActorId);
+                }
             }
 
             return healed;
@@ -478,6 +488,7 @@ namespace Ironfront.Net.Replication.Projectiles
                 Vec3 to = actor.Present.Torso.Center - _position[slot];
                 if (to.SqrMagnitude > rangeSquared) continue;
 
+                bool gaveThisActor = false;
                 for (byte loadoutSlot = 0; loadoutSlot < ActorSpareAmmoPool.SlotsPerActor; loadoutSlot++)
                 {
                     // The ceiling is the pool's, not this object's: it is the authored loadout
@@ -486,8 +497,10 @@ namespace Ironfront.Net.Replication.Projectiles
                     if (_ammoPool.Give(actor.ActorId, loadoutSlot) > 0)
                     {
                         given++;
+                        gaveThisActor = true;
                     }
                 }
+                if (gaveThisActor) Resupplied?.Invoke(_owner[slot], actor.ActorId);
             }
 
             return given;

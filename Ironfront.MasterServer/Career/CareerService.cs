@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Ironfront.MasterServer.Data;
+using Ironfront.MasterServer.Diagnostics;
 using Ironfront.Net.Protocol.Achievements;
 
 namespace Ironfront.MasterServer.Career
@@ -14,6 +15,19 @@ namespace Ironfront.MasterServer.Career
         public int Players { get; set; }
     }
 
+    /// <summary>The first player to earn a Mythic achievement.</summary>
+    public readonly struct FirstHolder
+    {
+        public FirstHolder(string name, long at)
+        {
+            Name = name;
+            At = at;
+        }
+
+        public string Name { get; }
+        public long At { get; }
+    }
+
     /// <summary>One player's achievements, and how common each one is.</summary>
     public sealed class AchievementsView
     {
@@ -21,17 +35,43 @@ namespace Ironfront.MasterServer.Career
         public Dictionary<string, long> Holders { get; set; } = new Dictionary<string, long>();
         public long Players { get; set; }
         public Dictionary<string, long> Career { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>Who earned each Mythic first; a hidden one only when the viewer holds it too.</summary>
+        public Dictionary<string, FirstHolder> Firsts { get; set; } = new Dictionary<string, FirstHolder>();
+    }
+
+    /// <summary>A career, and what is held, as <see cref="Achievement"/> reads it.</summary>
+    internal sealed class CareerView : ICareerView
+    {
+        private readonly IReadOnlyDictionary<string, long> _career;
+        private readonly ISet<string> _held;
+
+        public CareerView(IReadOnlyDictionary<string, long> career, ISet<string> held)
+        {
+            _career = career;
+            _held = held;
+        }
+
+        public long Get(CareerStat stat) => _career.TryGetValue(CareerStats.Key(stat), out long value) ? value : 0;
+
+        public bool Holds(string achievementId) => _held.Contains(achievementId);
     }
 
     /// <summary>
-    /// Careers, achievements and the global ranking (owner's list of 2026-10-09, item 4).
+    /// Careers, achievements and the global ranking (achievements v2, <c>docs/achievements.md</c>).
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>The master judges every online achievement.</b> A game server reports what happened in a
-    /// round (<c>MatchPlayerResult.Stats</c>); this folds it into the career and unlocks whatever
-    /// the career now reaches (<see cref="AchievementCatalog"/>). The client cannot unlock an online
-    /// achievement; it can only claim the four practice ones, which nothing else can see happen.
+    /// round (<see cref="RoundFact"/>); <see cref="CareerRules"/> turns that into career numbers and
+    /// <see cref="AchievementCatalog"/> says what they earn. The client cannot unlock an online
+    /// achievement; it can only claim the practice ones, which nothing else can see happen.
+    /// </para>
+    /// <para>
+    /// <b>A report sent while the round runs is judged, not kept.</b> The career is read, the round
+    /// so far is laid over it in memory, and whatever that earns is unlocked at once; only the
+    /// round's final report (its end, or the player leaving) is written to the career. So nothing is
+    /// counted twice, and an unlock never waits for the round to end.
     /// </para>
     /// <para>
     /// <b>What the master knows itself, it does not take from the server.</b> The map and the mode
@@ -48,36 +88,47 @@ namespace Ironfront.MasterServer.Career
         public CareerService(SqliteDatabase database)
         {
             _database = database ?? throw new ArgumentNullException(nameof(database));
+
+            // Achievements v2 replaced the whole list (owner, 2026-10-09): rows for ids the catalogue
+            // no longer has are deleted, careers are kept. Idempotent, so it runs at every start.
+            int removed = _database.DeleteAchievementsNotIn(AchievementCatalog.All.Select(a => a.Id));
+            if (removed > 0) StructuredLog.Event("achievements-retired", new { rows = removed });
         }
 
         /// <summary>
-        /// Folds one round into <paramref name="playerId"/>'s career and answers the achievements it
-        /// earned, in catalogue order.
+        /// Judges one player's round and answers the achievements it earned, in catalogue order.
         /// </summary>
-        /// <param name="stats">The game server's numbers by key; null from a server that predates them.</param>
+        /// <param name="stats">The game server's facts by key; null from a server that predates them.</param>
+        /// <param name="final">
+        /// The player's round is over (it ended, or they left): the round is written to the career.
+        /// False for a report sent while it runs, which is judged and forgotten.
+        /// </param>
         public List<string> RecordRound(int playerId, IReadOnlyDictionary<string, long>? stats,
-            int kills, int deaths, int score, ushort mapId, bool night, long now)
+            int kills, int deaths, int score, ushort mapId, bool night, bool final, long now)
         {
-            var round = new Dictionary<CareerStat, long>();
-            if (stats != null)
-                foreach (KeyValuePair<string, long> stat in stats)
-                    if (CareerStats.TryParse(stat.Key, out CareerStat key) && stat.Value > 0)
-                        round[key] = stat.Value;
+            RoundSheet round = RoundSheet.From(stats);
 
-            // A server older than the stats still reports these three; the match counts either way.
-            round[CareerStat.Matches] = 1;
-            round[CareerStat.Kills] = Math.Max(kills, round.TryGetValue(CareerStat.Kills, out long k) ? k : 0);
-            round[CareerStat.Deaths] = Math.Max(deaths, round.TryGetValue(CareerStat.Deaths, out long d) ? d : 0);
-            round[CareerStat.Score] = Math.Max(score, round.TryGetValue(CareerStat.Score, out long s) ? s : 0);
+            // A server older than the facts still reports these three.
+            if (!round.Has(RoundFact.Kills)) round.Set(RoundFact.Kills, kills);
+            if (!round.Has(RoundFact.Deaths)) round.Set(RoundFact.Deaths, deaths);
+            if (!round.Has(RoundFact.Score)) round.Set(RoundFact.Score, score);
+            if (final && !round.Has(RoundFact.Finished)) round.Set(RoundFact.Finished, 1);
 
-            // The master's own facts about the round.
-            round[CareerStat.MapsPlayed] = mapId < 63 ? 1L << mapId : 0;
-            round[CareerStat.NightMatches] = night ? 1 : 0;
-            round[CareerStat.NightKills] = night ? round[CareerStat.Kills] : 0;
+            var context = new RoundContext(mapId, night, final);
+            var delta = new Dictionary<CareerStat, long>();
+            CareerRules.Derive(round, in context, delta);
 
             Dictionary<string, long> career = _database.ReadCareer(playerId);
+            if (final)
+            {
+                long streak = Value(career, CareerStat.WinStreak);
+                long next = CareerRules.NextWinStreak(streak, round, in context);
+                if (next != streak) delta[CareerStat.WinStreak] = next;
+                if (next > Value(career, CareerStat.BestWinStreak)) delta[CareerStat.BestWinStreak] = next;
+            }
+
             var changed = new Dictionary<string, long>();
-            foreach (KeyValuePair<CareerStat, long> stat in round)
+            foreach (KeyValuePair<CareerStat, long> stat in delta)
             {
                 string key = CareerStats.Key(stat.Key);
                 long before = career.TryGetValue(key, out long value) ? value : 0;
@@ -86,25 +137,47 @@ namespace Ironfront.MasterServer.Career
                 career[key] = after;
                 changed[key] = after;
             }
-            if (changed.Count > 0) _database.WriteCareer(playerId, changed);
+
+            // Mid-round, the career above is a copy laid over with the round so far, never written.
+            if (final && changed.Count > 0) _database.WriteCareer(playerId, changed);
 
             return Unlock(playerId, career, now);
         }
 
         /// <summary>
-        /// Records the practice achievements in <paramref name="ids"/> that the catalogue lets the
-        /// client claim; anything else is ignored. Answers the ones newly earned.
+        /// Records the practice achievements in <paramref name="ids"/> and the practice numbers in
+        /// <paramref name="progress"/> (only <c>Pr</c> stats; anything else is ignored). Answers the
+        /// achievements newly earned, IRONCLAD included when a claim completes it.
         /// </summary>
-        public List<string> Claim(int playerId, IEnumerable<string>? ids, long now)
+        public List<string> Claim(int playerId, IEnumerable<string>? ids, IReadOnlyDictionary<string, long>? progress, long now)
         {
-            var earned = new List<string>();
-            if (ids == null) return earned;
-            foreach (string id in ids.Distinct())
+            if (progress != null)
             {
-                Achievement? achievement = AchievementCatalog.Find(id);
-                if (achievement == null || !achievement.IsClaimedByClient) continue;
-                if (_database.InsertAchievement(playerId, id, now)) earned.Add(id);
+                Dictionary<string, long> career = _database.ReadCareer(playerId);
+                var changed = new Dictionary<string, long>();
+                foreach (KeyValuePair<string, long> entry in progress)
+                {
+                    if (!CareerStats.TryParse(entry.Key, out CareerStat stat) || !CareerStats.IsPractice(stat)) continue;
+                    if (entry.Value <= 0) continue;
+                    long before = career.TryGetValue(entry.Key, out long value) ? value : 0;
+                    long after = CareerStats.Combine(stat, before, entry.Value);
+                    if (after != before) changed[entry.Key] = after;
+                }
+                if (changed.Count > 0) _database.WriteCareer(playerId, changed);
             }
+
+            var earned = new List<string>();
+            if (ids != null)
+            {
+                foreach (string id in ids.Distinct())
+                {
+                    Achievement? achievement = AchievementCatalog.Find(id);
+                    if (achievement == null || !achievement.IsClaimedByClient) continue;
+                    if (_database.InsertAchievement(playerId, id, now)) earned.Add(id);
+                }
+            }
+
+            earned.AddRange(Unlock(playerId, _database.ReadCareer(playerId), now));
             return earned;
         }
 
@@ -124,13 +197,29 @@ namespace Ironfront.MasterServer.Career
         }
 
         /// <summary>What <paramref name="requester"/> has earned, how common each achievement is, and the career behind them.</summary>
-        public AchievementsView Achievements(int requester) => new AchievementsView
+        public AchievementsView Achievements(int requester)
         {
-            Unlocked = _database.ReadAchievements(requester),
-            Holders = _database.CountAchievementHolders(),
-            Players = _database.CountCareerPlayers(),
-            Career = _database.ReadCareer(requester),
-        };
+            List<(string Id, long At)> unlocked = _database.ReadAchievements(requester);
+            var held = new HashSet<string>(unlocked.Select(u => u.Id), StringComparer.Ordinal);
+
+            var mythics = AchievementCatalog.All.Where(a => a.Tier == AchievementTier.Mythic).Select(a => a.Id).ToList();
+            var firsts = new Dictionary<string, FirstHolder>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, (string Name, long At)> first in _database.ReadFirstHolders(mythics))
+            {
+                Achievement? achievement = AchievementCatalog.Find(first.Key);
+                if (achievement == null || (achievement.Hidden && !held.Contains(first.Key))) continue;
+                firsts[first.Key] = new FirstHolder(first.Value.Name, first.Value.At);
+            }
+
+            return new AchievementsView
+            {
+                Unlocked = unlocked,
+                Holders = _database.CountAchievementHolders(),
+                Players = _database.CountCareerPlayers(),
+                Career = _database.ReadCareer(requester),
+                Firsts = firsts,
+            };
+        }
 
         /// <summary>Ranking order: score, then kills, then fewer deaths, then the older account.</summary>
         internal static int Compare(CareerRow a, CareerRow b)
@@ -143,18 +232,34 @@ namespace Ironfront.MasterServer.Career
             return byDeaths != 0 ? byDeaths : a.PlayerId.CompareTo(b.PlayerId);
         }
 
+        /// <summary>
+        /// Records every online achievement <paramref name="career"/> now earns. Two passes, so
+        /// IRONCLAD sees what the first pass just unlocked.
+        /// </summary>
         private List<string> Unlock(int playerId, IReadOnlyDictionary<string, long> career, long now)
         {
             var earned = new List<string>();
-            var held = new HashSet<string>(_database.ReadAchievements(playerId).Select(a => a.Id));
-            foreach (Achievement achievement in AchievementCatalog.All)
+            var held = new HashSet<string>(_database.ReadAchievements(playerId).Select(a => a.Id), StringComparer.Ordinal);
+            var view = new CareerView(career, held);
+
+            for (int pass = 0; pass < 2; pass++)
             {
-                if (achievement.Stat == null || held.Contains(achievement.Id)) continue;
-                long value = career.TryGetValue(CareerStats.Key(achievement.Stat.Value), out long v) ? v : 0;
-                if (achievement.IsEarnedBy(value) && _database.InsertAchievement(playerId, achievement.Id, now))
+                bool any = false;
+                foreach (Achievement achievement in AchievementCatalog.All)
+                {
+                    if (achievement.IsClaimedByClient || held.Contains(achievement.Id)) continue;
+                    if (!achievement.IsEarnedBy(view)) continue;
+                    if (!_database.InsertAchievement(playerId, achievement.Id, now)) continue;
+                    held.Add(achievement.Id);
                     earned.Add(achievement.Id);
+                    any = true;
+                }
+                if (!any) break;
             }
             return earned;
         }
+
+        private static long Value(IReadOnlyDictionary<string, long> career, CareerStat stat)
+            => career.TryGetValue(CareerStats.Key(stat), out long value) ? value : 0;
     }
 }
