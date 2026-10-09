@@ -275,6 +275,14 @@ $buildArgs = @(
     "-buildOutput", $buildOut,
     "-logFile", $LogFile
 )
+# Linux STARTS on its target. The IL2CPP cross-compiler comes from the sysroot/toolchain packages,
+# whose classes implement Unity's Sysroot interface only when UNITY_STANDALONE_LINUX_API is defined
+# at compile time. A batch run that starts on Windows and switches inside the build method only
+# QUEUES the recompile ("Requested script compilation because: Switching to platform
+# LinuxStandaloneSupport"), builds with the Windows-compiled scripts, and fails with "No Toolchain
+# found for host platform" although the packages are installed (measured 2026-10-09).
+# tools/build-server.ps1 passes -buildTarget Linux64 for the same reason.
+if ($isLinuxPlayer) { $buildArgs += @("-buildTarget", "Linux64") }
 if (-not $Development) { $buildArgs += "-release" }
 if (-not $Development -and -not $KeepDiagnostics) { $buildArgs += "-noDiagnostics" }
 
