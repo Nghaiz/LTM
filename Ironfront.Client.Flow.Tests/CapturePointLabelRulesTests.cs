@@ -5,7 +5,7 @@ namespace Ironfront.Client.Flow.Tests
 {
     /// <summary>
     /// Capture-point names on the map and in the top-right corner (owner request 2026-10-09,
-    /// Forest Lake): readable, and covering as little of the map as possible.
+    /// Forest Lake, Dustbowl and Island): readable, and covering as little of the map as possible.
     /// </summary>
     public sealed class CapturePointLabelRulesTests
     {
@@ -24,7 +24,7 @@ namespace Ironfront.Client.Flow.Tests
         [InlineData("   ")]
         public void ABlankPointHasNoLabel(string? authored)
         {
-            // Dustbowl and Island author no names, and must draw nothing new.
+            // A point authored without a name (a new map's, say) must draw no empty label.
             Assert.Null(CapturePointLabelRules.Wording(authored));
         }
 

@@ -93300,6 +93300,7 @@ MonoBehaviour:
   flagParent: {fileID: 10451}
   lqFlag: {fileID: 4440}
   hqFlag: {fileID: 3429}
+  mapLabel: Fortress
 --- !u!114 &19008
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -96393,6 +96394,7 @@ MonoBehaviour:
   flagParent: {fileID: 7493}
   lqFlag: {fileID: 2894}
   hqFlag: {fileID: 2893}
+  mapLabel: Bridge
 --- !u!114 &19246
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -101378,6 +101380,7 @@ MonoBehaviour:
   flagParent: {fileID: 8858}
   lqFlag: {fileID: 5231}
   hqFlag: {fileID: 4769}
+  mapLabel: Town
 --- !u!114 &19634
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -101637,6 +101640,7 @@ MonoBehaviour:
   flagParent: {fileID: 8434}
   lqFlag: {fileID: 5090}
   hqFlag: {fileID: 3872}
+  mapLabel: Oasis
 --- !u!114 &19653
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -102040,6 +102044,7 @@ MonoBehaviour:
   flagParent: {fileID: 9563}
   lqFlag: {fileID: 3687}
   hqFlag: {fileID: 4588}
+  mapLabel: Outpost
 --- !u!114 &19683
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -105437,6 +105442,7 @@ MonoBehaviour:
   flagParent: {fileID: 7395}
   lqFlag: {fileID: 2751}
   hqFlag: {fileID: 2750}
+  mapLabel: Mine
 --- !u!114 &19946
 MonoBehaviour:
   m_ObjectHideFlags: 0

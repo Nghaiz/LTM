@@ -10,11 +10,11 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Owner request 2026-10-09:</b> Forest Lake's bases carry their names on the map, easy to
-    /// read and covering as little as possible; and standing on one names it under the side chip
-    /// and the flag indicator, top-right. Only Forest Lake for now: a point is named by authoring
-    /// <c>CapturePoint.mapLabel</c>, and a point left blank draws no label at all, so Dustbowl and
-    /// Island are unchanged without any map test in code.
+    /// <b>Owner request 2026-10-09:</b> the bases carry their names on the map, easy to read and
+    /// covering as little as possible; and standing on one names it under the side chip and the
+    /// flag indicator, top-right. Forest Lake first, then Dustbowl and Island the same day. A point
+    /// is named by authoring <c>CapturePoint.mapLabel</c> in its scene, and a point left blank draws
+    /// no label at all, so which maps are named is scene data, never a map test in code.
     /// </para>
     /// <para>
     /// <b>Covering as little as possible</b> is three rules here and one in the drawing code: the

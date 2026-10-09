@@ -99,8 +99,8 @@ public class CapturePoint : SpawnPoint
 
 	/// <summary>
 	/// The point's name as players see it: under its flag on the map, and top-right while the
-	/// player stands on it. Blank draws neither (owner request 2026-10-09, Forest Lake only for
-	/// now); see <see cref="CapturePointLabelRules"/>.
+	/// player stands on it. Blank draws neither (owner request 2026-10-09; every point on Forest
+	/// Lake, Dustbowl and Island is named); see <see cref="CapturePointLabelRules"/>.
 	/// </summary>
 	public string mapLabel = string.Empty;
 

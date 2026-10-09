@@ -5,13 +5,13 @@ using UnityEngine.UI;
 
 /// <summary>
 /// The capture points' names on the map, under their flags: on the M map and on the deploy
-/// screen's map, which are the same picture. Owner request 2026-10-09 (Forest Lake).
+/// screen's map, which are the same picture. Owner request 2026-10-09 (Forest Lake, Dustbowl,
+/// Island).
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Only named points get a label.</b> A point is named by its authored
-/// <see cref="CapturePoint.mapLabel"/>; a map whose points are all blank (Dustbowl and Island
-/// today) builds no layer at all.
+/// <see cref="CapturePoint.mapLabel"/>; a map whose points are all blank builds no layer at all.
 /// </para>
 /// <para>
 /// <b>Kept out of the way</b> (the request: easy to read, covering as little as possible). The
