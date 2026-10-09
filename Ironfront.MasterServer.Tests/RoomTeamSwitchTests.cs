@@ -76,15 +76,11 @@ namespace Ironfront.MasterServer.Tests
         }
 
         /// <summary>
-        /// Criterion 4: the target side is full, so the switch is refused with a reason.
+        /// A two-seat room lets both players stand on one side: 2 v 0 is a room shape the owner
+        /// allows (ruling of 2026-10-09, players choose their side freely).
         /// </summary>
-        /// <remarks>
-        /// A two-seat room holds one per side, so the same two players who may switch freely in
-        /// a four-seat room are refused here. That is the pair criteria 3 and 4 are graded on,
-        /// and both are reachable from two machines.
-        /// </remarks>
         [Fact]
-        public void ASwitchIntoAFullSideIsRefused()
+        public void BothPlayersOfATwoSeatRoomMayShareASide()
         {
             var lobby = new LobbyService();
 
@@ -96,23 +92,22 @@ namespace Ironfront.MasterServer.Tests
 
             ServiceResult result = lobby.SetTeam(host.PlayerId, 1);
 
-            Assert.False(result.Ok);
-            Assert.Equal(ErrorCode.TeamsWouldUnbalance, result.ErrorCode);
-            Assert.Equal(0, Member(room, host.PlayerId).Team);
+            Assert.True(result.Ok);
+            Assert.Equal(1, Member(room, host.PlayerId).Team);
             Assert.Equal(1, Member(room, guest.PlayerId).Team);
         }
 
         /// <summary>
-        /// The cap is what stops a stack, which is the whole reason the rule exists.
+        /// A side may grow past half the seats, all the way to every member of the room: one on
+        /// blue against everyone else on red is a room the owner wants playable.
         /// </summary>
         /// <remarks>
-        /// An 8-seat room caps a side at four. This is the case the discarded "differ by more
-        /// than one" rule and the shipped seat cap agree on — recorded because the seat cap must
-        /// be shown to still forbid the thing the original rule was written for, not merely to be
-        /// more permissive than it.
+        /// Until 2026-10-09 an 8-seat room capped a side at four and refused the fifth with
+        /// <c>TeamsWouldUnbalance</c>. The game server now moves a free body across when a side
+        /// has used its own, so the cap protected nothing.
         /// </remarks>
         [Fact]
-        public void ASideCannotGrowPastHalfTheSeats()
+        public void ASideMayHoldEveryMemberButOne()
         {
             var lobby = new LobbyService();
 
@@ -128,16 +123,13 @@ namespace Ironfront.MasterServer.Tests
             for (int i = 1; i < players.Length; i++)
                 Assert.True(lobby.JoinRoom(players[i], room.RoomId, null).Ok);
 
-            // Auto-balance gives 0,1,0,1,0 — team 0 holds three of its four, team 1 two.
-            Assert.Equal(3, Occupants(room, 0));
+            // Auto-balance gives 0,1,0,1,0; then everyone but player A moves to team 1.
+            for (int i = 1; i < players.Length; i++)
+                Assert.True(lobby.SetTeam(players[i].PlayerId, 1).Ok, $"player {i} was refused team 1");
+            Assert.True(lobby.SetTeam(players[0].PlayerId, 0).Ok);
 
-            // A fourth may move onto team 0; a fifth may not.
-            Assert.True(lobby.SetTeam(players[1].PlayerId, 0).Ok);
-            Assert.Equal(4, Occupants(room, 0));
-
-            ServiceResult refused = lobby.SetTeam(players[3].PlayerId, 0);
-            Assert.False(refused.Ok);
-            Assert.Equal(ErrorCode.TeamsWouldUnbalance, refused.ErrorCode);
+            Assert.Equal(1, Occupants(room, 0));
+            Assert.Equal(4, Occupants(room, 1));
         }
 
         [Fact]

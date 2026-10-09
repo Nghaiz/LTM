@@ -491,6 +491,22 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>True once a connection has been given this actor.</summary>
         public bool IsClaimed { get; private set; }
 
+        /// <summary>
+        /// Moves an unclaimed player body to <paramref name="team"/>, so a side that has used
+        /// every body built for it can still take a player. Owner's ruling, 2026-10-09: players
+        /// pick their side freely, even 1 v 10.
+        /// </summary>
+        /// <remarks>
+        /// Through the game's own <c>Actor.SetTeam</c> when there is one (it also recolours the
+        /// body and sets <see cref="Team"/>), and the replicated field alone otherwise.
+        /// </remarks>
+        public void ReTeam(byte team)
+        {
+            IGameplayActorSource source = Source;
+            if (source != null) source.SetTeam(team);
+            Team = team;
+        }
+
         /// <summary>Aim pitch in degrees, driven by whoever controls this actor.</summary>
         public float PitchDegrees { get; set; }
 

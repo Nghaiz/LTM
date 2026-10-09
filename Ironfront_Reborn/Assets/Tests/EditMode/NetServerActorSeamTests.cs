@@ -49,6 +49,10 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             public void ApplyBalanceDamage(float balanceDamage) => BalanceDamageTaken += balanceDamage;
 
+            internal byte TeamSet = byte.MaxValue;
+
+            public void SetTeam(byte team) => TeamSet = team;
+
             public bool TryGetActiveWeaponNetworkId(out byte networkId)
             {
                 networkId = HoldsAWeapon ? HeldWeaponNetworkId : (byte)0;
@@ -183,6 +187,21 @@ namespace Ironfront.Net.Unity.Server.Tests
             var actor = _gameObject.AddComponent<NetServerActor>();
             actor.BindGameplaySource(NetServerBindings.ResolveActorSource(_gameObject));
             return actor;
+        }
+
+        [Test]
+        public void ReTeamMovesTheGameActorAndTheReplicatedTeamTogether()
+        {
+            // A player body moved across so a side can take more than half the seats (owner's
+            // ruling 2026-10-09): the game's actor recolours and the snapshot reports the new side.
+            var gameplay = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(gameplay);
+            actor.Team = 0;
+
+            actor.ReTeam(1);
+
+            Assert.AreEqual(1, gameplay.TeamSet);
+            Assert.AreEqual(1, actor.Team);
         }
 
         [Test]

@@ -164,8 +164,9 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
-        /// Hands an unclaimed player slot ON <paramref name="team"/> to a joining connection.
-        /// Returns false when that side has none free, even if the other side does.
+        /// Hands an unclaimed player slot ON <paramref name="team"/> to a joining connection,
+        /// moving a free body across from the other side when this one has none. Returns false
+        /// only when no free body is left at all.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -182,14 +183,26 @@ namespace Ironfront.Net.Unity.Server
         /// it. Keying the walk on team makes the next joiner take slot 1 back.
         /// </para>
         /// <para>
-        /// <b>A side can be full while the server is not.</b> The pool alternates teams as it
-        /// fills, so 16 connections is 8 bodies a side and the ninth joiner on one side is
-        /// refused with a half-empty server. That is the intended behaviour of a team-keyed
-        /// claim, and it is why the caller must answer with <c>DisconnectReason.TeamFull</c>
-        /// rather than <c>ServerFull</c>: one of those has a remedy the player can act on.
+        /// <b>A full side borrows a body from the other one.</b> The pool alternates teams as it
+        /// fills, so 16 connections is 8 bodies a side. Until 2026-10-09 the ninth joiner on one
+        /// side was refused with <c>TeamFull</c>; the owner then ruled that players choose their
+        /// side freely, even 1 v 10, so a side with no free body of its own takes a free body of
+        /// the other side and moves it across (<see cref="NetServerActor.ReTeam"/>). Same-side
+        /// bodies are still used first, so a balanced room changes no body's team.
         /// </para>
         /// </remarks>
         public bool TryClaimPlayerSlot(byte team, out NetServerActor actor)
+        {
+            actor = FindFreePlayerBody(team) ?? FindFreePlayerBody(null);
+            if (actor == null) return false;
+
+            if (actor.Team != team) actor.ReTeam(team);
+            actor.Claim();
+            return true;
+        }
+
+        /// <summary>The first free player body on <paramref name="team"/>, or on any side when null.</summary>
+        private NetServerActor FindFreePlayerBody(byte? team)
         {
             for (int i = 0; i < _actors.Count; i++)
             {
@@ -197,15 +210,12 @@ namespace Ironfront.Net.Unity.Server
                 if (candidate == null || !candidate.AvailableForPlayers || candidate.IsClaimed)
                     continue;
 
-                if (candidate.Team != team) continue;
+                if (team.HasValue && candidate.Team != team.Value) continue;
 
-                candidate.Claim();
-                actor = candidate;
-                return true;
+                return candidate;
             }
 
-            actor = null;
-            return false;
+            return null;
         }
 
         /// <summary>
