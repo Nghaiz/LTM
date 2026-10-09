@@ -11,7 +11,7 @@ namespace Ironfront
     /// <summary>
     /// Produces the Windows player that phase-3D lane B's runner launches four times: once
     /// headless as the server, three times rendered as scripted clients -- and, since 2026-10-07,
-    /// the macOS player as well.
+    /// the macOS player as well, and since 2026-10-09 the Linux player.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -47,6 +47,15 @@ namespace Ironfront
     /// cross-compiles IL2CPP from Windows to Windows and Linux only. And it is a universal binary
     /// (Intel + Apple silicon), set explicitly, because an Intel-only player runs on an M-series
     /// Mac only under Rosetta, which Apple is retiring.
+    /// </para>
+    /// <para>
+    /// <b>The Linux player</b> (<see cref="BuildLinuxPlayer"/>, <c>build-player.ps1 -Platform linux</c>,
+    /// owner's list of 2026-10-09: "win, mac, linux") is the Windows recipe for x86_64 Linux:
+    /// IL2CPP cross-compiled from Windows through the <c>com.unity.toolchain.win-x86_64-linux</c>
+    /// package the project already carries. It has to be IL2CPP: the Linux module ships a
+    /// non-development player only for IL2CPP (there is no
+    /// <c>linux64_player_nondevelopment_mono</c> variation), so a Mono release could not be built
+    /// at all. It cannot be started here either; <c>.github/workflows/linux-smoke.yml</c> does.
     /// </para>
     /// </remarks>
     public static class EditorBuildWindowsHarness
@@ -142,11 +151,27 @@ namespace Ironfront
             RestoreTargetInBatchMode = true,
         };
 
+        private static readonly PlayerPlatform Linux = new PlayerPlatform
+        {
+            Name = "linux",
+            Target = BuildTarget.StandaloneLinux64,
+            Module = "Linux Build Support (IL2CPP)",
+            DefaultOutputDirectory = "build/linux",
+            PlayerFileName = "Ironfront.x86_64",
+            CompletionMarker = "linux player complete",
+            ReleaseBackend = ScriptingImplementation.IL2CPP,
+            DevelopmentBackend = null,
+            RestoreTargetInBatchMode = true,
+        };
+
         [MenuItem("Ironfront/Build Windows Player (lane-B harness)")]
         public static void BuildWindowsPlayer() => BuildPlayer(Windows);
 
         [MenuItem("Ironfront/Build macOS Player")]
         public static void BuildMacPlayer() => BuildPlayer(MacOS);
+
+        [MenuItem("Ironfront/Build Linux Player")]
+        public static void BuildLinuxPlayer() => BuildPlayer(Linux);
 
         private static void BuildPlayer(PlayerPlatform platform)
         {
@@ -294,7 +319,7 @@ namespace Ironfront
             // EditorBuild.VerifyOutput for the observed case where it was not.
             string missing = platform.Target == BuildTarget.StandaloneOSX
                 ? FindMissingMacBundlePart(playerPath)
-                : FindMissingWindowsPlayerPart(outputDirectory, playerPath);
+                : FindMissingFlatPlayerPart(outputDirectory, playerPath);
             if (missing != null)
             {
                 Fail($"build reported {summary.result} and {summary.totalSize} bytes, but {missing}; "
@@ -307,7 +332,8 @@ namespace Ironfront
             return true;
         }
 
-        private static string FindMissingWindowsPlayerPart(string outputDirectory, string executablePath)
+        // Windows and Linux lay a player out the same way: the executable, and its *_Data folder beside it.
+        private static string FindMissingFlatPlayerPart(string outputDirectory, string executablePath)
         {
             if (!File.Exists(executablePath)) return $"nothing was written to {executablePath}";
             if (Directory.GetDirectories(outputDirectory, "*_Data").Length == 0)

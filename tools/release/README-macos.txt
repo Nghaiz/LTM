@@ -25,15 +25,20 @@ CÀI ĐẶT
 VÀO TRẬN
   1. Ở màn hình đầu, bấm MULTIPLAYER.
   2. Lần đầu chơi: bấm "Create an account" để tạo tên đăng nhập và mật khẩu.
-     Tài khoản lưu trên server nên máy nào cũng dùng được, kể cả máy Windows.
-     Những lần sau: nhập tên, mật khẩu rồi bấm LOG IN.
-  3. Bấm BROWSE ROOMS để xem danh sách phòng.
-  4. Bấm JOIN để vào phòng có sẵn, hoặc CREATE ROOM để tạo phòng mới.
-  5. Trong phòng, bấm READY UP. Trận tự bắt đầu khi có ít nhất 2 người
+     Tài khoản lưu trên server nên máy nào cũng dùng được, kể cả máy Windows và Linux.
+     Những lần sau: nhập tên, mật khẩu rồi bấm LOG IN. Tích "Remember me"
+     thì 30 ngày tới máy này tự đăng nhập.
+  3. Đăng nhập xong là thấy ngay danh sách phòng. Bấm JOIN để vào một phòng,
+     QUICK MATCH để vào phòng đông nhất còn chỗ, hoặc CREATE ROOM để tạo
+     phòng mới (DUSTBOWL, ISLAND hoặc FOREST LAKE).
+  4. Trong phòng, bấm READY UP. Trận tự bắt đầu khi có ít nhất 2 người
      READY trong cùng một phòng. Một mình thì phòng sẽ đứng chờ.
-  6. Chọn điểm xuất phát trên bản đồ nhỏ rồi bấm DEPLOY.
+  5. Chọn điểm xuất phát trên bản đồ nhỏ rồi bấm DEPLOY.
 
-Người chơi Mac và Windows vào chung phòng được, miễn là cùng phiên bản.
+Chưa biết chơi? Bấm HOW TO PLAY ở màn hình đầu, hoặc phím H ở các màn hình
+khác. Đổi phím trong SETTINGS. Bảng xếp hạng (GLOBAL RANKING) và thành tích
+(ACHIEVEMENTS) có ở màn hình đầu và trong menu Esc khi đang chơi.
+
 Không cần cấu hình gì thêm. Địa chỉ server đã có sẵn trong game.
 
 YÊU CẦU
@@ -71,14 +76,20 @@ INSTALL
 
 PLAY
   1. Main menu: MULTIPLAYER.
-  2. First time: "Create an account". Accounts live on the server and work
-     on Windows too. Later: enter your name and password, then LOG IN.
-  3. BROWSE ROOMS, then JOIN a room or CREATE ROOM.
+  2. First time: "Create an account". Accounts live on the server and work on Windows and Linux too.
+     Later: enter your name and password, then LOG IN. Tick "Remember me"
+     and this computer signs you in by itself for 30 days.
+  3. Signing in opens the room list. JOIN a room, QUICK MATCH into the
+     fullest room with a free place, or CREATE ROOM (DUSTBOWL, ISLAND or
+     FOREST LAKE).
   4. Press READY UP. The match starts by itself once at least 2 players
      in the room are ready; a room with one player just waits.
   5. Pick a spawn point on the minimap and press DEPLOY.
 
-Mac and Windows players share rooms when they run the same version.
+New here? HOW TO PLAY on the main menu, or H on any other menu screen.
+Rebind keys in SETTINGS. GLOBAL RANKING and ACHIEVEMENTS are on the main
+menu and in the Esc menu during a match.
+
 Nothing to configure: the server address is built into the game.
 
 REQUIREMENTS

@@ -158,7 +158,7 @@ What is different, and why:
 | Backend | IL2CPP | **Mono**. IL2CPP for macOS links with Apple's toolchain and can only be built on a Mac |
 | CPU | x64 | **universal**: x86_64 + arm64 in one binary, checked by `package-release.ps1` |
 | Signature | none (SmartScreen warns) | Unity's **ad-hoc** signature, written on Windows too. Apple silicon will not start unsigned code. Not notarized, so Gatekeeper blocks the first launch until the player clicks "Open Anyway" |
-| Zip | `System.IO.Compression` | `tools/release/zip_macos_bundle.py`, which records Unix permissions. A zip made by .NET on Windows drops the executable bit and the app does not open |
+| Zip | `System.IO.Compression` | `tools/release/zip_unix_release.py macos`, which records Unix permissions. A zip made by .NET on Windows drops the executable bit and the app does not open |
 | First build | minutes | far longer: every shader compiles for Metal once; later builds reuse `Library/` |
 
 **This machine cannot run the result, so a Mac does.** `.github/workflows/macos-smoke.yml` takes
@@ -183,3 +183,39 @@ the tag afterwards.
 `-Publish` adds the zip to the release when it already exists (the Windows zip went first),
 otherwise it creates it. A batch macOS build switches the Editor's target back to Windows when it
 ends, so the next Editor opens where it always does.
+
+## 8. Linux
+
+Since 2026-10-09 (owner's list of 2026-10-09: "win, mac, linux") the release also carries a Linux
+zip. It is built on this Windows machine too:
+
+```powershell
+pwsh .claude/scripts/unity-editor.ps1 close
+pwsh tools/build-player.ps1 -Platform linux                    # build/linux/Ironfront.x86_64
+pwsh tools/package-release.ps1 -Platform linux -Version v4.6.0 # IronfrontReborn-v4.6.0-linux-x64.zip
+```
+
+| | Windows | Linux |
+|---|---|---|
+| Module | Windows Build Support (IL2CPP) | **Linux Build Support (IL2CPP)** |
+| Backend | IL2CPP | **IL2CPP**, cross-compiled from Windows with the `com.unity.toolchain.win-x86_64-linux` package in `Packages/manifest.json`. Not a choice: Unity ships no non-development Mono player for Linux |
+| CPU | x64 | x86_64; `package-release.ps1` checks the ELF header |
+| Native code | `GameAssembly.dll` | `GameAssembly.so` |
+| Zip | `System.IO.Compression` | `tools/release/zip_unix_release.py linux`, which marks every ELF file 0755 |
+| README | CRLF, UTF-8 with BOM | LF, UTF-8 without BOM (`tools/release/README-linux.txt`) |
+
+**This machine cannot run the result, so a GitHub runner does.** `.github/workflows/linux-smoke.yml`
+takes the zip from a release (a draft is fine), unzips it with `unzip`, checks the executable bit
+and the ELF type, then starts the player on Xvfb with Mesa's software OpenGL (`-force-glcore`;
+the runner has no GPU): the title screen, a practice match entered from the keyboard (Tab, Return,
+Return) with `xdotool`, DEPLOY clicked, then SIGTERM. It requires the `[flow] master`,
+`title screen ready`, `plays offline` and `[vegetation] 'Terrain` lines and no exception line, and
+keeps the log and screenshots as artifacts. Before a zip is public:
+
+```powershell
+gh release create linux-smoke-<n> --draft --title "Linux smoke <n>" artifacts/release/<zip>
+git tag linux-smoke-<n>; git push origin linux-smoke-<n>     # the tag push starts the run
+```
+
+For a published release: `gh workflow run linux-smoke.yml -f release=<tag>`. Delete the draft and
+the tag afterwards. A batch Linux build switches the Editor's target back to Windows when it ends.
