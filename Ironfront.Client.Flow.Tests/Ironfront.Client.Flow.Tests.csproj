@@ -85,6 +85,8 @@
              Link="Linked\MasterSession.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Overlay\AchievementBoard.cs"
              Link="Linked\AchievementBoard.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Overlay\AchievementRoundSummary.cs"
+             Link="Linked\AchievementRoundSummary.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\MatchTransportHandoff.cs"
              Link="Linked\MatchTransportHandoff.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\RoomBotChoice.cs"

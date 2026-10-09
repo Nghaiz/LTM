@@ -12,8 +12,9 @@ namespace Ironfront.Net.Unity.Client.Overlay
     public readonly struct AchievementEntry
     {
         public AchievementEntry(Achievement achievement, int order, bool earned, long earnedAt, long holders,
-            long players, long measure, string firstName, long firstAt)
+            long players, long measure, string firstName, long firstAt, long partsDone = 0)
         {
+            PartsDone = partsDone;
             Achievement = achievement;
             Order = order;
             Earned = earned;
@@ -49,6 +50,9 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         public long FirstAt { get; }
 
+        /// <summary>For a multi-part achievement, the career's bits: which parts are done.</summary>
+        public long PartsDone { get; }
+
         /// <summary>Whether the share of players is known: the master answered, and someone has a career.</summary>
         public bool HasShare => Players > 0;
 
@@ -63,6 +67,29 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         /// <summary>Whether the page draws progress: a revealed, unearned achievement that counts something.</summary>
         public bool ShowsProgress => !Earned && IsRevealed && Achievement.Progress != AchievementProgress.None;
+    }
+
+    /// <summary>How the page orders the list.</summary>
+    public enum AchievementSort
+    {
+        /// <summary>Easiest first: the catalogue's order.</summary>
+        Difficulty,
+        /// <summary>Rarest first, by the share of players holding it.</summary>
+        Rarity,
+        /// <summary>Most recently earned first; the rest after, easiest first.</summary>
+        Recent,
+        /// <summary>The unearned ones nearest their target first.</summary>
+        Closest,
+    }
+
+    /// <summary>Which earned state the page shows.</summary>
+    public enum AchievementStatus
+    {
+        All,
+        Unlocked,
+        Locked,
+        /// <summary>Not earned, and some progress made toward it.</summary>
+        InProgress,
     }
 
     /// <summary>
@@ -118,10 +145,73 @@ namespace Ironfront.Net.Unity.Client.Overlay
                 }
 
                 long measure = earned ? Math.Max(achievement.Target, achievement.MeasureOf(view)) : achievement.MeasureOf(view);
+                long parts = achievement.Measure == AchievementMeasure.Parts && achievement.Stat != null
+                    ? view.Get(achievement.Stat.Value)
+                    : 0;
                 entries.Add(new AchievementEntry(achievement, i, earned, fromMaster ? at : 0, holders, players, measure,
-                    firstName, firstAt));
+                    firstName, firstAt, parts));
             }
             return entries;
+        }
+
+        /// <summary>Whether <paramref name="entry"/> passes the page's filters; a null tier or tag means any.</summary>
+        public static bool Passes(in AchievementEntry entry, AchievementTier? tier, AchievementStatus status, AchievementTags? tag)
+        {
+            if (tier != null && entry.Achievement.Tier != tier) return false;
+            if (tag != null && (entry.Achievement.Tags & tag.Value) == 0) return false;
+            return status switch
+            {
+                AchievementStatus.Unlocked => entry.Earned,
+                AchievementStatus.Locked => !entry.Earned,
+                AchievementStatus.InProgress => entry.ShowsProgress && entry.Measure > 0,
+                _ => true,
+            };
+        }
+
+        /// <summary>Orders <paramref name="entries"/> in place.</summary>
+        public static void Sort(List<AchievementEntry> entries, AchievementSort sort)
+        {
+            entries.Sort((x, y) =>
+            {
+                int by = sort switch
+                {
+                    AchievementSort.Rarity => CompareRarity(x, y),
+                    AchievementSort.Recent => CompareRecent(x, y),
+                    AchievementSort.Closest => CompareClosest(x, y),
+                    _ => 0,
+                };
+                return by != 0 ? by : x.Order.CompareTo(y.Order);
+            });
+        }
+
+        /// <summary>The sort's name on its button.</summary>
+        public static string SortName(AchievementSort sort) => sort switch
+        {
+            AchievementSort.Rarity => "RAREST",
+            AchievementSort.Recent => "RECENT",
+            AchievementSort.Closest => "CLOSEST",
+            _ => "DIFFICULTY",
+        };
+
+        private static int CompareRarity(in AchievementEntry x, in AchievementEntry y)
+        {
+            if (x.HasShare != y.HasShare) return x.HasShare ? -1 : 1;
+            return x.HasShare ? x.Share.CompareTo(y.Share) : 0;
+        }
+
+        private static int CompareRecent(in AchievementEntry x, in AchievementEntry y)
+        {
+            if (x.Earned != y.Earned) return x.Earned ? -1 : 1;
+            return y.EarnedAt.CompareTo(x.EarnedAt);
+        }
+
+        private static int CompareClosest(in AchievementEntry x, in AchievementEntry y)
+        {
+            bool xOpen = !x.Earned && x.Achievement.Progress != AchievementProgress.None;
+            bool yOpen = !y.Earned && y.Achievement.Progress != AchievementProgress.None;
+            if (xOpen != yOpen) return xOpen ? -1 : 1;
+            if (!xOpen) return 0;
+            return ProgressFraction(y).CompareTo(ProgressFraction(x));
         }
 
         /// <summary>How many of <paramref name="entries"/> are earned.</summary>

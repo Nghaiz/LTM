@@ -316,8 +316,10 @@ BAPTISM OF FIRE, UNBROKEN, OVERWATCH, và PARTICIPATION TROPHY cho người đ�
 4. **Online: hiện vài giây sau khi đạt.** Game server gửi tiến độ hiệp lên master mỗi 15 giây và lúc
    hết hiệp; master chấm và đẩy xuống client.
 5. **Chỉ người mở khoá thấy thông báo.** Không thông báo cho cả server.
-6. **Tổng kết cuối hiệp**: bảng Tab lúc hiệp kết thúc có thêm ô "Achievements": các thành tựu vừa mở
-   và tiến độ đã tăng (ví dụ `+42 kills · GRIM ARITHMETIC 642 / 10,000`).
+6. **Tổng kết cuối hiệp**: lúc hiệp kết thúc hiện thẻ `ROUND ACHIEVEMENTS` ở giữa phía dưới màn hình
+   trong 20 giây, không cần giữ Tab: các thành tựu vừa mở, các mốc 50% / 90%, và tối đa 3 tiến độ đã
+   tăng gần đích nhất (ví dụ `+42 · GRIM ARITHMETIC 642 / 10,000`). Mở bảng Tab thì thẻ tạm mờ đi để
+   không che bảng. (Đổi so với bản duyệt, xem mục 9.)
 7. **Giao diện toast** (trên giữa màn hình):
    - Khung và ánh sáng theo màu hạng; icon bật lên kiểu "pop", một vệt sáng quét ngang.
    - Dòng nhỏ: `ACHIEVEMENT UNLOCKED` hoặc `CLASSIFIED ACHIEVEMENT DECLASSIFIED` (ẩn); bên phải hạng
@@ -478,8 +480,8 @@ gửi thành tựu ẩn người xem chưa có trong màn so sánh; phòng 1 đ�
 | Thiết kế (tài liệu này) | Đã duyệt 2026-10-09 |
 | Chọn đội tự do | Xong, PR #588 (master bỏ giới hạn mỗi phe; game server chuyển thân xác trống sang phe thiếu) |
 | Cờ lê vàng + ISEEGOLD | Xong, PR #589 (gõ ở menu, chỉ practice, game nhớ, có thông báo) |
-| Danh mục 80 + bộ đếm server + master | Xong phần lõi (PR "achievements v2 engine"): danh mục 80, game server đếm mọi số liệu trong mục 7.1 cho mọi actor kể cả bot, master chấm và lưu, báo tiến độ giữa hiệp mỗi 15 giây, báo hiệp của người rời trận, xoá thành tựu cũ và giữ career, game báo việc bật night vision. Practice: 15 thành tựu chấm ngay trong game. Test: dotnet 8 bộ xanh, EditMode 632/632 |
-| Toast, trang thành tựu, tổng kết cuối hiệp, tuỳ chọn số bot practice | Chưa |
+| Danh mục 80 + bộ đếm server + master | Xong phần lõi, PR #590: danh mục 80, game server đếm mọi số liệu trong mục 7.1 cho mọi actor kể cả bot, master chấm và lưu, báo tiến độ giữa hiệp mỗi 15 giây, báo hiệp của người rời trận, xoá thành tựu cũ và giữ career, game báo việc bật night vision. Practice: 15 thành tựu chấm ngay trong game. Test: dotnet 8 bộ xanh, EditMode 632/632 |
+| Toast, trang thành tựu, tổng kết cuối hiệp, tuỳ chọn số bot practice | Xong (PR "achievements v2 UI"). Toast: một hàng đợi lưu qua chuyển cảnh và cả khi thoát game, bộ đếm `2 / 3`, màu và khung theo hạng, Mythic rộng gấp đôi nền obsidian có hạt lửa giữ 8 giây, thành tựu ẩn "giải mật" màu dâng từ dưới lên, nhỏ lại khi đang bắn. Trang: lọc theo hạng / trạng thái / loại, sắp xếp độ khó / độ hiếm / mới mở / gần mở nhất, độ hiếm thật và nhãn COMMON…LEGENDARY, thanh tiến độ hoặc kỷ lục, bảng chi tiết có từng phần và người đầu tiên mở Mythic. Practice có thêm "BLUE / RED, ALONE VS ALL BOTS". **Khác bản duyệt**: tổng kết cuối hiệp là thẻ riêng ở dưới màn hình (không nằm trong bảng Tab) để người chơi thấy ngay mà không phải giữ Tab, giống màn tổng kết sau trận của các game lớn; thẻ tự mờ khi mở bảng Tab. Âm thanh từng hạng và icon đến ở bước "Icon và âm thanh"; tới lúc đó toast dùng tiếng chuông cũ và ô vuông thay icon. Test: dotnet 8 bộ xanh |
 | So sánh trong GLOBAL RANKING | Chưa |
 | Icon và âm thanh | Chưa |
 | Deploy master + game server, cập nhật main, thay 3 bản v4.6.0 | Chưa |

@@ -826,6 +826,10 @@ namespace Ironfront.Net.Unity.Client
 
             int previous = _lastPhase;
             _lastPhase = phase;
+
+            // Achievements v2: the round summary snapshots the career at Playing and compares at
+            // Ended, so a client that joins mid-round starts its summary there too.
+            Overlay.AchievementLedger.NoteRoundPhase((MatchPhase)phase);
             if (previous < 0) return;
 
             if (phase == (int)MatchPhase.Playing)

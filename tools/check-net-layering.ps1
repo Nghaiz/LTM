@@ -271,6 +271,10 @@ $ClientBaseline = @(
                 'PracticeFeats.Progress(), a Shared METHOD, in AchievementBoard.cs and the overlay pages. ' +
                 'It collides with Pathfinding.Progress, a struct in the A* code in Assembly-CSharp, which ' +
                 'this assembly never references' }
+    @{ Type = 'Type'                    ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'UnityEngine.UI.Image.Type, the nested UGUI enum, in AchievementToast.cs filling a ' +
+                'badge from the bottom (Image.Type.Filled). It collides with a legacy type named Type ' +
+                'in a predefined assembly, which this assembly never references' }
 )
 
 # RULE 7's allow-list: the legacy names Net/Diagnostics still contains, one row per NAME.

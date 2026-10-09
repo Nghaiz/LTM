@@ -93,6 +93,12 @@ namespace Ironfront.Net.Unity
         /// <summary>A practice achievement was earned (its id). Raised on the main thread.</summary>
         public static event Action<string>? Earned;
 
+        /// <summary>An offline match began (the round summary snapshots the practice numbers).</summary>
+        public static event Action? RoundBegan;
+
+        /// <summary>An offline match ended (the round summary compares the practice numbers).</summary>
+        public static event Action? RoundOver;
+
         private static PracticeMatch _match;
         private static bool _running;
         private static float _startedAt;
@@ -108,6 +114,8 @@ namespace Ironfront.Net.Unity
         private static void ResetOnLoad()
         {
             Earned = null;
+            RoundBegan = null;
+            RoundOver = null;
             _running = false;
         }
 
@@ -124,6 +132,7 @@ namespace Ironfront.Net.Unity
             _nightVisionUsed = false;
             FlagsHelped.Clear();
             KillsByActor.Clear();
+            RoundBegan?.Invoke();
         }
 
         /// <summary>
@@ -196,6 +205,18 @@ namespace Ironfront.Net.Unity
         {
             if (!_running) return;
             _running = false;
+            try
+            {
+                Judge(playerWon, playerKey, now);
+            }
+            finally
+            {
+                RoundOver?.Invoke();
+            }
+        }
+
+        private static void Judge(bool playerWon, int playerKey, float now)
+        {
             if (now - _startedAt < CareerRules.QualifyingSeconds) return;
 
             if (_match.MapId >= 1 && _match.MapId <= 3) Or(CareerStat.PrMapsFinished, 1L << _match.MapId);
