@@ -102,7 +102,7 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         public static MoveInput FromUnityInput(float yawDegrees, InputButtons combat)
             => FromUnityInput(
-                yawDegrees, combat, Input.GetButton("Crouch"), Input.GetButton("Sprint"));
+                yawDegrees, combat, GameKeys.Held(GameAction.Crouch), GameKeys.Held(GameAction.Sprint));
 
         /// <summary>
         /// As above, with the crouch STATE supplied by the caller.
@@ -139,7 +139,7 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         public static MoveInput FromUnityInput(
             float yawDegrees, InputButtons combat, bool crouching)
-            => FromUnityInput(yawDegrees, combat, crouching, Input.GetButton("Sprint"));
+            => FromUnityInput(yawDegrees, combat, crouching, GameKeys.Held(GameAction.Sprint));
 
         /// <summary>
         /// As above, with the sprint STATE supplied by the caller.
@@ -184,10 +184,10 @@ namespace Ironfront.Net.Unity
                     false, false, false, false,
                     InputFrame.SlotOf(InputButtons.None))
                 : new MoveInput(
-                Input.GetAxis("Horizontal"),
-                Input.GetAxis("Vertical"),
+                GameKeys.MoveX,
+                GameKeys.MoveZ,
                 yawDegrees,
-                Input.GetButton("Jump"),
+                GameKeys.Held(GameAction.Jump),
                 sprinting,
                 crouching,
                 (combat & InputButtons.Fire) != 0,

@@ -9,7 +9,7 @@ $unityRoot = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/UI/IronfrontRebo
 $htmlPath = Join-Path $packRoot 'index.html'
 $catalogPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Editor/NetVerification/IronfrontRebornUiAssetCatalog.cs'
 $builderPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Editor/NetVerification/BuildMenuCanvas.cs'
-$settingsPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scripts/Net/Client/Menu/MenuSettingsScreen.cs'
+$settingsPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scripts/Net/Client/Overlay/SettingsPage.cs'
 $createRoomPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scripts/Net/Client/Menu/MenuCreateRoomScreen.cs'
 $roomLobbyPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scripts/Net/Client/Menu/MenuRoomLobbyScreen.cs'
 $scenePath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scenes/Menu.unity'
@@ -81,12 +81,16 @@ foreach ($practiceControl in @('MatchTime', 'TimeOfDay', 'PlayerTeam', 'Vehicles
     }
 }
 
+# Settings is an overlay page shared by the menu and the match (owner's list of 2026-10-09,
+# item 3): every category is a tab, and the controls tab rebinds every action.
 $settings = Get-Content -Raw -LiteralPath $settingsPath
-if ($settings -notmatch '_categoryGroups') {
-    $failures.Add('Settings tabs do not switch real category groups')
+foreach ($category in @('Display', 'Graphics', 'Audio', 'Gameplay', 'Vehicles', 'Controls')) {
+    if ($settings -notmatch ('SettingsCategory\.' + $category)) {
+        $failures.Add("Settings page has no $category tab")
+    }
 }
-if ($settings -notmatch '_statusText') {
-    $failures.Add('Settings HTML status line is not bound to runtime state')
+if ($settings -notmatch 'KeyBindingList') {
+    $failures.Add('Settings page does not offer key rebinding')
 }
 
 $createRoom = Get-Content -Raw -LiteralPath $createRoomPath
@@ -106,12 +110,12 @@ foreach ($caption in @('"READY UP"', '"STAND DOWN"')) {
 $scene = Get-Content -Raw -LiteralPath $scenePath
 if ($scene -match '\.svg') { $failures.Add('Generated Menu scene still references SVG') }
 if ($scene -notmatch 'm_PixelPerfect: 1') { $failures.Add('Generated Menu scene is not pixel-perfect') }
-foreach ($screenName in @('Main Menu', 'Sign In', 'Create Account', 'Practice', 'Settings', 'Rooms', 'Create Room', 'Waiting Room')) {
+foreach ($screenName in @('Main Menu', 'Sign In', 'Create Account', 'Practice', 'Rooms', 'Create Room', 'Waiting Room')) {
     if ($scene -notmatch ('m_Name: ' + [regex]::Escape($screenName) + '(\r?\n)')) {
         $failures.Add("Generated Menu scene is missing screen $screenName")
     }
 }
-foreach ($nodeName in @('ForgotPassword', 'DisplayGroup', 'AudioGroup', 'GameplayGroup', 'Versus')) {
+foreach ($nodeName in @('Versus', 'RememberMe', 'HowToPlay', 'Ranking', 'Achievements')) {
     if ($scene -notmatch ('m_Name: ' + [regex]::Escape($nodeName) + '(\r?\n)')) {
         $failures.Add("Generated Menu scene is missing node $nodeName")
     }

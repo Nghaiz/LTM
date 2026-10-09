@@ -160,7 +160,6 @@ namespace Ironfront.Net.Unity.EditorTools
             GameObject login = BuildLogin(root, controller, toast, log);
             GameObject register = BuildRegister(root, controller, log);
             GameObject practice = BuildPractice(root, controller, toast, out Button practiceBack);
-            GameObject settings = BuildSettings(root, controller, toast, out Button settingsBack);
             GameObject authenticating = BuildAuthenticating(root);
             GameObject lobby = BuildLobby(root, controller, toast, out Text signedIn, out Button browseRooms);
             GameObject browser = BuildRoomBrowser(root, controller, toast, log);
@@ -179,8 +178,6 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_browseRoomsButton", browseRooms);
             Assign(so, "_practiceBackBar", practice);
             Assign(so, "_practiceBackButton", practiceBack);
-            Assign(so, "_settingsScreen", settings);
-            Assign(so, "_settingsBackButton", settingsBack);
             Assign(so, "_signedInText", signedIn);
             so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -190,7 +187,6 @@ namespace Ironfront.Net.Unity.EditorTools
             login.SetActive(false);
             register.SetActive(false);
             practice.SetActive(false);
-            settings.SetActive(false);
             authenticating.SetActive(false);
             lobby.SetActive(false);
             browser.SetActive(false);
@@ -325,8 +321,17 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(-560f, 58f), new Vector2(480f, 68f), "menu", "icons/target.png");
             Button settings = PackButton(panel, "Settings", "SETTINGS",
                 new Vector2(-560f, -22f), new Vector2(480f, 68f), "menu", "icons/settings.png");
+            // The guide, under Settings (owner's list of 2026-10-09, item 1); the How to play key
+            // opens it from every other menu screen.
+            Button howToPlay = PackButton(panel, "HowToPlay", "HOW TO PLAY",
+                new Vector2(-560f, -102f), new Vector2(480f, 68f), "menu", "icons/guide.png");
+            // The global ranking and the achievements, above Exit (owner's list of 2026-10-09, item 4).
+            Button ranking = PackButton(panel, "Ranking", "GLOBAL RANKING",
+                new Vector2(-560f, -182f), new Vector2(480f, 68f), "menu", "icons/ranking.png");
+            Button achievements = PackButton(panel, "Achievements", "ACHIEVEMENTS",
+                new Vector2(-560f, -262f), new Vector2(480f, 68f), "menu", "icons/achievements.png");
             Button exit = PackButton(panel, "Exit", "EXIT",
-                new Vector2(-560f, -102f), new Vector2(480f, 68f), "menu", "icons/power.png");
+                new Vector2(-560f, -342f), new Vector2(480f, 68f), "menu", "icons/power.png");
 
             Text footer = Label(panel, "Tagline", "SIMPLE BATTLES\nENDLESS POSSIBILITIES", 12,
                 new Vector2(-796f + 260f, -450f), new Vector2(520f, 48f));
@@ -347,8 +352,9 @@ namespace Ironfront.Net.Unity.EditorTools
             Anchor(build.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f),
                 new Vector2(-22f, 16f), new Vector2(420f, 22f));
 
-            SetVerticalNavigation(multiplayer, practice, settings, exit);
-            ConfigureKeyboard(panel, new Selectable[] { multiplayer, practice, settings, exit }, multiplayer, null);
+            SetVerticalNavigation(multiplayer, practice, settings, howToPlay, ranking, achievements, exit);
+            ConfigureKeyboard(panel, new Selectable[] { multiplayer, practice, settings, howToPlay, ranking, achievements, exit },
+                multiplayer, null);
 
             MenuTitleScreen screen = panel.AddComponent<MenuTitleScreen>();
             var so = new SerializedObject(screen);
@@ -356,10 +362,13 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_multiplayerButton", multiplayer);
             Assign(so, "_practiceButton", practice);
             Assign(so, "_settingsButton", settings);
+            Assign(so, "_howToPlayButton", howToPlay);
+            Assign(so, "_rankingButton", ranking);
+            Assign(so, "_achievementsButton", achievements);
             Assign(so, "_exitButton", exit);
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            log.AppendLine("title: supplied background/logo and four fully wired actions.");
+            log.AppendLine("title: supplied background/logo and seven fully wired actions.");
             return panel;
         }
 
@@ -390,44 +399,48 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(0f, 190f), new Vector2(520f, 24f));
             subheading.color = Hex("8AA5BA");
 
-            InputField username = PackField(panel, "Username", "Username / Callsign",
-                new Vector2(0f, 122f), new Vector2(480f, 54f), password: false,
+            // A label over every field (owner's list of 2026-10-09, item 1): the placeholder goes
+            // when the player types, and the field must still say what it is.
+            var loginField = new Vector2(480f, 52f);
+            FieldLabel(panel, "USERNAME / CALLSIGN", new Vector2(0f, 116f), loginField);
+            InputField username = PackField(panel, "Username", "Your callsign",
+                new Vector2(0f, 116f), loginField, password: false,
                 iconAsset: "icons/user.png");
-            InputField password = PackField(panel, "Password", "Password",
-                new Vector2(0f, 56f), new Vector2(480f, 54f), password: true,
+            FieldLabel(panel, "PASSWORD", new Vector2(0f, 32f), loginField);
+            InputField password = PackField(panel, "Password", "Your password",
+                new Vector2(0f, 32f), loginField, password: true,
                 iconAsset: "icons/lock.png", trailingAction: 66f);
             // Inside the field's right end, which is where `.field-action` sits in the prototype,
             // and at a position the field's text inset now stops short of. It used to be centred
             // at x=210 over a field spanning -240..240, so it covered the last 75px of the input
             // and swallowed every click meant for it.
-            Button reveal = AddPasswordReveal(panel, password, new Vector2(206f, 56f));
+            Button reveal = AddPasswordReveal(panel, password, new Vector2(206f, 32f));
+            // "Remember me" signs this computer in by itself next time (a master token, never the
+            // password; RememberedSignIn). "Forgot password?" is gone: the master has no recovery
+            // to offer, and a link that only said so was a dead control (#301).
             Toggle remember = PackToggle(panel, "RememberMe", "Remember me",
-                new Vector2(-125f, 10f));
-            Button forgot = LinkButton(panel, "ForgotPassword", "Forgot password?",
-                new Vector2(145f, 10f), new Vector2(210f, 38f));
-            Button logIn = PackButton(panel, "LogIn", "LOG IN", new Vector2(0f, -52f),
-                new Vector2(420f, 72f), "primary");
+                new Vector2(-125f, -16f));
+            Text rememberHint = Label(panel, "RememberHint", "Stay signed in on this computer", 13,
+                new Vector2(118f, -16f), new Vector2(240f, 26f));
+            rememberHint.alignment = TextAnchor.MiddleRight;
+            rememberHint.color = Hex("8AA5BA");
+            rememberHint.resizeTextForBestFit = false;
+            Button logIn = PackButton(panel, "LogIn", "LOG IN", new Vector2(0f, -82f),
+                new Vector2(420f, 64f), "primary");
             Label(panel, "Divider", "────────────  OR  ────────────", 14,
-                new Vector2(0f, -103f), new Vector2(480f, 24f));
+                new Vector2(0f, -132f), new Vector2(480f, 24f));
             Button create = PackButton(panel, "CreateAccount", "CREATE AN ACCOUNT",
-                new Vector2(0f, -154f), new Vector2(420f, 50f), "secondary", "icons/user.png");
+                new Vector2(0f, -180f), new Vector2(420f, 50f), "secondary", "icons/user.png");
             Button back = PackButton(panel, "Back", "BACK", new Vector2(-500f, -310f),
                 new Vector2(142f, 48f), "secondary");
 
             Text error = Label(panel, "Error", string.Empty, 18,
-                new Vector2(0f, -221f), new Vector2(540f, 52f));
+                new Vector2(0f, -246f), new Vector2(540f, 52f));
             error.color = ErrorInk;
 
-            SetVerticalNavigation(username, password, reveal, remember, forgot, logIn, create, back);
+            SetVerticalNavigation(username, password, reveal, remember, logIn, create, back);
             ConfigureKeyboard(panel,
-                new Selectable[] { username, password, reveal, remember, forgot, logIn, create, back }, logIn, back);
-
-            // Forgot password is an announce-only control, so it goes to the shared development
-            // notice and NOT to MenuLoginScreen: the screen used to carry a second, parallel way to
-            // say the same sentence, and Awake() only wired it when the field was non-null, so a
-            // builder that left it null made that whole path unreachable while still compiling.
-            // One owner for the announcement; MenuDevelopmentControls is it.
-            panel.AddComponent<MenuDevelopmentControls>().Configure(toast, forgot);
+                new Selectable[] { username, password, reveal, remember, logIn, create, back }, logIn, back);
 
             MenuLoginScreen screen = panel.AddComponent<MenuLoginScreen>();
             var so = new SerializedObject(screen);
@@ -441,7 +454,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_errorText", error);
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            log.AppendLine("login: supplied pack, remember/forgot/back, explicit keyboard order.");
+            log.AppendLine("login: supplied pack, labelled fields, remember me / back, explicit keyboard order.");
             return panel;
         }
 
@@ -461,27 +474,32 @@ namespace Ironfront.Net.Unity.EditorTools
             Label(panel, "Subtitle", "Create your secure battlefield identity.", 15,
                 new Vector2(0f, 248f), new Vector2(660f, 28f)).color = Hex("8AA5BA");
 
-            InputField username = PackField(panel, "Username", "Username (3-16, a-z 0-9 _)",
-                new Vector2(0f, 190f), new Vector2(600f, 54f), false, "icons/user.png");
-            InputField password = PackField(panel, "Password", "Password",
-                new Vector2(0f, 125f), new Vector2(600f, 54f), true, "icons/lock.png");
-            InputField confirm = PackField(panel, "ConfirmPassword", "Repeat password",
-                new Vector2(0f, 60f), new Vector2(600f, 54f), true, "icons/shield.png");
-            Button revealPassword = AddPasswordReveal(panel, password, new Vector2(270f, 125f));
-            Button revealConfirm = AddPasswordReveal(panel, confirm, new Vector2(270f, 60f));
-            InputField displayName = PackField(panel, "DisplayName", "Display name (optional)",
-                new Vector2(0f, -5f), new Vector2(600f, 54f), false);
+            var registerField = new Vector2(600f, 50f);
+            FieldLabel(panel, "USERNAME", new Vector2(0f, 175f), registerField);
+            InputField username = PackField(panel, "Username", "3-16 letters, digits or _",
+                new Vector2(0f, 175f), registerField, false, "icons/user.png");
+            FieldLabel(panel, "PASSWORD", new Vector2(0f, 93f), registerField);
+            InputField password = PackField(panel, "Password", "Choose a password",
+                new Vector2(0f, 93f), registerField, true, "icons/lock.png");
+            FieldLabel(panel, "REPEAT PASSWORD", new Vector2(0f, 11f), registerField);
+            InputField confirm = PackField(panel, "ConfirmPassword", "Type it again",
+                new Vector2(0f, 11f), registerField, true, "icons/shield.png");
+            Button revealPassword = AddPasswordReveal(panel, password, new Vector2(270f, 93f));
+            Button revealConfirm = AddPasswordReveal(panel, confirm, new Vector2(270f, 11f));
+            FieldLabel(panel, "DISPLAY NAME  (OPTIONAL)", new Vector2(0f, -71f), registerField);
+            InputField displayName = PackField(panel, "DisplayName", "Shown to other players; your username if blank",
+                new Vector2(0f, -71f), registerField, false, "icons/users.png");
 
             // The screen's one committing action, so it takes the primary face -- as LOG IN does on
             // the sign-in screen this one mirrors. It was a secondary outline.
             Button create = PackButton(
-                panel, "Create", "CREATE OPERATIVE", new Vector2(0f, -105f), new Vector2(600f, 56f),
+                panel, "Create", "CREATE OPERATIVE", new Vector2(0f, -150f), new Vector2(600f, 56f),
                 "primary");
             Button back = MakeButton(
-                panel, "Back", "Already enlisted? Sign in", new Vector2(0f, -165f), new Vector2(360f, 44f));
+                panel, "Back", "Already enlisted? Sign in", new Vector2(0f, -212f), new Vector2(360f, 44f));
 
             Text error = Label(
-                panel, "Error", string.Empty, 28, new Vector2(0f, -300f), new Vector2(760f, 90f));
+                panel, "Error", string.Empty, 22, new Vector2(0f, -290f), new Vector2(660f, 80f));
             error.color = ErrorInk;
 
             MenuRegisterScreen screen = panel.AddComponent<MenuRegisterScreen>();
@@ -630,46 +648,81 @@ namespace Ironfront.Net.Unity.EditorTools
             // `.practice-layout`: the map card beside the parameters column, both running from the
             // top of the parameters heading to the bottom of the deployment summary.
             const float contentTop = 224f;
-            const float contentBottom = -202f;
+            const float contentBottom = -348f;
             MapCard(panel, PanelContentLeft + 245f, contentTop, contentBottom, 490f, 32,
                 "Runs on this machine. No network required.", 0f, out Text practiceMapTitle);
 
             const float rightCentre = 290f;
             const float rightWidth = 820f;
             const float gap = 14f;
-            const float row = 48f + gap;
             float two = (rightWidth - gap) * 0.5f;
             float leftTwo = rightCentre - ((two + gap) * 0.5f);
             float rightTwo = rightCentre + ((two + gap) * 0.5f);
 
             ConfigHeading(panel, "SIMULATION PARAMETERS", "01",
                 new Vector2(rightCentre, contentTop - 22f), new Vector2(rightWidth, 44f));
-            // Two columns throughout, like Settings. A three-column middle band left 264px per
-            // button, which "AI DIFFICULTY // IN DEVELOPMENT" overran at the action type size, so
-            // those captions ran into the button strokes.
-            float firstRow = contentTop - 44f - gap - 24f;
-            Dropdown map = MakeDropdown(panel, "PracticeMap", new Vector2(leftTwo, firstRow),
-                new Vector2(two, 48f));
-            Button mode = MakeButton(panel, "PracticeMode", "GAME MODE // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow), new Vector2(two, 48f));
-            Button difficulty = MakeButton(panel, "Difficulty", "AI DIFFICULTY // IN DEVELOPMENT",
-                new Vector2(leftTwo, firstRow - row), new Vector2(two, 48f));
-            Button bots = MakeButton(panel, "BotCount", "BOT COUNT // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow - row), new Vector2(two, 48f));
-            Button matchTime = MakeButton(panel, "MatchTime", "MATCH TIME // IN DEVELOPMENT",
-                new Vector2(leftTwo, firstRow - (row * 2f)), new Vector2(two, 48f));
-            Button weather = MakeButton(panel, "Weather", "WEATHER // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow - (row * 2f)), new Vector2(two, 48f));
-            Button timeOfDay = MakeButton(panel, "TimeOfDay", "TIME OF DAY // IN DEVELOPMENT",
-                new Vector2(leftTwo, firstRow - (row * 3f)), new Vector2(two, 48f));
-            Button playerTeam = MakeButton(panel, "PlayerTeam", "PLAYER TEAM // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow - (row * 3f)), new Vector2(two, 48f));
-            Button vehicles = MakeButton(panel, "Vehicles", "VEHICLES // IN DEVELOPMENT",
-                new Vector2(leftTwo, firstRow - (row * 4f)), new Vector2(two, 48f));
-            Button friendlyFire = MakeButton(panel, "FriendlyFire", "FRIENDLY FIRE // IN DEVELOPMENT",
-                new Vector2(rightTwo, firstRow - (row * 4f)), new Vector2(two, 48f));
+            // Owner, 2026-10-08: the settings a multiplayer room is created with, which used to be
+            // IN DEVELOPMENT placeholders here. Two columns throughout, like Settings: the map and
+            // Create Room's mode, rule, points and night-vision battery, then the three only an
+            // offline match can choose. The placeholders with nothing behind them (AI difficulty,
+            // match time, weather, friendly fire) are gone. Each control has its label above it
+            // (owner's list of 2026-10-09, item 1): a 14px label, 4px, a 44px control, 12px.
+            const float fieldHeight = 44f;
+            const float rowPitch = 74f;
+            const float rowsTop = contentTop - 44f - 12f;
+            float FieldY(int line) => rowsTop - (line * rowPitch) - 18f - (fieldHeight * 0.5f);
+            var cell = new Vector2(two, fieldHeight);
 
-            // `.practice-summary`: a framed box with a small key over the value.
+            FieldLabel(panel, "MAP", new Vector2(leftTwo, FieldY(0)), cell);
+            Dropdown map = MakeDropdown(panel, "PracticeMap", new Vector2(leftTwo, FieldY(0)), cell);
+            FieldLabel(panel, "GAME MODE", new Vector2(rightTwo, FieldY(0)), cell);
+            Dropdown mode = MakeDropdown(panel, "PracticeMode", new Vector2(rightTwo, FieldY(0)), cell);
+            AuthorOptions(mode, System.Array.ConvertAll(RoomSettingsChoice.Modes, RoomSettingsChoice.ModeOption));
+
+            FieldLabel(panel, "VICTORY RULE", new Vector2(leftTwo, FieldY(1)), cell);
+            Dropdown rule = MakeDropdown(panel, "PracticeVictoryRule", new Vector2(leftTwo, FieldY(1)), cell);
+            AuthorOptions(rule, System.Array.ConvertAll(RoomSettingsChoice.Rules, RoomSettingsChoice.RuleOption));
+            FieldLabel(panel, "POINTS TO WIN", new Vector2(rightTwo, FieldY(1)), cell);
+            InputField points = PackField(panel, "PracticeVictoryPoints",
+                RoomSettingsChoice.PointsPlaceholder(VictoryRule.Margin),
+                new Vector2(rightTwo, FieldY(1)), cell, password: false);
+            points.contentType = InputField.ContentType.IntegerNumber;
+            points.characterLimit = 4;
+            points.text = RoomRules.DefaultMarginPoints.ToString();
+            FieldCaption(points, two, "POINTS");
+
+            FieldLabel(panel, "YOUR SIDE", new Vector2(leftTwo, FieldY(2)), cell);
+            Dropdown team = MakeDropdown(panel, "PlayerTeam", new Vector2(leftTwo, FieldY(2)), cell);
+            AuthorOptions(team, PracticeChoice.TeamOptions);
+            FieldLabel(panel, "NIGHT VISION BATTERY", new Vector2(rightTwo, FieldY(2)), cell);
+            InputField vision = PackField(panel, "PracticeNightVision", RoomSettingsChoice.VisionPlaceholder(),
+                new Vector2(rightTwo, FieldY(2)), cell, password: false);
+            vision.contentType = InputField.ContentType.IntegerNumber;
+            vision.characterLimit = 3;
+            vision.interactable = false;
+            FieldCaption(vision, two, "SECONDS");
+
+            FieldLabel(panel, "VEHICLES", new Vector2(leftTwo, FieldY(3)), cell);
+            Dropdown vehicles = MakeDropdown(panel, "Vehicles", new Vector2(leftTwo, FieldY(3)), cell);
+            AuthorOptions(vehicles, PracticeChoice.VehicleOptions);
+            FieldLabel(panel, "RESPAWN TIME", new Vector2(rightTwo, FieldY(3)), cell);
+            InputField respawn = PackField(panel, "RespawnTime", PracticeChoice.RespawnPlaceholder(),
+                new Vector2(rightTwo, FieldY(3)), cell, password: false);
+            respawn.contentType = InputField.ContentType.IntegerNumber;
+            respawn.characterLimit = 2;
+            respawn.text = PracticeSettings.DefaultRespawnSeconds.ToString();
+            FieldCaption(respawn, two, "SECONDS");
+
+            // Create Room's bot card, without the presets or the servers' ceiling an offline match
+            // does not have (MenuPracticeScreen never hands it a capacity).
+            const float botCardHeight = 150f;
+            float botCardTop = FieldY(3) - (fieldHeight * 0.5f) - gap;
+            MenuBotSlider bots = BuildBotSlider(panel,
+                new Vector2(rightCentre, botCardTop - (botCardHeight * 0.5f)),
+                new Vector2(rightWidth, botCardHeight), out Slider botTrack, compact: true);
+
+            // `.practice-summary`: a framed box with a small key over the value, the value now the
+            // match START will play.
             AngularPanel summary = Angular(panel, "PracticeSummary",
                 new Vector2(rightCentre, contentBottom + 27f), new Vector2(rightWidth, 54f), 0f,
                 Hex("071825"), AngularEdge.All, 1f, Hex("345A73"));
@@ -682,159 +735,41 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(0f, -8f), new Vector2(rightWidth - 34f, 20f));
             summaryValue.alignment = TextAnchor.MiddleLeft;
             summaryValue.fontStyle = FontStyle.Bold;
-            summaryValue.resizeTextForBestFit = false;
+            summaryValue.resizeTextForBestFit = true;
+            summaryValue.resizeTextMinSize = 9;
+            summaryValue.resizeTextMaxSize = 13;
             // Right-aligned to the parameters column, which is the content's right edge.
-            back = PackButton(panel, "Back", "BACK", new Vector2(PanelContentRight - 280f - 16f - 110f, -365f),
+            back = PackButton(panel, "Back", "BACK", new Vector2(PanelContentRight - 280f - 16f - 110f, -405f),
                 new Vector2(220f, 50f), "secondary");
             Button start = PackButton(panel, "StartPractice", "START PRACTICE  ›",
-                new Vector2(PanelContentRight - 140f, -365f), new Vector2(280f, 50f), "primary");
+                new Vector2(PanelContentRight - 140f, -405f), new Vector2(280f, 50f), "primary");
+            // Beside the buttons, as on Create Room: a refusal is read next to the button that
+            // caused it.
+            Text error = Label(panel, "Error", string.Empty, 16,
+                new Vector2(PanelContentLeft + 430f, -405f), new Vector2(860f, 50f));
+            error.alignment = TextAnchor.MiddleLeft;
+            error.color = ErrorInk;
 
             MenuPracticeScreen screen = panel.AddComponent<MenuPracticeScreen>();
             var so = new SerializedObject(screen);
             Assign(so, "_controller", controller);
             Assign(so, "_mapDropdown", map);
             Assign(so, "_mapPreviewTitle", practiceMapTitle);
+            Assign(so, "_modeDropdown", mode);
+            Assign(so, "_ruleDropdown", rule);
+            Assign(so, "_pointsField", points);
+            Assign(so, "_visionField", vision);
+            Assign(so, "_botSlider", bots);
+            Assign(so, "_teamDropdown", team);
+            Assign(so, "_vehiclesDropdown", vehicles);
+            Assign(so, "_respawnField", respawn);
+            Assign(so, "_summaryText", summaryValue);
+            Assign(so, "_errorText", error);
             Assign(so, "_startButton", start);
-            AssignArray(so, "_unsupportedControls", new Object[] { mode, difficulty, bots,
-                matchTime, weather, timeOfDay, playerTeam, vehicles, friendlyFire });
-            Assign(so, "_toast", toast);
             so.ApplyModifiedPropertiesWithoutUndo();
             ConfigureKeyboard(panel,
-                new Selectable[] { map, mode, difficulty, bots, matchTime, weather, timeOfDay,
-                    playerTeam, vehicles, friendlyFire, back, start },
+                new Selectable[] { map, mode, rule, points, team, vision, vehicles, respawn, botTrack, back, start },
                 start, back);
-            return panel;
-        }
-
-        private static GameObject BuildSettings(
-            GameObject root, MenuScreenController controller, MenuToast toast, out Button back)
-        {
-            GameObject panel = Panel(root, "Settings", opaque: false);
-            FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
-            MultiplayerShade(panel);
-            PackPanel(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f));
-            TopBar(panel, controller, toast, "SYSTEM SETTINGS", "CONFIGURATION", "LOCAL PROFILE",
-                offline: true, ("MAIN MENU", MenuNavigationAction.MainMenu));
-            // Heading block on the content inset like Practice's; it used to start 20px OUTSIDE the
-            // panel. The two control columns below are sized to end at the panel's right inset --
-            // at 560 wide they ran 30px past the panel edge, and APPLY SETTINGS 70px.
-            Kicker(panel, "SYSTEM CONTROL // CLIENT CONFIGURATION",
-                new Vector2(PanelContentLeft + 310f, 375f), new Vector2(620f, 28f), TextAnchor.MiddleLeft);
-            Label(panel, "Heading", "SETTINGS", 42,
-                new Vector2(PanelContentLeft + 230f, 325f), new Vector2(460f, 66f)).alignment = TextAnchor.MiddleLeft;
-            Text settingsNote = Label(panel, "Subtitle",
-                "Optimize visuals, performance and battlefield awareness.", 14,
-                new Vector2(PanelContentLeft + 350f, 286f), new Vector2(700f, 28f));
-            settingsNote.alignment = TextAnchor.MiddleLeft;
-            settingsNote.color = Hex("8DA8BA");
-            Text profile = Label(panel, "SettingsProfile", "PROFILE   DEFAULT", 13,
-                new Vector2(570f, 338f), new Vector2(260f, 30f));
-            profile.alignment = TextAnchor.MiddleRight;
-            profile.color = Orange;
-
-            Button displayTab = MakeButton(panel, "DisplayTab", "01  DISPLAY",
-                new Vector2(-570f, 190f), new Vector2(260f, 64f));
-            Button audioTab = MakeButton(panel, "AudioTab", "02  AUDIO",
-                new Vector2(-570f, 110f), new Vector2(260f, 64f));
-            Button gameplayTab = MakeButton(panel, "GameplayTab", "03  GAMEPLAY",
-                new Vector2(-570f, 30f), new Vector2(260f, 64f));
-
-            GameObject displayGroup = Panel(panel, "DisplayGroup", opaque: false);
-            GameObject audioGroup = Panel(panel, "AudioGroup", opaque: false);
-            GameObject gameplayGroup = Panel(panel, "GameplayGroup", opaque: false);
-
-            // Two columns between the category tabs and the panel's right inset.
-            const float columnWidth = 526f;
-            const float columnGap = 24f;
-            const float firstColumnLeft = PanelContentLeft + 320f;
-            const float leftColumn = firstColumnLeft + (columnWidth * 0.5f);
-            const float rightColumn = leftColumn + columnWidth + columnGap;
-            var cell = new Vector2(columnWidth, 60f);
-            var headingPosition = new Vector2(firstColumnLeft + 450f, 245f);
-
-            Label(displayGroup, "GroupHeading", "DISPLAY & PERFORMANCE", 24,
-                headingPosition, new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
-            Dropdown resolution = MakeDropdown(displayGroup, "Resolution", new Vector2(leftColumn, 165f), cell);
-            Dropdown displayMode = MakeDropdown(displayGroup, "DisplayMode", new Vector2(rightColumn, 165f), cell);
-            Dropdown quality = MakeDropdown(displayGroup, "Quality", new Vector2(leftColumn, 85f), cell);
-            Toggle vSync = MakeSwitch(displayGroup, "VSync", "V-SYNC", new Vector2(rightColumn, 85f), cell);
-            Dropdown fps = MakeDropdown(displayGroup, "FpsLimit", new Vector2(leftColumn, 5f), cell);
-            Button motionBlur = MakeButton(displayGroup, "MotionBlur", "MOTION BLUR // IN DEVELOPMENT",
-                new Vector2(rightColumn, 5f), cell);
-
-            Label(audioGroup, "GroupHeading", "AUDIO MIXER", 24,
-                headingPosition, new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
-            Slider volume = MakeSlider(audioGroup, "MasterVolume", "MASTER VOLUME",
-                new Vector2(leftColumn, 165f), 0f, 1f, columnWidth);
-            Button music = MakeButton(audioGroup, "MusicVolume", "MUSIC // IN DEVELOPMENT",
-                new Vector2(rightColumn, 165f), cell);
-            Button sfx = MakeButton(audioGroup, "SfxVolume", "SOUND EFFECTS // IN DEVELOPMENT",
-                new Vector2(leftColumn, 85f), cell);
-            Button voice = MakeButton(audioGroup, "VoiceVolume", "VOICE CHAT // IN DEVELOPMENT",
-                new Vector2(rightColumn, 85f), cell);
-            Button advancedAudio = MakeButton(audioGroup, "AdvancedAudio", "DYNAMIC RANGE // IN DEVELOPMENT",
-                new Vector2(leftColumn, 5f), cell);
-            Button outputDevice = MakeButton(audioGroup, "OutputDevice", "OUTPUT DEVICE // IN DEVELOPMENT",
-                new Vector2(rightColumn, 5f), cell);
-
-            Label(gameplayGroup, "GroupHeading", "GAMEPLAY & ACCESSIBILITY", 24,
-                headingPosition, new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
-            Slider fov = MakeSlider(gameplayGroup, "FieldOfView", "FIELD OF VIEW",
-                new Vector2(leftColumn, 165f), 60f, 120f, columnWidth);
-            Slider sensitivity = MakeSlider(gameplayGroup, "Sensitivity", "MOUSE SENSITIVITY",
-                new Vector2(rightColumn, 165f), 0.05f, 1f, columnWidth);
-            Button language = MakeButton(gameplayGroup, "Language", "LANGUAGE // IN DEVELOPMENT",
-                new Vector2(leftColumn, 85f), cell);
-            Button colorblind = MakeButton(gameplayGroup, "Colorblind", "COLORBLIND // IN DEVELOPMENT",
-                new Vector2(rightColumn, 85f), cell);
-            Button accessibility = MakeButton(gameplayGroup, "Accessibility", "SUBTITLES // IN DEVELOPMENT",
-                new Vector2(leftColumn, 5f), cell);
-            Button cameraShake = MakeButton(gameplayGroup, "CameraShake", "CAMERA SHAKE // IN DEVELOPMENT",
-                new Vector2(rightColumn, 5f), cell);
-
-            audioGroup.SetActive(false);
-            gameplayGroup.SetActive(false);
-
-            // Right-aligned on the panel's right inset, 16 apart: APPLY, CANCEL, RESET.
-            const float applyCentre = PanelContentRight - 150f;
-            const float cancelCentre = applyCentre - 150f - 16f - 130f;
-            const float resetCentre = cancelCentre - 130f - 16f - 140f;
-            Button reset = PackButton(panel, "Reset", "RESET DEFAULTS",
-                new Vector2(resetCentre, -365f), new Vector2(280f, 50f), "secondary");
-            back = PackButton(panel, "Back", "CANCEL",
-                new Vector2(cancelCentre, -365f), new Vector2(260f, 50f), "secondary");
-            Button save = PackButton(panel, "Save", "APPLY SETTINGS",
-                new Vector2(applyCentre, -365f), new Vector2(300f, 50f), "primary");
-            Text settingsStatus = Label(panel, "SettingsStatus", "NO UNSAVED CHANGES", 11,
-                new Vector2(PanelContentLeft + 150f, -365f), new Vector2(300f, 30f));
-            settingsStatus.alignment = TextAnchor.MiddleLeft;
-            settingsStatus.color = Hex("718FA4");
-
-            MenuSettingsScreen screen = panel.AddComponent<MenuSettingsScreen>();
-            var so = new SerializedObject(screen);
-            Assign(so, "_resolution", resolution);
-            Assign(so, "_displayMode", displayMode);
-            Assign(so, "_quality", quality);
-            Assign(so, "_vSync", vSync);
-            Assign(so, "_fpsLimit", fps);
-            Assign(so, "_masterVolume", volume);
-            Assign(so, "_fieldOfView", fov);
-            Assign(so, "_sensitivity", sensitivity);
-            Assign(so, "_saveButton", save);
-            Assign(so, "_resetButton", reset);
-            Assign(so, "_statusText", settingsStatus);
-            AssignArray(so, "_categoryButtons", new Object[] { displayTab, audioTab, gameplayTab });
-            AssignArray(so, "_categoryGroups", new Object[] { displayGroup, audioGroup, gameplayGroup });
-            AssignArray(so, "_unsupportedButtons",
-                new Object[] { motionBlur, music, sfx, voice, advancedAudio, outputDevice,
-                    language, colorblind, accessibility, cameraShake });
-            Assign(so, "_toast", toast);
-            so.ApplyModifiedPropertiesWithoutUndo();
-            ConfigureKeyboard(panel,
-                new Selectable[] { displayTab, audioTab, gameplayTab, resolution, displayMode,
-                    quality, vSync, fps, motionBlur, volume, music, sfx, voice, advancedAudio,
-                    outputDevice, fov, sensitivity, language, colorblind, accessibility,
-                    cameraShake, reset, back, save }, save, back);
             return panel;
         }
 
@@ -876,15 +811,26 @@ namespace Ironfront.Net.Unity.EditorTools
             ping.alignment = TextAnchor.MiddleLeft;
             SignalBars(panel, new Vector2(right - 180f, 322f));
 
+            // Who is signed in, and the way to stop being them on this computer (RememberedSignIn).
+            Text account = Label(panel, "Account", string.Empty, 13,
+                new Vector2(right - 390f, 372f), new Vector2(420f, 24f));
+            account.alignment = TextAnchor.MiddleRight;
+            account.color = Hex("8DA8BA");
+            account.resizeTextForBestFit = false;
+            account.supportRichText = true;
+            Button signOut = PackButton(panel, "SignOut", "SIGN OUT",
+                new Vector2(right - 85f, 372f), new Vector2(170f, 38f), "secondary", "icons/leave.png");
+
             // `.room-tools`: the search takes what the filters and the refresh leave.
             const float tools = 205f;
             Button refresh = PackButton(panel, "Refresh", "REFRESH", new Vector2(right - 75f, tools),
                 new Vector2(150f, 48f), "secondary", "icons/refresh.png");
-            Button region = PackButton(panel, "RegionFilter", "ALL REGIONS",
-                new Vector2(right - 150f - 14f - 115f, tools), new Vector2(230f, 48f), "secondary");
+            // The mode filter cycles ALL MODES and each mode (MenuRoomBrowserScreen). The region
+            // filter that stood beside it is gone: the master has one region and names none.
             Button mode = PackButton(panel, "ModeFilter", "ALL MODES",
-                new Vector2(right - 150f - 28f - 230f - 115f, tools), new Vector2(230f, 48f), "secondary");
-            float searchRight = right - 150f - 42f - 460f;
+                new Vector2(right - 150f - 14f - 115f, tools), new Vector2(230f, 48f), "secondary");
+            Text modeLabel = mode.GetComponentInChildren<Text>(includeInactive: true);
+            float searchRight = right - 150f - 28f - 230f;
             InputField search = PackField(panel, "Search", "Search rooms, maps or modes...",
                 new Vector2((left + searchRight) * 0.5f, tools), new Vector2(searchRight - left, 48f),
                 password: false, iconAsset: "icons/search.png");
@@ -1007,11 +953,15 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_passwordField", password);
             Assign(so, "_passwordJoinButton", promptJoin);
             Assign(so, "_passwordCancelButton", promptCancel);
+            Assign(so, "_modeFilterButton", mode);
+            Assign(so, "_modeFilterLabel", modeLabel);
+            Assign(so, "_quickMatchButton", quick);
+            Assign(so, "_accountText", account);
+            Assign(so, "_signOutButton", signOut);
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            panel.AddComponent<MenuDevelopmentControls>().Configure(toast, mode, region, quick);
             ConfigureKeyboard(panel,
-                new Selectable[] { search, mode, refresh, region, quick, create }, refresh, null);
+                new Selectable[] { search, mode, refresh, quick, create, signOut }, refresh, null);
 
             prompt.SetActive(false);
 
@@ -1081,56 +1031,69 @@ namespace Ironfront.Net.Unity.EditorTools
             mission.fontStyle = FontStyle.Bold;
             mission.color = Hex("6F8DA3");
 
+            // Five labelled rows (owner's list of 2026-10-09, item 1: a label above every input).
+            // A row is its 14px label, 4px, the 46px field and 14px to the next label: 78.
             const float formTop = 290f;
-            var fieldSize = new Vector2(leftWidth, 56f);
-            InputField name = PackField(panel, "Name", "Room name",
-                new Vector2(leftCentre, formTop - 28f), fieldSize, password: false);
-            // `.two-col`: map and mode share the row exactly as in the HTML. The mode is a room
-            // setting since protocol 14 (phase P32); the screen fills its options.
+            const float fieldHeight = 46f;
+            const float rowPitch = 78f;
+            float FieldY(int row) => formTop - (row * rowPitch) - 18f - (fieldHeight * 0.5f);
             float half = (leftWidth - 14f) * 0.5f;
             float leftHalf = leftCentre - (half * 0.5f) - 7f;
             float rightHalf = leftCentre + (half * 0.5f) + 7f;
-            Dropdown map = MakeDropdown(panel, "Map", new Vector2(leftHalf, formTop - 104f),
-                new Vector2(half, 56f));
-            Dropdown mode = MakeDropdown(panel, "Mode", new Vector2(rightHalf, formTop - 104f),
-                new Vector2(half, 56f));
+            var wide = new Vector2(leftWidth, fieldHeight);
+            var halfCell = new Vector2(half, fieldHeight);
+
+            FieldLabel(panel, "ROOM NAME", new Vector2(leftCentre, FieldY(0)), wide);
+            InputField name = PackField(panel, "Name", "Name your operation",
+                new Vector2(leftCentre, FieldY(0)), wide, password: false);
+
+            // `.two-col`: map and mode share the row exactly as in the HTML. The mode is a room
+            // setting since protocol 14 (phase P32); the screen fills its options.
+            FieldLabel(panel, "MAP", new Vector2(leftHalf, FieldY(1)), halfCell);
+            Dropdown map = MakeDropdown(panel, "Map", new Vector2(leftHalf, FieldY(1)), halfCell);
+            FieldLabel(panel, "GAME MODE", new Vector2(rightHalf, FieldY(1)), halfCell);
+            Dropdown mode = MakeDropdown(panel, "Mode", new Vector2(rightHalf, FieldY(1)), halfCell);
             AuthorOptions(mode, System.Array.ConvertAll(RoomSettingsChoice.Modes, RoomSettingsChoice.ModeOption));
 
-            // Seats and region share a row; the bots have a card of their own under the form
-            // (protocol 13: a slider of the match's total, bounded by the servers).
+            // The seats and the victory rule share a row; the bots have a card of their own under
+            // the form (protocol 13: a slider of the match's total, bounded by the servers).
+            FieldLabel(panel, "PLAYERS", new Vector2(leftHalf, FieldY(2)), halfCell);
             InputField maxPlayers = PackField(panel, "MaxPlayers",
-                "Players (even, 2-" + ProtocolConstants.MAX_PLAYERS + ")",
-                new Vector2(leftHalf, formTop - 180f), new Vector2(half, 56f),
-                password: false);
+                "Even, 2-" + ProtocolConstants.MAX_PLAYERS,
+                new Vector2(leftHalf, FieldY(2)), halfCell, password: false);
             maxPlayers.contentType = InputField.ContentType.IntegerNumber;
             // The victory rule and the points it is played to (protocol 14, phase P32): lead by
             // the points, or be first to them. The screen fills the rule options and keeps the
             // field's placeholder on the chosen rule's range.
-            Dropdown rule = MakeDropdown(panel, "VictoryRule", new Vector2(rightHalf, formTop - 180f),
-                new Vector2(half, 56f));
+            FieldLabel(panel, "VICTORY RULE", new Vector2(rightHalf, FieldY(2)), halfCell);
+            Dropdown rule = MakeDropdown(panel, "VictoryRule", new Vector2(rightHalf, FieldY(2)), halfCell);
             AuthorOptions(rule, System.Array.ConvertAll(RoomSettingsChoice.Rules, RoomSettingsChoice.RuleOption));
 
-            // The rows' own 56, so this pair's captions match the placeholders above them.
+            FieldLabel(panel, "ROOM ACCESS", new Vector2(leftHalf, FieldY(3)), halfCell);
             Toggle isPrivate = MakeSwitch(panel, "Private", "PRIVATE ROOM",
-                new Vector2(leftHalf, formTop - 256f), new Vector2(half, 56f));
+                new Vector2(leftHalf, FieldY(3)), halfCell);
+            FieldLabel(panel, "POINTS TO WIN", new Vector2(rightHalf, FieldY(3)), halfCell);
             InputField points = PackField(panel, "VictoryPoints",
                 RoomSettingsChoice.PointsPlaceholder(VictoryRule.Margin),
-                new Vector2(rightHalf, formTop - 256f), new Vector2(half, 56f), password: false);
+                new Vector2(rightHalf, FieldY(3)), halfCell, password: false);
             points.contentType = InputField.ContentType.IntegerNumber;
             points.characterLimit = 4;
             points.text = RoomRules.DefaultMarginPoints.ToString();
             FieldCaption(points, half, "POINTS");
-            const float formBottom = formTop - 360f;
+
             // The password and, beside it, Night Mode's night-vision battery (phase P32), which the
             // screen opens only while Night Mode is chosen.
-            InputField password = PackField(panel, "Password", "Room password",
-                new Vector2(leftHalf, formBottom + 28f), new Vector2(half, 56f), password: true);
+            FieldLabel(panel, "ROOM PASSWORD", new Vector2(leftHalf, FieldY(4)), halfCell);
+            InputField password = PackField(panel, "Password", "Only for a private room",
+                new Vector2(leftHalf, FieldY(4)), halfCell, password: true);
+            FieldLabel(panel, "NIGHT VISION BATTERY", new Vector2(rightHalf, FieldY(4)), halfCell);
             InputField vision = PackField(panel, "NightVision", RoomSettingsChoice.VisionPlaceholder(),
-                new Vector2(rightHalf, formBottom + 28f), new Vector2(half, 56f), password: false);
+                new Vector2(rightHalf, FieldY(4)), halfCell, password: false);
             vision.contentType = InputField.ContentType.IntegerNumber;
             vision.characterLimit = 3;
             vision.interactable = false;
             FieldCaption(vision, half, "SECONDS");
+            float formBottom = FieldY(4) - (fieldHeight * 0.5f);
 
             // `.map-preview`, level with the form column, with three stat cells at its foot. The
             // title is bound to the dropdown rather than authored, so the card cannot name a map
@@ -1174,8 +1137,8 @@ namespace Ironfront.Net.Unity.EditorTools
 
             // Under the form, tops level: the bots on the form's column, the servers' capacity on
             // the preview's.
-            const float cardsTop = formBottom - 14f;
-            const float botCardHeight = 226f;
+            float cardsTop = formBottom - 14f;
+            const float botCardHeight = 216f;
             const float capacityHeight = 138f;
             MenuBotSlider bots = BuildBotSlider(panel,
                 new Vector2(leftCentre, cardsTop - (botCardHeight * 0.5f)),
@@ -1185,8 +1148,8 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(cardWidth, capacityHeight));
 
             // `.form-footer`: right-aligned, under a rule, under both cards.
-            const float ruleY = cardsTop - botCardHeight - 16f;
-            const float footerY = ruleY - 56f;
+            float ruleY = cardsTop - botCardHeight - 16f;
+            float footerY = ruleY - 52f;
             Angular(panel, "FormRule", new Vector2(0f, ruleY), new Vector2(1400f, 1f), 0f,
                 new Color(103f / 255f, 160f / 255f, 201f / 255f, 0.28f),
                 AngularEdge.All, 0f, Color.clear);
@@ -1241,6 +1204,22 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         /// <summary>
+        /// The caption over a field, left-aligned to its edge (owner's list of 2026-10-09, item 1:
+        /// a label above every input). The placeholder inside it is only a hint now.
+        /// </summary>
+        private static Text FieldLabel(GameObject parent, string caption, Vector2 fieldCentre, Vector2 fieldSize)
+        {
+            Text label = Label(parent, "Label " + caption, caption, 12,
+                new Vector2(fieldCentre.x, fieldCentre.y + (fieldSize.y * 0.5f) + 11f), new Vector2(fieldSize.x, 16f));
+            label.alignment = TextAnchor.MiddleLeft;
+            label.fontStyle = FontStyle.Bold;
+            label.color = Hex("7ACFFF");
+            label.resizeTextForBestFit = false;
+            label.raycastTarget = false;
+            return label;
+        }
+
+        /// <summary>
         /// A small caption at the right end of a number field, so the number still says what it
         /// is once the placeholder has gone (phase P32: the points and the night-vision battery).
         /// </summary>
@@ -1275,8 +1254,13 @@ namespace Ironfront.Net.Unity.EditorTools
         /// Everything the runtime changes is handed to <see cref="MenuBotSlider"/> by reference;
         /// what it may choose and how it is worded are <see cref="RoomBotChoice"/>'s.
         /// </remarks>
+        /// <param name="compact">
+        /// The practice screen's card: no presets and no servers' ceiling (an offline match has
+        /// none), so it fits under the practice parameters. The value, the side split, the track and
+        /// its notches are the same as Create Room's.
+        /// </param>
         private static MenuBotSlider BuildBotSlider(GameObject parent, Vector2 position, Vector2 size,
-            out Slider slider)
+            out Slider slider, bool compact = false)
         {
             AngularPanel card = Angular(parent, "BotCard", position, size, CutCard, Hex("061522"),
                 AngularEdge.All, 1f, Hex("3F6986"));
@@ -1285,20 +1269,21 @@ namespace Ironfront.Net.Unity.EditorTools
             float left = -inner * 0.5f;
             float top = size.y * 0.5f;
 
+            float lift = compact ? 6f : 0f;
             Text kicker = Label(root, "Kicker", "BOTS IN THIS MATCH", 12,
-                new Vector2(left + 150f, top - 24f), new Vector2(300f, 20f));
+                new Vector2(left + 150f, top - 24f + lift), new Vector2(300f, 20f));
             kicker.alignment = TextAnchor.MiddleLeft;
             kicker.fontStyle = FontStyle.Bold;
             kicker.color = Orange;
             kicker.resizeTextForBestFit = false;
 
             Text value = Label(root, "Value", "50  BOTS", 20,
-                new Vector2(left + 170f, top - 62f), new Vector2(340f, 56f));
+                new Vector2(left + 170f, top - 62f + lift), new Vector2(340f, 56f));
             value.alignment = TextAnchor.MiddleLeft;
             value.resizeTextForBestFit = false;
             value.supportRichText = true;
 
-            Image chip = Plain(root, "TierChip", new Vector2(-left - 80f, top - 30f),
+            Image chip = Plain(root, "TierChip", new Vector2(-left - 80f, top - 30f + lift),
                 new Vector2(160f, 28f), new Color(0.21f, 0.71f, 1f, 0.22f));
             Text tier = Label(chip.gameObject, "Tier", "BATTLE", 13, Vector2.zero,
                 new Vector2(150f, 26f));
@@ -1306,13 +1291,13 @@ namespace Ironfront.Net.Unity.EditorTools
             tier.resizeTextForBestFit = false;
 
             Text perSide = Label(root, "PerSide", "25 per side, 25 vs 25", 14,
-                new Vector2(-left - 160f, top - 64f), new Vector2(320f, 24f));
+                new Vector2(-left - 160f, top - 64f + lift), new Vector2(320f, 24f));
             perSide.alignment = TextAnchor.MiddleRight;
             perSide.color = Hex("A9C2D3");
             perSide.resizeTextForBestFit = false;
 
             // The track: a Slider over 0..50 steps of two, so an odd total cannot be picked.
-            float trackY = top - 112f;
+            float trackY = top - 112f + (compact ? 14f : 0f);
             var trackObject = new GameObject("Track", typeof(RectTransform), typeof(Image), typeof(Slider));
             trackObject.transform.SetParent(root.transform, false);
             Centre(trackObject.GetComponent<RectTransform>(), new Vector2(0f, trackY), new Vector2(inner, 34f));
@@ -1389,8 +1374,9 @@ namespace Ironfront.Net.Unity.EditorTools
                 tickLabels[i] = number;
             }
 
-            // One-press presets, left to right, the owner's benchmark counts among them.
-            int presets = RoomBotChoice.Presets.Length;
+            // One-press presets, left to right, the owner's benchmark counts among them. Create
+            // Room's only: the compact card ends under the notches.
+            int presets = compact ? 0 : RoomBotChoice.Presets.Length;
             float chipWidth = 88f;
             float chipGap = 8f;
             float presetsY = trackY - 76f;
@@ -1413,14 +1399,28 @@ namespace Ironfront.Net.Unity.EditorTools
                 presetButtons[i] = button;
             }
 
-            float presetsRight = left + (presets * (chipWidth + chipGap)) - chipGap;
-            Text ceiling = Label(root, "Ceiling", string.Empty, 13,
-                new Vector2((presetsRight + 16f + (-left)) * 0.5f, presetsY),
-                new Vector2((-left) - presetsRight - 16f, 36f));
-            ceiling.alignment = TextAnchor.MiddleRight;
-            ceiling.resizeTextForBestFit = true;
-            ceiling.resizeTextMinSize = 10;
-            ceiling.resizeTextMaxSize = 13;
+            Text ceiling;
+            if (!compact)
+            {
+                float presetsRight = left + (presets * (chipWidth + chipGap)) - chipGap;
+                ceiling = Label(root, "Ceiling", string.Empty, 13,
+                    new Vector2((presetsRight + 16f + (-left)) * 0.5f, presetsY),
+                    new Vector2((-left) - presetsRight - 16f, 36f));
+                ceiling.alignment = TextAnchor.MiddleRight;
+                ceiling.resizeTextForBestFit = true;
+                ceiling.resizeTextMinSize = 10;
+                ceiling.resizeTextMaxSize = 13;
+            }
+            else
+            {
+                // Practice's card has no presets row: the line goes in the heading row, between
+                // the kicker and the tier chip, and says the bots run here (MenuBotSlider._runsLocally).
+                ceiling = Label(root, "Ceiling", string.Empty, 12,
+                    new Vector2(left + 300f + ((-left - 168f) - (left + 300f)) * 0.5f, top - 24f + lift),
+                    new Vector2((-left - 168f) - (left + 300f), 22f));
+                ceiling.alignment = TextAnchor.MiddleRight;
+                ceiling.resizeTextForBestFit = false;
+            }
 
             MenuBotSlider component = root.AddComponent<MenuBotSlider>();
             var so = new SerializedObject(component);
@@ -1434,6 +1434,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_tierChip", chip);
             Assign(so, "_tierText", tier);
             Assign(so, "_ceilingText", ceiling);
+            so.FindProperty("_runsLocally").boolValue = compact;
             AssignArray(so, "_tickLabels", tickLabels);
             AssignArray(so, "_tickMarks", tickMarks);
             AssignArray(so, "_presetButtons", presetButtons);
@@ -1521,14 +1522,10 @@ namespace Ironfront.Net.Unity.EditorTools
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             MultiplayerShade(panel);
             PackPanel(panel, "OperationsPanel", Vector2.zero, new Vector2(1580f, 940f));
-            // The prototype's ROOMS link is deliberately NOT wired here. On every other screen it
-            // navigates to the browser; from inside a room it would mean walking out of a match the
-            // player is already in, and the lobby's own LEAVE control is the one place that
-            // decision belongs. The item is still drawn -- greyed out it would read as broken -- so
-            // it takes the shared development notice, which is the spec's rule for a control the
-            // game cannot honestly honour.
-            TopBar(panel, controller, toast, "LOBBY", "IN MATCH", "ROOM LOBBY", offline: false,
-                ("ROOMS", null));
+            // No ROOMS link here: from inside a room it would mean walking out of it, and the
+            // lobby's own LEAVE ROOM is the one place that decision belongs. It used to be drawn
+            // and only announce that it did nothing (owner's list of 2026-10-09: no dead controls).
+            TopBar(panel, controller, toast, "LOBBY", "IN ROOM", "WAITING ROOM", offline: false);
 
             // This panel is 1580 wide, so its content inset is 72 in from x = -790.
             const float lobbyContentLeft = -790f + 72f;
@@ -1581,17 +1578,21 @@ namespace Ironfront.Net.Unity.EditorTools
             }
 
             Button switchSide = PackButton(panel, "SwitchSide", "SWITCH SIDE",
-                new Vector2(165f, -410f), new Vector2(200f, 50f), "secondary");
+                new Vector2(395f, -410f), new Vector2(200f, 50f), "secondary");
             Text switchLabel = switchSide.GetComponentInChildren<Text>(includeInactive: true);
             Button ready = PackButton(panel, "Ready", "READY UP",
-                new Vector2(385f, -410f), new Vector2(200f, 50f), "primary");
+                new Vector2(615f, -410f), new Vector2(220f, 50f), "primary");
             Text readyLabel = ready.GetComponentInChildren<Text>(includeInactive: true);
             Button leave = PackButton(panel, "Leave", "LEAVE ROOM",
                 new Vector2(-600f, -410f), new Vector2(220f, 50f), "danger", "icons/leave.png");
-            Button invite = PackButton(panel, "CopyInvite", "COPY INVITE",
-                new Vector2(585f, 392f), new Vector2(220f, 48f), "secondary", "icons/copy.png");
-            Button start = PackButton(panel, "StartGame", "START GAME",
-                new Vector2(615f, -410f), new Vector2(220f, 50f), "command");
+            // COPY INVITE and START GAME are gone (owner's list of 2026-10-09: no placeholders).
+            // There is no invite to copy -- a room is found by name in the browser -- and the match
+            // starts by itself once two players are ready, which the status line says.
+            Text howTo = Label(panel, "GuideHint", string.Empty, 13,
+                new Vector2(0f, -455f), new Vector2(1400f, 22f));
+            howTo.color = Hex("8DA8BA");
+            howTo.resizeTextForBestFit = false;
+            howTo.supportRichText = true;
 
             // The chat band sits ABOVE the action band, and the two used to share one.
             //
@@ -1609,7 +1610,8 @@ namespace Ironfront.Net.Unity.EditorTools
             // or colour tag restyles the whole log for everyone in the room.
             chatLog.supportRichText = false;
 
-            InputField chatField = PackField(panel, "ChatInput", "Say something",
+            FieldLabel(panel, "ROOM CHAT", new Vector2(-180f, -330f), new Vector2(560f, 52f));
+            InputField chatField = PackField(panel, "ChatInput", "Say something to the room",
                 new Vector2(-180f, -330f), new Vector2(560f, 52f), password: false,
                 iconAsset: "icons/chevron.png");
 
@@ -1624,7 +1626,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 "secondary");
 
             Text error = Label(
-                panel, "Error", string.Empty, 22, new Vector2(0f, -455f), new Vector2(1400f, 30f));
+                panel, "Error", string.Empty, 20, new Vector2(0f, -380f), new Vector2(1400f, 28f));
             error.color = ErrorInk;
 
             MenuRoomLobbyScreen screen = panel.AddComponent<MenuRoomLobbyScreen>();
@@ -1647,10 +1649,10 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_chatLog", chatLog);
             Assign(so, "_chatField", chatField);
             Assign(so, "_chatSendButton", chatSend);
+            Assign(so, "_guideHint", howTo);
             so.ApplyModifiedPropertiesWithoutUndo();
-            panel.AddComponent<MenuDevelopmentControls>().Configure(toast, invite, start);
             ConfigureKeyboard(panel,
-                new Selectable[] { switchSide, ready, chatField, chatSend, leave, start }, ready, leave);
+                new Selectable[] { switchSide, ready, chatField, chatSend, leave }, ready, leave);
 
             log.AppendLine("room lobby: " + perSide + " rows per side, colours left to ITeamPalette.");
             return panel;

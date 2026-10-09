@@ -30,6 +30,30 @@ public class GameManager : MonoBehaviour
 
 	public int victoryPoints = 200;
 
+	/// <summary>
+	/// The offline match's victory rule: lead by <see cref="victoryPoints"/> (the original game's
+	/// only rule) or be first to them. Chosen on the practice screen (owner, 2026-10-08); a
+	/// networked match plays its room's rule instead.
+	/// </summary>
+	[NonSerialized]
+	public Ironfront.Net.Protocol.VictoryRule victoryRule = Ironfront.Net.Protocol.VictoryRule.Margin;
+
+	/// <summary>The offline Night Mode's night-vision battery, in seconds.</summary>
+	[NonSerialized]
+	public int nightVisionSeconds = Ironfront.Net.Protocol.RoomRules.DefaultNightVisionSeconds;
+
+	/// <summary>The side the player fights on offline: 0 blue, 1 red. See <see cref="OfflinePlayerTeam"/>.</summary>
+	[NonSerialized]
+	public int practiceTeam;
+
+	/// <summary>
+	/// The offline player's team, the one answer for every offline reader: the practice screen's
+	/// choice, and blue when there is no <c>GameManager</c>. It used to be a literal 0 in two
+	/// places (<c>FpsActorController.Start</c>, <c>MinimapUi.UpdateSpawnPointButtons</c>), from
+	/// when the human could only ever be blue.
+	/// </summary>
+	public static int OfflinePlayerTeam => instance != null && instance.practiceTeam == 1 ? 1 : 0;
+
 	public AudioMixerGroup fpMixerGroup;
 
 	public GameObject spectatorCameraPrefab;
@@ -98,6 +122,12 @@ public class GameManager : MonoBehaviour
 		// MatchStateMachine, `Changed` is subscribed offline only, and AddScore/AddFlag are
 		// already gated on NetContext.IsOffline at both call sites.
 		MatchScoreboard.Current.Reset();
+		// The practice achievements' match (owner's list of 2026-10-09, item 4): its kills start
+		// at zero, and how many bots it has decides one of them.
+		if (Ironfront.Net.Unity.NetContext.IsOffline && ActorManager.instance != null)
+		{
+			Ironfront.Net.Unity.PracticeFeats.MatchStarted(ActorManager.instance.team0Bots + ActorManager.instance.team1Bots);
+		}
 		// The HUD, the player and the decal pool are the client's half of a match. A dedicated
 		// server that instantiates them gets a Canvas nobody looks at, an FpsActorController
 		// reaching for SceneryCamera.instance in Start, and a null-instance singleton behind

@@ -106,6 +106,21 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void TheLandingKeepsTheSpeedAcrossOfTheLastStepInTheAir()
+        {
+            var tracker = new FallTracker();
+            tracker.Observe(true, 10f, 0f, 6.5f, 0f);
+            tracker.Observe(false, 10.2f, MovementCore.JumpSpeed, 6.5f, 1f);
+            tracker.Observe(false, 8f, -8f, 6f, 2f);
+
+            float landed = tracker.Observe(true, 6f, -10f, 0f, 0f);   // the landing step has stopped
+
+            Assert.True(landed > 0f);
+            Assert.Equal(6f, tracker.LandingHorizontalX);
+            Assert.Equal(2f, tracker.LandingHorizontalZ);
+        }
+
+        [Fact]
         public void LandingHigherThanTheTakeoffPaysOnlyTheTakeoff()
         {
             Assert.Equal(MovementCore.JumpSpeed, FallDamage.LandingSpeed(-1f, MovementCore.JumpSpeed, G), 3);

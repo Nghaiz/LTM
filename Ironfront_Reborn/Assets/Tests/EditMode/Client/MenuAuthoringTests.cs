@@ -14,23 +14,30 @@ namespace Ironfront.Net.Unity.Client.Tests
     public sealed class MenuAuthoringTests
     {
         [Test]
-        public void MenuSceneContainsTheEightHtmlScreensWithoutPrototypeData()
+        public void MenuSceneContainsItsSevenScreensWithoutPrototypeData()
         {
             Scene scene = EditorSceneManager.OpenScene("Assets/Scenes/Menu.unity", OpenSceneMode.Single);
             GameObject root = scene.GetRootGameObjects().Single(item => item.name == "Multiplayer Menu");
             string[] screens =
             {
-                "Main Menu", "Sign In", "Create Account", "Practice", "Settings",
+                "Main Menu", "Sign In", "Create Account", "Practice",
                 "Rooms", "Create Room", "Waiting Room",
             };
 
             foreach (string screen in screens)
                 Assert.NotNull(root.transform.Find(screen), $"Missing HTML screen '{screen}'.");
 
+            // Settings is the overlay page the menu and the match share (owner's list of 2026-10-09,
+            // item 3); a second, menu-only copy would drift from it.
+            Assert.IsNull(root.transform.Find("Settings"), "The menu scene carries its own Settings screen again.");
+
             CanvasScaler scaler = root.GetComponent<CanvasScaler>();
             Assert.AreEqual(new Vector2(1920f, 1080f), scaler.referenceResolution);
             Assert.IsTrue(root.GetComponent<Canvas>().pixelPerfect);
-            Assert.NotNull(root.transform.Find("Sign In/ForgotPassword"));
+            // No control whose only job is to say it does nothing (owner's list of 2026-10-09).
+            Assert.IsNull(root.transform.Find("Sign In/ForgotPassword"), "Forgot password is back, with nothing behind it.");
+            Assert.IsEmpty(root.GetComponentsInChildren<MenuDevelopmentControls>(true),
+                "A menu control only announces that it is not built yet.");
             Assert.NotNull(root.GetComponentInChildren<MenuToast>(true));
 
             string allText = string.Join("\n", root.GetComponentsInChildren<Text>(true)
@@ -123,7 +130,7 @@ namespace Ironfront.Net.Unity.Client.Tests
 
             foreach (string screen in new[]
                      {
-                         "Main Menu", "Sign In", "Create Account", "Practice", "Settings",
+                         "Main Menu", "Sign In", "Create Account", "Practice",
                          "Rooms", "Create Room", "Waiting Room",
                      })
             {

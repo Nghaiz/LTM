@@ -76,10 +76,6 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private GameObject? _practiceBackBar;
         [SerializeField] private Button? _practiceBackButton;
 
-        [Header("Settings")]
-        [SerializeField] private GameObject? _settingsScreen;
-        [SerializeField] private Button? _settingsBackButton;
-
         [Header("Lobby readout")]
         [SerializeField] private Text? _signedInText;
 
@@ -138,10 +134,11 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>The legacy practice menu is showing, so every network screen is down.</summary>
         private bool _practiceOpen;
-        private bool _settingsOpen;
 
         public bool IsPracticeScreenOpen => _practiceOpen;
-        public bool IsSettingsScreenOpen => _settingsOpen;
+
+        /// <summary>The settings overlay is up (<see cref="GameOverlays"/>); it draws over whatever screen is.</summary>
+        public bool IsSettingsScreenOpen => GameOverlays.Current == OverlayPage.Settings;
 
         private volatile bool _busy;
 
@@ -215,9 +212,6 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_practiceBackButton != null)
                 _practiceBackButton.onClick.AddListener(ClosePractice);
 
-            if (_settingsBackButton != null)
-                _settingsBackButton.onClick.AddListener(CloseSettings);
-
             if (_browseRoomsButton != null)
                 _browseRoomsButton.onClick.AddListener(OpenRoomBrowser);
         }
@@ -232,6 +226,8 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// </remarks>
         private void Update()
         {
+            ReadGuideKey();
+
             string created = _pendingAccountCreated;
             if (created != null)
             {
@@ -263,6 +259,30 @@ namespace Ironfront.Net.Unity.Client.Menu
             _dirty = false;
             Apply();
         }
+
+        /// <summary>
+        /// The How to play key opens the guide on every menu screen (owner's list of 2026-10-09,
+        /// item 1), except while a field is being typed in, where it is a letter.
+        /// </summary>
+        private static void ReadGuideKey()
+        {
+            if (GameOverlays.Current != OverlayPage.None || !GameKeys.Down(GameAction.HowToPlay)) return;
+            if (IsTyping()) return;
+            OpenHowToPlay();
+        }
+
+        /// <summary>Whether a text field holds the keyboard, so a letter key is a letter.</summary>
+        internal static bool IsTyping()
+        {
+            GameObject? selected = UnityEngine.EventSystems.EventSystem.current != null
+                ? UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject
+                : null;
+            InputField? field = selected != null ? selected.GetComponent<InputField>() : null;
+            return LocalTextEntry.OwnsKeyboard || (field != null && field.isFocused);
+        }
+
+        /// <summary>Opens the guide over whichever screen is up.</summary>
+        public static void OpenHowToPlay() => GameOverlays.Open(OverlayPage.HowToPlay);
 
         /// <summary>Every screen under this controller, active or not. Main thread only.</summary>
         private MenuFormScreen[] Forms()
@@ -327,6 +347,35 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearError();
             _registerRequested = false;
             _flow.Transition(GameFlowState.LoginScreen);
+
+            // "Remember me" (owner's list of 2026-10-09, item 1): this machine's token signs the
+            // player straight in; a refused one is forgotten and the form asks for the password.
+            string token = RememberedSignIn.Token;
+            if (token.Length > 0 && _session != null) Submit(TokenLogInAsync(token));
+        }
+
+        /// <summary>The signed-in player's name, or empty before a sign-in.</summary>
+        public string SignedInName => _session != null ? _session.DisplayName : string.Empty;
+
+        /// <summary>
+        /// Signs out of this machine: the remembered sign-in is forgotten (the name stays in the
+        /// field) and the menu goes back to the sign-in form, so another account can sign in.
+        /// Offered on the room list, outside any room.
+        /// </summary>
+        public void SignOut()
+        {
+            if (_flow == null) return;
+
+            RememberedSignIn.ForgetToken();
+            ClearError();
+            ClearChat();
+            _practiceOpen = false;
+            _createRequested = false;
+            _registerRequested = false;
+            _roomHeading = string.Empty;
+            _flow.Reset();
+            _flow.Transition(GameFlowState.LoginScreen);
+            _dirty = true;
         }
 
         /// <summary>Returns from the login form to the title screen.</summary>
@@ -347,7 +396,6 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearError();
             ClearChat();
             _practiceOpen = false;
-            _settingsOpen = false;
             _registerRequested = false;
             _createRequested = false;
             _roomHeading = string.Empty;
@@ -367,7 +415,6 @@ namespace Ironfront.Net.Unity.Client.Menu
         public void OpenPractice()
         {
             ClearError();
-            _settingsOpen = false;
             _practiceOpen = true;
             _dirty = true;
         }
@@ -380,21 +427,21 @@ namespace Ironfront.Net.Unity.Client.Menu
             _dirty = true;
         }
 
+        /// <summary>Opens the settings overlay over whichever screen is up (<see cref="GameOverlays"/>).</summary>
         public void OpenSettings()
         {
             ClearError();
-            _practiceOpen = false;
-            _settingsOpen = true;
-            _dirty = true;
+            GameOverlays.Open(OverlayPage.Settings);
         }
 
+        /// <summary>Closes the settings overlay, if it is up.</summary>
         public void CloseSettings()
         {
-            _settingsOpen = false;
-            _dirty = true;
+            if (IsSettingsScreenOpen) GameOverlays.Close();
         }
 
-        public void LaunchPracticeMap(string sceneName)
+        /// <summary>Starts a practice match on <paramref name="sceneName"/>, played by <paramref name="settings"/>.</summary>
+        public void LaunchPracticeMap(string sceneName, in PracticeSettings settings)
         {
             IPracticeLauncher? practice = NetClientBindings.Practice;
             if (practice == null || !practice.IsAvailable) return;
@@ -409,7 +456,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             // a frozen score, and the player on no team (see NetContext.IsDeclaredOffline).
             NetContext.Clear();
             NetContext.DeclareOfflineProcess();
-            practice.LaunchMap(sceneName);
+            practice.LaunchMap(sceneName, settings);
         }
 
         /// <summary>Whether the Practice button should be offered at all.</summary>
@@ -447,12 +494,12 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// survives the link dying, and every later press then talks to a dead socket and reports
         /// "lost the connection" with no way back short of restarting the game.
         /// </remarks>
-        public void SubmitLogin(string username, string password)
+        public void SubmitLogin(string username, string password, bool remember = false)
         {
             if (_session == null || _flow == null) return;
             if (_flow.State != GameFlowState.LoginScreen) return;
 
-            Submit(LogInAsync(username, password));
+            Submit(LogInAsync(username, password, remember));
         }
 
         /// <summary>
@@ -643,13 +690,41 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         // ------------------------------------------------------------------ the work
 
-        private async Task<bool> LogInAsync(string username, string password)
+        private async Task<bool> LogInAsync(string username, string password, bool remember)
         {
             if (_session == null) return false;
 
             if (!_session.IsMasterConnected && !await ConnectAsync()) return false;
 
-            return await _session.LoginAsync(username, password);
+            if (!await _session.LoginAsync(username, password, remember)) return false;
+
+            // The token, not the password; an older master sends none and only the name is kept.
+            if (remember) RememberedSignIn.Remember(username, _session.RememberToken);
+            return await BrowseAfterSignInAsync();
+        }
+
+        /// <summary>
+        /// Straight on to the room list: the signed-in screen between them was one more press
+        /// that said nothing (owner's list of 2026-10-09, item 1: nothing superfluous).
+        /// </summary>
+        private async Task<bool> BrowseAfterSignInAsync()
+        {
+            if (_session == null || _flow == null || _flow.State != GameFlowState.Lobby) return true;
+            await _session.OpenRoomBrowserAsync();
+            return true;
+        }
+
+        private async Task<bool> TokenLogInAsync(string token)
+        {
+            if (_session == null) return false;
+
+            if (!_session.IsMasterConnected && !await ConnectAsync()) return false;
+
+            bool signedIn = await _session.LoginWithTokenAsync(token);
+
+            // Spent either way: keep the next one, or stop signing in by itself.
+            RememberedSignIn.ReplaceToken(signedIn ? _session.RememberToken : string.Empty);
+            return signedIn && await BrowseAfterSignInAsync();
         }
 
         private async Task<bool> RegisterAsync(string username, string password, string displayName)
@@ -789,7 +864,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             GameFlowState state = _flow != null ? _flow.State : GameFlowState.Booting;
 
-            bool localOverlay = _practiceOpen || _settingsOpen;
+            bool localOverlay = _practiceOpen;
             bool login = !localOverlay && state == GameFlowState.LoginScreen && !_registerRequested;
             bool register = !localOverlay && state == GameFlowState.LoginScreen && _registerRequested;
 
@@ -809,7 +884,6 @@ namespace Ironfront.Net.Unity.Client.Menu
             SetActive(_createRoomScreen, browsing && _createRequested);
             SetActive(_roomLobbyScreen, !localOverlay && state == GameFlowState.RoomLobby);
             SetActive(_practiceBackBar, _practiceOpen);
-            SetActive(_settingsScreen, _settingsOpen);
 
             if (_browseRoomsButton != null) _browseRoomsButton.interactable = !_busy;
 

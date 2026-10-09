@@ -67,6 +67,7 @@ namespace Ironfront.Rendering.Tests
         [TearDown]
         public void TearDown()
         {
+            InstancedDetailRenderer.PrefetchPoint = null;
             Object.DestroyImmediate(_viewer);
             Object.DestroyImmediate(_terrain.gameObject);
             Object.DestroyImmediate(_data);
@@ -191,6 +192,83 @@ namespace Ironfront.Rendering.Tests
             TakeOver();
             Assert.AreEqual(8, _details.Kept(0, caster: false), "the grass came back different");
             Assert.Greater(near, 0);
+        }
+
+        [Test]
+        public void WithoutAPrefetchAJumpReadsEveryNearPatchAtOnce()
+        {
+            TakeOver();
+
+            _viewer.transform.position = SpawnPoint + Vector3.up * 2f;
+            _details.Frame(_camera);
+
+            Assert.Greater(_details.Baked, 0, "the jump found its patches already read, so the next test proves nothing");
+            Assert.IsTrue(_details.IsHolding);
+        }
+
+        [Test]
+        public void PatchesRoundTheSpawnPointAreReadBeforeTheJump()
+        {
+            TakeOver();
+
+            // Phase P35, finding 1: a respawn's jump read every near patch in one frame.
+            InstancedDetailRenderer.PrefetchPoint = SpawnPoint;
+            int read = 0;
+            for (int frame = 0; frame < 200; frame++)
+            {
+                _details.Frame(_camera);
+                read += _details.Prefetched;
+                if (frame > 0 && _details.Prefetched == 0) break;
+            }
+            Assert.Greater(read, 0, "nothing was read round the spawn point");
+            Assert.AreEqual(0, _details.Baked, "what was read for the jump is dropped and read again every frame");
+
+            _viewer.transform.position = SpawnPoint + Vector3.up * 2f;
+            InstancedDetailRenderer.PrefetchPoint = null;
+            _details.Frame(_camera);
+
+            Assert.AreEqual(0, _details.Baked, "the jump still read patches: those read for it were dropped, or too few were read");
+            Assert.IsTrue(_details.IsHolding, "the terrain took the details back on the jump");
+            Assert.AreEqual(4, _details.Kept(0, caster: false), "the grass 10 m ahead of the spawn point is not drawn");
+        }
+
+        // 380 m from the camera's start, past the detail distance and the eviction distance both,
+        // beside the grass 380 m ahead.
+        private static readonly Vector3 SpawnPoint = new Vector3(Side * 0.5f + Cell * 0.5f, 0f, 470f);
+
+        [Test]
+        public void APatchReadBeforeIsNotAskedOfTheTerrainAgain()
+        {
+            Vector3 start = _viewer.transform.position;
+            TakeOver();
+            _viewer.transform.position = new Vector3(Side * 0.5f, 2f, Side - 10f);
+            TakeOver();
+            int reads = _details.Cache.TerrainReads;
+
+            _viewer.transform.position = start;
+            TakeOver();
+
+            Assert.AreEqual(reads, _details.Cache.TerrainReads,
+                "a patch read before was read from the terrain again (phase P35: 20 to 60 ms each in the player)");
+            Assert.AreEqual(8, _details.Kept(0, caster: false), "the grass came back different");
+        }
+
+        [Test]
+        public void WithNoRoomToKeepThemPatchesAreReadFromTheTerrainAgain()
+        {
+            _details.Cache.KeptBudget = 0;
+            Vector3 start = _viewer.transform.position;
+            TakeOver();
+            _viewer.transform.position = new Vector3(Side * 0.5f, 2f, Side - 10f);
+            TakeOver();
+            int reads = _details.Cache.TerrainReads;
+
+            _viewer.transform.position = start;
+            TakeOver();
+
+            Assert.Greater(_details.Cache.TerrainReads, reads, "details were kept past the budget");
+            Assert.AreEqual(0, _details.Cache.KeptDetails);
+            Assert.AreEqual(8, _details.Kept(0, caster: false), "the grass came back different");
         }
 
         private void TakeOver()

@@ -202,6 +202,15 @@ namespace Ironfront.Tools.ClientWiringGate
                  "Practice is unreachable and the offline game loses its entry (criterion 5)"),
                 ("_settingsButton",
                  "Settings renders but cannot open the existing options UI"),
+                ("_howToPlayButton",
+                 "the guide has no button on the main menu, where the owner asked for it "
+                 + "(list of 2026-10-09, item 1)"),
+                ("_rankingButton",
+                 "the global ranking has no button on the main menu, where the owner asked for "
+                 + "it above Exit (list of 2026-10-09, item 4)"),
+                ("_achievementsButton",
+                 "the achievements have no button on the main menu, where the owner asked for "
+                 + "them above Exit (list of 2026-10-09, item 4)"),
                 ("_exitButton",
                  "Exit renders but cannot reach the application's single quit path")),
 
@@ -307,7 +316,16 @@ namespace Ironfront.Tools.ClientWiringGate
                  + "even with the right password (criterion 7)"),
                 ("_passwordCancelButton",
                  "the prompt cannot be dismissed, so a mis-click on a private room traps the "
-                 + "player on the browser")),
+                 + "player on the browser"),
+                ("_modeFilterButton",
+                 "ALL MODES is drawn and filters nothing"),
+                ("_modeFilterLabel",
+                 "the mode filter changes the list without saying which mode it is showing"),
+                ("_quickMatchButton",
+                 "QUICK MATCH is drawn and joins nothing"),
+                ("_signOutButton",
+                 "a remembered sign-in can never be left, so another account cannot sign in on "
+                 + "this computer")),
 
             new Screen(
                 "MenuCreateRoomScreen", "Scripts/Net/Client/Menu/MenuCreateRoomScreen.cs",
@@ -767,11 +785,15 @@ namespace Ironfront.Tools.ClientWiringGate
         /// the button exists, something announces for it, and that something has a toast to
         /// announce into.
         /// </remarks>
+        /// <remarks>
+        /// <b>Empty since 2026-10-09.</b> The owner's list of that day asked for every placeholder
+        /// control to be finished or removed: Forgot password went (the master has no recovery),
+        /// and the room browser's mode filter and quick match were built. A new entry here is a new
+        /// placeholder, which that rule forbids; <c>MenuAuthoringTests</c> asserts the menu carries
+        /// no <c>MenuDevelopmentControls</c> at all.
+        /// </remarks>
         private static readonly (string Screen, string Button, string Consequence)[] DevelopmentNotices =
-        {
-            ("MenuLoginScreen", "ForgotPassword",
-             "Forgot password renders but cannot show the classroom-build limitation"),
-        };
+            Array.Empty<(string, string, string)>();
 
         private const string DevelopmentControlsSource =
             "Scripts/Net/Client/Menu/MenuDevelopmentControls.cs";

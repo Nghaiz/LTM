@@ -25,7 +25,7 @@ namespace Ironfront.MasterServer.Data
         public long EndedAt { get; init; }
     }
 
-    public sealed class SqliteDatabase : IDisposable
+    public sealed partial class SqliteDatabase : IDisposable
     {
         private readonly SqliteConnection _connection;
 
@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS match_results (
     ended_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_results_player ON match_results(player_id);");
+            CreateRememberTokenTable();
+            CreateCareerTables();
         }
 
         public AccountRecord? FindAccount(string username)

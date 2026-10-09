@@ -41,9 +41,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         public const string FullscreenModeKey = "ironfront display mode";
         public const string QualityKey = "ironfront quality";
         public const string VSyncKey = "ironfront vsync";
-        public const string MasterVolumeKey = "master volume";
-        public const string FieldOfViewKey = "field of view";
-        public const string SensitivityKey = "mouse sensitivity";
+        public const string MasterVolumeKey = GameOptionsStore.MasterVolumeKey;
+        public const string FieldOfViewKey = GameOptionsStore.FieldOfViewKey;
+        public const string SensitivityKey = GameOptionsStore.MouseSensitivityKey;
         public const string FpsLimitKey = "ironfront fps limit";
 
         /// <summary>
@@ -103,6 +103,70 @@ namespace Ironfront.Net.Unity.Client.Menu
             PlayerPrefs.SetInt(FpsLimitKey,
                 CpuBudgetRules.FrameRateLimits[CpuBudgetRules.FrameRateLimitIndex(value.FpsLimit)]);
             PlayerPrefs.Save();
+        }
+
+        /// <summary>The resolution and mode a <see cref="MenuSettingsData"/> asks the display for.</summary>
+        public readonly struct DisplayApplication
+        {
+            public DisplayApplication(int width, int height, FullScreenMode mode)
+            {
+                Width = width;
+                Height = height;
+                Mode = mode;
+            }
+
+            public int Width { get; }
+            public int Height { get; }
+            public FullScreenMode Mode { get; }
+        }
+
+        /// <summary>
+        /// Borderless always fills the display at its own resolution (a chosen one would only be
+        /// upscaled); windowed and fullscreen use the chosen one.
+        /// </summary>
+        public static DisplayApplication ResolveApplication(MenuSettingsData data, int displayWidth, int displayHeight)
+        {
+            FullScreenMode mode = ModeFor(data.DisplayMode);
+            return mode == FullScreenMode.FullScreenWindow
+                ? new DisplayApplication(displayWidth, displayHeight, mode)
+                : new DisplayApplication(data.ResolutionWidth, data.ResolutionHeight, mode);
+        }
+
+        public static FullScreenMode ModeFor(int displayModeIndex) => displayModeIndex switch
+        {
+            2 => FullScreenMode.ExclusiveFullScreen,
+            1 => FullScreenMode.FullScreenWindow,
+            _ => FullScreenMode.Windowed,
+        };
+
+        public static int DisplayModeIndexOf(FullScreenMode mode) => mode switch
+        {
+            FullScreenMode.ExclusiveFullScreen => 2,
+            FullScreenMode.FullScreenWindow => 1,
+            _ => 0,
+        };
+
+        /// <summary>The display mode names, by <see cref="MenuSettingsData.DisplayMode"/>.</summary>
+        public static readonly string[] DisplayModeNames = { "WINDOWED", "BORDERLESS", "FULLSCREEN" };
+
+        /// <summary>Applies the display half of <paramref name="data"/>: resolution, mode, preset, v-sync and frame cap.</summary>
+        /// <remarks>
+        /// Master volume is not applied here: the game's own options apply it through the mixer
+        /// (<see cref="GameOptionsStore.Apply"/>), and setting the listener's volume as well
+        /// turned it down twice in the menu.
+        /// </remarks>
+        public static void ApplyDisplay(MenuSettingsData data)
+        {
+            DisplayApplication application = ResolveApplication(
+                data, Screen.currentResolution.width, Screen.currentResolution.height);
+            Screen.SetResolution(application.Width, application.Height, application.Mode);
+
+            // A preset carries its own v-sync, so the player's choice goes on after it, through the
+            // frame cap, which keeps the menus' own cap in force until the player leaves them.
+            QualitySettings.SetQualityLevel(data.Quality, applyExpensiveChanges: true);
+            BackgroundFrameCap.ApplyPlayerChoice(
+                data.VSync,
+                CpuBudgetRules.FrameCapFor(data.FpsLimit, Screen.currentResolution.refreshRateRatio.value));
         }
     }
 }

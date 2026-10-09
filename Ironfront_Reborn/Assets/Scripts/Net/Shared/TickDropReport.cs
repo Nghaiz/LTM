@@ -27,14 +27,19 @@ namespace Ironfront.Net.Unity
 
         /// <summary>
         /// Records one drop and returns the warning to log now, or null when it is deferred to the
-        /// summary because the window is in the background.
+        /// summary because the window is in the background. <paramref name="outsideLoopMs"/> is the
+        /// part of the frame spent between frames, outside the game (<see cref="PlayerLoopClock"/>),
+        /// or negative when unknown.
         /// </summary>
-        public string Record(int droppedTicks, float frameMs, bool focused)
+        public string Record(int droppedTicks, float frameMs, bool focused, float outsideLoopMs = -1f)
         {
             if (focused)
             {
+                string split = outsideLoopMs < 0f
+                    ? string.Empty
+                    : $" ({outsideLoopMs:F0} ms of it between frames, outside the game loop)";
                 return $"[NetPredictionClock] dropped {droppedTicks} tick(s) after a {frameMs:F0} ms "
-                       + "frame. Raise MaxTicksPerFrame only if this is routine.";
+                       + $"frame{split}. Raise MaxTicksPerFrame only if this is routine.";
             }
 
             _backgroundTicks += droppedTicks;

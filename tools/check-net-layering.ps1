@@ -243,7 +243,7 @@ $ClientBaseline = @(
                 'reference -- the green compile is the proof' }
     @{ Type = 'Resolution'              ; Kind = 'not-a-reference'; Retires = 'never'
        Reason = 'UnityEngine.Resolution, the engine struct, in `foreach (Resolution resolution ' +
-                'in Screen.resolutions)` at MenuSettingsScreen.cs. It collides with a public ' +
+                'in Screen.resolutions)` at SettingsPage.cs. It collides with a public ' +
                 'enum NESTED inside UnityStandardAssets BloomOptimized in firstpass -- the same ' +
                 'shape as the Mode row above, and an engine type rather than a legacy one' }
     # Found by the killfeed's pictures (owner's report of 2026-09-30).

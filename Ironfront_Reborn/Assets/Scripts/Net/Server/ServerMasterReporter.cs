@@ -165,6 +165,9 @@ namespace Ironfront.Net.Unity.Server
         {
             if (phase != MatchPhase.Playing) return;
 
+            // The round's clock for the career's time played (owner's list of 2026-10-09, item 4).
+            _roundStartedAt = Time.realtimeSinceStartup;
+
             int roomId = RoomId;
             Reporter.MatchStarted(roomId);
 
@@ -176,7 +179,7 @@ namespace Ironfront.Net.Unity.Server
 
         private void OnMatchEnded(byte winningTeam)
         {
-            CollectScores();
+            CollectScores(winningTeam);
             Reporter.MatchEnded(RoomId, _scores);
 
             Debug.Log($"[net] match ended, winner "
@@ -218,21 +221,34 @@ namespace Ironfront.Net.Unity.Server
         /// a second path.
         /// </para>
         /// </remarks>
-        private void CollectScores()
+        private void CollectScores(byte winningTeam)
         {
             _scores.Clear();
 
             if (_loop == null) return;
 
             MatchScoreTally tally = _loop.Scores;
+            MatchCareerTally career = _loop.Career;
+            int mostPoints = MostPoints(tally);
+            int seconds = Mathf.Max(0, Mathf.RoundToInt(Time.realtimeSinceStartup - _roundStartedAt));
 
             IReadOnlyList<ServerTickLoop.ServerPlayerScoreRow> rows = _loop.ScoreRows;
             for (int i = 0; i < rows.Count; i++)
             {
                 ushort actorId = rows[i].ActorId;
-                if (tally.IsUntouched(actorId)) continue;
+
+                // A player who neither killed nor died used to be left out, so a quiet match left
+                // no rows. Since the career (item 4) a round played IS something: the account
+                // played a match, perhaps held a flag. Only a row with no account to credit -- a
+                // loopback or harness session, player id 0 -- is still left out.
+                if (rows[i].PlayerId <= 0 && tally.IsUntouched(actorId)) continue;
 
                 int kills = tally.KillsOf(actorId);
+                byte team = ServerActorRegistry.Instance.TryFind(actorId, out NetServerActor body) && body != null
+                    ? body.Team
+                    : TeamId.None;
+                var stats = new long[Ironfront.Net.Protocol.Achievements.CareerStats.Count];
+                career.Fill(actorId, tally, team, winningTeam, seconds, tally.PointsOf(actorId) >= mostPoints, stats);
 
                 _scores.Add(new MatchPlayerScore(
                     rows[i].PlayerId,
@@ -245,9 +261,21 @@ namespace Ironfront.Net.Unity.Server
                     // (code-conventions.md, "No Derived Fields"). When objectives start scoring,
                     // the rule lands in MatchStateMachine with every other rule and this line
                     // reads it.
-                    kills * PointsPerKill));
+                    kills * PointsPerKill,
+                    stats));
             }
         }
+
+        /// <summary>The most points any actor scored this round, bots included: the MVP's bar.</summary>
+        private static int MostPoints(MatchScoreTally tally)
+        {
+            int most = 0;
+            for (ushort a = 0; a < ProtocolConstants.MAX_ACTORS; a++) most = Mathf.Max(most, tally.PointsOf(a));
+            return most;
+        }
+
+        /// <summary>When the round's Playing phase began, in realtime seconds.</summary>
+        private float _roundStartedAt;
 
         /// <summary>
         /// What one kill is worth on the end-of-match report.

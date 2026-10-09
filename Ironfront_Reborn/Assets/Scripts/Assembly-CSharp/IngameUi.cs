@@ -168,7 +168,7 @@ public class IngameUi : MonoBehaviour
 		resupplyHealthIndicator.color = white;
 		white.a = Mathf.Clamp01(2f - 2f * resupplyAmmoAction.Ratio());
 		resupplyAmmoIndicator.color = white;
-		if (Input.GetKeyDown(KeyCode.End) && !Ironfront.Net.Unity.LocalTextEntry.OwnsKeyboard)
+		if (Ironfront.Net.Unity.GameKeys.Down(Ironfront.Net.Unity.GameAction.ToggleHud) && !Ironfront.Net.Unity.LocalTextEntry.OwnsKeyboard)
 		{
 			canvas.enabled = !canvas.enabled;
 		}

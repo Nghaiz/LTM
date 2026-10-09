@@ -126,6 +126,17 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Button? _refreshButton;
         [SerializeField] private Button? _createRoomButton;
 
+        [Header("Filters and quick match (owner's list of 2026-10-09, item 1)")]
+        [Tooltip("Cycles ALL MODES, then each game mode; the list shows only rooms of that mode.")]
+        [SerializeField] private Button? _modeFilterButton;
+        [SerializeField] private Text? _modeFilterLabel;
+        [Tooltip("Joins the fullest open room that still has a place.")]
+        [SerializeField] private Button? _quickMatchButton;
+
+        [Header("Account")]
+        [SerializeField] private Text? _accountText;
+        [SerializeField] private Button? _signOutButton;
+
         [Header("Readouts")]
         [SerializeField] private Text? _pingText;
         [SerializeField] private Text? _overflowText;
@@ -142,6 +153,9 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private RoomInfo[] _visibleRooms = Array.Empty<RoomInfo>();
         private RoomInfo[] _visibleRejoins = Array.Empty<RoomInfo>();
+
+        /// <summary>-1 for every mode, else an index into <see cref="RoomSettingsChoice.Modes"/>.</summary>
+        private int _modeFilter = -1;
 
         private void Awake()
         {
@@ -164,6 +178,9 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_refreshButton != null) _refreshButton.onClick.AddListener(OnRefresh);
             if (_createRoomButton != null) _createRoomButton.onClick.AddListener(OnCreateRoom);
             if (_searchField != null) _searchField.onValueChanged.AddListener(OnSearchChanged);
+            if (_modeFilterButton != null) _modeFilterButton.onClick.AddListener(OnModeFilter);
+            if (_quickMatchButton != null) _quickMatchButton.onClick.AddListener(OnQuickMatch);
+            if (_signOutButton != null) _signOutButton.onClick.AddListener(OnSignOut);
             if (_passwordJoinButton != null) _passwordJoinButton.onClick.AddListener(OnPasswordJoin);
             if (_passwordCancelButton != null) _passwordCancelButton.onClick.AddListener(ClosePrompt);
 
@@ -173,6 +190,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         private void Update()
         {
             if (_passwordPrompt == null || !_passwordPrompt.activeSelf) return;
+            if (GameOverlays.OwnsEscape) return;
 
             if (Input.GetKeyDown(KeyCode.Escape)) ClosePrompt();
             else if ((Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
@@ -185,6 +203,66 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             ClosePrompt();
             if (_controller != null) DrawRooms(_controller);
+        }
+
+        private void OnModeFilter()
+        {
+            ClosePrompt();
+            _modeFilter = NextModeFilter(_modeFilter);
+            if (_modeFilterLabel != null) _modeFilterLabel.text = ModeFilterLabel(_modeFilter);
+            if (_controller != null) DrawRooms(_controller);
+        }
+
+        /// <summary>The filter after <paramref name="current"/>: every mode, then each mode in turn.</summary>
+        internal static int NextModeFilter(int current)
+            => current + 1 >= RoomSettingsChoice.Modes.Length ? -1 : current + 1;
+
+        internal static string ModeFilterLabel(int filter)
+            => filter < 0 ? "ALL MODES" : RoomSettingsChoice.ModeOption(RoomSettingsChoice.Modes[filter]);
+
+        /// <summary>
+        /// QUICK MATCH: into the fullest open room that still has a place, so the player is in a
+        /// battle at once and a half-empty room fills before a new one is needed.
+        /// </summary>
+        private void OnQuickMatch()
+        {
+            ClosePrompt();
+            if (_controller == null) return;
+
+            RoomInfo? pick = QuickMatchPick(_controller.Rooms);
+            if (pick == null)
+            {
+                SetError("No open room has a place right now. Create one and others will join you.");
+                return;
+            }
+
+            _controller.JoinRoom(pick.RoomId, null);
+        }
+
+        /// <summary>
+        /// The room QUICK MATCH joins: public, waiting and not full; the most players first, then
+        /// the most seats left, then the oldest. Null when there is none.
+        /// </summary>
+        internal static RoomInfo? QuickMatchPick(RoomInfo[]? rooms)
+        {
+            RoomInfo? best = null;
+            if (rooms == null) return null;
+            foreach (RoomInfo room in rooms)
+            {
+                if (room == null || room.IsPrivate || room.CanRejoin || !room.IsJoinable) continue;
+                if (best == null
+                    || room.Players > best.Players
+                    || (room.Players == best.Players && room.MaxPlayers - room.Players > best.MaxPlayers - best.Players)
+                    || (room.Players == best.Players && room.MaxPlayers == best.MaxPlayers && room.RoomId < best.RoomId))
+                    best = room;
+            }
+            return best;
+        }
+
+        private void OnSignOut()
+        {
+            ClosePrompt();
+            _controller?.SignOut();
         }
 
         private void OnRefresh()
@@ -304,7 +382,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         private void DrawRooms(MenuScreenController controller)
         {
             string query = _searchField != null ? _searchField.text : string.Empty;
-            Split(controller.Rooms, query, out RoomInfo[] rejoins, out RoomInfo[] rooms);
+            Split(controller.Rooms, query, _modeFilter, out RoomInfo[] rejoins, out RoomInfo[] rooms);
 
             Draw(rejoins, rooms, controller.IsBusy);
 
@@ -315,6 +393,12 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (_refreshButton != null) _refreshButton.interactable = !controller.IsBusy;
             if (_createRoomButton != null) _createRoomButton.interactable = !controller.IsBusy;
+            if (_quickMatchButton != null) _quickMatchButton.interactable = !controller.IsBusy;
+            if (_signOutButton != null) _signOutButton.interactable = !controller.IsBusy;
+            if (_accountText != null)
+                _accountText.text = controller.SignedInName.Length > 0
+                    ? "SIGNED IN AS  <color=#FFFFFF>" + controller.SignedInName.ToUpperInvariant() + "</color>"
+                    : string.Empty;
             if (_passwordJoinButton != null) _passwordJoinButton.interactable = !controller.IsBusy;
         }
 
@@ -403,6 +487,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// </para>
         /// </remarks>
         internal static void Split(RoomInfo[]? all, string query, out RoomInfo[] rejoins, out RoomInfo[] open)
+            => Split(all, query, -1, out rejoins, out open);
+
+        /// <summary>As above, the open rooms also limited to one mode unless <paramref name="modeFilter"/> is -1.</summary>
+        internal static void Split(RoomInfo[]? all, string query, int modeFilter, out RoomInfo[] rejoins, out RoomInfo[] open)
         {
             var mine = new List<RoomInfo>();
             var others = new List<RoomInfo>();
@@ -413,7 +501,7 @@ namespace Ironfront.Net.Unity.Client.Menu
                 {
                     if (room == null) continue;
                     if (room.CanRejoin) mine.Add(room);
-                    else if (IsOpenRoom(room) && MatchesSearch(room, query)) others.Add(room);
+                    else if (IsOpenRoom(room) && MatchesSearch(room, query) && MatchesMode(room, modeFilter)) others.Add(room);
                 }
             }
 
@@ -481,6 +569,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// The MAP cell: the map, the room's bots beside it (protocol 13), so a 100-bot room
         /// reads as one before anybody joins it, and the rule it is played to (protocol 14).
         /// </summary>
+        internal static bool MatchesMode(RoomInfo room, int modeFilter)
+            => modeFilter < 0 || room.GameMode == (byte)RoomSettingsChoice.Modes[modeFilter];
+
         internal static string MapCell(RoomInfo room)
             => (room.BotCount > 0
                    ? $"{MapLabel(room)}  ·  {room.BotCount} bots"

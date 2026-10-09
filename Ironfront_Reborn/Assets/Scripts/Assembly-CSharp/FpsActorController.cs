@@ -308,9 +308,8 @@ public class FpsActorController : ActorController
 		// client the literal was simply wrong — a team-1 player believed it was team 0 — so the
 		// prefab now authors UNKNOWN_TEAM and the answer comes from whoever knows it.
 		//
-		// Offline, that is here, and the literal 0 is the same one MinimapUi.UpdateSpawnPointButtons
-		// already carries for the same reason (V10 D16): the human is always team 0 in
-		// single-player, so this keeps offline byte-for-byte what it was. Networked, the answer
+		// Offline, that is here, from GameManager.OfflinePlayerTeam, which MinimapUi.UpdateSpawnPointButtons
+		// reads too (V10 D16): blue, unless the practice screen chose red. Networked, the answer
 		// comes from the snapshot via NetClientLocalCombatDriver — deliberately not from here,
 		// because it has not arrived yet at Awake and that is the whole defect.
 		//
@@ -381,12 +380,19 @@ public class FpsActorController : ActorController
 
 	private void Start()
 	{
-		// See Awake's remark (P12 D-1): offline, the human is always team 0.
+		// See Awake's remark (P12 D-1): offline, the human is on the side the practice screen
+		// chose, blue unless it chose red (GameManager.OfflinePlayerTeam).
 		if (NetContext.IsOffline && actor != null && actor.team == UNKNOWN_TEAM)
 		{
-			actor.SetTeam(0);
+			actor.SetTeam(GameManager.OfflinePlayerTeam);
 		}
 		SceneryCamera.instance.camera.enabled = true;
+		// Until the first deploy the scenery camera repaints the whole screen from the highest
+		// depth, so a first-person camera under it renders a frame nobody sees -- from the parked
+		// body at (0, 1000, 0), over the whole map, at the preset's quality. The joining screen ran
+		// at 0.8 to 5 fps on the owner's Ultra machine (phase P35, finding 2). SpawnAt and
+		// EnterDeployedView turn it back on (FirstPersonCamera).
+		fpCamera.enabled = false;
 		actorLocalOrigin = actor.transform.localPosition;
 		DisableInput();
 		defaultMix.TransitionTo(0f);
@@ -777,6 +783,7 @@ public class FpsActorController : ActorController
 		FirstPersonCamera();
 		ForceEndCrouch();
 		deployedView = true;
+		MinimapUi.ForgetDrawnSpawnPoint();
 	}
 
 	/// <summary>
@@ -881,6 +888,7 @@ public class FpsActorController : ActorController
 		FirstPersonCamera();
 		ForceEndCrouch();
 		deployedView = true;
+		MinimapUi.ForgetDrawnSpawnPoint();
 	}
 
 	public override void ApplyRecoil(Vector3 impulse)
@@ -1067,8 +1075,10 @@ public class FpsActorController : ActorController
 			offlineFall.Rebase(y);
 			return;
 		}
-		float landedAt = offlineFall.Observe(controller.OnGround(), y, characterController.velocity.y);
-		float damage = Ironfront.Net.Replication.Combat.FallDamage.ForImpact(landedAt, -Ironfront.Net.Replication.Movement.MovementCore.Gravity);
+		Vector3 velocity = characterController.velocity;
+		float landedAt = offlineFall.Observe(controller.OnGround(), y, velocity.y, velocity.x, velocity.z);
+		float impact = Ironfront.Net.Unity.LandingImpact.OnGroundBelow(actor.transform.position, landedAt, offlineFall.LandingHorizontalX, offlineFall.LandingHorizontalZ);
+		float damage = Ironfront.Net.Replication.Combat.FallDamage.ForImpact(impact, -Ironfront.Net.Replication.Movement.MovementCore.Gravity);
 		if (damage <= 0f)
 		{
 			return;
@@ -1079,18 +1089,33 @@ public class FpsActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// While the player waits to deploy, points the grass renderer at the spawn point the deploy
+	/// will use -- the one they picked, or the one drawn for them
+	/// (<see cref="MinimapUi.TryGetDeployTarget"/>) -- so it reads the patches there before the
+	/// camera jumps (<see cref="Ironfront.Rendering.InstancedDetailRenderer.PrefetchPoint"/>).
+	/// </summary>
+	private void UpdateDetailPrefetch()
+	{
+		Ironfront.Rendering.InstancedDetailRenderer.PrefetchPoint =
+			actor.dead && MinimapUi.TryGetDeployTarget(out SpawnPoint target)
+				? target.transform.position
+				: (Vector3?)null;
+	}
+
 	private void Update()
 	{
 		UpdateNetworkSwim();
 		TrackOfflineFall();
+		UpdateDetailPrefetch();
 
 		// Capture the edge every render frame. NetPredictionClock may or may not simulate a tick
 		// in this frame; OnNetworkTickSimulated clears it only after it reached C_INPUT.
-		bool fireHeldNow = Input.GetButton("Fire1") || Input.GetMouseButton(0);
+		bool fireHeldNow = GameKeys.Held(GameAction.Fire);
 		if (NetContext.IsClient && inputEnabled && !LocalTextEntry.Composing
 			&& !LoadoutUi.IsOpen())
 		{
-			if (Input.GetButtonDown("Fire1") || Input.GetMouseButtonDown(0))
+			if (GameKeys.Down(GameAction.Fire))
 			{
 				pendingNetworkFire = true;
 			}
@@ -1107,7 +1132,7 @@ public class FpsActorController : ActorController
 			sprintCannotFireAction.Start();
 		}
 		fpParent.lean = Lean();
-		if (Input.GetButtonDown("Fire2"))
+		if (GameKeys.Down(GameAction.Aim))
 		{
 			aimToggle = !aimToggle;
 		}
@@ -1184,7 +1209,7 @@ public class FpsActorController : ActorController
 		{
 			UpdateInput();
 		}
-		if (!Input.GetButtonDown("Use"))
+		if (!GameKeys.Down(GameAction.Use))
 		{
 			return;
 		}
@@ -1235,23 +1260,23 @@ public class FpsActorController : ActorController
 		{
 			return;
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha1))
+		if (GameKeys.Down(GameAction.Weapon1))
 		{
 			QueueWeaponSwitch(0);
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha2))
+		if (GameKeys.Down(GameAction.Weapon2))
 		{
 			QueueWeaponSwitch(1);
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha3))
+		if (GameKeys.Down(GameAction.Weapon3))
 		{
 			QueueWeaponSwitch(2);
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha4))
+		if (GameKeys.Down(GameAction.Weapon4))
 		{
 			QueueWeaponSwitch(3);
 		}
-		if (Input.GetKeyDown(KeyCode.Alpha5))
+		if (GameKeys.Down(GameAction.Weapon5))
 		{
 			QueueWeaponSwitch(4);
 		}
@@ -1294,13 +1319,14 @@ public class FpsActorController : ActorController
 		{
 			actor.SwitchSeat(7);
 		}
-		if (OptionsUi.GetOptions().toggleCrouch && Input.GetButtonDown("Crouch"))
+		if (OptionsUi.GetOptions().toggleCrouch && GameKeys.Down(GameAction.Crouch))
 		{
 			crouchInput = !crouchInput;
 		}
-		// While the map is held open the wheel zooms it (MinimapUi); switching weapons with the
-		// same notch would change the gun in the player's hands every time they zoom.
-		float wheel = MinimapUi.OwnsScrollWheel ? 0f : Input.mouseScrollDelta.y;
+		// While the map is held open the wheel zooms it (MinimapUi), and while the Tab board is open it
+		// turns the board's pages (HudInputClaims); switching weapons with the same notch would change
+		// the gun in the player's hands every time.
+		float wheel = MinimapUi.OwnsScrollWheel || HudInputClaims.ScoreboardOwnsWheel ? 0f : Input.mouseScrollDelta.y;
 		if (wheel < 0f)
 		{
 			QueueWeaponSwitch(actor.FindWeaponSlot(1, skipToggleable: true));

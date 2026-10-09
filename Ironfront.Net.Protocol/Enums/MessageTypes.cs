@@ -97,6 +97,20 @@ namespace Ironfront.Net.Protocol
         RegisterRequest  = 0x0003,
         RegisterResponse = 0x0004,
 
+        /// <summary>
+        /// Signs in with a remembered token instead of a password. Body
+        /// <c>{ "token", "clientVersion", "maps" }</c>; answered with <see cref="LoginResponse"/>.
+        /// </summary>
+        /// <remarks>
+        /// "Remember me" (owner's list of 2026-10-09, item 1). A <see cref="LoginRequest"/> with
+        /// <c>"remember": true</c> gets a <c>rememberToken</c> in its response; the client keeps
+        /// it and sends it here next time. Each use spends the token and the response carries the
+        /// next one. Not a <c>PROTOCOL_VERSION</c> bump, for <see cref="RoomTeamRequest"/>'s
+        /// reason: MSP bodies are JSON and an older master answers an unknown opcode with
+        /// <see cref="ErrorPush"/>.
+        /// </remarks>
+        TokenLoginRequest = 0x0005,
+
         RoomListRequest   = 0x0010,
         RoomListResponse  = 0x0011,
         RoomCreateRequest = 0x0012,
@@ -134,6 +148,42 @@ namespace Ironfront.Net.Protocol
         MatchmakeRequest  = 0x0030,
         MatchmakeResponse = 0x0031,
         MatchmakeCancel   = 0x0032,
+
+        // ----- Career: global ranking and achievements (owner's list of 2026-10-09, item 4).
+        // Additive opcodes, not a PROTOCOL_VERSION bump, for RoomTeamRequest's reason.
+
+        /// <summary>The global ranking. Body <c>{}</c>; answered with <see cref="LeaderboardResponse"/>.</summary>
+        LeaderboardRequest  = 0x0040,
+
+        /// <summary>
+        /// The best hundred careers by score and the requester's own row. Body
+        /// <c>{ "rows": [ { "rank", "playerId", "name", "score", "kills", "deaths", "headshots",
+        /// "wins", "matches", "bestStreak" } ], "you": row | null, "players" }</c>.
+        /// </summary>
+        LeaderboardResponse = 0x0041,
+
+        /// <summary>The requester's achievements. Body <c>{}</c>; answered with <see cref="AchievementsResponse"/>.</summary>
+        AchievementsRequest  = 0x0042,
+
+        /// <summary>
+        /// Body <c>{ "unlocked": [ { "id", "at" } ], "earned": { id: players }, "players",
+        /// "career": { statKey: value } }</c>: what the requester has, how many players have each
+        /// one (the page's share), and the career numbers progress is drawn from.
+        /// </summary>
+        AchievementsResponse = 0x0043,
+
+        /// <summary>
+        /// The client reports practice achievements, which only it can see happen. Body
+        /// <c>{ "ids": [ ... ] }</c>; the master keeps only ids the catalogue marks as claimed by
+        /// the client, and answers with <see cref="AchievementsResponse"/>.
+        /// </summary>
+        AchievementClaimRequest = 0x0044,
+
+        /// <summary>
+        /// Master → client, unasked: achievements just earned. Body <c>{ "ids": [ ... ] }</c>.
+        /// Sent at the end of a round for the ones the round earned, so the toast shows in the match.
+        /// </summary>
+        AchievementUnlockedPush = 0x0045,
 
         Heartbeat = 0x00F0,
         ErrorPush = 0x00F1,

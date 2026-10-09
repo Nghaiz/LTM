@@ -165,7 +165,7 @@ public class MinimapUi : MonoBehaviour
 
 	private void Update()
 	{
-		bool held = (Input.GetKey(KeyCode.M) && !LocalTextEntry.OwnsKeyboard)
+		bool held = (GameKeys.Held(GameAction.Map) && !LocalTextEntry.OwnsKeyboard)
 			|| (HoldSource != null && HoldSource());
 		float target = (!held) ? 0f : 1f;
 		minimapOpenness = Mathf.MoveTowards(minimapOpenness, target, Time.deltaTime * 20f);
@@ -277,6 +277,87 @@ public class MinimapUi : MonoBehaviour
 		return spawnPoint != null;
 	}
 
+	/// <summary>
+	/// Where the next deploy will put the player: the flag they clicked, or else the flag drawn for
+	/// them in advance (<see cref="DrawnSpawnPoint"/>).
+	/// </summary>
+	/// <remarks>
+	/// <b>Drawn ahead so the grass there can be read ahead (phase P35, "flag any").</b> A deploy
+	/// with no flag picked used to leave the choice to the server, so the client learnt where it
+	/// stood only in the frame it arrived, and read 117-154 thousand grass details there in one
+	/// 332-440 ms frame. The draw is the same one the server makes for "no preference" (any flag the
+	/// team owns, uniformly; offline the frontline draw the original made), only earlier, and the
+	/// request then names that flag, which the server honours like a click.
+	/// </remarks>
+	public static bool TryGetDeployTarget(out SpawnPoint spawnPoint)
+	{
+		if (TryGetPickedSpawnPoint(out spawnPoint))
+		{
+			return true;
+		}
+		spawnPoint = instance != null ? instance.DrawnSpawnPoint() : null;
+		return spawnPoint != null;
+	}
+
+	/// <summary>Forgets the drawn flag, so the next death draws a new one. Called on every spawn.</summary>
+	public static void ForgetDrawnSpawnPoint()
+	{
+		if (instance != null)
+		{
+			instance.drawnSpawnPoint = null;
+		}
+	}
+
+	/// <summary>The flag drawn for a deploy with none picked; see <see cref="TryGetDeployTarget"/>.</summary>
+	private SpawnPoint drawnSpawnPoint;
+
+	/// <summary>
+	/// The flag a deploy with nothing picked will use, drawn once per death and drawn again only
+	/// when the team loses it, so the prefetch and the deploy agree on one place.
+	/// </summary>
+	private SpawnPoint DrawnSpawnPoint()
+	{
+		if (FpsActorController.instance == null || ActorManager.instance == null)
+		{
+			return null;
+		}
+		int team;
+		if (NetContext.IsOffline)
+		{
+			team = FpsActorController.instance.actor.team;
+		}
+		else if (NetPresenterGate.TryResolveLocalTeam(out byte localTeam))
+		{
+			team = localTeam;
+		}
+		else
+		{
+			return null;
+		}
+		if (drawnSpawnPoint != null && drawnSpawnPoint.owner == team)
+		{
+			return drawnSpawnPoint;
+		}
+		drawnSpawnPoint = NetContext.IsOffline
+			? ActorManager.RandomFrontlineSpawnPointForTeam(team)
+			: UniformOwnedSpawnPoint(team);
+		return drawnSpawnPoint;
+	}
+
+	/// <summary>
+	/// Any spawn point <paramref name="team"/> owns, each equally likely: the server's own draw for
+	/// "no preference" (<see cref="DeployFlagDraw"/>).
+	/// </summary>
+	private static SpawnPoint UniformOwnedSpawnPoint(int team)
+	{
+		SpawnPoint[] spawnPoints = ActorManager.instance.spawnPoints;
+		int index = DeployFlagDraw.Uniform(
+			spawnPoints.Length,
+			i => spawnPoints[i] != null && spawnPoints[i].owner == team,
+			n => UnityEngine.Random.Range(0, n));
+		return index >= 0 ? spawnPoints[index] : null;
+	}
+
 	public static SpawnPoint SelectedSpawnPoint()
 	{
 		// Only the player picks a spawn point from a minimap. Bots use
@@ -292,7 +373,7 @@ public class MinimapUi : MonoBehaviour
 		}
 		if (instance.selectedSpawnPoint == null)
 		{
-			return ActorManager.RandomFrontlineSpawnPointForTeam(FpsActorController.instance.actor.team);
+			return instance.DrawnSpawnPoint();
 		}
 		if (instance.selectedSpawnPoint.owner != FpsActorController.instance.actor.team)
 		{
@@ -303,13 +384,13 @@ public class MinimapUi : MonoBehaviour
 
 	public static void UpdateSpawnPointButtons()
 	{
-		// The human is always team 0 offline, so this literal keeps offline single-player
-		// byte-for-byte unchanged (V10 D16). Otherwise the local team comes from the
-		// replicated snapshot, never from FpsActorController.playerTeam (V10 D17).
+		// Offline the human is on the side the practice screen chose (GameManager.OfflinePlayerTeam;
+		// it was a literal 0 when the human could only be blue, V10 D16). Otherwise the local team
+		// comes from the replicated snapshot, never from FpsActorController.playerTeam (V10 D17).
 		int localTeam;
 		if (NetContext.IsOffline)
 		{
-			localTeam = 0;
+			localTeam = GameManager.OfflinePlayerTeam;
 		}
 		else if (NetPresenterGate.TryResolveLocalTeam(out byte team))
 		{

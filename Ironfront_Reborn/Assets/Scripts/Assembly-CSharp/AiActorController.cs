@@ -296,9 +296,44 @@ public class AiActorController : ActorController
 
 	private bool forceAntiStuckReverse;
 
+	/// <summary>
+	/// The steering a recovery backs up with: a car's wheels, or a tank's turn
+	/// (<see cref="DrivingRules.CarReverseSteer"/>, <see cref="DrivingRules.NoseTurn"/>).
+	/// </summary>
+	private float antiStuckSteer;
+
 	private bool waitForPlayer;
 
 	private int recentAntiStuckEvents;
+
+	/// <summary>
+	/// Metres from the bumper to the first thing solid along the left, centre and right feelers
+	/// (<see cref="SenseObstacles"/>); infinity when clear.
+	/// </summary>
+	private float feelerLeft = float.PositiveInfinity;
+
+	private float feelerCentre = float.PositiveInfinity;
+
+	private float feelerRight = float.PositiveInfinity;
+
+	/// <summary>How far the feelers last looked, metres.</summary>
+	private float feelerLookahead = DrivingRules.MinLookahead;
+
+	private float nextFeelAt;
+
+	/// <summary>Seconds between feeler casts: each driver's three casts, ten times a second.</summary>
+	private const float FeelEvery = 0.1f;
+
+	/// <summary>
+	/// What the feelers see: the world (the terrain, its trees, rocks, walls, props) and other
+	/// vehicles. Not hitboxes, actors or ragdolls: a soldier is <see cref="blockerAhead"/>'s.
+	/// </summary>
+	private const int FeelerMask = (1 << 0) | (1 << 12);
+
+	/// <summary>The terrain under a feeler is ground to drive on when it faces up at least this much.</summary>
+	private const float DrivableNormalY = 0.6f;
+
+	private static readonly RaycastHit[] FeelerHits = new RaycastHit[16];
 
 	private bool canTurnCarTowardsWaypoint = true;
 
@@ -966,9 +1001,27 @@ public class AiActorController : ActorController
 						}
 						else if (vehicleType == typeof(Car) || vehicleType == typeof(Tank))
 						{
+							// Each recovery backs up longer than the last, turning the nose toward
+							// whichever side the feelers find more room on (DrivingRules). The
+							// original backed straight up for one second, every time, so a car nosed
+							// into a tree on its path drove back into the same tree.
 							PushAntiStuckEvent();
+							// The recovery that gives up walks the squad out, and this body may be out
+							// of its seat already: there is nothing left to back up. Reading its seat
+							// here threw, and the exception ended this coroutine for the bot's life.
+							if (!actor.IsSeated() || actor.seat.vehicle == null)
+							{
+								continue;
+							}
+							int attempt = Mathf.Max(1, recentAntiStuckEvents);
+							Vehicle stuckVehicle = actor.seat.vehicle;
+							nextFeelAt = 0f;
+							SenseObstacles(stuckVehicle);
+							antiStuckSteer = vehicleType == typeof(Tank)
+								? DrivingRules.NoseTurn(feelerLeft, feelerRight, attempt)
+								: DrivingRules.CarReverseSteer(feelerLeft, feelerRight, attempt);
 							forceAntiStuckReverse = true;
-							yield return new WaitForSeconds(1f);
+							yield return new WaitForSeconds(DrivingRules.ReverseSeconds(attempt));
 							forceAntiStuckReverse = false;
 							yield return new WaitForSeconds(1f);
 							if (!actor.IsSeated())
@@ -1045,7 +1098,9 @@ public class AiActorController : ActorController
 	/// </remarks>
 	private void PushAntiStuckEvent()
 	{
-		if ((float)recentAntiStuckEvents > 2f)
+		// DrivingRules.RecoveriesBeforeGivingUp inside RecoveryMemorySeconds. The original gave up on
+		// the third recovery inside 30 s, each a one-second straight reverse.
+		if (recentAntiStuckEvents >= DrivingRules.RecoveriesBeforeGivingUp - 1)
 		{
 			if (actor.IsSeated() && actor.seat.vehicle != null)
 			{
@@ -1069,7 +1124,7 @@ public class AiActorController : ActorController
 			CancelInvoke("PopAntiStuckEvent");
 		}
 		recentAntiStuckEvents++;
-		Invoke("PopAntiStuckEvent", 30f);
+		Invoke("PopAntiStuckEvent", DrivingRules.RecoveryMemorySeconds);
 	}
 
 	private void PopAntiStuckEvent()
@@ -2482,6 +2537,11 @@ public class AiActorController : ActorController
 	{
 		Vehicle vehicle = actor.seat.vehicle;
 		float z = vehicle.LocalVelocity().z;
+		if (forceAntiStuckReverse)
+		{
+			// A recovery: back up and swing the hull toward the room (AiVehicle chose the turn).
+			return new Vector2(antiStuckSteer * 0.6f, -0.6f);
+		}
 		// A tank with an enemy in its sights inside the standoff stops and fires from there (phase
 		// P28, part 3); the original drove its path into point-blank range of every defender.
 		if (VehicleRules.HoldStandoff(VehicleKind.Armour, HasTarget(), targetDistance))
@@ -2508,11 +2568,14 @@ public class AiActorController : ActorController
 		Vector3 vector = base.transform.worldToLocalMatrix.MultiplyVector(waypointDeltaBlockable);
 		vector.y = 0f;
 		bool flag = Mathf.Abs(vector.z) > Mathf.Abs(vector.x);
-		if (forceAntiStuckReverse && flag && magnitude > 2.5f)
+		Vector2 tankInput = new Vector2(Mathf.Clamp(vector.x, -1f, 1f), (!flag) ? 0f : Mathf.Sign(vector.z));
+		// A waypoint well behind: pivot round to it on the tracks rather than back up the way.
+		if (DrivingRules.TurnAround(vector.z, waypointDeltaBlockable.magnitude))
 		{
-			return new Vector2(0f, Mathf.Sign(0f - vector.z) * 0.5f);
+			tankInput = new Vector2(vector.x >= 0f ? 1f : -1f, 0f);
 		}
-		return new Vector2(Mathf.Clamp(vector.x, -1f, 1f), (!flag) ? 0f : Mathf.Sign(vector.z));
+		tankInput.y = DrivingRules.LimitReverse(tankInput.y, z);
+		return AvoidObstacles(vehicle, tankInput);
 	}
 
 	private Vector2 GetCarInput()
@@ -2555,9 +2618,14 @@ public class AiActorController : ActorController
 			result.y = Mathf.Abs(result.y);
 			color = Color.red;
 		}
-		if (forceAntiStuckReverse)
+		// Never more throttle past the speed the path wants while driving forward. The line above
+		// turns the brake into full throttle whenever the car cannot turn toward its waypoint, so a
+		// car that missed a corner at speed kept accelerating. Forward only: backing up past the
+		// speed, a forward throttle IS the brake, and taking it away let quad bikes reverse
+		// downhill at 25-38 m/s off the map (bot soak, 2026-10-08).
+		if (magnitude3 > 1.1f * num2 && result.y > 0f && z > 0f)
 		{
-			result.y = -0.7f;
+			result.y = 0f;
 		}
 		if (z < 0f)
 		{
@@ -2571,7 +2639,92 @@ public class AiActorController : ActorController
 		result.x *= num4;
 		result.y *= num5;
 		Debug.DrawRay(actor.seat.vehicle.transform.position, GetWaypointDelta(), color);
-		return result;
+		// A waypoint well behind is turned round to, forward and at full lock toward its side,
+		// rather than backed up to the whole way; a reverse already under way is braked first.
+		float ahead = Vector3.Dot(waypointDeltaBlockable, vehicle.transform.forward);
+		if (!forceAntiStuckReverse && DrivingRules.TurnAround(ahead, waypointDeltaBlockable.magnitude))
+		{
+			result.x = Vector3.Dot(waypointDeltaBlockable, vehicle.transform.right) >= 0f ? 1f : -1f;
+			result.y = z < -1f ? 0.6f : Mathf.Clamp(num3, 0f, 0.6f);
+		}
+		result.y = DrivingRules.LimitReverse(result.y, z);
+		if (forceAntiStuckReverse)
+		{
+			// A recovery: back up with the wheels turned so the nose comes round toward the room
+			// (AiVehicle chose which way). Last, so nothing above flips it.
+			return new Vector2(antiStuckSteer, -0.7f);
+		}
+		return AvoidObstacles(vehicle, result);
+	}
+
+	/// <summary>
+	/// Nudges a driver's steering and throttle round what the feelers see ahead
+	/// (<see cref="DrivingRules.Avoid"/>). Only while driving forward: a vehicle backing up has
+	/// its own reasons, and its feelers point the wrong way.
+	/// </summary>
+	private Vector2 AvoidObstacles(Vehicle vehicle, Vector2 input)
+	{
+		if (input.y <= 0f || vehicle.LocalVelocity().z < -0.5f)
+		{
+			return input;
+		}
+		SenseObstacles(vehicle);
+		DrivingRules.Avoid(feelerLeft, feelerCentre, feelerRight, feelerLookahead, out float steer, out float throttleShare);
+		input.x = DrivingRules.BlendSteer(input.x, steer);
+		input.y *= throttleShare;
+		return input;
+	}
+
+	/// <summary>
+	/// Casts the three feelers ahead of <paramref name="vehicle"/>: from a metre over its centre,
+	/// along its heading and <see cref="DrivingRules.SideFeelerDegrees"/> either side, as far as
+	/// <see cref="DrivingRules.Lookahead"/> at its speed. Each reports the metres from the bumper to
+	/// the first thing solid; the vehicle's own colliders, and ground it could drive up, do not count.
+	/// At most every <see cref="FeelEvery"/> seconds.
+	/// </summary>
+	private void SenseObstacles(Vehicle vehicle)
+	{
+		float now = Time.time;
+		if (now < nextFeelAt)
+		{
+			return;
+		}
+		nextFeelAt = now + FeelEvery;
+
+		Transform hull = vehicle.transform;
+		float halfLength = Mathf.Max(1f, vehicle.avoidanceSize.y * 0.5f);
+		feelerLookahead = DrivingRules.Lookahead(vehicle.LocalVelocity().z);
+		Vector3 origin = hull.position + hull.up;
+		Vector3 ahead = hull.forward;
+		feelerCentre = Feel(vehicle, origin, ahead, halfLength);
+		feelerLeft = Feel(vehicle, origin, Quaternion.AngleAxis(0f - DrivingRules.SideFeelerDegrees, hull.up) * ahead, halfLength);
+		feelerRight = Feel(vehicle, origin, Quaternion.AngleAxis(DrivingRules.SideFeelerDegrees, hull.up) * ahead, halfLength);
+	}
+
+	private float Feel(Vehicle vehicle, Vector3 origin, Vector3 direction, float halfLength)
+	{
+		int hits = Physics.SphereCastNonAlloc(origin, 0.5f, direction, FeelerHits, feelerLookahead + halfLength,
+			FeelerMask, QueryTriggerInteraction.Ignore);
+		float nearest = float.PositiveInfinity;
+		for (int i = 0; i < hits; i++)
+		{
+			RaycastHit hit = FeelerHits[i];
+			Collider collider = hit.collider;
+			if (collider == null || hit.distance <= 0f)
+			{
+				continue;
+			}
+			if (vehicle.rigidbody != null && collider.attachedRigidbody == vehicle.rigidbody)
+			{
+				continue;
+			}
+			if (collider is TerrainCollider && hit.normal.y >= DrivableNormalY)
+			{
+				continue;
+			}
+			nearest = Mathf.Min(nearest, Mathf.Max(0f, hit.distance - halfLength));
+		}
+		return nearest;
 	}
 
 	private Vector3 GetProjectedDrivingTarget(float minDistance, float speedGain, Vehicle vehicle)
@@ -3376,7 +3529,12 @@ public class AiActorController : ActorController
 		List<Vehicle> list = new List<Vehicle>(ActorManager.instance.vehicles);
 		Vector3 squadPosition = actor.CenterPosition();
 		list.RemoveAll((Vehicle vehicle) => !vehicle.AiShouldEnter() || (vehicle.ownerTeam >= 0 && vehicle.ownerTeam != actor.team) || Vector3.Distance(vehicle.transform.position, squadPosition) > 150f);
-		list.Sort((Vehicle x, Vehicle y) => Vector3.Distance(x.transform.position, squadPosition).CompareTo(Vector3.Distance(y.transform.position, squadPosition)));
+		// The best kind first, then the sturdier, then the nearer (VehicleRules.ComparePreference):
+		// owner, 2026-10-08, "helicopters and tanks first, then jeeps and motorbikes". The original
+		// took whichever was nearest. Squad.ShouldBoard still refuses any not worth the walk.
+		list.Sort((Vehicle x, Vehicle y) => VehicleRules.ComparePreference(
+			Squad.KindOf(x), x.maxHealth, Vector3.Distance(x.transform.position, squadPosition),
+			Squad.KindOf(y), y.maxHealth, Vector3.Distance(y.transform.position, squadPosition)));
 		return list;
 	}
 

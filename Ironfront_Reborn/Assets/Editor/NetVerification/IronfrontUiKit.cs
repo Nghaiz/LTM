@@ -24,34 +24,34 @@ namespace Ironfront.Net.Unity.EditorTools
     internal static class IronfrontUiKit
     {
         /// <summary><c>--steel-100</c>: body text.</summary>
-        internal static readonly Color Ink = Hex("E7F2FB");
+        internal static readonly Color Ink = UiStyle.Ink;
 
         /// <summary><c>--ink-900</c>: text on the orange primary face.</summary>
-        internal static readonly Color Ink900 = Hex("07111D");
+        internal static readonly Color Ink900 = UiStyle.Ink900;
 
         /// <summary><c>.section-heading p</c>: secondary text.</summary>
-        internal static readonly Color Muted = Hex("8DA8BA");
+        internal static readonly Color Muted = UiStyle.Muted;
 
-        internal static readonly Color Cyan = Hex("35B6FF");
-        internal static readonly Color CyanSoft = Hex("7ACFFF");
-        internal static readonly Color Orange = Hex("FF7417");
-        internal static readonly Color Green = Hex("3BDB83");
-        internal static readonly Color Red = Hex("FF5265");
+        internal static readonly Color Cyan = UiStyle.Cyan;
+        internal static readonly Color CyanSoft = UiStyle.CyanSoft;
+        internal static readonly Color Orange = UiStyle.Orange;
+        internal static readonly Color Green = UiStyle.Green;
+        internal static readonly Color Red = UiStyle.Red;
 
         /// <summary><c>--line</c>: the default stroke.</summary>
-        internal static readonly Color Line = new Color(113f / 255f, 179f / 255f, 226f / 255f, 0.42f);
+        internal static readonly Color Line = UiStyle.Hairline;
 
         /// <summary><c>--panel</c>: glass cards.</summary>
-        internal static readonly Color Surface = new Color(5f / 255f, 18f / 255f, 31f / 255f, 0.93f);
+        internal static readonly Color Surface = UiStyle.PanelFill;
 
         // The corners, in reference pixels, exactly as the stylesheet cuts them.
-        internal const float CutPanel = 20f;
-        internal const float CutCard = 18f;
-        internal const float CutMenuButton = 13f;
-        internal const float CutAction = 10f;
+        internal const float CutPanel = UiStyle.CutPanel;
+        internal const float CutCard = UiStyle.CutCard;
+        internal const float CutMenuButton = UiStyle.CutMenuButton;
+        internal const float CutAction = UiStyle.CutAction;
 
         /// <summary>Buttons at least this tall are <c>.menu-button</c> rows rather than actions.</summary>
-        internal const float MenuButtonHeight = 62f;
+        internal const float MenuButtonHeight = UiStyle.MenuButtonHeight;
 
         /// <summary>
         /// The bundled UI font used by the HTML prototype's fallback stack.
@@ -103,28 +103,7 @@ namespace Ironfront.Net.Unity.EditorTools
         /// the orange bracket on the cut corner at its designed size whatever the panel's.
         /// </summary>
         internal static void StyleOperationsPanel(AngularPanel panel)
-        {
-            panel.color = new Color(6f / 255f, 20f / 255f, 33f / 255f, 0.9f);
-            panel.Configure(CutPanel, AngularEdge.All, 1f,
-                new Color(107f / 255f, 164f / 255f, 206f / 255f, 0.65f));
-
-            Transform existing = panel.transform.Find("Accent");
-            GameObject accentObject = existing != null
-                ? existing.gameObject
-                : new GameObject("Accent", typeof(RectTransform), typeof(AngularAccent));
-            accentObject.transform.SetParent(panel.transform, worldPositionStays: false);
-
-            RectTransform rect = accentObject.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = AngularAccent.DesignSize;
-
-            AngularAccent accent = accentObject.GetComponent<AngularAccent>();
-            accent.color = Orange;
-            accent.raycastTarget = false;
-        }
+            => UiStyle.StyleOperationsPanel(panel);
 
         /// <summary>
         /// <c>inputs/field.svg</c> on an existing surface: an uncut frame with a 1px border, and
@@ -136,29 +115,7 @@ namespace Ironfront.Net.Unity.EditorTools
         /// restyles that run over their own output.
         /// </remarks>
         internal static void StyleFieldFace(AngularPanel face)
-        {
-            face.color = WithAlpha(Hex("071523"), 0.92f);
-            face.Configure(0f, AngularEdge.All, 1f, Hex("5E89A9"));
-
-            Transform existing = face.transform.Find("Accent");
-            GameObject barObject = existing != null
-                ? existing.gameObject
-                : new GameObject("Accent", typeof(RectTransform), typeof(AngularPanel));
-            barObject.transform.SetParent(face.transform, worldPositionStays: false);
-            barObject.transform.SetAsFirstSibling();
-
-            RectTransform barRect = barObject.GetComponent<RectTransform>();
-            barRect.anchorMin = new Vector2(0f, 0f);
-            barRect.anchorMax = new Vector2(0f, 1f);
-            barRect.pivot = new Vector2(0f, 0.5f);
-            barRect.anchoredPosition = Vector2.zero;
-            barRect.sizeDelta = new Vector2(3f, 0f);
-
-            AngularPanel bar = barObject.GetComponent<AngularPanel>();
-            bar.color = Hex("39AEF5");
-            bar.Configure(0f, AngularEdge.None, 0f, Color.clear);
-            bar.raycastTarget = false;
-        }
+            => UiStyle.StyleFieldFace(face);
 
         /// <summary>
         /// The button face for an action variant: <c>primary.svg</c>, <c>secondary.svg</c>, and
@@ -170,30 +127,7 @@ namespace Ironfront.Net.Unity.EditorTools
         /// red, so the state reads from the edge the way the other two variants do.
         /// </remarks>
         internal static void StyleButtonFace(AngularPanel face, string kind, float height)
-        {
-            float cut = height >= MenuButtonHeight ? CutMenuButton : CutAction;
-            switch (kind)
-            {
-                case "primary":
-                    face.color = Hex("FF9D27");
-                    face.SetGradient(Hex("F15A0A"), 90f);
-                    face.Configure(cut, AngularEdge.All, 1f, Hex("FFC066"));
-                    break;
-                case "command":
-                    face.color = WithAlpha(Hex("04172B"), 0.92f);
-                    face.Configure(cut, AngularEdge.All, 1f, Hex("2E8FD6"));
-                    break;
-                case "danger":
-                    face.color = WithAlpha(Hex("170A10"), 0.92f);
-                    face.Configure(cut, AngularEdge.All, 1f, Hex("B8475A"));
-                    break;
-                default:
-                    face.color = WithAlpha(Hex("0A1927"), 0.92f);
-                    face.Configure(cut, AngularEdge.All, 1f, Hex("7FB5DB"));
-                    break;
-            }
-            face.raycastTarget = true;
-        }
+            => UiStyle.StyleButtonFace(face, kind, height);
 
         /// <summary>The caption of the action that puts a player into the world.</summary>
         internal const string DeployCaption = "DEPLOY  ➜";
@@ -230,14 +164,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
         /// <summary>The tint states every button of a variant shares.</summary>
         internal static ColorBlock ButtonColours(ColorBlock colours, string kind)
-        {
-            colours.normalColor = Color.white;
-            colours.highlightedColor = kind == "primary" ? Hex("FFD9AE") : CyanSoft;
-            colours.pressedColor = kind == "primary" ? Hex("E95D0D") : Hex("176F9F");
-            colours.disabledColor = new Color(0.35f, 0.4f, 0.45f, 0.45f);
-            colours.colorMultiplier = 1f;
-            return colours;
-        }
+            => UiStyle.ButtonColours(colours, kind);
 
         /// <summary>
         /// The caption size, by the button's class rather than its exact height: the tall menu
@@ -247,12 +174,10 @@ namespace Ironfront.Net.Unity.EditorTools
         /// Scaling with the height gave a screen's side-by-side controls three different type
         /// sizes when their heights differed by a few pixels.
         /// </remarks>
-        internal static int CaptionSize(float height)
-            => height >= MenuButtonHeight ? Mathf.Clamp(Mathf.RoundToInt(height * 0.32f), 20, 25)
-                : height >= 46f ? 16 : 14;
+        internal static int CaptionSize(float height) => UiStyle.CaptionSize(height);
 
         /// <summary>The caption colour on a variant's face.</summary>
-        internal static Color CaptionInk(string kind) => kind == "primary" ? Ink900 : Ink;
+        internal static Color CaptionInk(string kind) => UiStyle.CaptionInk(kind);
 
         /// <summary>
         /// Imports a UI texture so it stays sharp where a canvas draws it smaller than its pixels.
@@ -289,16 +214,9 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         internal static Color Hex(string rgb)
-        {
-            if (!ColorUtility.TryParseHtmlString("#" + rgb, out Color colour))
-                return Color.white;
-            return colour;
-        }
+            => UiStyle.Hex(rgb);
 
         internal static Color WithAlpha(Color colour, float alpha)
-        {
-            colour.a = alpha;
-            return colour;
-        }
+            => UiStyle.WithAlpha(colour, alpha);
     }
 }

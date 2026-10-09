@@ -96,11 +96,17 @@ namespace Ironfront.Net.Unity.EditorTools
                 ShowScoreboard(so, 20, 18);
                 string board = Render(camera, target, new Color(0.35f, 0.42f, 0.36f), "scoreboard.png");
 
-                ShowScoreboard(so, 32, 32);
+                // The owner's case for paging (list of 2026-10-09, item 2): a dozen players and a
+                // hundred bots. The board opens on the page with the player's own row, then turns.
+                ShowScoreboard(so, 56, 56, humans0: 6, humans1: 6);
                 string full = Render(camera, target, new Color(0.35f, 0.42f, 0.36f), "scoreboard-full.png");
+                var board2 = (ScoreboardView)so.FindProperty("_scoreboard").objectReferenceValue;
+                board2.TurnPage(1);
+                for (int t = 0; t < 40; t++) board2.Tick(0.05f);
+                string page2 = Render(camera, target, new Color(0.35f, 0.42f, 0.36f), "scoreboard-page2.png");
 
                 string rect = ((RectTransform)readout).rect.ToString();
-                return $"canvas {rect}; wrote {killfeedSky}, {killfeedDark}, {plates}, {board}, {full}";
+                return $"canvas {rect}; wrote {killfeedSky}, {killfeedDark}, {plates}, {board}, {full}, {page2}";
             }
             finally
             {
@@ -225,7 +231,8 @@ namespace Ironfront.Net.Unity.EditorTools
             NetClientBindings.WeaponIcon = previousIcons;
         }
 
-        private static void ShowScoreboard(SerializedObject hud, int team0Players, int team1Players)
+        private static void ShowScoreboard(SerializedObject hud, int team0Players, int team1Players,
+            int humans0 = 2, int humans1 = 1)
         {
             var view = (ScoreboardView)hud.FindProperty("_scoreboard").objectReferenceValue;
             view.gameObject.SetActive(true);
@@ -240,18 +247,21 @@ namespace Ironfront.Net.Unity.EditorTools
 
             // Worded by the same statics the presenter calls, so the capture shows what a match does.
             view.SetMatch(new ScoreboardMatch(
-                "DUSTBOWL", ScoreboardWording.SummaryLine(team0Players + team1Players, 3),
+                "DUSTBOWL", ScoreboardWording.SummaryLine(team0Players + team1Players, humans0 + humans1),
                 412, 376, ScoreboardWording.Lead(412, 376, 200),
                 ScoreboardWording.LeadLine(MatchPhase.Playing, 412, 376, 200, TeamId.None),
                 ScoreboardWording.Clock(-1), ScoreboardWording.PhaseLabel(MatchPhase.Playing, false), false,
                 3, 2, TeamId.None, ScoreboardWording.Rules(200)));
 
-            Column(view, TeamId.Team0, team0Players, humans: 2, firstId: 1, local: 1);
-            Column(view, TeamId.Team1, team1Players, humans: 1, firstId: 33, local: 0);
+            Column(view, TeamId.Team0, team0Players, humans: humans0, firstId: 1, local: 1);
+            Column(view, TeamId.Team1, team1Players, humans: humans1, firstId: (ushort)(team0Players + 1), local: 0);
             view.End();
 
             for (int t = 0; t < 40; t++) view.Tick(0.05f);
         }
+
+        private static readonly string[] PlayerNames =
+            { "Minh", "Lan", "Hoàng", "Thảo", "Quân", "Vy", "Đức", "Ngọc", "Khang", "Trâm" };
 
         private static void Column(ScoreboardView view, byte team, int players, int humans, ushort firstId, ushort local)
         {
@@ -266,7 +276,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 int k = Mathf.Max(0, 17 - i + (i % 3));
                 int d = 3 + (i * 7) % 9;
                 bool human = i < humans;
-                string name = !human ? BotCallsigns.For(id) : team == TeamId.Team0 ? (i == 0 ? "Minh" : "Lan") : "Hoàng";
+                string name = !human ? BotCallsigns.For(id) : PlayerNames[(i + (team == TeamId.Team0 ? 0 : 4)) % PlayerNames.Length];
 
                 // A spread of every state the board draws: dead, in a vehicle, a live streak, a
                 // slow connection.

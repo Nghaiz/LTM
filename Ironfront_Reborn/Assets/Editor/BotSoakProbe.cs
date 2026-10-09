@@ -92,6 +92,32 @@ namespace Ironfront.Editor.Verification
         static readonly Dictionary<Actor, BotTrack> Tracks = new Dictionary<Actor, BotTrack>();
         static int[] _lastOwners;
         static readonly Dictionary<Squad, float> BoardingSince = new Dictionary<Squad, float>();
+        static readonly Dictionary<Vehicle, VehicleTrack> VehicleTracks = new Dictionary<Vehicle, VehicleTrack>();
+
+        /// <summary>Metres a boarded vehicle must get from where it was first seen not to count as trapped there.</summary>
+        const float LeftSpawnMetres = 15f;
+
+        /// <summary>Vehicle events kept in the result.</summary>
+        const int VehicleEventsKept = 80;
+
+        sealed class VehicleTrack
+        {
+            public int Kind;
+            public Vector3 Spawn;
+            public Vector3 Last;
+            public float MaxFromSpawn;
+            public bool BotDriving;
+            public bool EverBotDriven;
+            public bool StuckNoted;
+            public float RunawayNotedAt = -100f;
+        }
+
+        /// <summary>Metres a second past which a bot-driven ground vehicle is written down with its driver's state.</summary>
+        const float RunawaySpeed = 20f;
+
+        static readonly FieldInfo ForceReverse = AiField("forceAntiStuckReverse");
+        static readonly FieldInfo CanTurn = AiField("canTurnCarTowardsWaypoint");
+        static readonly FieldInfo WaitForPlayer = AiField("waitForPlayer");
         static TerrainCollider[] _terrainColliders = new TerrainCollider[0];
 
         static readonly FieldInfo HasPath = AiField("hasPath");
@@ -289,6 +315,7 @@ namespace Ironfront.Editor.Verification
             _pathsCanceled = 0;
             Tracks.Clear();
             BoardingSince.Clear();
+            VehicleTracks.Clear();
             _lastOwners = null;
             _baseOwners = null;
 
@@ -558,6 +585,7 @@ namespace Ironfront.Editor.Verification
             }
 
             SampleBoarding(now);
+            SampleVehicles(now);
             SampleTactics();
             _result.gameSeconds = now - _releasedAt;
             _result.peakAlive = Mathf.Max(_result.peakAlive, alive);
@@ -593,6 +621,89 @@ namespace Ironfront.Editor.Verification
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// How bots use vehicles: every take of the wheel by a bot, by kind; the metres they drive;
+        /// every vehicle the AI marks stuck (its squad walks out); every bot-driven vehicle left
+        /// empty while still alive; and, at the end, every boarded vehicle that never got
+        /// <see cref="LeftSpawnMetres"/> from where it was first seen (owner, 2026-10-08: vehicles
+        /// spawn among trees and bots drive into everything and give up).
+        /// </summary>
+        static void SampleVehicles(float now)
+        {
+            List<Vehicle> vehicles = ActorManager.instance.vehicles;
+            if (vehicles == null) return;
+            BotSoakVehicles result = _result.vehicles;
+            string at = (now - _releasedAt).ToString("F0", CultureInfo.InvariantCulture) + "s";
+
+            foreach (Vehicle vehicle in vehicles)
+            {
+                if (vehicle == null) continue;
+                Vector3 position = vehicle.transform.position;
+                if (!VehicleTracks.TryGetValue(vehicle, out VehicleTrack track))
+                {
+                    VehicleTracks.Add(vehicle, new VehicleTrack
+                    {
+                        Kind = (int)Squad.KindOf(vehicle),
+                        Spawn = position,
+                        Last = position,
+                    });
+                    continue;
+                }
+
+                Actor driver = vehicle.HasDriver() ? vehicle.Driver() : null;
+                bool botDriving = !vehicle.dead && driver != null && driver.aiControlled;
+                if (botDriving && !track.BotDriving)
+                {
+                    result.boardings[track.Kind]++;
+                    track.EverBotDriven = true;
+                }
+                if (botDriving && track.BotDriving)
+                {
+                    result.drivenMetres[track.Kind] += Vector3.Distance(position, track.Last);
+                    result.drivenSeconds[track.Kind] += SampleEvery;
+                }
+                if (!botDriving && track.BotDriving && !vehicle.dead && vehicle.IsEmpty())
+                {
+                    result.abandonedAlive++;
+                    Event(result, $"[{at}] {vehicle.name} left empty at {position:F0}"
+                                  + (vehicle.stuck ? " (marked stuck)" : string.Empty)
+                                  + $", {Vector3.Distance(position, track.Spawn):F0} m from where it spawned");
+                }
+                float speed = vehicle.rigidbody != null ? vehicle.rigidbody.linearVelocity.magnitude : 0f;
+                if (botDriving && track.Kind != 2 && speed > RunawaySpeed && now - track.RunawayNotedAt > 10f)
+                {
+                    track.RunawayNotedAt = now;
+                    result.runaways++;
+                    var ai = driver.controller as AiActorController;
+                    string state = "no ai";
+                    if (ai != null)
+                    {
+                        var path = CurrentPath.GetValue(ai) as Pathfinding.Path;
+                        int count = path != null && path.vectorPath != null ? path.vectorPath.Count : -1;
+                        state = $"hasPath={HasPath.GetValue(ai)} waypoint={Waypoint.GetValue(ai)}/{count} "
+                                + $"reverse={ForceReverse.GetValue(ai)} canTurn={CanTurn.GetValue(ai)} "
+                                + $"waitForPlayer={WaitForPlayer.GetValue(ai)} enabled={ai.enabled}";
+                    }
+                    Event(result, $"[{at}] RUNAWAY {vehicle.name} {speed:F0} m/s (local z {vehicle.LocalVelocity().z:F0}) at {position:F0}: {state}");
+                }
+                if (vehicle.stuck && !track.StuckNoted)
+                {
+                    track.StuckNoted = true;
+                    result.stuckMarked++;
+                    Event(result, $"[{at}] {vehicle.name} marked stuck at {position:F0}");
+                }
+
+                track.BotDriving = botDriving;
+                track.MaxFromSpawn = Mathf.Max(track.MaxFromSpawn, Vector3.Distance(position, track.Spawn));
+                track.Last = position;
+            }
+        }
+
+        static void Event(BotSoakVehicles result, string line)
+        {
+            if (result.events.Count < VehicleEventsKept) result.events.Add(line);
         }
 
         static void SampleBoarding(float now)
@@ -810,6 +921,15 @@ namespace Ironfront.Editor.Verification
             string folder = OutputFolder(SessionState.GetString(LabelKey, "unlabelled"));
             Directory.CreateDirectory(folder);
             string file = Path.Combine(folder, _map + ".json");
+            foreach (KeyValuePair<Vehicle, VehicleTrack> entry in VehicleTracks)
+            {
+                if (entry.Value.EverBotDriven && entry.Value.MaxFromSpawn < LeftSpawnMetres)
+                {
+                    _result.vehicles.trappedAtSpawn++;
+                    Event(_result.vehicles, "trapped: " + (entry.Key != null ? entry.Key.name : "a destroyed vehicle")
+                                            + " boarded but never " + LeftSpawnMetres + " m from " + entry.Value.Spawn.ToString("F0"));
+                }
+            }
             File.WriteAllText(file, JsonUtility.ToJson(_result, true));
             Debug.Log("[soak] " + _map + ": " + _result.gameSeconds.ToString("F0", CultureInfo.InvariantCulture)
                       + " game s, " + _result.logs.Count + " distinct warning/error line(s), "
@@ -916,6 +1036,7 @@ namespace Ironfront.Editor.Verification
         public List<string> flagChanges = new List<string>();
         public string finalOwners;
         public BotSoakTactics tactics = new BotSoakTactics();
+        public BotSoakVehicles vehicles = new BotSoakVehicles();
         public List<string> commanderLines = new List<string>();
         public List<BotSoakLogEntry> logs = new List<BotSoakLogEntry>();
     }
@@ -923,6 +1044,32 @@ namespace Ironfront.Editor.Verification
     /// <summary>
     /// Counts over every sample, so a mean is a count over <see cref="samples"/> (phase P32).
     /// </summary>
+    /// <summary>How bots used vehicles over one map's soak. Indexed by <c>VehicleKind</c>: transport, armour, aircraft, boat.</summary>
+    [Serializable]
+    public sealed class BotSoakVehicles
+    {
+        /// <summary>Times a bot took the wheel.</summary>
+        public int[] boardings = new int[4];
+
+        /// <summary>Metres covered, and seconds spent, with a bot at the wheel.</summary>
+        public float[] drivenMetres = new float[4];
+        public float[] drivenSeconds = new float[4];
+
+        /// <summary>Vehicles the AI marked stuck, so its squad walked out.</summary>
+        public int stuckMarked;
+
+        /// <summary>Bot-driven vehicles left empty while still alive.</summary>
+        public int abandonedAlive;
+
+        /// <summary>Vehicles a bot boarded that never got 15 m from where they were first seen.</summary>
+        public int trappedAtSpawn;
+
+        /// <summary>Samples of a bot-driven ground vehicle over 20 m/s, at most one a vehicle each 10 s.</summary>
+        public int runaways;
+
+        public List<string> events = new List<string>();
+    }
+
     [Serializable]
     public sealed class BotSoakTactics
     {

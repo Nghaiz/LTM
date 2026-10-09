@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Night Mode's night vision (phase P32): every player carries goggles, switched with
-/// <see cref="ToggleKey"/>, that run on a battery the room's host sized in the lobby.
+/// the night-vision key (<see cref="GameAction.NightVision"/>, N unless rebound), that run on a battery the room's host sized in the lobby.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -22,8 +22,6 @@ using UnityEngine.UI;
 /// </remarks>
 public sealed class NightVisionGoggles : MonoBehaviour
 {
-	public const KeyCode ToggleKey = KeyCode.N;
-
 	private const int Segments = 10;
 	private const float PanelWidth = 286f;
 	private const float PanelHeight = 50f;
@@ -115,7 +113,7 @@ public sealed class NightVisionGoggles : MonoBehaviour
 		}
 		wasAlive = alive;
 
-		if (alive && Input.GetKeyDown(ToggleKey) && !LocalTextEntry.OwnsKeyboard && !IngameMenuUi.IsOpen())
+		if (alive && GameKeys.Down(GameAction.NightVision) && !LocalTextEntry.OwnsKeyboard && !IngameMenuUi.IsOpen())
 		{
 			Toggle();
 		}
@@ -234,7 +232,8 @@ public sealed class NightVisionGoggles : MonoBehaviour
 		{
 			return "RECHARGING";
 		}
-		return battery.Fraction < 1f ? "[N] NIGHT VISION  ·  CHARGING" : "[N] NIGHT VISION";
+		string key = "[" + GameKeys.Cap(GameAction.NightVision) + "] NIGHT VISION";
+		return battery.Fraction < 1f ? key + "  ·  CHARGING" : key;
 	}
 
 	private void BuildHud()

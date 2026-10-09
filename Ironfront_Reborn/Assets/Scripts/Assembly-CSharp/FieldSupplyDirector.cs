@@ -21,8 +21,10 @@ using Vec3 = Ironfront.Net.Replication.Movement.Vec3;
 /// </para>
 /// <para>
 /// <b>Server-side only.</b> Each place becomes an ordinary <see cref="VehicleSpawner"/>, so the
-/// vehicles reach every client through <c>S_VEHICLE_SPAWN</c> like any other and need no client
-/// change; a networked client never runs this. Offline practice runs it as the server it is.
+/// vehicles reach every client through <c>S_VEHICLE_SPAWN</c> like any other; a networked client
+/// never runs this. Offline practice runs it as the server it is. The client still has to know
+/// each prefab: no pad in its scene names them, so <c>SceneVehiclePrefabDirectory</c> reads this
+/// config too (v4.5.0, 2026-10-07: Forest Lake's shore boat was invisible to every online player).
 /// </para>
 /// <para>
 /// <b>Inside the vehicle-id budget.</b> <c>MAX_VEHICLES</c> is 24. Forest Lake authors 12 pads, four
@@ -39,8 +41,6 @@ using Vec3 = Ironfront.Net.Replication.Movement.Vec3;
 public sealed class FieldSupplyDirector : MonoBehaviour
 {
 	public static FieldSupplyDirector instance;
-
-	private const string ConfigFolder = "FieldSupply/";
 
 	/// <summary>Places tried for each vehicle before it is left out, and said to be.</summary>
 	private const int ParkingAttempts = 64;
@@ -102,6 +102,9 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 
 	private FieldParking parking;
 
+	/// <summary>The match is played with vehicles off: crates only.</summary>
+	private bool vehiclesOff;
+
 	public static FieldSupplyDirector EnsureOn(GameObject host)
 	{
 		FieldSupplyDirector director = host.GetComponent<FieldSupplyDirector>();
@@ -136,10 +139,10 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		}
 
 		mapScene = SceneManager.GetActiveScene();
-		config = Resources.Load<FieldSupplyConfig>(ConfigFolder + mapScene.name);
+		config = FieldSupplyConfig.For(mapScene.name);
 		if (config == null)
 		{
-			Debug.Log("[supply] " + mapScene.name + " has no Resources/" + ConfigFolder + mapScene.name + ", so nothing is scattered.");
+			Debug.Log("[supply] " + mapScene.name + " has no Resources/" + FieldSupplyConfig.ResourceFolder + mapScene.name + ", so nothing is scattered.");
 			return;
 		}
 		if (ActorManager.instance == null || ActorManager.instance.spawnPoints == null)
@@ -153,10 +156,14 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			config = null;
 			return;
 		}
-		if (GameManager.instance != null && GameManager.instance.noVehicles)
+		// Vehicles off (the practice screen's VEHICLES OFF) leaves the vehicles out and still
+		// scatters the crates, which are supplies rather than vehicles. It used to return here,
+		// before the random and the parking the crates use existed, and every frame of the match
+		// then threw from PlaceCrate.
+		vehiclesOff = GameManager.instance != null && GameManager.instance.noVehicles;
+		if (vehiclesOff)
 		{
-			Debug.Log("[supply] " + mapScene.name + ": vehicles are off for this match, none scattered.");
-			return;
+			Debug.Log("[supply] " + mapScene.name + ": vehicles are off for this match, none scattered; crates are.");
 		}
 
 		bases.Clear();
@@ -168,6 +175,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			}
 		}
 		parking = new FieldParking(config);
+		Debug.Log("[supply] " + mapScene.name + ": " + parking.IndexedTrees + " terrain tree(s) kept clear of every vehicle placed.");
 		Layout(firstMatch: true);
 		// The first crates a few seconds in: the server's projectile table is up by then, so each
 		// crate is replicated from its first frame rather than missed by the clients.
@@ -309,6 +317,10 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 	{
 		matchNumber++;
 		random = new System.Random(FieldSupplyLayout.MatchSeed(DateTime.UtcNow.Ticks, matchNumber, mapScene.name.GetHashCode()));
+		if (vehiclesOff)
+		{
+			return;
+		}
 
 		padPositions.Clear();
 		fieldPositions.Clear();
@@ -482,9 +494,10 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			float radius = Mathf.Lerp(config.flagRingInner, config.flagRingOuter, (float)random.NextDouble());
 			var outward = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
 			Vector3 probe = centre + outward * radius;
-			// Nose out, so a crew drives away from the walls rather than into them.
-			float yaw = Mathf.Atan2(outward.x, outward.z) * Mathf.Rad2Deg;
-			if (!parking.CanPark(probe, yaw, footprint, out Vector3 ground)
+			// Nose out, so a crew drives away from the walls rather than into them; another heading
+			// near it when the way out is blocked (FieldParking.TryPark).
+			float wish = Mathf.Atan2(outward.x, outward.z) * Mathf.Rad2Deg;
+			if (!parking.TryPark(probe, wish, footprint, out Vector3 ground, out float yaw)
 				|| !FieldSupplyLayout.FarFromAll(ToVec(ground), padPositions.ToArray(), PadSeparation * PadSeparation))
 			{
 				continue;
@@ -540,8 +553,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 			{
 				continue;
 			}
-			float yaw = (float)(random.NextDouble() * 360.0);
-			if (!parking.CanPark(probe, yaw, footprint, out Vector3 ground))
+			if (!parking.TryPark(probe, (float)(random.NextDouble() * 360.0), footprint, out Vector3 ground, out float yaw))
 			{
 				continue;
 			}
@@ -582,6 +594,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		}
 		Vec3[] others = OtherFieldPositions(moving);
 		Vec3[] pads = padPositions.ToArray();
+		int nearShore = 0, moorable = 0;
 		if (area.width > 0f && area.height > 0f)
 		{
 			for (int attempt = 0; attempt < ShoreAttempts; attempt++)
@@ -590,11 +603,16 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 					Mathf.Lerp(area.xMin, area.xMax, (float)random.NextDouble()),
 					0f,
 					Mathf.Lerp(area.yMin, area.yMax, (float)random.NextDouble()));
-				if (!FieldParking.NearShore(probe, config.shoreReach, out float yaw)
-					|| !parking.CanMoor(probe, yaw, footprint, out Vector3 surface))
+				if (!FieldParking.NearShore(probe, config.shoreReach, out float yaw))
 				{
 					continue;
 				}
+				nearShore++;
+				if (!parking.CanMoor(probe, yaw, footprint, out Vector3 surface))
+				{
+					continue;
+				}
+				moorable++;
 				Vec3 spot = ToVec(surface);
 				if (!FieldSupplyLayout.FarFromAll(spot, others, config.spacing * config.spacing)
 					|| !FieldSupplyLayout.FarFromAll(spot, pads, PadSeparation * PadSeparation))
@@ -607,6 +625,11 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 				return true;
 			}
 		}
+		// Said, not swallowed: v4.5.0's server moored no boat on any match and printed only "none".
+		Debug.LogWarning("[supply] no shore mooring for a " + prefab.name + ": " + ShoreAttempts + " points over "
+			+ (area.width > 0f && area.height > 0f ? "x " + area.xMin.ToString("F0") + "-" + area.xMax.ToString("F0") + ", z " + area.yMin.ToString("F0") + "-" + area.yMax.ToString("F0") : "no area")
+			+ ", " + nearShore + " deep water by a shore, " + moorable + " fit the hull, the rest too close to another find; ground from the "
+			+ FieldParking.ShoreGroundSource() + ".");
 		at = default;
 		facing = default;
 		return false;

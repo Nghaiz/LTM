@@ -193,8 +193,10 @@ namespace Ironfront.Net.Unity
         void OpenLoadoutAfterDeath() { }
 
         /// <summary>
-        /// Where the player picked to spawn on the loadout screen's minimap, when they picked a
-        /// flag at all. The flag's authored position, which is the same number on every process.
+        /// Where the next deploy will put the player: the flag they picked on the loadout screen's
+        /// minimap, or, with none picked, the flag the client drew for them in advance (any flag the
+        /// team owns, as the server would draw) so the grass there could be read before the jump.
+        /// The flag's authored position, which is the same number on every process.
         /// </summary>
         /// <remarks>
         /// A position rather than an index because the index the minimap holds is the client's

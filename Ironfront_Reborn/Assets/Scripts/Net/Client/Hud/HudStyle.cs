@@ -142,6 +142,15 @@ namespace Ironfront.Net.Unity.Client.Hud
         /// <summary>A live streak's flame and count.</summary>
         public static readonly Color StreakInk = new Color(1f, 0.55f, 0.12f);
 
+        /// <summary>The kills column's mark and heading: a clear green.</summary>
+        public static readonly Color KillsInk = new Color(0.36f, 0.9f, 0.5f);
+
+        /// <summary>The K/D column's heading: the palette's cyan.</summary>
+        public static readonly Color RatioHeadInk = new Color(0.48f, 0.81f, 1f);
+
+        /// <summary>The score column's heading: a warm yellow, apart from the gold of BEST.</summary>
+        public static readonly Color ScoreHeadInk = new Color(1f, 0.83f, 0.3f);
+
         /// <summary>The dot beside a live player.</summary>
         public static readonly Color AliveInk = new Color(0.3f, 0.95f, 0.45f);
 

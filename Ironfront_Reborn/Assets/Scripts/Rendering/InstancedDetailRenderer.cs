@@ -59,6 +59,27 @@ namespace Ironfront.Rendering
         /// <summary>CPU time a frame may spend reading patches ahead of need (at least one is read).</summary>
         internal const double BakeBudgetMs = 1.0;
 
+        /// <summary>
+        /// CPU time a frame may spend, in all, reading patches round <see cref="PrefetchPoint"/>: it
+        /// is set while the player waits to deploy, when a frame has little else to do.
+        /// </summary>
+        internal const double PrefetchBudgetMs = 3.0;
+
+        /// <summary>
+        /// Where the camera is about to jump to, when that is known: the spawn point the player
+        /// picked on the loadout screen, set by the player's controller while they wait to deploy,
+        /// null otherwise.
+        /// </summary>
+        /// <remarks>
+        /// A respawn moves the camera hundreds of metres, every patch the terrain would draw there
+        /// is new, and they cannot wait (<see cref="Stream"/>): each deploy cost one frame of 200 to
+        /// 840 ms on the owner's Ultra machine (phase P35, finding 1; 25 deploys and 25 such frames
+        /// in the v4.5.0 playtest of 2026-10-07). The wait on the loadout screen lasts 2 to 17
+        /// seconds, so those patches are read during it instead, nearest the spawn point first, and
+        /// kept until the jump.
+        /// </remarks>
+        public static Vector3? PrefetchPoint { get; set; }
+
         /// <summary>Structured buffers the instanced detail shaders read per vertex.</summary>
         internal const int VertexBufferInputs = 1;
 
@@ -145,6 +166,7 @@ namespace Ironfront.Rendering
         private readonly Plane[] _planes = new Plane[6];
         private readonly Vector4[] _planeVectors = new Vector4[6];
         private readonly List<Missing> _missing = new List<Missing>();
+        private readonly List<Missing> _ahead = new List<Missing>();
         private readonly Stopwatch _watch = new Stopwatch();
         private Terrain _terrain;
         private DetailCatalog _catalog;
@@ -167,6 +189,13 @@ namespace Ironfront.Rendering
         private float _shadowRange;
         private int _builtFrame = -1;
         private bool _announced;
+        private float _slowReadLogAt;
+        private int _slowReadsUnlogged;
+
+        /// <summary>A frame reading patches for this long or more says so (at most once in <see cref="SlowReadLogSeconds"/>).</summary>
+        internal const double SlowReadMs = 20.0;
+
+        private const float SlowReadLogSeconds = 5f;
 
         internal bool IsBuilt => _catalog != null;
 
@@ -184,6 +213,9 @@ namespace Ironfront.Rendering
 
         /// <summary>Patches read from the terrain last frame.</summary>
         internal int Baked { get; private set; }
+
+        /// <summary>Of <see cref="Baked"/>, the patches read round <see cref="PrefetchPoint"/>.</summary>
+        internal int Prefetched { get; private set; }
 
         private void Start() => Build();
 
@@ -240,6 +272,7 @@ namespace Ironfront.Rendering
                 DrawCalls = 0;
                 ShadowOnlyDraws = 0;
                 Baked = 0;
+                Prefetched = 0;
                 if (_catalog == null || viewer == null || !_terrain.drawTreesAndFoliage)
                 {
                     _handOff?.Release();
@@ -298,51 +331,106 @@ namespace Ironfront.Rendering
         private bool Stream(Vector3 eye, float distance)
         {
             float reach = distance + PrefetchMetres;
+            Vector3? ahead = PrefetchPoint;
             IReadOnlyList<DetailPatchCache.Entry> resident = _cache.Resident;
             for (int i = resident.Count - 1; i >= 0; i--)
             {
                 DetailPatchCache.Entry entry = resident[i];
-                if (SquareDistance(entry.PatchX, entry.PatchZ, eye) > distance + EvictMetres) _cache.Evict(entry);
+                if (SquareDistance(entry.PatchX, entry.PatchZ, eye) <= distance + EvictMetres) continue;
+                // What was read for the jump is kept for it.
+                if (ahead.HasValue && SquareDistance(entry.PatchX, entry.PatchZ, ahead.Value) <= reach) continue;
+                _cache.Evict(entry);
             }
 
-            _missing.Clear();
+            _watch.Restart();
+            _cache.ResetCosts();
+            bool ready = true;
+            int urgentRead = 0, instancesRead = 0;
+            Collect(eye, reach, _missing);
+            if (_missing.Count > 0)
+            {
+                _missing.Sort(NearestFirst.Instance);
+                bool holding = _handOff.IsHolding;
+                foreach (Missing missing in _missing)
+                {
+                    bool needed = missing.Distance <= distance;
+                    bool urgent = holding && needed;
+                    if (!urgent && Baked > 0 && _watch.Elapsed.TotalMilliseconds >= BakeBudgetMs)
+                    {
+                        if (needed) ready = false;
+                        continue;
+                    }
+                    _cache.Bake(missing.Entry);
+                    Baked++;
+                    instancesRead += missing.Entry.Count;
+                    if (urgent) urgentRead++;
+                }
+            }
+
+            if (ahead.HasValue && _watch.Elapsed.TotalMilliseconds < PrefetchBudgetMs)
+            {
+                Collect(ahead.Value, reach, _ahead);
+                _ahead.Sort(NearestFirst.Instance);
+                foreach (Missing missing in _ahead)
+                {
+                    if (_watch.Elapsed.TotalMilliseconds >= PrefetchBudgetMs) break;
+                    if (missing.Entry.Baked) continue;
+                    _cache.Bake(missing.Entry);
+                    Baked++;
+                    Prefetched++;
+                    instancesRead += missing.Entry.Count;
+                }
+            }
+            ReportSlowRead(_watch.Elapsed.TotalMilliseconds, urgentRead, instancesRead);
+            return ready;
+        }
+
+        /// <summary>
+        /// Says when a frame spent <see cref="SlowReadMs"/> or more reading patches: the cost a
+        /// player feels as a hitch, which no other line in a release player's log can attribute
+        /// (phase P35).
+        /// </summary>
+        private void ReportSlowRead(double ms, int urgentRead, int instancesRead)
+        {
+            if (ms < SlowReadMs) return;
+            if (Time.unscaledTime < _slowReadLogAt)
+            {
+                _slowReadsUnlogged++;
+                return;
+            }
+            Debug.Log($"[details] '{name}': read {Baked} patch prototype(s), {instancesRead} details, in {ms:F0} ms; {urgentRead} of them "
+                + $"needed at once and {Prefetched} for a respawn (terrain {_cache.ComputeMs:F0} ms, {_cache.Reused} from memory, pack {_cache.PackMs:F0}, "
+                + $"upload {_cache.UploadMs:F0}, pool grown {_cache.Grows}x)"
+                + (_slowReadsUnlogged > 0 ? $"; {_slowReadsUnlogged} more slow read(s) since the last line." : "."));
+            _slowReadLogAt = Time.unscaledTime + SlowReadLogSeconds;
+            _slowReadsUnlogged = 0;
+        }
+
+        /// <summary>
+        /// The patches not yet read within <paramref name="reach"/> of <paramref name="centre"/>,
+        /// into <paramref name="into"/>.
+        /// </summary>
+        private void Collect(Vector3 centre, float reach, List<Missing> into)
+        {
+            into.Clear();
             Vector2 size = _cache.PatchSize;
             Vector2 start = _cache.SquareMin(0, 0);
             float margin = reach + _catalog.Reach;
-            int x0 = Mathf.Max(0, Mathf.FloorToInt((eye.x - margin - start.x) / size.x));
-            int x1 = Mathf.Min(_cache.Patches - 1, Mathf.FloorToInt((eye.x + margin - start.x) / size.x));
-            int z0 = Mathf.Max(0, Mathf.FloorToInt((eye.z - margin - start.y) / size.y));
-            int z1 = Mathf.Min(_cache.Patches - 1, Mathf.FloorToInt((eye.z + margin - start.y) / size.y));
+            int x0 = Mathf.Max(0, Mathf.FloorToInt((centre.x - margin - start.x) / size.x));
+            int x1 = Mathf.Min(_cache.Patches - 1, Mathf.FloorToInt((centre.x + margin - start.x) / size.x));
+            int z0 = Mathf.Max(0, Mathf.FloorToInt((centre.z - margin - start.y) / size.y));
+            int z1 = Mathf.Min(_cache.Patches - 1, Mathf.FloorToInt((centre.z + margin - start.y) / size.y));
             for (int z = z0; z <= z1; z++)
                 for (int x = x0; x <= x1; x++)
                 {
-                    float away = SquareDistance(x, z, eye);
+                    float away = SquareDistance(x, z, centre);
                     if (away > reach) continue;
                     for (int p = 0; p < _catalog.Prototypes.Length; p++)
                     {
                         DetailPatchCache.Entry entry = _cache.Get(x, z, p);
-                        if (!entry.Baked) _missing.Add(new Missing { Entry = entry, Distance = away });
+                        if (!entry.Baked) into.Add(new Missing { Entry = entry, Distance = away });
                     }
                 }
-            if (_missing.Count == 0) return true;
-
-            _missing.Sort(NearestFirst.Instance);
-            bool holding = _handOff.IsHolding;
-            bool ready = true;
-            _watch.Restart();
-            foreach (Missing missing in _missing)
-            {
-                bool needed = missing.Distance <= distance;
-                bool urgent = holding && needed;
-                if (!urgent && Baked > 0 && _watch.Elapsed.TotalMilliseconds >= BakeBudgetMs)
-                {
-                    if (needed) ready = false;
-                    continue;
-                }
-                _cache.Bake(missing.Entry);
-                Baked++;
-            }
-            return ready;
         }
 
         /// <summary>

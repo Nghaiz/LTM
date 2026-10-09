@@ -123,6 +123,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         public static string Preview(int bots) => bots <= 0 ? "NONE" : $"{bots} ({bots / 2}/SIDE)";
 
         /// <summary>The line under the slider: what the host can still take.</summary>
+        /// <summary>Practice's line in place of the servers' ceiling: an offline match has no servers to fill.</summary>
+        public const string LocalCeilingText = "Every bot runs on this machine.";
+
         public static string CeilingText(RoomCapacity? capacity)
         {
             if (capacity == null)

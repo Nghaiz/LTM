@@ -171,6 +171,7 @@ namespace Ironfront.Net.Unity.Server
             MatchScoreFeed.Install(_scoreOf);
             _match.PhaseChanged   += OnPhaseChanged;
             _match.ResetRequested += OnResetRequested;
+            _match.PointCaptured += OnPointCaptured;
             _match.BothTeamsEliminated += OnBothTeamsEliminated;
             _match.SpawnPointCensusDanger += OnSpawnPointCensusDanger;
 
@@ -291,6 +292,14 @@ namespace Ironfront.Net.Unity.Server
         private string VictoryWords()
             => (_rules != null && _rules.Rule == VictoryRule.Target ? "first to " : "win by ") + _match.VictoryPoints;
 
+        // Flags captured is a career stat (owner's list of 2026-10-09, item 4): the soldiers who
+        // stood in the zone when it turned are credited, in the round's career tally.
+        private void OnPointCaptured(byte pointId, byte team, IReadOnlyList<ushort> capturers)
+        {
+            if (_loop == null || _match == null || !_match.CountsDeaths) return;
+            for (int i = 0; i < capturers.Count; i++) _loop.Career.CreditCapture(capturers[i]);
+        }
+
         private void OnDestroy()
         {
             NetRoomRules.Changed -= OnRoomRulesChanged;
@@ -298,6 +307,7 @@ namespace Ironfront.Net.Unity.Server
             if (_match == null) return;
             _match.PhaseChanged   -= OnPhaseChanged;
             _match.ResetRequested -= OnResetRequested;
+            _match.PointCaptured -= OnPointCaptured;
             _match.BothTeamsEliminated -= OnBothTeamsEliminated;
             _match.SpawnPointCensusDanger -= OnSpawnPointCensusDanger;
         }
@@ -493,7 +503,7 @@ namespace Ironfront.Net.Unity.Server
 
                 Vector3 p = actor.transform.position;
                 _presence[_presenceCount++] =
-                    new ActorPresence(new Vec3(p.x, p.y, p.z), actor.Team, actor.IsAlive);
+                    new ActorPresence(new Vec3(p.x, p.y, p.z), actor.Team, actor.IsAlive, actor.ActorId);
             }
         }
 

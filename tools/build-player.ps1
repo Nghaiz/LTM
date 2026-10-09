@@ -1,4 +1,4 @@
-# tools/build-player.ps1 -- build the Windows player and STOP.
+# tools/build-player.ps1 -- build the Windows (or macOS) player and STOP.
 #
 # WHY THIS EXISTS SEPARATELY. Until now the only way to produce build/windows/Ironfront.exe
 # from a shell was `run-lane-b.ps1 -Build`, and that switch does not mean "build" -- it means
@@ -27,8 +27,21 @@
 # Visual Studio Build Tools C++ workload (MSVC). The first IL2CPP build spends several minutes in
 # the C++ compiler; later ones reuse Library/Bee and are much faster.
 #
+# -Platform macos (since 2026-10-07) builds build/macos/Ironfront.app instead: the same release
+# player, but on MONO -- IL2CPP for macOS links with Apple's toolchain and can only be built on a
+# Mac -- and as one universal binary for Intel and Apple silicon. It needs the "Mac Build Support
+# (Mono)" module, installed through Unity Hub. The first macOS build compiles every shader for
+# Metal and takes far longer than a Windows build; later ones reuse the shader cache in Library/.
+#
+# -Platform linux (since 2026-10-09) builds build/linux/Ironfront.x86_64: the Windows recipe for
+# x86_64 Linux, IL2CPP cross-compiled from Windows with the com.unity.toolchain.win-x86_64-linux
+# package the project carries. It needs the "Linux Build Support (IL2CPP)" module. IL2CPP is not a
+# choice here: Unity ships no non-development Mono player for Linux.
+#
 # Usage:
 #   pwsh tools/build-player.ps1
+#   pwsh tools/build-player.ps1 -Platform macos
+#   pwsh tools/build-player.ps1 -Platform linux
 #   pwsh tools/build-player.ps1 -Development
 #   pwsh tools/build-player.ps1 -UnityPath "D:\UnityEditor\6000.3.21f1\Editor\Unity.exe"
 #   pwsh tools/build-player.ps1 -OutputDirectory build/windows -LogFile tmp/build-player.log
@@ -39,9 +52,14 @@ param(
     # Same variable tools/build-server.ps1 and run-lane-b.ps1 read.
     [string] $UnityPath = $env:UNITY_PATH,
 
-    # Where the player lands. The contract with run-lane-b.ps1 and play-lan.ps1 is this
-    # default; both look here.
-    [string] $OutputDirectory = "build/windows",
+    # windows (Ironfront.exe, IL2CPP), macos (Ironfront.app, Mono, universal) or linux
+    # (Ironfront.x86_64, IL2CPP cross-compiled from Windows). See the header.
+    [ValidateSet("windows", "macos", "linux")]
+    [string] $Platform = "windows",
+
+    # Where the player lands. Default build/windows -- the contract with run-lane-b.ps1 and
+    # play-lan.ps1, which both look there -- or build/macos for -Platform macos.
+    [string] $OutputDirectory = "",
 
     [string] $LogFile = "",
 
@@ -67,8 +85,12 @@ if ($Development -and $KeepDiagnostics) {
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$isMac = $Platform -eq "macos"
+$isLinuxPlayer = $Platform -eq "linux"
+if (-not $OutputDirectory) { $OutputDirectory = "build/$Platform" }
 
 . "$PSScriptRoot/lib/build-stamp.ps1"
+. "$PSScriptRoot/lib/mac-bundle.ps1"
 
 # Capture source cleanliness BEFORE build-libs replaces the tracked plugin binaries. Managed
 # assemblies contain a new PE/MVID on each successful compilation, so testing afterwards makes
@@ -174,22 +196,56 @@ New-Item -ItemType Directory -Force -Path $buildOut | Out-Null
 # what it does not write: a release build into a Mono folder would leave MonoBleedingEdge/ and
 # Ironfront_Data/Managed/ beside GameAssembly.dll, package-release.ps1 would ship both, and anybody
 # dating the build by a Managed DLL would read the previous build's timestamp.
-$holdsMono   = (Test-Path (Join-Path $buildOut "MonoBleedingEdge")) -or
-               (Test-Path (Join-Path $buildOut "Ironfront_Data/Managed"))
-$holdsIl2cpp = Test-Path (Join-Path $buildOut "GameAssembly.dll")
-if (($Development -and $holdsIl2cpp) -or (-not $Development -and $holdsMono)) {
-    Write-Host "[build] $buildOut holds the other scripting backend's player; emptying it first"
-    Get-ChildItem -LiteralPath $buildOut -Force | Remove-Item -Recurse -Force
+#
+# The macOS player is always Mono, so there is no other backend to find -- but the .app is a folder
+# Unity writes INTO, and a file a previous build left inside it (a development build's, say) would
+# be inside the bundle players download. Removed first; the slow part of the build (the Metal
+# shader cache and Library/Bee) is not in the output folder, so this costs only a copy.
+if ($isMac) {
+    $staleApp = Join-Path $buildOut "Ironfront.app"
+    if (Test-Path -LiteralPath $staleApp) {
+        Write-Host "[build] removing the previous $staleApp"
+        Remove-Item -LiteralPath $staleApp -Recurse -Force
+    }
+}
+else {
+    $holdsMono   = (Test-Path (Join-Path $buildOut "MonoBleedingEdge")) -or
+                   (Test-Path (Join-Path $buildOut "Ironfront_Data/Managed"))
+    # GameAssembly.dll on Windows, GameAssembly.so on Linux.
+    $holdsIl2cpp = (Test-Path (Join-Path $buildOut "GameAssembly.dll")) -or
+                   (Test-Path (Join-Path $buildOut "GameAssembly.so"))
+    if (($Development -and $holdsIl2cpp) -or (-not $Development -and $holdsMono)) {
+        Write-Host "[build] $buildOut holds the other scripting backend's player; emptying it first"
+        Get-ChildItem -LiteralPath $buildOut -Force | Remove-Item -Recurse -Force
+    }
 }
 
-$exe = Join-Path $buildOut "Ironfront.exe"
+# What the player is, what proves it was written, and the line the Editor logs once it has checked
+# the output (EditorBuildWindowsHarness.PlayerPlatform.CompletionMarker). The macOS executable is
+# named in the bundle's Info.plist, which does not exist until the build has run (see below).
+if ($isMac) {
+    $exe            = Join-Path $buildOut "Ironfront.app/Contents/Info.plist"
+    $executeMethod  = "Ironfront.EditorBuildWindowsHarness.BuildMacPlayer"
+    $completionLine = "[build] macos player complete ->"
+}
+elseif ($isLinuxPlayer) {
+    $exe            = Join-Path $buildOut "Ironfront.x86_64"
+    $executeMethod  = "Ironfront.EditorBuildWindowsHarness.BuildLinuxPlayer"
+    $completionLine = "[build] linux player complete ->"
+}
+else {
+    $exe            = Join-Path $buildOut "Ironfront.exe"
+    $executeMethod  = "Ironfront.EditorBuildWindowsHarness.BuildWindowsPlayer"
+    $completionLine = "[build] lane-B windows player complete ->"
+}
 $before = if (Test-Path $exe) { (Get-Item $exe).LastWriteTime } else { $null }
 
 Write-Host "[build] Unity : $UnityPath"
 Write-Host "[build] output: $buildOut"
 Write-Host "[build] log   : $LogFile"
 Write-Host ("[build] this takes roughly ten minutes" +
-            $(if ($Development) { "" } else { ", longer on the first IL2CPP build" }) +
+            $(if ($isMac) { ", far longer on the first macOS build (every shader compiles for Metal)" }
+              elseif ($Development) { "" } else { ", longer on the first IL2CPP build" }) +
             ". Nothing is printed until it ends.")
 
 # STAMP THE BUILD WITH THE COMMIT IT CAME FROM, then put the sources back.
@@ -215,16 +271,26 @@ $stampOriginals = $stamp.Originals
 $buildArgs = @(
     "-batchmode", "-quit", "-nographics",
     "-projectPath", (Join-Path $repoRoot "Ironfront_Reborn"),
-    "-executeMethod", "Ironfront.EditorBuildWindowsHarness.BuildWindowsPlayer",
+    "-executeMethod", $executeMethod,
     "-buildOutput", $buildOut,
     "-logFile", $LogFile
 )
+# Linux STARTS on its target. The IL2CPP cross-compiler comes from the sysroot/toolchain packages,
+# whose classes implement Unity's Sysroot interface only when UNITY_STANDALONE_LINUX_API is defined
+# at compile time. A batch run that starts on Windows and switches inside the build method only
+# QUEUES the recompile ("Requested script compilation because: Switching to platform
+# LinuxStandaloneSupport"), builds with the Windows-compiled scripts, and fails with "No Toolchain
+# found for host platform" although the packages are installed (measured 2026-10-09).
+# tools/build-server.ps1 passes -buildTarget Linux64 for the same reason.
+if ($isLinuxPlayer) { $buildArgs += @("-buildTarget", "Linux64") }
 if (-not $Development) { $buildArgs += "-release" }
 if (-not $Development -and -not $KeepDiagnostics) { $buildArgs += "-noDiagnostics" }
 
+$releaseBackend = if ($isMac) { "Mono, universal" } else { "IL2CPP" }
 $flavour = if ($Development) { "development, Mono, diagnostics" }
-           elseif ($KeepDiagnostics) { "release, IL2CPP, diagnostics KEPT (measuring only -- never package)" }
-           else { "release, IL2CPP, no diagnostics" }
+           elseif ($KeepDiagnostics) { "release, $releaseBackend, diagnostics KEPT (measuring only -- never package)" }
+           else { "release, $releaseBackend, no diagnostics" }
+$flavour = "$Platform, $flavour"
 Write-Host "[build] flavour: $flavour"
 
 $started = Get-Date
@@ -265,19 +331,19 @@ if ($null -eq $unityExitCode) {
     # after BuildPipeline returned success and the complete artifact was measured. Since -logFile
     # starts a fresh log for this invocation, it is a safe success witness rather than a stale
     # file-exists check.
-    $completed = Select-String -LiteralPath $LogFile `
-        -SimpleMatch '[build] lane-B windows player complete ->' |
+    $completed = Select-String -LiteralPath $LogFile -SimpleMatch $completionLine |
         Select-Object -Last 1
     if (-not $completed) {
-        throw "the Windows player build returned no exit code and no completion marker after ${elapsed}s. See $LogFile."
+        throw "the $Platform player build returned no exit code and no completion marker after ${elapsed}s. See $LogFile."
     }
     Write-Warning "[build] Unity returned no readable exit code; accepted the harness completion marker."
 }
 
 if ($null -ne $unityExitCode -and $unityExitCode -ne 0) {
-    throw "the Windows player build exited $unityExitCode after ${elapsed}s. See $LogFile."
+    throw "the $Platform player build exited $unityExitCode after ${elapsed}s. See $LogFile."
 }
 
+if ($isMac -and (Test-Path $exe)) { $exe = Get-MacBundleExecutable (Join-Path $buildOut "Ironfront.app") }
 if (-not (Test-Path $exe)) {
     throw "the build reported success but there is no $exe. See $LogFile."
 }
@@ -286,7 +352,9 @@ if (-not (Test-Path $exe)) {
 # evidence that anything was rebuilt -- a green build routinely leaves it untouched. The code is
 # what moved: the managed assemblies on Mono, GameAssembly.dll on IL2CPP.
 $after = (Get-Item $exe).LastWriteTime
-$code = if ($Development) { Join-Path $buildOut "Ironfront_Data/Managed/Assembly-CSharp.dll" }
+$code = if ($isMac) { Join-Path $buildOut "Ironfront.app/Contents/Resources/Data/Managed/Assembly-CSharp.dll" }
+        elseif ($Development) { Join-Path $buildOut "Ironfront_Data/Managed/Assembly-CSharp.dll" }
+        elseif ($isLinuxPlayer) { Join-Path $buildOut "GameAssembly.so" }
         else { Join-Path $buildOut "GameAssembly.dll" }
 $codeStamp = if (Test-Path $code) { (Get-Item $code).LastWriteTime } else { "MISSING" }
 
@@ -296,4 +364,9 @@ Write-Host "[build] $exe"
 Write-Host "[build]   exe  last written $after$(if ($before -eq $after) { '  (unchanged -- expected)' })"
 Write-Host "[build]   $(Split-Path -Leaf $code) last written $codeStamp  <- judge the build by this"
 Write-Host ""
-Write-Host "[build] next: pwsh tools/play-lan.ps1 -PlayerId <id>   (joins the live fly master)"
+if ($isMac -or $isLinuxPlayer) {
+    Write-Host "[build] next: pwsh tools/package-release.ps1 -Platform $Platform -Version <vX.Y.Z>"
+}
+else {
+    Write-Host "[build] next: pwsh tools/play-lan.ps1 -PlayerId <id>   (joins the live fly master)"
+}

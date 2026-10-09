@@ -112,6 +112,7 @@ namespace Ironfront.Net.Unity.Client
             _master.OnRoomStatePush += OnRoomStatePushed;
             _master.OnChat += OnChatPushed;
             _master.OnError += OnErrorPushed;
+            _master.OnAchievementsUnlocked += OnAchievementsPushed;
         }
 
         /// <summary>
@@ -139,6 +140,11 @@ namespace Ironfront.Net.Unity.Client
         private void OnChatPushed(ChatMessage message)
         {
             if (message != null) OnChat?.Invoke(message);
+        }
+
+        private void OnAchievementsPushed(string[] ids)
+        {
+            if (ids != null && ids.Length > 0) OnAchievementsUnlocked?.Invoke(ids);
         }
 
         /// <summary>
@@ -322,6 +328,13 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>The account's display name, or empty.</summary>
         public string DisplayName { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// The "remember me" token the last sign-in returned, or empty when none was asked for
+        /// (protocol 14.0.2). The menu keeps it on this machine; a token sign-in spends the one it
+        /// sent, so this is always the one to keep.
+        /// </summary>
+        public string RememberToken { get; private set; } = string.Empty;
 
         /// <summary>Whether a login has succeeded on this connection.</summary>
         public bool IsLoggedIn => SessionToken.Length > 0;
@@ -550,7 +563,13 @@ namespace Ironfront.Net.Unity.Client
         /// <c>LoginScreen</c> with <see cref="LastError"/> set. The plaintext password is never
         /// sent, TLS or not, and is never stored on this object.
         /// </remarks>
-        public async Task<bool> LoginAsync(string username, string password)
+        public Task<bool> LoginAsync(string username, string password) => LoginAsync(username, password, remember: false);
+
+        /// <summary>
+        /// Logs in as above; with <paramref name="remember"/> the master also returns a token
+        /// (<see cref="RememberToken"/>) that signs this machine in next time without the password.
+        /// </summary>
+        public async Task<bool> LoginAsync(string username, string password, bool remember)
         {
             // The maps this build can load go with every login (P30): the master then never lists,
             // joins, creates or matchmakes this client into a room on any other map, which is the
@@ -561,7 +580,7 @@ namespace Ironfront.Net.Unity.Client
             try
             {
                 string hash = PasswordHasher.Hash(password, username);
-                LoginResult result = await _master.LoginAsync(username, hash, LoadableMapIds).ConfigureAwait(false);
+                LoginResult result = await _master.LoginAsync(username, hash, LoadableMapIds, remember).ConfigureAwait(false);
                 NoteMasterAnswered();
 
                 if (!result.Ok)
@@ -574,12 +593,7 @@ namespace Ironfront.Net.Unity.Client
                     return false;
                 }
 
-                SessionToken = result.SessionToken ?? string.Empty;
-                PlayerId = result.PlayerId;
-                DisplayName = result.DisplayName ?? string.Empty;
-                LastError = string.Empty;
-
-                _flow.Transition(GameFlowState.Lobby);
+                SignedIn(result);
                 return true;
             }
             catch (MasterServerException ex)
@@ -595,6 +609,62 @@ namespace Ironfront.Net.Unity.Client
                 Recover(GameFlowState.LoginScreen);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Signs in with a token "remember me" kept on this machine (owner's list of 2026-10-09,
+        /// item 1). Drives <c>LoginScreen -&gt; Authenticating -&gt; Lobby</c> like a password login,
+        /// or back to <c>LoginScreen</c>; the caller then forgets a token the master refused.
+        /// </summary>
+        /// <remarks>
+        /// The token is spent by the attempt whatever the answer, and a success carries the next
+        /// one in <see cref="RememberToken"/>, so the caller must store that one in its place.
+        /// </remarks>
+        public async Task<bool> LoginWithTokenAsync(string token)
+        {
+            _flow.Transition(GameFlowState.Authenticating);
+
+            try
+            {
+                LoginResult result = await _master.TokenLoginAsync(token, LoadableMapIds).ConfigureAwait(false);
+                NoteMasterAnswered();
+
+                if (!result.Ok)
+                {
+                    RememberToken = string.Empty;
+                    Fail(MasterErrorText.DescribeRememberedFailure(result.ErrorCode, result.RetryAfterSeconds));
+                    Recover(GameFlowState.LoginScreen);
+                    return false;
+                }
+
+                SignedIn(result);
+                return true;
+            }
+            catch (MasterServerException ex)
+            {
+                NoteMasterAnswered();
+                RememberToken = string.Empty;
+                Fail(MasterErrorText.DescribeRememberedFailure(ex.ErrorCode, 0));
+                Recover(GameFlowState.LoginScreen);
+                return false;
+            }
+            catch (Exception ex) when (IsLinkFailure(ex))
+            {
+                Fail(LinkFailureText());
+                Recover(GameFlowState.LoginScreen);
+                return false;
+            }
+        }
+
+        private void SignedIn(LoginResult result)
+        {
+            SessionToken = result.SessionToken ?? string.Empty;
+            PlayerId = result.PlayerId;
+            DisplayName = result.DisplayName ?? string.Empty;
+            RememberToken = result.RememberToken ?? string.Empty;
+            LastError = string.Empty;
+
+            _flow.Transition(GameFlowState.Lobby);
         }
 
         /// <summary>
@@ -954,6 +1024,66 @@ namespace Ironfront.Net.Unity.Client
             {
                 Fail(LinkFailureText());
                 return false;
+            }
+        }
+
+        // ------------------------------------------------------------------ the career
+
+        /// <summary>
+        /// Achievements the master has just recorded for this account (owner's list of
+        /// 2026-10-09, item 4): after a round it judged, or after a practice claim.
+        /// </summary>
+        /// <remarks>Raised on the link's thread, like <see cref="OnChat"/>: hand it to the main thread before drawing.</remarks>
+        public event Action<string[]>? OnAchievementsUnlocked;
+
+        /// <summary>Why the last career request came back empty, in the player's words; empty after one that answered.</summary>
+        /// <remarks>
+        /// Its own field rather than <see cref="LastError"/>: the ranking and the achievements are
+        /// overlay pages that open over any screen, and a page that could not load must not leave
+        /// an error on the room browser underneath it.
+        /// </remarks>
+        public string CareerError { get; private set; } = string.Empty;
+
+        /// <summary>The global ranking: the best hundred careers and this player's own row. Null when it could not be had.</summary>
+        public Task<Leaderboard?> GetLeaderboardAsync() => CareerAsync(() => _master.GetLeaderboardAsync());
+
+        /// <summary>This player's achievements, how many players hold each, and the career numbers behind them.</summary>
+        public Task<AchievementState?> GetAchievementsAsync() => CareerAsync(() => _master.GetAchievementsAsync());
+
+        /// <summary>
+        /// Reports practice achievements this game saw earned; the master records the ones the
+        /// account lacks and answers with the account's achievements.
+        /// </summary>
+        public Task<AchievementState?> ClaimAchievementsAsync(IReadOnlyList<string> ids)
+            => ids == null || ids.Count == 0
+                ? GetAchievementsAsync()
+                : CareerAsync(() => _master.ClaimAchievementsAsync(ids));
+
+        private async Task<T?> CareerAsync<T>(Func<Task<T>> request) where T : class
+        {
+            if (!IsLoggedIn)
+            {
+                CareerError = "Sign in to multiplayer to see your career.";
+                return null;
+            }
+
+            try
+            {
+                T result = await request().ConfigureAwait(false);
+                NoteMasterAnswered();
+                CareerError = string.Empty;
+                return result;
+            }
+            catch (MasterServerException ex)
+            {
+                NoteMasterAnswered();
+                CareerError = MasterErrorText.DescribeFailure(ex.ErrorCode);
+                return null;
+            }
+            catch (Exception ex) when (IsLinkFailure(ex))
+            {
+                CareerError = LinkFailureText();
+                return null;
             }
         }
 
@@ -1319,6 +1449,7 @@ namespace Ironfront.Net.Unity.Client
             _master.OnRoomStatePush -= OnRoomStatePushed;
             _master.OnChat -= OnChatPushed;
             _master.OnError -= OnErrorPushed;
+            _master.OnAchievementsUnlocked -= OnAchievementsPushed;
 
             _game.OnConnected -= OnGameConnected;
             _game.OnDisconnected -= OnGameDisconnected;

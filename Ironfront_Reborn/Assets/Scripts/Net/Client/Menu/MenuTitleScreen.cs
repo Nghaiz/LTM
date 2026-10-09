@@ -37,6 +37,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Button? _multiplayerButton;
         [SerializeField] private Button? _practiceButton;
         [SerializeField] private Button? _settingsButton;
+        [SerializeField] private Button? _howToPlayButton;
+        [SerializeField] private Button? _rankingButton;
+        [SerializeField] private Button? _achievementsButton;
         [SerializeField] private Button? _exitButton;
 
         private void Awake()
@@ -50,6 +53,16 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_settingsButton != null)
                 _settingsButton.onClick.AddListener(OnSettings);
 
+            if (_howToPlayButton != null)
+                _howToPlayButton.onClick.AddListener(MenuScreenController.OpenHowToPlay);
+
+            // The career pages (owner's list of 2026-10-09, item 4), above Exit.
+            if (_rankingButton != null)
+                _rankingButton.onClick.AddListener(OpenRanking);
+
+            if (_achievementsButton != null)
+                _achievementsButton.onClick.AddListener(OpenAchievements);
+
             if (_exitButton != null)
                 _exitButton.onClick.AddListener(ExitGame);
         }
@@ -59,6 +72,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         private void OnPractice() => _controller?.OpenPractice();
 
         private void OnSettings() => _controller?.OpenSettings();
+
+        internal static void OpenRanking() => GameOverlays.Open(OverlayPage.Ranking);
+
+        internal static void OpenAchievements() => GameOverlays.Open(OverlayPage.Achievements);
 
         internal static void OpenSettings() => NetClientBindings.MenuPlatformActions?.OpenSettings();
 
@@ -70,6 +87,9 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_multiplayerButton != null) _multiplayerButton.interactable = !controller.IsBusy;
             if (_practiceButton != null) _practiceButton.interactable = controller.IsPracticeAvailable;
             if (_settingsButton != null) _settingsButton.interactable = !controller.IsBusy;
+            if (_howToPlayButton != null) _howToPlayButton.interactable = !controller.IsBusy;
+            if (_rankingButton != null) _rankingButton.interactable = !controller.IsBusy;
+            if (_achievementsButton != null) _achievementsButton.interactable = !controller.IsBusy;
             if (_exitButton != null) _exitButton.interactable = !controller.IsBusy;
         }
     }

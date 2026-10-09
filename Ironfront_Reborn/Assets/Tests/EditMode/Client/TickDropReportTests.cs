@@ -20,6 +20,16 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void AFocusedDropSaysHowMuchOfTheFrameWasSpentBetweenFrames()
+        {
+            // Phase P35, finding 3: a focused long frame spent mostly outside the game loop. The
+            // release log has to say so, or the next one is as unattributable as the first.
+            string warning = new TickDropReport().Record(9, 412f, focused: true, outsideLoopMs: 380f);
+
+            StringAssert.Contains("dropped 9 tick(s) after a 412 ms frame (380 ms of it between frames", warning);
+        }
+
+        [Test]
         public void DropsInTheBackgroundWaitForFocusAndAreSummedOnce()
         {
             var report = new TickDropReport();

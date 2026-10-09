@@ -147,6 +147,7 @@ namespace Ironfront.Net.MasterLink
                     Kills    = score.Kills,
                     Deaths   = score.Deaths,
                     Score    = score.Score,
+                    Stats    = CareerStatsOf(score.Career),
                 };
             }
 
@@ -155,6 +156,18 @@ namespace Ironfront.Net.MasterLink
             var payload = new MatchPlayerResult[count];
             Array.Copy(_scratch, payload, count);
             _link.MatchEnded(roomId, payload);
+        }
+
+        /// <summary>The non-zero career numbers by name, or null when there are none.</summary>
+        internal static System.Collections.Generic.Dictionary<string, long>? CareerStatsOf(long[]? career)
+        {
+            if (career == null) return null;
+            var stats = new System.Collections.Generic.Dictionary<string, long>();
+            int count = Math.Min(career.Length, Ironfront.Net.Protocol.Achievements.CareerStats.Count);
+            for (int i = 0; i < count; i++)
+                if (career[i] != 0)
+                    stats[Ironfront.Net.Protocol.Achievements.CareerStats.Key((Ironfront.Net.Protocol.Achievements.CareerStat)i)] = career[i];
+            return stats.Count > 0 ? stats : null;
         }
 
         /// <summary>Pumps the link's inbound queue. Call once per frame.</summary>

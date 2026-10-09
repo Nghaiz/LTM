@@ -1,6 +1,7 @@
 # Phase P35: long frames on the owner's Ultra machine (handover)
 
-Status: **investigated, not fixed.** Handed over by the owner on 2026-10-07 for a later session.
+Status: **findings 1 and 2 fixed (2026-10-08); the "flag any" respawn fixed and finding 3 closed
+as not reproduced (2026-10-09, P36).** Handed over by the owner on 2026-10-07 for a later session.
 Everything below was measured on the owner's own machine (RTX 4060 Laptop, 8 GB, 32 threads,
 Ultra preset), which is also the development PC.
 
@@ -58,6 +59,15 @@ Candidate fixes, to measure before choosing:
 - Or bake only the patches in the view frustum and within ~30 m at once, the rest under the budget.
 - The owner's log matches: `deploy requested` is followed by one 400 to 650 ms frame every time.
 
+**Fixed 2026-10-08 (prefetch at the picked spawn point).** While the player is dead with a spawn
+point picked, `FpsActorController` sets `InstancedDetailRenderer.PrefetchPoint`; the renderer reads
+the patches round it within 3 ms a frame, nearest first, and keeps them until the jump. The v4.5.0
+playtest log (2026-10-07) still showed it: 25 deploys, 25 frames of 196 to 706 ms right after.
+Editor, Forest Lake's own terrain at Ultra (120 m, density 1.0), an 800 m jump: 57.4 ms and 104
+patches read in the jump frame before; 0.1 ms and none after, the 128 patches read over 14 frames
+of the wait (worst 13.3 ms: one dense patch). Not yet measured in a player build. A deploy with no
+flag picked ("flag any") is not covered: the server chooses the spot.
+
 ### 2. The pre-deploy screen renders at 0.8 to 5 fps
 
 Measured on the joining client: GPU 157 to 1294 ms per frame, 2,000 to 3,300 draws and 3.4 to 5.7 M
@@ -69,6 +79,12 @@ culling mask, clears to skybox) and the player's FP camera at the parked body, *
 looking over the whole map at Ultra. The scenery camera paints over the FP camera's whole frame, so
 that frame is pure waste. First thing to try: disable the FP camera (or its rendering) until
 `EnterDeployedView`.
+
+**Fixed 2026-10-08.** `FpsActorController.Start` turns the FP camera off with the scenery camera on;
+`SpawnAt` and `EnterDeployedView` turn it back on (`FirstPersonCamera`). Editor, Forest Lake's
+pre-deploy screen, toggled live: batches 1,695 to 1,075, SetPass calls 1,321 to 840, triangles 2.45 M
+to 1.99 M, `Camera.Render` 7.7 to about 5.2 ms a frame. The per-pixel cost that made the owner's
+GPU take 157 to 1,294 ms was this camera's whole frame; not yet measured in a player build.
 
 ### 3. With focus, most of a long frame is outside the player loop
 
@@ -85,6 +101,44 @@ Not yet separated: cua-driver's UIA client (it was running; see memory
 reproduce focused with cua-driver stopped and overlays off, then attribute with a development build
 and the Profiler (`build-player.ps1 -Development`), whose timeline shows the main thread between
 `PlayerLoop` calls.
+
+### 2026-10-09: measured in a player build
+
+Release IL2CPP player with diagnostics (`-KeepDiagnostics`), the owner's machine, two autopilot
+clients in a live Azure room (Forest Lake, night, 50 bots a side), the measured one focused.
+
+- **Finding 3 did not reproduce.** About 190 s focused with cua-driver running idle, then three
+  cua-driver reads of the window (UIA tree, screenshot): no frame over 168 ms, no dropped tick, and
+  every long frame (50 to 66 ms) inside the player loop (physics and scripts in a fight). The
+  2026-10-07 probe's focused stalls remain unexplained; the autopilot stands still, the owner plays.
+- **Reading grass patches is the terrain's own `ComputeDetailInstanceTransforms`**, main thread
+  only (it throws on a worker), and costs 2 to 3 microseconds a detail in this player once a match
+  is under way (0.4 at the very first deploy, and in the Editor): a "flag any" respawn read 88 to 96
+  patch prototypes, 117 to 154 thousand details, in 332 to 440 ms, of which the terrain's read was
+  298 ms, packing 33 and upload 1. While moving, one dense patch alone is 20 to 60 ms, past the
+  1 ms budget (at least one is read a frame).
+- **Kept off the GPU (2026-10-09).** `DetailPatchCache` keeps a patch's packed details in memory
+  when it leaves the GPU (at most 1.5 M details, about 30 MB, oldest forgotten first), so reading
+  it again costs only its upload. Editor, Forest Lake at Ultra: returning to a place left 800 m
+  behind, 56.6 ms and 104 terrain reads became 0.6 ms and none.
+- A frame that spends 20 ms or more reading patches now logs `[details] ... read N patch
+  prototype(s) ... in X ms` with the split (at most once in 5 s), in every build, so the next
+  playtest's logs say how much of the stutter is grass.
+
+### 2026-10-09 (second run): finding 3 closed as not reproduced, and watched in every build
+
+Owner's list of 2026-10-09, item 6. Release IL2CPP player with diagnostics, the measured client
+focused and uncapped, the other in the background, a live Azure room (Forest Lake, 50 bots a side),
+cua-driver not touching either window: **about 20 minutes, three deaths and four deploys, and not one
+frame over 168 ms after the map finished loading** (the only three were the boot, the menu load and
+the map load, all `EarlyUpdate.UpdatePreloading`). With the respawn read gone (P36 item 5) and the
+pre-deploy camera off, nothing left in the measured client stalls between frames.
+
+The 2026-10-07 stalls stay unexplained, so the release player now carries the measurement the
+diagnostics build used to find them: `PlayerLoopClock` marks the start and end of every frame's
+player loop (two clock reads a frame, not in batch mode), and a focused prediction-clock drop now
+reads `dropped N tick(s) after a X ms frame (Y ms of it between frames, outside the game loop)`. If
+the owner's next session has one, the log says whether it was the game or the window.
 
 ### Not the cause (measured)
 

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Replication.Movement;
@@ -289,6 +291,34 @@ namespace Ironfront.Net.Replication.Tests
             for (int i = 0; i < 90; i++) match.Tick(Tick, 1, actors);
 
             Assert.Equal(TeamId.Team1, point.OwningTeam);
+        }
+
+        /// <summary>
+        /// A flag that turns credits the live actors of the side standing in it, and nobody else
+        /// (owner's list of 2026-10-09, item 4: flags captured is a career stat).
+        /// </summary>
+        [Fact]
+        public void ACaptureNamesTheLiveSoldiersInTheZone()
+        {
+            var point = new CapturePointState(0, Vec3.Zero, 10f, captureSpeed: 0.05f);
+            var match = new MatchStateMachine(new MatchRules { MinPlayersToStart = 1, WarmupSeconds = 0f }, point);
+            var credited = new List<(byte Team, ushort[] Actors)>();
+            match.PointCaptured += (_, team, actors) => credited.Add((team, actors.ToArray()));
+
+            var actors = new[]
+            {
+                new ActorPresence(Vec3.Zero, TeamId.Team1, true, actorId: 7),
+                new ActorPresence(new Vec3(3f, 0f, 0f), TeamId.Team1, true, actorId: 8),
+                new ActorPresence(Vec3.Zero, TeamId.Team1, false, actorId: 9),
+                new ActorPresence(new Vec3(300f, 0f, 0f), TeamId.Team1, true, actorId: 10),
+                new ActorPresence(Vec3.Zero, TeamId.Team1, true),
+            };
+
+            for (int i = 0; i < 90; i++) match.Tick(Tick, 1, actors);
+
+            (byte team, ushort[] who) = Assert.Single(credited);
+            Assert.Equal(TeamId.Team1, team);
+            Assert.Equal(new ushort[] { 7, 8 }, who);
         }
 
         // ------------------------------------------------------------------ reset

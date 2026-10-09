@@ -118,15 +118,23 @@ public sealed class NightModeDirector : MonoBehaviour
 		mapName = SceneManager.GetActiveScene().name;
 		config = Resources.Load<NightModeConfig>(ConfigFolder + mapName);
 
-		// Offline the original's own switch decides (GameManager.nightMode), with the default battery.
+		// Offline the original's own switch decides (GameManager.nightMode), with the battery the
+		// practice screen chose (GameManager.nightVisionSeconds).
 		if (NetContext.IsOffline)
 		{
 			bool offlineNight = GameManager.instance != null && GameManager.instance.nightMode;
 			Apply(new RoomSettings(offlineNight ? GameMode.Night : GameMode.PointMatch, VictoryRule.Margin,
-				RoomRules.DefaultMarginPoints, offlineNight ? RoomRules.DefaultNightVisionSeconds : (byte)0));
+				RoomRules.DefaultMarginPoints, offlineNight ? OfflineBatterySeconds() : (byte)0));
 			return;
 		}
 		Apply(NetRoomRules.Current);
+	}
+
+	/// <summary>The offline night's battery: the practice screen's, held to the rooms' own range.</summary>
+	private static byte OfflineBatterySeconds()
+	{
+		int seconds = GameManager.instance != null ? GameManager.instance.nightVisionSeconds : RoomRules.DefaultNightVisionSeconds;
+		return (byte)Mathf.Clamp(seconds, RoomRules.MinNightVisionSeconds, RoomRules.MaxNightVisionSeconds);
 	}
 
 	private void OnRoomRulesChanged(RoomSettings settings)

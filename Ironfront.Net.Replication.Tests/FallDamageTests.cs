@@ -97,5 +97,55 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0f, FallDamage.ForImpact(float.NaN, OneG));
             Assert.Equal(0f, FallDamage.ForDrop(float.NaN));
         }
+
+        [Fact]
+        public void OnFlatGroundTheImpactIsTheFallItself()
+        {
+            Assert.Equal(12f, FallDamage.ImpactAlongNormal(12f, 6.5f, 0f, 0f, 1f, 0f), 4);
+        }
+
+        [Fact]
+        public void RunningDownASlopeOnlyThePartIntoItHits()
+        {
+            // The 2026-10-07 playtest: a jump down Forest Lake's hills landed at 10-12 m/s and cost
+            // 7-19 health. Running down a 30-degree slope at 6.5 m/s, the slope leans toward +X.
+            float tilt = 30f * (float)Math.PI / 180f;
+            float nx = (float)Math.Sin(tilt), ny = (float)Math.Cos(tilt);
+
+            float impact = FallDamage.ImpactAlongNormal(12f, 6.5f, 0f, nx, ny, 0f);
+
+            Assert.Equal(12f * ny - 6.5f * nx, impact, 3);
+            Assert.True(FallDamage.ForImpact(12f, PlayerGravity) > 15f, "the old reading of the same landing");
+            Assert.Equal(0f, FallDamage.ForImpact(impact, PlayerGravity));
+        }
+
+        [Fact]
+        public void RunningIntoARisingSlopeHitsHarder()
+        {
+            float tilt = 30f * (float)Math.PI / 180f;
+            float impact = FallDamage.ImpactAlongNormal(12f, -6.5f, 0f, (float)Math.Sin(tilt), (float)Math.Cos(tilt), 0f);
+
+            Assert.True(impact > 12f * (float)Math.Cos(tilt));
+        }
+
+        [Fact]
+        public void ADropOntoASlopeStillHitsAlmostAllOfItsFall()
+        {
+            // A fall from a helicopter with nothing across: only the slope's own tilt softens it.
+            float tilt = 20f * (float)Math.PI / 180f;
+            float lethal = FallDamage.LethalImpactSpeed(PlayerGravity);
+
+            float impact = FallDamage.ImpactAlongNormal(lethal * 1.2f, 0f, 0f, (float)Math.Sin(tilt), (float)Math.Cos(tilt), 0f);
+
+            Assert.True(FallDamage.ForImpact(impact, PlayerGravity) >= FallDamage.FullHealth);
+        }
+
+        [Fact]
+        public void AWallOrAMissingNormalLeavesTheFallAsItWas()
+        {
+            Assert.Equal(12f, FallDamage.ImpactAlongNormal(12f, 6.5f, 0f, 1f, 0f, 0f));
+            Assert.Equal(12f, FallDamage.ImpactAlongNormal(12f, 6.5f, 0f, 0f, 0f, 0f));
+            Assert.Equal(0f, FallDamage.ImpactAlongNormal(0f, 6.5f, 0f, 0f, 1f, 0f));
+        }
     }
 }
