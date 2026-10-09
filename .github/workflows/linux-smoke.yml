@@ -132,7 +132,7 @@ jobs:
             shot shot-practice.png
             # The map opens on the loadout screen; DEPLOY sits bottom right at this size. Whether
             # the click landed is judged from the next screenshot, not here.
-            xdotool mousemove 1000 650 click 1 2>/dev/null || true
+            xdotool mousemove 1000 627 click 1 2>/dev/null || true
             sleep 30
             shot shot-deployed.png
           fi
