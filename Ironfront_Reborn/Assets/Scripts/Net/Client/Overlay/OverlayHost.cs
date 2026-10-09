@@ -321,11 +321,19 @@ namespace Ironfront.Net.Unity.Client.Overlay
             }
         }
 
-        private static void EnsureEventSystem()
+        /// <summary>A scene with no EventSystem still needs the overlay's buttons to answer the mouse.</summary>
+        /// <remarks>
+        /// Play mode only, and always under this host. An Editor tool renders a detached host in edit
+        /// mode (<see cref="ShowForTool"/>); a new GameObject lands in the ACTIVE scene, which there is
+        /// whatever the Editor has open, and before this guard every page capture left an EventSystem
+        /// in Menu.unity: twenty of them were saved into it (2026-10-09), and the menu logged
+        /// "There can be only one active Event System" twenty times at every start.
+        /// </remarks>
+        private void EnsureEventSystem()
         {
-            if (EventSystem.current != null) return;
+            if (!Application.isPlaying || EventSystem.current != null) return;
             var go = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-            if (_instance != null) go.transform.SetParent(_instance.transform, false);
+            go.transform.SetParent(transform, false);
         }
     }
 }
