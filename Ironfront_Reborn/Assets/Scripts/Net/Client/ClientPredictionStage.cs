@@ -460,6 +460,7 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private InputFrame ToFrame(in MoveInput input)
             => MovementSimulation.ToFrame(
-                in input, _clock != null ? _clock.AimPitchDegrees : 0f, InputButtons.None);
+                in input, _clock != null ? _clock.AimPitchDegrees : 0f,
+                NetShotReports.FrameButtons);
     }
 }

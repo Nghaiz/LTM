@@ -501,6 +501,23 @@ public class FpsActorController : ActorController
 		return true;
 	}
 
+	/// <summary>
+	/// From the eye along the mouse's aim. The recoil kicks the camera (<c>PlayerFpParent.KickCamera</c>)
+	/// and the gun model, and both are drawn; neither steers the round (owner's run of 2026-10-10:
+	/// "it should fly where the player aimed, not where the kick tilted the camera"). The camera's
+	/// parent carries the mouse's pitch and none of the kick, and it is the aim the server is sent.
+	/// </summary>
+	public override bool TryGetAimRay(out Ray ray)
+	{
+		if (fpCamera == null || fpCameraParent == null || !fpCamera.isActiveAndEnabled || actor == null || actor.fallenOver)
+		{
+			ray = default(Ray);
+			return false;
+		}
+		ray = new Ray(fpCamera.transform.position, fpCameraParent.forward);
+		return true;
+	}
+
 	public override void ReceivedDamage(float damage, float balanceDamage, Vector3 point, Vector3 direction, Vector3 force)
 	{
 		if (balanceDamage > 5f)

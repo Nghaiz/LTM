@@ -241,6 +241,34 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>
+        /// Resolves one trigger pull whose hits the shooter's own game reports (14.0.6): the same
+        /// pre-conditions as <see cref="Resolve"/>, the round spent and the cooldown stamped, and no
+        /// sweep -- the hits arrive later as <c>C_SHOT_REPORT</c> and are judged against this shot.
+        /// </summary>
+        /// <remarks>
+        /// Counted in <see cref="ShotsFired"/> like any other pull, so the rapid-fire signal is
+        /// blind to nothing.
+        /// </remarks>
+        public FireRejection ResolveReported(
+            ref WeaponRuntimeState state,
+            in WeaponConfig config,
+            bool shooterIsAlive,
+            float nowSeconds)
+        {
+            FireRejection rejection = CheckCanFire(in state, in config, shooterIsAlive, nowSeconds);
+            if (rejection != FireRejection.None)
+            {
+                if (rejection == FireRejection.OnCooldown) FireRateViolations++;
+                return rejection;
+            }
+
+            state.LastFiredTime = nowSeconds;
+            state.AmmoInClip--;
+            ShotsFired++;
+            return FireRejection.None;
+        }
+
+        /// <summary>
         /// The authoritative pre-conditions, with no side effects.
         /// </summary>
         /// <remarks>

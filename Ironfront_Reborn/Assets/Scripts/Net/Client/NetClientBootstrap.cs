@@ -217,6 +217,7 @@ namespace Ironfront.Net.Unity.Client
             EnsureSeatRequester();
             EnsureLocalCombatDriver();
             EnsureChatSender();
+            EnsureShotReporter();
             EnsurePhysicsSync();
 
             if (_connectOnStart) Connect();
@@ -619,6 +620,16 @@ namespace Ironfront.Net.Unity.Client
         {
             if (GetComponent<ClientChatSender>() == null)
                 gameObject.AddComponent<ClientChatSender>();
+        }
+
+        /// <summary>
+        /// Makes sure the local player's struck rounds are reported (<see cref="ClientShotReporter"/>,
+        /// 14.0.6), added in code for <see cref="EnsureChatSender"/>'s reason.
+        /// </summary>
+        private void EnsureShotReporter()
+        {
+            if (GetComponent<ClientShotReporter>() == null)
+                gameObject.AddComponent<ClientShotReporter>();
         }
 
         /// <summary>
