@@ -36,6 +36,36 @@ namespace Ironfront.MasterServer.Tests
             Assert.Equal(6980, AchievementCatalog.TotalPoints);
         }
 
+        /// <summary>Every id v4.6.0 shipped: a player may hold any of them, on the master or in a save file.</summary>
+        private static readonly string[] ShippedIds =
+        {
+            "roll_call", "lights_out", "baptism_of_fire", "steady_hand", "flag_runner", "taste_of_victory",
+            "speed_bump", "by_the_book", "cadet", "turncoat", "victory_lap", "bullet_sponge", "participation_trophy",
+            "three_fronts", "unbroken", "predator", "dead_centre", "overwatch", "steel_rain", "rotorhead",
+            "forward_supply", "night_shift", "cannon_fodder", "dust_devil", "first_past_the_post", "boots_only",
+            "nine_lives", "man_overboard", "mutual_destruction", "grim_arithmetic", "juggernaut", "crowd_control",
+            "cold_steel", "armourer", "can_opener", "long_campaign", "top_brass", "clean_sheet", "naked_eye",
+            "night_terror", "hell_week", "island_hopper", "lake_monster", "graveyard_shift", "motor_pool",
+            "jack_of_all_trades", "touchdown", "buckshot_sniper", "dogfight", "gold_standard", "windreader",
+            "all_fronts_mastered", "air_defense", "undefeated", "moonlight_marksman", "outnumbered",
+            "on_borrowed_time", "pacifist", "nemesis", "absolute_dominance", "drill_sergeant", "grand_tour",
+            "impossible_angle", "from_the_grave", "centurion", "rampage", "curvature", "perfect_ten", "dead_eye",
+            "untouchable", "blade_only", "tank_ace", "sky_king", "map_painter", "hail_mary", "creature_of_the_night",
+            "immaculate", "ironclad", "mid_air", "counter_sniper",
+        };
+
+        [Fact]
+        public void AnIdOncePlayersCanHoldItNeverLeavesTheCatalogue()
+        {
+            // Owner, 2026-10-10: an update never costs a player an achievement. Change an achievement's
+            // rule, title or tier as much as you like; its id is the key every database and save file
+            // holds it under, so it never changes and never goes. The master keeps rows for an unknown
+            // id and the client keeps unknown ids, but only the catalogue draws them.
+            var ids = new HashSet<string>(AchievementCatalog.All.Select(a => a.Id));
+            foreach (string id in ShippedIds)
+                Assert.True(ids.Contains(id), $"'{id}' shipped in v4.6.0 and left the catalogue: players holding it would stop seeing it");
+        }
+
         [Fact]
         public void EveryAchievementCanBeEarnedAndReadsAsAnExactRule()
         {
@@ -347,8 +377,10 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
-        public void RetiredAchievementRowsAreDeletedAndCareersKept()
+        public void AnAchievementTheCatalogueNoLongerHasIsKeptAndNotCounted()
         {
+            // Owner, 2026-10-10: an update never costs a player an achievement. A row for an id this
+            // build does not know survives the master's start, every judging and every read.
             var database = new SqliteDatabase(":memory:");
             Assert.True(database.InsertAccount("old", Password, "Old", 0));
             int id = database.FindAccount("old")!.PlayerId;
@@ -356,9 +388,31 @@ namespace Ironfront.MasterServer.Tests
             Assert.True(database.InsertAchievement(id, "first_blood", 1));
 
             var career = new CareerService(database);
-
-            Assert.Empty(database.ReadAchievements(id));
             Assert.Contains("baptism_of_fire", Round(career, id, Facts(("kills", 1))));
+            career.Claim(id, new[] { "cadet" }, null, now: 5);
+
+            Assert.Contains(database.ReadAchievements(id), row => row.Id == "first_blood" && row.At == 1);
+            Assert.Contains(career.Achievements(id).Unlocked, row => row.Id == "first_blood");
+            AchievementTotals totals = AchievementTotals.Of(database.ReadAchievements(id).Select(row => row.Id));
+            Assert.Equal(2, totals.Count);
+        }
+
+        [Fact]
+        public void APracticeAchievementIsJudgedFromTheNumbersAClaimCarries()
+        {
+            // A practice achievement that reads a number is judged by today's rule from the claimed
+            // numbers, so a threshold an update lowered unlocks it at the next sign-in even though
+            // the player's game never sent its id.
+            (CareerService career, SqliteDatabase db, int[] ids) = Players(1);
+
+            List<string> earned = career.Claim(ids[0], null,
+                new Dictionary<string, long> { ["prDustDevilBest"] = 40, ["prMapsFinished"] = 14 }, now: 3);
+
+            Assert.Contains("dust_devil", earned);
+            Assert.Contains("cadet", earned);
+            Assert.DoesNotContain("hell_week", earned);
+            Assert.DoesNotContain("gold_standard", earned);
+            Assert.Contains(db.ReadAchievements(ids[0]), row => row.Id == "dust_devil");
         }
 
         [Fact]

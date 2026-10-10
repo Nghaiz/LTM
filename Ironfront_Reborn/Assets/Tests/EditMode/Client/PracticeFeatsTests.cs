@@ -12,34 +12,22 @@ namespace Ironfront.Net.Unity.Client.Tests
     /// short of it, against the catalogue's own wording.
     /// </summary>
     /// <remarks>
-    /// PracticeFeats keeps its numbers in PlayerPrefs; every key it (or the ledger, if a Play session
-    /// left it subscribed) can write is saved before each test and put back after.
+    /// PracticeFeats keeps its numbers in <see cref="AchievementVault"/>, which every test points at a
+    /// fresh temporary folder (and away from PlayerPrefs), so no test reads or writes a real save.
     /// </remarks>
     public sealed class PracticeFeatsTests
     {
         private const int Player = 1;
         private const ushort Dustbowl = 1, Island = 2, ForestLake = 3;
 
-        private static readonly string[] IntKeys = { PracticeFeats.GuideTabsKey };
-        private static readonly string[] StringKeys =
-        {
-            "ironfront.achievements.earned", "ironfront.achievements.toast-queue",
-            "ironfront.achievements.v2.prMapsFinished", "ironfront.achievements.v2.prSidesWon",
-            "ironfront.achievements.v2.prDustDevilBest", "ironfront.achievements.v2.prHellWeekBest",
-            "ironfront.achievements.v2.prLakeMonsterBest", "ironfront.achievements.v2.prMotorPoolBest",
-            "ironfront.achievements.v2.prGrandTour", "ironfront.achievements.v2.prImmaculateBest",
-        };
-
-        private readonly Dictionary<string, (bool Had, int Int, string Text)> _saved = new Dictionary<string, (bool, int, string)>();
         private readonly HashSet<string> _earned = new HashSet<string>();
+        private string _folder;
 
         [SetUp]
-        public void SaveAndClear()
+        public void UseAFreshVault()
         {
-            Assert.That(StringKeys, Does.Contain("ironfront.achievements.v2." + CareerStats.Key(CareerStat.PrGrandTour)));
-            foreach (string key in IntKeys) _saved[key] = (PlayerPrefs.HasKey(key), PlayerPrefs.GetInt(key, 0), null);
-            foreach (string key in StringKeys) _saved[key] = (PlayerPrefs.HasKey(key), 0, PlayerPrefs.GetString(key, string.Empty));
-            foreach (string key in _saved.Keys) PlayerPrefs.DeleteKey(key);
+            _folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ironfront-vault-" + System.Guid.NewGuid().ToString("N"));
+            AchievementVault.UseFolderForTests(_folder);
             _earned.Clear();
             PracticeFeats.Earned += OnEarned;
         }
@@ -49,14 +37,8 @@ namespace Ironfront.Net.Unity.Client.Tests
         {
             PracticeFeats.Earned -= OnEarned;
             PracticeFeats.MatchEnded(false, Player, 0f);
-            foreach (KeyValuePair<string, (bool Had, int Int, string Text)> entry in _saved)
-            {
-                PlayerPrefs.DeleteKey(entry.Key);
-                if (!entry.Value.Had) continue;
-                if (entry.Value.Text == null) PlayerPrefs.SetInt(entry.Key, entry.Value.Int);
-                else PlayerPrefs.SetString(entry.Key, entry.Value.Text);
-            }
-            PlayerPrefs.Save();
+            AchievementVault.UseFolderForTests(null);
+            if (System.IO.Directory.Exists(_folder)) System.IO.Directory.Delete(_folder, true);
         }
 
         private void OnEarned(string id) => _earned.Add(id);

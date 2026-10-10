@@ -469,6 +469,28 @@ Test cho từng bộ đếm mới (mỗi cái có ca "vừa đủ" và "thiếu 
 practice, phân bổ hạng 13/16/21/14/16; hàng đợi toast không bỏ sót khi 5 cái mở cùng lúc; master không
 gửi thành tựu ẩn người xem chưa có trong màn so sánh; phòng 1 đấu nhiều người bắt đầu được.
 
+### 7.4 Lưu trữ: cập nhật game không bao giờ làm mất thành tựu (từ v4.6.1)
+
+Anh yêu cầu ngày 10/10/2026: sửa lỗi, cập nhật client hay server đều không được làm người chơi mất
+bất kỳ thành tựu nào. Cách làm theo kiểu các game indie không dùng Steam:
+
+- **Máy người chơi**: thành tựu practice, tiến độ practice, cờ lê vàng và hàng đợi banner nằm trong
+  file `achievements.json` ở thư mục dữ liệu người dùng (Windows: `AppData/LocalLow/LTM10/IronfrontReborn`,
+  macOS: `~/Library/Application Support/...`, Linux: `~/.config/unity3d/LTM10/IronfrontReborn`), không
+  nằm trong thư mục game, nên giải nén bản mới hay xoá bản cũ đều không đụng tới. File được ghi trọn
+  vẹn (ghi file tạm rồi thay thế), bản trước đó giữ làm `achievements.json.bak`; file hỏng thì đọc bản
+  backup. Các key PlayerPrefs của v4.6.0 vẫn được ghi song song, nên chạy lại bản cũ vẫn thấy đủ.
+- **Chỉ có thêm, không có bớt**: mỗi lần mở game, mọi bản sao (file, backup, PlayerPrefs cũ) được
+  gộp lại: thành tựu là hợp của tất cả, tiến độ lấy số lớn hơn (bitmask thì gộp bit). ID mà bản game
+  hiện tại không biết (thành tựu của bản mới hơn, hay đã bỏ) được giữ nguyên, chỉ không hiển thị.
+- **Master**: không còn xoá dòng thành tựu nào lúc khởi động. Dòng của ID đã bỏ được giữ, không hiển
+  thị và không tính điểm. Test `AnIdOncePlayersCanHoldItNeverLeavesTheCatalogue` chặn việc đổi tên hay
+  xoá một ID đã phát hành: luật, tên, hạng đổi thoải mái, ID thì không.
+- **Luật thay đổi thì chấm lại ("ghi đè" theo bản mới)**: mỗi lần đăng nhập, master chấm lại mọi thành
+  tựu theo luật hiện hành từ career (kể cả thành tựu practice có số liệu, từ số đã claim), và game
+  chấm lại thành tựu practice từ tiến độ lưu trên máy ngay lần mở đầu tiên. Ngưỡng bị hạ thì ai đã đủ
+  sẽ nhận ngay, kèm banner; ai đã có thì giữ nguyên.
+
 ## 8. Mặc định đang áp dụng
 
 1. **Career cũ được giữ** (người có sẵn số liệu mở ngay các thành tựu cày đã đủ).
