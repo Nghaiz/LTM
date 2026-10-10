@@ -449,6 +449,12 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		if (useMuzzleDirection)
 		{
 			direction = ConvergedOnAim(configuration.muzzle.forward);
+			// The original's recoil: a round fired mid-burst leaves along the kick of the gun, which
+			// this shot's own kick (below) has not yet added to. The first shot flies true.
+			if (!user.aiControlled && !(this is MountedWeapon) && user.controller != null)
+			{
+				direction = KickedOffAim(direction, user.controller.RoundKickDegrees);
+			}
 		}
 		lastFired = Time.time;
 		if (HasActiveAnimator())
@@ -484,12 +490,13 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		// exist on a headless build at all.
 		if (user.aiControlled ? NetWeaponAuthority.GameplayHalfRunsHere : NetWeaponAuthority.CosmeticHalfRunsHere)
 		{
-			user.ApplyRecoil(configuration.kickback * Vector3.back + UnityEngine.Random.insideUnitSphere * configuration.randomKick);
-			// The recoil the player feels in the aim: the crosshair climbs and the next round
-			// follows it (WeaponHandling). The model's kick above is only drawn.
+			// One draw for the kick that is drawn and the kick the next round leaves along, so the
+			// two are the same kick (RecoilKick, the original's springs).
+			Vector3 random = UnityEngine.Random.insideUnitSphere;
+			user.ApplyRecoil(configuration.kickback * Vector3.back + random * configuration.randomKick);
 			if (!user.aiControlled && !(this is MountedWeapon) && user.controller != null)
 			{
-				user.controller.ApplyAimRecoil(this);
+				user.controller.KickRounds(configuration.kickback, configuration.randomKick, random);
 			}
 		}
 		AmmoChanged();
@@ -625,7 +632,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		{
 			return null;
 		}
-		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * (configuration.spread * SpreadScale()));
+		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * ShotSpread());
 		Vector3 origin = ProjectileOrigin(direction);
 		GameObject instance = null;
 
@@ -663,18 +670,31 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	}
 
 	/// <summary>
-	/// The spread multiplier for the local player's shot: wider from the hip and on the move
-	/// (<see cref="WeaponHandling"/>), never past what the server's hit judge allows. 1 for bots
-	/// and mounted guns, whose spread is their own.
+	/// The spread of the local player's shot, radians: the prefab's aimed, wider from the hip and on
+	/// the move (<see cref="WeaponHandling"/>), the cone the server's hit judge allows. The prefab's
+	/// own for bots and mounted guns.
 	/// </summary>
-	protected float SpreadScale()
+	protected float ShotSpread()
 	{
-		if (user == null || user.aiControlled || this is MountedWeapon || !WeaponHandling.TryGet(NetworkId, out WeaponHandlingProfile handling))
+		if (user == null || user.aiControlled || this is MountedWeapon)
 		{
-			return 1f;
+			return configuration.spread;
 		}
 		bool moving = user.Velocity().sqrMagnitude > WeaponHandling.MovingSpeed * WeaponHandling.MovingSpeed;
-		return WeaponHandling.SpreadScale(in handling, aiming, moving);
+		return WeaponHandling.ShotSpread(NetworkId, configuration.spread, aiming, moving);
+	}
+
+	/// <summary>
+	/// <paramref name="direction"/> turned by the gun's kick: <paramref name="kickDegrees"/> x up, y right,
+	/// in the shooter's own view (<see cref="ActorController.RoundKickDegrees"/>).
+	/// </summary>
+	private static Vector3 KickedOffAim(Vector3 direction, Vector2 kickDegrees)
+	{
+		if (kickDegrees == Vector2.zero || direction == Vector3.zero)
+		{
+			return direction;
+		}
+		return Quaternion.LookRotation(direction) * Quaternion.Euler(-kickDegrees.x, kickDegrees.y, 0f) * Vector3.forward;
 	}
 
 	/// <summary>

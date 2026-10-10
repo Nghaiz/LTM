@@ -341,12 +341,20 @@ namespace Ironfront.Net.Replication.Combat
             for (int i = 0; i < configs.Length; i++) configs[i] = Inert;
 
             // ak.prefab -> AK Tracer.prefab. The service rifle.
+            // Handling (owner's list of 2026-10-11, item 8). kickback and randomKick are each
+            // prefab's own, and RecoilKick turns them into the original's recoil on the rounds. The
+            // hip spread and the moving penalty follow CS2 and PUBG: a shot that is not aimed, or is
+            // fired on the move, is not a marksman's. The aimed spread stays the prefab's. A
+            // bolt-action fired unscoped is the widest, which ends the no-scope that v4.6.1 allowed
+            // (SL-DEFENDER and RECON LRR were pinpoint from the hip: their aimed spread is 0 and
+            // 0.0003 rad, and the hip only multiplied it).
             configs[WeaponIds.RK44] = new WeaponConfig(
                 cooldown: 0.095f, spread: 0.003f, projectilesPerShot: 1, range: 400f,
                 damage: 35f, force: 80f, clipSize: 30, spareAmmo: 180,
                 balanceDamage: 55f,
                 dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f,
-                round: Rounds.Rk44);
+                round: Rounds.Rk44,
+                kickback: 0.55f, randomKick: 0.04f, hipSpread: 0.016f, movingSpreadScale: 1.75f);
 
             // mk25.prefab. The SIDEARM, and the row the "one press costs two rounds" report was
             // about. It is a semi-automatic: the prefab authors `auto: 0`.
@@ -368,7 +376,8 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 30f, force: 50f, clipSize: 12, spareAmmo: 36,
                 balanceDamage: 50f,
                 dropoffStartMetres: 99.3f, dropoffEndMetres: 200f, dropoffMinMultiplier: 0.75f,
-                automatic: false, round: Rounds.Sind7);
+                automatic: false, round: Rounds.Sind7,
+                kickback: 1.2f, randomKick: 0.05f, hipSpread: 0.012f, movingSpreadScale: 1.4f);
 
             // The suppressed variant is NOT a copy: it loses range sooner and floors lower. Same
             // prefab family and the same `auto: 0`, so the same semi-automatic trigger; the two
@@ -378,7 +387,8 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 30f, force: 50f, clipSize: 12, spareAmmo: 36,
                 balanceDamage: 50f,
                 dropoffStartMetres: 30f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.6f,
-                automatic: false, round: Rounds.Sind7Suppressed);
+                automatic: false, round: Rounds.Sind7Suppressed,
+                kickback: 1f, randomKick: 0.05f, hipSpread: 0.012f, movingSpreadScale: 1.4f);
 
             // shotgun.prefab (ShellLoadedWeapon). TWENTY pellets at 15, not one round at 40.
             // `auto: 0` in the prefab, so `automatic: false` -- and here the flag is not
@@ -389,7 +399,8 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 15f, force: 30f, clipSize: 6, spareAmmo: 30,
                 balanceDamage: 20f,
                 dropoffStartMetres: 0f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.1f,
-                automatic: false, round: Rounds.Eagle76);
+                automatic: false, round: Rounds.Eagle76,
+                kickback: 2f, randomKick: 0.6f, hipSpread: 0.0375f, movingSpreadScale: 1.2f);
 
             // sniper.prefab (ScopedWeapon). The placeholder had this as an automatic. Piercing: it
             // fires Sniper Rifle Tracer.prefab, the one projectile authored `piercing: 1`, so it
@@ -399,7 +410,8 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 80f, force: 130f, clipSize: 8, spareAmmo: 40,
                 balanceDamage: 130f,
                 dropoffStartMetres: 248.3f, dropoffEndMetres: 500f, dropoffMinMultiplier: 0.9f,
-                automatic: false, piercing: true, round: Rounds.SlDefender);
+                automatic: false, piercing: true, round: Rounds.SlDefender,
+                kickback: 1f, randomKick: 0.05f, hipSpread: 0.06f, movingSpreadScale: 2f);
 
             // dmr.prefab. Automatic, as its prefab authors it (`auto: 1`), 20-round magazine.
             configs[WeaponIds.SIGNAL_DMR] = new WeaponConfig(
@@ -407,7 +419,8 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 38f, force: 100f, clipSize: 20, spareAmmo: 120,
                 balanceDamage: 60f,
                 dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f,
-                automatic: true, round: Rounds.SignalDmr);
+                automatic: true, round: Rounds.SignalDmr,
+                kickback: 0.42f, randomKick: 0.05f, hipSpread: 0.018f, movingSpreadScale: 1.75f);
 
             // RFB.prefab (ScopedWeapon). A fast-firing marksman rifle, not the bolt-action the
             // placeholder assumed - 0.1 s and 14 rounds against the guessed 1.5 s and 5. `auto: 0`
@@ -418,7 +431,8 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 52f, force: 110f, clipSize: 14, spareAmmo: 84,
                 balanceDamage: 85f,
                 dropoffStartMetres: 36f, dropoffEndMetres: 400f, dropoffMinMultiplier: 0.8f,
-                automatic: false, round: Rounds.ReconLrr);
+                automatic: false, round: Rounds.ReconLrr,
+                kickback: 0.55f, randomKick: 0.05f, hipSpread: 0.022f, movingSpreadScale: 1.75f);
 
             // `automatic` is READ OFF THE PREFAB, not judged here. Every weapon prefab carries the
             // gun's own `auto` field, `tools/extract_weapon_registry.py` has emitted it as

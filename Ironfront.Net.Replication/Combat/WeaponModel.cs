@@ -1,4 +1,5 @@
-﻿using Ironfront.Net.Protocol;
+﻿using System;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
 namespace Ironfront.Net.Replication.Combat
@@ -218,6 +219,29 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public readonly RoundBallistics Round;
 
+        /// <summary>The weapon's authored <c>kickback</c>: how hard one shot throws the gun back (<see cref="RecoilKick"/>).</summary>
+        public readonly float Kickback;
+
+        /// <summary>The weapon's authored <c>randomKick</c>: the random part of each shot's throw.</summary>
+        public readonly float RandomKick;
+
+        /// <summary>
+        /// The spread of a shot fired from the hip, radians, when wider than <see cref="Spread"/>
+        /// (owner's list of 2026-10-11, item 8, after CS2 and PUBG: an unaimed shot is not a sniper's).
+        /// </summary>
+        public readonly float HipSpread;
+
+        /// <summary>The spread multiplied this much while the shooter moves (CS2's and PUBG's moving penalty).</summary>
+        public readonly float MovingSpreadScale;
+
+        /// <summary>
+        /// The most the original recoil turns a round off the aim, radians: what the server's hit judge
+        /// allows beyond the spread. Worked out once, from <see cref="Kickback"/>, <see cref="RandomKick"/>
+        /// and <see cref="Cooldown"/> through <see cref="RecoilKick.WorstDeviationDegrees"/>, rather than at
+        /// the use site: it is three seconds of simulated fire, and the judge runs per reported hit.
+        /// </summary>
+        public readonly float RecoilAllowance;
+
         public WeaponConfig(
             float cooldown, float spread, int projectilesPerShot, float range,
             float damage, float force, byte clipSize,
@@ -231,9 +255,18 @@ namespace Ironfront.Net.Replication.Combat
             bool automatic = true,
             ushort releaseDelayTicks = 0,
             bool piercing = false,
-            RoundBallistics round = default)
+            RoundBallistics round = default,
+            float kickback = 0f,
+            float randomKick = 0f,
+            float hipSpread = 0f,
+            float movingSpreadScale = 1f)
         {
             Round = round;
+            Kickback = kickback;
+            RandomKick = randomKick;
+            HipSpread = hipSpread;
+            MovingSpreadScale = movingSpreadScale < 1f ? 1f : movingSpreadScale;
+            RecoilAllowance = RecoilKick.WorstDeviationDegrees(kickback, randomKick, cooldown) * (float)(Math.PI / 180.0);
             Piercing = piercing;
             SpareAmmo = spareAmmo;
             SpendsAmmo = spendsAmmo;
