@@ -650,7 +650,7 @@ namespace Ironfront.Net.Unity.EditorTools
             const float contentTop = 224f;
             const float contentBottom = -348f;
             MapCard(panel, PanelContentLeft + 245f, contentTop, contentBottom, 490f, 32,
-                "Runs on this machine. No network required.", 0f, out Text practiceMapTitle);
+                "Runs on this machine. No network required.", 0f, out Text practiceMapTitle, out Image practiceMapArt);
 
             const float rightCentre = 290f;
             const float rightWidth = 820f;
@@ -755,6 +755,8 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_controller", controller);
             Assign(so, "_mapDropdown", map);
             Assign(so, "_mapPreviewTitle", practiceMapTitle);
+            Assign(so, "_mapPreviewArt", practiceMapArt);
+            AssignArray(so, "_mapPictures", MapPictures());
             Assign(so, "_modeDropdown", mode);
             Assign(so, "_ruleDropdown", rule);
             Assign(so, "_pointsField", points);
@@ -1101,7 +1103,7 @@ namespace Ironfront.Net.Unity.EditorTools
             const float statHeight = 56f;
             const float cardWidth = 457f;
             AngularPanel preview = MapCard(panel, rightCentre, formTop, formBottom, cardWidth, 28,
-                "The map every player in this room will load.", 14f + statHeight, out Text previewTitle);
+                "The map every player in this room will load.", 14f + statHeight, out Text previewTitle, out Image previewArt);
 
             // `.map-preview dl`: four cells 8px apart, each under a 2px rule. VICTORY is the
             // room's rule (protocol 14), bound to the rule dropdown and the points field.
@@ -1183,6 +1185,8 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_backButton", back);
             Assign(so, "_errorText", error);
             Assign(so, "_mapPreviewTitle", previewTitle);
+            Assign(so, "_mapPreviewArt", previewArt);
+            AssignArray(so, "_mapPictures", MapPictures());
             Assign(so, "_mapPreviewCapacity", previewValues[0]);
             Assign(so, "_mapPreviewBots", previewValues[1]);
             Assign(so, "_rulePreview", previewValues[2]);
@@ -1748,7 +1752,7 @@ namespace Ironfront.Net.Unity.EditorTools
         /// captions in the picture's lower third and left 225px of empty card beneath.
         /// </remarks>
         private static AngularPanel MapCard(GameObject parent, float x, float top, float bottom,
-            float width, int titleSize, string note, float belowNote, out Text title)
+            float width, int titleSize, string note, float belowNote, out Text title, out Image art)
         {
             const float pad = 20f;
             const float kickerHeight = 16f;
@@ -1764,7 +1768,8 @@ namespace Ironfront.Net.Unity.EditorTools
 
             // Inside the card's 1px stroke, so the picture does not paint over the frame.
             float y = (height * 0.5f) - 1f;
-            CoverArt(card.gameObject, "PreviewArt", "backgrounds/multiplayer.png",
+            // The first map by day; the screen swaps in the chosen map and mode (MapPictureChoice).
+            art = CoverArt(card.gameObject, "PreviewArt", MapPictureChoice.AssetName(0),
                 new Vector2(0f, y - (artHeight * 0.5f)), new Vector2(width - 2f, artHeight));
             // `linear-gradient(0deg, rgba(3, 13, 23, .75), transparent 60%)`.
             var shade = new Color(3f / 255f, 13f / 255f, 23f / 255f, 0.75f);
@@ -2776,6 +2781,18 @@ namespace Ironfront.Net.Unity.EditorTools
         /// created, so the gate's per-entry check has one entry per authored row and a shrunk
         /// screen cannot leave a stale reference on the end.
         /// </remarks>
+        /// <summary>
+        /// Every map by day and in Night Mode, in <see cref="MapPictureChoice"/>'s order (owner's run
+        /// of 2026-10-10, task 4). The pictures come from <c>tools/ui/make_map_art.py</c>.
+        /// </summary>
+        private static Object[] MapPictures()
+        {
+            var pictures = new Object[MapPictureChoice.Count];
+            for (int i = 0; i < pictures.Length; i++)
+                pictures[i] = IronfrontRebornUiAssetCatalog.Sprite(MapPictureChoice.AssetName(i));
+            return pictures;
+        }
+
         private static void AssignArray(SerializedObject so, string field, Object[] values)
         {
             SerializedProperty property = so.FindProperty(field);

@@ -85,6 +85,12 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// <summary>The preview card's victory line: "LEAD BY 200", "FIRST TO 500".</summary>
         [SerializeField] private Text? _rulePreview;
 
+        /// <summary>The map card's picture, which follows the map and the mode (<see cref="MapPictureChoice"/>).</summary>
+        [SerializeField] private Image? _mapPreviewArt;
+
+        /// <summary>Every map by day and in Night Mode, in <see cref="MapPictureChoice"/>'s order. Filled by the menu builder.</summary>
+        [SerializeField] private Sprite[]? _mapPictures;
+
         /// <summary>
         /// The map ids behind the dropdown, in its own option order.
         /// </summary>
@@ -154,6 +160,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// <summary>Points the map-preview card at the map the dropdown is showing.</summary>
         private void RefreshMapPreview()
         {
+            MapPictureChoice.Show(_mapPreviewArt, _mapPictures, SelectedMapId(), SelectedMode());
             if (_mapPreviewTitle == null || _mapDropdown == null) return;
             if (_mapDropdown.options.Count == 0)
             {
