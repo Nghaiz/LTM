@@ -380,6 +380,13 @@ namespace Ironfront.Net.Unity.Server
             return source != null && source.TryWithholdCarriedTrigger(forwardX, forwardY, forwardZ);
         }
 
+        /// <summary>Whether the carried weapon hands back a pull it held for its lock. See the seam.</summary>
+        public bool TryTakeHeldCarriedTrigger()
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.TryTakeHeldCarriedTrigger();
+        }
+
         /// <summary>Writes the authority's weapon state into the engine weapon. See the seam.</summary>
         public void MirrorAuthorityWeaponState(
             int ammoInClip, bool unholstered, float elapsedSinceLastShot)

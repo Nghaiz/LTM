@@ -208,8 +208,9 @@ namespace Ironfront.Net.Replication.Client
         /// A HUD wants the predicted clip; anything MEASURING the server wants this one, and
         /// the two are not interchangeable: <see cref="ReconcileAmmo"/> deliberately KEEPS the
         /// prediction while it is within <see cref="AmmoResyncThreshold"/> of the snapshot, so
-        /// <see cref="AmmoInClip"/> can sit up to two rounds off the server's and stay there —
-        /// the bias is sticky by design and never converges on its own.
+        /// <see cref="AmmoInClip"/> can sit up to two rounds off the server's while a predicted
+        /// shot is in flight. It converges once the server has processed the last frame this
+        /// side predicted a shot on (see <see cref="SettleOnServerClip"/>).
         /// </para>
         /// <para>
         /// <b>The measurement that made this necessary.</b> On 2026-09-14 the lane-B grader
@@ -234,6 +235,17 @@ namespace Ironfront.Net.Replication.Client
         /// the byte without this grades an unopened match as a dry magazine.
         /// </remarks>
         public bool HasServerAmmo { get; private set; }
+
+        // The weapon ServerAmmoInClip was read for: a local switch names the new weapon before any
+        // snapshot does, and the old weapon's clip must never be settled onto it.
+        private byte _serverAmmoWeaponId;
+
+        // A predicted shot the server has not answered yet, and the input frame it rode in (when
+        // the caller said; the tickless PredictFire cannot, and its shot stays in flight until a
+        // weapon change, a reload or a reset settles the clip some other way).
+        private bool _shotInFlight;
+        private bool _shotInFlightTickKnown;
+        private uint _shotInFlightTick;
 
         /// <summary>
         /// The authoritative reserve from the most recent snapshot, for the "/ 90" half of the
@@ -329,6 +341,7 @@ namespace Ironfront.Net.Replication.Client
             _runtime = WeaponRuntimeState.Loaded(_weapon);
             _serverRuntime = _runtime;
             _weaponCommands.Clear();
+            _shotInFlight = false;
             ServerSaysReleasePending = false;
             _reloadStartedAt = float.NaN;
 
@@ -480,6 +493,8 @@ namespace Ironfront.Net.Replication.Client
             _runtime.LastFiredTime = nowSeconds;
             _runtime.AmmoInClip--;
             PredictedShots++;
+            _shotInFlight = true;
+            _shotInFlightTickKnown = false;
             return FireRejection.None;
         }
 
@@ -490,7 +505,16 @@ namespace Ironfront.Net.Replication.Client
         public FireRejection PredictFire(
             float nowSeconds, uint inputTick, uint localTick, in Vec3 aim)
         {
-            if (!_weapon.HasDelayedRelease) return PredictFire(nowSeconds);
+            if (!_weapon.HasDelayedRelease)
+            {
+                FireRejection shot = PredictFire(nowSeconds);
+                if (shot == FireRejection.None)
+                {
+                    _shotInFlightTickKnown = true;
+                    _shotInFlightTick = inputTick;
+                }
+                return shot;
+            }
             if (!EffectiveTriggerPolicy.SprintAllowsFire(in _trigger, nowSeconds))
                 return FireRejection.Holstered;
             if (!IsAlive) return FireRejection.ShooterDead;
@@ -605,6 +629,7 @@ namespace Ironfront.Net.Replication.Client
             if (!entry.Has(SnapshotField.Weapon))
             {
                 if (_weapon.HasDelayedRelease) RebuildThrowablePrediction();
+                else SettleOnServerClip(lastProcessedInputTick);
                 return;
             }
 
@@ -623,6 +648,7 @@ namespace Ironfront.Net.Replication.Client
                 _runtime = WeaponRuntimeState.Loaded(in _weapon);
                 _serverRuntime = _runtime;
                 _weaponCommands.Clear();
+                _shotInFlight = false;
 
                 // And the edge is re-armed for the same reason EquipWeapon re-arms it — this is
                 // the OTHER way a weapon changes, a server-side swap this client never asked
@@ -650,6 +676,7 @@ namespace Ironfront.Net.Replication.Client
             // the server's clip actually is.
             ServerAmmoInClip = entry.AmmoInClip;
             HasServerAmmo = true;
+            _serverAmmoWeaponId = entry.WeaponId;
 
             bool serverWasReloading = ServerSaysReloading;
             ServerSaysReloading = (entry.WeaponStateFlags & WeaponStateFlags.Reloading) != 0;
@@ -717,6 +744,48 @@ namespace Ironfront.Net.Replication.Client
                 _runtime.Reloading = false;
                 _reloadStartedAt = float.NaN;
             }
+
+            if (reloadDelivered || weaponChanged) _shotInFlight = false;
+
+            SettleOnServerClip(lastProcessedInputTick);
+        }
+
+        /// <summary>
+        /// Takes the server's clip once nothing this side predicted is still waiting for it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b><see cref="ReconcileAmmo"/>'s slack is for shots in flight, and only for them.</b>
+        /// A predicted shot leaves this side's clip a round or two below a snapshot that was
+        /// captured before the server saw it, and taking that snapshot would flicker the HUD. Once
+        /// the server has processed the last frame a shot was predicted on, its clip already
+        /// includes that shot, or refused it: there is nothing in flight left to protect, and the
+        /// two counts must agree.
+        /// </para>
+        /// <para>
+        /// <b>Without this a refused shot stood forever on a clip of one</b> (owner report
+        /// 2026-10-11, measured against the live Dustbowl server the same day). The guided
+        /// launcher predicted a launch the server refused: 0 here, 1 there, a drift of one inside
+        /// the threshold, and the server's field never changed again to say otherwise. The
+        /// player held a missile they could neither fire nor reload: "it has ammo but will not
+        /// fire".
+        /// </para>
+        /// </remarks>
+        private void SettleOnServerClip(uint lastProcessedInputTick)
+        {
+            if (_shotInFlight)
+            {
+                if (!_shotInFlightTickKnown) return;
+                if (unchecked((int)(lastProcessedInputTick - _shotInFlightTick)) < 0) return;
+                _shotInFlight = false;
+            }
+
+            if (!HasServerAmmo || _serverAmmoWeaponId != WeaponId) return;
+            if (_reloadPending || _runtime.Reloading || ServerSaysReloading) return;
+            if (_runtime.AmmoInClip == ServerAmmoInClip) return;
+
+            _runtime.AmmoInClip = ServerAmmoInClip;
+            SnapshotAmmoCorrections++;
         }
 
         /// <summary>
@@ -828,6 +897,8 @@ namespace Ironfront.Net.Replication.Client
             // flag exists to keep apart.
             ServerAmmoInClip = 0;
             HasServerAmmo = false;
+            _serverAmmoWeaponId = 0;
+            _shotInFlight = false;
 
             PredictedShots = 0;
             SnapshotAmmoCorrections = 0;

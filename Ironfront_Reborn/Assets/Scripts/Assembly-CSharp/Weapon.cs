@@ -935,6 +935,15 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	}
 
 	/// <summary>
+	/// Whether a pull this weapon held back has come due: the server then resolves the frame as a
+	/// fresh trigger pull. Server only; only the Javelin holds one, for its lock to finish.
+	/// </summary>
+	public virtual bool TakeHeldTrigger()
+	{
+		return false;
+	}
+
+	/// <summary>
 	/// Copies the server's authoritative carried-weapon state onto this weapon's own counters.
 	/// </summary>
 	/// <remarks>

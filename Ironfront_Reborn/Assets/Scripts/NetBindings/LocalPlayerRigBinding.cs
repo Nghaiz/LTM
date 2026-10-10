@@ -303,6 +303,12 @@ namespace Ironfront.Net.Unity.Bindings
                 // Delayed throwables never run a client-side reload transaction. Their loaded
                 // count and reserve are one snapshot projection, even while the hand animation
                 // is pending; skipping the clip write here recreates two inventory writers.
+                // The guided launcher's launch is the server's (Javelin.WithholdsTrigger): the
+                // clip dropping is the server saying it flew, and only then does this player see
+                // the tube fire. Before the assignment, because the launch spends the round itself.
+                if (clipSettled && weapon is Javelin launcher && ammoInClip < weapon.ammo)
+                    launcher.PresentServerLaunch();
+
                 if (clipSettled || weapon is ThrowableWeapon) weapon.ammo = ammoInClip;
 
                 // The reserve, which had two writers and no corrector: Weapon.ReloadDone spends
