@@ -29,6 +29,9 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// <c>IRONFRONT_AUTOPLAY_JOIN=name</c> waits for a room of that name and joins it.
     /// </para>
     /// <para>
+    /// <c>IRONFRONT_AUTOPLAY_FIGHT=1</c> also fights once deployed (<see cref="CombatAutopilot"/>).
+    /// </para>
+    /// <para>
     /// <c>IRONFRONT_AUTOPLAY_UNCAPPED=1</c> runs the match as a focused window would, with no
     /// v-sync and no frame cap, though the window is in the background: the measuring client of
     /// an A/B must not sit under <c>BackgroundFrameCap</c>'s 30 fps, and bringing it to the front
@@ -90,6 +93,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             }
             pilot._joinName = Environment.GetEnvironmentVariable("IRONFRONT_AUTOPLAY_JOIN") ?? string.Empty;
             pilot._uncapped = Environment.GetEnvironmentVariable("IRONFRONT_AUTOPLAY_UNCAPPED") == "1";
+            // Phase P38: a client that also fights, for measuring hit registration live.
+            if (Environment.GetEnvironmentVariable("IRONFRONT_AUTOPLAY_FIGHT") == "1") host.AddComponent<CombatAutopilot>();
 
             Debug.Log($"[autoplay] driving the menus as {pilot._user}: "
                       + (pilot._createName.Length > 0

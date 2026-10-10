@@ -124,6 +124,17 @@ namespace Ironfront.Net.Unity.Client
         /// <c>GetComponent</c> per snapshot would be 48 lookups at 30 Hz for a value that
         /// cannot change while the transform is live.
         /// </remarks>
+        /// <summary>
+        /// Fills <paramref name="into"/> with every body drawn right now. For diagnostics that pick
+        /// among them (<c>CombatAutopilot</c>); nothing in a match calls it.
+        /// </summary>
+        public void CopyLiveViews(List<RemoteActorView> into)
+        {
+            into.Clear();
+            foreach (KeyValuePair<ushort, RemoteActorView> pair in _views)
+                if (pair.Value != null && _live.ContainsKey(pair.Key)) into.Add(pair.Value);
+        }
+
         public bool TryFindView(ushort actorId, out RemoteActorView view)
         {
             if (_views.TryGetValue(actorId, out view)) return view != null;
