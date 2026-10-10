@@ -27,9 +27,9 @@ namespace Ironfront.Net.Unity.Client
     internal sealed class RemoteBodyHitboxes
     {
         /// <summary>One collider of the soldier, in its bone's space.</summary>
-        internal readonly struct Shape
+        internal readonly struct BodyHitShape
         {
-            private Shape(
+            private BodyHitShape(
                 string bone, bool capsule, bool sphere, Vector3 centre, Vector3 size, float radius, float height,
                 HitboxType part)
             {
@@ -65,14 +65,14 @@ namespace Ironfront.Net.Unity.Client
             /// <summary>What a round that strikes it hit, for the server's damage.</summary>
             public HitboxType Part { get; }
 
-            public static Shape Box(string bone, Vector3 centre, Vector3 size, HitboxType part)
-                => new Shape(bone, false, false, centre, size, 0f, 0f, part);
+            public static BodyHitShape Box(string bone, Vector3 centre, Vector3 size, HitboxType part)
+                => new BodyHitShape(bone, false, false, centre, size, 0f, 0f, part);
 
-            public static Shape Capsule(string bone, Vector3 centre, float radius, float height, HitboxType part)
-                => new Shape(bone, true, false, centre, Vector3.zero, radius, height, part);
+            public static BodyHitShape Capsule(string bone, Vector3 centre, float radius, float height, HitboxType part)
+                => new BodyHitShape(bone, true, false, centre, Vector3.zero, radius, height, part);
 
-            public static Shape Sphere(string bone, Vector3 centre, float radius, HitboxType part)
-                => new Shape(bone, true, true, centre, Vector3.zero, radius, 2f * radius, part);
+            public static BodyHitShape Sphere(string bone, Vector3 centre, float radius, HitboxType part)
+                => new BodyHitShape(bone, true, true, centre, Vector3.zero, radius, 2f * radius, part);
         }
 
         /// <summary>The head bone.</summary>
@@ -85,23 +85,23 @@ namespace Ironfront.Net.Unity.Client
         /// Every hitbox of the soldier prefab. The limbs' damage is the server's Limb, the hips' and
         /// chest's its Body, the head's and the ragdoll's head sphere's (x3 offline) its Head.
         /// </summary>
-        internal static readonly Shape[] Shapes =
+        internal static readonly BodyHitShape[] Shapes =
         {
-            Shape.Box(HeadBone, new Vector3(-0.13f, 0f, 0f), new Vector3(0.4f, 0.3f, 0.3f), HitboxType.Head),
-            Shape.Box(BodyBone, new Vector3(0.3f, 0f, 0f), new Vector3(1.4f, 0.7f, 0.5f), HitboxType.Body),
-            Shape.Box(BodyBone, new Vector3(-0.2f, 0f, 0f), new Vector3(0.45f, 0.4f, 0.3f), HitboxType.Body),
-            Shape.Box("Bone", new Vector3(-0.35f, 0f, 0f), new Vector3(0.4f, 0.4f, 0.3f), HitboxType.Body),
-            Shape.Sphere("Bone_003", new Vector3(-0.25f, 0f, 0f), 0.15f, HitboxType.Head),
-            Shape.Capsule("Bone_003_L_001", new Vector3(-0.13915128f, 0f, 0f), 0.06f, 0.39830256f, HitboxType.Limb),
-            Shape.Capsule("Bone_003_R_001", new Vector3(-0.13915132f, 0f, 0f), 0.06f, 0.39830264f, HitboxType.Limb),
-            Shape.Capsule("Bone_003_L_002", new Vector3(-0.124141574f, 0f, 0f), 0.06f, 0.36828315f, HitboxType.Limb),
-            Shape.Capsule("Bone_003_R_002", new Vector3(-0.124141596f, 0f, 0f), 0.06f, 0.36828318f, HitboxType.Limb),
-            Shape.Capsule("Bone_005_L_001", new Vector3(-0.15957704f, 0f, 0f), 0.08f, 0.47915408f, HitboxType.Limb),
-            Shape.Capsule("Bone_005_R_001", new Vector3(-0.15957707f, 0f, 0f), 0.08f, 0.47915414f, HitboxType.Limb),
-            Shape.Capsule("Bone_005_L_002", new Vector3(-0.1294818f, 0f, 0f), 0.08f, 0.4189636f, HitboxType.Limb),
-            Shape.Capsule("Bone_005_R_002", new Vector3(-0.1294818f, 0f, 0f), 0.08f, 0.4189636f, HitboxType.Limb),
-            Shape.Box("Bone_005_L_003", new Vector3(-0.07000001f, 0f, 0f), new Vector3(0.3f, 0.15f, 0.1f), HitboxType.Limb),
-            Shape.Box("Bone_005_R_003", new Vector3(-0.07000001f, 0f, 0f), new Vector3(0.3f, 0.15f, 0.1f), HitboxType.Limb),
+            BodyHitShape.Box(HeadBone, new Vector3(-0.13f, 0f, 0f), new Vector3(0.4f, 0.3f, 0.3f), HitboxType.Head),
+            BodyHitShape.Box(BodyBone, new Vector3(0.3f, 0f, 0f), new Vector3(1.4f, 0.7f, 0.5f), HitboxType.Body),
+            BodyHitShape.Box(BodyBone, new Vector3(-0.2f, 0f, 0f), new Vector3(0.45f, 0.4f, 0.3f), HitboxType.Body),
+            BodyHitShape.Box("Bone", new Vector3(-0.35f, 0f, 0f), new Vector3(0.4f, 0.4f, 0.3f), HitboxType.Body),
+            BodyHitShape.Sphere("Bone_003", new Vector3(-0.25f, 0f, 0f), 0.15f, HitboxType.Head),
+            BodyHitShape.Capsule("Bone_003_L_001", new Vector3(-0.13915128f, 0f, 0f), 0.06f, 0.39830256f, HitboxType.Limb),
+            BodyHitShape.Capsule("Bone_003_R_001", new Vector3(-0.13915132f, 0f, 0f), 0.06f, 0.39830264f, HitboxType.Limb),
+            BodyHitShape.Capsule("Bone_003_L_002", new Vector3(-0.124141574f, 0f, 0f), 0.06f, 0.36828315f, HitboxType.Limb),
+            BodyHitShape.Capsule("Bone_003_R_002", new Vector3(-0.124141596f, 0f, 0f), 0.06f, 0.36828318f, HitboxType.Limb),
+            BodyHitShape.Capsule("Bone_005_L_001", new Vector3(-0.15957704f, 0f, 0f), 0.08f, 0.47915408f, HitboxType.Limb),
+            BodyHitShape.Capsule("Bone_005_R_001", new Vector3(-0.15957707f, 0f, 0f), 0.08f, 0.47915414f, HitboxType.Limb),
+            BodyHitShape.Capsule("Bone_005_L_002", new Vector3(-0.1294818f, 0f, 0f), 0.08f, 0.4189636f, HitboxType.Limb),
+            BodyHitShape.Capsule("Bone_005_R_002", new Vector3(-0.1294818f, 0f, 0f), 0.08f, 0.4189636f, HitboxType.Limb),
+            BodyHitShape.Box("Bone_005_L_003", new Vector3(-0.07000001f, 0f, 0f), new Vector3(0.3f, 0.15f, 0.1f), HitboxType.Limb),
+            BodyHitShape.Box("Bone_005_R_003", new Vector3(-0.07000001f, 0f, 0f), new Vector3(0.3f, 0.15f, 0.1f), HitboxType.Limb),
         };
 
         /// <summary>
@@ -156,7 +156,7 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>The fraction along the segment where it enters <paramref name="shape"/>, 0 when it starts inside.</summary>
-        internal static bool SegmentEnters(Transform bone, in Shape shape, Vector3 from, Vector3 to, out float fraction)
+        internal static bool SegmentEnters(Transform bone, in BodyHitShape shape, Vector3 from, Vector3 to, out float fraction)
         {
             Vector3 a = bone.InverseTransformPoint(from) - shape.Centre;
             Vector3 b = bone.InverseTransformPoint(to) - shape.Centre;

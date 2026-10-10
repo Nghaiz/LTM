@@ -34,7 +34,7 @@ namespace Ironfront.Net.Unity.Client.Tests
                 .Select(assembly => assembly.GetType("Hitbox", false))
                 .First(type => type != null);
 
-            var unmatched = new List<RemoteBodyHitboxes.Shape>(RemoteBodyHitboxes.Shapes);
+            var unmatched = new List<RemoteBodyHitboxes.BodyHitShape>(RemoteBodyHitboxes.Shapes);
             var strays = new List<string>();
             foreach (Collider collider in soldier.GetComponentsInChildren<Collider>(true))
             {
@@ -140,7 +140,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             }
         }
 
-        private static bool Matches(RemoteBodyHitboxes.Shape shape, Collider collider, HitboxType part)
+        private static bool Matches(RemoteBodyHitboxes.BodyHitShape shape, Collider collider, HitboxType part)
         {
             if (shape.Bone != collider.name || shape.Part != part) return false;
             switch (collider)
