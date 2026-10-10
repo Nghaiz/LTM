@@ -589,7 +589,7 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(HitmarkerSeverity.Normal, HitmarkerEvent.SeverityOf(false, false));
             Assert.Equal(HitmarkerSeverity.Headshot, HitmarkerEvent.SeverityOf(false, true));
             Assert.Equal(HitmarkerSeverity.Kill, HitmarkerEvent.SeverityOf(true, false));
-            Assert.Equal(HitmarkerSeverity.Kill, HitmarkerEvent.SeverityOf(true, true));
+            Assert.Equal(HitmarkerSeverity.HeadshotKill, HitmarkerEvent.SeverityOf(true, true));
         }
 
         [Fact]
