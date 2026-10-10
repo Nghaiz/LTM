@@ -238,13 +238,15 @@ namespace Ironfront.Net.Replication.Tests
         public void AKillHitmarkerOutranksAHeadshot()
         {
             // The int this maps to is what IngameUi.Hit(int) receives, so the order is load-bearing.
-            Assert.Equal(HitmarkerSeverity.Kill, HitmarkerEvent.SeverityOf(killed: true, headshot: true));
+            Assert.Equal(HitmarkerSeverity.HeadshotKill, HitmarkerEvent.SeverityOf(killed: true, headshot: true));
+            Assert.Equal(HitmarkerSeverity.Kill, HitmarkerEvent.SeverityOf(killed: true, headshot: false));
             Assert.Equal(HitmarkerSeverity.Headshot, HitmarkerEvent.SeverityOf(false, true));
             Assert.Equal(HitmarkerSeverity.Normal, HitmarkerEvent.SeverityOf(false, false));
 
             Assert.Equal(0, (int)HitmarkerSeverity.Normal);
             Assert.Equal(1, (int)HitmarkerSeverity.Headshot);
             Assert.Equal(2, (int)HitmarkerSeverity.Kill);
+            Assert.Equal(3, (int)HitmarkerSeverity.HeadshotKill);
         }
 
         // ------------------------------------------------------------- match state (task 7)

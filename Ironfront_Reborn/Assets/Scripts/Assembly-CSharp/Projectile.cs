@@ -471,7 +471,7 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 				// shot the server missed is a worse lie than one that arrives 60 ms late.
 				if (NetContext.IsOffline)
 				{
-					IngameUi.Hit();
+					IngameUi.Hit(OfflineHitSeverity(component));
 				}
 			}
 		}
@@ -503,6 +503,23 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		}
 		UnityEngine.Object.Destroy(base.gameObject);
 		return true;
+	}
+
+	/// <summary>
+	/// What the player's hit was offline, for the hitmarker (<see cref="Ironfront.Net.Unity.HitFeedbackRules"/>):
+	/// the head's hitboxes multiply damage by three or four, and the actor lying dead after the
+	/// hit means it killed.
+	/// </summary>
+	private static int OfflineHitSeverity(Hitbox hitbox)
+	{
+		bool head = hitbox.multiplier >= 2f;
+		Actor victim = hitbox.parent as Actor;
+		bool killed = victim != null && victim.dead;
+		if (killed)
+		{
+			return head ? Ironfront.Net.Unity.HitFeedbackRules.HeadshotKill : Ironfront.Net.Unity.HitFeedbackRules.Kill;
+		}
+		return head ? Ironfront.Net.Unity.HitFeedbackRules.Headshot : Ironfront.Net.Unity.HitFeedbackRules.Body;
 	}
 
 	protected virtual void SpawnDecal(RaycastHit hitInfo)
