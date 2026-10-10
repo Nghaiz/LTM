@@ -394,14 +394,24 @@ namespace Ironfront.Net.Unity.Client.Overlay
         private void PlaySound(Achievement achievement)
         {
             if (_audio == null) return;
-            string name = (achievement.Tags & AchievementTags.Disaster) != 0
-                ? "disaster"
-                : AchievementBoard.TierName(achievement.Tier).ToLowerInvariant();
+            bool disaster = (achievement.Tags & AchievementTags.Disaster) != 0;
+            string name = disaster ? "disaster" : AchievementBoard.TierName(achievement.Tier).ToLowerInvariant();
             AudioClip? clip = Clip(SoundPrefix + name) ?? Clip(SoundPath);
             if (clip == null) return;
             _audio.clip = clip;
+            // A hidden one is declassified first: its sting while the silhouette fills, then its metal.
+            AudioClip? reveal = achievement.Hidden && !disaster ? Clip(SoundPrefix + "hidden") : null;
+            if (reveal != null)
+            {
+                _audio.PlayOneShot(reveal);
+                _audio.PlayDelayed(HiddenRevealSeconds);
+                return;
+            }
             _audio.Play();
         }
+
+        /// <summary>How long a hidden achievement's reveal sting runs before its metal's sound.</summary>
+        private const float HiddenRevealSeconds = 0.55f;
 
         private AudioClip? Clip(string path)
         {

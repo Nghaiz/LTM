@@ -22,6 +22,18 @@ TIERS = {
     "hidden":   ("#C9A6FF", "#3D1F73", "#EADCFF", "#9B6BFF"),
 }
 STARS = {"Bronze": 0, "Silver": 1, "Gold": 2, "Platinum": 3, "Mythic": 0, "hidden": 0}
+
+# The metal itself, five stops from its highlight to its shadow, laid diagonally so the rim catches
+# light like struck metal rather than a flat two-tone (owner's run of 2026-10-10, task 6).
+METAL = {
+    "Bronze":   ("#FFE1C2", "#F2B27A", "#C2733A", "#7A3E14", "#4A220A"),
+    "Silver":   ("#FFFFFF", "#E8EEF5", "#AEBBC9", "#6E7E90", "#3E4A57"),
+    "Gold":     ("#FFF6C9", "#FFE68A", "#E0A82A", "#A86A06", "#5E3A02"),
+    "Platinum": ("#FFFFFF", "#D9FBFF", "#8FD8F0", "#2B7FA6", "#13405A"),
+    "Mythic":   ("#FFC2B8", "#FF8A7A", "#B3242B", "#5A0B10", "#2A0407"),
+    "hidden":   ("#F0E6FF", "#C9A6FF", "#7E55CC", "#3D1F73", "#1E0F3A"),
+}
+HIDDEN_INK = "#B48CFF"
 CORES = {
     "Mythic": ("#3A0D12", "#14080A", "#050203"),
 }
@@ -96,14 +108,82 @@ def _cracks(accent):
     return glow + core
 
 
-def _mark(x, glyph, ink, accent):
-    """A small disc on the rim carrying a mark: a moon for Night Mode, a target for practice."""
-    return (f'<circle cx="{x}" cy="15" r="11" fill="#071827" stroke="{accent}" stroke-width="2.2"/>'
-            f'<g transform="translate({x - 7.5} 7.5) scale(0.15)" color="{ink}">{GLYPHS[glyph]}</g>')
+def _mark(x, glyph, ink, accent, y=15):
+    """A small disc on the rim carrying a mark: a moon for Night Mode, a target for practice, an eye
+    for a hidden achievement."""
+    return (f'<circle cx="{x}" cy="{y}" r="11" fill="#071827" stroke="{accent}" stroke-width="2.2"/>'
+            f'<g transform="translate({x - 7.5} {y - 7.5}) scale(0.15)" color="{ink}">{GLYPHS[glyph]}</g>')
 
 
-def badge_svg(glyph, tier, night=False, practice=False, dim_glyph=False):
+def _ring(cx, cy, radius, count, start=-90.0):
+    """``count`` points round a circle."""
+    return [(cx + radius * math.cos(math.radians(start + 360.0 * k / count)),
+             cy + radius * math.sin(math.radians(start + 360.0 * k / count))) for k in range(count)]
+
+
+def _under(tier):
+    """Platinum's facets: cut into the star's points, under the medallion."""
+    if tier != "Platinum":
+        return ""
+    facets = ""
+    tips = _ring(50, 50, 49, 12)
+    valleys = _ring(50, 50, 41, 12, start=-90.0 + 15.0)
+    for k in range(12):
+        tx, ty = tips[k]
+        vx, vy = valleys[k]
+        px, py = valleys[k - 1]
+        shade = "#FFFFFF" if k % 2 == 0 else "#0B3A55"
+        opacity = 0.35 if k % 2 == 0 else 0.25
+        facets += f'<polygon points="{px:.2f},{py:.2f} {tx:.2f},{ty:.2f} 50,50" fill="{shade}" fill-opacity="{opacity}"/>'
+        facets += f'<polygon points="{tx:.2f},{ty:.2f} {vx:.2f},{vy:.2f} 50,50" fill="{shade}" fill-opacity="{opacity * 0.5}"/>'
+    return facets
+
+
+def _ornament(tier):
+    """What each metal's rim carries, so no two read alike even at a glance:
+    Bronze riveted, Silver studded at its corners with a second rim, Gold a gem in its crest and an
+    engraved line, Platinum cut in facets with a prismatic edge, Mythic a red aura."""
+    light = METAL[tier][0]
+    dark = METAL[tier][4]
+    if tier == "Bronze":
+        rivets = ""
+        for x, y in _ring(50, 50, 43.2, 16):
+            rivets += (f'<circle cx="{x:.2f}" cy="{y:.2f}" r="2.1" fill="{dark}" fill-opacity="0.85"/>'
+                       f'<circle cx="{x - 0.5:.2f}" cy="{y - 0.5:.2f}" r="1.25" fill="{light}"/>')
+        return rivets
+    if tier == "Silver":
+        studs = ""
+        for x, y in _ring(50, 50, 43.5, 6):
+            studs += (f'<polygon points="{x:.2f},{y - 3.2:.2f} {x + 3.2:.2f},{y:.2f} {x:.2f},{y + 3.2:.2f} {x - 3.2:.2f},{y:.2f}" '
+                      f'fill="{light}" stroke="{dark}" stroke-width="0.6"/>')
+        inner = " ".join(f"{50 + 40.5 * math.cos(math.radians(a)):.2f},{50 + 40.5 * math.sin(math.radians(a)):.2f}"
+                         for a in range(-90, 270, 60))
+        return f'<polygon points="{inner}" fill="none" stroke="{light}" stroke-opacity="0.7" stroke-width="0.9"/>' + studs
+    if tier == "Gold":
+        gem = ('<polygon points="50,3.5 55.5,9 50,15 44.5,9" fill="#FFF6C9" stroke="#5E3A02" stroke-width="0.8"/>'
+               '<polygon points="50,3.5 55.5,9 50,9" fill="#FFFFFF" fill-opacity="0.75"/>'
+               '<polygon points="50,15 44.5,9 50,9" fill="#A86A06" fill-opacity="0.55"/>')
+        line = ('<path d="M50 9.5 L86.5 20 C86.5 55 74 78 50 92.5 C26 78 13.5 55 13.5 20 Z" fill="none" '
+                f'stroke="{dark}" stroke-opacity="0.55" stroke-width="0.9"/>')
+        return line + gem
+    if tier == "Platinum":
+        return (f'<polygon points="{star_points(50, 50, 49, 41, points=12, rotate=-90)}" fill="none" '
+                'stroke="url(#prism)" stroke-width="1.8"/>')
+    return ""
+
+
+def _aura(tier):
+    """Mythic's red light, behind the seal."""
+    if tier != "Mythic":
+        return ""
+    return ('<radialGradient id="aura" cx="0.5" cy="0.55" r="0.5">'
+            '<stop offset="0.55" stop-color="#FF3D3D" stop-opacity="0.55"/>'
+            '<stop offset="1" stop-color="#FF3D3D" stop-opacity="0"/></radialGradient>')
+
+
+def badge_svg(glyph, tier, night=False, practice=False, dim_glyph=False, hidden=False):
     light, dark, ink, accent = TIERS[tier]
+    highlight, bright, mid, low, shadow = METAL[tier]
     inner, middle, outer = CORES.get(tier, DEFAULT_CORE)
     frame = _frame(tier)
     cx, cy = _centre(tier)
@@ -114,11 +194,22 @@ def badge_svg(glyph, tier, night=False, practice=False, dim_glyph=False):
         star_row += f'<polygon fill="{accent}" points="{star_points(x, 88, 4.6, 2.0)}"/>'
     mythic = tier == "Mythic"
     marks = (_mark(84, "moon", ink, accent) if night else "") + (_mark(16, "target", ink, accent) if practice else "")
+    if hidden:
+        # A hidden achievement keeps a violet seal once earned: the secret it was.
+        marks += _mark(84, "eye", HIDDEN_INK, "#9B6BFF", y=85)
+    aura = _aura(tier)
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
 <defs>
-  <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="{light}"/><stop offset="1" stop-color="{dark}"/>
+  <linearGradient id="rim" x1="0.15" y1="0" x2="0.85" y2="1">
+    <stop offset="0" stop-color="{highlight}"/><stop offset="0.18" stop-color="{bright}"/>
+    <stop offset="0.5" stop-color="{mid}"/><stop offset="0.82" stop-color="{low}"/>
+    <stop offset="1" stop-color="{shadow}"/>
   </linearGradient>
+  <linearGradient id="prism" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FF9AE6"/><stop offset="0.35" stop-color="#9AF0FF"/>
+    <stop offset="0.7" stop-color="#FFF59A"/><stop offset="1" stop-color="#B49AFF"/>
+  </linearGradient>
+  {aura}
   <radialGradient id="core" cx="0.5" cy="0.38" r="0.62">
     <stop offset="0" stop-color="{inner}"/><stop offset="0.65" stop-color="{middle}"/>
     <stop offset="1" stop-color="{outer}"/>
@@ -128,9 +219,13 @@ def badge_svg(glyph, tier, night=False, practice=False, dim_glyph=False):
     <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
   </linearGradient>
 </defs>
+{'<circle cx="50" cy="56" r="49" fill="url(#aura)"/>' if mythic else ""}
 {_crown("url(#rim)") if mythic else ""}
 <g fill="url(#rim)">{frame}</g>
+{_under(tier)}
 {_scaled(tier, frame, 'fill="url(#core)"')}
+{_ornament(tier)}
+{_scaled(tier, frame, f'fill="none" stroke="#9B6BFF" stroke-opacity="0.85" stroke-width="2"') if hidden else ""}
 {_cracks(accent) if mythic else ""}
 {_scaled(tier, frame, f'fill="none" stroke="{accent}" stroke-opacity="0.55" stroke-width="1.6"')}
 <g transform="translate({cx - 26} {cy - 28}) scale(0.52)" color="{ink}" opacity="{0.45 if dim_glyph else 1}">{GLYPHS[glyph]}</g>
@@ -164,7 +259,7 @@ def all_badges():
         key = entry["id"]
         if key not in GLYPH:
             raise KeyError(f"tools/ui/badges.py: no glyph chosen for '{key}'; add it to GLYPH")
-        yield key, badge_svg(GLYPH[key], entry["tier"], entry["night"], entry["practice"])
+        yield key, badge_svg(GLYPH[key], entry["tier"], entry["night"], entry["practice"], hidden=entry["hidden"])
         if entry["hidden"]:
             yield key + "_shadow", shadow_svg(GLYPH[key], entry["tier"])
     yield "_hidden", hidden_badge_svg()
