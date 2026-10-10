@@ -181,7 +181,7 @@ namespace Ironfront.Net.Replication.Match
 
             byte family = CareerWeapons.IsPrimary(weapon) ? LifePrimary
                 : CareerWeapons.IsPistol(weapon) ? LifePistol
-                : weapon == WeaponIds.FRAG ? LifeGrenade
+                : CareerWeapons.IsGrenade(weapon) ? LifeGrenade
                 : CareerWeapons.IsLauncher(weapon) ? LifeLauncher
                 : (byte)0;
             if (family != 0 && _lifeWeapons[killer] != LifeAll)
@@ -190,7 +190,7 @@ namespace Ironfront.Net.Replication.Match
                 if (_lifeWeapons[killer] == LifeAll) Add(killer, RoundFact.JackOfAllTrades, 1);
             }
 
-            if (weapon != WeaponIds.FRAG) return;
+            if (!CareerWeapons.IsGrenade(weapon)) return;
             Add(killer, RoundFact.GrenadeKills, 1);
             _blastKills[killer] = Math.Abs(now - _blastTime[killer]) <= SameTick ? _blastKills[killer] + 1 : 1;
             _blastTime[killer] = now;

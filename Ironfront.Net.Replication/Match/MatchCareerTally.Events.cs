@@ -78,7 +78,8 @@ namespace Ironfront.Net.Replication.Match
             if (down.HeightMetres < CareerRules.AirborneMetres) return;
 
             if (down.DestroyerVehicleType == VehicleIds.NONE) Add(destroyer, RoundFact.HelisDownedOnFoot, 1);
-            if (down.DestroyerVehicleType == VehicleIds.HELICOPTER && down.DestroyerIsPilot
+            // Its pilot's rockets or its door gun: either seat of a helicopter in the air.
+            if (down.DestroyerVehicleType == VehicleIds.HELICOPTER
                 && down.DestroyerHeightMetres >= CareerRules.AirborneMetres)
                 Add(destroyer, RoundFact.Dogfights, 1);
             if (down.ByTankMainGun && down.HeightMetres >= CareerRules.ImpossibleAngleMetres)
