@@ -153,6 +153,45 @@ public class TimeOfDay : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// Runs <paramref name="action"/> in the day's light whatever the hour, and gives the night
+	/// back after: for a one-off shot that must not depend on when it is taken (the minimap's, which
+	/// a night already up when the map loads would otherwise draw near black).
+	/// </summary>
+	public void WhileDay(System.Action action)
+	{
+		if (!IsNight || dayAtmosphere == null)
+		{
+			action();
+			return;
+		}
+		GameObject day = base.transform.Find("Day").gameObject;
+		GameObject night = base.transform.Find("Night").gameObject;
+		Color sky = RenderSettings.ambientSkyColor;
+		Color equator = RenderSettings.ambientEquatorColor;
+		Color ground = RenderSettings.ambientGroundColor;
+		Material skybox = RenderSettings.skybox;
+		day.SetActive(true);
+		night.SetActive(false);
+		RenderSettings.ambientSkyColor = dayAtmosphere.sky;
+		RenderSettings.ambientEquatorColor = dayAtmosphere.equator;
+		RenderSettings.ambientGroundColor = dayAtmosphere.ground;
+		RenderSettings.skybox = dayAtmosphere.skyboxMaterial;
+		try
+		{
+			action();
+		}
+		finally
+		{
+			day.SetActive(false);
+			night.SetActive(true);
+			RenderSettings.ambientSkyColor = sky;
+			RenderSettings.ambientEquatorColor = equator;
+			RenderSettings.ambientGroundColor = ground;
+			RenderSettings.skybox = skybox;
+		}
+	}
+
 	private void ApplyAtmosphere(Atmosphere atmosphere)
 	{
 		this.atmosphere = atmosphere;
