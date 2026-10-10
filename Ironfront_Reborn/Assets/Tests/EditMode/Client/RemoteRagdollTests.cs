@@ -59,6 +59,42 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void ABodyKnockedOverAliveIsHitWhereItsBonesLie()
+        {
+            // Owner's list of 2026-10-11, item 7: a bot shot off its feet could not be shot again
+            // until it stood up. Lying as a runtime ragdoll, it is struck where its bones are drawn.
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            floor.transform.localScale = new Vector3(10f, 1f, 10f);
+            SceneManager.MoveGameObjectToScene(floor, _scene);
+
+            Animator animator = SpawnProxy(Vector3.zero);
+            RemoteRagdoll ragdoll = RemoteRagdoll.TryCreate(animator);
+            Assert.IsFalse(ragdoll.TryHitSegment(Vector3.up * 5f, Vector3.down, out _, out _),
+                "a body standing on its animator is the hitboxes' to judge, not the ragdoll's");
+
+            ragdoll.Fell(Vector3.forward * 5f, HumanBodyBones.Chest);
+            PhysicsScene physics = _scene.GetPhysicsScene();
+            for (float t = 0f; t < SettleSeconds; t += StepSeconds) physics.Simulate(StepSeconds);
+
+            Vector3 hips = animator.GetBoneTransform(HumanBodyBones.Hips).position;
+            Vector3 head = animator.GetBoneTransform(HumanBodyBones.Head).position;
+            Assert.Less(hips.y, 0.6f, "the body did not lie down");
+
+            Assert.IsTrue(ragdoll.TryHitSegment(hips + Vector3.up * 3f, hips + Vector3.down * 0.5f,
+                out float fraction, out bool struckHead), "a round straight down on the lying hips missed");
+            Assert.IsFalse(struckHead);
+            Assert.That(fraction, Is.InRange(0.5f, 1f));
+
+            Assert.IsTrue(ragdoll.TryHitSegment(head + Vector3.up * 3f, head + Vector3.down * 0.5f,
+                out _, out struckHead), "a round straight down on the lying head missed");
+            Assert.IsTrue(struckHead, "the lying head was struck as the body");
+
+            Vector3 beside = hips + Vector3.right * 3f;
+            Assert.IsFalse(ragdoll.TryHitSegment(beside + Vector3.up * 3f, beside + Vector3.down * 0.5f, out _, out _),
+                "a round three metres to the side hit the body");
+        }
+
+        [Test]
         public void AFelledProxyComesToRestOnTheGround()
         {
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Plane);

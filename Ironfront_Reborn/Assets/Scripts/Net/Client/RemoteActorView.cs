@@ -227,16 +227,30 @@ namespace Ironfront.Net.Unity.Client
             : SwimPresentation.IdleHeadAboveRoot;
 
         /// <summary>
-        /// Where the segment first enters this living body's hitboxes as last drawn: the fraction
-        /// along it, and the part it met. False for a body with no state yet, a dead or hidden
-        /// one, or a rig without the bones.
+        /// Where the segment first enters this living body as last drawn: the fraction along it, and
+        /// the part it met. False for a body with no state yet, a dead or hidden one, or a rig
+        /// without the bones.
         /// </summary>
+        /// <remarks>
+        /// A living body knocked over lies as a runtime ragdoll and is hit where its bones lie. It
+        /// was refused outright, as a corpse is: a bot shot off its feet could not be shot again
+        /// until it stood up, and its ragdoll's colliders stopped the round like a wall (owner's
+        /// list of 2026-10-11, item 7). A dead body is still never a target.
+        /// </remarks>
         internal bool TryHitSegment(Vector3 from, Vector3 to, out float fraction, out HitboxType part)
         {
             fraction = 1f;
             part = HitboxType.Body;
-            return _hitboxes != null && _hasState && _state.IsAlive && isActiveAndEnabled && !IsRagdollPosed
-                   && _hitboxes.TryHit(from, to, out fraction, out part);
+            if (!_hasState || !_state.IsAlive || !isActiveAndEnabled) return false;
+
+            if (IsRagdollPosed)
+            {
+                if (!_ragdoll.TryHitSegment(from, to, out fraction, out bool head)) return false;
+                part = head ? HitboxType.Head : HitboxType.Body;
+                return true;
+            }
+
+            return _hitboxes != null && _hitboxes.TryHit(from, to, out fraction, out part);
         }
 
         /// <summary>The body's animator, which a corpse copies the skeleton and pose from.</summary>
