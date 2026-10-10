@@ -98,6 +98,34 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void ASpearheadIsAGrenadeLikeAFrag()
+        {
+            // Owner's run of 2026-10-10: the explosive grenade with the bigger pouch counted for no
+            // grenade achievement at all.
+            var tally = new MatchCareerTally();
+            tally.WatchHealth(Me, alive: true, health: 100f);
+            tally.RecordKill(Kill(Enemy, weapon: WeaponIds.SPEARHEAD, cause: CauseOfDeath.Explosion), 5f);
+            tally.RecordKill(Kill(Other, weapon: WeaponIds.SPEARHEAD, cause: CauseOfDeath.Explosion), 5f);
+            tally.RecordKill(Kill(Human, weapon: WeaponIds.SPEARHEAD, cause: CauseOfDeath.Explosion, bot: false), 5f);
+            Assert.Equal(3, Fact(tally, RoundFact.BestGrenadeBlast));
+            Assert.Equal(3, Fact(tally, RoundFact.GrenadeKills));
+
+            tally.RecordKill(Kill(Me, killer: Enemy), 10f);
+            tally.RecordKill(Kill(Enemy, weapon: WeaponIds.SPEARHEAD, cause: CauseOfDeath.Explosion), 11f);
+            Assert.Equal(1, Fact(tally, RoundFact.FromTheGraveBest));
+
+            var life = new MatchCareerTally();
+            life.RecordKill(Kill(Enemy, weapon: WeaponIds.RK44), 1f);
+            life.RecordKill(Kill(Enemy, weapon: WeaponIds.SIND7), 2f);
+            life.RecordKill(Kill(Enemy, weapon: WeaponIds.SPEARHEAD), 3f);
+            life.RecordKill(Kill(Enemy, weapon: WeaponIds.BEU_AW1), 4f);
+            Assert.Equal(1, Fact(life, RoundFact.JackOfAllTrades));
+
+            Assert.False(CareerWeapons.IsGrenade(WeaponIds.BEU_AW1));
+            Assert.False(CareerWeapons.IsGrenade(WeaponIds.AMMO_BAG));
+        }
+
+        [Fact]
         public void DyingInYourOwnBlastBesideAnEnemyIsMutualDestructionOnce()
         {
             var tally = new MatchCareerTally();
@@ -267,13 +295,17 @@ namespace Ironfront.Net.Replication.Tests
             };
             tally.RecordVehicleDown(heli);
 
+            // From a helicopter in the air, by its pilot's rockets or its door gun: the seat is not asked.
             heli.DestroyerVehicleType = VehicleIds.HELICOPTER;
-            heli.DestroyerIsPilot = true;
             heli.DestroyerHeightMetres = 30f;
             tally.RecordVehicleDown(heli);
 
+            // ...but a helicopter still on its pad is not in a dogfight.
+            CareerVehicleDown grounded = heli;
+            grounded.DestroyerHeightMetres = 4.9f;
+            tally.RecordVehicleDown(grounded);
+
             heli.DestroyerVehicleType = VehicleIds.TANK;
-            heli.DestroyerIsPilot = true;
             heli.ByTankMainGun = true;
             tally.RecordVehicleDown(heli);
 
@@ -288,7 +320,7 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(1, Fact(tally, RoundFact.HelisDownedOnFoot));
             Assert.Equal(1, Fact(tally, RoundFact.Dogfights));
             Assert.Equal(1, Fact(tally, RoundFact.ImpossibleAngles));
-            Assert.Equal(5, Fact(tally, RoundFact.VehiclesDestroyed));
+            Assert.Equal(6, Fact(tally, RoundFact.VehiclesDestroyed));
         }
 
         [Fact]

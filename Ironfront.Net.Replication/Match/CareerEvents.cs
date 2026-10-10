@@ -70,7 +70,8 @@ namespace Ironfront.Net.Replication.Match
 
         /// <summary>The vehicle type the destroyer sat in, <see cref="VehicleIds.NONE"/> on foot.</summary>
         public byte DestroyerVehicleType;
-        public bool DestroyerIsPilot;
+
+        /// <summary>How high the destroyer's own vehicle was above the ground, in metres.</summary>
         public float DestroyerHeightMetres;
 
         /// <summary>The killing blow was a tank's main gun.</summary>
@@ -110,6 +111,14 @@ namespace Ironfront.Net.Replication.Match
 
         public static bool IsLauncher(byte weaponId)
             => weaponId == WeaponIds.BEU_AW1 || weaponId == WeaponIds.BIL_SCALPEL;
+
+        /// <summary>
+        /// The thrown grenades: FRAG and SPEARHEAD, the explosive one with the bigger pouch. CROWD
+        /// CONTROL, FROM THE GRAVE and JACK OF ALL TRADES say "a grenade", and counted FRAG alone
+        /// until the owner's run of 2026-10-10.
+        /// </summary>
+        public static bool IsGrenade(byte weaponId)
+            => weaponId == WeaponIds.FRAG || weaponId == WeaponIds.SPEARHEAD;
 
         /// <summary>The rifles COUNTER-SNIPER's victim must be holding.</summary>
         public static bool IsSniperRifle(byte weaponId)

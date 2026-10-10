@@ -227,7 +227,10 @@ namespace Ironfront.Net.Unity
             if (_match.Rule == VictoryRule.Target && _kills >= 30) Raise(FirstPastThePost);
             if (!_match.Vehicles && _match.Bots >= 50 && MostKills(playerKey)) Raise(BootsOnly);
             if (_match.Night && _match.Bots >= 50 && !_nightVisionUsed) Raise(GraveyardShift);
-            if (_match.AlliedBots == 0 && _match.EnemyBots >= 20 && _match.HardRule) Raise(DrillSergeant);
+            // Under any rule: a side scores a kill times the flags it holds, so a lone soldier who
+            // holds one or two flags against twenty bots never reaches a 200-point lead (owner's
+            // run of 2026-10-10: "is one against twenty even possible?").
+            if (_match.AlliedBots == 0 && _match.EnemyBots >= 20) Raise(DrillSergeant);
 
             if (_match.HardRule && _match.MapId >= 1 && _match.MapId <= 3)
                 Or(CareerStat.PrGrandTour, 1L << (2 * (_match.MapId - 1) + (_match.Rule == VictoryRule.Target ? 1 : 0)));

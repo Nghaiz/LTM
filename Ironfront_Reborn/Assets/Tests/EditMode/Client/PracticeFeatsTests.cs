@@ -207,17 +207,17 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
-        public void DrillSergeantIsNoAlliesAgainstTwentyUnderAHardRule()
+        public void DrillSergeantIsAWinAloneAgainstTwentyUnderAnyRule()
         {
             Start(Dustbowl, 0, 19);
             Win();
             Start(Dustbowl, 1, 20);
             Win();
-            Start(Dustbowl, 0, 20, points: 100);
-            Win();
             Assert.That(_earned, Does.Not.Contain(PracticeFeats.DrillSergeant));
 
-            Start(Dustbowl, 0, 20, VictoryRule.Target, 500);
+            // The lowest rule the practice screen allows: one soldier scores a kill times the flags
+            // he holds, so a 200-point lead against twenty was out of reach (2026-10-10).
+            Start(Dustbowl, 0, 20, points: 50);
             Win();
             Assert.That(_earned, Does.Contain(PracticeFeats.DrillSergeant));
         }

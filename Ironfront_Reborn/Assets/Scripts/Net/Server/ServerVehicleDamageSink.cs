@@ -50,14 +50,14 @@ namespace Ironfront.Net.Unity.Server
             _currentTick = currentTick ?? throw new ArgumentNullException(nameof(currentTick));
         }
 
-        /// <summary>Damage applications that named no registered vehicle.</summary>
         /// <summary>
         /// A vehicle's health reached zero (the hit that starts its burn, or kills it outright),
-        /// with the actor last credited with damaging it, 0 when nobody. Achievements v2:
-        /// CAN OPENER, AIR DEFENSE, DOGFIGHT, IMPOSSIBLE ANGLE.
+        /// with the actor last credited with damaging it, 0 when nobody. Raised while its crew is
+        /// still in the seats. Achievements v2: CAN OPENER, AIR DEFENSE, DOGFIGHT, IMPOSSIBLE ANGLE.
         /// </summary>
         public event Action<ushort, ushort> Downed;
 
+        /// <summary>Damage applications that named no registered vehicle.</summary>
         public long UnknownVehicles { get; private set; }
 
         /// <summary>Damage applied to vehicles that were already dead. Free; nothing happens.</summary>
@@ -114,8 +114,11 @@ namespace Ironfront.Net.Unity.Server
             ushort credited = TryGetRecentAttacker(vehicleId, Ironfront.Net.Replication.Server.DeathAttribution.DestroyerCreditTicks, out ushort lastAttacker) ? lastAttacker : (ushort)0;
             if (source != null && (source.CrashSkipsBurn || source.IsFlooded))
             {
-                _burnClock.KillImmediately(vehicleId);
+                // Reported BEFORE the kill: KillImmediately empties every seat, and the report is
+                // read for who was aboard (a pilot shot down). Reported after it, every helicopter
+                // went down empty (owner's run of 2026-10-10: DOGFIGHT never unlocked).
                 Downed?.Invoke(vehicleId, credited);
+                _burnClock.KillImmediately(vehicleId);
                 return new VehicleDamageOutcome(0f, startedBurning: false, died: true);
             }
 

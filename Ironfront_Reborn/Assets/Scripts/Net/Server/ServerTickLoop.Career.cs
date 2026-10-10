@@ -152,10 +152,9 @@ namespace Ironfront.Net.Unity.Server
                 if (!anyone && source != null && source.OwnerTeam >= 0 && source.OwnerTeam != attacker.Team)
                     down.EnemyVehicle = true;
 
-                if (seats.TryFindSeatOf(destroyer, out ushort seatedIn, out byte seat))
+                if (seats.TryFindSeatOf(destroyer, out ushort seatedIn, out _))
                 {
                     down.DestroyerVehicleType = VehicleTypeOf(seatedIn);
-                    down.DestroyerIsPilot = seat == 0;
                     down.DestroyerHeightMetres = vehicles.TryFind(seatedIn, out IGameplayVehicleSource own) && own != null
                         ? own.HeightAboveGround
                         : -1f;
