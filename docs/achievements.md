@@ -421,6 +421,9 @@ Steam chỉ cho so với bạn bè; ở đây so được với **mọi người
 - **80 icon riêng**, vẽ bằng code như bộ hiện tại (`tools/ui/badges.py` + `make_icons.py`).
 - Mỗi icon = **khung huy hiệu theo hạng** (đồng / bạc / vàng / bạch kim có cánh và sao / Mythic
   obsidian có vết nứt phát sáng đỏ và vương miện gai) + **hình vẽ giữa** riêng cho từng thành tựu.
+  Từ 11/10/2026 điều này được kiểm tra thật: trước đó 33 huy hiệu mượn hình của thành tựu khác (MID-AIR
+  và DOGFIGHT cùng đôi cánh). 33 hình mới nằm trong `tools/ui/badge_glyphs.py`, và `badges.py` dừng
+  với tên các thành tựu trùng nếu hai thành tựu lại dùng chung một hình.
   Thành tựu Night Mode có thêm vầng trăng nhỏ trên khung; thành tựu practice có thêm biểu tượng bia
   tập bắn nhỏ.
 - Mỗi icon xuất 3 trạng thái: màu (đã mở), xám có khoá (chưa mở), **bóng đen** (ẩn chưa mở).
