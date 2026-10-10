@@ -12,7 +12,7 @@ namespace Ironfront.Client.Flow.Tests
     public sealed class PracticeChoiceTests
     {
         private const ushort Dustbowl = 1;
-        private const ushort ForestLake = RoomRules.NightModeMapId;
+        private const ushort ForestLake = 3;
 
         private static bool Read(
             out PracticeSettings settings, out string error,
@@ -48,8 +48,8 @@ namespace Ironfront.Client.Flow.Tests
             Assert.False(Read(out _, out string refused, rule: VictoryRule.Target, points: "50"));
             Assert.Contains("between 100 and 3000", refused);
 
-            Assert.False(Read(out _, out string notHere, mode: GameMode.Night, map: Dustbowl));
-            Assert.Contains("Forest Lake only", notHere);
+            Assert.True(Read(out PracticeSettings dustbowlNight, out _, mode: GameMode.Night, map: Dustbowl));
+            Assert.Equal(GameMode.Night, dustbowlNight.Rules.Mode);
 
             Assert.True(Read(out PracticeSettings night, out _, mode: GameMode.Night, map: ForestLake, vision: "90"));
             Assert.Equal(GameMode.Night, night.Rules.Mode);

@@ -323,6 +323,7 @@ namespace Ironfront.Net.Unity.Server
             // been counted as corruption on every send (ledger X-8).
             _router.Chat = this;
             _router.NightVision = this;
+            _router.ShotReports = _combat;
 
             // Before V5 this stayed null and every C_VEHICLE_INPUT was counted and dropped --
             // which was V4's honest shipped state, because nothing could drive a vehicle yet.
@@ -788,6 +789,10 @@ namespace Ironfront.Net.Unity.Server
                 // Delayed throws advance from the simulation clock, not from packet arrival.
                 // This also runs during a catch-up step, once for every tick actually simulated.
                 _combat.AdvancePendingActions(_players, NetContext.CurrentTick);
+
+                // After the players stepped, so a report that overtook the frame firing its pull
+                // (reliable channel against unreliable) finds the pull that frame just recorded.
+                _combat.StepPendingReports(_players);
             }
 
             _inputStageMs = NowMs() - _stepStartMs;
@@ -2262,6 +2267,7 @@ namespace Ironfront.Net.Unity.Server
             _interest.Forget(actorId);
             _spawnAcks.Forget(actorId);
             _hitboxHistory.Forget(actorId);
+            _combat.ForgetReportedShots(actorId);
 
             // The vehicle pair table is keyed on (viewer, vehicle), so a departing VIEWER leaks
             // one row per vehicle it ever saw — the same trap-2 leak, one dictionary over. The
@@ -2796,7 +2802,7 @@ namespace Ironfront.Net.Unity.Server
         /// own driver, and a car driving away left its driver uncovered.
         /// </para>
         /// </remarks>
-        private static bool IsOccluded(OcclusionQuery query)
+        internal static bool IsOccluded(OcclusionQuery query)
         {
             Vector3 from = MovementSimulation.ToUnity(query.Origin);
             Vector3 to = MovementSimulation.ToUnity(query.Point);

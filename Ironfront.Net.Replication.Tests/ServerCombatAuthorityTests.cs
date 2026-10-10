@@ -189,6 +189,60 @@ namespace Ironfront.Net.Replication.Tests
             Assert.False(result.Fired);
         }
 
+        // ------------------------------------------------------------------ reported hits (14.0.6)
+
+        [Fact]
+        public void AReportedPullSpendsTheRoundAndSweepsNothing()
+        {
+            // The same level shot DamageReachingZeroHealthEmitsDeath kills with. With the bit set
+            // nothing is swept: the hits arrive as C_SHOT_REPORT and are judged one by one.
+            var fixture = new CombatFixture();
+            byte before = fixture.Weapon.AmmoInClip;
+
+            CombatTickResult result = fixture.Step(now: 10f, InputButtons.Fire | InputButtons.ReportsOwnHits);
+
+            Assert.True(result.Fired);
+            Assert.True(result.AwaitsReport);
+            Assert.Equal(0, result.HitCount);
+            Assert.False(result.VictimDied);
+            Assert.Equal(before - 1, fixture.Weapon.AmmoInClip);
+            Assert.Equal(100f, fixture.Sink.HealthOf(Victim));
+            Assert.Equal(1, fixture.Resolver.ShotsFired);
+        }
+
+        [Fact]
+        public void AReportedPullKeepsEveryRuleOfAPull()
+        {
+            // The bit buys no shot: the cooldown, the clip and the reload still decide.
+            var fixture = new CombatFixture();
+            fixture.Step(now: 10f, InputButtons.Fire | InputButtons.ReportsOwnHits);
+
+            CombatTickResult early = fixture.Step(
+                now: 10f + WeaponConfig.Rifle.Cooldown * 0.5f, InputButtons.Fire | InputButtons.ReportsOwnHits);
+            Assert.False(early.Fired);
+            Assert.False(early.AwaitsReport);
+            Assert.Equal(FireRejection.OnCooldown, early.Rejection);
+
+            fixture.Weapon.AmmoInClip = 0;
+            CombatTickResult empty = fixture.Step(now: 20f, InputButtons.Fire | InputButtons.ReportsOwnHits);
+            Assert.False(empty.Fired);
+            Assert.False(empty.AwaitsReport);
+        }
+
+        [Fact]
+        public void AnAcceptedReportDoesTheServersOwnDamage()
+        {
+            var fixture = new CombatFixture();
+
+            DamageOutcome outcome = fixture.Authority.ApplyReportedHit(
+                WeaponConfig.Rifle, Shooter, Victim, HitboxType.Head, 10f, out float damage);
+
+            Assert.Equal(ServerFireResolver.DamageFor(WeaponConfig.Rifle, HitboxType.Head, 10f), damage);
+            Assert.True(outcome.Died);
+            Assert.Equal(0f, fixture.Sink.HealthOf(Victim));
+            Assert.Equal(1, fixture.Authority.KillsResolved);
+        }
+
         // ------------------------------------------------------------------ damage and death
 
         [Fact]

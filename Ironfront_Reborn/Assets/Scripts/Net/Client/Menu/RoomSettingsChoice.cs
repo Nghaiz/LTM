@@ -93,7 +93,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (!RoomRules.ModeAllowedOn(mode, mapId))
             {
-                error = "Night Mode is played on Forest Lake only.";
+                error = "That map has no Night Mode.";
                 return false;
             }
 

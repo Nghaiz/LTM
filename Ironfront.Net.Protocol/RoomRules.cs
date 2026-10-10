@@ -6,7 +6,7 @@ namespace Ironfront.Net.Protocol
         /// <summary>Conquest by day: the match the game has always had.</summary>
         PointMatch = 0,
 
-        /// <summary>Conquest at night, Forest Lake only: dark, night vision on a battery.</summary>
+        /// <summary>Conquest at night, on every map: dark, night vision on a battery.</summary>
         Night = 1,
     }
 
@@ -67,12 +67,6 @@ namespace Ironfront.Net.Protocol
     /// </remarks>
     public static class RoomRules
     {
-        /// <summary>
-        /// The one map Night Mode is played on: Forest Lake. Its id in <c>MapCatalog</c> (a test in
-        /// Ironfront.Net.Replication.Tests holds the two together; Protocol cannot reference it).
-        /// </summary>
-        public const ushort NightModeMapId = 3;
-
         public const ushort MinMarginPoints = 50;
         public const ushort MaxMarginPoints = 1000;
         public const ushort MarginPointsStep = 10;
@@ -99,8 +93,14 @@ namespace Ironfront.Net.Protocol
         public static ushort DefaultPoints(VictoryRule rule) => rule == VictoryRule.Target ? DefaultTargetPoints : DefaultMarginPoints;
 
         /// <summary>Whether <paramref name="mode"/> may be played on <paramref name="mapId"/>.</summary>
+        /// <remarks>
+        /// Night Mode is on every map (owner's run of 2026-10-10: Island and Dustbowl get Forest
+        /// Lake's night); 0 is no map at all. Each map's night is its
+        /// <c>Resources/NightMode/&lt;scene&gt;</c> config, and an EditMode test fails a catalogue map
+        /// without one, so the lobby cannot offer a night the map does not have.
+        /// </remarks>
         public static bool ModeAllowedOn(GameMode mode, ushort mapId)
-            => mode == GameMode.PointMatch || (mode == GameMode.Night && mapId == NightModeMapId);
+            => mode == GameMode.PointMatch || (mode == GameMode.Night && mapId != 0);
 
         /// <summary>
         /// Whether a room may be made with these settings: a known mode on a map it allows, a known

@@ -1,6 +1,6 @@
 # Phase P37: owner's run 2 of 2026-10-09 (practice exits, remember me, achievements v2)
 
-Status: **in progress.** Owner rules for this run: fully automatic, single-threaded (no
+Status: **done 2026-10-10** (record under Progress). Owner rules for this run: fully automatic, single-threaded (no
 subagents), one PR per item merged to `develop` before the next, servers redeployed when a merged
 change touches them, CI read only at the end or before a deploy/release. **Final step:** deploy the
 master and the Azure game servers, promote `main`, and REPLACE the three v4.6.0 release zips
@@ -18,6 +18,12 @@ table the owner reads; keep it current. This file is the engineering plan.
 | #587 | Remember me tick works (listener bound in OnEnable) |
 | #588 | Free team choice: no per-side cap at the master; the server re-teams a free body |
 | #589 | ISEEGOLD golden wrench: menu code, practice-only, persisted, announced |
+| #590 | Achievements v2 engine: 80 achievements, round facts from the game server, the master derives the career and judges, mid-round progress every 15 s, leavers reported, night vision reported, old rows retired |
+| #591 | Client screens: queued persistent banners with a counter, Mythic and declassify banners, the page with filters and sorts and a detail panel, the end-of-round summary, practice alone against every bot |
+| #592 | Base names under every flag on the M map and the deploy map, and top-right while standing in a base (the other session's work, shipped from here) |
+| #593 | GLOBAL RANKING: achievements and Mythic columns, player card, side-by-side compare; protocol 14.0.5 `PLAYER_PROFILE` with the hidden rule kept by the master |
+| #594 | 80 badges (Mythic frame, night and practice marks, 15 silhouettes) and a sound per metal plus the disaster trombone |
+| #595 | GRAND TOUR night win under any rule; 16 EditMode tests for the practice judge; feasibility checks recorded in docs/achievements.md section 7.2 |
 
 ## Architecture (achievements v2)
 
@@ -75,8 +81,34 @@ table the owner reads; keep it current. This file is the engineering plan.
 
 ## Progress
 
-- C: started 2026-10-09. Exploration done, no code written yet. Paused at the owner's request
-  (machine shutdown); resume from "Resume notes" below without re-reading the server.
+Every PR above merged to `develop` in order. Then, on 2026-10-10 (+07):
+
+- **Master** (fly `kien-master-2026`): revision a1eb8146, image
+  `ghcr.io/nghaiz/ironfront-master@sha256:a3ba2fa5388d470261a86686988c7fb1b9eeae6af53406df8eda021c4b5f5efe`,
+  deployed first because servers on the new engine report round facts the old master would
+  misread. Rollback: `92cf6040…95e9` (64705e00), config backup
+  `D:\Coding\LTM-backups\master-config-before-20261010-010804.json`. The ranking was empty after
+  the deploy (no online round since v4.6.0; the retired 50 achievements were deleted by design);
+  the database kept its accounts.
+- **Game servers** (Azure VM): `ironfront-game-server:a1eb814`, built stamped with
+  `tools/build-server.ps1` (Shared and Server DLLs read back a1eb8146), registered as Dustbowl 4,
+  Island 5, Forest Lake 6. Rollback `64705e0`. Pre-deploy logs:
+  `tmp/azure-logs/64705e0-20261010-predeploy-achv2/` (no match in the 18 h before).
+- **Live checks:** `Ironfront.Tools.E2E` against fly + Azure: PASS (login, join, 10 UDP payloads)
+  and NEGATIVE PASS (corrupted ticket refused, InvalidTicket). A probe of the live master answered
+  `LEADERBOARD_RES` with the new fields and `PLAYER_PROFILE_RES` for a real id and `player: null`
+  for an unknown one.
+- **main** promoted to `048eff2d` (parents 195d0747 + a1eb8146, tree == develop). The `v4.6.0`
+  tag was not moved.
+- **v4.6.0 zips replaced** with `gh release upload --clobber`, all built from a1eb8146 (release,
+  no diagnostics), every GitHub digest matching:
+  windows `50aa9caefbd3a4447c0b505a443f672256b771081acb1ee3e7e76ef5a5ad5239` (518.2 MB),
+  macos `f66324cf94f1cc25eeb5888c5d9150d5b90b4e2a85ac2b4bf970f5105c15ab20` (499.4 MB, universal),
+  linux `407a63b7cf2bd7e5028f5dbc9b7840b3d4c6e6c06336cd83dcd5ba81de219d51` (515.9 MB).
+  Windows smoke from an extracted copy in %TEMP%: title screen, fly master over TLS, 0 exceptions,
+  no secret or log files, exit 0 in 0.6 s. macOS (run 37973004456, x86_64 + arm64) and Linux
+  (run 37973650551) smoke against temporary draft releases, deleted afterwards: title screen and an
+  Offline practice start on every architecture. Release notes rewritten for the rebuild.
 
 ## Resume notes (read before coding; found while exploring on 2026-10-09)
 
@@ -147,7 +179,7 @@ table the owner reads; keep it current. This file is the engineering plan.
 - Facts -> derivations -> career keys -> achievements (see Architecture). Measures: value, bit
   count, ALL FRONTS = sum of min(wins on map, 50), IRONCLAD = count of the other 79 held.
 
-### Still to check in the Editor (design section 7.2)
+### Still to check in the Editor (design section 7.2): answered 2026-10-10 in `docs/achievements.md` section 7.2
 
 - Is the helicopter pilot's seat `enclosed`? Enclosed seats ignore non-piercing damage
   (`Actor.DamageAttributed`), which would make MID-AIR impossible; fallback = door gunner.

@@ -14,11 +14,17 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>A body or limb hit that did not kill.</summary>
         Normal = 0,
 
-        /// <summary>A headshot that did not kill. Drawn red, higher-pitched tick.</summary>
+        /// <summary>A headshot that did not kill. Drawn gold, with a metal "dink".</summary>
         Headshot = 1,
 
-        /// <summary>The hit that killed. Outranks a headshot when both are true.</summary>
+        /// <summary>The hit that killed, on the body. Drawn red.</summary>
         Kill = 2,
+
+        /// <summary>
+        /// The hit that killed, on the head: the loudest of all (owner's run of 2026-10-10, phase
+        /// P38: a headshot the player cannot tell apart from a body shot is one they doubt).
+        /// </summary>
+        HeadshotKill = 3,
     }
 
     /// <summary>
@@ -67,10 +73,10 @@ namespace Ironfront.Net.Replication.Client
                 atTick,
                 atSeconds);
 
-        /// <summary>A kill outranks a headshot: the loudest true thing wins.</summary>
+        /// <summary>The loudest true thing wins: a kill outranks a headshot, and a headshot kill both.</summary>
         public static HitmarkerSeverity SeverityOf(bool killed, bool headshot)
         {
-            if (killed) return HitmarkerSeverity.Kill;
+            if (killed) return headshot ? HitmarkerSeverity.HeadshotKill : HitmarkerSeverity.Kill;
             return headshot ? HitmarkerSeverity.Headshot : HitmarkerSeverity.Normal;
         }
     }

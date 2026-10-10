@@ -58,6 +58,17 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// A player's pull whose hits their own game reports (14.0.6): a shot now, and its hits
+        /// later through <see cref="NoteCareerHit"/> with the serial returned here.
+        /// </summary>
+        internal long NoteCareerReportedShot(ushort shooter, byte weaponId)
+        {
+            long serial = ++_careerShotSerial;
+            if (CareerCounting && CareerWeapons.IsFirearm(weaponId)) _careerTally.RecordShot(shooter, weaponId);
+            return serial;
+        }
+
         /// <summary>A bot's (or any engine-fired) projectile from shot <paramref name="serial"/> hurt <paramref name="victim"/>.</summary>
         public void NoteCareerHit(ushort shooter, ushort victim, byte weaponId, long serial)
         {
@@ -141,10 +152,9 @@ namespace Ironfront.Net.Unity.Server
                 if (!anyone && source != null && source.OwnerTeam >= 0 && source.OwnerTeam != attacker.Team)
                     down.EnemyVehicle = true;
 
-                if (seats.TryFindSeatOf(destroyer, out ushort seatedIn, out byte seat))
+                if (seats.TryFindSeatOf(destroyer, out ushort seatedIn, out _))
                 {
                     down.DestroyerVehicleType = VehicleTypeOf(seatedIn);
-                    down.DestroyerIsPilot = seat == 0;
                     down.DestroyerHeightMetres = vehicles.TryFind(seatedIn, out IGameplayVehicleSource own) && own != null
                         ? own.HeightAboveGround
                         : -1f;

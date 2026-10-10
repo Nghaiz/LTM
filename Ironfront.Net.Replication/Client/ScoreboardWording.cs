@@ -114,7 +114,7 @@ namespace Ironfront.Net.Replication.Client
         /// </remarks>
         public const string PointMatch = "POINT MATCH";
 
-        /// <summary>Night Mode, Forest Lake only (protocol 14, phase P32).</summary>
+        /// <summary>Night Mode (protocol 14, phase P32).</summary>
         public const string NightMode = "NIGHT MODE";
 
         /// <summary>The name the board gives a room's mode.</summary>

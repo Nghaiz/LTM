@@ -78,14 +78,23 @@ namespace Ironfront.Net.Replication.Combat
         /// <summary>True when the sprint rule is what refused the trigger on this frame.</summary>
         public readonly bool BlockedBySprint;
 
+        /// <summary>
+        /// The round was spent and the shooter's own game will report what it hit
+        /// (<see cref="InputButtons.ReportsOwnHits"/>, 14.0.6): nothing was swept, and the shot
+        /// is waiting in the reported-shot ledger for its <c>C_SHOT_REPORT</c>.
+        /// </summary>
+        public readonly bool AwaitsReport;
+
         public CombatTickResult(
             FireRejection rejection, bool fired, int hitCount, bool weaponChanged,
             bool victimDied, ushort deadActorId, in Vec3 aimDirection, in Vec3 origin,
             bool launchedProjectile = false,
             bool effectiveTriggerDown = false,
             bool blockedBySprint = false,
-            bool releaseBegan = false)
+            bool releaseBegan = false,
+            bool awaitsReport = false)
         {
+            AwaitsReport = awaitsReport;
             EffectiveTriggerDown = effectiveTriggerDown;
             BlockedBySprint = blockedBySprint;
             Rejection = rejection;
@@ -449,6 +458,30 @@ namespace Ironfront.Net.Replication.Combat
                     blockedBySprint: blockedBySprint);
             }
 
+            // 4b. The shooter's game reports what its rounds hit (14.0.6, owner's run of 2026-10-10:
+            //     "aimed dead on and it does not hit"). Its screen drew every body where it put
+            //     them and flew the rounds against that picture in real time; a second sweep here,
+            //     against a rewound box set frozen for the whole flight, disagreed with it in four
+            //     ways (phase P38 finding F2). The pull is judged by the same rules -- cooldown,
+            //     ammo, holster, reload -- and the round is spent; the hits are checked one by one
+            //     when the report arrives (ReportedHitJudge). A v4.6.0 client never sets the bit
+            //     and is swept as before.
+            if (frame.IsPressed(InputButtons.ReportsOwnHits))
+            {
+                FireRejection reported = _fireResolver.ResolveReported(
+                    ref weapon, in config, shooterIsAlive, nowSeconds);
+                bool spent = reported == FireRejection.None;
+
+                return new CombatTickResult(
+                    reported, spent, hitCount: 0,
+                    weaponChanged: weapon.AmmoInClip != ammoBefore,
+                    victimDied: false, deadActorId: 0, in aim, in origin,
+                    launchedProjectile: false,
+                    effectiveTriggerDown: pull.Effective,
+                    blockedBySprint: blockedBySprint,
+                    awaitsReport: spent);
+            }
+
             // Only the sweep starts from the rewound seat. A launch or a throw is simulated from
             // the present by the engine, so its origin is the present one above.
             FireRejection rejection = _fireResolver.Resolve(
@@ -504,6 +537,22 @@ namespace Ironfront.Net.Replication.Combat
                 launchedProjectile: false,
                 effectiveTriggerDown: pull.Effective,
                 blockedBySprint: blockedBySprint);
+        }
+
+        /// <summary>
+        /// Applies one hit the shooter's game reported and <see cref="ReportedHitJudge"/> accepted
+        /// (14.0.6): the server's own damage for the box and the distance, through the same sink a
+        /// swept hit uses. The damage dealt is returned beside the outcome for the hit confirmation.
+        /// </summary>
+        public DamageOutcome ApplyReportedHit(
+            in WeaponConfig config, ushort shooterActorId, ushort targetActorId, HitboxType hitbox,
+            float distanceMetres, out float damage)
+        {
+            damage = ServerFireResolver.DamageFor(in config, hitbox, distanceMetres);
+            float balanceDamage = ServerFireResolver.BalanceDamageFor(in config, distanceMetres);
+            DamageOutcome outcome = _damageSink.ApplyDamage(targetActorId, damage, balanceDamage, shooterActorId);
+            if (outcome.Died) KillsResolved++;
+            return outcome;
         }
 
         /// <summary>Advances a delayed throwable independently of input packet arrival.</summary>

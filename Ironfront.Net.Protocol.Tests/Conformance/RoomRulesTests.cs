@@ -9,7 +9,8 @@ namespace Ironfront.Net.Protocol.Tests
     public sealed class RoomRulesTests
     {
         private const ushort Dustbowl = 1;
-        private const ushort ForestLake = RoomRules.NightModeMapId;
+        private const ushort Island = 2;
+        private const ushort ForestLake = 3;
 
         [Fact]
         public void TheDefaultIsTheMatchTheGameHasAlwaysHad()
@@ -45,10 +46,11 @@ namespace Ironfront.Net.Protocol.Tests
             => Assert.Equal(valid, RoomRules.AreValid(Dustbowl, GameMode.PointMatch, rule, (ushort)points, 0));
 
         [Fact]
-        public void NightModeIsForestLakeOnly()
+        public void NightModeIsOnEveryMap()
         {
+            Assert.True(RoomRules.AreValid(Dustbowl, GameMode.Night, VictoryRule.Margin, 200, 45));
+            Assert.True(RoomRules.AreValid(Island, GameMode.Night, VictoryRule.Margin, 200, 45));
             Assert.True(RoomRules.AreValid(ForestLake, GameMode.Night, VictoryRule.Margin, 200, 45));
-            Assert.False(RoomRules.AreValid(Dustbowl, GameMode.Night, VictoryRule.Margin, 200, 45));
             Assert.False(RoomRules.AreValid(0, GameMode.Night, VictoryRule.Margin, 200, 45));
         }
 

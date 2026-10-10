@@ -32,6 +32,7 @@ namespace Ironfront.Net.Replication.Server
     public sealed class ServerMessageRouter
     {
         private readonly InputFrame[] _scratch = new InputFrame[ClientInputMessage.MaxFrames];
+        private readonly ShotReportHit[] _reportScratch = new ShotReportHit[ShotReportMessage.MaxHits];
 
         /// <summary>
         /// Where an accepted C_SPAWN_REQUEST goes. Null leaves the message counted and
@@ -78,6 +79,12 @@ namespace Ironfront.Net.Replication.Server
 
         /// <summary>Receives <c>C_NIGHT_VISION</c> (14.0.4).</summary>
         public INightVisionHandler? NightVision { get; set; }
+
+        /// <summary>Receives <c>C_SHOT_REPORT</c> (14.0.6): the hits a shooter's own game saw.</summary>
+        public IShotReportHandler? ShotReports { get; set; }
+
+        /// <summary><c>C_SHOT_REPORT</c> messages parsed and handed on.</summary>
+        public long ShotReportsReceived { get; private set; }
 
         /// <summary>C_SEAT_REQUEST messages received, whether accepted or refused.</summary>
         public long SeatRequestsReceived { get; private set; }
@@ -255,6 +262,23 @@ namespace Ironfront.Net.Replication.Server
                         if (body.Length == 1 && body[0] <= 1)
                         {
                             NightVision?.OnNightVision(session, body[0] == 1);
+                            handled++;
+                        }
+                        else
+                        {
+                            MalformedMessages++;
+                        }
+
+                        break;
+
+                    case ClientMessageType.ShotReport:
+                        if (ShotReportMessage.TryParse(
+                                body, _reportScratch, out uint fireTick, out byte reportWeapon, out int reportCount))
+                        {
+                            ShotReportsReceived++;
+                            ShotReports?.OnShotReport(
+                                session, fireTick, reportWeapon,
+                                new ReadOnlySpan<ShotReportHit>(_reportScratch, 0, reportCount));
                             handled++;
                         }
                         else

@@ -204003,6 +204003,7 @@ MonoBehaviour:
     fogDensity: 0.012
     fog: {r: 0.066176474, g: 0.03377282, b: 0.03162846, a: 1}
     skyboxMaterial: {fileID: 2100000, guid: c62d2ab1cb68cfa49a531869b82ee827, type: 2}
+  nightVisionFogFactor: 1
   testNight: 0
 --- !u!114 &7842
 MonoBehaviour:
@@ -226449,9 +226450,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   frameMargin: 0.08
   objectiveFrameMargin: 0
-  bakedPicture: {fileID: 0}
-  bakedCentre: {x: 0, y: 0}
-  bakedHalfSpan: 0
+  bakedPicture: {fileID: 2800000, guid: 3136243f634f74748a42730f948177a3, type: 3}
+  bakedNightPicture: {fileID: 2800000, guid: 291964f1fb177f24fb6b46da646f2f61, type: 3}
+  bakedCentre: {x: 259.4311, y: 362.85236}
+  bakedHalfSpan: 270.07925
 --- !u!1 &9727261
 GameObject:
   m_ObjectHideFlags: 0
@@ -232492,7 +232494,6 @@ MonoBehaviour:
   _tracers: {fileID: 67069234}
   _registry: {fileID: 67069239}
   _drawKillfeed: 1
-  _scoreboardKey: 9
 --- !u!114 &67069237
 MonoBehaviour:
   m_ObjectHideFlags: 0

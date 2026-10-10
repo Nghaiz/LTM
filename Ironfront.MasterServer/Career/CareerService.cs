@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Ironfront.MasterServer.Data;
-using Ironfront.MasterServer.Diagnostics;
 using Ironfront.Net.Protocol.Achievements;
 
 namespace Ironfront.MasterServer.Career
@@ -110,12 +109,11 @@ namespace Ironfront.MasterServer.Career
 
         public CareerService(SqliteDatabase database)
         {
+            // Nothing is deleted at start any more (owner, 2026-10-10: an update never costs a player
+            // an achievement). A row whose id the catalogue no longer has is kept and simply not
+            // shown or counted -- AchievementTotals and the client both read through the catalogue --
+            // so a later build that brings the id back finds it where it was.
             _database = database ?? throw new ArgumentNullException(nameof(database));
-
-            // Achievements v2 replaced the whole list (owner, 2026-10-09): rows for ids the catalogue
-            // no longer has are deleted, careers are kept. Idempotent, so it runs at every start.
-            int removed = _database.DeleteAchievementsNotIn(AchievementCatalog.All.Select(a => a.Id));
-            if (removed > 0) StructuredLog.Event("achievements-retired", new { rows = removed });
         }
 
         /// <summary>
@@ -288,8 +286,10 @@ namespace Ironfront.MasterServer.Career
         }
 
         /// <summary>
-        /// Records every online achievement <paramref name="career"/> now earns. Two passes, so
-        /// IRONCLAD sees what the first pass just unlocked.
+        /// Records every achievement <paramref name="career"/> now earns by today's rules: the online
+        /// ones and the practice ones that read a number. Two passes, so IRONCLAD sees what the first
+        /// pass just unlocked. Every claim -- one a sign-in -- runs it, so a rule an update changed is
+        /// applied to an existing career the next time its player signs in.
         /// </summary>
         private List<string> Unlock(int playerId, IReadOnlyDictionary<string, long> career, long now)
         {
@@ -302,7 +302,11 @@ namespace Ironfront.MasterServer.Career
                 bool any = false;
                 foreach (Achievement achievement in AchievementCatalog.All)
                 {
-                    if (achievement.IsClaimedByClient || held.Contains(achievement.Id)) continue;
+                    if (held.Contains(achievement.Id)) continue;
+                    // A practice feat with nothing to count is the client's claim alone; one that reads
+                    // a practice number is judged here too, from the numbers the client claimed, so a
+                    // threshold an update lowered unlocks what the player had already done.
+                    if (achievement.IsClaimedByClient && achievement.Stat == null) continue;
                     if (!achievement.IsEarnedBy(view)) continue;
                     if (!_database.InsertAchievement(playerId, achievement.Id, now)) continue;
                     held.Add(achievement.Id);

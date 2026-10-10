@@ -83,10 +83,6 @@ namespace Ironfront.Net.Unity
         public const string GrandTour = "grand_tour";
         public const string Immaculate = "immaculate";
 
-        /// <summary>The guide tabs read so far, one bit per tab, kept between runs.</summary>
-        public const string GuideTabsKey = "ironfront.achievements.guide-tabs";
-
-        private const string ProgressPrefix = "ironfront.achievements.v2.";
         private const ushort Dustbowl = 1, Island = 2, ForestLake = 3;
         private const byte KindLand = 1, KindTank = 2, KindHeli = 4, KindBoat = 8, KindAll = 15;
 
@@ -211,6 +207,8 @@ namespace Ironfront.Net.Unity
             }
             finally
             {
+                // A finished round's numbers are saved now, not a few seconds later.
+                AchievementVault.Flush();
                 RoundOver?.Invoke();
             }
         }
@@ -229,7 +227,10 @@ namespace Ironfront.Net.Unity
             if (_match.Rule == VictoryRule.Target && _kills >= 30) Raise(FirstPastThePost);
             if (!_match.Vehicles && _match.Bots >= 50 && MostKills(playerKey)) Raise(BootsOnly);
             if (_match.Night && _match.Bots >= 50 && !_nightVisionUsed) Raise(GraveyardShift);
-            if (_match.AlliedBots == 0 && _match.EnemyBots >= 20 && _match.HardRule) Raise(DrillSergeant);
+            // Under any rule: a side scores a kill times the flags it holds, so a lone soldier who
+            // holds one or two flags against twenty bots never reaches a 200-point lead (owner's
+            // run of 2026-10-10: "is one against twenty even possible?").
+            if (_match.AlliedBots == 0 && _match.EnemyBots >= 20) Raise(DrillSergeant);
 
             if (_match.HardRule && _match.MapId >= 1 && _match.MapId <= 3)
                 Or(CareerStat.PrGrandTour, 1L << (2 * (_match.MapId - 1) + (_match.Rule == VictoryRule.Target ? 1 : 0)));
@@ -242,8 +243,8 @@ namespace Ironfront.Net.Unity
         public static void GuideTabRead(int tab, int tabs)
         {
             if (tabs <= 0 || tabs > 30 || tab < 0 || tab >= tabs) return;
-            int read = PlayerPrefs.GetInt(GuideTabsKey, 0) | (1 << tab);
-            PlayerPrefs.SetInt(GuideTabsKey, read);
+            AchievementVault.RaiseProgress(CareerStat.PrGuidePages, 1L << tab);
+            long read = Read(CareerStat.PrGuidePages);
             int all = (1 << tabs) - 1;
             if ((read & all) == all) Raise(ByTheBook);
         }
@@ -255,21 +256,11 @@ namespace Ironfront.Net.Unity
         public static Dictionary<string, long> Progress()
         {
             var progress = new Dictionary<string, long>(StringComparer.Ordinal);
-            int guide = PlayerPrefs.GetInt(GuideTabsKey, 0);
-            if (guide != 0) progress[CareerStats.Key(CareerStat.PrGuidePages)] = guide;
-            foreach (CareerStat stat in Kept)
-            {
-                long value = Read(stat);
-                if (value != 0) progress[CareerStats.Key(stat)] = value;
-            }
+            foreach (KeyValuePair<string, long> entry in AchievementVault.Data.Progress)
+                if (entry.Value != 0 && CareerStats.TryParse(entry.Key, out CareerStat stat) && CareerStats.IsPractice(stat))
+                    progress[entry.Key] = entry.Value;
             return progress;
         }
-
-        private static readonly CareerStat[] Kept =
-        {
-            CareerStat.PrMapsFinished, CareerStat.PrSidesWon, CareerStat.PrDustDevilBest, CareerStat.PrHellWeekBest,
-            CareerStat.PrLakeMonsterBest, CareerStat.PrMotorPoolBest, CareerStat.PrGrandTour, CareerStat.PrImmaculateBest,
-        };
 
         private static bool MostKills(int playerKey)
         {
@@ -279,18 +270,12 @@ namespace Ironfront.Net.Unity
             return true;
         }
 
-        private static long Read(CareerStat stat)
-            => long.TryParse(PlayerPrefs.GetString(ProgressPrefix + CareerStats.Key(stat), "0"), out long value) ? value : 0;
+        private static long Read(CareerStat stat) => AchievementVault.GetProgress(stat);
 
-        private static void Write(CareerStat stat, long value)
-            => PlayerPrefs.SetString(ProgressPrefix + CareerStats.Key(stat), value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        // Both keep the larger number or both halves of a mask: the vault's merge rule for the stat.
+        private static void Best(CareerStat stat, long value) => AchievementVault.RaiseProgress(stat, value);
 
-        private static void Best(CareerStat stat, long value)
-        {
-            if (value > Read(stat)) Write(stat, value);
-        }
-
-        private static void Or(CareerStat stat, long bits) => Write(stat, Read(stat) | bits);
+        private static void Or(CareerStat stat, long bits) => AchievementVault.RaiseProgress(stat, bits);
 
         private static bool Has(CareerStat stat, long bits) => (Read(stat) & bits) == bits;
 

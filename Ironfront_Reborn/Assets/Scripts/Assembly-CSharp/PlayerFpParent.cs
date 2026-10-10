@@ -268,6 +268,15 @@ public class PlayerFpParent : MonoBehaviour
 		SetFov(verticalFov, zoom);
 	}
 
+	/// <summary>
+	/// Aims through a scope of <paramref name="magnification"/> power: the field of view that
+	/// magnifies the player's own that many times (<see cref="Ironfront.Net.Unity.ScopeProfiles"/>).
+	/// </summary>
+	public void SetAimMagnification(float magnification)
+	{
+		SetFov(verticalFov, Ironfront.Net.Unity.ScopeProfiles.VerticalFovFor(magnification, verticalFov));
+	}
+
 	public void SetFov(float normal, float zoom)
 	{
 		normalFov = normal;

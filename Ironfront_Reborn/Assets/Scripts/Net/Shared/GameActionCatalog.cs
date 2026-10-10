@@ -51,7 +51,7 @@ namespace Ironfront.Net.Unity
             new GameActionInfo(GameAction.MoveRight, "move-right", "Strafe right", "Step right; steer right in a vehicle.", GameActionGroup.Movement, KeyCode.D, KeyCode.RightArrow),
             new GameActionInfo(GameAction.Jump, "jump", "Jump", "Jump over low cover; swim up in water.", GameActionGroup.Movement, KeyCode.Space),
             new GameActionInfo(GameAction.Crouch, "crouch", "Crouch", "Crouch behind cover; steadier aim, slower feet.", GameActionGroup.Movement, KeyCode.LeftControl, KeyCode.C),
-            new GameActionInfo(GameAction.Sprint, "sprint", "Sprint", "Run flat out. You cannot shoot while sprinting.", GameActionGroup.Movement, KeyCode.LeftShift),
+            new GameActionInfo(GameAction.Sprint, "sprint", "Sprint", "Run flat out. You cannot shoot while sprinting. Through a rifle scope, hold it to steady your breath.", GameActionGroup.Movement, KeyCode.LeftShift),
             new GameActionInfo(GameAction.LeanLeft, "lean-left", "Lean left", "Peek round the left of cover.", GameActionGroup.Movement, KeyCode.Q),
             new GameActionInfo(GameAction.LeanRight, "lean-right", "Lean right", "Peek round the right of cover.", GameActionGroup.Movement, KeyCode.E),
 
@@ -72,6 +72,10 @@ namespace Ironfront.Net.Unity
             new GameActionInfo(GameAction.Chat, "chat", "Chat", "Open the chat line; Tab switches team / all.", GameActionGroup.Interface, KeyCode.Return, KeyCode.KeypadEnter),
             new GameActionInfo(GameAction.HowToPlay, "how-to-play", "How to play", "Open this guide from the menus and the deploy screen.", GameActionGroup.Interface, KeyCode.H),
             new GameActionInfo(GameAction.ToggleHud, "toggle-hud", "Hide HUD", "Hide or show the on-screen readout.", GameActionGroup.Interface, KeyCode.End),
+
+            // Last, in the enum's order: Get indexes this array by the enum value.
+            new GameActionInfo(GameAction.ZeroUp, "zero-up", "Scope zero up", "Set a rifle scope's zero 100 m farther (the wheel zooms).", GameActionGroup.Combat, KeyCode.PageUp),
+            new GameActionInfo(GameAction.ZeroDown, "zero-down", "Scope zero down", "Set a rifle scope's zero 100 m nearer.", GameActionGroup.Combat, KeyCode.PageDown),
         };
 
         /// <summary>The entry for <paramref name="action"/>.</summary>

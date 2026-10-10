@@ -111,7 +111,7 @@ namespace Ironfront.Client.Input.Tests
         [Fact]
         public void Basic_overload_leaves_unproduced_and_weapon_selection_bits_clear()
         {
-            const InputButtons unused = InputButtons.Prone | InputButtons.Reserved7
+            const InputButtons unused = InputButtons.Prone | InputButtons.ReportsOwnHits
                                          | InputButtons.LeanLeft | InputButtons.LeanRight
                                          | InputButtons.SwitchWeapon0 | InputButtons.SwitchWeapon1
                                          | InputButtons.SwitchWeapon2 | InputButtons.SwitchWeapon3

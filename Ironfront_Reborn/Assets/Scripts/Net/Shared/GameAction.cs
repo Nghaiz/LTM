@@ -34,6 +34,8 @@ namespace Ironfront.Net.Unity
         Chat,
         HowToPlay,
         ToggleHud,
+        ZeroUp,
+        ZeroDown,
     }
 
     /// <summary>The headings the settings screen and the guide's controls tab group actions under.</summary>

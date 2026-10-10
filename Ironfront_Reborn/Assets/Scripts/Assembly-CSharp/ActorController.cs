@@ -8,6 +8,24 @@ public abstract class ActorController : MonoBehaviour
 
 	public abstract bool UseMuzzleDirection();
 
+	/// <summary>
+	/// The line this actor aims along, recoil's kick left out: where its rounds are sent
+	/// (owner's run of 2026-10-10). False when it has none, and the muzzle decides.
+	/// </summary>
+	public virtual bool TryGetAimRay(out Ray ray)
+	{
+		ray = default(Ray);
+		return false;
+	}
+
+	/// <summary>
+	/// One shot of <paramref name="weapon"/>'s recoil on the aim itself (Ironfront.Net.Unity.WeaponHandling):
+	/// the local player's crosshair climbs and the round follows it. Nothing for anyone else.
+	/// </summary>
+	public virtual void ApplyAimRecoil(Weapon weapon)
+	{
+	}
+
 	public abstract Vector3 Velocity();
 
 	public abstract bool OnGround();

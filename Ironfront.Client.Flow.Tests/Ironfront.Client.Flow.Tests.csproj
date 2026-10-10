@@ -115,6 +115,8 @@
              Link="Linked\CpuBudgetRules.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\CapturePointLabelRules.cs"
              Link="Linked\CapturePointLabelRules.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\AchievementSaveData.cs"
+             Link="Linked\AchievementSaveData.cs" />
   </ItemGroup>
 
 </Project>

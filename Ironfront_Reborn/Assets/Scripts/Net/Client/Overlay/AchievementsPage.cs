@@ -34,7 +34,6 @@ namespace Ironfront.Net.Unity.Client.Overlay
         private const float CardGap = 20f;
         private const float CardHeight = 122f;
         private const float CardPitch = 134f;
-        private const int Embers = 6;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Register() => OverlayHost.RegisterPage<AchievementsPage>(OverlayPage.Achievements);
@@ -57,7 +56,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
             public Text Share = null!;
             public Text Rarity = null!;
             public Image ShareFill = null!;
-            public Image[] Embers = null!;
+            public AchievementCardFx Fx = null!;
             public bool Mythic;
             public int EntryIndex = -1;
         }
@@ -153,24 +152,23 @@ namespace Ironfront.Net.Unity.Client.Overlay
             return true;
         }
 
+        private readonly Vector3[] _corners = new Vector3[4];
+
         private void Update()
         {
-            // The Mythic cards' embers: a few sparks rising slowly through the frame.
+            // Every kind's living background (AchievementCardFx), on the cards the list shows now.
+            if (_scroll == null || _scroll.viewport == null) return;
+            _scroll.viewport.GetWorldCorners(_corners);
+            float top = _corners[1].y;
+            float bottom = _corners[0].y;
             float t = Time.unscaledTime;
             for (int i = 0; i < _cards.Count; i++)
             {
                 Card card = _cards[i];
-                if (!card.Mythic || !card.Rect.gameObject.activeInHierarchy) continue;
-                for (int e = 0; e < card.Embers.Length; e++)
-                {
-                    float phase = (t * (0.18f + 0.04f * e) + e * 0.37f) % 1f;
-                    RectTransform rect = card.Embers[e].rectTransform;
-                    float x = 20f + ((e * 97f) % (card.Rect.sizeDelta.x - 40f)) + Mathf.Sin(t * 1.3f + e) * 6f;
-                    rect.anchoredPosition = new Vector2(x, -CardHeight + 6f + phase * (CardHeight - 12f));
-                    Color c = card.Embers[e].color;
-                    c.a = Mathf.Sin(phase * Mathf.PI) * 0.75f;
-                    card.Embers[e].color = c;
-                }
+                if (!card.Rect.gameObject.activeInHierarchy) continue;
+                card.Rect.GetWorldCorners(_corners);
+                if (_corners[0].y > top || _corners[1].y < bottom) continue;
+                card.Fx.Animate(t, card.Rect.sizeDelta);
             }
         }
 
@@ -312,15 +310,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
                 if (bound.EntryIndex >= 0 && bound.EntryIndex < _entries.Count) _detail?.Show(_entries[bound.EntryIndex]);
             });
 
-            card.Embers = new Image[Embers];
-            for (int e = 0; e < Embers; e++)
-            {
-                card.Embers[e] = Ui.Fill(card.Rect, "Ember", new Color(1f, 0.42f, 0.2f, 0f));
-                RectTransform rect = card.Embers[e].rectTransform;
-                rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-                rect.sizeDelta = new Vector2(3f, 3f);
-                card.Embers[e].raycastTarget = false;
-            }
+            card.Fx = AchievementCardFx.Build(card.Rect, _cards.Count);
 
             card.Accent = Ui.Fill(card.Rect, "Accent", Color.white);
             Ui.TopLeft(card.Accent.rectTransform, new Vector2(3f, 14f), new Vector2(3f, CardHeight - 28f));
@@ -483,16 +473,15 @@ namespace Ironfront.Net.Unity.Client.Overlay
             bool revealed = entry.IsRevealed;
             card.Mythic = achievement.Tier == AchievementTier.Mythic;
 
-            Color face = card.Mythic
-                ? (earned ? new Color(0.13f, 0.03f, 0.04f, 0.96f) : new Color(0.08f, 0.03f, 0.04f, 0.92f))
-                : (earned ? new Color(0.04f, 0.12f, 0.19f, 0.94f) : new Color(0.025f, 0.07f, 0.11f, 0.86f));
-            card.Face.color = face;
+            // Each kind its own face and its own living background (owner's run of 2026-10-10, task 6).
+            AchievementCardFx.Style style = AchievementCardFx.For(achievement, revealed);
+            card.Face.color = AchievementCardFx.Face(style, earned);
+            card.Fx.Configure(style, earned);
             card.Face.Configure(10f, AngularEdge.All, card.Mythic ? 2f : 1.5f,
                 card.Mythic ? UiStyle.WithAlpha(metal, earned ? 0.9f : 0.55f)
                 : earned ? UiStyle.WithAlpha(metal, 0.75f) : UiStyle.WithAlpha(UiStyle.Hairline, 0.32f));
             card.Accent.color = metal;
             card.Accent.enabled = earned;
-            foreach (Image ember in card.Embers) ember.enabled = card.Mythic;
 
             card.Badge.sprite = AchievementArt.Badge(achievement, revealed);
             card.Badge.color = earned || !revealed ? Color.white : AchievementArt.LockedTint;

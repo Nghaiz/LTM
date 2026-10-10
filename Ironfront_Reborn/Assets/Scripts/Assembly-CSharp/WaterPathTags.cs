@@ -112,6 +112,9 @@ public static class WaterPathTags
 		uint tag = (uint)_waterTag;
 		bool bounded = WaterLevel.TryGetBoundedArea(out Rect lakes);
 		float seaLine = MovementCore.WaterHeight - MovementCore.SwimStartDepth;
+		// Bots may already be searching on path threads, and AlternativePath adds to and takes from
+		// these same penalties there: one lock for every writer, or an addition is lost.
+		lock (AlternativePath.PenaltySync)
 		foreach (int index in LandGraphs)
 		{
 			if (graphs == null || index >= graphs.Length || graphs[index] == null) continue;

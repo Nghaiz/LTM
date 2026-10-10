@@ -1,4 +1,5 @@
 using System.Collections;
+using Ironfront.Net.Unity;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -75,6 +76,22 @@ public class IngameUi : MonoBehaviour
 
 	private Action hitmarkerAction = new Action(0.15f);
 
+	/// <summary>The severity of the cross on screen (<see cref="HitFeedbackRules"/>).</summary>
+	private int hitmarkerSeverity;
+
+	/// <summary>When the last body tick played, for <see cref="HitFeedbackRules.BodyTickMinGapSeconds"/>.</summary>
+	private float lastBodyTickAt = -10f;
+
+	/// <summary>When the last headshot or kill sound played, and how loud it was.</summary>
+	private float lastLoudSoundAt = -10f;
+
+	private int lastLoudSeverity;
+
+	/// <summary>The headshot and kill sounds, loaded once each (index = severity).</summary>
+	private readonly AudioClip[] hitClips = new AudioClip[HitFeedbackRules.HeadshotKill + 1];
+
+	private readonly bool[] hitClipLoaded = new bool[HitFeedbackRules.HeadshotKill + 1];
+
 	private Action damageIndicatorAction = new Action(1.5f);
 
 	private Action resupplyHealthAction = new Action(1.5f);
@@ -96,7 +113,8 @@ public class IngameUi : MonoBehaviour
 	}
 
 	/// <summary>
-	/// Marks a hit, loud in proportion to what it was: 0 normal, 1 headshot, 2 kill.
+	/// Marks a hit, loud in proportion to what it was: 0 normal, 1 headshot, 2 kill, 3 headshot kill
+	/// (<see cref="HitFeedbackRules"/>).
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -216,6 +234,14 @@ public class IngameUi : MonoBehaviour
 	{
 		Vector2 vector = minimapCamera.camera.WorldToViewportPoint(FpsActorController.instance.actor.Position());
 		hitmarker.enabled = !hitmarkerAction.Done();
+		if (hitmarker.enabled)
+		{
+			float life = hitmarkerAction.Ratio();
+			Color cross = HitFeedbackRules.Colour(hitmarkerSeverity);
+			cross.a = HitFeedbackRules.Alpha(life);
+			hitmarker.color = cross;
+			hitmarker.rectTransform.localScale = Vector3.one * HitFeedbackRules.Scale(hitmarkerSeverity, life);
+		}
 		Color white = Color.white;
 		if (vignetteAction.Done())
 		{
@@ -264,17 +290,58 @@ public class IngameUi : MonoBehaviour
 		canvas.enabled = true;
 	}
 
+	/// <summary>
+	/// Puts up the cross for a hit and plays its sound (owner's run of 2026-10-10): white for the
+	/// body, gold for the head, red for a kill. Every hit restarts the cross, so a burst pulses once
+	/// per round that landed, but a quieter hit does not cut a kill's red short.
+	/// </summary>
 	private void ShowHitmarker(int severity)
 	{
-		if (hitmarkerAction.Done())
+		severity = HitFeedbackRules.Clamp(severity);
+		bool shown = !hitmarkerAction.TrueDone();
+		if (!shown || HitFeedbackRules.Replaces(hitmarkerSeverity, hitmarkerAction.Ratio(), severity))
 		{
-			hitmarkerAction.Start();
-			// Severity rides the pitch rather than a second clip: a headshot ticks higher and a
-			// kill higher still, off the one authored sound. The colour is client-track work
-			// (E7) -- the audio is what the shipped component can already express.
-			hitmarkerSound.pitch = 1f + 0.15f * Mathf.Clamp(severity, 0, 2);
-			hitmarkerSound.Play();
+			hitmarkerSeverity = severity;
+			hitmarkerAction.StartLifetime(HitFeedbackRules.Seconds(severity));
 		}
+		PlayHitSound(severity);
+	}
+
+	private void PlayHitSound(int severity)
+	{
+		float now = Time.unscaledTime;
+		AudioClip clip = HitClip(severity);
+		if (clip == null)
+		{
+			// A body hit, or a build without the sounds: the authored tick, once per pellet volley.
+			if (now - lastBodyTickAt < HitFeedbackRules.BodyTickMinGapSeconds)
+			{
+				return;
+			}
+			lastBodyTickAt = now;
+			hitmarkerSound.pitch = 1f + 0.15f * (severity == HitFeedbackRules.Body ? 0 : 1);
+			hitmarkerSound.Play();
+			return;
+		}
+		if (now - lastLoudSoundAt < HitFeedbackRules.LoudSoundMinGapSeconds && severity <= lastLoudSeverity)
+		{
+			return;
+		}
+		lastLoudSoundAt = now;
+		lastLoudSeverity = severity;
+		hitmarkerSound.pitch = 1f;
+		hitmarkerSound.PlayOneShot(clip);
+	}
+
+	private AudioClip HitClip(int severity)
+	{
+		if (!hitClipLoaded[severity])
+		{
+			hitClipLoaded[severity] = true;
+			string path = HitFeedbackRules.SoundPath(severity);
+			hitClips[severity] = path != null ? Resources.Load<AudioClip>(path) : null;
+		}
+		return hitClips[severity];
 	}
 
 	public void FlashVehicleBar(float amount)

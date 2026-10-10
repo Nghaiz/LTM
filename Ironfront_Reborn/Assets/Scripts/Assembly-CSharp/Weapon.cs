@@ -448,7 +448,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		}
 		if (useMuzzleDirection)
 		{
-			direction = configuration.muzzle.forward;
+			direction = ConvergedOnAim(configuration.muzzle.forward);
 		}
 		lastFired = Time.time;
 		if (HasActiveAnimator())
@@ -457,10 +457,15 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		}
 		// One serial per trigger pull, shared by every pellet it fires (achievements v2 accuracy).
 		currentShotSerial = ++nextShotSerial;
+		// One report per pull, its pellets numbered: the server knows how many the pull fired.
+		reportsCurrentShot = !user.aiControlled && !(this is MountedWeapon) && NetShotReports.Reports(NetworkId);
+		currentReportTick = reportsCurrentShot ? NetShotReports.CurrentFireTick : 0u;
 		for (int i = 0; i < configuration.projectilesPerShot; i++)
 		{
+			currentPellet = (byte)Mathf.Min(i, 255);
 			SpawnProjectile(direction);
 		}
+		reportsCurrentShot = false;
 		// Once per shot, not once per projectile: a shell-loaded weapon fires twenty pellets and
 		// every one of them leaves the same hand. Cleared here rather than at the top of the next
 		// shot so that a bot -- which never has one supplied -- cannot inherit the last human's.
@@ -480,6 +485,12 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		if (user.aiControlled ? NetWeaponAuthority.GameplayHalfRunsHere : NetWeaponAuthority.CosmeticHalfRunsHere)
 		{
 			user.ApplyRecoil(configuration.kickback * Vector3.back + UnityEngine.Random.insideUnitSphere * configuration.randomKick);
+			// The recoil the player feels in the aim: the crosshair climbs and the next round
+			// follows it (WeaponHandling). The model's kick above is only drawn.
+			if (!user.aiControlled && !(this is MountedWeapon) && user.controller != null)
+			{
+				user.controller.ApplyAimRecoil(this);
+			}
 		}
 		AmmoChanged();
 		if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)
@@ -614,7 +625,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		{
 			return null;
 		}
-		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
+		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * (configuration.spread * SpreadScale()));
 		Vector3 origin = ProjectileOrigin(direction);
 		GameObject instance = null;
 
@@ -630,6 +641,10 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			component.source = user;
 			component.sourceWeaponId = NetworkId;
 			component.shotSerial = currentShotSerial;
+			component.zeroOverride = SightZeroMetres;
+			component.reportsHits = reportsCurrentShot;
+			component.reportFireTick = currentReportTick;
+			component.reportPellet = currentPellet;
 			// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
 			// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
 			// the direction announced is the direction fired. A no-op off the server.
@@ -646,6 +661,119 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			throw;
 		}
 	}
+
+	/// <summary>
+	/// The spread multiplier for the local player's shot: wider from the hip and on the move
+	/// (<see cref="WeaponHandling"/>), never past what the server's hit judge allows. 1 for bots
+	/// and mounted guns, whose spread is their own.
+	/// </summary>
+	protected float SpreadScale()
+	{
+		if (user == null || user.aiControlled || this is MountedWeapon || !WeaponHandling.TryGet(NetworkId, out WeaponHandlingProfile handling))
+		{
+			return 1f;
+		}
+		bool moving = user.Velocity().sqrMagnitude > WeaponHandling.MovingSpeed * WeaponHandling.MovingSpeed;
+		return WeaponHandling.SpreadScale(in handling, aiming, moving);
+	}
+
+	/// <summary>
+	/// The zero the sight is set to, metres; 0 leaves the round's own. A scope whose zero the
+	/// player sets overrides it (<see cref="ScopedWeapon"/>).
+	/// </summary>
+	public virtual float SightZeroMetres => 0f;
+
+	/// <summary>Whether the pull being fired is one this client reports the hits of (<see cref="NetShotReports"/>).</summary>
+	private bool reportsCurrentShot;
+
+	/// <summary>The input tick carrying the pull being fired, when it is reported.</summary>
+	private uint currentReportTick;
+
+	/// <summary>Which of the pull's rounds is being spawned.</summary>
+	private byte currentPellet;
+
+	/// <summary>How far along the aim line the point a round is sent to may lie, metres.</summary>
+	private const float AimReachMetres = 1500f;
+
+	private static readonly RaycastHit[] aimHits = new RaycastHit[16];
+
+	/// <summary>
+	/// The direction from where this round is born to the point the user's aim rests on: the first
+	/// thing on their aim line (<see cref="ActorController.TryGetAimRay"/>), a body this client
+	/// draws for the server included, or the line's far end.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The owner's run of 2026-10-10.</b> A round left along <c>muzzle.forward</c>, and the
+	/// muzzle hangs off the view model the recoil spring throws up to 15 degrees about, so a burst
+	/// sprayed where the kick pointed the gun rather than where the crosshair rested -- and the
+	/// server, aiming with the mouse's yaw and pitch, swept a different line again. Sent at the aim
+	/// point, a round hits what the crosshair is on; the kick stays a thing that is drawn.
+	/// </para>
+	/// <para>
+	/// The first thing on the line and not a point at a fixed range: the muzzle sits under and
+	/// beside the eye, so a round sent at a point behind the target would pass beside it by that
+	/// offset scaled down with the distance.
+	/// </para>
+	/// </remarks>
+	private Vector3 ConvergedOnAim(Vector3 muzzleDirection)
+	{
+		if (user == null || user.controller == null || !user.controller.TryGetAimRay(out Ray aim))
+		{
+			return muzzleDirection;
+		}
+		float reach = DistanceAlongAim(user, aim, AimReachMetres, out _);
+		Vector3 toPoint = aim.GetPoint(reach) - ProjectileOrigin(muzzleDirection);
+		// A point at the muzzle or behind it -- the barrel already inside the wall the eye looks
+		// at -- would send the round sideways or back: it leaves along the aim instead.
+		if (Vector3.Dot(toPoint, aim.direction) < MinConvergeMetres)
+		{
+			return aim.direction;
+		}
+		return toPoint.normalized;
+	}
+
+	/// <summary>
+	/// How far along <paramref name="aim"/> the first thing lies -- a wall, a vehicle, a body this
+	/// client draws for the server -- up to <paramref name="reach"/>; <paramref name="user"/>'s own
+	/// body and the vehicle they sit in are never in the way. <paramref name="found"/> says whether
+	/// anything was.
+	/// </summary>
+	protected static float DistanceAlongAim(Actor user, Ray aim, float reach, out bool found)
+	{
+		found = false;
+		int count = Physics.RaycastNonAlloc(aim, aimHits, reach, -2049, QueryTriggerInteraction.Ignore);
+		Transform body = user != null ? user.transform : null;
+		Transform vehicle = user != null && user.seat != null && user.seat.vehicle != null ? user.seat.vehicle.transform : null;
+		for (int i = 0; i < count; i++)
+		{
+			RaycastHit hit = aimHits[i];
+			if (hit.distance >= reach || (body != null && hit.collider.transform.IsChildOf(body)))
+			{
+				continue;
+			}
+			if (vehicle != null && hit.collider.transform.IsChildOf(vehicle))
+			{
+				continue;
+			}
+			Hitbox own = user != null && Hitbox.IsHitboxLayer(hit.collider.gameObject.layer) ? hit.collider.GetComponent<Hitbox>() : null;
+			if (own != null && own.parent == user)
+			{
+				continue;
+			}
+			reach = hit.distance;
+			found = true;
+		}
+		if (NetShotReports.TryHitBody(aim.origin, aim.GetPoint(reach), out RemoteBodyHit drawn))
+		{
+			reach *= drawn.Fraction;
+			found = true;
+		}
+		return reach;
+	}
+
+	/// <summary>How far ahead of the muzzle, along the aim, the point must lie to be aimed at, metres.</summary>
+	private const float MinConvergeMetres = 0.5f;
 
 	/// <summary>
 	/// Whether this client leaves the shot's projectile to the server: a rocket, a rocket pod's

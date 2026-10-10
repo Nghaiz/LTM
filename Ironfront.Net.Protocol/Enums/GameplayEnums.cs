@@ -17,26 +17,24 @@ namespace Ironfront.Net.Protocol
         Sprint        = 1 << 5,
         Prone         = 1 << 6,
         /// <summary>
-        /// Deliberately unassigned. Was <c>ThrowGrenade</c>, declared at the freeze with zero
-        /// producers and zero consumers repo-wide, and retired by phase-V7 D10 rather than
-        /// implemented.
+        /// The client reports what its own rounds hit (14.0.6, owner's run of 2026-10-10: "aimed
+        /// dead on and it does not hit"). A carried firearm's trigger pull in a frame with this bit
+        /// spends its round and is not swept by the server; the hits arrive as
+        /// <c>C_SHOT_REPORT</c> and are checked one by one.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The game has no dedicated grenade input and never did: throwing is <i>switch to the
-        /// gear slot, then Fire</i>, which routes through <c>Actor.SwitchWeapon</c> and
-        /// <c>ThrowableWeapon.Fire</c> — a path V6 already made server-authoritative. Wiring
-        /// this bit would add a <b>second route to firing</b> that does not pass
-        /// <c>Weapon.CanFire()</c>, and a second route is the one nobody writes the rapid-fire
-        /// test for.
+        /// <b>Bit 7 was <c>ThrowGrenade</c></b>, declared at the freeze, never sent, and retired by
+        /// phase-V7 D10 as <c>Reserved7</c>: throwing is "switch to the gear slot, then Fire". No
+        /// build ever set it, so a v4.6.0 client's frames still read as before -- swept by the
+        /// server -- and <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is unchanged.
         /// </para>
         /// <para>
-        /// <b>Renaming is not a wire change.</b> No producer ever set the bit, so no packet's
-        /// bytes move and <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is unchanged. The
-        /// value is kept rather than deleted so the neighbouring bits do not renumber.
+        /// A client that sets the bit and reports nothing hits nothing, and a report is only ever
+        /// for a shot the server itself accepted, so the bit grants no extra shot.
         /// </para>
         /// </remarks>
-        Reserved7     = 1 << 7,
+        ReportsOwnHits = 1 << 7,
         LeanLeft      = 1 << 8,
         LeanRight     = 1 << 9,
         Use           = 1 << 10,

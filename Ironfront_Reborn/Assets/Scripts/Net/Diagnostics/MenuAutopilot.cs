@@ -29,6 +29,9 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// <c>IRONFRONT_AUTOPLAY_JOIN=name</c> waits for a room of that name and joins it.
     /// </para>
     /// <para>
+    /// <c>IRONFRONT_AUTOPLAY_FIGHT=1</c> also fights once deployed (<see cref="CombatAutopilot"/>).
+    /// </para>
+    /// <para>
     /// <c>IRONFRONT_AUTOPLAY_UNCAPPED=1</c> runs the match as a focused window would, with no
     /// v-sync and no frame cap, though the window is in the background: the measuring client of
     /// an A/B must not sit under <c>BackgroundFrameCap</c>'s 30 fps, and bringing it to the front
@@ -40,6 +43,9 @@ namespace Ironfront.Net.Unity.Diagnostics
         private const float StepSeconds = 1f;
         private const float DeployDelaySeconds = 2f;
         private const byte MaxPlayers = 4;
+
+        /// <summary>The map a created room is on when the variable names none: Forest Lake.</summary>
+        private const ushort ForestLakeMapId = 3;
 
         private string _user = string.Empty;
         private string _password = string.Empty;
@@ -84,12 +90,14 @@ namespace Ironfront.Net.Unity.Diagnostics
             {
                 string[] parts = create.Split(';');
                 pilot._createName = parts[0];
-                pilot._createMap = parts.Length > 1 && ushort.TryParse(parts[1], out ushort map) ? map : RoomRules.NightModeMapId;
+                pilot._createMap = parts.Length > 1 && ushort.TryParse(parts[1], out ushort map) ? map : ForestLakeMapId;
                 pilot._createBots = parts.Length > 2 && byte.TryParse(parts[2], out byte bots) ? bots : (byte)0;
                 pilot._createNight = parts.Length > 3 && parts[3] == "night";
             }
             pilot._joinName = Environment.GetEnvironmentVariable("IRONFRONT_AUTOPLAY_JOIN") ?? string.Empty;
             pilot._uncapped = Environment.GetEnvironmentVariable("IRONFRONT_AUTOPLAY_UNCAPPED") == "1";
+            // Phase P38: a client that also fights, for measuring hit registration live.
+            if (Environment.GetEnvironmentVariable("IRONFRONT_AUTOPLAY_FIGHT") == "1") host.AddComponent<CombatAutopilot>();
 
             Debug.Log($"[autoplay] driving the menus as {pilot._user}: "
                       + (pilot._createName.Length > 0

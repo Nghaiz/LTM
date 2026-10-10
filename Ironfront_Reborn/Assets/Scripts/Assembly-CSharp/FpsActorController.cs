@@ -501,6 +501,23 @@ public class FpsActorController : ActorController
 		return true;
 	}
 
+	/// <summary>
+	/// From the eye along the mouse's aim. The recoil kicks the camera (<c>PlayerFpParent.KickCamera</c>)
+	/// and the gun model, and both are drawn; neither steers the round (owner's run of 2026-10-10:
+	/// "it should fly where the player aimed, not where the kick tilted the camera"). The camera's
+	/// parent carries the mouse's pitch and none of the kick, and it is the aim the server is sent.
+	/// </summary>
+	public override bool TryGetAimRay(out Ray ray)
+	{
+		if (fpCamera == null || fpCameraParent == null || !fpCamera.isActiveAndEnabled || actor == null || actor.fallenOver)
+		{
+			ray = default(Ray);
+			return false;
+		}
+		ray = new Ray(fpCamera.transform.position, fpCameraParent.forward);
+		return true;
+	}
+
 	public override void ReceivedDamage(float damage, float balanceDamage, Vector3 point, Vector3 direction, Vector3 force)
 	{
 		if (balanceDamage > 5f)
@@ -557,7 +574,13 @@ public class FpsActorController : ActorController
 
 	public override void EnableInput()
 	{
-		characterController.enabled = true;
+		// Never a live capsule inside a vehicle: StartSeated switched it off on purpose, and a
+		// menu, the chat or a get-up re-enabling it in the seat gave the hull a body to fight and
+		// the footsteps a ground to walk on (owner report 2026-10-10).
+		bool seated = actor != null && actor.IsSeated();
+		characterController.enabled = !seated;
+		// Also heals a stale flag: a body that died in a seat and respawns walks with footsteps again.
+		controller.seated = seated;
 		controller.inputEnabled = true;
 		inputEnabled = true;
 	}
@@ -565,6 +588,7 @@ public class FpsActorController : ActorController
 	public override void StartSeated(Seat seat)
 	{
 		controller.DisableCharacterController();
+		controller.seated = true;
 		controller.SetMouseEnabled(seat.type != Seat.Type.Pilot);
 		mouseViewLocked = seat.type == Seat.Type.Pilot;
 		fpCameraParent.parent = seat.transform;
@@ -591,6 +615,7 @@ public class FpsActorController : ActorController
 	public override void EndSeated(Vector3 exitPosition, Quaternion flatFacing)
 	{
 		controller.EnableCharacterController();
+		controller.seated = false;
 		controller.SetMouseEnabled(true);
 		mouseViewLocked = false;
 		base.transform.position = exitPosition + 0.8f * Vector3.up;
@@ -891,6 +916,55 @@ public class FpsActorController : ActorController
 		MinimapUi.ForgetDrawnSpawnPoint();
 	}
 
+	/// <summary>The aim's recoil over the current burst (<see cref="WeaponHandling"/>).</summary>
+	private readonly AimRecoilState aimRecoil = new AimRecoilState();
+
+	/// <summary>The handling of the gun the recoil belongs to; recovery uses it.</summary>
+	private WeaponHandlingProfile aimRecoilHandling;
+
+	private bool aimRecoilActive;
+
+	public override void ApplyAimRecoil(Weapon weapon)
+	{
+		if (weapon == null || fpCameraParent == null || !WeaponHandling.TryGet(weapon.NetworkId, out WeaponHandlingProfile handling))
+		{
+			return;
+		}
+		aimRecoilHandling = handling;
+		aimRecoilActive = true;
+		Vector2 kick = aimRecoil.Kick(in handling, Time.time, UnityEngine.Random.Range(-1f, 1f));
+		TurnAim(-kick.x, kick.y);
+	}
+
+	/// <summary>The hands bring part of the climb back once the trigger rests.</summary>
+	private void RecoverAimRecoil()
+	{
+		if (!aimRecoilActive || fpCameraParent == null)
+		{
+			return;
+		}
+		if (actor == null || actor.dead)
+		{
+			aimRecoil.Reset();
+			aimRecoilActive = false;
+			return;
+		}
+		Vector2 back = aimRecoil.Recover(in aimRecoilHandling, Time.time, Time.deltaTime);
+		if (back != Vector2.zero)
+		{
+			TurnAim(back.x, -back.y);
+		}
+	}
+
+	/// <summary>Turns the aim -- the camera's parent, which the server is sent -- by these degrees (x down, y right).</summary>
+	private void TurnAim(float pitchDegrees, float yawDegrees)
+	{
+		Vector3 euler = fpCameraParent.localEulerAngles;
+		euler.x += pitchDegrees;
+		euler.y += yawDegrees;
+		fpCameraParent.localEulerAngles = euler;
+	}
+
 	public override void ApplyRecoil(Vector3 impulse)
 	{
 		fpParent.ApplyRecoil(impulse);
@@ -1131,6 +1205,7 @@ public class FpsActorController : ActorController
 		{
 			sprintCannotFireAction.Start();
 		}
+		RecoverAimRecoil();
 		fpParent.lean = Lean();
 		if (GameKeys.Down(GameAction.Aim))
 		{
@@ -1139,7 +1214,10 @@ public class FpsActorController : ActorController
 		bool flag = actor.IsAiming();
 		if (flag && actor.HasUnholsteredWeapon() && actor.activeWeapon.configuration.aimFov < 30f)
 		{
-			controller.SetMouseSensitivityMultiplier(OptionsUi.GetOptions().sniperMultiplier * OptionsUi.GetOptions().mouseSensitivity, OptionsUi.GetOptions().mouseInvert);
+			// A variable scope slows the mouse with its power, so 25x turns like its 6x (ScopeProfiles).
+			ScopedWeapon scoped = actor.activeWeapon as ScopedWeapon;
+			float zoomScale = scoped != null ? scoped.SensitivityScale : 1f;
+			controller.SetMouseSensitivityMultiplier(OptionsUi.GetOptions().sniperMultiplier * OptionsUi.GetOptions().mouseSensitivity * zoomScale, OptionsUi.GetOptions().mouseInvert);
 		}
 		else
 		{
@@ -1326,7 +1404,10 @@ public class FpsActorController : ActorController
 		// While the map is held open the wheel zooms it (MinimapUi), and while the Tab board is open it
 		// turns the board's pages (HudInputClaims); switching weapons with the same notch would change
 		// the gun in the player's hands every time.
-		float wheel = MinimapUi.OwnsScrollWheel || HudInputClaims.ScoreboardOwnsWheel ? 0f : Input.mouseScrollDelta.y;
+		// And while a variable rifle scope is up the wheel steps its power (ScopedWeapon).
+		float wheel = MinimapUi.OwnsScrollWheel || HudInputClaims.ScoreboardOwnsWheel || HudInputClaims.ScopeOwnsWheel
+			? 0f
+			: Input.mouseScrollDelta.y;
 		if (wheel < 0f)
 		{
 			QueueWeaponSwitch(actor.FindWeaponSlot(1, skipToggleable: true));
@@ -1512,11 +1593,19 @@ public class FpsActorController : ActorController
 	public override void SwitchedToWeapon(Weapon weapon)
 	{
 		SetupWeaponFov(weapon);
+		// A new gun starts a new burst: the last one's climb is the player's to keep.
+		aimRecoil.Reset();
+		aimRecoilActive = false;
 	}
 
 	private void SetupWeaponFov(Weapon weapon)
 	{
-		if (weapon != null)
+		ScopedWeapon scoped = weapon as ScopedWeapon;
+		if (scoped != null && scoped.HasScopeProfile)
+		{
+			fpParent.SetAimMagnification(scoped.CurrentMagnification);
+		}
+		else if (weapon != null)
 		{
 			fpParent.SetAimFov(weapon.configuration.aimFov);
 		}

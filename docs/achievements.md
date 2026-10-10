@@ -171,7 +171,7 @@ người chơi tự đo (practice).
 | 46 | ★ JACK OF ALL TRADES | ON 🔒 | In one life, get a kill with a primary weapon, a kill with your pistol, a grenade kill and a kill with the BEU AW1 or BIL SCALPEL. | | mới |
 | 47 | TOUCHDOWN | ON 🔒 | Kill an enemy by landing or crashing a helicopter on them. | | mới |
 | 48 | BUCKSHOT SNIPER | ON 🔒 | Kill an enemy with the 76 EAGLE shotgun from 60 m or more. | | mới |
-| 49 | DOGFIGHT | ON 🔒 | While you pilot a helicopter 5 m or more above the ground, shoot down an enemy helicopter that is also 5 m or more up, with its pilot aboard. | | mới |
+| 49 | DOGFIGHT | ON 🔒 | From a helicopter 5 m or more above the ground, as its pilot or its gunner, shoot down an enemy helicopter that is also 5 m or more up, with its pilot aboard. | | mới |
 | 50 | GOLD STANDARD | PR 🔒 | Get a kill with the golden wrench in practice. | | client |
 
 ### 4.4 Platinum (14)
@@ -182,13 +182,13 @@ người chơi tự đo (practice).
 | 52 | ALL FRONTS MASTERED | ON | Win 50 online rounds on each of the 3 maps. Each must have at least 5 minutes of your play. | 📊 0/150 | mới |
 | 53 | AIR DEFENSE | ON | On foot, shoot down 25 enemy helicopters: destroy them with their pilot aboard while they are 5 m or more above the ground. | 📊 | mới |
 | 54 | UNDEFEATED | ON | Win 10 online rounds in a row. Any round you play for 5 minutes or more and do not win resets the count. | chuỗi hiện tại | mới (master) |
-| 55 | MOONLIGHT MARKSMAN | ON NM | Kill an enemy with a headshot from 300 m or more in Night Mode. | kỷ lục | mới |
+| 55 | MOONLIGHT MARKSMAN | ON NM | Kill an enemy with a headshot from 150 m or more in Night Mode. | kỷ lục | mới |
 | 56 | ★ OUTNUMBERED | ON | Win an online round as the only human player on your side against at least 3 human players. You must play at least 10 minutes. | | mới |
 | 57 | ★ ON BORROWED TIME | ON | After an enemy brings you down to 5 health or less, get 10 more kills without healing and without dying. | kỷ lục | mới |
 | 58 | ★ PACIFIST | ON | Win an online round with 0 kills and 0 deaths while capturing more flags than anyone else in it, bots included. You must play at least 15 minutes. | | mới |
 | 59 | ★ NEMESIS | ON | Kill the same human player 7 times in one round without them killing you once. | kỷ lục | mới |
 | 60 | ★ ABSOLUTE DOMINANCE | ON | Finish an online round first of everyone in it, bots included, in kills, in flag captures and in accuracy (at least 50 shots), with nobody dying fewer times than you. You must play at least 5 minutes. | | mới |
-| 61 | DRILL SERGEANT | PR | Win a practice round with no allied bots against 20 or more enemy bots, under LEAD BY 200 or more or FIRST TO 500 or more, after at least 5 minutes of your play. | | client |
+| 61 | DRILL SERGEANT | PR | Win a practice round alone, with no allied bots, against 20 or more enemy bots, after at least 5 minutes of your play. | | client |
 | 62 | GRAND TOUR | PR | Win practice rounds on all 3 maps under both win rules (LEAD BY 200 or more, FIRST TO 500 or more), and win a Night Mode practice round. | 📊 0/7 | client |
 | 63 | IMPOSSIBLE ANGLE | ON 🔒 | Shoot down an enemy helicopter that is 10 m or more above the ground with a tank's main gun. | | mới |
 | 64 | FROM THE GRAVE | ON 🔒 | After you die, kill 3 enemies with a grenade you threw before dying. | | mới |
@@ -202,8 +202,8 @@ Ghi chú:
   người nhận PARTICIPATION TROPHY.
 - **OUTNUMBERED** tính số người thật ở mỗi phe lúc hiệp kết thúc. Chọn đội giờ tự do hoàn toàn (mục
   7.1), nên 1 người đấu 3 hay 1 đấu 10 đều chơi được.
-- **DRILL SERGEANT** và **GRAND TOUR** chỉ tính luật thắng mặc định hoặc khó hơn (lead by từ 200, first
-  to từ 500).
+- **GRAND TOUR** chỉ tính luật thắng mặc định hoặc khó hơn (lead by từ 200, first to từ 500).
+  **DRILL SERGEANT** tính mọi luật (mục 4.10).
 
 ### 4.5 Mythic (16)
 
@@ -289,6 +289,37 @@ thật). Sau khi mở thì thấy mô tả thật ở bảng trên.
 Một người chơi giỏi, một trận Forest Lake 100 bot dài: ROLL CALL, STEADY HAND, FLAG RUNNER, có thể
 BAPTISM OF FIRE, UNBROKEN, OVERWATCH, và PARTICIPATION TROPHY cho người đứng bét. Khoảng **4 đến 7 trên
 80**, đa số Bronze. Trong 5 phút đầu: **không có cái nào**.
+
+### 4.10 Rà soát lại cả 80 thành tựu (10/10/2026)
+
+Chủ dự án báo: DOGFIGHT không mở dù đã dùng trực thăng phe mình bắn hạ trực thăng địch; hỏi CURVATURE,
+COUNTER-SNIPER và DRILL SERGEANT có làm được thật không; LAKE MONSTER phải làm lại. Mỗi thành tựu được
+lần theo đường đi của số liệu: sự kiện trong game, bộ đếm của game server, luật của master, và việc
+người chơi có thật sự nhìn thấy và bắn trúng được mục tiêu không.
+
+Lỗi tìm thấy và cách sửa:
+
+| Thành tựu | Lỗi | Sửa |
+|---|---|---|
+| DOGFIGHT, AIR DEFENSE, IMPOSSIBLE ANGLE | Trực thăng không cháy mà chết ngay, và đồng hồ cháy xoá mọi ghế trước khi game server báo "trực thăng rơi". Bộ đếm luôn thấy trực thăng rơi không có phi công, nên cả ba không bao giờ mở được trên online. Test của bộ đếm vẫn xanh vì tự đưa tổ lái vào. | Báo trước, xoá ghế sau. Test `VehicleDownCrewTests` đỏ trước khi sửa, xanh sau khi sửa. |
+| DOGFIGHT | Chỉ tính phi công (rocket). Xạ thủ súng cửa bắn hạ trực thăng địch thì không được tính. | Tính cả xạ thủ, miễn trực thăng của mình cũng cách mặt đất từ 5 m. |
+| CROWD CONTROL, FROM THE GRAVE, JACK OF ALL TRADES | Chỉ đếm FRAG. SPEARHEAD cũng là lựu đạn nổ nhưng không được đếm. | SPEARHEAD được đếm như FRAG. |
+| MOONLIGHT MARKSMAN | Sương đêm Forest Lake có mật độ 0,022 (kiểu bình phương mũ). Bật night vision thì còn 0,0077. Ở 300 m người lính chỉ còn khoảng 0,5% màu của mình, tức là không thấy được. | 300 m thành 150 m (với night vision còn khoảng 26%). Ai đã đủ 150 m thì nhận ngay lần đăng nhập tới. |
+| DRILL SERGEANT | Mỗi mạng giết được số điểm bằng số cờ phe mình đang giữ, và mất hết cờ là thua ngay. Một mình giữ 1 hoặc 2 cờ trước 20 bot thì phải giết hơn khoảng 100 đến 200 mạng mới đủ LEAD BY 200. | Bỏ điều kiện luật khó: thắng một mình trước từ 20 bot theo luật nào cũng được (thấp nhất màn practice cho chọn là LEAD BY 50 hoặc FIRST TO 100). |
+| LAKE MONSTER | Xuồng không có súng, chỉ hành khách bắn bằng súng của mình. | Xuồng RHIB có súng máy ở mũi (PR #607). |
+
+Những cái bị nghi nhưng làm được (giữ nguyên):
+
+| Thành tựu | Vì sao làm được |
+|---|---|
+| CURVATURE (headshot 900 m) | Vùng chơi Dustbowl rộng 1.700 x 1.600 m, Forest Lake 2.000 x 1.500 m. Camera vẽ tới 2.000 m. Ngoài 500 m server vẫn gửi kẻ địch nằm trong 15 độ trước mặt. SL-DEFENDER bắn xa 1.000 m, có ống ngắm 25x, chỉnh zero tới 1.000 m và đo xa; headshot ở 900 m gây 288 sát thương. Island (700 x 700 m) không đủ xa. |
+| WINDREADER (headshot 500 m) | Như trên. SL-DEFENDER, RECON LRR (1.000 m) và SIGNAL DMR (800 m) đều với tới. |
+| COUNTER-SNIPER (súng ngắn, trên 150 m) | S-IND7 bắn xa 200 m; headshot ở 151 m gây 104,6, đủ hạ. Khó vì đạn toả và rơi khoảng 1 m, nhưng làm được, nhất là với bot cầm súng bắn tỉa nằm yên một chỗ. |
+| BUCKSHOT SNIPER (shotgun 60 m) | Đạn chì bay tới 80 m, mỗi viên còn 9,6 sát thương ở 60 m. Chỉ cần phát kết liễu là shotgun. |
+| MID-AIR | Ghế trực thăng kín, chỉ đạn SL-DEFENDER xuyên được, qua kính buồng lái. Đúng thiết kế. |
+| ON BORROWED TIME | Game không tự hồi máu, chỉ medipack mới hồi. |
+| TOUCHDOWN, MAN OVERBOARD, VICTORY LAP | Trực thăng và xuồng đều có hộp va chạm để cán; còi chỉ có trên jeep và quad bike. |
+| GOLD STANDARD | Cần một mạng giết bằng cờ lê vàng trong practice; ISEEGOLD chỉ mở khoá cờ lê. Câu thông báo giữ nguyên. |
 
 ---
 
@@ -469,6 +500,28 @@ Test cho từng bộ đếm mới (mỗi cái có ca "vừa đủ" và "thiếu 
 practice, phân bổ hạng 13/16/21/14/16; hàng đợi toast không bỏ sót khi 5 cái mở cùng lúc; master không
 gửi thành tựu ẩn người xem chưa có trong màn so sánh; phòng 1 đấu nhiều người bắt đầu được.
 
+### 7.4 Lưu trữ: cập nhật game không bao giờ làm mất thành tựu (từ v4.6.1)
+
+Anh yêu cầu ngày 10/10/2026: sửa lỗi, cập nhật client hay server đều không được làm người chơi mất
+bất kỳ thành tựu nào. Cách làm theo kiểu các game indie không dùng Steam:
+
+- **Máy người chơi**: thành tựu practice, tiến độ practice, cờ lê vàng và hàng đợi banner nằm trong
+  file `achievements.json` ở thư mục dữ liệu người dùng (Windows: `AppData/LocalLow/LTM10/IronfrontReborn`,
+  macOS: `~/Library/Application Support/...`, Linux: `~/.config/unity3d/LTM10/IronfrontReborn`), không
+  nằm trong thư mục game, nên giải nén bản mới hay xoá bản cũ đều không đụng tới. File được ghi trọn
+  vẹn (ghi file tạm rồi thay thế), bản trước đó giữ làm `achievements.json.bak`; file hỏng thì đọc bản
+  backup. Các key PlayerPrefs của v4.6.0 vẫn được ghi song song, nên chạy lại bản cũ vẫn thấy đủ.
+- **Chỉ có thêm, không có bớt**: mỗi lần mở game, mọi bản sao (file, backup, PlayerPrefs cũ) được
+  gộp lại: thành tựu là hợp của tất cả, tiến độ lấy số lớn hơn (bitmask thì gộp bit). ID mà bản game
+  hiện tại không biết (thành tựu của bản mới hơn, hay đã bỏ) được giữ nguyên, chỉ không hiển thị.
+- **Master**: không còn xoá dòng thành tựu nào lúc khởi động. Dòng của ID đã bỏ được giữ, không hiển
+  thị và không tính điểm. Test `AnIdOncePlayersCanHoldItNeverLeavesTheCatalogue` chặn việc đổi tên hay
+  xoá một ID đã phát hành: luật, tên, hạng đổi thoải mái, ID thì không.
+- **Luật thay đổi thì chấm lại ("ghi đè" theo bản mới)**: mỗi lần đăng nhập, master chấm lại mọi thành
+  tựu theo luật hiện hành từ career (kể cả thành tựu practice có số liệu, từ số đã claim), và game
+  chấm lại thành tựu practice từ tiến độ lưu trên máy ngay lần mở đầu tiên. Ngưỡng bị hạ thì ai đã đủ
+  sẽ nhận ngay, kèm banner; ai đã có thì giữ nguyên.
+
 ## 8. Mặc định đang áp dụng
 
 1. **Career cũ được giữ** (người có sẵn số liệu mở ngay các thành tựu cày đã đủ).
@@ -487,4 +540,4 @@ gửi thành tựu ẩn người xem chưa có trong màn so sánh; phòng 1 đ�
 | Toast, trang thành tựu, tổng kết cuối hiệp, tuỳ chọn số bot practice | Xong (PR "achievements v2 UI"). Toast: một hàng đợi lưu qua chuyển cảnh và cả khi thoát game, bộ đếm `2 / 3`, màu và khung theo hạng, Mythic rộng gấp đôi nền obsidian có hạt lửa giữ 8 giây, thành tựu ẩn "giải mật" màu dâng từ dưới lên, nhỏ lại khi đang bắn. Trang: lọc theo hạng / trạng thái / loại, sắp xếp độ khó / độ hiếm / mới mở / gần mở nhất, độ hiếm thật và nhãn COMMON…LEGENDARY, thanh tiến độ hoặc kỷ lục, bảng chi tiết có từng phần và người đầu tiên mở Mythic. Practice có thêm "BLUE / RED, ALONE VS ALL BOTS". **Khác bản duyệt**: tổng kết cuối hiệp là thẻ riêng ở dưới màn hình (không nằm trong bảng Tab) để người chơi thấy ngay mà không phải giữ Tab, giống màn tổng kết sau trận của các game lớn; thẻ tự mờ khi mở bảng Tab. Âm thanh từng hạng và icon đến ở bước "Icon và âm thanh"; tới lúc đó toast dùng tiếng chuông cũ và ô vuông thay icon. Test: dotnet 8 bộ xanh |
 | So sánh trong GLOBAL RANKING | Xong (PR "ranking compare"). Bảng xếp hạng thêm cột ACHIEVEMENTS (số đã mở · điểm) và MYTHIC; bấm tên mở thẻ người chơi (chỉ số chính, huy chương theo hạng, số ẩn, 3 thành tựu hiếm nhất mình được thấy); COMPARE (trên mỗi dòng và trên thẻ) mở màn so sánh hai bên: mình trái, họ phải, thanh tiến độ mọc từ giữa, lọc theo hạng / loại / BOTH HAVE / ONLY ME / ONLY THEM / NEITHER, sắp xếp như trang thành tựu. Master áp luật ẩn (yêu cầu mới `PLAYER_PROFILE` 0x0046/0x0047, giao thức 14.0.5): thành tựu ẩn mình chưa có không bao giờ được gửi, cả ngày mở lẫn số liệu career chỉ phục vụ nó; cột của họ ghi CLASSIFIED |
 | Icon và âm thanh | Xong (PR "achievement badges"). 80 huy hiệu vẽ bằng code (`tools/ui/badges.py`, `make_icons.py --badges`): Bronze tròn, Silver lục giác 1 sao, Gold khiên 2 sao, Platinum hình sao 3 sao, Mythic obsidian có vương miện gai và vết nứt đỏ; thành tựu Night Mode có vầng trăng nhỏ, practice có bia tập bắn nhỏ trên khung. 15 thành tựu ẩn có thêm bóng đen `<id>_shadow` (hình khung đen, hình vẽ giữa mờ). Hạng, ẩn, night, practice đọc thẳng từ danh mục nên không lệch được; 50 huy hiệu cũ đã xoá. Âm thanh (`make_achievement_sound.py`): Bronze một tiếng chuông, Silver hai nốt, Gold ba nốt kèn đồng, Platinum fanfare ngắn, Mythic ba tiếng trống trầm rồi hợp xướng, thảm hoạ là kèn trôm-pét buồn "wah wah wah waaah"; tiếng chuông cũ giữ làm dự phòng. Test kiểm tra đủ huy hiệu, đủ bóng đen, không thừa file cũ, đủ âm thanh |
-| Deploy master + game server, cập nhật main, thay 3 bản v4.6.0 | Chưa |
+| Deploy master + game server, cập nhật main, thay 3 bản v4.6.0 | Xong ngày 10/10/2026. Master và 3 game server chạy commit a1eb8146; kiểm tra thật qua fly + Azure: đăng nhập, vào phòng, nhận dữ liệu UDP đạt, vé giả bị từ chối. `main` = 048eff2d. Ba bản zip v4.6.0 (Windows, macOS, Linux) đã được thay bằng bản build từ a1eb8146 và chạy thử đạt trên cả 3 hệ máy; ghi chú phát hành đã viết lại. Bảng xếp hạng đang trống vì từ v4.6.0 chưa có trận online nào, và 50 thành tựu cũ đã xoá theo thiết kế; tài khoản vẫn còn nguyên |

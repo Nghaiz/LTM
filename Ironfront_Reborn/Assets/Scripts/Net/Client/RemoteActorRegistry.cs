@@ -36,7 +36,7 @@ namespace Ironfront.Net.Unity.Client
     /// </remarks>
     [DefaultExecutionOrder(-50)]
     [DisallowMultipleComponent]
-    public sealed class RemoteActorRegistry : MonoBehaviour
+    public sealed class RemoteActorRegistry : MonoBehaviour, IRemoteBodyHitTester
     {
         [Tooltip("Instantiated for each actor the server spawns into view.")]
         [SerializeField] private GameObject _remoteActorPrefab;
@@ -124,6 +124,17 @@ namespace Ironfront.Net.Unity.Client
         /// <c>GetComponent</c> per snapshot would be 48 lookups at 30 Hz for a value that
         /// cannot change while the transform is live.
         /// </remarks>
+        /// <summary>
+        /// Fills <paramref name="into"/> with every body drawn right now. For diagnostics that pick
+        /// among them (<c>CombatAutopilot</c>); nothing in a match calls it.
+        /// </summary>
+        public void CopyLiveViews(List<RemoteActorView> into)
+        {
+            into.Clear();
+            foreach (KeyValuePair<ushort, RemoteActorView> pair in _views)
+                if (pair.Value != null && _live.ContainsKey(pair.Key)) into.Add(pair.Value);
+        }
+
         public bool TryFindView(ushort actorId, out RemoteActorView view)
         {
             if (_views.TryGetValue(actorId, out view)) return view != null;
@@ -171,13 +182,38 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null) return;
             _client.Router.OnSpawnActor += OnSpawn;
             _client.Router.OnDespawnActor += OnDespawn;
+
+            // The bodies the local player's rounds are tested against (14.0.6).
+            NetShotReports.Tester = this;
         }
 
         private void OnDisable()
         {
+            if (ReferenceEquals(NetShotReports.Tester, this)) NetShotReports.Tester = null;
             if (_client == null) return;
             _client.Router.OnSpawnActor -= OnSpawn;
             _client.Router.OnDespawnActor -= OnDespawn;
+        }
+
+        /// <summary>
+        /// The nearest living body this client draws that the segment enters, by the soldier's
+        /// own hitboxes on the pose last drawn (<see cref="RemoteBodyHitboxes"/>).
+        /// </summary>
+        public bool TryHitBody(Vector3 from, Vector3 to, out RemoteBodyHit hit)
+        {
+            hit = default;
+            float nearest = float.MaxValue;
+            foreach (KeyValuePair<ushort, RemoteActorView> pair in _views)
+            {
+                RemoteActorView view = pair.Value;
+                if (view == null || !_live.ContainsKey(pair.Key)) continue;
+                if (!view.TryHitSegment(from, to, out float fraction, out HitboxType part) || fraction >= nearest) continue;
+
+                nearest = fraction;
+                hit = new RemoteBodyHit(pair.Key, part, Vector3.LerpUnclamped(from, to, fraction), fraction);
+            }
+
+            return nearest <= 1f;
         }
 
         private void Update()

@@ -37,6 +37,12 @@ namespace Ironfront.Net.Protocol
         /// An older server counts it as an unknown message and moves on.
         /// </summary>
         NightVision   = 0x28,
+        /// <summary>
+        /// The rounds of one trigger pull that the shooter's own game saw strike a body (14.0.6),
+        /// for a client whose input frames carry <see cref="InputButtons.ReportsOwnHits"/>. The
+        /// server checks every claim and computes the damage. Channel 2.
+        /// </summary>
+        ShotReport    = 0x29,
     }
 
     /// <summary>
