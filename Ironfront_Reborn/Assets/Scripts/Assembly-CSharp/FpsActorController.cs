@@ -1164,7 +1164,10 @@ public class FpsActorController : ActorController
 		bool flag = actor.IsAiming();
 		if (flag && actor.HasUnholsteredWeapon() && actor.activeWeapon.configuration.aimFov < 30f)
 		{
-			controller.SetMouseSensitivityMultiplier(OptionsUi.GetOptions().sniperMultiplier * OptionsUi.GetOptions().mouseSensitivity, OptionsUi.GetOptions().mouseInvert);
+			// A variable scope slows the mouse with its power, so 25x turns like its 6x (ScopeProfiles).
+			ScopedWeapon scoped = actor.activeWeapon as ScopedWeapon;
+			float zoomScale = scoped != null ? scoped.SensitivityScale : 1f;
+			controller.SetMouseSensitivityMultiplier(OptionsUi.GetOptions().sniperMultiplier * OptionsUi.GetOptions().mouseSensitivity * zoomScale, OptionsUi.GetOptions().mouseInvert);
 		}
 		else
 		{
@@ -1351,7 +1354,10 @@ public class FpsActorController : ActorController
 		// While the map is held open the wheel zooms it (MinimapUi), and while the Tab board is open it
 		// turns the board's pages (HudInputClaims); switching weapons with the same notch would change
 		// the gun in the player's hands every time.
-		float wheel = MinimapUi.OwnsScrollWheel || HudInputClaims.ScoreboardOwnsWheel ? 0f : Input.mouseScrollDelta.y;
+		// And while a variable rifle scope is up the wheel steps its power (ScopedWeapon).
+		float wheel = MinimapUi.OwnsScrollWheel || HudInputClaims.ScoreboardOwnsWheel || HudInputClaims.ScopeOwnsWheel
+			? 0f
+			: Input.mouseScrollDelta.y;
 		if (wheel < 0f)
 		{
 			QueueWeaponSwitch(actor.FindWeaponSlot(1, skipToggleable: true));
@@ -1541,7 +1547,12 @@ public class FpsActorController : ActorController
 
 	private void SetupWeaponFov(Weapon weapon)
 	{
-		if (weapon != null)
+		ScopedWeapon scoped = weapon as ScopedWeapon;
+		if (scoped != null && scoped.HasScopeProfile)
+		{
+			fpParent.SetAimMagnification(scoped.CurrentMagnification);
+		}
+		else if (weapon != null)
 		{
 			fpParent.SetAimFov(weapon.configuration.aimFov);
 		}
