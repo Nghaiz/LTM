@@ -377,6 +377,51 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
+        public void ANewSeasonResetsTheOnlineCareerOnceAndKeepsAchievementsAndPractice()
+        {
+            // Owner, 2026-10-11: season 1's online numbers were double-counted and incomplete, so the
+            // ranking starts again. What a player holds, and what practice counted, stays.
+            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"season-{System.Guid.NewGuid():N}.db");
+            int id;
+            using (var old = new SqliteDatabase(path))
+            {
+                Assert.True(old.InsertAccount("veteran", Password, "Veteran", 0));
+                id = old.FindAccount("veteran")!.PlayerId;
+                old.WriteCareer(id, new Dictionary<string, long> { ["kills"] = 1005, ["wins"] = 7, ["prGuidePages"] = 3 });
+                Assert.True(old.InsertAchievement(id, "cadet", 1));
+            }
+            using (var raw = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+            {
+                // A season-1 database: written before seasons were recorded.
+                raw.Open();
+                using var drop = raw.CreateCommand();
+                drop.CommandText = "DROP TABLE career_meta";
+                drop.ExecuteNonQuery();
+            }
+
+            using var database = new SqliteDatabase(path);
+            Assert.Equal(1, database.ReadCareerSeason());
+            _ = new CareerService(database);
+
+            Assert.Equal(SqliteDatabase.CurrentCareerSeason, database.ReadCareerSeason());
+            Assert.Equal(new Dictionary<string, long> { ["prGuidePages"] = 3 }, database.ReadCareer(id));
+            Assert.Contains(database.ReadAchievements(id), row => row.Id == "cadet");
+            Assert.Empty(database.ReadCareerRows());
+
+            // Once: a later start keeps the new season's numbers.
+            database.WriteCareer(id, new Dictionary<string, long> { ["kills"] = 5 });
+            _ = new CareerService(database);
+            Assert.Equal(5, database.ReadCareer(id)["kills"]);
+        }
+
+        [Fact]
+        public void AFreshDatabaseStartsInTheCurrentSeason()
+        {
+            var database = new SqliteDatabase(":memory:");
+            Assert.Equal(SqliteDatabase.CurrentCareerSeason, database.ReadCareerSeason());
+        }
+
+        [Fact]
         public void AnAchievementTheCatalogueNoLongerHasIsKeptAndNotCounted()
         {
             // Owner, 2026-10-10: an update never costs a player an achievement. A row for an id this

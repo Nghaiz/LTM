@@ -35,7 +35,20 @@ namespace Ironfront.MasterServer.Data
     /// </remarks>
     public sealed partial class SqliteDatabase
     {
-        private void CreateCareerTables() => Execute(@"
+        /// <summary>
+        /// The career season the stored numbers belong to. Season 1 (v4.6.0 and v4.6.1) is closed:
+        /// its online numbers were wrong both ways. A game server re-sent each round's running
+        /// totals, so every round in a room re-added the ones before it (maidang2804 held 1,005
+        /// kills for about 555), and a round's end was dropped for every player whose master link
+        /// had closed mid-round. The owner chose a fresh ranking over a partial repair (2026-10-11);
+        /// season 1's rows are archived in <c>career_stats_season1</c>.
+        /// </summary>
+        public const int CurrentCareerSeason = 2;
+
+        private void CreateCareerTables()
+        {
+            bool fresh = !TableExists("career_stats");
+            Execute(@"
 CREATE TABLE IF NOT EXISTS career_stats (
     player_id INTEGER NOT NULL REFERENCES accounts(player_id),
     stat TEXT NOT NULL,
@@ -48,7 +61,85 @@ CREATE TABLE IF NOT EXISTS achievements (
     unlocked_at INTEGER NOT NULL,
     PRIMARY KEY (player_id, achievement_id)
 );
-CREATE INDEX IF NOT EXISTS idx_achievements_id ON achievements(achievement_id);");
+CREATE INDEX IF NOT EXISTS idx_achievements_id ON achievements(achievement_id);
+CREATE TABLE IF NOT EXISTS career_meta (
+    key TEXT PRIMARY KEY,
+    value INTEGER NOT NULL
+);");
+
+            // A database that has never held a career starts in the current season: there is
+            // nothing of an older one in it to reset.
+            if (fresh) Execute($"INSERT OR IGNORE INTO career_meta(key, value) VALUES ('season', {CurrentCareerSeason})");
+        }
+
+        private bool TableExists(string name)
+        {
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name";
+            cmd.Parameters.AddWithValue("$name", name);
+            return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
+        }
+
+        /// <summary>The career season the stored numbers belong to; 1 for a database that never recorded one.</summary>
+        public int ReadCareerSeason()
+        {
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT value FROM career_meta WHERE key = 'season'";
+            object? value = cmd.ExecuteScalar();
+            return value is long season ? (int)season : 1;
+        }
+
+        /// <summary>
+        /// Starts career season <paramref name="season"/>: every stat row <paramref name="reset"/>
+        /// names is copied into <c>career_stats_season{old}</c> and deleted, and the season is
+        /// recorded, in one transaction. Achievements and the rows not named are untouched.
+        /// </summary>
+        /// <returns>How many rows were archived and deleted.</returns>
+        public int BeginCareerSeason(int season, System.Func<string, bool> reset)
+        {
+            int old = ReadCareerSeason();
+            var keys = new List<string>();
+            using (SqliteCommand cmd = _connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT DISTINCT stat FROM career_stats";
+                using SqliteDataReader reader = cmd.ExecuteReader();
+                while (reader.Read()) keys.Add(reader.GetString(0));
+            }
+
+            string archive = $"career_stats_season{old}";
+            int removed = 0;
+            using SqliteTransaction transaction = _connection.BeginTransaction();
+            using (SqliteCommand create = _connection.CreateCommand())
+            {
+                create.Transaction = transaction;
+                create.CommandText = $"CREATE TABLE IF NOT EXISTS {archive} (player_id INTEGER NOT NULL, stat TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (player_id, stat))";
+                create.ExecuteNonQuery();
+            }
+            foreach (string key in keys)
+            {
+                if (!reset(key)) continue;
+                using SqliteCommand copy = _connection.CreateCommand();
+                copy.Transaction = transaction;
+                copy.CommandText = $"INSERT OR REPLACE INTO {archive}(player_id, stat, value) SELECT player_id, stat, value FROM career_stats WHERE stat = $stat";
+                copy.Parameters.AddWithValue("$stat", key);
+                copy.ExecuteNonQuery();
+
+                using SqliteCommand delete = _connection.CreateCommand();
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM career_stats WHERE stat = $stat";
+                delete.Parameters.AddWithValue("$stat", key);
+                removed += delete.ExecuteNonQuery();
+            }
+            using (SqliteCommand mark = _connection.CreateCommand())
+            {
+                mark.Transaction = transaction;
+                mark.CommandText = "INSERT INTO career_meta(key, value) VALUES ('season', $season) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+                mark.Parameters.AddWithValue("$season", season);
+                mark.ExecuteNonQuery();
+            }
+            transaction.Commit();
+            return removed;
+        }
 
         /// <summary>Every stat <paramref name="playerId"/> has, by key.</summary>
         public Dictionary<string, long> ReadCareer(int playerId)

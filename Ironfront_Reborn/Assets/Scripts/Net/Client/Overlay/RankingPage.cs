@@ -514,7 +514,8 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
             if (_players != null)
                 _players.text = board == null ? string.Empty
-                    : board.Players.ToString("N0", CultureInfo.InvariantCulture) + " SOLDIERS WITH A CAREER";
+                    : (board.Season > 0 ? "SEASON " + board.Season.ToString(CultureInfo.InvariantCulture) + "  ·  " : string.Empty)
+                      + board.Players.ToString("N0", CultureInfo.InvariantCulture) + " SOLDIERS WITH A CAREER";
             if (_you != null)
             {
                 _you.text = you != null ? "#" + you.Rank.ToString("N0", CultureInfo.InvariantCulture)

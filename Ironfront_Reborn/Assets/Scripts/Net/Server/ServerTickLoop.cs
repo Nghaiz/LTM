@@ -2193,6 +2193,13 @@ namespace Ironfront.Net.Unity.Server
             _respawnGate.ResetForNewRound(
                 _stillDeadPlayers, CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
+            // The board starts the round at zero. It never did: the Tab board ran on from round to
+            // round, and each round's report to the master carried the running totals, so a room
+            // of five rounds put its first round into the career five times (2026-10-10, owner's
+            // list item 6). The round that just ended was reported at Ended, before this runs.
+            _scoreTally.Clear();
+            _scoresDirty = true;
+
             // The bots of the new round. The world reset that ran just before this despawned the
             // last round's and re-armed the release gate; the gate opens 30 s after a player body
             // ENTERS the world, which only a deploy reports. Players still alive are carried into

@@ -131,7 +131,7 @@ namespace Ironfront.MasterClient
 
         public Task<Leaderboard> GetLeaderboardAsync(CancellationToken ct = default)
             => RequestAsync(MspMessageType.LeaderboardRequest, new { }, MspMessageType.LeaderboardResponse,
-                response => new Leaderboard { Rows = response.Rows ?? Array.Empty<LeaderboardRow>(), You = response.You, Players = response.Players }, ct);
+                response => new Leaderboard { Rows = response.Rows ?? Array.Empty<LeaderboardRow>(), You = response.You, Players = response.Players, Season = response.Season }, ct);
 
         public Task<AchievementState> GetAchievementsAsync(CancellationToken ct = default)
             => RequestAsync(MspMessageType.AchievementsRequest, new { }, MspMessageType.AchievementsResponse, ToAchievementState, ct);
@@ -465,6 +465,7 @@ namespace Ironfront.MasterClient
             public LeaderboardRow[]? Rows { get; set; }
             public LeaderboardRow? You { get; set; }
             public long Players { get; set; }
+            public int Season { get; set; }
             public AchievementUnlock[]? Unlocked { get; set; }
             public Dictionary<string, long>? Earned { get; set; }
             public Dictionary<string, long>? Career { get; set; }

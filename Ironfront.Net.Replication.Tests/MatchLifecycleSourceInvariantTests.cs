@@ -61,6 +61,28 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A round reset starts the board at zero and sends it, so neither the Tab board nor the
+        /// next round's report to the master carries the round before.
+        /// </summary>
+        /// <remarks>
+        /// 2026-10-10, owner's list item 6: the board ran on across the rounds of a room, and the
+        /// report of each round carried the running totals, so a room of five rounds put its first
+        /// round into the career five times (maidang2804: 1,005 kills recorded for about 555).
+        /// </remarks>
+        [Fact]
+        public void ARoundResetStartsTheScoreboardAtZero()
+        {
+            string reset = MethodBody(
+                ReadScript("Net", "Server", "ServerTickLoop.cs"), "ServerTickLoop.cs",
+                "public void ResetForNewMatch()");
+
+            int clear = reset.IndexOf("_scoreTally.Clear();", StringComparison.Ordinal);
+            Assert.True(clear >= 0, "ResetForNewMatch must clear the score tally the board and the round report read.");
+            Assert.True(reset.IndexOf("_scoresDirty = true;", clear, StringComparison.Ordinal) > clear,
+                "the cleared board must be sent, or the clients keep showing the last round's.");
+        }
+
+        /// <summary>
         /// A round reset anchors the bot release for players carried into the new round alive.
         /// </summary>
         /// <remarks>
