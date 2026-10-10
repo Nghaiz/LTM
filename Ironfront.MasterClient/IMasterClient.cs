@@ -59,6 +59,9 @@ namespace Ironfront.MasterClient
         public LeaderboardRow[] Rows { get; set; } = Array.Empty<LeaderboardRow>();
         public LeaderboardRow? You { get; set; }
         public long Players { get; set; }
+
+        /// <summary>The career season the numbers belong to; 0 from a master that predates seasons.</summary>
+        public int Season { get; set; }
     }
 
     /// <summary>One achievement a player has, and when (Unix milliseconds).</summary>

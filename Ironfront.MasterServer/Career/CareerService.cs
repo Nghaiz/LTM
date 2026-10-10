@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Ironfront.MasterServer.Data;
+using Ironfront.MasterServer.Diagnostics;
 using Ironfront.Net.Protocol.Achievements;
 
 namespace Ironfront.MasterServer.Career
@@ -114,7 +115,21 @@ namespace Ironfront.MasterServer.Career
             // shown or counted -- AchievementTotals and the client both read through the catalogue --
             // so a later build that brings the id back finds it where it was.
             _database = database ?? throw new ArgumentNullException(nameof(database));
+
+            // A new season (SqliteDatabase.CurrentCareerSeason) resets the online career numbers
+            // once, and only those: achievements stay held, and the practice numbers (claimed by
+            // the client, never miscounted) stay.
+            int season = SqliteDatabase.CurrentCareerSeason;
+            if (_database.ReadCareerSeason() < season)
+            {
+                int removed = _database.BeginCareerSeason(season, IsOnlineStat);
+                MasterLog.Warn($"career season {season} begun: {removed} online career number(s) archived and reset; achievements kept");
+            }
         }
+
+        /// <summary>Whether a stored stat is an online one a season resets (an unknown key is kept).</summary>
+        internal static bool IsOnlineStat(string key)
+            => CareerStats.TryParse(key, out CareerStat stat) && !CareerStats.IsPractice(stat);
 
         /// <summary>
         /// Judges one player's round and answers the achievements it earned, in catalogue order.

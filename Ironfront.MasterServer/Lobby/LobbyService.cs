@@ -173,6 +173,20 @@ namespace Ironfront.MasterServer.Lobby
         /// <summary>The countdown length this service arms. Settable so a test can shorten it.</summary>
         public long StartCountdownMs { get; set; } = DefaultStartCountdownMs;
 
+        /// <summary>
+        /// Whether the game server playing <c>room</c> still has players on it. Set by the
+        /// dispatcher from the game servers' heartbeats; null (the tests' default) reads as no.
+        /// </summary>
+        /// <remarks>
+        /// A member leaves the room when their master link closes, and the link can close while
+        /// they play on: on 2026-10-10 four of six players lost it in the same minute of a round
+        /// and played four more rounds on the game server. Had the last member gone too, the room
+        /// would have been removed and its server handed to the next room while they were still
+        /// on it. An empty room in a match is kept while this says its server has players, and
+        /// <see cref="RemoveAbandoned"/> takes it away once the server says it has none.
+        /// </remarks>
+        public Func<Room, bool>? ServerHasPlayers { get; set; }
+
         /// <summary>The game-server host's bot budget. Settable so the master's config and a test can size it.</summary>
         public BotCapacity Capacity { get; set; } = new BotCapacity();
 
@@ -287,6 +301,9 @@ namespace Ironfront.MasterServer.Lobby
             });
             _playerToRoom.Add(session.PlayerId, room.RoomId);
 
+            // A room kept with nobody in it (ServerHasPlayers) has a host who is gone.
+            if (room.Members.Count == 1) room.HostPlayerId = session.PlayerId;
+
             MasterLog.Warn($"room {room.RoomId}: player {session.PlayerId} rejoined its match on team {team}");
             RoomChanged?.Invoke(room);
             return new ServiceResult(true, ErrorCode.Ok, room);
@@ -331,6 +348,14 @@ namespace Ironfront.MasterServer.Lobby
             room.Members.RemoveAll(member => member.PlayerId == playerId);
             if (room.Members.Count == 0)
             {
+                if (room.State == RoomLifecycleState.InMatch && ServerHasPlayers?.Invoke(room) == true)
+                {
+                    // Its players are still on the game server; their rounds are reported to this
+                    // room, and they can come back to it through the browser's rejoin row.
+                    MasterLog.Warn($"room {room.RoomId}: no member left on the master, kept while its game server has players");
+                    RoomChanged?.Invoke(room);
+                    return new ServiceResult(true, ErrorCode.Ok, room);
+                }
                 _rooms.Remove(room.RoomId); RoomRemoved?.Invoke(room); return new ServiceResult(true, ErrorCode.Ok, room);
             }
             if (room.HostPlayerId == playerId) room.HostPlayerId = room.Members[0].PlayerId;
@@ -341,6 +366,20 @@ namespace Ironfront.MasterServer.Lobby
             if (!ShouldStart(room)) CancelStart(room);
 
             RoomChanged?.Invoke(room); return new ServiceResult(true, ErrorCode.Ok, room);
+        }
+
+        /// <summary>
+        /// Removes <paramref name="roomId"/> if nobody is left in it, the way <see cref="LeaveRoom"/>
+        /// removes a room its last member leaves. For a room kept empty while its game server had
+        /// players (<see cref="ServerHasPlayers"/>), once that server reports none or is lost.
+        /// </summary>
+        /// <returns>Whether the room was removed.</returns>
+        public bool RemoveAbandoned(int roomId)
+        {
+            if (!_rooms.TryGetValue(roomId, out Room? room) || room.Members.Count > 0) return false;
+            _rooms.Remove(roomId);
+            RoomRemoved?.Invoke(room);
+            return true;
         }
 
         /// <summary>

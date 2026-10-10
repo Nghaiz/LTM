@@ -55,15 +55,6 @@ namespace Ironfront
 		private static readonly Color StoneFeature = Hex(0x9E998F);
 		private static readonly Color Outline = Hex(0x2E3136);
 
-		/// <summary>What the night picture keeps of each channel: dark, and bluer than the day.</summary>
-		private static readonly Color Moonlit = new Color(0.18f, 0.21f, 0.3f);
-
-		/// <summary>How much of the day's colour the night keeps.</summary>
-		private const float NightSaturation = 0.35f;
-
-		/// <summary>Extra light the brightest ground (paths, roofs) keeps at night.</summary>
-		private const float NightHighlightGain = 1.35f;
-
 		private enum Feature : byte
 		{
 			None,
@@ -84,6 +75,11 @@ namespace Ironfront
 			if (camera == null)
 			{
 				throw new System.InvalidOperationException("The open scene has no MinimapCamera.");
+			}
+			if (camera.originalLivePicture)
+			{
+				// Owner, 2026-10-11: Island and Dustbowl keep the original game's minimap.
+				throw new System.InvalidOperationException("This map keeps the original game's live minimap (MinimapCamera.originalLivePicture); it is not baked.");
 			}
 			if (!MinimapCamera.TryGetLevelFrame(out Vector2 centre, out float halfSpan))
 			{
@@ -622,13 +618,7 @@ namespace Ironfront
 			{
 				for (int i = 0; i < colour.Length; i++)
 				{
-					Color c = colour[i];
-					float grey = c.grayscale;
-					Color muted = Color.Lerp(new Color(grey, grey, grey), c, NightSaturation);
-					// A little more of the brightest ground than of the darkest: paths and roofs
-					// catch the moon, a forest swallows it.
-					float lift = Mathf.Lerp(1f, NightHighlightGain, Mathf.Clamp01((grey - 0.4f) / 0.5f));
-					colour[i] = new Color(muted.r * Moonlit.r * lift, muted.g * Moonlit.g * lift, muted.b * Moonlit.b * lift, 1f);
+					colour[i] = MinimapNightGrade.Apply(colour[i]);
 				}
 			}
 

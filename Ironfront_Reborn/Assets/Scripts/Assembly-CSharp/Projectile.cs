@@ -70,6 +70,9 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 
 	private const float PIERCING_RANGE = 2f;
 
+	/// <summary>How far past the first wall a reported round still tests remote bodies, metres.</summary>
+	private const float ReportedWallSlackMetres = 0.01f;
+
 	public Configuration configuration;
 
 	protected Vector3 velocity = Vector3.zero;
@@ -351,7 +354,9 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 	{
 		float reach = delta.magnitude;
 		bool struckWorld = TryNearestWorldHit(ray, reach, source, out RaycastHit hitInfo);
-		float open = struckWorld ? hitInfo.distance : reach;
+		// A centimetre past the wall: a body knocked over alive lies on its own ragdoll's colliders,
+		// which the world sweep meets at the same distance as the body test does.
+		float open = struckWorld ? Mathf.Min(reach, hitInfo.distance + ReportedWallSlackMetres) : reach;
 		if (TryStrikeRemoteBody(ray, open))
 		{
 			return;

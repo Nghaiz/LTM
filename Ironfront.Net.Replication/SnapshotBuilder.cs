@@ -162,12 +162,18 @@ namespace Ironfront.Net.Replication
                 flags);
         }
 
-        /// <summary>Rounds and clamps a float health into the 0..100 the wire allows.</summary>
+        /// <summary>Rounds UP and clamps a float health into the 0..100 the wire allows.</summary>
+        /// <remarks>
+        /// Up, as the HUD rounds it offline (<c>IngameUi.SetHealth</c>): only a dead actor is ever
+        /// sent as 0. Rounding to nearest sent a living player with less than half a point as 0, and
+        /// the HUD then read HEALTH 0 over a soldier who kept fighting (owner's list of 2026-10-11,
+        /// item 5) -- the server, rightly, still had them alive.
+        /// </remarks>
         public static byte ClampHealth(float health)
         {
             if (health <= 0f) return 0;
             if (health >= Quantize.HEALTH_MAX) return Quantize.HEALTH_MAX;
-            return (byte)(health + 0.5f);
+            return (byte)Math.Ceiling(health);
         }
 
         /// <summary>Reverses <see cref="Capture"/>'s position quantization.</summary>

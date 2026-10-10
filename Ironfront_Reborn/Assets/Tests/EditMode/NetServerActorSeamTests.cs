@@ -130,6 +130,11 @@ namespace Ironfront.Net.Unity.Server.Tests
                 return WithholdsTrigger;
             }
 
+            /// <summary>What the carried weapon answers when asked for a pull it held.</summary>
+            internal bool HeldTriggerDue;
+
+            public bool TryTakeHeldCarriedTrigger() => HeldTriggerDue;
+
             /// <summary>Weapon.CanFire's ammo and draw terms, read off the last mirror.</summary>
             internal bool RefusesWithoutARound;
 
@@ -406,6 +411,18 @@ namespace Ironfront.Net.Unity.Server.Tests
             NetServerActor actor = CreateActor(gameplay);
 
             Assert.IsFalse(actor.TryWithholdCarriedTrigger(0f, 0f, 1f));
+        }
+
+        [Test]
+        public void APullHeldForTheLockIsHandedBackWhenDue()
+        {
+            // The seam must pass the weapon's answer through both ways: swallowing a true would
+            // leave a tap made a moment before the server's lock unlaunched, as it was.
+            var due = new FakeGameplayActor { HeldTriggerDue = true };
+            Assert.IsTrue(CreateActor(due).TryTakeHeldCarriedTrigger());
+
+            var notDue = new FakeGameplayActor { HeldTriggerDue = false };
+            Assert.IsFalse(CreateActor(notDue).TryTakeHeldCarriedTrigger());
         }
 
         [Test]

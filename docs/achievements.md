@@ -421,6 +421,9 @@ Steam chỉ cho so với bạn bè; ở đây so được với **mọi người
 - **80 icon riêng**, vẽ bằng code như bộ hiện tại (`tools/ui/badges.py` + `make_icons.py`).
 - Mỗi icon = **khung huy hiệu theo hạng** (đồng / bạc / vàng / bạch kim có cánh và sao / Mythic
   obsidian có vết nứt phát sáng đỏ và vương miện gai) + **hình vẽ giữa** riêng cho từng thành tựu.
+  Từ 11/10/2026 điều này được kiểm tra thật: trước đó 33 huy hiệu mượn hình của thành tựu khác (MID-AIR
+  và DOGFIGHT cùng đôi cánh). 33 hình mới nằm trong `tools/ui/badge_glyphs.py`, và `badges.py` dừng
+  với tên các thành tựu trùng nếu hai thành tựu lại dùng chung một hình.
   Thành tựu Night Mode có thêm vầng trăng nhỏ trên khung; thành tựu practice có thêm biểu tượng bia
   tập bắn nhỏ.
 - Mỗi icon xuất 3 trạng thái: màu (đã mở), xám có khoá (chưa mở), **bóng đen** (ẩn chưa mở).
@@ -522,9 +525,33 @@ bất kỳ thành tựu nào. Cách làm theo kiểu các game indie không dùn
   chấm lại thành tựu practice từ tiến độ lưu trên máy ngay lần mở đầu tiên. Ngưỡng bị hạ thì ai đã đủ
   sẽ nhận ngay, kèm banner; ai đã có thì giữ nguyên.
 
+### 7.5 Mùa career và cách đếm round (từ 11/10/2026)
+
+**Mỗi round là một trận.** Một phòng chơi nhiều round liền nhau trên cùng game server; cột MATCHES đếm
+số round người chơi có mặt đến lúc kết thúc, WINS đếm round phe mình thắng, WIN % là WINS / MATCHES.
+KILLS, DEATHS, HEADS, SCORE cộng từng round. BEST là chuỗi giết dài nhất trong một round.
+
+**Hai lỗi của mùa 1 (v4.6.0, v4.6.1), tìm ra từ dữ liệu master ngày 10/10/2026:**
+
+- Bảng điểm trên game server không được làm mới giữa các round (bảng Tab cũng cộng dồn), nên báo cáo
+  mỗi round gửi lên master là tổng dồn từ round đầu. Phòng 5 round cộng round đầu vào career 5 lần:
+  maidang2804 có 1.005 kill trong khi thực tế khoảng 555.
+- Master chỉ ghi kết quả round cho người còn là thành viên phòng lúc round kết thúc. Kết nối tới master
+  của 4 trong 6 người rớt cùng một phút giữa round 2 (họ vẫn chơi tiếp trên game server), nên round 2
+  đến 5 của họ (3 round thắng của nghaiz và ngocminh05) không vào career.
+
+**Đã sửa:** game server xoá bảng điểm khi round mới bắt đầu (`ResetForNewMatch`); master ghi kết quả
+cho mọi người chơi mà game server của phòng báo, giống báo cáo giữa round; phòng đang trong trận mà mọi
+thành viên rớt kết nối master vẫn được giữ cho tới khi game server báo không còn người chơi.
+
+**Mùa 2:** anh chọn làm mới bảng xếp hạng thay vì sửa một phần (11/10/2026). Lần khởi động đầu tiên
+của master bản mới chuyển số liệu online của mùa 1 sang bảng `career_stats_season1` rồi xoá khỏi
+career; thành tựu đã mở và số liệu practice giữ nguyên (`SqliteDatabase.CurrentCareerSeason`).
+
 ## 8. Mặc định đang áp dụng
 
-1. **Career cũ được giữ** (người có sẵn số liệu mở ngay các thành tựu cày đã đủ).
+1. **Career cũ được giữ** (người có sẵn số liệu mở ngay các thành tựu cày đã đủ). Riêng số liệu online
+   của mùa 1 đã được làm mới ở mùa 2 (mục 7.5).
 2. **Các con số** như trong bảng.
 3. **Toast giữa trận** cho online (sau vài giây), ngay lập tức cho practice.
 4. **Điểm thành tựu** 10/25/50/100/250 và cột điểm trên bảng xếp hạng.

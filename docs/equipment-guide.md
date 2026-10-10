@@ -34,16 +34,20 @@ Tài liệu này liệt kê **17 trang bị trong loadout của nhân vật** �
 
 ## Độ giật và độ tản của súng
 
-Từ bản v4.6.1, đạn luôn bay đúng theo hướng ngắm (tâm ngắm), còn độ giật làm **chính tâm ngắm** nhích lên sau mỗi phát; đạn đi theo tâm ngắm nên người chơi ghì chuột xuống để giữ loạt đạn trên mục tiêu, như súng thật. Ngừng bắn một lúc thì tay tự kéo lại một phần (40–85 % tùy súng), phần còn lại là của người chơi. Ngắm bằng ống ngắm (chuột phải) cho độ tản nhỏ nhất; bắn không ngắm (hip-fire) và bắn khi đang di chuyển thì đạn tản rộng hơn, tối đa gấp 3 lần.
+**Từ 11/10/2026 độ giật là của bản gốc** (anh yêu cầu: "làm giống bản gốc ở tmp/recovered, đừng tự chế"). Tâm ngắm không còn tự nhích lên sau mỗi phát như v4.6.1; thay vào đó súng bị giật bằng đúng hai lò xo của `PlayerFpParent` bản gốc với `kickback` / `randomKick` của từng prefab, và **viên đạn bắn ra giữa loạt bay theo nòng đang bị giật**, đúng như bản gốc. Phát đầu tiên luôn trúng tâm ngắm; nòng nảy lên rồi tự về sau khoảng 1 giây khi nhả cò. Mô hình nằm ở `RecoilKick` (thư viện chung), server cho phép mức giật lớn nhất của từng súng khi chấm phát bắn (`WeaponConfig.RecoilAllowance`).
 
-| Súng | Nguyên mẫu | Độ giật mỗi phát | Ghi chú |
-|---|---|---|---|
-| RK-44 | AK, 7.62×39 | nhẹ (0,45°) | Loạt dài vẫn kiểm soát được. |
-| SIGNAL DMR | súng thiện xạ 7.62×51 bắn liên thanh | trung bình (0,85°) | Nên bắn từng phát hoặc loạt ngắn. |
-| RECON LRR | bullpup .308 bán tự động | mạnh (1,4°) | |
-| SL-DEFENDER | bolt-action .338 | rất mạnh (3°) | Tay kéo lại gần hết trong lúc lên đạn. |
-| S-IND7 / [SUP] | súng ngắn 9 mm | 1,1° / 0,9° | Bản giảm thanh giật nhẹ hơn. |
-| 76 EAGLE | shotgun bơm 12 ga | rất mạnh (4°) | |
+Độ tản khi ngắm (chuột phải) giữ nguyên số của prefab gốc. Bắn không ngắm và bắn khi đang chạy thì tản rộng hơn, theo cách CS2 và PUBG làm: súng bolt-action bắn không ngắm không còn chính xác như ngắm (v4.6.1 cho SL-DEFENDER và RECON LRR bắn hông trúng như laser).
+
+| Súng | Giật khi giữ cò (bản gốc) | Tản khi ngắm | Tản bắn hông | Khi chạy |
+|---|---|---|---|---|
+| RK-44 | phát đầu 0°, cả loạt khoảng 2°, lớn nhất ~3° | 0,17° | 0,9° | ×1,75 |
+| SIGNAL DMR | khoảng 0,6°, lớn nhất ~0,9° | 0,07° | 1,0° | ×1,75 |
+| RECON LRR | khoảng 0,3° khi bắn nhanh | 0,02° | 1,25° | ×1,75 |
+| SL-DEFENDER | đã hết giật trước phát sau (lên đạn 1,5 s) | 0° | 3,4° | ×2 |
+| S-IND7 / [SUP] | khoảng 0,5°, lớn nhất ~0,7° | 0,46° | 0,7° | ×1,4 |
+| 76 EAGLE | đã hết giật trước phát sau | 1,7° (20 viên) | 2,1° | ×1,2 |
+
+Đạn có trọng lực và lực cản không khí thật (`RoundBallistics`): kiểm tra trong game ngày 11/10/2026, một viên RK-44 sau 0,6 s đã bay 335 m, rơi 1,25 m khỏi đường bắn và chậm từ 715 m/s xuống trung bình 553 m/s. Súng trường được chỉnh "zero" ở 100 m, súng ngắn và shotgun ở 25 m, nên ở cự ly chiến đấu viên đạn chỉ lệch vài cm khỏi tâm ngắm.
 
 ## Trang bị trên phương tiện
 

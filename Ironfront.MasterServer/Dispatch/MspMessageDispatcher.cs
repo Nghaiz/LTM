@@ -39,6 +39,9 @@ namespace Ironfront.MasterServer.Dispatch
             _career = new Career.CareerService(database);
             _lobby.RoomChanged += BroadcastRoom;
             _lobby.RoomRemoved += room => _gameServers.Release(room.AssignedGameServerId, room.RoomId);
+            _lobby.ServerHasPlayers = room => _gameServers.TryGet(room.AssignedGameServerId, out GameServerRecord? server)
+                                              && server is not null && server.AssignedRoomId == room.RoomId
+                                              && server.CurrentPlayers > 0;
         }
 
         /// <summary>Successful logins, total and per completed minute (phase 03 metrics).</summary>
@@ -184,6 +187,9 @@ namespace Ironfront.MasterServer.Dispatch
         private void ResetRoomAfterServerLoss(int roomId)
         {
             if (!_lobby.TryGetRoomById(roomId, out Room? room) || room is null) return;
+
+            // A room kept empty for its server's players has nobody to return to Waiting.
+            if (_lobby.RemoveAbandoned(roomId)) return;
             room.AssignedGameServerId = 0;
             foreach (RoomMember member in room.Members)
                 if (_connectionsByPlayer.TryGetValue(member.PlayerId, out ClientConnection? connection))
@@ -687,6 +693,14 @@ namespace Ironfront.MasterServer.Dispatch
                     + "room again. It cannot recover on its own: registration happens once, at "
                     + "boot. Restart that game server.");
             }
+            else if (request.CurrentPlayers == 0
+                     && _gameServers.TryGet(request.ServerId, out GameServerRecord? server) && server is not null
+                     && server.AssignedRoomId is int roomId && roomId != 0 && _lobby.RemoveAbandoned(roomId))
+            {
+                // A room kept with nobody in it while its players were still on this server
+                // (LobbyService.ServerHasPlayers): they have all gone now.
+                MasterLog.Warn($"room {roomId} closed: no member left and its game server {request.ServerId} has no players");
+            }
 
             StructuredLog.Event("gs_heartbeat", new
             {
@@ -841,7 +855,12 @@ namespace Ironfront.MasterServer.Dispatch
             _lobby.TryGetRoomById(request.RoomId, out Room? room);
             foreach (MatchPlayerResult result in request.Results ?? Array.Empty<MatchPlayerResult>())
             {
-                if (!_lobby.IsMember(request.RoomId, result.PlayerId)) continue;
+                // Every player the room's own game server reports, as GS_MATCH_PROGRESS already
+                // takes them: it admitted each one on a ticket this master issued for this room.
+                // Room membership was the gate, and membership is a master link: on 2026-10-10
+                // four of six players lost theirs mid-round, played four more rounds, and none of
+                // those rounds (three of them wins) reached their careers.
+                if (result.PlayerId <= 0) continue;
                 _database.InsertMatchResult(request.RoomId, result.PlayerId, result.Kills, result.Deaths, result.Score, endedAt);
 
                 // The career and the achievements it earns (owner's list of 2026-10-09, item 4).
@@ -895,7 +914,8 @@ namespace Ironfront.MasterServer.Dispatch
             object? you = view.You.HasValue
                 ? RankRow(view.You.Value.Rank, view.You.Value.Row, view.Totals.GetValueOrDefault(view.You.Value.Row.PlayerId))
                 : null;
-            Send(connection, MspMessageType.LeaderboardResponse, new { rows, you, players = view.Players });
+            Send(connection, MspMessageType.LeaderboardResponse,
+                new { rows, you, players = view.Players, season = SqliteDatabase.CurrentCareerSeason });
         }
 
         private static object RankRow(int rank, CareerRow row, AchievementTotals? totals) => new

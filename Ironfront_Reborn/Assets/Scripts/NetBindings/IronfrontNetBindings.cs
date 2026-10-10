@@ -1080,6 +1080,9 @@ namespace Ironfront.Net.Unity.Bindings
             => _actor != null
                && _actor.TryWithholdCarriedTriggerByNetwork(new Vector3(forwardX, forwardY, forwardZ));
 
+        public bool TryTakeHeldCarriedTrigger()
+            => _actor != null && _actor.TryTakeHeldCarriedTriggerByNetwork();
+
         public bool ReleaseCarriedThrowable(
             float originX, float originY, float originZ,
             float directionX, float directionY, float directionZ)

@@ -73,9 +73,88 @@ public class Javelin : ScopedWeapon
 		}
 	}
 
+	/// <remarks>
+	/// On a networked client the launch is always the server's to make, so the client predicts
+	/// none and shows the launch when the server's clip says it happened
+	/// (<see cref="PresentServerLaunch"/>). A launch predicted on the client's own lock, while the
+	/// server's lock was a moment behind, showed the tube's flash and smoke and no missile, and the
+	/// round it spent never came back (owner report 2026-10-11).
+	/// </remarks>
 	public override bool WithholdsTrigger()
 	{
-		return !HasLock();
+		return ServerMakesTheLaunch() || !HasLock();
+	}
+
+	/// <summary>
+	/// Seconds a server holds a pull that came while its lock was still running, and fires it the
+	/// moment the lock completes.
+	/// </summary>
+	/// <remarks>
+	/// The client draws its lock box from its own copy of the lock and the server decides from
+	/// its copy, a few frames apart. A pull made the moment the box turned to "locked" reached a
+	/// server whose lock was not quite done, and was ignored: only a trigger still held when the
+	/// server's lock completed ever launched. Measured on the live Dustbowl server on 2026-10-11,
+	/// a 0.1 s tap 2.2 s into the aim launched nothing while one at 2.6 s did.
+	/// </remarks>
+	public const float HeldPullSeconds = 1f;
+
+	/// <summary>How long after a pull a launch the server reports is shown as this player's.</summary>
+	public const float LaunchConfirmSeconds = HeldPullSeconds + 1.5f;
+
+	private const float TrackingBeepSeconds = 0.18f;
+
+	private const float LockToneVolume = 0.35f;
+
+	private float heldPullUntil = float.NegativeInfinity;
+
+	private float launchRequestedAt = float.NegativeInfinity;
+
+	private int lastPullFrame = -2;
+
+	private AudioSource lockTone;
+
+	private AudioClip trackingClip;
+
+	private AudioClip lockedClip;
+
+	private AudioClip deniedClip;
+
+	private float nextTrackingBeep;
+
+	/// <summary>True on a networked client: the server flies the missile and decides when it leaves.</summary>
+	private bool ServerMakesTheLaunch()
+	{
+		return Ironfront.Net.Unity.NetContext.IsClient && ServerDrawsProjectile();
+	}
+
+	/// <summary>
+	/// Server: whether a pull held for the lock (<see cref="HeldPullSeconds"/>) is due now that the
+	/// lock is done. Taken once.
+	/// </summary>
+	public override bool TakeHeldTrigger()
+	{
+		if (Time.time > heldPullUntil || !HasLock())
+		{
+			return false;
+		}
+		heldPullUntil = float.NegativeInfinity;
+		return true;
+	}
+
+	/// <summary>
+	/// Shows this player's launch once the server has made it: the tube's flash, smoke, report and
+	/// kick, and the round leaving the clip. Called by the local rig when the server's clip drops.
+	/// </summary>
+	/// <returns>False when no pull of this player's is waiting for a launch.</returns>
+	public bool PresentServerLaunch()
+	{
+		if (Time.time - launchRequestedAt > LaunchConfirmSeconds)
+		{
+			return false;
+		}
+		launchRequestedAt = float.NegativeInfinity;
+		Shoot(SampleForward(), false);
+		return true;
 	}
 
 	private Vector3 SampleOrigin()
@@ -112,6 +191,8 @@ public class Javelin : ScopedWeapon
 	{
 		base.Unholster();
 		hasManualTarget = false;
+		heldPullUntil = float.NegativeInfinity;
+		launchRequestedAt = float.NegativeInfinity;
 		SetReloadPose(false);
 	}
 
@@ -292,12 +373,23 @@ public class Javelin : ScopedWeapon
 		{
 			lockImage.texture = lockingTexture;
 		}
+		UpdateLockTone();
 	}
 
 	public override void Fire(Vector3 direction, bool useMuzzleDirection)
 	{
+		bool freshPull = Time.frameCount - lastPullFrame > 1;
+		lastPullFrame = Time.frameCount;
 		if (HasLock())
 		{
+			heldPullUntil = float.NegativeInfinity;
+			if (ServerMakesTheLaunch())
+			{
+				// The pull has gone to the server in this frame's input; the launch is shown when
+				// the server's clip says it happened (PresentServerLaunch).
+				launchRequestedAt = Time.time;
+				return;
+			}
 			// No Reload() after the shot, as the original had: the next missile goes on when the
 			// player presses R, as every other gun's magazine does (owner report 2026-10-07; see
 			// Unholster). A bot reloads through its controller whenever its weapon is empty.
@@ -314,6 +406,88 @@ public class Javelin : ScopedWeapon
 				manualTargetPoint = hitInfo.point;
 				hasManualTarget = true;
 			}
+		}
+		else if (hasNetworkAim && IsLocking())
+		{
+			// Server: the lock is still running. The pull is held for it (HeldPullSeconds) and
+			// handed back through TakeHeldTrigger the frame the lock completes.
+			heldPullUntil = Time.time + HeldPullSeconds;
+		}
+		// From the hip, empty or mid-reload the launcher cannot lock, so a pull does nothing: say
+		// so with the denied tone, as a lock-on launcher in any modern shooter does.
+		if (freshPull && !aiming && IsLocalHuman())
+		{
+			PlayLockSound(deniedClip);
+		}
+	}
+
+	private bool IsLocalHuman()
+	{
+		return user != null && !user.aiControlled && Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(user);
+	}
+
+	private AudioSource LockTone()
+	{
+		if (lockTone == null)
+		{
+			// A child, not a second AudioSource on the weapon root: Weapon reads its report's
+			// source off the root. Switched off with the weapon, so a holstered tone is silent.
+			GameObject tone = new GameObject("Lock tone");
+			tone.transform.SetParent(base.transform, false);
+			lockTone = tone.AddComponent<AudioSource>();
+			lockTone.playOnAwake = false;
+			lockTone.spatialBlend = 0f;
+			lockTone.volume = LockToneVolume;
+			trackingClip = Resources.Load<AudioClip>("IronfrontUi/lock-tracking");
+			lockedClip = Resources.Load<AudioClip>("IronfrontUi/lock-locked");
+			deniedClip = Resources.Load<AudioClip>("IronfrontUi/lock-denied");
+		}
+		return lockTone;
+	}
+
+	private void PlayLockSound(AudioClip clip)
+	{
+		AudioSource source = LockTone();
+		if (clip != null)
+		{
+			source.PlayOneShot(clip);
+		}
+	}
+
+	/// <summary>
+	/// The seeker's tones, the local player's only: a quick beep while the lock is being taken and
+	/// a steady tone once it holds, the way the lock-on launchers of the big shooters talk to a
+	/// player who cannot watch the box and the target at once. The original launcher was silent.
+	/// </summary>
+	private void UpdateLockTone()
+	{
+		bool locked = aiming && HasLock();
+		bool tracking = aiming && IsLocking() && !locked;
+		if (!locked && !tracking && lockTone == null)
+		{
+			return;
+		}
+		AudioSource source = LockTone();
+		if (locked)
+		{
+			if (!source.isPlaying || source.clip != lockedClip)
+			{
+				source.clip = lockedClip;
+				source.loop = true;
+				source.Play();
+			}
+			return;
+		}
+		if (source.loop)
+		{
+			source.Stop();
+			source.loop = false;
+			source.clip = null;
+		}
+		if (tracking && Time.time >= nextTrackingBeep && trackingClip != null)
+		{
+			source.PlayOneShot(trackingClip);
+			nextTrackingBeep = Time.time + TrackingBeepSeconds;
 		}
 	}
 

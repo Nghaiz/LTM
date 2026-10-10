@@ -254,8 +254,8 @@ namespace Ironfront.Net.Unity.Client.Overlay
             RectTransform heads = Ui.Child(content, "Columns");
             Ui.TopLeft(heads, new Vector2(RowInset, HeadsTop), new Vector2(ContentWidth - 2f * RowInset, 28f));
 
-            HeadAtLeft(heads, "#", "medal", 10f, 46f);
-            HeadAtLeft(heads, "PLAYER", "person", 66f, 300f);
+            HeadAtLeft(heads, "#", "rank", 10f, 46f);
+            HeadAtLeft(heads, "PLAYER", "soldier", 66f, 300f);
             foreach ((string caption, string icon, Color ink, float right, float width) in Columns)
             {
                 RectTransform cell = Ui.Child(heads, caption);
@@ -514,7 +514,8 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
             if (_players != null)
                 _players.text = board == null ? string.Empty
-                    : board.Players.ToString("N0", CultureInfo.InvariantCulture) + " SOLDIERS WITH A CAREER";
+                    : (board.Season > 0 ? "SEASON " + board.Season.ToString(CultureInfo.InvariantCulture) + "  ·  " : string.Empty)
+                      + board.Players.ToString("N0", CultureInfo.InvariantCulture) + " SOLDIERS WITH A CAREER";
             if (_you != null)
             {
                 _you.text = you != null ? "#" + you.Rank.ToString("N0", CultureInfo.InvariantCulture)

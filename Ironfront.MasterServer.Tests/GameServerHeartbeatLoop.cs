@@ -24,6 +24,9 @@ namespace Ironfront.MasterServer.Tests
         private readonly CancellationTokenSource _stop = new CancellationTokenSource();
         private readonly Task _loop;
 
+        /// <summary>The players each heartbeat reports on the server; none by default.</summary>
+        public byte Players { get; set; }
+
         public GameServerHeartbeatLoop(GameServerLink link, ushort serverId)
         {
             if (link == null) throw new ArgumentNullException(nameof(link));
@@ -32,7 +35,7 @@ namespace Ironfront.MasterServer.Tests
             {
                 while (!_stop.IsCancellationRequested)
                 {
-                    link.Heartbeat(new GameServerHeartbeat { ServerId = serverId });
+                    link.Heartbeat(new GameServerHeartbeat { ServerId = serverId, CurrentPlayers = Players });
                     try
                     {
                         await Task.Delay(Interval, _stop.Token).ConfigureAwait(false);

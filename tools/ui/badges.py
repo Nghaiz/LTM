@@ -9,8 +9,12 @@ has no badge, a hidden one has no silhouette, or a badge is left over from a ret
 """
 import math
 
-from glyphs import GLYPHS, star_points
+from glyphs import GLYPHS as ICON_GLYPHS, star_points
+from badge_glyphs import BADGE_GLYPHS
 from write_achievements_doc import load
+
+# The UI icons and the badge-only glyphs, one table: a badge may use either.
+GLYPHS = {**ICON_GLYPHS, **BADGE_GLYPHS}
 
 # Rim gradient (light, dark), glyph ink, accent: per metal. Mythic is obsidian with red light.
 TIERS = {
@@ -39,30 +43,31 @@ CORES = {
 }
 DEFAULT_CORE = ("#18405F", "#0A2236", "#040F1A")
 
-# id -> glyph. A new achievement without an entry stops make_icons.py with its id.
+# id -> glyph. A new achievement without an entry stops make_icons.py with its id, and so does a glyph
+# two achievements share (owner's list of 2026-10-11, item 4: MID-AIR and DOGFIGHT both showed wings).
 GLYPH = {
     "roll_call": "person", "lights_out": "moon", "baptism_of_fire": "first-blood", "steady_hand": "crosshair",
     "flag_runner": "flag", "taste_of_victory": "trophy", "speed_bump": "jeep", "by_the_book": "book",
     "cadet": "chevrons-up", "turncoat": "refresh", "victory_lap": "speaker", "bullet_sponge": "target",
     "participation_trophy": "podium",
-    "three_fronts": "map", "unbroken": "shield", "predator": "people", "dead_centre": "headshot",
+    "three_fronts": "map", "unbroken": "shield", "predator": "paw", "dead_centre": "headshot",
     "overwatch": "scope", "steel_rain": "tank", "rotorhead": "helicopter", "forward_supply": "ammo",
-    "night_shift": "eye", "cannon_fodder": "skull", "dust_devil": "flame", "first_past_the_post": "clock",
-    "boots_only": "boot", "nine_lives": "heart", "man_overboard": "wave", "mutual_destruction": "explosion",
+    "night_shift": "owl", "cannon_fodder": "skull", "dust_devil": "tornado", "first_past_the_post": "clock",
+    "boots_only": "boot", "nine_lives": "cat", "man_overboard": "wave", "mutual_destruction": "explosion",
     "grim_arithmetic": "rifles", "juggernaut": "bolt", "crowd_control": "grenade", "cold_steel": "knife",
-    "armourer": "gear", "can_opener": "explosion", "long_campaign": "laurel", "top_brass": "crown",
-    "clean_sheet": "shield", "naked_eye": "eye", "night_terror": "moon", "hell_week": "bot",
-    "island_hopper": "flag", "lake_monster": "boat", "graveyard_shift": "skull", "motor_pool": "jeep",
-    "jack_of_all_trades": "dice", "touchdown": "parachute", "buckshot_sniper": "scope", "dogfight": "wings",
+    "armourer": "gear", "can_opener": "can", "long_campaign": "laurel", "top_brass": "officer-cap",
+    "clean_sheet": "checklist", "naked_eye": "eye", "night_terror": "claws", "hell_week": "bot",
+    "island_hopper": "palm", "lake_monster": "boat", "graveyard_shift": "tombstone", "motor_pool": "wheel",
+    "jack_of_all_trades": "dice", "touchdown": "parachute", "buckshot_sniper": "shell", "dogfight": "wings",
     "gold_standard": "wrench",
-    "windreader": "scope", "all_fronts_mastered": "map", "air_defense": "helicopter", "undefeated": "infinity",
-    "moonlight_marksman": "moon", "outnumbered": "people", "on_borrowed_time": "hourglass", "pacifist": "handshake",
-    "nemesis": "target", "absolute_dominance": "crown", "drill_sergeant": "chevrons-up", "grand_tour": "laurel",
-    "impossible_angle": "tank", "from_the_grave": "grenade",
-    "centurion": "shield", "rampage": "flame", "curvature": "scope", "perfect_ten": "headshot",
-    "dead_eye": "crosshair", "untouchable": "heart", "blade_only": "knife", "tank_ace": "tank",
-    "sky_king": "helicopter", "map_painter": "flag", "hail_mary": "clock", "creature_of_the_night": "moon",
-    "immaculate": "star", "ironclad": "medal", "mid_air": "wings", "counter_sniper": "bolt",
+    "windreader": "wind", "all_fronts_mastered": "globe", "air_defense": "missile", "undefeated": "infinity",
+    "moonlight_marksman": "moon-sight", "outnumbered": "people", "on_borrowed_time": "hourglass", "pacifist": "handshake",
+    "nemesis": "skull-target", "absolute_dominance": "crown", "drill_sergeant": "whistle", "grand_tour": "compass",
+    "impossible_angle": "tank-aa", "from_the_grave": "ghost",
+    "centurion": "galea", "rampage": "flame", "curvature": "trajectory", "perfect_ten": "ten",
+    "dead_eye": "eye-cross", "untouchable": "heart", "blade_only": "crossed-knives", "tank_ace": "ace",
+    "sky_king": "eagle", "map_painter": "brush", "hail_mary": "football", "creature_of_the_night": "bat",
+    "immaculate": "star", "ironclad": "medal", "mid_air": "aviator", "counter_sniper": "pistol",
 }
 
 
@@ -253,8 +258,22 @@ def hidden_badge_svg():
     return badge_svg("question", "hidden")
 
 
+def check_unique_glyphs():
+    """Every achievement has its own picture; raises naming the achievements that share one."""
+    seen = {}
+    for key, glyph in GLYPH.items():
+        if glyph not in GLYPHS:
+            raise KeyError(f"tools/ui/badges.py: '{key}' names glyph '{glyph}', which neither table has")
+        seen.setdefault(glyph, []).append(key)
+    shared = {glyph: keys for glyph, keys in seen.items() if len(keys) > 1}
+    if shared:
+        raise ValueError("tools/ui/badges.py: achievements share a picture: "
+                         + "; ".join(f"{glyph}: {', '.join(keys)}" for glyph, keys in sorted(shared.items())))
+
+
 def all_badges():
     """Every badge to render, as (file name without .png, svg): one per achievement, a silhouette per hidden one."""
+    check_unique_glyphs()
     for entry in load():
         key = entry["id"]
         if key not in GLYPH:
