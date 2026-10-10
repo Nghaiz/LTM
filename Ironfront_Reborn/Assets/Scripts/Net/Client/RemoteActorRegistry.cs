@@ -186,7 +186,7 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>
         /// The nearest living body this client draws that the segment enters, by the soldier's
-        /// own two hitboxes on the pose last drawn (<see cref="RemoteBodyHitboxes"/>).
+        /// own hitboxes on the pose last drawn (<see cref="RemoteBodyHitboxes"/>).
         /// </summary>
         public bool TryHitBody(Vector3 from, Vector3 to, out RemoteBodyHit hit)
         {
@@ -196,10 +196,10 @@ namespace Ironfront.Net.Unity.Client
             {
                 RemoteActorView view = pair.Value;
                 if (view == null || !_live.ContainsKey(pair.Key)) continue;
-                if (!view.TryHitSegment(from, to, out float fraction, out bool head) || fraction >= nearest) continue;
+                if (!view.TryHitSegment(from, to, out float fraction, out HitboxType part) || fraction >= nearest) continue;
 
                 nearest = fraction;
-                hit = new RemoteBodyHit(pair.Key, head, Vector3.LerpUnclamped(from, to, fraction), fraction);
+                hit = new RemoteBodyHit(pair.Key, part, Vector3.LerpUnclamped(from, to, fraction), fraction);
             }
 
             return nearest <= 1f;

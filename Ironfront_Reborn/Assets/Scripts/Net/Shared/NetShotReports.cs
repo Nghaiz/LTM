@@ -9,18 +9,18 @@ namespace Ironfront.Net.Unity
     /// <summary>Where a round crossed a body the server streams to this client.</summary>
     public readonly struct RemoteBodyHit
     {
-        public RemoteBodyHit(ushort actorId, bool head, Vector3 point, float fraction)
+        public RemoteBodyHit(ushort actorId, HitboxType part, Vector3 point, float fraction)
         {
             ActorId = actorId;
-            Head = head;
+            Part = part;
             Point = point;
             Fraction = fraction;
         }
 
         public ushort ActorId { get; }
 
-        /// <summary>The round met the head's box before the body's.</summary>
-        public bool Head { get; }
+        /// <summary>The part of the body the round met first.</summary>
+        public HitboxType Part { get; }
 
         /// <summary>World point of entry.</summary>
         public Vector3 Point { get; }

@@ -194,8 +194,8 @@ namespace Ironfront.Net.Unity.Client
         // The head bone, which a swimmer is placed by. Null when the animator is not a humanoid.
         private Transform _head;
 
-        // The soldier's two hitboxes on this rig's bones, which the local player's rounds are
-        // tested against (14.0.6). Null when the rig lacks either bone.
+        // The soldier's hitboxes on this rig's bones, which the local player's rounds are tested
+        // against (14.0.6). Null when the rig lacks any of the bones.
         private RemoteBodyHitboxes _hitboxes;
 
         // 1 while the body stands still, 0 while it moves, eased between: how much of the idle
@@ -228,15 +228,15 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>
         /// Where the segment first enters this living body's hitboxes as last drawn: the fraction
-        /// along it, and whether the head was met first. False for a body with no state yet, a
-        /// dead or hidden one, or a rig without the bones.
+        /// along it, and the part it met. False for a body with no state yet, a dead or hidden
+        /// one, or a rig without the bones.
         /// </summary>
-        internal bool TryHitSegment(Vector3 from, Vector3 to, out float fraction, out bool head)
+        internal bool TryHitSegment(Vector3 from, Vector3 to, out float fraction, out HitboxType part)
         {
             fraction = 1f;
-            head = false;
+            part = HitboxType.Body;
             return _hitboxes != null && _hasState && _state.IsAlive && isActiveAndEnabled && !IsRagdollPosed
-                   && _hitboxes.TryHit(from, to, out fraction, out head);
+                   && _hitboxes.TryHit(from, to, out fraction, out part);
         }
 
         /// <summary>The body's animator, which a corpse copies the skeleton and pose from.</summary>
@@ -362,8 +362,9 @@ namespace Ironfront.Net.Unity.Client
             if (_hitboxes == null)
             {
                 Debug.LogWarning(
-                    $"[net] {name} has no {RemoteBodyHitboxes.HeadBone}/{RemoteBodyHitboxes.BodyBone} bones: "
-                    + "the local player's rounds cannot strike this body, so its hits are never reported.",
+                    $"[net] {name} lacks the soldier's hitbox bones ({RemoteBodyHitboxes.HeadBone}, "
+                    + $"{RemoteBodyHitboxes.BodyBone} and the limbs): the local player's rounds cannot strike "
+                    + "this body, so its hits are never reported.",
                     this);
             }
             CreateFallbackMuzzleFlash();
