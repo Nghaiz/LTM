@@ -40,6 +40,9 @@ namespace Ironfront.Net.Unity.Client.Hud
         [SerializeField] private Image _band;
         [SerializeField] private Text _teamName;
         [SerializeField] private Image _flagIcon;
+
+        /// <summary>The PLAYER column's soldier, in the side's colour (owner's list of 2026-10-11, item 3).</summary>
+        [SerializeField] private Image _playerMark;
         [SerializeField] private Text _flags;
         [SerializeField] private Text _perKill;
         [SerializeField] private Text _players;
@@ -86,6 +89,7 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             _band.color = new Color(team.r, team.g, team.b, 0.9f);
             _flagIcon.color = HudStyle.TeamInk(team);
+            if (_playerMark != null) _playerMark.color = HudStyle.TeamInk(team);
         }
 
         public void SetFlags(int flags)
