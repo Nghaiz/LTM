@@ -46,15 +46,20 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
-        public void NightModeOffForestLakeIsRefused()
+        public void NightModeIsPlayedOnEveryMap()
         {
+            // Owner's run of 2026-10-10: Island and Dustbowl get Forest Lake's night.
             var lobby = new LobbyService();
             ServiceResult created = lobby.CreateRoom(
                 SessionFor(1), Room("Dust", Dustbowl, new RoomSettings(GameMode.Night, VictoryRule.Margin, 200, 45)));
 
-            Assert.False(created.Ok);
-            Assert.Equal(ErrorCode.InvalidRoomSettings, created.ErrorCode);
-            Assert.Empty(lobby.Rooms);
+            Assert.True(created.Ok);
+            Assert.Equal(GameMode.Night, lobby.Rooms.Single().Settings.Mode);
+
+            ServiceResult flat = lobby.CreateRoom(
+                SessionFor(2), Room("Flat", Dustbowl, new RoomSettings(GameMode.Night, VictoryRule.Margin, 200, 0)));
+            Assert.False(flat.Ok, "a night still needs its battery");
+            Assert.Equal(ErrorCode.InvalidRoomSettings, flat.ErrorCode);
         }
 
         [Fact]

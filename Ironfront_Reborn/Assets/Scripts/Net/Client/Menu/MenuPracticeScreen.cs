@@ -116,15 +116,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         internal static string[] CurrentMapScenes()
             => MapCatalog.All.Select(entry => entry.SceneName).ToArray();
 
-        /// <summary>Night Mode is Forest Lake's: choosing it takes the screen there and opens the battery.</summary>
+        /// <summary>Night Mode opens the battery; every map has a night, so the map stays where it is.</summary>
         private void OnModeChanged()
         {
             bool nightMode = SelectedMode() == GameMode.Night;
-            if (nightMode && SelectedMapId() != RoomRules.NightModeMapId && _mapDropdown != null)
-            {
-                int index = _mapIds.IndexOf(RoomRules.NightModeMapId);
-                if (index >= 0) _mapDropdown.value = index;
-            }
             if (_visionField != null)
             {
                 _visionField.interactable = nightMode;

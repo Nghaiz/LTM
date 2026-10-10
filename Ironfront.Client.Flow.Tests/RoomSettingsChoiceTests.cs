@@ -13,7 +13,7 @@ namespace Ironfront.Client.Flow.Tests
     public sealed class RoomSettingsChoiceTests
     {
         private const ushort Dustbowl = 1;
-        private const ushort ForestLake = RoomRules.NightModeMapId;
+        private const ushort ForestLake = 3;
 
         [Fact]
         public void AnEmptyPointsFieldIsTheRulesDefault()
@@ -47,14 +47,17 @@ namespace Ironfront.Client.Flow.Tests
         }
 
         [Fact]
-        public void NightModeOffForestLakeIsRefusedAndOnItCarriesABattery()
+        public void NightModeOnAnyMapCarriesABattery()
         {
-            Assert.False(RoomSettingsChoice.TryRead(GameMode.Night, VictoryRule.Margin, "", Dustbowl, out _, out string error));
-            Assert.Contains("Forest Lake", error);
+            foreach (ushort map in new[] { Dustbowl, ForestLake })
+            {
+                Assert.True(RoomSettingsChoice.TryRead(GameMode.Night, VictoryRule.Margin, "", map, out RoomSettings night, out _));
+                Assert.Equal(RoomRules.DefaultNightVisionSeconds, night.NightVisionSeconds);
+                Assert.True(RoomRules.AreValid(map, night));
+            }
 
-            Assert.True(RoomSettingsChoice.TryRead(GameMode.Night, VictoryRule.Margin, "", ForestLake, out RoomSettings night, out _));
-            Assert.Equal(RoomRules.DefaultNightVisionSeconds, night.NightVisionSeconds);
-            Assert.True(RoomRules.AreValid(ForestLake, night));
+            Assert.False(RoomSettingsChoice.TryRead(GameMode.Night, VictoryRule.Margin, "", 0, out _, out string error));
+            Assert.Contains("no Night Mode", error);
         }
 
         [Theory]

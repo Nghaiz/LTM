@@ -3,8 +3,8 @@ using UnityEngine;
 /// <summary>
 /// What a map looks like in Night Mode (phase P32): its dark, the light that is left, and the
 /// dressing put out around its flags. Loaded from <c>Resources/NightMode/&lt;scene&gt;</c> by
-/// <see cref="NightModeDirector"/>; a map without one has no Night Mode (the lobby offers it on
-/// Forest Lake only, <c>RoomRules.NightModeMapId</c>).
+/// <see cref="NightModeDirector"/>; a map without one has no Night Mode. Every map in the catalogue
+/// has one (<c>NightModeConfigCoverageTests</c>), since the lobby offers Night Mode on all of them.
 /// </summary>
 [CreateAssetMenu(menuName = "Ironfront/Night Mode Config", fileName = "NightMode")]
 public sealed class NightModeConfig : ScriptableObject
