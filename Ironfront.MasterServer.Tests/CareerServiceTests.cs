@@ -570,9 +570,10 @@ namespace Ironfront.MasterServer.Tests
         [Fact]
         public void EveryMetalAndTheDisastersHaveTheirSound()
         {
-            // AchievementToast plays IronfrontUi/achievement-<metal> (or -disaster), falling back to the chime.
+            // AchievementToast plays IronfrontUi/achievement-<metal> (or -disaster), falling back to the chime,
+            // and a hidden one's -hidden sting before its metal.
             string folder = System.IO.Path.Combine(RepoRoot(), "Ironfront_Reborn", "Assets", "Resources", "IronfrontUi");
-            foreach (string name in new[] { "bronze", "silver", "gold", "platinum", "mythic", "disaster", "unlocked" })
+            foreach (string name in new[] { "bronze", "silver", "gold", "platinum", "mythic", "hidden", "disaster", "unlocked" })
                 Assert.True(System.IO.File.Exists(System.IO.Path.Combine(folder, "achievement-" + name + ".wav")), name);
         }
 
