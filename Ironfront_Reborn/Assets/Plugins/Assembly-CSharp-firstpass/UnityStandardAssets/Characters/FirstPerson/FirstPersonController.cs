@@ -19,6 +19,13 @@ namespace UnityStandardAssets.Characters.FirstPerson
 		[NonSerialized]
 		public bool externalMovementAuthority;
 
+		// The body sits in a vehicle seat (set by FpsActorController.StartSeated/EndSeated). No
+		// footsteps then: driving holds the same move keys and the body rides the hull, so the step
+		// cycle ran on and played steps over the engine (owner report 2026-10-10: "a jeep or a quad
+		// bike sounds like walking").
+		[NonSerialized]
+		public bool seated;
+
 		// What the capsule really moved per second on the last netcode tick. Needed because
 		// CharacterController.velocity divides a Move by Time.deltaTime: moved from Update at
 		// 30 Hz, a 3.5 m/s walk read 16.8 m/s at 144 fps, and the footsteps and weapon bob that
@@ -259,6 +266,10 @@ namespace UnityStandardAssets.Characters.FirstPerson
 
 		private void ProgressStepCycle(float speed)
 		{
+			if (seated)
+			{
+				return;
+			}
 			if (BodyVelocity.sqrMagnitude > 0f && (m_Input.x != 0f || m_Input.y != 0f))
 			{
 				m_StepCycle += (BodyVelocity.magnitude + speed * ((!m_IsWalking) ? m_RunstepLenghten : 1f)) * Time.fixedDeltaTime;

@@ -557,7 +557,13 @@ public class FpsActorController : ActorController
 
 	public override void EnableInput()
 	{
-		characterController.enabled = true;
+		// Never a live capsule inside a vehicle: StartSeated switched it off on purpose, and a
+		// menu, the chat or a get-up re-enabling it in the seat gave the hull a body to fight and
+		// the footsteps a ground to walk on (owner report 2026-10-10).
+		bool seated = actor != null && actor.IsSeated();
+		characterController.enabled = !seated;
+		// Also heals a stale flag: a body that died in a seat and respawns walks with footsteps again.
+		controller.seated = seated;
 		controller.inputEnabled = true;
 		inputEnabled = true;
 	}
@@ -565,6 +571,7 @@ public class FpsActorController : ActorController
 	public override void StartSeated(Seat seat)
 	{
 		controller.DisableCharacterController();
+		controller.seated = true;
 		controller.SetMouseEnabled(seat.type != Seat.Type.Pilot);
 		mouseViewLocked = seat.type == Seat.Type.Pilot;
 		fpCameraParent.parent = seat.transform;
@@ -591,6 +598,7 @@ public class FpsActorController : ActorController
 	public override void EndSeated(Vector3 exitPosition, Quaternion flatFacing)
 	{
 		controller.EnableCharacterController();
+		controller.seated = false;
 		controller.SetMouseEnabled(true);
 		mouseViewLocked = false;
 		base.transform.position = exitPosition + 0.8f * Vector3.up;
