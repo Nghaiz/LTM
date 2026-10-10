@@ -287,14 +287,50 @@ public sealed class NightModeDirector : MonoBehaviour
 				moonRotationAuthored = moon.transform.rotation;
 			}
 		}
-		if (ambience == null)
+		Transform nightRoot = time.transform.Find("Night");
+		if (ambience == null && nightRoot != null)
 		{
-			Transform sound = time.transform.Find("Night/Ambient Sound");
-			ambience = sound != null ? sound.GetComponent<AudioSource>() : null;
-			if (ambience != null)
+			// "Ambient Sound" on Forest Lake and Dustbowl, "Ambience" on Island: the Night child
+			// that carries an audio source.
+			foreach (Transform child in nightRoot)
 			{
-				ambienceAuthored = ambience.clip;
+				ambience = child.GetComponent<AudioSource>();
+				if (ambience != null)
+				{
+					ambienceAuthored = ambience.clip;
+					break;
+				}
 			}
+		}
+		HideOriginalNight(nightRoot);
+	}
+
+	/// <summary>
+	/// Puts away what the original game's own night left under <c>Night</c>: Island's hand-placed
+	/// pumpkins, falling leaves, the leaf recolouring and a stray box, Dustbowl's floodlight.
+	/// Night Mode is Forest Lake's night on every map (owner's run of 2026-10-10: "like Forest Lake,
+	/// not the original game"), so only the moonlight and the ambience stay. On the server as on
+	/// every client, so a collider among them never exists on one side only.
+	/// </summary>
+	private void HideOriginalNight(Transform nightRoot)
+	{
+		if (nightRoot == null)
+		{
+			return;
+		}
+		int hidden = 0;
+		foreach (Transform child in nightRoot)
+		{
+			bool kept = (moon != null && child == moon.transform) || (ambience != null && child == ambience.transform);
+			if (!kept && child.gameObject.activeSelf)
+			{
+				child.gameObject.SetActive(false);
+				hidden++;
+			}
+		}
+		if (hidden > 0)
+		{
+			Debug.Log("[night] " + mapName + ": put away " + hidden + " piece(s) of the original game's night.");
 		}
 	}
 

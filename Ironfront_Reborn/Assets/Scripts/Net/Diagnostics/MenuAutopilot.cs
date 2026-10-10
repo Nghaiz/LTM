@@ -44,6 +44,9 @@ namespace Ironfront.Net.Unity.Diagnostics
         private const float DeployDelaySeconds = 2f;
         private const byte MaxPlayers = 4;
 
+        /// <summary>The map a created room is on when the variable names none: Forest Lake.</summary>
+        private const ushort ForestLakeMapId = 3;
+
         private string _user = string.Empty;
         private string _password = string.Empty;
         private string _createName = string.Empty;
@@ -87,7 +90,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             {
                 string[] parts = create.Split(';');
                 pilot._createName = parts[0];
-                pilot._createMap = parts.Length > 1 && ushort.TryParse(parts[1], out ushort map) ? map : RoomRules.NightModeMapId;
+                pilot._createMap = parts.Length > 1 && ushort.TryParse(parts[1], out ushort map) ? map : ForestLakeMapId;
                 pilot._createBots = parts.Length > 2 && byte.TryParse(parts[2], out byte bots) ? bots : (byte)0;
                 pilot._createNight = parts.Length > 3 && parts[3] == "night";
             }

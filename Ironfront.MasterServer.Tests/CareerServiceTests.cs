@@ -169,7 +169,7 @@ namespace Ironfront.MasterServer.Tests
             Dictionary<string, long> facts = Facts(("finished", 1), ("won", 1), ("secondsPlayed", 900), ("botKills", 10),
                 ("nightVisionKnown", known), ("nightVisionUsed", used));
 
-            List<string> got = career.RecordRound(ids[0], facts, 10, 0, 10, RoomRules.NightModeMapId, night: true, final: true, now: 1);
+            List<string> got = career.RecordRound(ids[0], facts, 10, 0, 10, 3, night: true, final: true, now: 1);
 
             Assert.Equal(earned, got.Contains("naked_eye"));
             Assert.Contains("lights_out", got);

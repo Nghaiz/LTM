@@ -113,13 +113,5 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(TeamId.Team0, match.ToMessage().WinningTeam);
         }
 
-        [Fact]
-        public void NightModesMapIdIsForestLakesInTheCatalog()
-        {
-            // Protocol cannot reference Configuration, so RoomRules carries the id as a constant;
-            // this holds the two together.
-            Assert.True(MapCatalog.TryGetId("ForestLake", out ushort forestLake));
-            Assert.Equal(RoomRules.NightModeMapId, forestLake);
-        }
     }
 }

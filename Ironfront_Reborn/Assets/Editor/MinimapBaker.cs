@@ -275,7 +275,14 @@ namespace Ironfront
 					{
 						continue;
 					}
-					Rasterise(filter.sharedMesh, filter.transform.localToWorldMatrix, (i, height, normal) =>
+					int firstSubMesh = 0, subMeshCount = 0;
+					Matrix4x4 toWorld = filter.transform.localToWorldMatrix;
+					Renderer surface = filter.GetComponent<Renderer>();
+					if (surface != null)
+					{
+						StaticBatchRange(surface, out firstSubMesh, out subMeshCount, out toWorld);
+					}
+					Rasterise(filter.sharedMesh, toWorld, firstSubMesh, subMeshCount, (i, height, normal) =>
 					{
 						if (height > water[i])
 						{
@@ -330,14 +337,23 @@ namespace Ironfront
 					{
 						continue;
 					}
-					Bounds bounds = renderer.bounds;
-					// Off the picture, or a flat decal: not drawn.
-					if (bounds.size.y < 0.15f || !Overlaps(bounds))
+					// The original maps carry their static batching baked in (Mesh2, Mesh3): the
+					// filter holds the whole combined mesh, already in world space, and the renderer
+					// draws only its own sub-meshes of it. Drawn through the renderer's transform it
+					// threw the whole batch across Dustbowl's picture in shards.
+					Mesh mesh = filter.sharedMesh;
+					StaticBatchRange(renderer, out int firstSubMesh, out int subMeshCount, out Matrix4x4 toWorld);
+					Bounds bounds = subMeshCount > 0 ? SubMeshBounds(mesh, firstSubMesh, subMeshCount, toWorld) : renderer.bounds;
+					// Off the picture, or a flat decal: not drawn. Nor anything wider than the
+					// picture itself: the scenery round a map (Dustbowl's desert backdrop is 9 km
+					// across), which would paint the whole picture.
+					float frame = metresPerPixel * Size;
+					if (bounds.size.y < 0.15f || !Overlaps(bounds) || bounds.size.x > frame || bounds.size.z > frame)
 					{
 						continue;
 					}
 					count++;
-					Rasterise(filter.sharedMesh, renderer.transform.localToWorldMatrix, (i, height, normal) =>
+					Rasterise(mesh, toWorld, firstSubMesh, subMeshCount, (i, height, normal) =>
 					{
 						if (height > featureTop[i] && height > ground[i] + 0.15f)
 						{
@@ -374,6 +390,10 @@ namespace Ironfront
 				return count;
 			}
 
+			/// <summary>A tree placed as a scene object: Forest Lake's pines, Island's alders and palms.</summary>
+			private static bool IsSceneTree(string lowerName)
+				=> lowerName.Contains("pine") || lowerName.Contains("alder") || lowerName.Contains("palm");
+
 			private static Feature Classify(Renderer renderer)
 			{
 				string name = renderer.name.ToLowerInvariant();
@@ -381,7 +401,7 @@ namespace Ironfront
 				// No material is an invisible helper (Level Bounds is a box nobody sees).
 				if (renderer.sharedMaterial == null || renderer.GetComponentInParent<LevelBounds>() != null
 					|| renderer.GetComponentInParent<WaterLevel>() != null || name.Contains("water") || name.Contains("river")
-					|| name.Contains("pine") || name.Contains("fern") || name.Contains("grass") || name.Contains("blueberry")
+					|| IsSceneTree(name) || name.Contains("fern") || name.Contains("grass") || name.Contains("blueberry")
 					|| name.Contains("flower") || name.Contains("bush") || name.Contains("tree") || name.Contains("sky")
 					|| name.Contains("cover point") || name.Contains("red cross") || root.Contains("pathfinding")
 					|| renderer.GetComponentInParent<Actor>() != null || renderer.GetComponentInParent<Vehicle>() != null
@@ -452,7 +472,7 @@ namespace Ironfront
 				foreach (Renderer renderer in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
 				{
 					string name = renderer.name.ToLowerInvariant();
-					if (renderer.enabled && name.Contains("pine") && Overlaps(renderer.bounds))
+					if (renderer.enabled && IsSceneTree(name) && Overlaps(renderer.bounds))
 					{
 						Bounds b = renderer.bounds;
 						crowns.Add(new Vector3(b.center.x, 0.38f * Mathf.Max(b.size.x, b.size.z), b.center.z));
@@ -657,17 +677,81 @@ namespace Ironfront
 			}
 
 			/// <summary>Fills a mesh's triangles from above, calling back per pixel with height and face normal.</summary>
-			private void Rasterise(Mesh mesh, Matrix4x4 toWorld, System.Action<int, float, Vector3> plot)
+			/// <summary>
+			/// A statically batched renderer's own sub-meshes of the combined mesh, and the matrix
+			/// its vertices are in (the batch root's, the world's when there is none); a count of
+			/// 0 and the renderer's own transform for anything else.
+			/// </summary>
+			private static void StaticBatchRange(Renderer renderer, out int first, out int count, out Matrix4x4 toWorld)
 			{
-				Vector3[] vertices = mesh.vertices;
-				int[] triangles = mesh.triangles;
-				var world = new Vector3[vertices.Length];
-				var pixel = new Vector2[vertices.Length];
-				for (int v = 0; v < vertices.Length; v++)
+				var serialized = new SerializedObject(renderer);
+				SerializedProperty firstProperty = serialized.FindProperty("m_StaticBatchInfo.firstSubMesh");
+				SerializedProperty countProperty = serialized.FindProperty("m_StaticBatchInfo.subMeshCount");
+				first = firstProperty != null ? firstProperty.intValue : 0;
+				count = countProperty != null ? countProperty.intValue : 0;
+				if (count <= 0)
 				{
-					world[v] = toWorld.MultiplyPoint3x4(vertices[v]);
-					pixel[v] = Pixel(world[v]);
+					count = 0;
+					toWorld = renderer.transform.localToWorldMatrix;
+					return;
 				}
+				var root = serialized.FindProperty("m_StaticBatchRoot").objectReferenceValue as Transform;
+				toWorld = root != null ? root.localToWorldMatrix : Matrix4x4.identity;
+			}
+
+			private static Bounds SubMeshBounds(Mesh mesh, int first, int count, Matrix4x4 toWorld)
+			{
+				Bounds local = mesh.GetSubMesh(first).bounds;
+				for (int s = first + 1; s < first + count && s < mesh.subMeshCount; s++)
+				{
+					local.Encapsulate(mesh.GetSubMesh(s).bounds);
+				}
+				var world = new Bounds(toWorld.MultiplyPoint3x4(local.center), Vector3.zero);
+				for (int corner = 0; corner < 8; corner++)
+				{
+					Vector3 offset = new Vector3(
+						(corner & 1) == 0 ? -local.extents.x : local.extents.x,
+						(corner & 2) == 0 ? -local.extents.y : local.extents.y,
+						(corner & 4) == 0 ? -local.extents.z : local.extents.z);
+					world.Encapsulate(toWorld.MultiplyPoint3x4(local.center + offset));
+				}
+				return world;
+			}
+
+			/// <summary>A combined mesh's vertices in the picture, kept: every renderer of the batch shares them.</summary>
+			private readonly Dictionary<Mesh, (Vector3[] world, Vector2[] pixel)> batchVertices =
+				new Dictionary<Mesh, (Vector3[] world, Vector2[] pixel)>();
+
+			private void Rasterise(Mesh mesh, Matrix4x4 toWorld, int firstSubMesh, int subMeshCount, System.Action<int, float, Vector3> plot)
+			{
+				bool shared = subMeshCount > 0 && toWorld == Matrix4x4.identity;
+				if (!shared || !batchVertices.TryGetValue(mesh, out (Vector3[] world, Vector2[] pixel) transformed))
+				{
+					Vector3[] vertices = mesh.vertices;
+					transformed = (new Vector3[vertices.Length], new Vector2[vertices.Length]);
+					for (int v = 0; v < vertices.Length; v++)
+					{
+						transformed.world[v] = toWorld.MultiplyPoint3x4(vertices[v]);
+						transformed.pixel[v] = Pixel(transformed.world[v]);
+					}
+					if (shared)
+					{
+						batchVertices[mesh] = transformed;
+					}
+				}
+				if (subMeshCount <= 0)
+				{
+					RasteriseTriangles(mesh.triangles, transformed.world, transformed.pixel, plot);
+					return;
+				}
+				for (int s = firstSubMesh; s < firstSubMesh + subMeshCount && s < mesh.subMeshCount; s++)
+				{
+					RasteriseTriangles(mesh.GetTriangles(s), transformed.world, transformed.pixel, plot);
+				}
+			}
+
+			private void RasteriseTriangles(int[] triangles, Vector3[] world, Vector2[] pixel, System.Action<int, float, Vector3> plot)
+			{
 				for (int t = 0; t + 2 < triangles.Length; t += 3)
 				{
 					int a = triangles[t], b = triangles[t + 1], c = triangles[t + 2];
