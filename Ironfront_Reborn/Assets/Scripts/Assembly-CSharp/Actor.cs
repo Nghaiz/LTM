@@ -888,6 +888,23 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		return true;
 	}
 
+	/// <summary>
+	/// Whether a pull the carried weapon held for its lock is due now, on a frame whose trigger is
+	/// up. Server only; under the same eligibility as <see cref="TryWithholdCarriedTriggerByNetwork"/>.
+	/// </summary>
+	public bool TryTakeHeldCarriedTriggerByNetwork()
+	{
+		if (activeWeapon == null || swimWeaponStowed || fallenOver)
+		{
+			return false;
+		}
+		if (IsSeated() && !seat.CanUseCarriedWeapon())
+		{
+			return false;
+		}
+		return activeWeapon.TakeHeldTrigger();
+	}
+
 	private void UpdateGetup()
 	{
 		float num = getupAction.Ratio();

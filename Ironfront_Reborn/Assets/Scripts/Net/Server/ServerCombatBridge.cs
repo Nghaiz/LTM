@@ -231,6 +231,13 @@ namespace Ironfront.Net.Unity.Server
         /// "hold fire and it goes when the lock does".
         /// </para>
         /// <para>
+        /// <b>A tap made just before the server's lock is done is held, not dropped.</b> The client
+        /// draws its lock from its own copy a few frames ahead of or behind this one, so a player
+        /// who clicks as their box turns to "locked" can reach a server still locking. The launcher
+        /// holds that pull (<c>Javelin.HeldPullSeconds</c>) and hands it back here on the first
+        /// trigger-up frame its lock is complete (owner report 2026-10-11).
+        /// </para>
+        /// <para>
         /// <b>The server decides the lock, from the server's own aim.</b> The client draws its own
         /// lock box from the same algorithm over the same input, and never says what it locked:
         /// a client-named target would be a target the server could not refuse.
@@ -247,7 +254,17 @@ namespace Ironfront.Net.Unity.Server
             actor.SteerCarriedWeapon(
                 eye.X, eye.Y, eye.Z, aim.X, aim.Y, aim.Z, frame.IsPressed(InputButtons.Aim));
 
-            if (!frame.IsPressed(InputButtons.Fire)) return frame;
+            if (!frame.IsPressed(InputButtons.Fire))
+            {
+                // A pull the launcher held while its lock was finishing (Javelin.HeldPullSeconds):
+                // due now, it is this frame's trigger -- a rising edge, since the frames before it
+                // reached the authority with the trigger kept back.
+                return actor.TryTakeHeldCarriedTrigger()
+                    ? new InputFrame(
+                        frame.MoveX, frame.MoveZ, frame.Yaw, frame.Pitch,
+                        frame.Buttons | InputButtons.Fire)
+                    : frame;
+            }
             if (!actor.TryWithholdCarriedTrigger(aim.X, aim.Y, aim.Z)) return frame;
 
             return new InputFrame(

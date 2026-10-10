@@ -268,6 +268,16 @@
         bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ);
 
         /// <summary>
+        /// Hands back a pull the carried weapon held while its lock was still running, once the
+        /// lock is done. Maps to <c>Actor.TryTakeHeldCarriedTriggerByNetwork</c>.
+        /// </summary>
+        /// <returns>
+        /// True on the one frame the held pull is due: the authority resolves that frame as a
+        /// fresh trigger pull. False otherwise, and always for an ordinary weapon.
+        /// </returns>
+        bool TryTakeHeldCarriedTrigger();
+
+        /// <summary>
         /// Writes the authority's carried-weapon state into the engine weapon the body is holding.
         /// </summary>
         /// <remarks>
