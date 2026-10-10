@@ -96,7 +96,7 @@
       Without this package the collector produces no coverage file and the CI step reports
       success while measuring nothing — a silent hole, worse than no coverage at all.
     -->
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
   </ItemGroup>
 
 </Project>
