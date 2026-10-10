@@ -1251,16 +1251,18 @@ namespace Ironfront.Net.Unity.EditorTools
             // Every column carries its own mark and colour (owner's list of 2026-10-09, item 2), the
             // same colours its numbers take on the rows: green kills, a red skull for deaths, the
             // ratio's cyan, an orange-red headshot, the streak's flame, a gold crown for the best.
-            ColumnHead(heads, "#", "medal", HudStyle.BoardMuted, bold, fromRight: false, RankX, RankWidth);
-            ColumnHead(heads, "PLAYER", "person", HudStyle.BoardMuted, bold, fromRight: false, NameX, 220f);
-            ColumnHead(heads, "KILLS", "crosshair", HudStyle.KillsInk, bold, fromRight: true, KillsX, NumberWidth);
-            ColumnHead(heads, "DEATHS", "skull", HudStyle.DeadInk, bold, fromRight: true, DeathsX, NumberWidth);
-            ColumnHead(heads, "K/D", "ratio", HudStyle.RatioHeadInk, bold, fromRight: true, RatioX, RatioWidth);
-            ColumnHead(heads, "HEADS", "headshot", HudStyle.HeadshotInk, bold, fromRight: true, HeadshotsX, NumberWidth);
-            ColumnHead(heads, "STREAK", "flame", HudStyle.StreakInk, bold, fromRight: true, StreakX, StreakWidth);
-            ColumnHead(heads, "BEST", "crown", HudStyle.GoldInk, bold, fromRight: true, BestX, NumberWidth);
-            ColumnHead(heads, "SCORE", "star", HudStyle.ScoreHeadInk, bold, fromRight: true, ScoreX, ScoreWidth);
-            ColumnHead(heads, "PING", "signal", HudStyle.AliveInk, bold, fromRight: true, PingX, PingWidth);
+            // The rank's mark sits over the rank numbers and medals; the player's over the bot / player
+            // marks of the rows, its name where the names start, in the side's colour (SetColour).
+            RankHead(heads, HudStyle.Gold);
+            Image playerMark = PlayerHead(heads, bold);
+            ColumnHead(heads, "KILLS", "crosshair", HudStyle.KillsInk, bold, KillsX);
+            ColumnHead(heads, "DEATHS", "skull", HudStyle.DeadInk, bold, DeathsX);
+            ColumnHead(heads, "K/D", "ratio", HudStyle.RatioHeadInk, bold, RatioX);
+            ColumnHead(heads, "HEADS", "headshot", HudStyle.HeadshotInk, bold, HeadshotsX);
+            ColumnHead(heads, "STREAK", "flame", HudStyle.StreakInk, bold, StreakX);
+            ColumnHead(heads, "BEST", "crown", HudStyle.GoldInk, bold, BestX);
+            ColumnHead(heads, "SCORE", "star", HudStyle.ScoreHeadInk, bold, ScoreX);
+            ColumnHead(heads, "PING", "signal", HudStyle.AliveInk, bold, PingX);
 
             Image rule = Picture(side, "Column Rule", new Color(1f, 1f, 1f, 0.16f));
             RectTransform ruleRect = rule.rectTransform;
@@ -1293,6 +1295,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_band", band);
             Assign(so, "_teamName", teamName);
             Assign(so, "_flagIcon", flagIcon);
+            Assign(so, "_playerMark", playerMark);
             Assign(so, "_flags", flags);
             Assign(so, "_perKill", perKill);
             Assign(so, "_players", players);
@@ -1433,37 +1436,37 @@ namespace Ironfront.Net.Unity.EditorTools
             status.preserveAspect = true;
             Place(status, new Vector2(1f, 0.5f), Middle, new Vector2(-(StatusX + StatusWidth * 0.5f), 0f), new Vector2(14f, 14f));
 
-            Text kills = BoardText(row, "Kills", bold, 18, Ink, TextAnchor.MiddleRight);
-            Column(kills, fromRight: true, KillsX, NumberWidth);
+            Text kills = BoardText(row, "Kills", bold, 18, Ink, TextAnchor.MiddleCenter);
+            Column(kills, fromRight: true, KillsX, StatWidth);
 
-            Text deaths = BoardText(row, "Deaths", bold, 18, HudStyle.BoardMuted, TextAnchor.MiddleRight);
-            Column(deaths, fromRight: true, DeathsX, NumberWidth);
+            Text deaths = BoardText(row, "Deaths", bold, 18, HudStyle.BoardMuted, TextAnchor.MiddleCenter);
+            Column(deaths, fromRight: true, DeathsX, StatWidth);
 
-            Text ratio = BoardText(row, "Ratio", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
-            Column(ratio, fromRight: true, RatioX, RatioWidth);
+            Text ratio = BoardText(row, "Ratio", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleCenter, shadowed: false);
+            Column(ratio, fromRight: true, RatioX, StatWidth);
 
-            Text headshots = BoardText(row, "Headshots", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
-            Column(headshots, fromRight: true, HeadshotsX, NumberWidth);
+            Text headshots = BoardText(row, "Headshots", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleCenter, shadowed: false);
+            Column(headshots, fromRight: true, HeadshotsX, StatWidth);
 
-            Image streakIcon = Picture(row, "Streak Icon", HudStyle.StreakInk);
+            // A flame and a number, centred as a pair: alone the number sits on the line.
+            GameObject streakCell = PairCell(row, "Streak Cell", StreakX);
+            Image streakIcon = Picture(streakCell, "Streak Icon", HudStyle.StreakInk);
             streakIcon.preserveAspect = true;
-            Place(streakIcon, new Vector2(1f, 0.5f), Middle, new Vector2(-(StreakX + 36f), 0f), new Vector2(16f, 16f));
+            Fixed(streakIcon, 16f);
+            Text streak = BoardText(streakCell, "Streak", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleCenter, shadowed: false);
 
-            Text streak = BoardText(row, "Streak", bold, 16, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
-            Column(streak, fromRight: true, StreakX, 26f);
+            Text best = BoardText(row, "Best", bold, 16, HudStyle.BoardMuted, TextAnchor.MiddleCenter, shadowed: false);
+            Column(best, fromRight: true, BestX, StatWidth);
 
-            Text best = BoardText(row, "Best", bold, 16, HudStyle.BoardMuted, TextAnchor.MiddleRight, shadowed: false);
-            Column(best, fromRight: true, BestX, NumberWidth);
+            Text score = BoardText(row, "Score", bold, 18, Ink, TextAnchor.MiddleCenter);
+            Column(score, fromRight: true, ScoreX, StatWidth);
 
-            Text score = BoardText(row, "Score", bold, 18, Ink, TextAnchor.MiddleRight);
-            Column(score, fromRight: true, ScoreX, ScoreWidth);
-
-            Image pingIcon = Picture(row, "Ping Icon", HudStyle.AliveInk);
+            // The bars and the milliseconds, centred as a pair, like the streak.
+            GameObject pingCell = PairCell(row, "Ping Cell", PingX);
+            Image pingIcon = Picture(pingCell, "Ping Icon", HudStyle.AliveInk);
             pingIcon.preserveAspect = true;
-            Place(pingIcon, new Vector2(1f, 0.5f), Middle, new Vector2(-(PingX + 52f), 0f), new Vector2(16f, 16f));
-
-            Text ping = BoardText(row, "Ping", bold, 15, HudStyle.BoardFaint, TextAnchor.MiddleRight, shadowed: false);
-            Column(ping, fromRight: true, PingX, 40f);
+            Fixed(pingIcon, 15f);
+            Text ping = BoardText(pingCell, "Ping", bold, 15, HudStyle.BoardFaint, TextAnchor.MiddleCenter, shadowed: false);
 
             ScoreboardRowView view = row.AddComponent<ScoreboardRowView>();
 
@@ -1542,25 +1545,26 @@ namespace Ironfront.Net.Unity.EditorTools
 
         // Columns, from a row's left edge or (fromRight) its right edge. The owner's report of
         // 2026-09-30 filled the empty middle: status, HS, streak, best, score and ping.
+        //
+        // Every stat column is the same width and CENTRED: its mark, its name and its numbers on one
+        // line (owner's list of 2026-10-11, item 3). They were right-aligned, so each name and mark
+        // stuck out to the left by its own width and the header read as crooked over the numbers.
         private const float RankX = 6f;
         private const float RankWidth = 30f;
         private const float KindX = 52f;
         private const float NameX = 68f;
-        private const float PingX = 6f;
-        private const float PingWidth = 70f;
-        private const float ScoreX = 84f;
-        private const float ScoreWidth = 62f;
-        private const float BestX = 152f;
-        private const float StreakX = 204f;
-        private const float StreakWidth = 54f;
-        private const float HeadshotsX = 276f;
-        private const float RatioX = 324f;
-        private const float RatioWidth = 56f;
-        private const float DeathsX = 384f;
-        private const float KillsX = 432f;
+        private const float StatWidth = 58f;
+        private const float StatEdge = 6f;
+        private const float PingX = StatEdge;
+        private const float ScoreX = StatEdge + StatWidth;
+        private const float BestX = StatEdge + StatWidth * 2f;
+        private const float StreakX = StatEdge + StatWidth * 3f;
+        private const float HeadshotsX = StatEdge + StatWidth * 4f;
+        private const float RatioX = StatEdge + StatWidth * 5f;
+        private const float DeathsX = StatEdge + StatWidth * 6f;
+        private const float KillsX = StatEdge + StatWidth * 7f;
         private const float StatusX = 480f;
         private const float StatusWidth = 28f;
-        private const float NumberWidth = 44f;
 
         private static readonly Vector2 TopLeft = new Vector2(0f, 1f);
         private static readonly Vector2 TopCentre = new Vector2(0.5f, 1f);
@@ -1574,41 +1578,81 @@ namespace Ironfront.Net.Unity.EditorTools
         /// One column's heading: its mark over its name, both in the column's colour. A name column
         /// (rank, player) reads left to right instead, mark then name, on one line.
         /// </summary>
-        private static void ColumnHead(
-            GameObject heads, string caption, string icon, Color ink, Font font, bool fromRight, float x, float width)
+        /// <summary>A stat column's head: its mark over its name, both centred over the column's numbers.</summary>
+        private static void ColumnHead(GameObject heads, string caption, string icon, Color ink, Font font, float x)
         {
             var cell = new GameObject(caption, typeof(RectTransform));
             cell.transform.SetParent(heads.transform, worldPositionStays: false);
-            Column(cell.transform, fromRight, x, width);
+            Column(cell.transform, fromRight: true, x, StatWidth);
 
-            Sprite mark = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Resources/IronfrontUi/Icons/" + icon + ".png");
-            Image glyph = Picture(cell, "Icon", ink);
-            glyph.sprite = mark;
-            glyph.preserveAspect = true;
+            Image glyph = Mark(cell, icon, ink);
+            Place(glyph, TopCentre, TopCentre, new Vector2(0f, -1f), new Vector2(20f, 20f));
 
-            Text head = BoardText(cell, "Caption", font, 11, ink,
-                fromRight ? TextAnchor.LowerCenter : TextAnchor.MiddleLeft, shadowed: false);
+            Text head = BoardText(cell, "Caption", font, 11, ink, TextAnchor.LowerCenter, shadowed: false);
             head.text = caption;
+            Stretch(head.rectTransform);
+        }
 
-            if (fromRight)
-            {
-                // Right-aligned, like the numbers under them.
-                Place(glyph, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-1f, -1f), new Vector2(20f, 20f));
-                Stretch(head.rectTransform);
-                head.alignment = TextAnchor.LowerRight;
-            }
-            else
-            {
-                Place(glyph, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(18f, 18f));
-                Place(head, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(caption.Length > 1 ? 24f : 22f, 0f),
-                    new Vector2(width, 20f));
-                if (caption == "#")
-                {
-                    // The rank column is narrow: the mark alone, centred.
-                    head.gameObject.SetActive(false);
-                    glyph.rectTransform.anchoredPosition = new Vector2((width - 18f) * 0.5f, 0f);
-                }
-            }
+        /// <summary>The rank's head: its mark alone, centred over the rank numbers and medals.</summary>
+        private static void RankHead(GameObject heads, Color ink)
+        {
+            var cell = new GameObject("#", typeof(RectTransform));
+            cell.transform.SetParent(heads.transform, worldPositionStays: false);
+            Column(cell.transform, fromRight: false, RankX, RankWidth);
+            Image glyph = Mark(cell, "rank", ink);
+            Place(glyph, Middle, Middle, Vector2.zero, new Vector2(22f, 22f));
+        }
+
+        /// <summary>
+        /// The player's head: the soldier over the rows' bot / player marks, the name where the names
+        /// start. Returns the mark, which the side's colour tints.
+        /// </summary>
+        private static Image PlayerHead(GameObject heads, Font font)
+        {
+            var cell = new GameObject("PLAYER", typeof(RectTransform));
+            cell.transform.SetParent(heads.transform, worldPositionStays: false);
+            Column(cell.transform, fromRight: false, 0f, NameX + 220f);
+
+            Image glyph = Mark(cell, "soldier", HudStyle.BoardMuted);
+            Place(glyph, new Vector2(0f, 0.5f), Middle, new Vector2(KindX, 0f), new Vector2(22f, 22f));
+
+            Text head = BoardText(cell, "Caption", font, 11, HudStyle.BoardMuted, TextAnchor.MiddleLeft, shadowed: false);
+            head.text = "PLAYER";
+            Place(head, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(NameX, 0f), new Vector2(220f, 20f));
+            return glyph;
+        }
+
+        private static Image Mark(GameObject cell, string icon, Color ink)
+        {
+            Image glyph = Picture(cell, "Icon", ink);
+            glyph.sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Resources/IronfrontUi/Icons/" + icon + ".png");
+            glyph.preserveAspect = true;
+            return glyph;
+        }
+
+        /// <summary>A stat column holding a mark and a number, laid out as a pair centred on the column.</summary>
+        private static GameObject PairCell(GameObject row, string name, float x)
+        {
+            var cell = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            cell.transform.SetParent(row.transform, worldPositionStays: false);
+            Column(cell.transform, fromRight: true, x, StatWidth);
+
+            var layout = cell.GetComponent<HorizontalLayoutGroup>();
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.spacing = 4f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+            return cell;
+        }
+
+        /// <summary>Holds a mark at <paramref name="size"/> square inside a layout group.</summary>
+        private static void Fixed(Image mark, float size)
+        {
+            LayoutElement element = mark.gameObject.AddComponent<LayoutElement>();
+            element.minWidth = element.preferredWidth = size;
+            element.minHeight = element.preferredHeight = size;
         }
 
         /// <summary>A full-height column in a row, <paramref name="x"/> in from one edge.</summary>

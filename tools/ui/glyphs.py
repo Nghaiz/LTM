@@ -83,6 +83,18 @@ GLYPHS = {
         "M24 4 L44 4 L58 40 L48 46 Z M76 4 L56 4 L42 40 L52 46 Z "
         + ring(50, 66, 28, 6) + " " + circle(50, 66, 16)),
     "person": path(circle(50, 26, 18) + " M18 92 C18 64 32 52 50 52 C68 52 82 64 82 92 Z"),
+    # The Tab board's and the ranking's rank and player columns (owner's list of 2026-10-11, item 3):
+    # a service medal (striped ribbon, a star on it) and a soldier in his helmet, not a ring and a
+    # blank silhouette.
+    "rank": path(
+        "M26 3 h48 v28 h-48 Z M37 3 h6 v28 h-6 Z M57 3 h6 v28 h-6 Z "
+        "M26 31 L74 31 L58 45 L42 45 Z "
+        "M" + " L".join(star_points(50, 69, 30, 12.5).split(" ")) + " Z "
+        + circle(50, 70, 5.5)),
+    "soldier": path(
+        "M23 38 C23 16 35 5 50 5 C65 5 77 16 77 38 C77 41 79 43 82 44 L18 44 C21 43 23 41 23 38 Z "
+        "M35 47 h30 v4 c0 8 -7 13 -15 13 c-8 0 -15 -5 -15 -13 Z "
+        "M12 97 C12 77 29 67 50 67 C71 67 88 77 88 97 Z"),
     "people": path(
         circle(36, 30, 15) + " M8 90 C8 66 20 56 36 56 C52 56 64 66 64 90 Z "
         + circle(70, 26, 12) + " M60 50 C66 47 72 47 76 48 C88 50 94 62 94 82 L68 82 C68 68 66 58 60 50 Z"),
