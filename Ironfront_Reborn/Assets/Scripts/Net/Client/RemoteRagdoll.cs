@@ -575,6 +575,44 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        /// <summary>
+        /// Where the segment first meets this ragdoll's bones as they lie: the fraction along it, and
+        /// whether the bone it met is the head. False when the body is not lying limp or the segment
+        /// misses every bone.
+        /// </summary>
+        /// <remarks>
+        /// For a body knocked over ALIVE (owner's list of 2026-10-11, item 7): the soldier is still in
+        /// the fight and lies where these bones are drawn, so this is where a round meets him. The
+        /// server boxes the same body where its own ragdoll lies (NetServerActor.CaptureHitboxes).
+        /// </remarks>
+        internal bool TryHitSegment(Vector3 from, Vector3 to, out float fraction, out bool head)
+        {
+            fraction = 1f;
+            head = false;
+            if (!IsActive) return false;
+
+            Vector3 along = to - from;
+            float length = along.magnitude;
+            if (length < 1e-4f) return false;
+
+            var ray = new Ray(from, along / length);
+            float nearest = float.MaxValue;
+            for (int i = 0; i < Specs.Length; i++)
+            {
+                Transform bone = _bones[i];
+                if (bone == null) continue;
+                Collider collider = bone.GetComponent<Collider>();
+                if (collider == null || !collider.enabled) continue;
+                if (!collider.Raycast(ray, out RaycastHit hit, length) || hit.distance >= nearest) continue;
+                nearest = hit.distance;
+                head = Specs[i].Bone == HumanBodyBones.Head;
+            }
+
+            if (nearest == float.MaxValue) return false;
+            fraction = nearest / length;
+            return true;
+        }
+
         /// <summary>Tears the bodies down and gives the skeleton back to the animator.</summary>
         public void Restore()
         {
