@@ -61,7 +61,18 @@ public class MinimapCamera : MonoBehaviour
 	/// </summary>
 	public Texture2D bakedNightPicture;
 
+	/// <summary>
+	/// The map keeps the original game's own minimap, a live shot of the level from above, and is
+	/// never baked (Island and Dustbowl). Owner, 2026-10-11: the baked pictures #609 gave both maps
+	/// were "drawn by hand", ugly and wrong; the original's are the map. Their night is graded from the
+	/// shot at run time (<see cref="MinimapNightGrade"/>), as Forest Lake's baked night is.
+	/// </summary>
+	public bool originalLivePicture;
+
 	private NightMinimapPicture nightPicture;
+
+	/// <summary>The live shot by moonlight, made the first time the night asks for it.</summary>
+	private Texture2D liveNightPicture;
 
 	/// <summary>The frame <see cref="bakedPicture"/> was drawn for: its centre (x, z)...</summary>
 	public Vector2 bakedCentre;
@@ -86,7 +97,7 @@ public class MinimapCamera : MonoBehaviour
 			FrameThePlayableArea();
 			return;
 		}
-		if (bakedPicture != null)
+		if (bakedPicture != null && !originalLivePicture)
 		{
 			camera.aspect = 1f;
 			FrameThePlayableArea();
@@ -460,11 +471,25 @@ public class MinimapCamera : MonoBehaviour
 
 	private void Render()
 	{
+		// By day whatever the hour: a night already up when the map loads would draw the level near
+		// black, and the night picture is graded from the day's (MinimapNightGrade).
+		if (TimeOfDay.instance != null)
+		{
+			TimeOfDay.instance.WhileDay(RenderNow);
+		}
+		else
+		{
+			RenderNow();
+		}
+		camera.enabled = false;
+	}
+
+	private void RenderNow()
+	{
 		bool fog = RenderSettings.fog;
 		RenderSettings.fog = false;
 		camera.Render();
 		RenderSettings.fog = fog;
-		camera.enabled = false;
 	}
 
 	/// <summary>
@@ -474,15 +499,48 @@ public class MinimapCamera : MonoBehaviour
 	public Texture Minimap()
 	{
 		NightModeDirector night = NightModeDirector.instance;
-		if (usingBakedPicture && bakedNightPicture != null && night != null && night.IsNight)
+		if (night != null && night.IsNight)
 		{
 			if (nightPicture == null)
 			{
-				nightPicture = new NightMinimapPicture(bakedNightPicture);
+				Texture2D moonlit = usingBakedPicture ? bakedNightPicture : LiveNightPicture();
+				if (moonlit != null)
+				{
+					nightPicture = new NightMinimapPicture(moonlit);
+				}
 			}
-			return nightPicture.Picture(night.GlowPoints, camera);
+			if (nightPicture != null)
+			{
+				return nightPicture.Picture(night.GlowPoints, camera);
+			}
 		}
 		return usingBakedPicture ? bakedPicture : minimapRenderTexture;
+	}
+
+	/// <summary>
+	/// The live shot read back once and graded by moonlight, or null with no shot to read. The same
+	/// grade the baker gives Forest Lake's night, so the three maps look alike after dark.
+	/// </summary>
+	private Texture2D LiveNightPicture()
+	{
+		if (liveNightPicture != null || minimapRenderTexture == null || !minimapRenderTexture.IsCreated())
+		{
+			return liveNightPicture;
+		}
+		int size = minimapRenderTexture.width;
+		RenderTexture previous = RenderTexture.active;
+		RenderTexture.active = minimapRenderTexture;
+		liveNightPicture = new Texture2D(size, size, TextureFormat.RGBA32, true);
+		liveNightPicture.name = "Live Night Minimap";
+		liveNightPicture.ReadPixels(new Rect(0f, 0f, size, size), 0, 0, false);
+		RenderTexture.active = previous;
+		Color32[] pixels = liveNightPicture.GetPixels32();
+		MinimapNightGrade.Apply(pixels);
+		liveNightPicture.SetPixels32(pixels);
+		liveNightPicture.wrapMode = TextureWrapMode.Clamp;
+		liveNightPicture.filterMode = FilterMode.Trilinear;
+		liveNightPicture.Apply(true, false);
+		return liveNightPicture;
 	}
 
 	private void OnDestroy()
@@ -491,6 +549,11 @@ public class MinimapCamera : MonoBehaviour
 		{
 			nightPicture.Release();
 			nightPicture = null;
+		}
+		if (liveNightPicture != null)
+		{
+			Destroy(liveNightPicture);
+			liveNightPicture = null;
 		}
 	}
 

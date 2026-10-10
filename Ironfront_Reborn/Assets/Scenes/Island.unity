@@ -226450,10 +226450,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   frameMargin: 0.08
   objectiveFrameMargin: 0
-  bakedPicture: {fileID: 2800000, guid: 3136243f634f74748a42730f948177a3, type: 3}
-  bakedNightPicture: {fileID: 2800000, guid: 291964f1fb177f24fb6b46da646f2f61, type: 3}
-  bakedCentre: {x: 259.4311, y: 362.85236}
-  bakedHalfSpan: 270.07925
+  bakedPicture: {fileID: 0}
+  bakedNightPicture: {fileID: 0}
+  originalLivePicture: 1
+  bakedCentre: {x: 0, y: 0}
+  bakedHalfSpan: 0
 --- !u!1 &9727261
 GameObject:
   m_ObjectHideFlags: 0
