@@ -54,6 +54,18 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(57, SnapshotBuilder.ClampHealth(56.7f));
         }
 
+        [Fact]
+        public void OnlyADeadActorIsSentAtZeroHealth()
+        {
+            // Owner's list of 2026-10-11, item 5: a player on 0.3 HP was sent as 0, and the HUD read
+            // HEALTH 0 over a soldier the server rightly kept alive. Rounded up, as the HUD rounds.
+            Assert.Equal(1, SnapshotBuilder.ClampHealth(0.3f));
+            Assert.Equal(1, SnapshotBuilder.ClampHealth(0.001f));
+            Assert.Equal(0, SnapshotBuilder.ClampHealth(0f));
+            Assert.Equal(57, SnapshotBuilder.ClampHealth(56.2f));
+            Assert.Equal(100, SnapshotBuilder.ClampHealth(99.9f));
+        }
+
         // ------------------------------------------------------------------ change masks
 
         [Fact]
