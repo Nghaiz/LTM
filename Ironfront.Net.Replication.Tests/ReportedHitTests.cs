@@ -134,17 +134,18 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void AFlickEarnsTheSwingTheMouseActuallyMade()
         {
-            // The round left on the shooter's own frame, along the aim of that moment: five
-            // degrees from the frame the server fired on, in the middle of a flick.
+            // The round left on the shooter's own frame, along the aim of that moment: twelve
+            // degrees from the frame the server fired on, in the middle of a flick -- wider than the
+            // RK-44's moving hip cone and the original recoil's worst kick together (about 7).
             HitboxSet pose = BodyAt(0f, 30f);
             Vec3 chest = pose.Torso.Center;
-            float fiveDegrees = 5f * (float)Math.PI / 180f;
-            Vec3 aimedBeside = Eye + RotateYaw(chest - Eye, fiveDegrees);
+            float twelveDegrees = 12f * (float)Math.PI / 180f;
+            Vec3 aimedBeside = Eye + RotateYaw(chest - Eye, twelveDegrees);
 
             Assert.Equal(ReportVerdict.OffAim,
                 Judge(Shot(WeaponIds.RK44, in aimedBeside), Claim(in chest), in pose));
             Assert.Equal(ReportVerdict.Accepted,
-                Judge(Shot(WeaponIds.RK44, in aimedBeside, swing: fiveDegrees), Claim(in chest), in pose));
+                Judge(Shot(WeaponIds.RK44, in aimedBeside, swing: twelveDegrees), Claim(in chest), in pose));
         }
 
         [Fact]

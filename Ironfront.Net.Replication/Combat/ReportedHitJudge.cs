@@ -163,7 +163,12 @@ namespace Ironfront.Net.Replication.Combat
             // The swing: the shooter's game fired on its own frame, between two of the frames the
             // server holds, along the aim of that moment. A still hand earns nothing; a flick
             // earns as much as the mouse actually moved around the pull.
-            double allowed = config.Spread * SpreadAllowanceFactor + AimSlackRadians
+            // The spread: aimed, the weapon's own (x3 as ever); from the hip or on the move, the hip
+            // cone and the moving penalty the shooter's game rolls (WeaponConfig.HipSpread). Then the
+            // original recoil's kick, which a round fired mid-burst leaves along (RecoilKick).
+            double spread = Math.Max(config.Spread * SpreadAllowanceFactor,
+                                     Math.Max(config.Spread, config.HipSpread) * config.MovingSpreadScale);
+            double allowed = spread + config.RecoilAllowance + AimSlackRadians
                              + Math.Min(MaxAimSwingRadians, Math.Max(0f, shot.AimSwing))
                              + Math.Atan2(MuzzleOffsetMetres + Math.Max(0f, shot.OriginSlack), distance);
             RoundBallistics round = config.Round;

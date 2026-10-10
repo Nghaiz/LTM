@@ -916,53 +916,28 @@ public class FpsActorController : ActorController
 		MinimapUi.ForgetDrawnSpawnPoint();
 	}
 
-	/// <summary>The aim's recoil over the current burst (<see cref="WeaponHandling"/>).</summary>
-	private readonly AimRecoilState aimRecoil = new AimRecoilState();
+	/// <summary>
+	/// The original game's recoil as the rounds feel it (owner's list of 2026-10-11, item 8): the
+	/// kick of the gun, which the next round leaves along. The aim itself never climbs.
+	/// </summary>
+	private readonly Ironfront.Net.Replication.Combat.RecoilKick roundKick = new Ironfront.Net.Replication.Combat.RecoilKick();
 
-	/// <summary>The handling of the gun the recoil belongs to; recovery uses it.</summary>
-	private WeaponHandlingProfile aimRecoilHandling;
+	public override Vector2 RoundKickDegrees => new Vector2(roundKick.PitchUpDegrees, roundKick.YawDegrees);
 
-	private bool aimRecoilActive;
-
-	public override void ApplyAimRecoil(Weapon weapon)
+	public override void KickRounds(float kickback, float randomKick, Vector3 random)
 	{
-		if (weapon == null || fpCameraParent == null || !WeaponHandling.TryGet(weapon.NetworkId, out WeaponHandlingProfile handling))
-		{
-			return;
-		}
-		aimRecoilHandling = handling;
-		aimRecoilActive = true;
-		Vector2 kick = aimRecoil.Kick(in handling, Time.time, UnityEngine.Random.Range(-1f, 1f));
-		TurnAim(-kick.x, kick.y);
+		roundKick.Shot(kickback, randomKick, random.x, random.y, random.z);
 	}
 
-	/// <summary>The hands bring part of the climb back once the trigger rests.</summary>
-	private void RecoverAimRecoil()
+	/// <summary>The springs bring the gun back, as the first-person rig's do every frame; at rest when dead.</summary>
+	private void SettleRoundKick()
 	{
-		if (!aimRecoilActive || fpCameraParent == null)
-		{
-			return;
-		}
 		if (actor == null || actor.dead)
 		{
-			aimRecoil.Reset();
-			aimRecoilActive = false;
+			roundKick.Reset();
 			return;
 		}
-		Vector2 back = aimRecoil.Recover(in aimRecoilHandling, Time.time, Time.deltaTime);
-		if (back != Vector2.zero)
-		{
-			TurnAim(back.x, -back.y);
-		}
-	}
-
-	/// <summary>Turns the aim -- the camera's parent, which the server is sent -- by these degrees (x down, y right).</summary>
-	private void TurnAim(float pitchDegrees, float yawDegrees)
-	{
-		Vector3 euler = fpCameraParent.localEulerAngles;
-		euler.x += pitchDegrees;
-		euler.y += yawDegrees;
-		fpCameraParent.localEulerAngles = euler;
+		roundKick.Step(Time.deltaTime);
 	}
 
 	public override void ApplyRecoil(Vector3 impulse)
@@ -1205,7 +1180,7 @@ public class FpsActorController : ActorController
 		{
 			sprintCannotFireAction.Start();
 		}
-		RecoverAimRecoil();
+		SettleRoundKick();
 		fpParent.lean = Lean();
 		if (GameKeys.Down(GameAction.Aim))
 		{
@@ -1593,9 +1568,8 @@ public class FpsActorController : ActorController
 	public override void SwitchedToWeapon(Weapon weapon)
 	{
 		SetupWeaponFov(weapon);
-		// A new gun starts a new burst: the last one's climb is the player's to keep.
-		aimRecoil.Reset();
-		aimRecoilActive = false;
+		// A new gun is drawn at rest.
+		roundKick.Reset();
 	}
 
 	private void SetupWeaponFov(Weapon weapon)

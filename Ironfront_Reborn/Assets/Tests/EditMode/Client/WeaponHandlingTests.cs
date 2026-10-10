@@ -1,14 +1,13 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
 using NUnit.Framework;
-using UnityEngine;
 
 namespace Ironfront.Net.Unity.Client.Tests
 {
     /// <summary>
-    /// The carried guns' handling (owner's run of 2026-10-10, phase P38: "unbalanced; they should
-    /// handle like the real guns"): recoil climbs the aim the round follows, and the spread opens
-    /// from the hip and on the move, never past what the server judges.
+    /// The carried guns' handling (owner's list of 2026-10-11, item 8): aimed, a gun keeps its
+    /// prefab's spread; from the hip and on the move it opens as in CS2 and PUBG, and the shooter's
+    /// game rolls exactly the cone the server's weapon table holds.
     /// </summary>
     public sealed class WeaponHandlingTests
     {
@@ -19,76 +18,41 @@ namespace Ironfront.Net.Unity.Client.Tests
         };
 
         [Test]
-        public void EveryCarriedGunHasItsHandlingAndNothingElseDoes()
+        public void AnAimedShotKeepsThePrefabsSpread()
         {
-            foreach (byte id in Guns)
-                Assert.IsTrue(WeaponHandling.TryGet(id, out _), $"weapon {id}");
-
-            Assert.IsFalse(WeaponHandling.TryGet(WeaponIds.FRAG, out _));
-            Assert.IsFalse(WeaponHandling.TryGet(WeaponIds.BEU_AW1, out _));
-            Assert.IsFalse(WeaponHandling.TryGet(WeaponIds.WRENCH, out _));
-        }
-
-        [Test]
-        public void TheSpreadNeverOpensPastWhatTheServerJudges()
-        {
-            Assert.AreEqual(ReportedHitJudge.SpreadAllowanceFactor, WeaponHandling.MaxSpreadScale);
             foreach (byte id in Guns)
             {
-                WeaponHandling.TryGet(id, out WeaponHandlingProfile handling);
-                Assert.AreEqual(1f, WeaponHandling.SpreadScale(in handling, aiming: true, moving: false), $"weapon {id} aimed");
-                Assert.LessOrEqual(WeaponHandling.SpreadScale(in handling, aiming: false, moving: true), WeaponHandling.MaxSpreadScale, $"weapon {id}");
-                Assert.Greater(WeaponHandling.SpreadScale(in handling, aiming: false, moving: false), 1f, $"weapon {id} from the hip");
+                WeaponConfig config = WeaponCatalog.For(id);
+                Assert.AreEqual(config.Spread, WeaponHandling.ShotSpread(id, 99f, aiming: true, moving: false), 1e-6f, $"weapon {id}");
             }
         }
 
         [Test]
-        public void TheKicksFollowTheRealGuns()
+        public void FromTheHipAndOnTheMoveTheConeOpensAsTheTableSays()
         {
-            float Up(byte id)
+            foreach (byte id in Guns)
             {
-                WeaponHandling.TryGet(id, out WeaponHandlingProfile handling);
-                return handling.KickUpDegrees;
+                WeaponConfig config = WeaponCatalog.For(id);
+                float hip = WeaponHandling.ShotSpread(id, 99f, aiming: false, moving: false);
+                float hipMoving = WeaponHandling.ShotSpread(id, 99f, aiming: false, moving: true);
+                Assert.AreEqual(System.Math.Max(config.Spread, config.HipSpread), hip, 1e-6f, $"weapon {id} hip");
+                Assert.Greater(hip, config.Spread, $"weapon {id}: a shot from the hip is as tight as an aimed one");
+                Assert.Greater(hipMoving, hip, $"weapon {id}: moving costs nothing");
             }
-
-            Assert.Less(Up(WeaponIds.RK44), Up(WeaponIds.SIGNAL_DMR), "7.62x39 kicks less than 7.62x51");
-            Assert.Less(Up(WeaponIds.SIGNAL_DMR), Up(WeaponIds.RECON_LRR));
-            Assert.Less(Up(WeaponIds.RECON_LRR), Up(WeaponIds.SL_DEFENDER), ".338 kicks hardest of the rifles");
-            Assert.Less(Up(WeaponIds.SIND7_SUPPRESSED), Up(WeaponIds.SIND7), "the suppressor tames the flip");
-            Assert.Greater(Up(WeaponIds.EAGLE_76), Up(WeaponIds.SL_DEFENDER), "a 12-gauge shoves hardest");
         }
 
         [Test]
-        public void ABurstClimbsAndTheHandsTakePartOfItBack()
+        public void ABoltActionFiredUnscopedIsNoSniperShot()
         {
-            WeaponHandling.TryGet(WeaponIds.RK44, out WeaponHandlingProfile ak);
-            var recoil = new AimRecoilState();
-
-            Vector2 first = recoil.Kick(in ak, 10f, 0f);
-            Assert.AreEqual(ak.KickUpDegrees * ak.FirstShotScale, first.x, 1e-5f, "the first shot is braced");
-            Vector2 second = recoil.Kick(in ak, 10.1f, 0f);
-            Assert.AreEqual(ak.KickUpDegrees, second.x, 1e-5f);
-
-            Assert.AreEqual(Vector2.zero, recoil.Recover(in ak, 10.15f, 0.05f), "no recovery while the trigger works");
-
-            float climbed = first.x + second.x;
-            float back = 0f;
-            for (float t = 10.3f; t < 12f; t += 0.02f) back += recoil.Recover(in ak, t, 0.02f).x;
-            Assert.AreEqual(climbed * ak.RecoveryShare, back, 1e-3f, "the hands take back their share and no more");
-            Assert.AreEqual(climbed * (1f - ak.RecoveryShare), recoil.Climb.x, 1e-3f);
+            // v4.6.1: SL-DEFENDER (spread 0) and RECON LRR (0.0003 rad) were pinpoint from the hip.
+            Assert.GreaterOrEqual(WeaponHandling.ShotSpread(WeaponIds.SL_DEFENDER, 0f, aiming: false, moving: false), 0.05f);
+            Assert.GreaterOrEqual(WeaponHandling.ShotSpread(WeaponIds.RECON_LRR, 0f, aiming: false, moving: false), 0.02f);
         }
 
         [Test]
-        public void ARestStartsANewBurst()
+        public void AGunTheTableDoesNotHoldKeepsItsOwnSpread()
         {
-            WeaponHandling.TryGet(WeaponIds.RK44, out WeaponHandlingProfile ak);
-            var recoil = new AimRecoilState();
-            recoil.Kick(in ak, 10f, 1f);
-            recoil.Kick(in ak, 10.1f, 1f);
-
-            Vector2 afterRest = recoil.Kick(in ak, 10.1f + WeaponHandling.BurstGapSeconds + 0.05f, 1f);
-            Assert.AreEqual(ak.KickUpDegrees * ak.FirstShotScale, afterRest.x, 1e-5f);
-            Assert.AreEqual(afterRest.x, recoil.Climb.x, 1e-5f, "the old burst is the shooter's now");
+            Assert.AreEqual(0.04f, WeaponHandling.ShotSpread(WeaponIds.FRAG, 0.04f, aiming: false, moving: true));
         }
     }
 }

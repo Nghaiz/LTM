@@ -19,10 +19,14 @@ public abstract class ActorController : MonoBehaviour
 	}
 
 	/// <summary>
-	/// One shot of <paramref name="weapon"/>'s recoil on the aim itself (Ironfront.Net.Unity.WeaponHandling):
-	/// the local player's crosshair climbs and the round follows it. Nothing for anyone else.
+	/// How far the original recoil has kicked the gun off the aim, degrees (x up, y right): what the
+	/// local player's next round leaves along (Ironfront.Net.Replication.Combat.RecoilKick). Zero for
+	/// anyone else.
 	/// </summary>
-	public virtual void ApplyAimRecoil(Weapon weapon)
+	public virtual Vector2 RoundKickDegrees => Vector2.zero;
+
+	/// <summary>One shot's kick, with the random draw the drawn kick used. Nothing for anyone else.</summary>
+	public virtual void KickRounds(float kickback, float randomKick, Vector3 random)
 	{
 	}
 
