@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Ironfront.Net.Protocol;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -5,55 +9,65 @@ using UnityEngine;
 namespace Ironfront.Net.Unity.Client.Tests
 {
     /// <summary>
-    /// The soldier's two hitboxes on a remote body's bones (14.0.6, owner's run of 2026-10-10:
-    /// "aimed dead on and it does not hit"): the local player's rounds are tested against these,
-    /// so they must be the soldier's own boxes, on bones the proxy really has.
+    /// The soldier's hitboxes on a remote body's bones (14.0.6, owner's run of 2026-10-10: "aimed
+    /// dead on and it does not hit"): the local player's rounds are tested against these, so they
+    /// must be the soldier's own colliders, on bones the proxy really has.
     /// </summary>
     public sealed class RemoteBodyHitboxesTests
     {
         private const string SoldierPrefab = "Assets/Prefab/Ai Character Optimizations.prefab";
         private const string ProxyPrefab = "Assets/Prefab/Remote Actor Proxy.prefab";
-        private const int HitboxLayer = 8;
+        private static readonly int[] HitboxLayers = { 8, 10, 16 };
 
+        /// <summary>
+        /// Both directions: every collider the soldier is hit on is in the table, and every shape in
+        /// the table is a collider the soldier is hit on. A rig change that adds, moves or drops a
+        /// hitbox fails here rather than quietly changing what a remote body can be hit on.
+        /// </summary>
         [Test]
-        public void TheBoxesAreTheSoldiersOwnHitboxColliders()
+        public void TheShapesAreTheSoldiersOwnHitboxColliders()
         {
             var soldier = AssetDatabase.LoadAssetAtPath<GameObject>(SoldierPrefab);
             Assert.IsNotNull(soldier, SoldierPrefab);
 
-            int matched = 0;
-            foreach (BoxCollider box in soldier.GetComponentsInChildren<BoxCollider>(true))
-            {
-                if (box.gameObject.layer != HitboxLayer) continue;
+            Type hitboxType = AppDomain.CurrentDomain.GetAssemblies()
+                .Select(assembly => assembly.GetType("Hitbox", false))
+                .First(type => type != null);
 
-                if (box.name == RemoteBodyHitboxes.HeadBone)
+            var unmatched = new List<RemoteBodyHitboxes.BodyHitShape>(RemoteBodyHitboxes.Shapes);
+            var strays = new List<string>();
+            foreach (Collider collider in soldier.GetComponentsInChildren<Collider>(true))
+            {
+                if (!HitboxLayers.Contains(collider.gameObject.layer)) continue;
+                Component hitbox = collider.GetComponent(hitboxType);
+                if (hitbox == null) continue;
+
+                float multiplier = (float)hitboxType.GetField("multiplier").GetValue(hitbox);
+                HitboxType part = multiplier >= 2f ? HitboxType.Head
+                    : multiplier >= 0.85f ? HitboxType.Body
+                    : HitboxType.Limb;
+
+                int index = unmatched.FindIndex(shape => Matches(shape, collider, part));
+                if (index < 0)
                 {
-                    AssertNear(RemoteBodyHitboxes.HeadCentre, box.center, "head centre");
-                    AssertNear(RemoteBodyHitboxes.HeadSize, box.size, "head size");
-                    matched++;
+                    strays.Add($"{collider.GetType().Name} on '{collider.name}' (x{multiplier})");
+                    continue;
                 }
-                else if (box.name == RemoteBodyHitboxes.BodyBone)
-                {
-                    AssertNear(RemoteBodyHitboxes.BodyCentre, box.center, "body centre");
-                    AssertNear(RemoteBodyHitboxes.BodySize, box.size, "body size");
-                    matched++;
-                }
-                else
-                {
-                    Assert.Fail($"a hitbox-layer box on '{box.name}' that remote bodies do not carry");
-                }
+                unmatched.RemoveAt(index);
             }
 
-            Assert.AreEqual(2, matched, "the soldier is hit on exactly two boxes, head and body");
+            Assert.IsEmpty(strays, "hitbox colliders on the soldier that remote bodies do not carry");
+            Assert.IsEmpty(unmatched.Select(shape => shape.Bone),
+                "shapes remote bodies are hit on that the soldier no longer carries");
         }
 
         [Test]
-        public void TheRemoteProxyHasBothBones()
+        public void TheRemoteProxyHasEveryBone()
         {
             var proxy = AssetDatabase.LoadAssetAtPath<GameObject>(ProxyPrefab);
             Assert.IsNotNull(proxy, ProxyPrefab);
             Assert.IsNotNull(RemoteBodyHitboxes.TryCreate(proxy.transform),
-                "without both bones no round can strike a remote body, and no hit is ever reported");
+                "without every bone no round can strike a remote body, and no hit is ever reported");
         }
 
         [Test]
@@ -76,51 +90,82 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
-        public void TheBoxesTurnWithTheirBonesAndTheHeadIsMetFirstFromAbove()
+        public void ASegmentEntersALocalCapsuleByItsSideOrItsCap()
         {
-            var root = new GameObject("body");
+            // Spine from x = -0.2 to +0.2, radius 0.1.
+            Assert.IsTrue(RemoteBodyHitboxes.SegmentEntersLocalCapsule(
+                new Vector3(0f, 0f, -1f), new Vector3(0f, 0f, 1f), 0.2f, 0.1f, out float entry));
+            Assert.AreEqual(0.45f, entry, 1e-4f, "the side at z = -0.1");
+
+            Assert.IsTrue(RemoteBodyHitboxes.SegmentEntersLocalCapsule(
+                new Vector3(-1f, 0f, 0f), new Vector3(1f, 0f, 0f), 0.2f, 0.1f, out entry));
+            Assert.AreEqual(0.35f, entry, 1e-4f, "the cap at x = -0.3");
+
+            Assert.IsFalse(RemoteBodyHitboxes.SegmentEntersLocalCapsule(
+                new Vector3(0.35f, 0f, -1f), new Vector3(0.35f, 0f, 1f), 0.2f, 0.1f, out _),
+                "past the end of the rounded cap");
+            Assert.IsFalse(RemoteBodyHitboxes.SegmentEntersLocalCapsule(
+                new Vector3(0f, 0.11f, -1f), new Vector3(0f, 0.11f, 1f), 0.2f, 0.1f, out _),
+                "a millimetre wide of the side");
+
+            Assert.IsTrue(RemoteBodyHitboxes.SegmentEntersLocalCapsule(
+                new Vector3(0.1f, 0f, 0f), new Vector3(1f, 0f, 0f), 0.2f, 0.1f, out entry));
+            Assert.AreEqual(0f, entry, "starting inside is struck at once");
+        }
+
+        [Test]
+        public void ARoundFromAboveMeetsTheHeadFirst()
+        {
+            var proxy = AssetDatabase.LoadAssetAtPath<GameObject>(ProxyPrefab);
+            GameObject body = UnityEngine.Object.Instantiate(proxy);
             try
             {
-                // A spine bone pointing down its own x, the way the rig hangs: the body box
-                // runs from 0.4 m above the bone to 1.0 m below it.
-                var body = new GameObject(RemoteBodyHitboxes.BodyBone).transform;
-                body.SetParent(root.transform, false);
-                body.localPosition = new Vector3(0f, 1.4f, 0f);
-                body.localRotation = Quaternion.Euler(0f, 0f, -90f);
-
-                var head = new GameObject(RemoteBodyHitboxes.HeadBone).transform;
-                head.SetParent(body, false);
-                head.localPosition = new Vector3(-0.5f, 0f, 0f);
-
-                RemoteBodyHitboxes boxes = RemoteBodyHitboxes.TryCreate(root.transform);
+                RemoteBodyHitboxes boxes = RemoteBodyHitboxes.TryCreate(body.transform);
                 Assert.IsNotNull(boxes);
 
-                Vector3 headCentre = head.TransformPoint(RemoteBodyHitboxes.HeadCentre);
-                Assert.IsTrue(boxes.TryHit(headCentre + Vector3.back * 5f, headCentre + Vector3.forward * 5f,
-                    out _, out bool struckHead));
-                Assert.IsTrue(struckHead, "a level round through the head is a headshot");
+                Transform head = Find(body.transform, RemoteBodyHitboxes.HeadBone);
+                Vector3 centre = head.TransformPoint(RemoteBodyHitboxes.Shapes[0].Centre);
 
-                Vector3 waist = body.TransformPoint(new Vector3(0.6f, 0f, 0f));
-                Assert.IsTrue(boxes.TryHit(waist + Vector3.back * 5f, waist + Vector3.forward * 5f,
-                    out _, out struckHead));
-                Assert.IsFalse(struckHead, "a round through the waist is a body hit");
+                Assert.IsTrue(boxes.TryHit(centre + Vector3.up * 3f, centre + Vector3.down * 3f,
+                    out _, out HitboxType part));
+                Assert.AreEqual(HitboxType.Head, part);
 
-                Vector3 beside = waist + Vector3.right * 1.5f;
-                Assert.IsFalse(boxes.TryHit(beside + Vector3.back * 5f, beside + Vector3.forward * 5f,
-                    out _, out _), "a round a metre and a half wide misses");
-
-                // Straight down from above: the head box is entered before the body box below it.
-                Vector3 above = headCentre + Vector3.up * 3f;
-                Assert.IsTrue(boxes.TryHit(above, above + Vector3.down * 6f, out _, out struckHead));
-                Assert.IsTrue(struckHead);
+                Vector3 beside = centre + Vector3.right * 2f;
+                Assert.IsFalse(boxes.TryHit(beside + Vector3.forward * 3f, beside + Vector3.back * 3f,
+                    out _, out _), "a round two metres wide misses");
             }
             finally
             {
-                Object.DestroyImmediate(root);
+                UnityEngine.Object.DestroyImmediate(body);
             }
         }
 
-        private static void AssertNear(Vector3 expected, Vector3 actual, string what)
-            => Assert.Less(Vector3.Distance(expected, actual), 1e-4f, $"{what}: expected {expected}, read {actual}");
+        private static bool Matches(RemoteBodyHitboxes.BodyHitShape shape, Collider collider, HitboxType part)
+        {
+            if (shape.Bone != collider.name || shape.Part != part) return false;
+            switch (collider)
+            {
+                case BoxCollider box:
+                    return !shape.IsCapsule && Near(shape.Centre, box.center) && Near(shape.Size, box.size);
+                case SphereCollider sphere:
+                    return shape.IsSphere && Near(shape.Centre, sphere.center)
+                           && Mathf.Abs(shape.Radius - sphere.radius) < 1e-4f;
+                case CapsuleCollider capsule:
+                    return shape.IsCapsule && !shape.IsSphere && capsule.direction == 0 && Near(shape.Centre, capsule.center)
+                           && Mathf.Abs(shape.Radius - capsule.radius) < 1e-4f
+                           && Mathf.Abs(shape.Height - capsule.height) < 1e-4f;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool Near(Vector3 a, Vector3 b) => Vector3.Distance(a, b) < 1e-4f;
+
+        private static Transform Find(Transform parent, string name)
+        {
+            foreach (Transform child in parent.GetComponentsInChildren<Transform>(true))
+                if (child.name == name) return child;
+            return null;
+        }
     }
 }

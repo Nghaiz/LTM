@@ -59,7 +59,7 @@ namespace Ironfront.Net.Unity.Client
             double drawn = _client != null ? _client.Router.Clock.RenderTick : 0.0;
             _hits[_count++] = new ShotReportHit(
                 hit.ActorId,
-                hit.Head ? HitboxType.Head : HitboxType.Body,
+                hit.Part,
                 pellet,
                 ShotReportHit.PackMillimetres(hit.Point.x),
                 ShotReportHit.PackMillimetres(hit.Point.y),
