@@ -93,6 +93,14 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 	public long shotSerial;
 
 	/// <summary>
+	/// The zero the shooter's scope is set to, metres, or 0 for the round's own
+	/// (<see cref="Configuration.zeroMetres"/>): the round leaves tilted to cross the line of sight
+	/// there (owner's run of 2026-10-10, phase P38).
+	/// </summary>
+	[NonSerialized]
+	public float zeroOverride;
+
+	/// <summary>
 	/// This round is the local player's, on a client that reports its own hits (14.0.6,
 	/// <see cref="Ironfront.Net.Unity.NetShotReports"/>): it is tested against the bodies this
 	/// client draws, and what it strikes is reported to the server, which judges and damages.
@@ -145,7 +153,8 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 	/// muzzle velocity, the drag and the zero.
 	/// </summary>
 	public Ironfront.Net.Replication.Combat.RoundBallistics Round
-		=> new Ironfront.Net.Replication.Combat.RoundBallistics(configuration.speed, configuration.dragPerMetre, configuration.zeroMetres);
+		=> new Ironfront.Net.Replication.Combat.RoundBallistics(
+			configuration.speed, configuration.dragPerMetre, zeroOverride > 0f ? zeroOverride : configuration.zeroMetres);
 
 	/// <summary>
 	/// A plain round: this class itself, no warhead, guidance or deployable behind it -- a rifle,

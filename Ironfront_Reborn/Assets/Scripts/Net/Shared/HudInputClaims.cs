@@ -14,5 +14,8 @@ namespace Ironfront.Net.Unity
     {
         /// <summary>The scoreboard is open and turns its pages with the mouse wheel.</summary>
         public static bool ScoreboardOwnsWheel { get; set; }
+
+        /// <summary>A variable rifle scope is up, and the wheel zooms it rather than switching weapons.</summary>
+        public static bool ScopeOwnsWheel { get; set; }
     }
 }

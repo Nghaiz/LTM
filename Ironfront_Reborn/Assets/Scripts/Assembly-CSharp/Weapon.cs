@@ -635,6 +635,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			component.source = user;
 			component.sourceWeaponId = NetworkId;
 			component.shotSerial = currentShotSerial;
+			component.zeroOverride = SightZeroMetres;
 			component.reportsHits = reportsCurrentShot;
 			component.reportFireTick = currentReportTick;
 			component.reportPellet = currentPellet;
@@ -654,6 +655,12 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			throw;
 		}
 	}
+
+	/// <summary>
+	/// The zero the sight is set to, metres; 0 leaves the round's own. A scope whose zero the
+	/// player sets overrides it (<see cref="ScopedWeapon"/>).
+	/// </summary>
+	public virtual float SightZeroMetres => 0f;
 
 	/// <summary>Whether the pull being fired is one this client reports the hits of (<see cref="NetShotReports"/>).</summary>
 	private bool reportsCurrentShot;
@@ -694,32 +701,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		{
 			return muzzleDirection;
 		}
-		float reach = AimReachMetres;
-		int count = Physics.RaycastNonAlloc(aim, aimHits, reach, -2049, QueryTriggerInteraction.Ignore);
-		Transform body = user.transform;
-		Transform vehicle = user.seat != null && user.seat.vehicle != null ? user.seat.vehicle.transform : null;
-		for (int i = 0; i < count; i++)
-		{
-			RaycastHit hit = aimHits[i];
-			if (hit.distance >= reach || hit.collider.transform.IsChildOf(body))
-			{
-				continue;
-			}
-			if (vehicle != null && hit.collider.transform.IsChildOf(vehicle))
-			{
-				continue;
-			}
-			Hitbox own = Hitbox.IsHitboxLayer(hit.collider.gameObject.layer) ? hit.collider.GetComponent<Hitbox>() : null;
-			if (own != null && own.parent == user)
-			{
-				continue;
-			}
-			reach = hit.distance;
-		}
-		if (NetShotReports.TryHitBody(aim.origin, aim.GetPoint(reach), out RemoteBodyHit drawn))
-		{
-			reach *= drawn.Fraction;
-		}
+		float reach = DistanceAlongAim(user, aim, AimReachMetres, out _);
 		Vector3 toPoint = aim.GetPoint(reach) - ProjectileOrigin(muzzleDirection);
 		// A point at the muzzle or behind it -- the barrel already inside the wall the eye looks
 		// at -- would send the round sideways or back: it leaves along the aim instead.
@@ -728,6 +710,45 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			return aim.direction;
 		}
 		return toPoint.normalized;
+	}
+
+	/// <summary>
+	/// How far along <paramref name="aim"/> the first thing lies -- a wall, a vehicle, a body this
+	/// client draws for the server -- up to <paramref name="reach"/>; <paramref name="user"/>'s own
+	/// body and the vehicle they sit in are never in the way. <paramref name="found"/> says whether
+	/// anything was.
+	/// </summary>
+	protected static float DistanceAlongAim(Actor user, Ray aim, float reach, out bool found)
+	{
+		found = false;
+		int count = Physics.RaycastNonAlloc(aim, aimHits, reach, -2049, QueryTriggerInteraction.Ignore);
+		Transform body = user != null ? user.transform : null;
+		Transform vehicle = user != null && user.seat != null && user.seat.vehicle != null ? user.seat.vehicle.transform : null;
+		for (int i = 0; i < count; i++)
+		{
+			RaycastHit hit = aimHits[i];
+			if (hit.distance >= reach || (body != null && hit.collider.transform.IsChildOf(body)))
+			{
+				continue;
+			}
+			if (vehicle != null && hit.collider.transform.IsChildOf(vehicle))
+			{
+				continue;
+			}
+			Hitbox own = user != null && Hitbox.IsHitboxLayer(hit.collider.gameObject.layer) ? hit.collider.GetComponent<Hitbox>() : null;
+			if (own != null && own.parent == user)
+			{
+				continue;
+			}
+			reach = hit.distance;
+			found = true;
+		}
+		if (NetShotReports.TryHitBody(aim.origin, aim.GetPoint(reach), out RemoteBodyHit drawn))
+		{
+			reach *= drawn.Fraction;
+			found = true;
+		}
+		return reach;
 	}
 
 	/// <summary>How far ahead of the muzzle, along the aim, the point must lie to be aimed at, metres.</summary>
