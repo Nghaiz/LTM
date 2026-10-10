@@ -103,22 +103,6 @@ CREATE INDEX IF NOT EXISTS idx_achievements_id ON achievements(achievement_id);"
             return unlocked;
         }
 
-        /// <summary>Deletes every achievement row whose id is not in <paramref name="keep"/>; answers how many.</summary>
-        public int DeleteAchievementsNotIn(IEnumerable<string> keep)
-        {
-            var ids = new List<string>(keep);
-            if (ids.Count == 0) return 0;
-            using SqliteCommand cmd = _connection.CreateCommand();
-            var names = new List<string>(ids.Count);
-            for (int i = 0; i < ids.Count; i++)
-            {
-                names.Add("$k" + i);
-                cmd.Parameters.AddWithValue("$k" + i, ids[i]);
-            }
-            cmd.CommandText = "DELETE FROM achievements WHERE achievement_id NOT IN (" + string.Join(",", names) + ")";
-            return cmd.ExecuteNonQuery();
-        }
-
         /// <summary>For each id in <paramref name="ids"/> that anyone holds: who earned it first, and when.</summary>
         public Dictionary<string, (string Name, long At)> ReadFirstHolders(IEnumerable<string> ids)
         {

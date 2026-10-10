@@ -31,14 +31,17 @@ namespace Ironfront.Net.Unity
     /// </remarks>
     public static class GoldenWrench
     {
-        /// <summary>The preference that remembers the unlock between runs.</summary>
-        public const string UnlockedKey = "ironfront.secrets.golden-wrench";
+        /// <summary>
+        /// The preference that remembered the unlock up to v4.6.0; <see cref="AchievementVault"/>
+        /// keeps it now and still writes this key for an older build.
+        /// </summary>
+        public const string UnlockedKey = AchievementVault.LegacyGoldenWrenchKey;
 
         /// <summary>Raised on the main thread when the wrench is unlocked; carries its loadout picture.</summary>
         public static event Action<Sprite?>? Revealed;
 
         /// <summary>Whether this machine has unlocked the golden wrench.</summary>
-        public static bool IsUnlocked => PlayerPrefs.GetInt(UnlockedKey, 0) == 1;
+        public static bool IsUnlocked => AchievementVault.Data.GoldenWrench;
 
         /// <summary>
         /// Unlocks it and says so, once: a second <c>ISEEGOLD</c> on a machine that has it already is
@@ -47,8 +50,7 @@ namespace Ironfront.Net.Unity
         public static void Unlock(Sprite? picture)
         {
             if (IsUnlocked) return;
-            PlayerPrefs.SetInt(UnlockedKey, 1);
-            PlayerPrefs.Save();
+            AchievementVault.SetGoldenWrench();
             Revealed?.Invoke(picture);
         }
 

@@ -19,13 +19,19 @@ namespace Ironfront.Net.Unity.Client.Overlay
     /// <remarks>
     /// <para>
     /// <b>Practice achievements are kept here first and claimed after.</b> An offline match has no
-    /// master to tell, so <see cref="PracticeFeats"/>' ids are stored in PlayerPrefs, shown at once,
-    /// and claimed from the master the next time an account is signed in, with the practice numbers
-    /// behind their progress. The master records only what the account lacks.
+    /// master to tell, so <see cref="PracticeFeats"/>' ids are stored in <see cref="AchievementVault"/>,
+    /// shown at once, and claimed from the master the next time an account is signed in, with the
+    /// practice numbers behind their progress. The master records only what the account lacks.
+    /// </para>
+    /// <para>
+    /// <b>Nothing is ever dropped</b> (owner, 2026-10-10: an update never costs an achievement). An
+    /// id this build does not know stays stored; it is only not drawn. And a rule that changed is
+    /// judged again from the stored practice numbers at the first tick, so a lowered threshold
+    /// unlocks what a player had already done.
     /// </para>
     /// <para>
     /// <b>One queue, and nothing in it is lost</b> (section 5.2): every unlock is one banner, shown
-    /// in turn; the queue is written to PlayerPrefs until a banner has played, so a banner a scene
+    /// in turn; the queue is kept by AchievementVault until a banner has played, so a banner a scene
     /// change or a quit cut short plays at the next start. A claimed practice achievement's echo
     /// from the master is not shown twice.
     /// </para>
@@ -38,12 +44,6 @@ namespace Ironfront.Net.Unity.Client.Overlay
     /// </remarks>
     public static class AchievementLedger
     {
-        /// <summary>The practice achievements earned on this machine, comma-separated.</summary>
-        public const string EarnedKey = "ironfront.achievements.earned";
-
-        /// <summary>Banners not yet played, comma-separated ids, oldest first.</summary>
-        public const string QueueKey = "ironfront.achievements.toast-queue";
-
         /// <summary>Seconds before a claim that failed is tried again.</summary>
         private const float RetrySeconds = 30f;
 
@@ -150,6 +150,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
         public static void Tick()
         {
             Load();
+            AchievementVault.Tick();
             MasterSession? session = Session;
             if (!ReferenceEquals(session, _session))
             {
@@ -319,8 +320,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
             Load();
             if (!Local.Add(id)) return;
 
-            PlayerPrefs.SetString(EarnedKey, string.Join(",", Local));
-            PlayerPrefs.Save();
+            AchievementVault.AddEarned(id);
             Debug.Log("[achievements] earned in practice: " + id);
 
             _claimedFor = 0;
@@ -364,9 +364,10 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         private static void SaveQueue()
         {
-            string queued = string.Join(",", Queue);
-            PlayerPrefs.SetString(QueueKey, _inFlight == null ? queued : queued.Length == 0 ? _inFlight : _inFlight + "," + queued);
-            PlayerPrefs.Save();
+            var saved = new List<string>(Queue.Count + 1);
+            if (_inFlight != null) saved.Add(_inFlight);
+            saved.AddRange(Queue);
+            AchievementVault.SetToastQueue(saved);
         }
 
         private static void Load()
@@ -374,16 +375,36 @@ namespace Ironfront.Net.Unity.Client.Overlay
             if (_loaded) return;
             _loaded = true;
 
-            // Ids of the retired list are dropped here and the key rewritten without them.
-            string stored = PlayerPrefs.GetString(EarnedKey, string.Empty);
-            foreach (string id in stored.Split(','))
-                if (id.Length > 0 && AchievementCatalog.Find(id) != null) Local.Add(id);
-            string kept = string.Join(",", Local);
-            if (kept != stored) PlayerPrefs.SetString(EarnedKey, kept);
+            // Every stored id, known to this build or not: a retired or a newer id is kept, only not drawn.
+            foreach (string id in AchievementVault.Data.Earned.Keys) Local.Add(id);
 
             // Banners a quit or a crash cut short play now.
-            foreach (string id in PlayerPrefs.GetString(QueueKey, string.Empty).Split(','))
-                if (id.Length > 0 && AchievementCatalog.Find(id) != null && Toasted.Add(id)) Queue.Add(id);
+            foreach (string id in AchievementVault.Data.ToastQueue)
+                if (AchievementCatalog.Find(id) != null && Toasted.Add(id)) Queue.Add(id);
+
+            Rejudge();
+        }
+
+        /// <summary>
+        /// Judges every practice achievement that reads a number again, by today's rule, from the
+        /// numbers this machine kept: an update that lowered a threshold unlocks what was already done.
+        /// </summary>
+        private static void Rejudge()
+        {
+            var view = new LocalCareer();
+            foreach (Achievement achievement in AchievementCatalog.All)
+            {
+                if (!achievement.IsPractice || achievement.Stat == null || Local.Contains(achievement.Id)) continue;
+                if (achievement.IsEarnedBy(view)) OnPracticeEarned(achievement.Id);
+            }
+        }
+
+        /// <summary>This machine's practice numbers and holdings, as an achievement reads a career.</summary>
+        private sealed class LocalCareer : ICareerView
+        {
+            public long Get(CareerStat stat) => AchievementVault.GetProgress(stat);
+
+            public bool Holds(string achievementId) => Local.Contains(achievementId);
         }
     }
 }

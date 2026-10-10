@@ -11,20 +11,20 @@ namespace Ironfront.Net.Unity.Client.Tests
     /// </summary>
     public sealed class GoldenWrenchTests
     {
-        private int _saved;
+        private string _folder = string.Empty;
 
         [SetUp]
         public void SetUp()
         {
-            _saved = PlayerPrefs.GetInt(GoldenWrench.UnlockedKey, 0);
-            PlayerPrefs.DeleteKey(GoldenWrench.UnlockedKey);
+            _folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ironfront-vault-" + System.Guid.NewGuid().ToString("N"));
+            AchievementVault.UseFolderForTests(_folder);
         }
 
         [TearDown]
         public void TearDown()
         {
-            if (_saved == 1) PlayerPrefs.SetInt(GoldenWrench.UnlockedKey, 1);
-            else PlayerPrefs.DeleteKey(GoldenWrench.UnlockedKey);
+            AchievementVault.UseFolderForTests(null);
+            if (System.IO.Directory.Exists(_folder)) System.IO.Directory.Delete(_folder, true);
         }
 
         [Test]
@@ -68,7 +68,9 @@ namespace Ironfront.Net.Unity.Client.Tests
             }
 
             Assert.AreEqual(1, announced, "typing the code again on an unlocked machine is not news");
-            Assert.AreEqual(1, PlayerPrefs.GetInt(GoldenWrench.UnlockedKey, 0));
+            Assert.IsTrue(AchievementVault.Data.GoldenWrench);
+            AchievementVault.UseFolderForTests(_folder);
+            Assert.IsTrue(GoldenWrench.IsUnlocked, "the unlock is on disk, not only in memory");
         }
     }
 }
