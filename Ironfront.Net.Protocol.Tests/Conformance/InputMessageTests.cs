@@ -170,10 +170,11 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(1 << 4, (ushort)InputButtons.Crouch);
             Assert.Equal(1 << 5, (ushort)InputButtons.Sprint);
             Assert.Equal(1 << 6, (ushort)InputButtons.Prone);
-            // V7-D10 retired ThrowGrenade to Reserved7 rather than implementing it. The bit
-            // is still pinned at 7 because the neighbours must not renumber -- a rename moves
-            // no byte, so this row is the proof the retirement was not a wire change.
-            Assert.Equal(1 << 7, (ushort)InputButtons.Reserved7);
+            // V7-D10 retired ThrowGrenade to Reserved7; 14.0.6 gives the bit its job as
+            // ReportsOwnHits. It is still pinned at 7 because the neighbours must not renumber --
+            // and because no build before 14.0.6 ever set it, which is what keeps a v4.6.0
+            // client's frames meaning what they always meant.
+            Assert.Equal(1 << 7, (ushort)InputButtons.ReportsOwnHits);
             Assert.Equal(1 << 8, (ushort)InputButtons.LeanLeft);
             Assert.Equal(1 << 9, (ushort)InputButtons.LeanRight);
             Assert.Equal(1 << 10, (ushort)InputButtons.Use);

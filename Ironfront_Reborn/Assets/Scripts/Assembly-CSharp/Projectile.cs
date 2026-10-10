@@ -93,6 +93,22 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 	public long shotSerial;
 
 	/// <summary>
+	/// This round is the local player's, on a client that reports its own hits (14.0.6,
+	/// <see cref="Ironfront.Net.Unity.NetShotReports"/>): it is tested against the bodies this
+	/// client draws, and what it strikes is reported to the server, which judges and damages.
+	/// </summary>
+	[NonSerialized]
+	public bool reportsHits;
+
+	/// <summary>The input tick of the frame that carried this round's pull.</summary>
+	[NonSerialized]
+	public uint reportFireTick;
+
+	/// <summary>Which of the pull's rounds this is: 0, or a shotgun's pellet.</summary>
+	[NonSerialized]
+	public byte reportPellet;
+
+	/// <summary>
 	/// Whether this projectile warns enemy AI that fire is incoming. V7 task 3.
 	/// </summary>
 	/// <remarks>
@@ -295,6 +311,11 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		// per step, a 30 Hz one ~33 mm, and each swept double). Accepted as a deliberate change
 		// to offline behaviour under brainstorm D8. ASweptSegmentIsNotDoubleCounted pins the
 		// LIBRARY's equivalent; this line is Unity's own copy and no CI test can reach it.
+		if (reportsHits)
+		{
+			TravelReported(ray, delta);
+			return;
+		}
 		if (Physics.Raycast(ray, out hitInfo, delta.magnitude, -2049) && Hit(ray, hitInfo))
 		{
 			flag = false;
@@ -307,6 +328,96 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 		{
 			base.transform.position += delta;
 		}
+	}
+
+	/// <summary>
+	/// One step of a round whose hits this client reports (owner's run of 2026-10-10: "aimed dead
+	/// on and it does not hit"). The bodies the server streams here carry no colliders, so the
+	/// step is tested against them as drawn (<see cref="Ironfront.Net.Unity.NetShotReports"/>) up
+	/// to the first wall; a body struck first stops the round and is reported, and the server's
+	/// verdict brings the hitmarker and the blood. The shooter's own body and own vehicle are
+	/// never in the way, as they are not for the server's wall check.
+	/// </summary>
+	private void TravelReported(Ray ray, Vector3 delta)
+	{
+		float reach = delta.magnitude;
+		bool struckWorld = TryNearestWorldHit(ray, reach, source, out RaycastHit hitInfo);
+		float open = struckWorld ? hitInfo.distance : reach;
+		if (TryStrikeRemoteBody(ray, open))
+		{
+			return;
+		}
+		// A piercing round's wall lets it on for two metres (Hit), and a body there is struck too.
+		if (struckWorld && hitInfo.collider.CompareTag("Piercable")
+			&& TryStrikeRemoteBody(new Ray(hitInfo.point, ray.direction), PIERCING_RANGE))
+		{
+			return;
+		}
+		if (struckWorld && Hit(ray, hitInfo))
+		{
+			if (hitInfo.collider.gameObject.layer == 0)
+			{
+				SpawnDecal(hitInfo);
+			}
+			return;
+		}
+		base.transform.position += delta;
+	}
+
+	private bool TryStrikeRemoteBody(Ray ray, float reach)
+	{
+		if (!Ironfront.Net.Unity.NetShotReports.TryHitBody(ray.origin, ray.GetPoint(reach), out Ironfront.Net.Unity.RemoteBodyHit body))
+		{
+			return false;
+		}
+		Ironfront.Net.Unity.NetShotReports.Report(reportFireTick, sourceWeaponId, reportPellet, in body, travelDistance);
+		reportsHits = false;
+		UnityEngine.Object.Destroy(base.gameObject);
+		return true;
+	}
+
+	private static readonly RaycastHit[] reportedRoundHits = new RaycastHit[16];
+
+	/// <summary>
+	/// The nearest collider on the step that is not part of <paramref name="shooter"/>'s body or
+	/// the vehicle they sit in.
+	/// </summary>
+	private static bool TryNearestWorldHit(Ray ray, float reach, Actor shooter, out RaycastHit nearest)
+	{
+		nearest = default;
+		int count = Physics.RaycastNonAlloc(ray, reportedRoundHits, reach, -2049, QueryTriggerInteraction.Ignore);
+		Transform body = shooter != null ? shooter.transform : null;
+		Transform vehicle = shooter != null && shooter.seat != null && shooter.seat.vehicle != null
+			? shooter.seat.vehicle.transform
+			: null;
+		bool found = false;
+		for (int i = 0; i < count; i++)
+		{
+			RaycastHit candidate = reportedRoundHits[i];
+			Transform hit = candidate.collider.transform;
+			if (body != null && hit.IsChildOf(body))
+			{
+				continue;
+			}
+			if (vehicle != null && hit.IsChildOf(vehicle))
+			{
+				continue;
+			}
+			Hitbox own = shooter != null && Hitbox.IsHitboxLayer(candidate.collider.gameObject.layer)
+				? candidate.collider.GetComponent<Hitbox>()
+				: null;
+			if (own != null && own.parent == shooter)
+			{
+				continue;
+			}
+			if (found && candidate.distance >= nearest.distance)
+			{
+				continue;
+			}
+			nearest = candidate;
+			found = true;
+		}
+		return found;
 	}
 
 	protected virtual bool Hit(Ray ray, RaycastHit hitInfo)

@@ -31,7 +31,7 @@ namespace Ironfront.Net.Unity.Server
     /// 16 players, which is the loop M1 criterion 9 requires to allocate nothing.
     /// </para>
     /// </remarks>
-    internal sealed class ServerCombatBridge
+    internal sealed partial class ServerCombatBridge
     {
         /// <summary>
         /// Room for the widest shotgun in scope. A weapon with more pellets than this still
@@ -115,9 +115,16 @@ namespace Ironfront.Net.Unity.Server
             // grenade is thrown by selecting the gear slot and pressing Fire, the path V6 already
             // made server-authoritative. Bit 7 was ThrowGrenade and V7-D10 retired it rather than
             // implementing it, because a dedicated throw bit is a second route to firing that
-            // does not pass Weapon.CanFire().
+            // does not pass Weapon.CanFire(); 14.0.6 reuses it as ReportsOwnHits, which fires
+            // nothing of its own (ServerCombatBridge.Reports).
             actor.ApplyWeaponSwitchIntent(frame.WeaponSlot);
             AdoptTheWeaponTheBodyIsHolding(session, actor, now);
+
+            // Every frame's aim, for the swing a reported pull is allowed (14.0.6).
+            if (frame.IsPressed(InputButtons.ReportsOwnHits))
+                _reportedShots.RecordAim(
+                    session.ActorId, frameTick,
+                    ServerCombatAuthority.AimDirection(frame.YawDegrees, frame.PitchDegrees));
             if (StepMountedWeapon(session, actor, in frame, now)) return;
 
             BuildTargets(tick);
@@ -194,6 +201,7 @@ namespace Ironfront.Net.Unity.Server
             // decision the server has made. BEFORE the cosmetic emit, so the ordering reads the
             // way it happens.
             if (result.LaunchedProjectile) LaunchCarriedProjectile(session, actor, in result);
+            else if (result.AwaitsReport) RecordReportedShot(session, frameTick, tick, now, in weapon, in result);
             else _loop.NoteCareerShot(session.ActorId, session.WeaponId, _hits, result.HitCount);
 
             EmitWeaponFire(session, actor, in result);
