@@ -52,8 +52,9 @@ namespace Ironfront.Net.Unity.EditorTools
                     // Line art stays uncompressed. The three painted backgrounds are photographs in
                     // all but name, and at 2560x1440 uncompressed they would hold ~20 MB of video
                     // memory each for the menu alone; high-quality compression (BC7 on desktop) is
-                    // visually indistinguishable on them at a quarter of that.
-                    IronfrontUiKit.SharpenUiTexture(texture, path.Contains("/backgrounds/")
+                    // visually indistinguishable on them at a quarter of that. The map cards'
+                    // pictures (maps/, six renders of the maps) are the same kind of image.
+                    IronfrontUiKit.SharpenUiTexture(texture, path.Contains("/backgrounds/") || path.Contains("/maps/")
                         ? TextureImporterCompression.CompressedHQ
                         : TextureImporterCompression.Uncompressed);
                     var settings = new TextureImporterSettings();
