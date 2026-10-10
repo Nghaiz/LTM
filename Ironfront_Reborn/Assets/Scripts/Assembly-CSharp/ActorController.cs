@@ -18,6 +18,14 @@ public abstract class ActorController : MonoBehaviour
 		return false;
 	}
 
+	/// <summary>
+	/// One shot of <paramref name="weapon"/>'s recoil on the aim itself (Ironfront.Net.Unity.WeaponHandling):
+	/// the local player's crosshair climbs and the round follows it. Nothing for anyone else.
+	/// </summary>
+	public virtual void ApplyAimRecoil(Weapon weapon)
+	{
+	}
+
 	public abstract Vector3 Velocity();
 
 	public abstract bool OnGround();

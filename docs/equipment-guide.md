@@ -32,6 +32,19 @@ Tài liệu này liệt kê **17 trang bị trong loadout của nhân vật** �
 | Gear cỡ lớn | 2 | 2 |
 | **Tổng** | **17** | **16** |
 
+## Độ giật và độ tản của súng
+
+Từ bản v4.6.1, đạn luôn bay đúng theo hướng ngắm (tâm ngắm), còn độ giật làm **chính tâm ngắm** nhích lên sau mỗi phát; đạn đi theo tâm ngắm nên người chơi ghì chuột xuống để giữ loạt đạn trên mục tiêu, như súng thật. Ngừng bắn một lúc thì tay tự kéo lại một phần (40–85 % tùy súng), phần còn lại là của người chơi. Ngắm bằng ống ngắm (chuột phải) cho độ tản nhỏ nhất; bắn không ngắm (hip-fire) và bắn khi đang di chuyển thì đạn tản rộng hơn, tối đa gấp 3 lần.
+
+| Súng | Nguyên mẫu | Độ giật mỗi phát | Ghi chú |
+|---|---|---|---|
+| RK-44 | AK, 7.62×39 | nhẹ (0,45°) | Loạt dài vẫn kiểm soát được. |
+| SIGNAL DMR | súng thiện xạ 7.62×51 bắn liên thanh | trung bình (0,85°) | Nên bắn từng phát hoặc loạt ngắn. |
+| RECON LRR | bullpup .308 bán tự động | mạnh (1,4°) | |
+| SL-DEFENDER | bolt-action .338 | rất mạnh (3°) | Tay kéo lại gần hết trong lúc lên đạn. |
+| S-IND7 / [SUP] | súng ngắn 9 mm | 1,1° / 0,9° | Bản giảm thanh giật nhẹ hơn. |
+| 76 EAGLE | shotgun bơm 12 ga | rất mạnh (4°) | |
+
 ## Trang bị trên phương tiện
 
 **CAR HORN (ID 18)** là còi xe: dùng để bấm còi và làm người ngồi trên xe bị AI chú ý. Nó có ID vũ khí để đồng bộ sự kiện trong mạng, nhưng **không nằm trong danh sách loadout** của nhân vật.

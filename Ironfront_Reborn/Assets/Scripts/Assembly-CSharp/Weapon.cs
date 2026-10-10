@@ -485,6 +485,12 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		if (user.aiControlled ? NetWeaponAuthority.GameplayHalfRunsHere : NetWeaponAuthority.CosmeticHalfRunsHere)
 		{
 			user.ApplyRecoil(configuration.kickback * Vector3.back + UnityEngine.Random.insideUnitSphere * configuration.randomKick);
+			// The recoil the player feels in the aim: the crosshair climbs and the next round
+			// follows it (WeaponHandling). The model's kick above is only drawn.
+			if (!user.aiControlled && !(this is MountedWeapon) && user.controller != null)
+			{
+				user.controller.ApplyAimRecoil(this);
+			}
 		}
 		AmmoChanged();
 		if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)
@@ -619,7 +625,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		{
 			return null;
 		}
-		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
+		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * (configuration.spread * SpreadScale()));
 		Vector3 origin = ProjectileOrigin(direction);
 		GameObject instance = null;
 
@@ -654,6 +660,21 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 			if (instance != null) UnityEngine.Object.Destroy(instance);
 			throw;
 		}
+	}
+
+	/// <summary>
+	/// The spread multiplier for the local player's shot: wider from the hip and on the move
+	/// (<see cref="WeaponHandling"/>), never past what the server's hit judge allows. 1 for bots
+	/// and mounted guns, whose spread is their own.
+	/// </summary>
+	protected float SpreadScale()
+	{
+		if (user == null || user.aiControlled || this is MountedWeapon || !WeaponHandling.TryGet(NetworkId, out WeaponHandlingProfile handling))
+		{
+			return 1f;
+		}
+		bool moving = user.Velocity().sqrMagnitude > WeaponHandling.MovingSpeed * WeaponHandling.MovingSpeed;
+		return WeaponHandling.SpreadScale(in handling, aiming, moving);
 	}
 
 	/// <summary>
