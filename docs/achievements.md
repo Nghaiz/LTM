@@ -167,7 +167,7 @@ người chơi tự đo (practice).
 | 39 | NAKED EYE | ON NM | Win a Night Mode round without turning on night vision, with at least 10 kills. The round must be LEAD BY 150 or FIRST TO 400 or more, and you must join it before anyone scores. | | mới |
 | 40 | NIGHT TERROR | ON NM | Get 10 melee kills in one Night Mode round. | kỷ lục | mới |
 | 41 | HELL WEEK | PR | Get 75 kills in one practice round with 100 bots. | kỷ lục | client |
-| 42 | ISLAND HOPPER | PR | In one practice round on Island, help capture every flag on the map: be in its zone when it turns to your side. | | client |
+| 42 | ISLAND HOPPER | PR | In one practice round on Island, help capture every flag your side did not hold when it began: be in its zone when it turns to your side. | | client |
 | 43 | LAKE MONSTER | PR | Get 10 kills from a boat in one practice round on Forest Lake. | kỷ lục | client |
 | 44 | GRAVEYARD SHIFT | PR NM | Win a Night Mode practice round with at least 50 bots without turning on night vision. The round must be LEAD BY 150 or FIRST TO 400 or more. | | client |
 | 45 | MOTOR POOL | PR | In one practice round, get a kill from a jeep or quad bike, a tank, a helicopter and a boat. | 📊 0/4 | client |
@@ -221,7 +221,7 @@ Ghi chú:
 | 71 | BLADE ONLY | ON | Finish an online round with at least 25 kills, every one of them a melee kill. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | kỷ lục | mới |
 | 72 | TANK ACE | ON | Get 50 kills in one tank without leaving it or it being destroyed. | kỷ lục | mới |
 | 73 | SKY KING | ON | Get 30 kills in one helicopter flight without leaving your seat or the helicopter being destroyed. | kỷ lục | mới |
-| 74 | MAP PAINTER | ON | In one round, help capture every flag on the map, never die, and win. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
+| 74 | MAP PAINTER | ON | In one round, help capture every flag your side did not hold when it began, never die, and win. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
 | 75 | HAIL MARY | ON | Win a round after the enemy came within 10 points of winning it. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
 | 76 | CREATURE OF THE NIGHT | ON NM | Win a Night Mode round with at least 30 kills and 0 deaths, without turning on night vision. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
 | 77 | IMMACULATE | PR | Get 100 kills without dying in a practice round with 100 bots. | kỷ lục | client |
@@ -236,7 +236,9 @@ Ghi chú:
 - **UNTOUCHABLE**: mọi nguồn sát thương đều tính (đạn, nổ, ngã, bị cán, chết đuối).
 - **HAIL MARY** tính theo luật của phòng: với "lead by 200" là lúc địch dẫn từ 190 điểm; với "first
   to 500" là lúc địch đạt từ 490 điểm.
-- **MAP PAINTER**, **ISLAND HOPPER**: "help capture" = có mặt trong vùng cờ lúc cờ đổi sang phe mình.
+- **MAP PAINTER**, **ISLAND HOPPER**: "help capture" = có mặt trong vùng cờ lúc cờ đổi sang phe mình. Từ
+  12/10/2026 chỉ đòi các cờ **phe mình chưa giữ lúc hiệp bắt đầu**: trước đó luật đòi cả cờ nhà, mà cờ
+  nhà chỉ "góp công chiếm" được sau khi để mất nó.
 
 ### 4.6 Thành tựu ẩn: tên, câu gợi ý và bóng đen
 

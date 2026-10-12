@@ -179,6 +179,8 @@ namespace Ironfront.Net.Replication.Match
             for (ushort a = 0; a < Actors; a++) Forget(a);
             _roundStart = 0f;
             _mapFlags = 0;
+            _heldAtStart[0] = 0;
+            _heldAtStart[1] = 0;
             _nearLoss[0] = false;
             _nearLoss[1] = false;
         }

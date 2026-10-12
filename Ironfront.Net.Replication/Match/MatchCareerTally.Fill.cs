@@ -38,8 +38,11 @@ namespace Ironfront.Net.Replication.Match
             into.Set(RoundFact.Finished, finished ? 1 : 0);
             into.Set(RoundFact.Won, finished && winningTeam != TeamId.None && team == winningTeam ? 1 : 0);
             into.Set(RoundFact.NearLoss, team < 2 && _nearLoss[team] ? 1 : 0);
-            into.Set(RoundFact.MapFlags, _mapFlags);
-            into.Set(RoundFact.FlagsHelpedDistinct, CareerStats.BitCount((long)_flagMask[actor]));
+            // The flags this player's side did not hold when the round began, and how many of those
+            // they helped take: MAP PAINTER's two numbers (a side's own starting flags are not asked).
+            ulong held = team < 2 ? _heldAtStart[team] : 0UL;
+            into.Set(RoundFact.MapFlags, _mapFlags - CareerStats.BitCount((long)held));
+            into.Set(RoundFact.FlagsHelpedDistinct, CareerStats.BitCount((long)(_flagMask[actor] & ~held)));
 
             if (finished) FillRanks(actor, team, scores, present, into);
         }

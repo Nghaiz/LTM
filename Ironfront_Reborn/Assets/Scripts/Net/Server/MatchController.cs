@@ -569,8 +569,19 @@ namespace Ironfront.Net.Unity.Server
             Debug.Log($"[net] match phase -> {phase} "
                       + $"({_match.Score0} / {_match.Score1}, {VictoryWords()})");
 
-            // Achievements v2: the round's facts start with its Playing phase.
-            if (phase == MatchPhase.Playing && _loop != null) _loop.BeginCareerRound(_match.CapturePoints.Count);
+            // Achievements v2: the round's facts start with its Playing phase, with the flags each
+            // side already holds (MAP PAINTER asks only for the ones a side did not hold).
+            if (phase == MatchPhase.Playing && _loop != null)
+            {
+                ulong team0Held = 0, team1Held = 0;
+                for (int i = 0; i < _match.CapturePoints.Count && i < 64; i++)
+                {
+                    float owner = _match.CapturePoints[i].Owner;
+                    if (owner < 0f) team0Held |= 1UL << i;
+                    else if (owner > 0f) team1Held |= 1UL << i;
+                }
+                _loop.BeginCareerRound(_match.CapturePoints.Count, team0Held, team1Held);
+            }
         }
 
         private void OnResetRequested()
