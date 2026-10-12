@@ -208,5 +208,63 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(tally.IsUntouched(Bob));
             Assert.True(tally.IsUntouched(Carol));
         }
+
+        /// <summary>
+        /// The one row projection, which the server's broadcast and the practice board both use
+        /// (owner's run of 2026-10-12): every count is the named actor's own, beside the side,
+        /// status and ping the caller passes.
+        /// </summary>
+        [Fact]
+        public void ARowCarriesItsOwnActorsCountsAndTheCallersFacts()
+        {
+            var tally = new MatchScoreTally();
+            tally.RecordDeath(victimActorId: Bob, killerActorId: Alice);
+            tally.CreditKill(Alice, headshot: true, points: 3);
+            tally.RecordDeath(victimActorId: Carol, killerActorId: Alice);
+            tally.CreditKill(Alice, headshot: false, points: 2);
+            tally.RecordDeath(victimActorId: Alice, killerActorId: Bob);
+            tally.CreditKill(Bob, headshot: false, points: 1);
+
+            PlayerScoreEntry alice = tally.RowFor((byte)Alice, TeamId.Team1, PlayerStatusFlags.Seated, pingMs: 42);
+
+            Assert.Equal((byte)Alice, alice.ActorId);
+            Assert.Equal(2, alice.Kills);
+            Assert.Equal(1, alice.Deaths);
+            Assert.Equal(TeamId.Team1, alice.Team);
+            Assert.True(alice.HasStats);
+            Assert.Equal(PlayerStatusFlags.Seated, alice.Status);
+            Assert.Equal(1, alice.Headshots);
+            Assert.Equal(0, alice.Streak);
+            Assert.Equal(2, alice.BestStreak);
+            Assert.Equal(5, alice.Points);
+            Assert.Equal(42, alice.PingMs);
+
+            // Bob's row is Bob's: a projection reading the wrong slot would move these.
+            PlayerScoreEntry bob = tally.RowFor((byte)Bob, TeamId.Team0, PlayerStatusFlags.Alive, pingMs: 0);
+            Assert.Equal(1, bob.Kills);
+            Assert.Equal(1, bob.Deaths);
+            Assert.Equal(1, bob.Streak);
+            Assert.Equal(1, bob.Points);
+        }
+
+        /// <summary>A count past the row's width is held at the maximum rather than wrapped to a small number.</summary>
+        [Fact]
+        public void ARowSaturatesCountsItsFieldsCannotHold()
+        {
+            var tally = new MatchScoreTally();
+            for (int i = 0; i < byte.MaxValue + 10; i++)
+            {
+                tally.RecordDeath(victimActorId: Bob, killerActorId: Alice);
+                tally.CreditKill(Alice, headshot: true, points: 300);
+            }
+
+            PlayerScoreEntry alice = tally.RowFor((byte)Alice, TeamId.Team0, PlayerStatusFlags.Alive, pingMs: 0);
+
+            Assert.Equal(byte.MaxValue + 10, alice.Kills);
+            Assert.Equal(byte.MaxValue, alice.Headshots);
+            Assert.Equal(byte.MaxValue, alice.Streak);
+            Assert.Equal(byte.MaxValue, alice.BestStreak);
+            Assert.Equal(ushort.MaxValue, alice.Points);
+        }
     }
 }

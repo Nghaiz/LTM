@@ -526,7 +526,7 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 	/// </summary>
 	private static int OfflineHitSeverity(Hitbox hitbox)
 	{
-		bool head = hitbox.multiplier >= 2f;
+		bool head = hitbox.IsHead;
 		Actor victim = hitbox.parent as Actor;
 		bool killed = victim != null && victim.dead;
 		if (killed)

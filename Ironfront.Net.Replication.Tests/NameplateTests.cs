@@ -95,7 +95,8 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("scores.LeaderOf(TeamId.Team0)", plates, StringComparison.Ordinal);
             Assert.Contains("scores.LeaderOf(TeamId.Team1)", plates, StringComparison.Ordinal);
 
-            string board = File.ReadAllText(ClientScript("NetClientCombatPresenter.cs"));
+            // The board's columns, online and in practice alike (owner's run of 2026-10-12).
+            string board = File.ReadAllText(ClientScript("ScoreboardColumns.cs"));
             Assert.Contains("=> _scores.CompareRank(left, right);", board, StringComparison.Ordinal);
         }
 

@@ -75,6 +75,11 @@ namespace Ironfront.Net.Unity.Bindings
             // The killfeed's weapon pictures: the loadout screen's own sprites, by network id.
             NetClientBindings.WeaponIcon = WeaponIconOf;
 
+            // The practice match's score and soldiers, for its killfeed and Tab board (owner's run
+            // of 2026-10-12). Unconditional like the rest: it reads this process's own offline
+            // match per call, and nothing reads it except the practice presenter.
+            NetClientBindings.PracticeView = new PracticeMatchBinding();
+
             // The chat box's tabs want a pointer; the loadout screen and the Esc menu own it too.
             NetClientBindings.ChatPointer = FreePointerForChat;
             NetClientBindings.HornHeard = CarHorn.PlayNearest;

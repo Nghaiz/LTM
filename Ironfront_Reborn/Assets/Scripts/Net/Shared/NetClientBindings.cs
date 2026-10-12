@@ -160,6 +160,17 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         public static IPracticeLauncher Practice { get; set; }
 
+        /// <summary>
+        /// The practice match as its killfeed and Tab board read it -- the score and who is in it
+        /// -- or null where nothing registered one (a server, an EditMode test). Owner's run of
+        /// 2026-10-12.
+        /// </summary>
+        /// <remarks>
+        /// Local state of this process, read by the client's practice presenter only while an
+        /// offline match runs: nothing behind it asks a server or the internet anything.
+        /// </remarks>
+        public static IPracticeMatchView PracticeView { get; set; }
+
         /// <summary>Settings and application-exit actions supplied by Assembly-CSharp.</summary>
         public static IMenuPlatformActions MenuPlatformActions { get; set; }
 
@@ -334,6 +345,7 @@ namespace Ironfront.Net.Unity
             MatchHud = null;
             TeamPalette = null;
             Practice = null;
+            PracticeView = null;
             MenuPlatformActions = null;
             LeaveMatch = null;
             ProjectileCatalogReader = null;

@@ -28,12 +28,12 @@ namespace Ironfront.Net.Unity.Client.Hud
     /// respawn the player did not request closes the screen — hold by construction.
     /// </para>
     /// <para>
-    /// <b>Inert offline, and the guard is the presenters'.</b> <c>GameManager.StartGame</c>
-    /// instantiates this prefab for the offline bot match too, where there is no snapshot, no
-    /// killfeed and no networked death. <c>NetClientPresenterGuard.IsPresentable</c> is the same
-    /// test every client presenter makes; failing it disables this component before
-    /// <c>OnEnable</c> can register it, so the offline game reaches an unregistered slot rather
-    /// than a live HUD nobody is driving.
+    /// <b>Offline, practice drives it.</b> <c>GameManager.StartGame</c> instantiates this prefab
+    /// for the offline bot match too, where there is no snapshot and no networked death. Since
+    /// the owner's run of 2026-10-12 the practice match has the killfeed and the Tab board all the
+    /// same: <see cref="PracticeMatchPresenter"/>, added here, feeds them from the offline game.
+    /// Anywhere else that is not a networked client the component disables itself before
+    /// <c>OnEnable</c> can register it.
     /// </para>
     /// <para>
     /// <b>Colour comes from <c>ITeamPalette</c>, never from a serialized <c>Color</c></b>
@@ -182,13 +182,25 @@ namespace Ironfront.Net.Unity.Client.Hud
 
             if (!NetClientPresenterGuard.IsPresentable)
             {
-                // Offline. Put the overlay away before disabling, or the authored state of the
-                // prefab is whatever the last Editor session left — and a deploy panel visible
-                // over the bot match is the X-48 failure one screen over.
+                // Not a networked client. Put the overlay away first, or the authored state of
+                // the prefab is whatever the last Editor session left — and a deploy panel
+                // visible over the bot match is the X-48 failure one screen over.
                 if (_deployRoot != null) _deployRoot.SetActive(false);
                 if (_scoreboard != null) _scoreboard.HideImmediately();
                 ClearTeamReadout();
                 ClearKillfeed();
+
+                // The practice match draws the killfeed and the Tab board too (owner's run of
+                // 2026-10-12), from the offline game's own deaths, flags and score. The deploy
+                // screen and the team chip stay away: a practice death opens the stock loadout
+                // screen, and nothing assigns a side over a network. Attached here rather than
+                // authored on the prefab, which online shares: NetClientCombatPresenter attaches its
+                // name plates the same way, for the same reason.
+                if (NetContext.IsOffline)
+                {
+                    gameObject.AddComponent<PracticeMatchPresenter>().Bind(this);
+                    return;
+                }
 
                 enabled = false;
                 return;
