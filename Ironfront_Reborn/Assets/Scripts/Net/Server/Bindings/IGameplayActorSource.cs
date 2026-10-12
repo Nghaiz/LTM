@@ -250,6 +250,12 @@
             float directionX, float directionY, float directionZ);
 
         /// <summary>
+        /// The carried weapon's own fire gates as a line for a log: which one refused an approved
+        /// launch. Diagnostics only.
+        /// </summary>
+        string DescribeCarriedWeapon();
+
+        /// <summary>
         /// Releases a throwable whose delay and inventory transaction were already approved by
         /// the server authority. This entry point must not run the engine's ammo or timer logic.
         /// </summary>

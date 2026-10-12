@@ -432,6 +432,15 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		}
 	}
 
+	/// <summary>
+	/// <see cref="CanFire"/>'s gates as a line for a server log, so a refused launch says which
+	/// one refused it (owner's v4.6.2 playtest: a BIL SCALPEL round spent with nothing launched).
+	/// </summary>
+	public virtual string DescribeFireGates()
+	{
+		return $"{name}({NetworkId}) canFire={CanFire()} unholstered={unholstered} reloading={reloading} ammo={ammo} auto={configuration.auto} holdingFire={holdingFire} coolingDown={CoolingDown()}";
+	}
+
 	public virtual bool CanFire()
 	{
 		return unholstered && !reloading && HasLoadedAmmo() && (configuration.auto || !holdingFire) && !CoolingDown();

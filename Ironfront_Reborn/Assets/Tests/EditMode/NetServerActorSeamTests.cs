@@ -110,6 +110,8 @@ namespace Ironfront.Net.Unity.Server.Tests
             internal readonly System.Collections.Generic.List<(Vector3 Eye, Vector3 Aim)> Swings =
                 new System.Collections.Generic.List<(Vector3, Vector3)>();
 
+            public string DescribeCarriedWeapon() => "fake";
+
             public bool SwingCarriedMelee(
                 float originX, float originY, float originZ,
                 float directionX, float directionY, float directionZ)
@@ -374,6 +376,23 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(1, gameplay.LastMirror.AmmoInClip,
                 "the engine must hold the round the authority just spent");
             Assert.AreEqual(1, gameplay.FiredDirections.Count);
+        }
+
+        [Test]
+        public void ARoundTheEngineRefusedToLaunchGoesBackIntoTheClip()
+        {
+            // Owner's v4.6.2 playtest (2026-10-12): a BIL SCALPEL round was spent and nothing was
+            // launched, and the client showed smoke with no missile. The round now comes back, so
+            // the clip never drops and the client shows no launch.
+            var session = new ClientSession(connectionId: 3, actorId: 7);
+            Ironfront.Net.Replication.Combat.WeaponConfig scalpel = Ironfront.Net.Replication.Combat.WeaponCatalog.For(Ironfront.Net.Protocol.WeaponIds.BIL_SCALPEL);
+            session.Weapon.AmmoInClip = 0;
+
+            ServerCombatBridge.GiveBackRefusedRound(session, in scalpel);
+            Assert.AreEqual(scalpel.ClipSize, session.Weapon.AmmoInClip);
+
+            ServerCombatBridge.GiveBackRefusedRound(session, in scalpel);
+            Assert.AreEqual(scalpel.ClipSize, session.Weapon.AmmoInClip, "never past a full clip");
         }
 
         [Test]
