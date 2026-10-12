@@ -141,6 +141,61 @@ CREATE TABLE IF NOT EXISTS career_meta (
             return removed;
         }
 
+        /// <summary>A one-time marker in <c>career_meta</c>; 0 when it was never written.</summary>
+        public long ReadCareerMeta(string key)
+        {
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT value FROM career_meta WHERE key = $key";
+            cmd.Parameters.AddWithValue("$key", key);
+            object? value = cmd.ExecuteScalar();
+            return value is long stored ? stored : 0;
+        }
+
+        public void WriteCareerMeta(string key, long value)
+        {
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "INSERT INTO career_meta(key, value) VALUES ($key, $value) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+            cmd.Parameters.AddWithValue("$key", key);
+            cmd.Parameters.AddWithValue("$value", value);
+            cmd.ExecuteNonQuery();
+        }
+
+        /// <summary>The current career table and every season archive (<c>career_stats_season{n}</c>).</summary>
+        public List<string> CareerTables()
+        {
+            var tables = new List<string> { "career_stats" };
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'career_stats_season%' ORDER BY name";
+            using SqliteDataReader reader = cmd.ExecuteReader();
+            while (reader.Read()) tables.Add(reader.GetString(0));
+            return tables;
+        }
+
+        /// <summary>
+        /// Gives every player who has stat <paramref name="fromKey"/> but not <paramref name="toKey"/>
+        /// the same value under <paramref name="toKey"/>, in the current table and every archive, in
+        /// one transaction: a new counter starts from the history of the one it was split from.
+        /// </summary>
+        /// <returns>How many rows were written.</returns>
+        public int SeedStat(string fromKey, string toKey)
+        {
+            int written = 0;
+            List<string> tables = CareerTables();
+            using SqliteTransaction transaction = _connection.BeginTransaction();
+            foreach (string table in tables)
+            {
+                using SqliteCommand cmd = _connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = $"INSERT INTO {table}(player_id, stat, value) SELECT player_id, $to, value FROM {table} "
+                                  + "WHERE stat = $from AND value > 0 ON CONFLICT(player_id, stat) DO NOTHING";
+                cmd.Parameters.AddWithValue("$from", fromKey);
+                cmd.Parameters.AddWithValue("$to", toKey);
+                written += cmd.ExecuteNonQuery();
+            }
+            transaction.Commit();
+            return written;
+        }
+
         /// <summary>Every stat <paramref name="playerId"/> has, by key.</summary>
         public Dictionary<string, long> ReadCareer(int playerId)
         {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Ironfront.MasterServer.Data;
 using Ironfront.MasterServer.Diagnostics;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Protocol.Achievements;
 
 namespace Ironfront.MasterServer.Career
@@ -125,7 +126,20 @@ namespace Ironfront.MasterServer.Career
                 int removed = _database.BeginCareerSeason(season, IsOnlineStat);
                 MasterLog.Warn($"career season {season} begun: {removed} online career number(s) archived and reset; achievements kept");
             }
+
+            // LONG CAMPAIGN counts Gold-size wins since the owner's run of 2026-10-12, a counter of
+            // its own. It starts from the wins already counted (almost every room ever played was
+            // the default LEAD BY 200, which is bigger than Gold), so nobody's progress drops to 0.
+            if (_database.ReadCareerMeta(GoldWinsSeededKey) == 0)
+            {
+                int seeded = _database.SeedStat(CareerStats.Key(CareerStat.RoundsWon), CareerStats.Key(CareerStat.GoldRoundsWon));
+                _database.WriteCareerMeta(GoldWinsSeededKey, 1);
+                MasterLog.Warn($"LONG CAMPAIGN counts Gold-size wins: {seeded} career row(s) seeded from round wins");
+            }
         }
+
+        /// <summary>The <c>career_meta</c> key marking the one-time seed of <see cref="CareerStat.GoldRoundsWon"/>.</summary>
+        internal const string GoldWinsSeededKey = "seeded-goldRoundsWon";
 
         /// <summary>Whether a stored stat is an online one a season resets (an unknown key is kept).</summary>
         internal static bool IsOnlineStat(string key)
@@ -139,8 +153,14 @@ namespace Ironfront.MasterServer.Career
         /// The player's round is over (it ended, or they left): the round is written to the career.
         /// False for a report sent while it runs, which is judged and forgotten.
         /// </param>
+        /// <param name="rule">The room's win rule, from the room: the master's word, never the server's.</param>
+        /// <param name="victoryPoints">
+        /// The room's points for that rule; 0 when the room is no longer known, which makes the round
+        /// count for no round achievement rather than for a size it may not have had.
+        /// </param>
         public List<string> RecordRound(int playerId, IReadOnlyDictionary<string, long>? stats,
-            int kills, int deaths, int score, ushort mapId, bool night, bool final, long now)
+            int kills, int deaths, int score, ushort mapId, bool night, bool final, long now,
+            VictoryRule rule, int victoryPoints)
         {
             RoundSheet round = RoundSheet.From(stats);
 
@@ -150,7 +170,7 @@ namespace Ironfront.MasterServer.Career
             if (!round.Has(RoundFact.Score)) round.Set(RoundFact.Score, score);
             if (final && !round.Has(RoundFact.Finished)) round.Set(RoundFact.Finished, 1);
 
-            var context = new RoundContext(mapId, night, final);
+            var context = new RoundContext(mapId, night, final, rule, victoryPoints);
             var delta = new Dictionary<CareerStat, long>();
             CareerRules.Derive(round, in context, delta);
 

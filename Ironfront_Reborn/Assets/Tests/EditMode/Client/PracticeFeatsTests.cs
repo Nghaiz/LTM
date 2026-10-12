@@ -151,18 +151,20 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
-        public void AFinishOrAWinCountsOnlyAfterFiveMinutesAndCadetNeedsAllThreeMaps()
+        public void AFinishCountsByTheRoomsPointsNotItsLengthAndCadetNeedsAllThreeMaps()
         {
-            Start(Dustbowl, 10, 10);
-            Win(299f);
+            // Owner's run of 2026-10-12: no minute limits. A 30-second round counts when its room is
+            // big enough (Bronze: LEAD BY 100, FIRST TO 250); a LEAD BY 90 room never does.
+            Start(Dustbowl, 10, 10, points: 90);
+            Win(3000f);
             Start(Island, 10, 10);
-            Win();
-            Start(ForestLake, 10, 10);
-            PracticeFeats.MatchEnded(false, Player, 300f);
+            Win(30f);
+            Start(ForestLake, 10, 10, VictoryRule.Target, 250);
+            PracticeFeats.MatchEnded(false, Player, 30f);
             Assert.That(_earned, Does.Not.Contain(PracticeFeats.Cadet));
 
-            Start(Dustbowl, 10, 10);
-            PracticeFeats.MatchEnded(false, Player, 300f);
+            Start(Dustbowl, 10, 10, points: 100);
+            PracticeFeats.MatchEnded(false, Player, 30f);
             Assert.That(_earned, Does.Contain(PracticeFeats.Cadet));
         }
 
@@ -178,7 +180,7 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
-        public void BootsOnlyNeedsVehiclesOffFiftyBotsAndTheMostKillsOfAnyone()
+        public void BootsOnlyNeedsVehiclesOffFiftyBotsTheMostKillsOfAnyoneAndASilverRoom()
         {
             Start(Dustbowl, 25, 25, vehicles: false);
             Kills(10);
@@ -186,7 +188,13 @@ namespace Ironfront.Net.Unity.Client.Tests
             Win();
             Assert.That(_earned, Does.Not.Contain(PracticeFeats.BootsOnly));
 
-            Start(Dustbowl, 25, 25, vehicles: false);
+            Start(Dustbowl, 25, 25, vehicles: false, points: 110);
+            Kills(11);
+            BotKills(9, 11);
+            Win();
+            Assert.That(_earned, Does.Not.Contain(PracticeFeats.BootsOnly));
+
+            Start(Dustbowl, 25, 25, vehicles: false, points: 120);
             Kills(11);
             BotKills(9, 11);
             Win();
@@ -201,55 +209,71 @@ namespace Ironfront.Net.Unity.Client.Tests
             Win();
             Assert.That(_earned, Does.Not.Contain(PracticeFeats.GraveyardShift));
 
-            Start(Dustbowl, 25, 25, night: true);
+            Start(Dustbowl, 25, 25, night: true, points: 140);
+            Win();
+            Assert.That(_earned, Does.Not.Contain(PracticeFeats.GraveyardShift));
+
+            Start(Dustbowl, 25, 25, night: true, points: 150);
             Win();
             Assert.That(_earned, Does.Contain(PracticeFeats.GraveyardShift));
         }
 
         [Test]
-        public void DrillSergeantIsAWinAloneAgainstTwentyUnderAnyRule()
+        public void DrillSergeantIsAWinAloneAgainstTwentyInABronzeRoom()
         {
             Start(Dustbowl, 0, 19);
             Win();
             Start(Dustbowl, 1, 20);
             Win();
+            Start(Dustbowl, 0, 20, points: 90);
+            Win();
             Assert.That(_earned, Does.Not.Contain(PracticeFeats.DrillSergeant));
 
-            // The lowest rule the practice screen allows: one soldier scores a kill times the flags
-            // he holds, so a 200-point lead against twenty was out of reach (2026-10-10).
-            Start(Dustbowl, 0, 20, points: 50);
-            Win();
+            // Not its own Platinum size (owner, 2026-10-12): one soldier scores a kill times the flags
+            // he holds, so a 200-point lead against twenty is out of reach. LEAD BY 100 is.
+            Start(Dustbowl, 0, 20, points: 100, flags: 5);
+            Win(45f);
             Assert.That(_earned, Does.Contain(PracticeFeats.DrillSergeant));
         }
 
         [Test]
-        public void FirstPastThePostIsAFirstToWinWithThirtyKills()
+        public void FirstPastThePostIsAFirstToThreeHundredWinWithThirtyKills()
         {
             Start(Island, 10, 10, VictoryRule.Target, 300);
             Kills(29);
+            Win();
+            Start(Island, 10, 10, VictoryRule.Target, 250);
+            Kills(30);
+            Win();
+            Start(Island, 10, 10, VictoryRule.Margin, 300);
+            Kills(30);
             Win();
             Assert.That(_earned, Does.Not.Contain(PracticeFeats.FirstPastThePost));
 
             Start(Island, 10, 10, VictoryRule.Target, 300);
             Kills(30);
-            Win();
+            Win(60f);
             Assert.That(_earned, Does.Contain(PracticeFeats.FirstPastThePost));
         }
 
         [Test]
-        public void GrandTourIsEveryMapUnderBothHardRulesAndANightWinUnderAnyRule()
+        public void GrandTourIsEveryMapUnderBothRulesAndANightWinAllPlatinumSizeHoweverFast()
         {
+            // The owner's Dustbowl LEAD BY win of 2026-10-11 was refused by the old five minutes: a
+            // fast win counts now, in a room of LEAD BY 200 / FIRST TO 500 or more.
             foreach (ushort map in new[] { Dustbowl, Island, ForestLake })
             {
                 Start(map, 10, 10, VictoryRule.Margin, 200);
-                Win();
+                Win(120f);
                 Start(map, 10, 10, VictoryRule.Target, 500);
-                Win();
+                Win(120f);
             }
+            Start(Island, 10, 10, VictoryRule.Margin, 190, night: true);
+            Win();
             Assert.That(_earned, Does.Not.Contain(PracticeFeats.GrandTour));
 
-            Start(Island, 10, 10, VictoryRule.Margin, 100, night: true);
-            Win();
+            Start(Island, 10, 10, VictoryRule.Margin, 200, night: true);
+            Win(90f);
             Assert.That(_earned, Does.Contain(PracticeFeats.GrandTour));
         }
 

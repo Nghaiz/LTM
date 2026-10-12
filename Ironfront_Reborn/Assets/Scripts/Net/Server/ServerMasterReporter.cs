@@ -262,7 +262,28 @@ namespace Ironfront.Net.Unity.Server
                     // reads it.
                     kills * PointsPerKill,
                     round));
+                LogCareerRound(rows[i].PlayerId, round, winningTeam == TeamId.None ? "end, draw" : "end");
             }
+        }
+
+        /// <summary>
+        /// One line per final report: the facts the master will judge this player's round by
+        /// (owner's run of 2026-10-12). Before it, the only record of a round's achievement facts
+        /// was the master's career sums, so "why was this not awarded" could not be answered from
+        /// any log. Zeros are left out except the facts every round rule reads.
+        /// </summary>
+        private void LogCareerRound(int playerId, Ironfront.Net.Protocol.Achievements.RoundSheet round, string how)
+        {
+            if (round == null || playerId <= 0) return;
+            var line = new System.Text.StringBuilder(256);
+            line.Append("[career] room ").Append(RoomId).Append(" player ").Append(playerId).Append(' ').Append(how).Append(':');
+            foreach (KeyValuePair<string, long> fact in round.ToDictionary())
+            {
+                bool always = fact.Key == "finished" || fact.Key == "won" || fact.Key == "joinedLate" || fact.Key == "secondsPlayed";
+                if (fact.Value == 0 && !always) continue;
+                line.Append(' ').Append(fact.Key).Append('=').Append(fact.Value);
+            }
+            Debug.Log(line.ToString());
         }
 
 
@@ -313,6 +334,7 @@ namespace Ironfront.Net.Unity.Server
             _progress.Add(new MatchPlayerScore(playerId, kills, tally.DeathsOf(actorId), kills * PointsPerKill, round));
             Reporter.MatchProgress(RoomId, _progress, final: true);
             Debug.Log($"[net] player {playerId} left mid-round; their round was reported to the master");
+            LogCareerRound(playerId, round, "left");
         }
 
         /// <summary>

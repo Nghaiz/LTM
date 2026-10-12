@@ -866,7 +866,8 @@ namespace Ironfront.MasterServer.Dispatch
                 // The career and the achievements it earns (owner's list of 2026-10-09, item 4).
                 // The map and the mode are the room's, never the server's word.
                 List<string> earned = _career.RecordRound(result.PlayerId, result.Stats, result.Kills, result.Deaths,
-                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, final: true, endedAt);
+                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, final: true, endedAt,
+                    room?.Settings.Rule ?? VictoryRule.Margin, room?.Settings.VictoryPoints ?? 0);
                 PushUnlocked(result.PlayerId, earned);
             }
 
@@ -899,7 +900,8 @@ namespace Ironfront.MasterServer.Dispatch
             {
                 if (result.PlayerId <= 0) continue;
                 List<string> earned = _career.RecordRound(result.PlayerId, result.Stats, result.Kills, result.Deaths,
-                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, request.Final, now);
+                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, request.Final, now,
+                    room?.Settings.Rule ?? VictoryRule.Margin, room?.Settings.VictoryPoints ?? 0);
                 PushUnlocked(result.PlayerId, earned);
             }
         }
