@@ -355,6 +355,10 @@ namespace Ironfront.MasterClient
                     VictoryPoints = response.VictoryPoints,
                     NightVisionSeconds = response.NightVisionSeconds,
                     MaxPlayers = response.MaxPlayers,
+                    Name = response.Name ?? string.Empty,
+                    HostPlayerId = response.HostPlayerId,
+                    IsPrivate = response.IsPrivate,
+                    StartsInMs = response.StartsInMs,
                 });
                 return;
             }
@@ -455,6 +459,12 @@ namespace Ironfront.MasterClient
             public byte NightVisionSeconds { get; set; }
             public byte BotCount { get; set; }
             public byte MaxPlayers { get; set; }
+
+            // The room push's name, host, lock and countdown (the lobby redesign, 2026-10-12).
+            public string? Name { get; set; }
+            public int HostPlayerId { get; set; }
+            public bool IsPrivate { get; set; }
+            public long StartsInMs { get; set; }
             public byte Channel { get; set; }
             public int FromPlayerId { get; set; }
             public string? FromName { get; set; }
