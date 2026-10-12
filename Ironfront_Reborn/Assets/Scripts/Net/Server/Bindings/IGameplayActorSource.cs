@@ -234,6 +234,22 @@
             float directionX, float directionY, float directionZ);
 
         /// <summary>
+        /// Deals a melee swing the authority has just approved (the WRENCH; owner's run of
+        /// 2026-10-12) with the melee weapon the body holds, from the supplied eye along the
+        /// supplied aim, through the original game's own melee code: the first soldier or prop in
+        /// reach takes the prefab's blow, and the wrench repairs the vehicle it strikes.
+        /// </summary>
+        /// <remarks>
+        /// The eye and the aim are supplied for <see cref="FireCarriedWeapon"/>'s reason: a
+        /// server-side body hangs in a bind pose nobody is standing in, so its weapon's muzzle
+        /// points nowhere the player is looking.
+        /// </remarks>
+        /// <returns>False when the body is not holding a melee weapon.</returns>
+        bool SwingCarriedMelee(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ);
+
+        /// <summary>
         /// Releases a throwable whose delay and inventory transaction were already approved by
         /// the server authority. This entry point must not run the engine's ammo or timer logic.
         /// </summary>

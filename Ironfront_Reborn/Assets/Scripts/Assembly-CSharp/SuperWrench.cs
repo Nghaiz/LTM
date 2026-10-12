@@ -8,10 +8,9 @@ public class SuperWrench : Wrench
 
 	public ParticleSystem cashParticles;
 
-	protected override void ShootMeleeRay()
+	protected override void ShootMeleeRay(Ray ray)
 	{
 		bool flag = false;
-		Ray ray = new Ray(configuration.muzzle.position, configuration.muzzle.forward);
 		RaycastHit hitInfo;
 		if (Physics.SphereCast(ray, radius, out hitInfo, range))
 		{
@@ -29,7 +28,7 @@ public class SuperWrench : Wrench
 		}
 		if (!flag)
 		{
-			base.ShootMeleeRay();
+			base.ShootMeleeRay(ray);
 		}
 	}
 

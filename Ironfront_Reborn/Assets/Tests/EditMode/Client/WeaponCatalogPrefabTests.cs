@@ -61,8 +61,9 @@ namespace Ironfront.Net.Unity.Client.Tests
             {
                 if (id > Ironfront.Net.Protocol.WeaponIds.MAX_ASSIGNED) continue;
                 WeaponConfig row = WeaponCatalog.For(id);
-                // Gear the server never fires as a gun -- binoculars, goggles, the wrenches -- has
-                // an inert row (no clip), and nothing on either side is predicted from it.
+                // Gear the server never fires -- binoculars, goggles, the golden wrench -- has an
+                // inert row (no clip), and nothing on either side is predicted from it. The WRENCH is
+                // compared: its melee row must swing at the prefab's cadence (2026-10-12).
                 if (row.ClipSize == 0) continue;
                 Component weapon = prefab.GetComponent(TypeNamed("Weapon"));
                 if (weapon == null) continue;
@@ -73,7 +74,9 @@ namespace Ironfront.Net.Unity.Client.Tests
                 int clip = (int)Field(prefabConfig, "ammo");
                 float cooldown = (float)Field(prefabConfig, "cooldown");
                 if (auto != row.Automatic) mismatches.Add($"{prefab.name} ({id}): prefab auto={auto}, catalog automatic={row.Automatic}");
-                if (clip != row.ClipSize) mismatches.Add($"{prefab.name} ({id}): prefab clip {clip}, catalog {row.ClipSize}");
+                // -1 is "never spends" (the wrench), which a byte clip says with SpendsAmmo instead.
+                bool neverSpends = clip == -1 && !row.SpendsAmmo;
+                if (!neverSpends && clip != row.ClipSize) mismatches.Add($"{prefab.name} ({id}): prefab clip {clip}, catalog {row.ClipSize}");
                 if (Mathf.Abs(cooldown - row.Cooldown) > 1e-4f) mismatches.Add($"{prefab.name} ({id}): prefab cooldown {cooldown}, catalog {row.Cooldown}");
             }
 

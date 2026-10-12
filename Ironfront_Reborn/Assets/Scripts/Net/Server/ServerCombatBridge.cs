@@ -200,7 +200,8 @@ namespace Ironfront.Net.Unity.Server
             // cooldown already stamped, so Weapon.CanFire() is the game's second opinion on a
             // decision the server has made. BEFORE the cosmetic emit, so the ordering reads the
             // way it happens.
-            if (result.LaunchedProjectile) LaunchCarriedProjectile(session, actor, in result);
+            if (result.SwungMelee) SwingCarriedMelee(session, actor, in result);
+            else if (result.LaunchedProjectile) LaunchCarriedProjectile(session, actor, in result);
             else if (result.AwaitsReport) RecordReportedShot(session, frameTick, tick, now, in weapon, in result);
             else _loop.NoteCareerShot(session.ActorId, session.WeaponId, _hits, result.HitCount);
 
@@ -397,6 +398,29 @@ namespace Ironfront.Net.Unity.Server
                 + "loadout, so its reserve reports no-resupply and its reloads are refused "
                 + "until they agree again.");
         }
+
+        /// <summary>
+        /// Deals an approved melee swing (the WRENCH) with the body's engine melee weapon, from the
+        /// authority's eye along the frame's aim: its blow, its knock-down and the wrench's vehicle
+        /// repair are the original game's, and a kill names the wrench (owner's run of 2026-10-12).
+        /// </summary>
+        private void SwingCarriedMelee(ClientSession session, NetServerActor actor, in CombatTickResult result)
+        {
+            if (actor.SwingCarriedMelee(
+                    result.Origin.X, result.Origin.Y, result.Origin.Z,
+                    result.AimDirection.X, result.AimDirection.Y, result.AimDirection.Z))
+                return;
+
+            UnswungMeleeSwings++;
+            if (UnswungMeleeSwings != 1) return;
+            Debug.LogError(
+                $"[net] actor {session.ActorId} swung weapon {session.WeaponId}, but the body holds no "
+                + "melee weapon, so NOTHING WAS DEALT. The session and the body disagree about the "
+                + "loadout. Further misses are counted in UnswungMeleeSwings and not logged.");
+        }
+
+        /// <summary>Approved melee swings the body could not deal. Zero on a healthy server.</summary>
+        public long UnswungMeleeSwings { get; private set; }
 
         /// <summary>Launches this actor's carried projectile weapon. Ledger <b>X-42</b>.</summary>
         /// <remarks>

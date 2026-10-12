@@ -106,6 +106,19 @@ namespace Ironfront.Net.Unity.Server.Tests
                 => FireCarriedWeapon(
                     originX, originY, originZ, directionX, directionY, directionZ);
 
+            /// <summary>Every melee swing the body was handed: (eye, aim).</summary>
+            internal readonly System.Collections.Generic.List<(Vector3 Eye, Vector3 Aim)> Swings =
+                new System.Collections.Generic.List<(Vector3, Vector3)>();
+
+            public bool SwingCarriedMelee(
+                float originX, float originY, float originZ,
+                float directionX, float directionY, float directionZ)
+            {
+                if (!HoldsAWeapon) return false;
+                Swings.Add((new Vector3(originX, originY, originZ), new Vector3(directionX, directionY, directionZ)));
+                return true;
+            }
+
             /// <summary>Every aim the carried weapon was handed, in order.</summary>
             internal readonly System.Collections.Generic.List<(Vector3 Eye, Vector3 Forward, bool Aim)> Steers =
                 new System.Collections.Generic.List<(Vector3, Vector3, bool)>();
@@ -192,6 +205,23 @@ namespace Ironfront.Net.Unity.Server.Tests
             var actor = _gameObject.AddComponent<NetServerActor>();
             actor.BindGameplaySource(NetServerBindings.ResolveActorSource(_gameObject));
             return actor;
+        }
+
+        [Test]
+        public void AnApprovedSwingReachesTheBodyAlongTheSuppliedEyeAndAim()
+        {
+            // The wrench online (owner's run of 2026-10-12): the authority approves the swing and
+            // the body's engine melee weapon deals it from the player's eye, never its bind pose.
+            var source = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(source);
+
+            Assert.IsTrue(actor.SwingCarriedMelee(1f, 1.7f, 2f, 0f, 0f, 1f));
+            Assert.AreEqual(1, source.Swings.Count);
+            Assert.AreEqual(new Vector3(1f, 1.7f, 2f), source.Swings[0].Eye);
+            Assert.AreEqual(Vector3.forward, source.Swings[0].Aim);
+
+            source.HoldsAWeapon = false;
+            Assert.IsFalse(actor.SwingCarriedMelee(1f, 1.7f, 2f, 0f, 0f, 1f));
         }
 
         [Test]
