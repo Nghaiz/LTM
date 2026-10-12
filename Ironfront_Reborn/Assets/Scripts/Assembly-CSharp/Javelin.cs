@@ -496,6 +496,11 @@ public class Javelin : ScopedWeapon
 		return target != null || lockingOnManualTarget;
 	}
 
+	public override string DescribeFireGates()
+	{
+		return base.DescribeFireGates() + $" lock={HasLock()} locking={IsLocking()} aiming={aiming} networkAim={hasNetworkAim}";
+	}
+
 	private bool HasLock()
 	{
 		return IsLocking() && lockOnAction.Done();

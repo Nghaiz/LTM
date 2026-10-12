@@ -1065,6 +1065,14 @@ namespace Ironfront.Net.Unity.Bindings
             return true;
         }
 
+        public string DescribeCarriedWeapon()
+        {
+            if (_actor == null) return "no actor";
+            Weapon weapon = _actor.activeWeapon;
+            string body = $"dead={_actor.dead} fallenOver={_actor.fallenOver} seated={_actor.IsSeated()}";
+            return weapon == null ? "nothing in hand, " + body : weapon.DescribeFireGates() + ", " + body;
+        }
+
         public bool SwingCarriedMelee(
             float originX, float originY, float originZ,
             float directionX, float directionY, float directionZ)
