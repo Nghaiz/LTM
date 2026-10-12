@@ -325,6 +325,25 @@ namespace Ironfront.MasterClient
         /// <summary>The four fields above as one value, every missing one read as its default.</summary>
         public Ironfront.Net.Protocol.RoomSettings Settings
             => Ironfront.Net.Protocol.RoomSettings.FromWire(GameMode, VictoryRule, VictoryPoints, NightVisionSeconds);
+
+        /// <summary>The room's name. Empty from a master older than the lobby redesign (2026-10-12).</summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>The member who hosts the room; 0 from an older master.</summary>
+        public int HostPlayerId { get; set; }
+
+        /// <summary>The room asks for a password; false from an older master.</summary>
+        public bool IsPrivate { get; set; }
+
+        /// <summary>
+        /// Milliseconds until the armed start countdown fires, measured by the master as it sent
+        /// this push; 0 when no countdown runs, and from an older master.
+        /// </summary>
+        /// <remarks>
+        /// Time left rather than a deadline, so this client's clock never enters it: count down
+        /// from the moment the push arrived.
+        /// </remarks>
+        public long StartsInMs { get; set; }
     }
     public sealed class ChatMessage { public byte Channel { get; set; } public int FromPlayerId { get; set; } public string FromName { get; set; } = string.Empty; public string Text { get; set; } = string.Empty; public long Timestamp { get; set; } }
 

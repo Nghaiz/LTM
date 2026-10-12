@@ -117,6 +117,66 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
+        public async Task TheRoomPushNamesTheRoomItsHostItsLockAndTheTimeLeftToStart()
+        {
+            // The lobby redesign (owner's run of 2026-10-12): the waiting room shows the room's
+            // name, a HOST mark, a PRIVATE chip and a countdown, all from the master's own push.
+            await using var server = new Phase03ServerHarness();
+            server.Lobby.StartCountdownMs = 6_000;
+
+            using var gameServer = new GameServerLink();
+            await gameServer.ConnectAsync("127.0.0.1", server.Port);
+            GameServerRegistrationResult registered = await PumpAsync(
+                gameServer.RegisterAsync(new GameServerRegistration
+                {
+                    ServerSecret = Phase03ServerHarness.SharedSecret,
+                    PublicIp     = "127.0.0.1",
+                    UdpPort      = 27015,
+                    MaxPlayers   = 16,
+                    MapIds       = new ushort[] { 1 },
+                }),
+                gameServer);
+            Assert.True(registered.Ok);
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, registered.ServerId);
+
+            using var alpha = new MasterClient.MasterClient();
+            using var beta  = new MasterClient.MasterClient();
+            await alpha.ConnectAsync("127.0.0.1", server.Port);
+            await beta.ConnectAsync("127.0.0.1", server.Port);
+            await LoginAsync(alpha, "p40_host");
+            await LoginAsync(beta,  "p40_guest");
+
+            RoomState? latest = null;
+            alpha.OnRoomStatePush += state => latest = state;
+
+            CreateRoomResult created = await PumpAsync(
+                alpha.CreateRoomAsync(new CreateRoomRequest
+                {
+                    Name = "Night Ops", MapId = 1, MaxPlayers = 8, IsPrivate = true, PasswordHash = PasswordHash,
+                }), alpha, beta);
+            Assert.True(created.Ok);
+            Assert.True(await PumpUntilAsync(() => latest != null, alpha, beta), "no push after the create");
+            server.Lobby.TryGetRoomById(created.RoomId, out Lobby.Room? room);
+
+            Assert.Equal("Night Ops", latest!.Name);
+            Assert.Equal(room!.HostPlayerId, latest.HostPlayerId);
+            Assert.NotEqual(0, latest.HostPlayerId);
+            Assert.True(latest.IsPrivate);
+            Assert.Equal(0, latest.StartsInMs);
+
+            JoinResult joined = await PumpAsync(beta.JoinRoomAsync(created.RoomId, PasswordHash), alpha, beta);
+            Assert.True(joined.Ok, $"beta could not join, errorCode {joined.ErrorCode}");
+
+            await PumpAsync(alpha.SetReadyAsync(true), alpha, beta);
+            await PumpAsync(beta.SetReadyAsync(true),  alpha, beta);
+            Assert.True(await PumpUntilAsync(() => latest!.StartsInMs > 0, alpha, beta), "no push carried the armed countdown");
+            Assert.InRange(latest!.StartsInMs, 1, 6_000);
+
+            await PumpAsync(beta.SetReadyAsync(false), alpha, beta);
+            Assert.True(await PumpUntilAsync(() => latest!.StartsInMs == 0, alpha, beta), "the withdrawn ready left a countdown showing");
+        }
+
+        [Fact]
         public async Task UnReadyingBeforeTheCountdownExpiresLeavesTheRoomWaiting()
         {
             await using var server = new Phase03ServerHarness();

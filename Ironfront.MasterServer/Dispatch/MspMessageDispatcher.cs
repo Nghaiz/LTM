@@ -1016,11 +1016,20 @@ namespace Ironfront.MasterServer.Dispatch
         {
             var members = new List<object>();
             foreach (RoomMember member in room.Members) members.Add(new { playerId = member.PlayerId, name = member.DisplayName, team = member.Team, ready = member.Ready });
+
+            // The waiting room's name, host, lock and countdown (owner's run of 2026-10-12: the
+            // lobby redesign). The countdown goes as time LEFT, measured here, never as the
+            // deadline: a client clock can be a minute and a half out, and a deadline read against
+            // it would count down from the wrong number.
+            long startsInMs = room.IsCountingDown
+                ? Math.Max(0L, room.StartDeadlineUnixMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                : 0L;
             return new
             {
                 roomId = room.RoomId, members, state = (byte)room.State, mapId = room.MapId, botCount = room.BotCount, maxPlayers = room.MaxPlayers,
                 gameMode = (byte)room.Settings.Mode, victoryRule = (byte)room.Settings.Rule,
                 victoryPoints = room.Settings.VictoryPoints, nightVisionSeconds = room.Settings.NightVisionSeconds,
+                name = room.Name, hostPlayerId = room.HostPlayerId, isPrivate = room.IsPrivate, startsInMs,
             };
         }
 
