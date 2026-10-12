@@ -34,7 +34,7 @@ namespace Ironfront.Net.Unity.Client
     /// </remarks>
     [DefaultExecutionOrder(-50)]
     [DisallowMultipleComponent]
-    public sealed class NetClientCombatPresenter : MonoBehaviour
+    public sealed class NetClientCombatPresenter : MonoBehaviour, IKillfeedSubjects
     {
         [Tooltip("Draws the streak. Optional — without it a shot still flashes and reports.")]
         [SerializeField] private CosmeticTracerPool _tracers;
@@ -124,14 +124,8 @@ namespace Ironfront.Net.Unity.Client
         private ScoreboardHeaderKey _pushedHeader;
         private bool _pushedHeaderValid;
 
-        /// <summary>The roster size the rows last counted, for the header's summary line.</summary>
-        private int _rosterPlayers;
-        private int _rosterHumans;
-
-        /// <summary>Reused across pushes; a scoreboard that allocated a list per frame would be
-        /// the IMGUI killfeed's mistake with more rows.</summary>
-        private readonly System.Collections.Generic.List<ushort> _scoreboardOrder =
-            new System.Collections.Generic.List<ushort>(ProtocolConstants.MAX_ACTORS);
+        /// <summary>The board's two columns, and the roster size they last counted for the header.</summary>
+        private readonly ScoreboardColumns _columns = new ScoreboardColumns();
 
         /// <summary>The last few kills, newest first. Drawn by the HUD; pruned here.</summary>
         public KillfeedModel Killfeed => _killfeed;
@@ -355,122 +349,16 @@ namespace Ironfront.Net.Unity.Client
             for (int i = 0; i < count; i++)
             {
                 KillfeedEntry entry = _killfeed[i];
-                KillfeedLine line = LineFor(in entry, hasLocal, localActorId);
+                KillfeedLine line = KillfeedLines.For(in entry, this, _killfeed.HoldSeconds, hasLocal, localActorId);
                 hud.SetKillfeedLine(i, in line);
             }
         }
 
         /// <summary>
-        /// One feed entry, worded and resolved for the HUD. Owner's report of 2026-09-30.
+        /// A capture point's name as a player reads it, from the scene's directory: "Fortress
+        /// Capture Point" is FORTRESS.
         /// </summary>
-        /// <remarks>
-        /// <b>A side resolved at the death is kept</b>, and only a side that was unknown then is
-        /// looked up again here: see <see cref="ResolveTeam"/>.
-        /// </remarks>
-        private KillfeedLine LineFor(in KillfeedEntry entry, bool hasLocal, ushort localActorId)
-        {
-            float hold = _killfeed.HoldSeconds;
-
-            switch (entry.Kind)
-            {
-                case KillfeedKind.Death:
-                {
-                    KillfeedWording wording = KillfeedWording.For(in entry);
-
-                    // A death nobody scored has no killer to name or colour: the sentence says
-                    // what happened to the victim instead of "The world" killing them (feature 2).
-                    bool scored = !wording.IsSentence;
-                    KillfeedBadge badge = scored ? KillfeedWording.BadgeOf(entry.Accolades) : default;
-                    string distance = scored && entry.DistanceMetres >= KillfeedAccoladeTracker.LongShotMetres
-                        ? KillfeedWording.Distance(entry.DistanceMetres)
-                        : string.Empty;
-
-                    return new KillfeedLine(
-                        entry.Sequence,
-                        scored ? NameFor(entry.KillerActorId) : string.Empty,
-                        scored ? KnownOrResolved(entry.KillerTeam, entry.KillerActorId) : TeamId.None,
-                        NameFor(entry.VictimActorId),
-                        KnownOrResolved(entry.VictimTeam, entry.VictimActorId),
-                        wording.Label,
-                        wording.Sentence,
-                        entry.Headshot,
-                        localIsKiller: scored && hasLocal && entry.KillerActorId == localActorId,
-                        localIsVictim: hasLocal && entry.VictimActorId == localActorId,
-                        weaponId: wording.WeaponId,
-                        restAfterWeapon: wording.RestAfterWeapon,
-                        glyph: (int)wording.Glyph,
-                        restAfterGlyph: wording.RestAfterGlyph,
-                        badge: badge.Text,
-                        badgeTone: (int)badge.Tone,
-                        distance: distance,
-                        holdSeconds: hold);
-                }
-
-                case KillfeedKind.FlagCaptured:
-                case KillfeedKind.FlagLost:
-                {
-                    bool captured = entry.Kind == KillfeedKind.FlagCaptured;
-                    return EventLine(
-                        in entry, ScoreboardWording.TeamName(entry.SubjectTeam), entry.SubjectTeam,
-                        KillfeedWording.FlagVerb(captured), FlagNameOf(entry.SubjectIndex),
-                        captured ? entry.SubjectTeam : TeamId.None, string.Empty, KillfeedGlyph.Flag,
-                        highlight: false, hold);
-                }
-
-                case KillfeedKind.PlayerJoined:
-                {
-                    byte team = KnownOrResolved(entry.SubjectTeam, entry.SubjectActorId);
-                    return EventLine(
-                        in entry, NameFor(entry.SubjectActorId), team, KillfeedWording.JoinedVerb,
-                        ScoreboardWording.TeamName(team), team, string.Empty, KillfeedGlyph.Joined,
-                        highlight: false, hold);
-                }
-
-                case KillfeedKind.PlayerLeft:
-                {
-                    string name = _departedNames[entry.SubjectActorId % _departedNames.Length]
-                                  ?? NameFor(entry.SubjectActorId);
-                    return EventLine(
-                        in entry, name, entry.SubjectTeam, string.Empty, string.Empty, TeamId.None,
-                        KillfeedWording.LeftSentence, KillfeedGlyph.Left, highlight: false, hold);
-                }
-
-                case KillfeedKind.RoundStarted:
-                    return EventLine(
-                        in entry, string.Empty, TeamId.None, string.Empty, string.Empty, TeamId.None,
-                        KillfeedWording.RoundWords(true, TeamId.None), KillfeedGlyph.Trophy,
-                        highlight: false, hold);
-
-                case KillfeedKind.RoundEnded:
-                {
-                    bool drawn = entry.SubjectTeam == TeamId.None;
-                    return EventLine(
-                        in entry, drawn ? string.Empty : ScoreboardWording.TeamName(entry.SubjectTeam),
-                        entry.SubjectTeam, drawn ? string.Empty : KillfeedWording.RoundWords(false, entry.SubjectTeam),
-                        string.Empty, TeamId.None,
-                        drawn ? KillfeedWording.RoundWords(false, TeamId.None) : string.Empty,
-                        KillfeedGlyph.Trophy, highlight: false, hold);
-                }
-
-                default:
-                    return EventLine(
-                        in entry, string.Empty, TeamId.None, string.Empty, string.Empty, TeamId.None,
-                        KillfeedWording.OverflowWords(entry.SubjectIndex), KillfeedGlyph.Overflow,
-                        highlight: false, hold);
-            }
-        }
-
-        /// <summary>A line that is not a death: a subject, a verb, an object, closing words and a picture.</summary>
-        private static KillfeedLine EventLine(
-            in KillfeedEntry entry, string subject, byte subjectTeam, string verb, string target,
-            byte targetTeam, string sentence, KillfeedGlyph glyph, bool highlight, float hold)
-            => new KillfeedLine(
-                entry.Sequence, subject, subjectTeam, target, targetTeam, string.Empty, sentence,
-                headshot: false, localIsKiller: highlight, localIsVictim: false,
-                glyph: (int)glyph, verb: verb, isEvent: true, holdSeconds: hold);
-
-        /// <summary>A capture point's name as a player reads it: "Fortress Capture Point" is FORTRESS.</summary>
-        private static string FlagNameOf(int pointIndex)
+        string IKillfeedSubjects.FlagNameOf(int pointIndex)
         {
             ICapturePointDirectory points = NetSceneBindings.CapturePoints;
             string authored = points != null && pointIndex >= 0 && pointIndex < points.Count
@@ -479,6 +367,12 @@ namespace Ironfront.Net.Unity.Client
 
             return KillfeedWording.FlagName(authored, pointIndex);
         }
+
+        string IKillfeedSubjects.NameOf(ushort actorId) => NameFor(actorId);
+
+        byte IKillfeedSubjects.TeamOf(ushort actorId) => ResolveTeam(actorId);
+
+        string IKillfeedSubjects.DepartedNameOf(ushort actorId) => _departedNames[actorId % _departedNames.Length];
 
         /// <summary>
         /// Toggles the Tab board, and rewrites it when something on it has moved. P18 3.3,
@@ -491,23 +385,9 @@ namespace Ironfront.Net.Unity.Client
         /// still forces it open for a scripted run.
         /// </para>
         /// <para>
-        /// <b>The sides come from <c>PlayerScoreTable</c>, not from <see cref="TeamOf"/>.</b>
-        /// That resolver reads the decoded snapshot, which <c>InterestManager</c> sheds under a
-        /// per-snapshot ceiling — fine for a killfeed, where a miss is one neutral-coloured name,
-        /// and useless for a scoreboard, where it would put most of a 41-bot roster on no side at
-        /// all. <c>S_PLAYER_SCORES</c> carries the team for exactly this reason.
-        /// </para>
-        /// <para>
-        /// <b>Rows are keyed on the ACTOR ID, and the name is looked up afterwards.</b> The two
-        /// tables fill from two messages that arrive independently and scores routinely land
-        /// first; a row keyed on the name table would make a player appear only once their name
-        /// did. Criterion 5 is that case.
-        /// </para>
-        /// <para>
-        /// <b>Sorted by kills, then by fewer deaths, then by id.</b> The last term is what makes
-        /// the order STABLE — without it two players on the same K/D swap places whenever a
-        /// broadcast arrives, and a board that reshuffles under a reader is unreadable. The id is
-        /// also what makes the two clients' boards agree, which criterion 4 grades.
+        /// <b>The columns are <see cref="ScoreboardColumns"/>'s</b>, shared with the practice
+        /// board: the sides from <c>PlayerScoreTable</c>, rows keyed on the actor id, and one
+        /// stable order. Its remarks carry the reasons.
         /// </para>
         /// <para>
         /// <b>Written only when something moved.</b> The rows are keyed on the three tables'
@@ -570,101 +450,11 @@ namespace Ironfront.Net.Unity.Client
                 _pushedScoreBotRevision = _bots.Revision;
                 _pushedScoreLocalActorId = localKey;
 
-                PushScoreboardColumns(hud, hasLocal, localActorId);
+                _columns.Write(hud, _scores, _names, _bots, hasLocal, localActorId);
             }
 
             PushScoreboardHeader(hud);
         }
-
-        private void PushScoreboardColumns(IMatchHud hud, bool hasLocal, ushort localActorId)
-        {
-            _rosterPlayers = 0;
-            _rosterHumans = 0;
-
-            for (int team = TeamId.Team0; team <= TeamId.Team1; team++)
-            {
-                _scoreboardOrder.Clear();
-
-                int humans = 0;
-                int totalKills = 0;
-                int totalDeaths = 0;
-
-                for (ushort actorId = 0; actorId < ProtocolConstants.MAX_ACTORS; actorId++)
-                {
-                    if (!_scores.Has(actorId)) continue;
-                    if (_scores.TeamOf(actorId) != team) continue;
-
-                    _scoreboardOrder.Add(actorId);
-                    totalKills += _scores.KillsOf(actorId);
-                    totalDeaths += _scores.DeathsOf(actorId);
-
-                    // A human is who S_PLAYER_LIST names; the spawn flag says who is a bot, and
-                    // an actor neither has described yet is counted as neither.
-                    if (_names.NameOf(actorId) != null) humans++;
-                }
-
-                // The side's one order ranks everybody, bots and players together; the board then
-                // lists the players first and the bots after them (owner's report of 2026-09-30),
-                // each keeping the rank it earned in the whole side.
-                _scoreboardOrder.Sort(CompareScoreRows);
-                for (int i = 0; i < _scoreboardOrder.Count; i++) _scoreboardRanks[_scoreboardOrder[i]] = i + 1;
-                ushort leader = _scoreboardOrder.Count > 0 && _scores.KillsOf(_scoreboardOrder[0]) > 0
-                    ? _scoreboardOrder[0]
-                    : ushort.MaxValue;
-
-                _rosterPlayers += _scoreboardOrder.Count;
-                _rosterHumans += humans;
-
-                hud.BeginScoreboardColumn(team, _scoreboardOrder.Count, humans, totalKills, totalDeaths);
-
-                for (int pass = 0; pass < 2; pass++)
-                {
-                    bool wantHumans = pass == 0;
-
-                    for (int i = 0; i < _scoreboardOrder.Count; i++)
-                    {
-                        ushort actorId = _scoreboardOrder[i];
-                        if ((_names.NameOf(actorId) != null) != wantHumans) continue;
-
-                        hud.AddScoreboardRow(team, RowFor(actorId, hasLocal, localActorId, leader));
-                    }
-                }
-            }
-
-            hud.EndScoreboard();
-        }
-
-        /// <summary>One actor's board row: the counts, the rank it earned, and the server's stats.</summary>
-        private ScoreboardRow RowFor(ushort actorId, bool hasLocal, ushort localActorId, ushort leader)
-        {
-            int kills = _scores.KillsOf(actorId);
-            int deaths = _scores.DeathsOf(actorId);
-            bool hasStats = _scores.HasStats(actorId);
-            PlayerStatusFlags status = _scores.StatusOf(actorId);
-
-            return new ScoreboardRow(
-                actorId,
-                NameFor(actorId),
-                kills,
-                deaths,
-                ScoreboardWording.Ratio(kills, deaths),
-                isBot: _names.NameOf(actorId) == null && _bots.IsBot(actorId),
-                isLocal: hasLocal && actorId == localActorId,
-                rank: _scoreboardRanks[actorId],
-                hasStats: hasStats,
-                isAlive: !hasStats || (status & PlayerStatusFlags.Alive) != 0,
-                isSeated: (status & PlayerStatusFlags.Seated) != 0,
-                headshots: _scores.HeadshotsOf(actorId),
-                streak: _scores.StreakOf(actorId),
-                bestStreak: _scores.BestStreakOf(actorId),
-                points: _scores.PointsOf(actorId),
-                pingMs: _scores.PingOf(actorId),
-                isLeader: actorId == leader,
-                ratioValue: deaths > 0 ? kills / (float)deaths : kills);
-        }
-
-        /// <summary>Each actor's place on its side by the board's one order, rewritten per push.</summary>
-        private readonly int[] _scoreboardRanks = new int[ProtocolConstants.MAX_ACTORS];
 
         /// <summary>
         /// States the match at the top of the board, when any of it has changed.
@@ -691,78 +481,16 @@ namespace Ironfront.Net.Unity.Client
                 _objectives != null ? _objectives.CapturePointsHeldBy(TeamId.Team1) : 0,
                 state.VictoryPoints,
                 hasState ? match.WinningTeam : TeamId.None,
-                _rosterPlayers, _rosterHumans);
+                _columns.Players, _columns.Humans);
 
             if (_pushedHeaderValid && key.Equals(_pushedHeader)) return;
 
             _pushedHeader = key;
             _pushedHeaderValid = true;
 
-            MatchPhase phase = hasState ? state.Phase : MatchPhase.WaitingForPlayers;
-
-            var header = new ScoreboardMatch(
-                _mapName,
-                ScoreboardWording.SummaryLine(state.Mode, _rosterPlayers, _rosterHumans),
-                state.Score0,
-                state.Score1,
-                ScoreboardWording.Lead(state.Score0, state.Score1, state.VictoryPoints),
-                hasState
-                    ? ScoreboardWording.LeadLine(
-                        phase, state.Score0, state.Score1, state.VictoryPoints, key.WinningTeam, state.Rule)
-                    : string.Empty,
-                ScoreboardWording.Clock(seconds),
-                hasState ? ScoreboardWording.PhaseLabel(phase, seconds >= 0) : string.Empty,
-                clockUrgent: phase == MatchPhase.Playing && seconds >= 0 && seconds <= 60,
-                key.Flags0,
-                key.Flags1,
-                key.WinningTeam,
-                hasState ? ScoreboardWording.Rules(state.VictoryPoints, state.Rule) : string.Empty);
-
+            ScoreboardMatch header = ScoreboardHeader.Build(_mapName, state.Mode, state.Rule, hasState, in key);
             hud.SetScoreboardMatch(in header);
         }
-
-        /// <summary>
-        /// Everything the board's header is drawn from, compared as integers so an unchanged
-        /// header costs nothing and a clock tick costs one push.
-        /// </summary>
-        private readonly struct ScoreboardHeaderKey : System.IEquatable<ScoreboardHeaderKey>
-        {
-            public ScoreboardHeaderKey(
-                int phase, int score0, int score1, int seconds, int flags0, int flags1,
-                int victoryPoints, byte winningTeam, int players, int humans)
-            {
-                Phase = phase;
-                Score0 = score0;
-                Score1 = score1;
-                Seconds = seconds;
-                Flags0 = flags0;
-                Flags1 = flags1;
-                VictoryPoints = victoryPoints;
-                WinningTeam = winningTeam;
-                Players = players;
-                Humans = humans;
-            }
-
-            public int Phase { get; }
-            public int Score0 { get; }
-            public int Score1 { get; }
-            public int Seconds { get; }
-            public int Flags0 { get; }
-            public int Flags1 { get; }
-            public int VictoryPoints { get; }
-            public byte WinningTeam { get; }
-            public int Players { get; }
-            public int Humans { get; }
-
-            public bool Equals(ScoreboardHeaderKey other)
-                => Phase == other.Phase && Score0 == other.Score0 && Score1 == other.Score1
-                   && Seconds == other.Seconds && Flags0 == other.Flags0 && Flags1 == other.Flags1
-                   && VictoryPoints == other.VictoryPoints && WinningTeam == other.WinningTeam
-                   && Players == other.Players && Humans == other.Humans;
-        }
-
-        /// <summary>The score table's one order, shared with the star on a name plate.</summary>
-        private int CompareScoreRows(ushort left, ushort right) => _scores.CompareRank(left, right);
 
         /// <summary>
         /// The team the snapshot gives this actor, or <c>TeamId.None</c> when it does not carry
@@ -800,10 +528,6 @@ namespace Ironfront.Net.Unity.Client
 
             return (byte)TeamOf(actorId);
         }
-
-        /// <summary>The side a line was written with, or a fresh answer when it was written with none.</summary>
-        private byte KnownOrResolved(byte known, ushort actorId)
-            => known != TeamId.None ? known : ResolveTeam(actorId);
 
         /// <summary>Whether the round is being played, which is when a flag changing hands is news.</summary>
         private bool IsRoundLive()

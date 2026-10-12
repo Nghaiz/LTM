@@ -19,19 +19,31 @@ public class Hitbox : MonoBehaviour
 		return layer == 8 || layer == 10 || layer == 16;
 	}
 
+	/// <summary>
+	/// A head hitbox: the head's multiply damage by three or four, the body's and the limbs' by
+	/// one or less. The offline hitmarker's headshot and the practice killfeed's both read this.
+	/// </summary>
+	public bool IsHead => multiplier >= 2f;
+
 	public bool ProjectileHit(Projectile p, Vector3 position)
 	{
 		Actor actor = parent as Actor;
 		if (actor != null)
 		{
-			bool hurt = actor.DamageAttributed(
-				p.Damage() * multiplier,
-				p.BalanceDamage(),
-				p.configuration.piercing,
-				position,
-				p.transform.forward,
-				p.configuration.impactForce * p.transform.forward,
-				p.source);
+			bool hurt;
+			// Where it struck, for the death this may cause: the practice killfeed draws a headshot
+			// from it (owner's run of 2026-10-12).
+			using (DeathContext.Struck(IsHead))
+			{
+				hurt = actor.DamageAttributed(
+					p.Damage() * multiplier,
+					p.BalanceDamage(),
+					p.configuration.piercing,
+					position,
+					p.transform.forward,
+					p.configuration.impactForce * p.transform.forward,
+					p.source);
+			}
 			// Achievements v2: a bullet that hurt a soldier is a hit for its shooter's accuracy.
 			if (hurt && p.source != null)
 			{

@@ -1883,6 +1883,11 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		// here, and Die() would then fire locally for a death S_DEATH is about to announce.
 		if (ownsHealth && health <= 0f)
 		{
+			// Offline, the two scores either side of the death: Die scores it, and the practice Tab
+			// board credits the killer with what the kill put on their side, as the server does.
+			bool offline = Ironfront.Net.Unity.NetContext.IsOffline;
+			int blueBefore = offline ? MatchScoreboard.Current.BlueScore : 0;
+			int redBefore = offline ? MatchScoreboard.Current.RedScore : 0;
 			Die(impactForce);
 			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(
 				this, impactForce, attacker, DeathContext.Cause,
@@ -1890,7 +1895,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			// The practice achievements (achievements v2) count every death of an offline match:
 			// the player's kills and how they were made, everyone's kills for "the most of anyone",
 			// and the player's own deaths. Online, the server's career tally does this.
-			if (Ironfront.Net.Unity.NetContext.IsOffline)
+			if (offline)
 			{
 				bool byAttacker = attacker != null && attacker != this;
 				Ironfront.Net.Unity.PracticeFeats.ActorKilled(
@@ -1900,6 +1905,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 					byAttacker && attacker.team != team,
 					DeathContext.WeaponId,
 					byAttacker && attacker.IsSeated() && attacker.seat.vehicle != null ? attacker.seat.vehicle.NetworkId : (byte)0);
+				ReportPracticeDeath(attacker, blueBefore, redBefore);
 			}
 		}
 		else if (ragdoll.IsRagdoll())
@@ -1930,6 +1936,45 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			IngameUi.instance.ShowVignette(intensity, 6f);
 		}
 		return true;
+	}
+
+	/// <summary>
+	/// Tells the practice killfeed and Tab board about this death (owner's run of 2026-10-12): the
+	/// facts the server puts in <c>S_DEATH</c>, read from the same <see cref="DeathContext"/>, and
+	/// what the kill put on the killer's side. Offline only, and local: nothing leaves the game.
+	/// </summary>
+	private void ReportPracticeDeath(Actor attacker, int blueBefore, int redBefore)
+	{
+		bool byOther = attacker != null && attacker != this;
+		bool enemyKill = byOther && attacker.team != team;
+		MatchScoreboard board = MatchScoreboard.Current;
+		int points = !enemyKill ? 0
+			: attacker.team == 0 ? board.BlueScore - blueBefore
+			: board.RedScore - redBefore;
+		GameObject crashed = DeathContext.Vehicle;
+		Vehicle vehicle = crashed != null ? crashed.GetComponent<Vehicle>() : null;
+		float metres = byOther ? Vector3.Distance(base.transform.position, attacker.transform.position) : 0f;
+		Ironfront.Net.Unity.PracticeFeed.ReportDeath(new Ironfront.Net.Unity.PracticeDeath(
+			GetInstanceID(), PracticeTeam(team), !aiControlled,
+			attacker != null ? attacker.GetInstanceID() : 0,
+			attacker != null ? PracticeTeam(attacker.team) : Ironfront.Net.Protocol.TeamId.None,
+			attacker != null && !attacker.aiControlled,
+			DeathContext.Cause,
+			DeathContext.WeaponId,
+			vehicle != null ? vehicle.NetworkId : Ironfront.Net.Protocol.VehicleIds.NONE,
+			DeathContext.Detail,
+			byOther && attacker.IsSeated() && attacker.seat.vehicle != null
+				? attacker.seat.vehicle.NetworkId
+				: Ironfront.Net.Protocol.VehicleIds.NONE,
+			DeathContext.HitboxHit == Ironfront.Net.Protocol.HitboxType.Head,
+			metres >= ushort.MaxValue ? ushort.MaxValue : (ushort)Mathf.RoundToInt(metres),
+			points));
+	}
+
+	/// <summary>A side as the protocol's team byte: 0 and 1 as they are, anything else nobody's.</summary>
+	private static byte PracticeTeam(int side)
+	{
+		return side == 0 || side == 1 ? (byte)side : Ironfront.Net.Protocol.TeamId.None;
 	}
 
 	public virtual void ApplyRecoil(Vector3 impulse)

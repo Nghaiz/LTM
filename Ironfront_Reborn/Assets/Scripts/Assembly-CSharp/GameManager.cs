@@ -136,9 +136,13 @@ public class GameManager : MonoBehaviour
 				flags++;
 				if (point.owner == practiceTeam) heldAtStart.Add(point.GetInstanceID());
 			}
-			Ironfront.Net.Unity.PracticeFeats.MatchStarted(new Ironfront.Net.Unity.PracticeMatch(
+			var practiceMatch = new Ironfront.Net.Unity.PracticeMatch(
 				mapId, nightMode, victoryRule, victoryPoints, !noVehicles,
-				ActorManager.instance.team0Bots, ActorManager.instance.team1Bots, practiceTeam, flags), Time.time, heldAtStart);
+				ActorManager.instance.team0Bots, ActorManager.instance.team1Bots, practiceTeam, flags);
+			Ironfront.Net.Unity.PracticeFeats.MatchStarted(practiceMatch, Time.time, heldAtStart);
+			// The practice killfeed and Tab board (owner's run of 2026-10-12) title the board and
+			// state its rule from the same match. Before the HUD below exists, so it finds one.
+			Ironfront.Net.Unity.PracticeFeed.Begin(practiceMatch);
 		}
 		// The HUD, the player and the decal pool are the client's half of a match. A dedicated
 		// server that instantiates them gets a Canvas nobody looks at, an FpsActorController

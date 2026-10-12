@@ -64,6 +64,12 @@ public sealed class MatchScoreboard
 	public bool GameEnded { get; private set; }
 
 	/// <summary>
+	/// The side that won (team 0 is blue), <see cref="TeamId.None"/> while the match is open. The
+	/// practice killfeed and Tab board say it (owner's run of 2026-10-12).
+	/// </summary>
+	public byte WinningTeam { get; private set; } = TeamId.None;
+
+	/// <summary>
 	/// The lead one team needs over the other to win, read from <c>GameManager</c>.
 	/// </summary>
 	/// <remarks>
@@ -168,6 +174,7 @@ public sealed class MatchScoreboard
 			return;
 		}
 		GameEnded = true;
+		WinningTeam = blue ? TeamId.Team0 : TeamId.Team1;
 		Ended?.Invoke(blue);
 		// A finished practice match is a practice achievement, and a won one with every bot
 		// another (owner's list of 2026-10-09, item 4). Blue is team 0.
@@ -198,6 +205,7 @@ public sealed class MatchScoreboard
 		BlueFlags = 0;
 		RedFlags = 0;
 		GameEnded = false;
+		WinningTeam = TeamId.None;
 		Changed?.Invoke();
 	}
 }
