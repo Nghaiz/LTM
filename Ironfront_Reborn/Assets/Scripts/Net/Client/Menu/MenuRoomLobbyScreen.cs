@@ -1,7 +1,9 @@
 ﻿#nullable enable
 
+using System;
 using Ironfront.MasterClient;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Protocol.Achievements;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -55,6 +57,40 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Image[] _teamZeroReadyBadges = new Image[RowsPerSide];
         [SerializeField] private Image[] _teamOneReadyBadges = new Image[RowsPerSide];
 
+        [Header("Roster rows (owner's run of 2026-10-12)")]
+        [Tooltip("Each row's plate: a member's, an open seat's, or hidden past the room's seats.")]
+        [SerializeField] private Image[] _teamZeroSlots = new Image[RowsPerSide];
+        [SerializeField] private Image[] _teamOneSlots = new Image[RowsPerSide];
+        [Tooltip("The edge of a member's row, in the side's colour from ITeamPalette at runtime.")]
+        [SerializeField] private Image[] _teamZeroStripes = new Image[RowsPerSide];
+        [SerializeField] private Image[] _teamOneStripes = new Image[RowsPerSide];
+        [SerializeField] private Image[] _teamZeroHostBadges = new Image[RowsPerSide];
+        [SerializeField] private Image[] _teamOneHostBadges = new Image[RowsPerSide];
+        [SerializeField] private GameObject[] _teamZeroYouTags = new GameObject[RowsPerSide];
+        [SerializeField] private GameObject[] _teamOneYouTags = new GameObject[RowsPerSide];
+        [Tooltip("Members over seats and how many are ready, under each side's name.")]
+        [SerializeField] private Text? _teamZeroCount;
+        [SerializeField] private Text? _teamOneCount;
+
+        [Header("The room at a glance (owner's run of 2026-10-12)")]
+        [SerializeField] private Image? _mapPicture;
+        [Tooltip("Every map's picture by day then at night, in MapCatalog order (MapPictureChoice).")]
+        [SerializeField] private Sprite[] _mapPictures = Array.Empty<Sprite>();
+        [SerializeField] private Text? _mapName;
+        [SerializeField] private Text? _modeChip;
+        [SerializeField] private GameObject? _dayIcon;
+        [SerializeField] private GameObject? _nightIcon;
+        [SerializeField] private Text? _ruleChip;
+        [SerializeField] private Text? _botsChip;
+        [SerializeField] private Text? _medalChip;
+        [SerializeField] private Graphic? _medalFace;
+        [SerializeField] private Text? _privacyChip;
+        [SerializeField] private GameObject? _lockIcon;
+        [SerializeField] private Text? _seatsChip;
+        [Tooltip("VS between the two sides, or the seconds left once everybody is ready.")]
+        [SerializeField] private Text? _versusText;
+        [SerializeField] private Text? _countdownCaption;
+
         [Header("Controls")]
         [SerializeField] private Button? _switchSideButton;
         [SerializeField] private Text? _switchSideLabel;
@@ -75,6 +111,12 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Text? _guideHint;
 
         private MenuChatInput? _chatInput;
+
+        /// <summary>The push last drawn: a new one restarts the countdown, a redraw of the same one does not.</summary>
+        private RoomState? _drawnRoom;
+
+        /// <summary><see cref="Time.unscaledTime"/> the armed start fires at, or 0 with no countdown.</summary>
+        private float _countdownEndsAt;
 
         private void Awake()
         {
@@ -140,6 +182,16 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void OnLeave() => _controller?.LeaveRoom();
 
+        /// <summary>
+        /// Ticks the countdown between pushes. The master sends the time left once, when the start
+        /// is armed, and again only if somebody stands down, so the seconds are counted here from
+        /// the moment that push arrived: never against this machine's clock, which can be wrong.
+        /// </summary>
+        private void Update()
+        {
+            if (_countdownEndsAt > 0f) DrawVersus(_drawnRoom);
+        }
+
         private void OnSendChat()
         {
             if (_controller == null || _chatField == null) return;
@@ -165,10 +217,18 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             RoomState? room = controller.Room;
 
-            DrawColumn(_teamZeroRows, _teamZeroReadyBadges, _teamZeroHeading, 0, room,
-                controller.PlayerId);
-            DrawColumn(_teamOneRows, _teamOneReadyBadges, _teamOneHeading, 1, room,
-                controller.PlayerId);
+            if (!ReferenceEquals(room, _drawnRoom))
+            {
+                _drawnRoom = room;
+                _countdownEndsAt = room != null && room.Lifecycle == RoomLifecycleState.Waiting && room.StartsInMs > 0
+                    ? Time.unscaledTime + room.StartsInMs / 1000f
+                    : 0f;
+            }
+
+            DrawColumn(TeamZero, 0, room, controller.PlayerId);
+            DrawColumn(TeamOne, 1, room, controller.PlayerId);
+            DrawRoomCard(room);
+            DrawVersus(room);
 
             if (_chatLog != null) _chatLog.text = NewestThatFit(_chatLog, controller.ChatLog);
             if (_guideHint != null)
@@ -179,8 +239,10 @@ namespace Ironfront.Net.Unity.Client.Menu
             bool known = room != null && TryGetSelf(room, out _);
             bool ready = room != null && TryGetSelf(room, out RoomMember self) && self.Ready;
 
+            // The push's own name since the lobby redesign; the browser row's before it arrives,
+            // and for a master older than the field.
             if (_headingText != null)
-                _headingText.text = controller.RoomHeading;
+                _headingText.text = room != null && room.Name.Length > 0 ? room.Name : controller.RoomHeading;
 
             if (_statusText != null)
                 _statusText.text = Describe(room);
@@ -202,54 +264,220 @@ namespace Ironfront.Net.Unity.Client.Menu
         }
 
         /// <summary>
-        /// Fills one side's rows, and colours its heading from <c>ITeamPalette</c>.
+        /// Draws <paramref name="room"/> without a controller: the menu capture tool's entry, so a
+        /// screenshot of the waiting room is laid out by this code and not by a copy of it.
+        /// </summary>
+        internal void DrawForCapture(RoomState room, int selfPlayerId, float countdownSeconds)
+        {
+            _drawnRoom = room;
+            _countdownEndsAt = countdownSeconds > 0f ? Time.unscaledTime + countdownSeconds : 0f;
+            DrawColumn(TeamZero, 0, room, selfPlayerId);
+            DrawColumn(TeamOne, 1, room, selfPlayerId);
+            DrawRoomCard(room);
+            DrawVersus(room);
+            if (_headingText != null) _headingText.text = room.Name;
+            if (_statusText != null) _statusText.text = Describe(room);
+        }
+
+        private Column TeamZero => new Column(_teamZeroRows, _teamZeroReadyBadges, _teamZeroHostBadges,
+            _teamZeroYouTags, _teamZeroSlots, _teamZeroStripes, _teamZeroHeading, _teamZeroCount);
+
+        private Column TeamOne => new Column(_teamOneRows, _teamOneReadyBadges, _teamOneHostBadges,
+            _teamOneYouTags, _teamOneSlots, _teamOneStripes, _teamOneHeading, _teamOneCount);
+
+        /// <summary>One side's authored pieces, row by row.</summary>
+        private readonly struct Column
+        {
+            public Column(Text[] names, Image[] ready, Image[] host, GameObject[] you, Image[] slots,
+                Image[] stripes, Text? heading, Text? count)
+            {
+                Names = names; Ready = ready; Host = host; You = you; Slots = slots; Stripes = stripes;
+                Heading = heading; Count = count;
+            }
+
+            public Text[] Names { get; }
+            public Image[] Ready { get; }
+            public Image[] Host { get; }
+            public GameObject[] You { get; }
+            public Image[] Slots { get; }
+            public Image[] Stripes { get; }
+            public Text? Heading { get; }
+            public Text? Count { get; }
+        }
+
+        /// <summary>
+        /// Fills one side: its heading and count, a row per member with their READY, HOST and YOU
+        /// marks, then an OPEN SLOT per seat still free, and nothing past the room's seats.
         /// </summary>
         /// <remarks>
-        /// The row TEXT carries the colour as well as the heading, because a reader scanning two
-        /// columns of identical grey names has only position to go on — and position is exactly
-        /// what a screenshot of a mid-switch roster makes ambiguous.
+        /// The name TEXT carries the side's colour as well as the heading, because a reader
+        /// scanning two columns of identical grey names has only position to go on, and position is
+        /// exactly what a screenshot of a mid-switch roster makes ambiguous.
         /// </remarks>
-        private static void DrawColumn(
-            Text[] rows, Image[] readyBadges, Text? heading, byte team, RoomState? room,
-            int selfPlayerId)
+        private static void DrawColumn(in Column column, byte team, RoomState? room, int selfPlayerId)
         {
             Color colour = TeamColour(team);
 
-            if (heading != null)
+            if (column.Heading != null)
             {
-                heading.text = Ironfront.Net.Replication.Client.ScoreboardWording.TeamName(
+                column.Heading.text = Ironfront.Net.Replication.Client.ScoreboardWording.TeamName(
                     team == 0 ? Ironfront.Net.Protocol.TeamId.Team0 : Ironfront.Net.Protocol.TeamId.Team1);
-                heading.color = colour;
+                column.Heading.color = colour;
             }
 
-            int written = 0;
+            int rows = column.Names.Length;
+            int seats = SeatsPerSide(room, rows);
+            int members = 0;
+            int ready = 0;
 
             if (room != null)
             {
                 foreach (RoomMember member in room.Members)
                 {
                     if (member == null || member.Team != team) continue;
-                    if (written >= rows.Length) break;
-
-                    Text row = rows[written];
-                    written++;
-
-                    if (row == null) continue;
-
-                    string you = member.PlayerId == selfPlayerId ? "  (you)" : string.Empty;
-                    row.text = member.Name + you;
-                    row.color = colour;
-                    if (written - 1 < readyBadges.Length && readyBadges[written - 1] != null)
-                        readyBadges[written - 1].gameObject.SetActive(member.Ready);
+                    if (member.Ready) ready++;
+                    if (members < rows)
+                        ShowMember(column, members, member, colour,
+                            member.PlayerId == selfPlayerId, member.PlayerId == room.HostPlayerId);
+                    members++;
                 }
             }
 
-            for (int i = written; i < rows.Length; i++)
+            for (int i = Math.Min(members, rows); i < rows; i++) ShowSeat(column, i, open: i < seats);
+
+            if (column.Count != null)
+                column.Count.text = room == null ? string.Empty : $"{members}/{seats}  ·  {ready} READY";
+        }
+
+        /// <summary>Seats on one side: half the room's, or every row for a master that sends none.</summary>
+        internal static int SeatsPerSide(RoomState? room, int rows)
+            => room == null || room.MaxPlayers <= 0 ? rows : Math.Min(rows, room.MaxPlayers / 2);
+
+        private static void ShowMember(in Column column, int i, RoomMember member, Color colour, bool self, bool host)
+        {
+            if (Get(column.Names, i) is Text name)
             {
-                if (rows[i] != null) rows[i].text = string.Empty;
-                if (i < readyBadges.Length && readyBadges[i] != null)
-                    readyBadges[i].gameObject.SetActive(false);
+                name.text = member.Name;
+                name.color = colour;
+                name.fontSize = MemberNameSize;
+                name.fontStyle = FontStyle.Normal;
             }
+            if (Get(column.Slots, i) is Image slot)
+            {
+                slot.gameObject.SetActive(true);
+                slot.color = MemberPlate;
+            }
+            if (Get(column.Stripes, i) is Image stripe)
+            {
+                stripe.gameObject.SetActive(true);
+                stripe.color = colour;
+            }
+            SetActive(Get(column.Ready, i), member.Ready);
+            SetActive(Get(column.Host, i), host);
+            if (Get(column.You, i) is GameObject you) you.SetActive(self);
+        }
+
+        private static void ShowSeat(in Column column, int i, bool open)
+        {
+            if (Get(column.Names, i) is Text name)
+            {
+                name.text = open ? "Open slot" : string.Empty;
+                name.color = OpenSlotInk;
+                name.fontSize = OpenSlotSize;
+                name.fontStyle = FontStyle.Italic;
+            }
+            if (Get(column.Slots, i) is Image slot)
+            {
+                slot.gameObject.SetActive(open);
+                slot.color = OpenPlate;
+            }
+            if (Get(column.Stripes, i) is Image stripe) stripe.gameObject.SetActive(false);
+            SetActive(Get(column.Ready, i), false);
+            SetActive(Get(column.Host, i), false);
+            if (Get(column.You, i) is GameObject you) you.SetActive(false);
+        }
+
+        private static readonly Color MemberPlate = new Color(1f, 1f, 1f, 0.07f);
+        private static readonly Color OpenPlate = new Color(1f, 1f, 1f, 0.025f);
+
+        /// <summary>A member's name at the size the builder authors; a free seat smaller and quieter, so names lead.</summary>
+        private const int MemberNameSize = 22;
+        private const int OpenSlotSize = 15;
+        private static readonly Color OpenSlotInk = new Color(0.44f, 0.55f, 0.64f, 0.7f);
+
+        private static T? Get<T>(T[]? items, int i) where T : class
+            => items != null && i < items.Length ? items[i] : null;
+
+        private static void SetActive(Component? component, bool active)
+        {
+            if (component != null) component.gameObject.SetActive(active);
+        }
+
+        /// <summary>
+        /// The room card over the rosters: its map's picture and name, and a chip for each setting,
+        /// all from the master's push (owner's run of 2026-10-12, item 4).
+        /// </summary>
+        private void DrawRoomCard(RoomState? room)
+        {
+            if (room == null) return;
+
+            RoomSettings settings = room.Settings;
+            MapPictureChoice.Show(_mapPicture, _mapPictures, room.MapId, settings.Mode);
+            if (_mapName != null) _mapName.text = RoomBadges.MapName(room.MapId).ToUpperInvariant();
+
+            bool night = RoomBadges.IsNight(settings);
+            if (_modeChip != null) _modeChip.text = RoomBadges.ModeLabel(settings);
+            if (_dayIcon != null) _dayIcon.SetActive(!night);
+            if (_nightIcon != null) _nightIcon.SetActive(night);
+            if (_ruleChip != null) _ruleChip.text = RoomBadges.RuleLabel(settings);
+            if (_botsChip != null) _botsChip.text = RoomBadges.BotsPerSideLabel(room.BotCount);
+
+            AchievementTier? tier = RoomBadges.MedalTier(settings);
+            Color medal = RoomBadges.MedalColour(tier);
+            if (_medalChip != null)
+            {
+                _medalChip.text = tier.HasValue ? RoomBadges.MedalLabel(tier) + " MEDALS" : RoomBadges.MedalLabel(tier);
+                _medalChip.color = medal;
+            }
+            if (_medalFace != null) _medalFace.color = new Color(medal.r * 0.22f, medal.g * 0.22f, medal.b * 0.22f, 0.92f);
+
+            if (_privacyChip != null) _privacyChip.text = room.IsPrivate ? "PRIVATE" : "PUBLIC";
+            if (_lockIcon != null) _lockIcon.SetActive(room.IsPrivate);
+
+            int members = room.Members?.Length ?? 0;
+            if (_seatsChip != null) _seatsChip.text = RoomBadges.SeatsLabel(members, room.MaxPlayers) + " PLAYERS";
+        }
+
+        /// <summary>
+        /// VS between the sides; the seconds left once everybody is ready; GO once the room starts.
+        /// </summary>
+        private void DrawVersus(RoomState? room)
+        {
+            if (_versusText == null) return;
+
+            string caption = string.Empty;
+            string big = "VS";
+            if (room != null)
+            {
+                switch (room.Lifecycle)
+                {
+                    case RoomLifecycleState.Waiting when _countdownEndsAt > 0f:
+                        caption = "STARTS IN";
+                        big = Mathf.Max(0, Mathf.CeilToInt(_countdownEndsAt - Time.unscaledTime)).ToString();
+                        break;
+                    case RoomLifecycleState.Starting:
+                        caption = "DEPLOYING";
+                        big = "GO";
+                        break;
+                    case RoomLifecycleState.InMatch:
+                        caption = "IN MATCH";
+                        big = "GO";
+                        break;
+                }
+            }
+
+            if (_versusText.text != big) _versusText.text = big;
+            if (_countdownCaption != null && _countdownCaption.text != caption) _countdownCaption.text = caption;
         }
 
         /// <summary>
@@ -337,9 +565,11 @@ namespace Ironfront.Net.Unity.Client.Menu
             switch (room.Lifecycle)
             {
                 case RoomLifecycleState.Waiting:
-                    return $"{room.Members.Length} in the room, {BotsPhrase(room.BotCount)}. "
+                    int ready = 0;
+                    foreach (RoomMember member in room.Members) if (member != null && member.Ready) ready++;
+                    return $"{room.Members.Length} in the room, {ready} ready. "
                            + RoomSettingsChoice.Sentence(room.Settings) + " "
-                           + "The match starts when everybody is ready.";
+                           + "The match starts when everybody is ready, two players at least.";
                 case RoomLifecycleState.Starting:
                     return "Everybody is ready. Starting...";
                 case RoomLifecycleState.InMatch:
@@ -351,8 +581,5 @@ namespace Ironfront.Net.Unity.Client.Menu
             }
         }
 
-        /// <summary>The room's bots in the status line: the total and how it splits (protocol 13).</summary>
-        internal static string BotsPhrase(int bots)
-            => bots <= 0 ? "no bots" : $"{bots} bots ({bots / 2} per side)";
     }
 }

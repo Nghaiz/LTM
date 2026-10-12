@@ -806,6 +806,15 @@ namespace Ironfront.Net.Unity.EditorTools
             browserNote.alignment = TextAnchor.MiddleLeft;
             browserNote.color = Hex("8DA8BA");
 
+            // How many open rooms are listed and how many players they hold (owner's run of
+            // 2026-10-12, item 4): the screen writes it on every draw.
+            Text summary = Label(panel, "Summary", string.Empty, 14,
+                new Vector2(right - 260f, 278f), new Vector2(520f, 26f));
+            summary.alignment = TextAnchor.MiddleRight;
+            summary.fontStyle = FontStyle.Bold;
+            summary.color = CyanSoft;
+            summary.resizeTextForBestFit = false;
+
             // Labelled "master", never "ping": see MasterSession.MasterPingMs. A number with no
             // subject is the one thing this readout must not be.
             Text ping = Label(panel, "Ping", "master --", 16,
@@ -850,24 +859,15 @@ namespace Ironfront.Net.Unity.EditorTools
             if (roomHead != null) roomHead.GetComponent<Text>().text = "OPEN ROOMS";
 
             int rows = MenuRoomBrowserScreen.Rows;
-            var joins = new Object[rows];
-            var names = new Object[rows];
-            var maps = new Object[rows];
-            var players = new Object[rows];
-            var statuses = new Object[rows];
+            var openRows = new RoomRowParts[rows];
 
             for (int i = 0; i < rows; i++)
             {
                 float y = MenuRoomBrowserScreen.TableTop - 40f - (i * MenuRoomBrowserScreen.RowPitch);
-                (Button Join, Text Name, Text Map, Text Players, Text Status) row =
-                    MakeRoomRow(openTable, i, new Vector2(0f, y));
-
-                joins[i] = row.Join;
-                names[i] = row.Name;
-                maps[i] = row.Map;
-                players[i] = row.Players;
-                statuses[i] = row.Status;
+                openRows[i] = MakeRoomRow(openTable, i, new Vector2(0f, y));
             }
+
+            GameObject emptyState = BuildEmptyRooms(openTable, out Text emptyText);
 
             // YOUR MATCHES: matches this player left while they were still running, drawn above
             // the open rooms and only when there is one (the owner's rule, 2026-09-30: a player
@@ -897,26 +897,16 @@ namespace Ironfront.Net.Unity.EditorTools
             matchesNote.raycastTarget = false;
 
             int rejoinRows = MenuRoomBrowserScreen.RejoinRows;
-            var rejoinJoins = new Object[rejoinRows];
-            var rejoinNames = new Object[rejoinRows];
-            var rejoinMaps = new Object[rejoinRows];
-            var rejoinPlayers = new Object[rejoinRows];
-            var rejoinStatuses = new Object[rejoinRows];
+            var rejoinParts = new RoomRowParts[rejoinRows];
 
             for (int i = 0; i < rejoinRows; i++)
             {
                 float y = MenuRoomBrowserScreen.TableTop - 40f - (i * MenuRoomBrowserScreen.RowPitch);
-                (Button Join, Text Name, Text Map, Text Players, Text Status) row =
-                    MakeRoomRow(yourMatches, i, new Vector2(0f, y), "REJOIN", "primary");
+                RoomRowParts row = MakeRoomRow(yourMatches, i, new Vector2(0f, y), "REJOIN", "primary");
                 row.Join.transform.parent.name = "RejoinRow" + i;
                 row.Join.transform.parent.GetComponent<Image>().color = new Color(42f / 255f, 24f / 255f, 8f / 255f, 0.78f);
                 row.Status.color = Orange;
-
-                rejoinJoins[i] = row.Join;
-                rejoinNames[i] = row.Name;
-                rejoinMaps[i] = row.Map;
-                rejoinPlayers[i] = row.Players;
-                rejoinStatuses[i] = row.Status;
+                rejoinParts[i] = row;
             }
 
             yourMatches.SetActive(false);
@@ -924,6 +914,15 @@ namespace Ironfront.Net.Unity.EditorTools
             Text overflow = Label(
                 panel, "Overflow", string.Empty, 14, new Vector2(left + 260f, -250f), new Vector2(520f, 26f));
             overflow.alignment = TextAnchor.MiddleLeft;
+
+            // What the medal chip means, said once under the table rather than in every row.
+            Text legend = Label(panel, "MedalLegend",
+                "MEDALS: the highest achievement size a round in that room counts for, set by its LEAD BY or FIRST TO.",
+                12, new Vector2(left + 380f, -284f), new Vector2(760f, 22f));
+            legend.alignment = TextAnchor.MiddleLeft;
+            legend.color = Hex("6F8CA2");
+            legend.resizeTextForBestFit = false;
+            legend.raycastTarget = false;
 
             Button create = PackButton(panel, "CreateRoom", "CREATE ROOM",
                 new Vector2(right - 140f, -320f), new Vector2(280f, 50f), "primary", "icons/plus.png");
@@ -941,8 +940,12 @@ namespace Ironfront.Net.Unity.EditorTools
             MenuRoomBrowserScreen screen = panel.AddComponent<MenuRoomBrowserScreen>();
             var so = new SerializedObject(screen);
             Assign(so, "_controller", controller);
-            AssignRoomRows(so, "_rows", joins, names, maps, players, statuses);
-            AssignRoomRows(so, "_rejoinRows", rejoinJoins, rejoinNames, rejoinMaps, rejoinPlayers, rejoinStatuses);
+            AssignRoomRows(so, "_rows", openRows);
+            AssignRoomRows(so, "_rejoinRows", rejoinParts);
+            AssignArray(so, "_mapPictures", MapPictures());
+            Assign(so, "_summaryText", summary);
+            Assign(so, "_emptyState", emptyState);
+            Assign(so, "_emptyText", emptyText);
             Assign(so, "_rejoinSection", yourMatches);
             Assign(so, "_openRoomsTable", openTable.GetComponent<RectTransform>());
             Assign(so, "_searchField", search);
@@ -967,7 +970,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
             prompt.SetActive(false);
 
-            log.AppendLine("room browser: supplied pack, search, " + rows + " real-data rows.");
+            log.AppendLine("room browser: supplied pack, search, " + rows + " rows with map art and chips.");
             return panel;
         }
 
@@ -1538,54 +1541,105 @@ namespace Ironfront.Net.Unity.EditorTools
             Text heading = Label(panel, "Heading", string.Empty, 34,
                 new Vector2(lobbyContentLeft + 430f, 382f), new Vector2(860f, 52f));
             heading.alignment = TextAnchor.MiddleLeft;
+
+            // The room at a glance (owner's run of 2026-10-12, item 4): a chip per setting under
+            // its name, every one written from the master's push by RoomBadges.
+            float chipX = lobbyContentLeft;
+            Vector2 ChipAt(float width)
+            {
+                var centre = new Vector2(chipX + width * 0.5f, 338f);
+                chipX += width + 10f;
+                return centre;
+            }
+            const float chipHeight = 30f;
+
+            Chip(panel, "ModeChip", ChipAt(104f), new Vector2(104f, chipHeight), null, ChipInk, out Text modeChip, out _);
+            GameObject dayIcon = ChipIcon(modeChip, "DayIcon", "icons/sun.png", UiStyle.Gold);
+            GameObject nightIcon = ChipIcon(modeChip, "NightIcon", "icons/moon.png", Hex("A9B8FF"));
+            nightIcon.SetActive(false);
+            Chip(panel, "RuleChip", ChipAt(140f), new Vector2(140f, chipHeight), "icons/flag.png", ChipInk,
+                out Text ruleChip, out _);
+            Chip(panel, "BotsChip", ChipAt(196f), new Vector2(196f, chipHeight), "icons/bot.png", ChipInk,
+                out Text botsChip, out _);
+            AngularPanel medalFace = Chip(panel, "MedalChip", ChipAt(168f), new Vector2(168f, chipHeight),
+                "icons/achievements.png", UiStyle.Gold, out Text medalChip, out Image medalIcon);
+            medalIcon.color = Color.white;
+            Chip(panel, "PrivacyChip", ChipAt(118f), new Vector2(118f, chipHeight), null, ChipInk,
+                out Text privacyChip, out _);
+            GameObject lockIcon = ChipIcon(privacyChip, "LockIcon", "icons/lock.png", UiStyle.Amber);
+            lockIcon.SetActive(false);
+            Chip(panel, "SeatsChip", ChipAt(150f), new Vector2(150f, chipHeight), "icons/users.png", ChipInk,
+                out Text seatsChip, out _);
+
             Text status = Label(panel, "Status", string.Empty, 14,
-                new Vector2(lobbyContentLeft + 430f, 346f), new Vector2(860f, 30f));
+                new Vector2(lobbyContentLeft + 450f, 298f), new Vector2(900f, 26f));
             status.alignment = TextAnchor.MiddleLeft;
             status.color = Hex("8DA8BA");
 
-            Angular(panel, "TeamZeroCard", new Vector2(-420f, 100f), new Vector2(620f, 510f),
+            // The theatre: the room's map and mode as the create screen pictures them.
+            Image mapPicture = CoverArt(panel, "MapBanner", MapPictureChoice.AssetName(0),
+                new Vector2(569f, 352f), new Vector2(298f, 168f));
+            GameObject banner = mapPicture.transform.parent.gameObject;
+            Plain(banner, "Shade", new Vector2(0f, -56f), new Vector2(298f, 56f), new Color(0f, 0f, 0f, 0.6f));
+            Text theatre = Label(banner, "Kicker", "THEATRE", 10, new Vector2(-10f, -42f), new Vector2(258f, 14f));
+            theatre.alignment = TextAnchor.MiddleLeft;
+            theatre.fontStyle = FontStyle.Bold;
+            theatre.color = CyanSoft;
+            theatre.resizeTextForBestFit = false;
+            theatre.raycastTarget = false;
+            Text mapName = Label(banner, "MapName", string.Empty, 20, new Vector2(-10f, -62f), new Vector2(258f, 26f));
+            mapName.alignment = TextAnchor.MiddleLeft;
+            mapName.fontStyle = FontStyle.Bold;
+            mapName.color = Color.white;
+            mapName.resizeTextForBestFit = false;
+            mapName.raycastTarget = false;
+            Angular(panel, "MapBannerEdge", new Vector2(569f, 352f), new Vector2(298f, 168f), 0f, Color.clear,
+                AngularEdge.All, 1f, Line);
+
+            Angular(panel, "TeamZeroCard", new Vector2(-420f, 20f), new Vector2(620f, 470f),
                 CutCard, new Color(5f / 255f, 25f / 255f, 43f / 255f, 0.88f),
                 AngularEdge.All, 1f, Hex("3E87B7"));
-            Angular(panel, "TeamOneCard", new Vector2(420f, 100f), new Vector2(620f, 510f),
+            Angular(panel, "TeamOneCard", new Vector2(420f, 20f), new Vector2(620f, 470f),
                 CutCard, new Color(30f / 255f, 17f / 255f, 12f / 255f, 0.88f),
                 AngularEdge.All, 1f, Orange);
-            Text versus = Label(panel, "Versus", "VS", 28, new Vector2(0f, 115f),
-                new Vector2(100f, 100f));
+
+            // VS between the sides; the seconds left once everybody is ready; GO when it starts.
+            Text countdownCaption = Label(panel, "CountdownCaption", string.Empty, 13, new Vector2(0f, 96f),
+                new Vector2(200f, 22f));
+            countdownCaption.fontStyle = FontStyle.Bold;
+            countdownCaption.color = UiStyle.Amber;
+            countdownCaption.resizeTextForBestFit = false;
+            Text versus = Label(panel, "Versus", "VS", 44, new Vector2(0f, 52f), new Vector2(200f, 70f));
             versus.color = Orange;
             versus.fontStyle = FontStyle.Bold;
+            versus.resizeTextForBestFit = false;
 
             // NO colour is set on either heading or any row here. Both are written at runtime
             // from ITeamPalette (criterion 10); authoring one would be the second copy of the
             // team-colour mapping that contracts 6.3 exists to prevent.
             Text zeroHeading = Label(
-                panel, "TeamZeroHeading", "BLUE TEAM", 34, new Vector2(-420f, 310f), new Vector2(560f, 56f));
+                panel, "TeamZeroHeading", "BLUE TEAM", 30, new Vector2(-420f, 222f), new Vector2(560f, 44f));
             Text oneHeading = Label(
-                panel, "TeamOneHeading", "RED TEAM", 34, new Vector2(420f, 310f), new Vector2(560f, 56f));
+                panel, "TeamOneHeading", "RED TEAM", 30, new Vector2(420f, 222f), new Vector2(560f, 44f));
+            Text zeroCount = TeamCount(panel, "TeamZeroCount", new Vector2(-420f, 190f));
+            Text oneCount = TeamCount(panel, "TeamOneCount", new Vector2(420f, 190f));
 
             int perSide = MenuRoomLobbyScreen.RowsPerSide;
-            var zeroRows = new Object[perSide];
-            var oneRows = new Object[perSide];
-            var zeroReadyBadges = new Object[perSide];
-            var oneReadyBadges = new Object[perSide];
+            var zero = new RosterRowParts[perSide];
+            var one = new RosterRowParts[perSide];
 
             for (int i = 0; i < perSide; i++)
             {
-                float y = 250f - (i * 52f);
-                (Text Row, Image ReadyBadge) zero = RosterRow(
-                    panel, "TeamZeroRow" + i, new Vector2(-420f, y));
-                (Text Row, Image ReadyBadge) one = RosterRow(
-                    panel, "TeamOneRow" + i, new Vector2(420f, y));
-                zeroRows[i] = zero.Row;
-                oneRows[i] = one.Row;
-                zeroReadyBadges[i] = zero.ReadyBadge;
-                oneReadyBadges[i] = one.ReadyBadge;
+                float y = 150f - (i * 44f);
+                zero[i] = RosterRow(panel, "TeamZeroRow" + i, new Vector2(-420f, y));
+                one[i] = RosterRow(panel, "TeamOneRow" + i, new Vector2(420f, y));
             }
 
             Button switchSide = PackButton(panel, "SwitchSide", "SWITCH SIDE",
-                new Vector2(395f, -410f), new Vector2(200f, 50f), "secondary");
+                new Vector2(395f, -410f), new Vector2(200f, 50f), "secondary", "icons/refresh.png");
             Text switchLabel = switchSide.GetComponentInChildren<Text>(includeInactive: true);
             Button ready = PackButton(panel, "Ready", "READY UP",
-                new Vector2(615f, -410f), new Vector2(220f, 50f), "primary");
+                new Vector2(615f, -410f), new Vector2(220f, 50f), "primary", "icons/shield.png");
             Text readyLabel = ready.GetComponentInChildren<Text>(includeInactive: true);
             Button leave = PackButton(panel, "Leave", "LEAVE ROOM",
                 new Vector2(-600f, -410f), new Vector2(220f, 50f), "danger", "icons/leave.png");
@@ -1606,7 +1660,7 @@ namespace Ironfront.Net.Unity.EditorTools
             // SWITCH SIDE, the input covered LEAVE ROOM, and the log covered the top of the input.
             // Every one of those is a click the wrong control swallowed.
             Text chatLog = Label(
-                panel, "ChatLog", string.Empty, 22, new Vector2(0f, -235f), new Vector2(1400f, 100f));
+                panel, "ChatLog", string.Empty, 16, new Vector2(0f, -245f), new Vector2(1400f, 50f));
             chatLog.alignment = TextAnchor.LowerLeft;
             chatLog.resizeTextForBestFit = false;
 
@@ -1614,9 +1668,9 @@ namespace Ironfront.Net.Unity.EditorTools
             // or colour tag restyles the whole log for everyone in the room.
             chatLog.supportRichText = false;
 
-            FieldLabel(panel, "ROOM CHAT", new Vector2(-180f, -330f), new Vector2(560f, 52f));
+            FieldLabel(panel, "ROOM CHAT", new Vector2(-180f, -318f), new Vector2(560f, 48f));
             InputField chatField = PackField(panel, "ChatInput", "Say something to the room",
-                new Vector2(-180f, -330f), new Vector2(560f, 52f), password: false,
+                new Vector2(-180f, -318f), new Vector2(560f, 48f), password: false,
                 iconAsset: "icons/chevron.png");
 
             // The master's own limit, so the field cannot accept a line the master will refuse.
@@ -1626,11 +1680,11 @@ namespace Ironfront.Net.Unity.EditorTools
             // constant rather than typed here: two places holding one number is how they drift.
             chatField.characterLimit = MspChatLimits.MaxTextCharacters;
             Button chatSend = PackButton(
-                panel, "ChatSend", "SEND", new Vector2(280f, -330f), new Vector2(200f, 52f),
+                panel, "ChatSend", "SEND", new Vector2(280f, -318f), new Vector2(200f, 48f),
                 "secondary");
 
             Text error = Label(
-                panel, "Error", string.Empty, 20, new Vector2(0f, -380f), new Vector2(1400f, 28f));
+                panel, "Error", string.Empty, 18, new Vector2(0f, -360f), new Vector2(1400f, 26f));
             error.color = ErrorInk;
 
             MenuRoomLobbyScreen screen = panel.AddComponent<MenuRoomLobbyScreen>();
@@ -1638,10 +1692,10 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_controller", controller);
             Assign(so, "_teamZeroHeading", zeroHeading);
             Assign(so, "_teamOneHeading", oneHeading);
-            AssignArray(so, "_teamZeroRows", zeroRows);
-            AssignArray(so, "_teamOneRows", oneRows);
-            AssignArray(so, "_teamZeroReadyBadges", zeroReadyBadges);
-            AssignArray(so, "_teamOneReadyBadges", oneReadyBadges);
+            AssignRoster(so, "_teamZero", zero);
+            AssignRoster(so, "_teamOne", one);
+            Assign(so, "_teamZeroCount", zeroCount);
+            Assign(so, "_teamOneCount", oneCount);
             Assign(so, "_switchSideButton", switchSide);
             Assign(so, "_switchSideLabel", switchLabel);
             Assign(so, "_readyButton", ready);
@@ -1654,25 +1708,115 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_chatField", chatField);
             Assign(so, "_chatSendButton", chatSend);
             Assign(so, "_guideHint", howTo);
+            Assign(so, "_mapPicture", mapPicture);
+            AssignArray(so, "_mapPictures", MapPictures());
+            Assign(so, "_mapName", mapName);
+            Assign(so, "_modeChip", modeChip);
+            Assign(so, "_dayIcon", dayIcon);
+            Assign(so, "_nightIcon", nightIcon);
+            Assign(so, "_ruleChip", ruleChip);
+            Assign(so, "_botsChip", botsChip);
+            Assign(so, "_medalChip", medalChip);
+            Assign(so, "_medalFace", medalFace);
+            Assign(so, "_privacyChip", privacyChip);
+            Assign(so, "_lockIcon", lockIcon);
+            Assign(so, "_seatsChip", seatsChip);
+            Assign(so, "_versusText", versus);
+            Assign(so, "_countdownCaption", countdownCaption);
             so.ApplyModifiedPropertiesWithoutUndo();
             ConfigureKeyboard(panel,
                 new Selectable[] { switchSide, ready, chatField, chatSend, leave }, ready, leave);
 
-            log.AppendLine("room lobby: " + perSide + " rows per side, colours left to ITeamPalette.");
+            log.AppendLine("room lobby: " + perSide + " rows per side, room chips and countdown, colours left to ITeamPalette.");
             return panel;
         }
 
-        /// <summary>One roster line. Left-aligned and fixed-size, so names do not jump about.</summary>
-        private static (Text Row, Image ReadyBadge) RosterRow(
-            GameObject parent, string name, Vector2 position)
+        /// <summary>A side's "members/seats · ready" line under its name.</summary>
+        private static Text TeamCount(GameObject panel, string name, Vector2 position)
         {
-            Text row = Label(parent, name, string.Empty, 28, position, new Vector2(560f, 46f));
-            row.alignment = TextAnchor.MiddleLeft;
-            row.resizeTextForBestFit = false;
-            Image ready = Icon(parent, name + "ReadyBadge", "badges/ready.png",
-                position + new Vector2(235f, 0f), new Vector2(66f, 22f));
-            ready.gameObject.SetActive(false);
-            return (row, ready);
+            Text count = Label(panel, name, string.Empty, 13, position, new Vector2(560f, 22f));
+            count.fontStyle = FontStyle.Bold;
+            count.color = Hex("8DA8BA");
+            count.resizeTextForBestFit = false;
+            count.raycastTarget = false;
+            return count;
+        }
+
+        /// <summary>Every piece of one roster row the waiting room writes to.</summary>
+        private sealed class RosterRowParts
+        {
+            public Text Name;
+            public Image Ready;
+            public Image Host;
+            public GameObject You;
+            public Image Slot;
+            public Image Stripe;
+        }
+
+        /// <summary>
+        /// One roster row: a plate, the side's edge, the player's icon and name, and the YOU, HOST
+        /// and READY marks. Left-aligned and fixed-size, so names do not jump about.
+        /// </summary>
+        private static RosterRowParts RosterRow(GameObject parent, string name, Vector2 position)
+        {
+            var parts = new RosterRowParts();
+            parts.Slot = Plain(parent, name + "Slot", position, new Vector2(560f, 38f), new Color(1f, 1f, 1f, 0.025f));
+            GameObject slot = parts.Slot.gameObject;
+
+            parts.Stripe = Plain(slot, "Stripe", new Vector2(-277.5f, 0f), new Vector2(5f, 38f), Color.white);
+            parts.Stripe.gameObject.SetActive(false);
+
+            Image user = Icon(slot, "Icon", "icons/user.png", new Vector2(-252f, 0f), new Vector2(18f, 18f));
+            user.color = Hex("6F8CA2");
+
+            parts.Name = Label(slot, name, string.Empty, 22, new Vector2(-92f, 0f), new Vector2(300f, 36f));
+            parts.Name.alignment = TextAnchor.MiddleLeft;
+            parts.Name.resizeTextForBestFit = false;
+
+            AngularPanel you = Angular(slot, "YouTag", new Vector2(98f, 0f), new Vector2(44f, 20f), 4f, Orange,
+                AngularEdge.All, 0f, Color.clear);
+            Text youText = Label(you.gameObject, "Text", "YOU", 11, Vector2.zero, new Vector2(44f, 20f));
+            youText.fontStyle = FontStyle.Bold;
+            youText.color = Ink900;
+            youText.resizeTextForBestFit = false;
+            youText.raycastTarget = false;
+            parts.You = you.gameObject;
+            parts.You.SetActive(false);
+
+            parts.Host = Icon(slot, "HostBadge", "badges/host.png", new Vector2(166f, 0f), new Vector2(72f, 18f));
+            parts.Host.gameObject.SetActive(false);
+            parts.Ready = Icon(slot, "ReadyBadge", "badges/ready.png", new Vector2(240f, 0f), new Vector2(72f, 18f));
+            parts.Ready.gameObject.SetActive(false);
+            return parts;
+        }
+
+        /// <summary>
+        /// Writes one side's rows into the screen's parallel arrays: the names and READY badges
+        /// the wiring gate grades, and the plates, edges, HOST badges and YOU tags beside them.
+        /// </summary>
+        private static void AssignRoster(SerializedObject so, string side, RosterRowParts[] rows)
+        {
+            var names = new Object[rows.Length];
+            var ready = new Object[rows.Length];
+            var host = new Object[rows.Length];
+            var you = new Object[rows.Length];
+            var slots = new Object[rows.Length];
+            var stripes = new Object[rows.Length];
+            for (int i = 0; i < rows.Length; i++)
+            {
+                names[i] = rows[i].Name;
+                ready[i] = rows[i].Ready;
+                host[i] = rows[i].Host;
+                you[i] = rows[i].You;
+                slots[i] = rows[i].Slot;
+                stripes[i] = rows[i].Stripe;
+            }
+            AssignArray(so, side + "Rows", names);
+            AssignArray(so, side + "ReadyBadges", ready);
+            AssignArray(so, side + "HostBadges", host);
+            AssignArray(so, side + "YouTags", you);
+            AssignArray(so, side + "Slots", slots);
+            AssignArray(so, side + "Stripes", stripes);
         }
 
         private static GameObject BuildPracticeBackBar(GameObject root, out Button backButton)
@@ -2302,23 +2446,24 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         /// <summary>
-        /// The column widths of the room table, as fractions of the row, and where each column's
-        /// centre falls.
+        /// The room table's columns: where each heading starts. The row cells below line up on
+        /// the same edges (owner's run of 2026-10-12, item 4: a thumbnail, the name and map, a chip
+        /// per setting, the seats and the status).
         /// </summary>
-        /// <remarks>
-        /// The prototype's <c>grid-template-columns: 1.55fr 1.25fr .7fr .62fr .65fr .7fr</c> has six
-        /// columns; this table has four plus the join button, because MODE and PING have no source
-        /// in the room protocol — see <c>MenuRoomBrowserScreen.RoomRow</c>. The name column keeps the
-        /// prototype's emphasis as the widest, and the two narrow numeric columns stay narrow so the
-        /// eye can compare them down the list, which is the whole reason a table is a table.
-        /// </remarks>
-        private static readonly (string Title, float Width, float Centre)[] RoomColumns =
+        private static readonly (string Title, float Left)[] RoomColumns =
         {
-            ("ROOM", 476f, -462f),
-            ("MAP", 392f, -28f),
-            ("PLAYERS", 196f, 266f),
-            ("STATUS", 196f, 462f),
+            ("ROOM", -614f),
+            ("MAP", -376f),
+            ("MODE  ·  RULE  ·  BOTS", -270f),
+            ("MEDALS", 66f),
+            ("PLAYERS", 280f),
+            ("STATUS", 400f),
         };
+
+        /// <summary>The chips' plate and edge, and the ink of a plain chip.</summary>
+        private static readonly Color ChipFace = new Color(10f / 255f, 30f / 255f, 46f / 255f, 0.92f);
+        private static readonly Color ChipEdge = new Color(113f / 255f, 179f / 255f, 226f / 255f, 0.30f);
+        private static readonly Color ChipInk = Hex("B9D3E6");
 
         /// <summary>The <c>.room-row--head</c> strip: same columns, read once.</summary>
         private static void RoomTableHeader(GameObject parent, Vector2 position)
@@ -2329,10 +2474,12 @@ namespace Ironfront.Net.Unity.EditorTools
                 0f, Hex("0B2133"), AngularEdge.All, 0f, Color.clear);
             header.raycastTarget = false;
 
-            foreach ((string title, _, float centre) in RoomColumns)
+            foreach ((string title, float leftEdge) in RoomColumns)
             {
-                Text cell = Label(header.gameObject, "Head" + title, title, 12,
-                    new Vector2(centre, 0f), new Vector2(180f, 24f));
+                // "HeadROOM" is the name the browser rewrites to OPEN ROOMS; the others are read once.
+                string name = "Head" + title.Split(' ')[0];
+                Text cell = Label(header.gameObject, name, title, 12,
+                    new Vector2(leftEdge + 150f, 0f), new Vector2(300f, 24f));
                 cell.alignment = TextAnchor.MiddleLeft;
                 cell.fontStyle = FontStyle.Bold;
                 cell.color = Hex("82A8C2");
@@ -2346,18 +2493,41 @@ namespace Ironfront.Net.Unity.EditorTools
             joinHead.raycastTarget = false;
         }
 
+        /// <summary>Every piece of one room row the screen writes to.</summary>
+        private sealed class RoomRowParts
+        {
+            public Button Join;
+            public Text Name;
+            public Text Map;
+            public Text Players;
+            public Text Status;
+            public Image Thumb;
+            public Text Mode;
+            public GameObject DayIcon;
+            public GameObject NightIcon;
+            public Text Rule;
+            public Text Bots;
+            public Text Medal;
+            public Graphic MedalFace;
+            public GameObject Lock;
+            public Image SeatsFill;
+            public Image StatusDot;
+        }
+
         /// <summary>
-        /// One room row: four cells and a join button, on the prototype's <c>.room-row</c>.
+        /// One room row: the map's picture, the name and map, a chip per setting, the seats with a
+        /// bar under them, the status with its dot, and the join button.
         /// </summary>
         /// <remarks>
         /// The row is a numbered <c>Row{i}</c> object that the screen activates and deactivates whole,
         /// so an unused row costs nothing and no cell can outlive its row.
         /// </remarks>
-        private static (Button Join, Text Name, Text Map, Text Players, Text Status) MakeRoomRow(
+        private static RoomRowParts MakeRoomRow(
             GameObject parent, int index, Vector2 position, string joinCaption = "JOIN",
             string joinKind = "command")
         {
             const float rowWidth = 1400f;
+            var parts = new RoomRowParts();
 
             var go = new GameObject("Row" + index, typeof(RectTransform), typeof(Image));
             go.transform.SetParent(parent.transform, worldPositionStays: false);
@@ -2367,28 +2537,135 @@ namespace Ironfront.Net.Unity.EditorTools
             image.color = new Color(4f / 255f, 15f / 255f, 26f / 255f, 0.55f);
             image.raycastTarget = false;
 
-            Text[] cells = new Text[RoomColumns.Length];
-            for (int i = 0; i < RoomColumns.Length; i++)
-            {
-                Text cell = Label(go, "Cell" + RoomColumns[i].Title, string.Empty, 15,
-                    new Vector2(RoomColumns[i].Centre, 0f),
-                    new Vector2(RoomColumns[i].Width - 20f, 38f));
-                cell.alignment = TextAnchor.MiddleLeft;
-                cell.resizeTextForBestFit = false;
-                cell.raycastTarget = false;
-                cells[i] = cell;
-            }
+            // The map's picture, cropped like the create screen's card: the screen swaps it for the
+            // room's map and mode.
+            parts.Thumb = CoverArt(go, "Thumb", MapPictureChoice.AssetName(0), new Vector2(-664f, 0f), new Vector2(64f, 36f));
 
-            // The name is what the eye lands on, so it is the one cell the prototype bolds and
-            // brightens; the rest are read second.
-            cells[0].fontStyle = FontStyle.Bold;
-            cells[0].color = Hex("EAF6FF");
-            for (int i = 1; i < cells.Length; i++) cells[i].color = Hex("9DBAD0");
+            parts.Name = RowText(go, "CellROOM", -614f, 228f, 15);
+            parts.Name.fontStyle = FontStyle.Bold;
+            parts.Name.color = Hex("EAF6FF");
+            parts.Map = RowText(go, "CellMAP", -376f, 100f, 13);
+            parts.Map.color = Hex("9DBAD0");
 
-            Button join = PackButton(go, "JoinButton", joinCaption, new Vector2(632f, 0f),
+            Chip(go, "ModeChip", new Vector2(-224f, 0f), new Vector2(92f, 24f), null, ChipInk, out parts.Mode, out _);
+            parts.DayIcon = ChipIcon(parts.Mode, "DayIcon", "icons/sun.png", UiStyle.Gold);
+            parts.NightIcon = ChipIcon(parts.Mode, "NightIcon", "icons/moon.png", Hex("A9B8FF"));
+            parts.NightIcon.SetActive(false);
+            Chip(go, "RuleChip", new Vector2(-110f, 0f), new Vector2(120f, 24f), "icons/flag.png", ChipInk, out parts.Rule, out _);
+            Chip(go, "BotsChip", new Vector2(8f, 0f), new Vector2(100f, 24f), "icons/bot.png", ChipInk, out parts.Bots, out _);
+            parts.MedalFace = Chip(go, "MedalChip", new Vector2(121f, 0f), new Vector2(110f, 24f), "icons/achievements.png", UiStyle.Gold,
+                out parts.Medal, out Image medalIcon);
+            medalIcon.color = Color.white;
+            AngularPanel lockChip = Chip(go, "LockChip", new Vector2(226f, 0f), new Vector2(84f, 24f), "icons/lock.png", UiStyle.Amber,
+                out Text lockText, out _);
+            lockText.text = "PRIVATE";
+            parts.Lock = lockChip.gameObject;
+            parts.Lock.SetActive(false);
+
+            parts.Players = RowText(go, "CellPLAYERS", 280f, 90f, 15, 7f);
+            parts.Players.fontStyle = FontStyle.Bold;
+            parts.Players.color = Hex("EAF6FF");
+            Plain(go, "SeatsTrack", new Vector2(318f, -11f), new Vector2(76f, 4f), new Color(1f, 1f, 1f, 0.12f));
+            parts.SeatsFill = Plain(go, "SeatsFill", new Vector2(318f, -11f), new Vector2(76f, 4f), Green);
+            parts.SeatsFill.type = Image.Type.Filled;
+            parts.SeatsFill.fillMethod = Image.FillMethod.Horizontal;
+            parts.SeatsFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            parts.SeatsFill.fillAmount = 0f;
+
+            AngularPanel status = Angular(go, "StatusChip", new Vector2(470f, 0f), new Vector2(140f, 24f), 6f, ChipFace,
+                AngularEdge.All, 1f, ChipEdge);
+            parts.StatusDot = Plain(status.gameObject, "Dot", new Vector2(-56f, 0f), new Vector2(8f, 8f), Green);
+            parts.Status = Label(status.gameObject, "CellSTATUS", string.Empty, 12, new Vector2(10f, 0f), new Vector2(108f, 24f));
+            parts.Status.alignment = TextAnchor.MiddleLeft;
+            parts.Status.fontStyle = FontStyle.Bold;
+            parts.Status.resizeTextForBestFit = false;
+            parts.Status.raycastTarget = false;
+
+            parts.Join = PackButton(go, "JoinButton", joinCaption, new Vector2(632f, 0f),
                 new Vector2(130f, 34f), joinKind);
 
-            return (join, cells[0], cells[1], cells[2], cells[3]);
+            return parts;
+        }
+
+        /// <summary>A left-aligned cell of a room row, from its left edge.</summary>
+        private static Text RowText(GameObject row, string name, float leftEdge, float width, int size, float y = 0f)
+        {
+            Text cell = Label(row, name, string.Empty, size,
+                new Vector2(leftEdge + width * 0.5f, y), new Vector2(width, y == 0f ? 38f : 20f));
+            cell.alignment = TextAnchor.MiddleLeft;
+            cell.resizeTextForBestFit = false;
+            cell.raycastTarget = false;
+            return cell;
+        }
+
+        /// <summary>
+        /// A chip: a small cut plate with an optional icon and a bold word, the browser's and the
+        /// waiting room's one shape for a room setting.
+        /// </summary>
+        private static AngularPanel Chip(GameObject parent, string name, Vector2 position, Vector2 size,
+            string iconAsset, Color ink, out Text text, out Image icon)
+        {
+            AngularPanel face = Angular(parent, name, position, size, 6f, ChipFace, AngularEdge.All, 1f, ChipEdge);
+            float iconSize = Mathf.Round(size.y * 0.6f);
+            float textLeft = 8f + iconSize + 5f;
+
+            icon = null;
+            if (iconAsset != null)
+            {
+                icon = Icon(face.gameObject, "Icon", iconAsset,
+                    new Vector2(-size.x * 0.5f + 8f + iconSize * 0.5f, 0f), new Vector2(iconSize, iconSize));
+                icon.color = ink;
+            }
+
+            int fontSize = size.y >= 30f ? 13 : 11;
+            text = Label(face.gameObject, "Text", string.Empty, fontSize,
+                new Vector2(textLeft * 0.5f - 4f, 0f), new Vector2(size.x - textLeft - 4f, size.y));
+            text.alignment = TextAnchor.MiddleLeft;
+            text.fontStyle = FontStyle.Bold;
+            text.color = ink;
+            text.resizeTextForBestFit = false;
+            text.raycastTarget = false;
+            return face;
+        }
+
+        /// <summary>An extra icon in a chip's icon slot, for a chip whose icon changes (sun or moon).</summary>
+        private static GameObject ChipIcon(Text chipText, string name, string asset, Color colour)
+        {
+            RectTransform face = (RectTransform)chipText.transform.parent;
+            Vector2 size = face.sizeDelta;
+            float iconSize = Mathf.Round(size.y * 0.6f);
+            Image icon = Icon(face.gameObject, name, asset,
+                new Vector2(-size.x * 0.5f + 8f + iconSize * 0.5f, 0f), new Vector2(iconSize, iconSize));
+            icon.color = colour;
+            return icon.gameObject;
+        }
+
+        /// <summary>
+        /// The table's empty state: shown in place of the rows when no open room is listed, so an
+        /// empty list reads as "nobody is hosting" rather than as a screen that failed to load.
+        /// </summary>
+        private static GameObject BuildEmptyRooms(GameObject table, out Text body)
+        {
+            var empty = new GameObject("EmptyState", typeof(RectTransform));
+            empty.transform.SetParent(table.transform, worldPositionStays: false);
+            Centre(empty.GetComponent<RectTransform>(), new Vector2(0f, -30f), new Vector2(1400f, 240f));
+
+            Image icon = Icon(empty, "Icon", "icons/users.png", new Vector2(0f, 46f), new Vector2(56f, 56f));
+            icon.color = Hex("4F7A99");
+
+            Text title = Label(empty, "Title", "NO OPEN ROOMS", 20, new Vector2(0f, -8f), new Vector2(900f, 30f));
+            title.fontStyle = FontStyle.Bold;
+            title.color = Hex("B9D3E6");
+            title.resizeTextForBestFit = false;
+            title.raycastTarget = false;
+
+            body = Label(empty, "Body", string.Empty, 14, new Vector2(0f, -40f), new Vector2(900f, 26f));
+            body.color = Hex("8DA8BA");
+            body.resizeTextForBestFit = false;
+            body.raycastTarget = false;
+
+            empty.SetActive(false);
+            return empty;
         }
 
         /// <summary>
@@ -2396,12 +2673,11 @@ namespace Ironfront.Net.Unity.EditorTools
         /// </summary>
         /// <remarks>
         /// <see cref="AssignArray"/> cannot do this: it writes object references into an array of
-        /// references, whereas a row is a struct whose cells are five separate fields. The array has
-        /// to be resized and each element's children written by name — and a name that has drifted
+        /// references, whereas a row is a struct whose cells are separate fields. The array has to
+        /// be resized and each element's children written by name -- and a name that has drifted
         /// from the component is reported here rather than silently leaving a cell empty.
         /// </remarks>
-        private static void AssignRoomRows(SerializedObject so, string field,
-            Object[] joins, Object[] names, Object[] maps, Object[] players, Object[] statuses)
+        private static void AssignRoomRows(SerializedObject so, string field, RoomRowParts[] rows)
         {
             SerializedProperty array = so.FindProperty(field);
             if (array == null || !array.isArray)
@@ -2410,15 +2686,27 @@ namespace Ironfront.Net.Unity.EditorTools
                     "'. The builder and the component have drifted; fix the builder rather than " +
                     "assigning by hand.");
 
-            array.arraySize = joins.Length;
-            for (int i = 0; i < joins.Length; i++)
+            array.arraySize = rows.Length;
+            for (int i = 0; i < rows.Length; i++)
             {
                 SerializedProperty element = array.GetArrayElementAtIndex(i);
-                Relative(element, "Join").objectReferenceValue = joins[i];
-                Relative(element, "Name").objectReferenceValue = names[i];
-                Relative(element, "Map").objectReferenceValue = maps[i];
-                Relative(element, "Players").objectReferenceValue = players[i];
-                Relative(element, "Status").objectReferenceValue = statuses[i];
+                RoomRowParts row = rows[i];
+                Relative(element, "Join").objectReferenceValue = row.Join;
+                Relative(element, "Name").objectReferenceValue = row.Name;
+                Relative(element, "Map").objectReferenceValue = row.Map;
+                Relative(element, "Players").objectReferenceValue = row.Players;
+                Relative(element, "Status").objectReferenceValue = row.Status;
+                Relative(element, "Thumb").objectReferenceValue = row.Thumb;
+                Relative(element, "Mode").objectReferenceValue = row.Mode;
+                Relative(element, "DayIcon").objectReferenceValue = row.DayIcon;
+                Relative(element, "NightIcon").objectReferenceValue = row.NightIcon;
+                Relative(element, "Rule").objectReferenceValue = row.Rule;
+                Relative(element, "Bots").objectReferenceValue = row.Bots;
+                Relative(element, "Medal").objectReferenceValue = row.Medal;
+                Relative(element, "MedalFace").objectReferenceValue = row.MedalFace;
+                Relative(element, "Lock").objectReferenceValue = row.Lock;
+                Relative(element, "SeatsFill").objectReferenceValue = row.SeatsFill;
+                Relative(element, "StatusDot").objectReferenceValue = row.StatusDot;
             }
         }
 
