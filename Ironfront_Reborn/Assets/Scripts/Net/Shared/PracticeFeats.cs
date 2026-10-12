@@ -41,8 +41,12 @@ namespace Ironfront.Net.Unity
         public int AlliedBots => PlayerTeam == 1 ? Team1Bots : Team0Bots;
         public int EnemyBots => PlayerTeam == 1 ? Team0Bots : Team1Bots;
 
-        /// <summary>The default rule or a harder one: LEAD BY 200 or more, FIRST TO 500 or more.</summary>
-        public bool HardRule => Rule == VictoryRule.Target ? VictoryPoints >= 500 : VictoryPoints >= 200;
+        /// <summary>
+        /// Whether the round is of <paramref name="size"/> or bigger: its LEAD BY or FIRST TO at
+        /// least the size's points (<see cref="CareerRules.MarginPoints"/>), the rule every round
+        /// achievement uses instead of minutes since the owner's run of 2026-10-12.
+        /// </summary>
+        public bool IsRoundOf(AchievementTier size) => CareerRules.IsRoundOf(size, Rule, VictoryPoints);
     }
 
     /// <summary>
@@ -59,9 +63,9 @@ namespace Ironfront.Net.Unity
     /// this assembly and not the client's.
     /// </para>
     /// <para>
-    /// <b>The rules are the catalogue's descriptions.</b> A round counts for "finish" and "win" after
-    /// <see cref="CareerRules.QualifyingSeconds"/> of play, as online. Raised more than once is
-    /// fine: the ledger keeps a set.
+    /// <b>The rules are the catalogue's descriptions.</b> A round counts for "finish" and "win" when
+    /// it is big enough for the achievement's size (<see cref="PracticeMatch.IsRoundOf"/>), as
+    /// online; there are no minute limits. Raised more than once is fine: the ledger keeps a set.
     /// </para>
     /// <para>The ids are <c>AchievementCatalog</c>'s; a test pins that they are exactly its practice ones.</para>
     /// </remarks>
@@ -97,7 +101,6 @@ namespace Ironfront.Net.Unity
 
         private static PracticeMatch _match;
         private static bool _running;
-        private static float _startedAt;
         private static int _kills;
         private static int _lifeKills;
         private static int _boatKills;
@@ -120,7 +123,6 @@ namespace Ironfront.Net.Unity
         {
             _match = match;
             _running = true;
-            _startedAt = now;
             _kills = 0;
             _lifeKills = 0;
             _boatKills = 0;
@@ -203,7 +205,7 @@ namespace Ironfront.Net.Unity
             _running = false;
             try
             {
-                Judge(playerWon, playerKey, now);
+                Judge(playerWon, playerKey);
             }
             finally
             {
@@ -213,29 +215,34 @@ namespace Ironfront.Net.Unity
             }
         }
 
-        private static void Judge(bool playerWon, int playerKey, float now)
+        private static void Judge(bool playerWon, int playerKey)
         {
-            if (now - _startedAt < CareerRules.QualifyingSeconds) return;
-
-            if (_match.MapId >= 1 && _match.MapId <= 3) Or(CareerStat.PrMapsFinished, 1L << _match.MapId);
+            // No minute limits (owner's run of 2026-10-12): a round counts when its LEAD BY or FIRST
+            // TO is at least the size each achievement asks. Offline the player is always in the
+            // round from its start, so the late-joiner rule has nothing to judge here.
+            if (_match.IsRoundOf(AchievementTier.Bronze) && _match.MapId >= 1 && _match.MapId <= 3)
+                Or(CareerStat.PrMapsFinished, 1L << _match.MapId);
             if (Has(CareerStat.PrMapsFinished, (1L << Dustbowl) | (1L << Island) | (1L << ForestLake))) Raise(Cadet);
             if (!playerWon) return;
 
-            Or(CareerStat.PrSidesWon, 1L << (_match.PlayerTeam == 1 ? 1 : 0));
+            if (_match.IsRoundOf(AchievementTier.Bronze)) Or(CareerStat.PrSidesWon, 1L << (_match.PlayerTeam == 1 ? 1 : 0));
             if (Has(CareerStat.PrSidesWon, 3)) Raise(Turncoat);
 
-            if (_match.Rule == VictoryRule.Target && _kills >= 30) Raise(FirstPastThePost);
-            if (!_match.Vehicles && _match.Bots >= 50 && MostKills(playerKey)) Raise(BootsOnly);
-            if (_match.Night && _match.Bots >= 50 && !_nightVisionUsed) Raise(GraveyardShift);
-            // Under any rule: a side scores a kill times the flags it holds, so a lone soldier who
-            // holds one or two flags against twenty bots never reaches a 200-point lead (owner's
-            // run of 2026-10-10: "is one against twenty even possible?").
-            if (_match.AlliedBots == 0 && _match.EnemyBots >= 20) Raise(DrillSergeant);
+            if (_match.Rule == VictoryRule.Target && _match.VictoryPoints >= CareerRules.TargetPoints(AchievementTier.Silver)
+                && _kills >= 30) Raise(FirstPastThePost);
+            if (_match.IsRoundOf(AchievementTier.Silver) && !_match.Vehicles && _match.Bots >= 50 && MostKills(playerKey))
+                Raise(BootsOnly);
+            if (_match.IsRoundOf(AchievementTier.Gold) && _match.Night && _match.Bots >= 50 && !_nightVisionUsed)
+                Raise(GraveyardShift);
+            // Bronze size, not its own Platinum (owner, 2026-10-12: "a threshold that keeps it
+            // feasible"): a side scores a kill times the flags it holds, so a lone soldier holding
+            // one or two flags against twenty bots needs 100 to 200 kills for a 200-point lead.
+            if (_match.IsRoundOf(AchievementTier.Bronze) && _match.AlliedBots == 0 && _match.EnemyBots >= 20)
+                Raise(DrillSergeant);
 
-            if (_match.HardRule && _match.MapId >= 1 && _match.MapId <= 3)
+            if (_match.IsRoundOf(AchievementTier.Platinum) && _match.MapId >= 1 && _match.MapId <= 3)
                 Or(CareerStat.PrGrandTour, 1L << (2 * (_match.MapId - 1) + (_match.Rule == VictoryRule.Target ? 1 : 0)));
-            // "...and win a Night Mode practice round": under any rule, unlike the six map wins.
-            if (_match.Night) Or(CareerStat.PrGrandTour, 1L << 6);
+            if (_match.IsRoundOf(AchievementTier.Platinum) && _match.Night) Or(CareerStat.PrGrandTour, 1L << 6);
             if (Has(CareerStat.PrGrandTour, 0x7F)) Raise(GrandTour);
         }
 

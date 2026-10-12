@@ -64,10 +64,13 @@ namespace Ironfront.Net.Protocol.Achievements
         BestMultiKill,
         HeadshotRun,
 
-        // ---- rounds that count (present at the end, 5 minutes played)
+        // ---- rounds that count: present at the end, in the round before anyone scored, and the
+        //      room's LEAD BY / FIRST TO at least the size the achievement asks (CareerRules)
         RoundsFinished,
         NightRoundsFinished,
         RoundsWon,
+        /// <summary>LONG CAMPAIGN's wins: rounds of Gold size (LEAD BY 150 / FIRST TO 400) or bigger.</summary>
+        GoldRoundsWon,
         WinsDustbowl,
         WinsIsland,
         WinsForestLake,

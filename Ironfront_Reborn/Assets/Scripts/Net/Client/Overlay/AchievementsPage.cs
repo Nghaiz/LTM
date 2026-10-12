@@ -91,7 +91,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
         public override OverlayPage Page => OverlayPage.Achievements;
         public override string Title => "ACHIEVEMENTS";
         public override string Kicker => "SERVICE RECORD // HONORS AND FEATS";
-        public override string Subtitle => "Eighty to earn online and in practice, Bronze to Mythic. A round counts when you play at least 5 minutes of it.";
+        public override string Subtitle => "Eighty to earn online and in practice, Bronze to Mythic. Rounds count by the room's points, not minutes: each one names the LEAD BY or FIRST TO it needs.";
         public override string IconName => "medal";
 
         public override void Build(RectTransform content, RectTransform actions)
