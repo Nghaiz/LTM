@@ -1065,6 +1065,19 @@ namespace Ironfront.Net.Unity.Bindings
             return true;
         }
 
+        public bool SwingCarriedMelee(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            if (_actor == null) return false;
+            if (!(_actor.activeWeapon is MeleeWeapon melee)) return false;
+
+            melee.SwingApprovedByServer(
+                new Vector3(originX, originY, originZ),
+                new Vector3(directionX, directionY, directionZ));
+            return true;
+        }
+
         public void SteerCarriedWeapon(
             float eyeX, float eyeY, float eyeZ,
             float forwardX, float forwardY, float forwardZ,

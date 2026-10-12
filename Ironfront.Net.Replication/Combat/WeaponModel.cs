@@ -40,6 +40,19 @@ namespace Ironfront.Net.Replication.Combat
         /// position is unaffected either way.
         /// </remarks>
         Projectile = 1,
+
+        /// <summary>
+        /// A swing resolved by the ENGINE's own melee code on the server body: the WRENCH.
+        /// </summary>
+        /// <remarks>
+        /// The authority approves the swing (cooldown, holster, one per press) and the engine's
+        /// <c>MeleeWeapon</c> deals it along the player's aim, as offline: the damage, the
+        /// knock-down and the wrench's vehicle repair all stay the original game's numbers on the
+        /// prefab. Before the owner's run of 2026-10-12 the wrench carried the inert config, so a
+        /// networked player's swing was refused for want of ammo and the wrench neither hurt nor
+        /// repaired anything online.
+        /// </remarks>
+        Melee = 2,
     }
 
     /// <summary>

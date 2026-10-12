@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class MeleeWeapon : Weapon
@@ -36,11 +37,53 @@ public class MeleeWeapon : Weapon
 		ShootMeleeRay();
 	}
 
-	protected virtual void ShootMeleeRay()
+	protected void ShootMeleeRay()
 	{
-		Ray ray = new Ray(configuration.muzzle.position, configuration.muzzle.forward);
+		ShootMeleeRay(new Ray(configuration.muzzle.position, configuration.muzzle.forward));
+	}
+
+	/// <summary>
+	/// Deals a swing the server has approved for a networked player (owner's run of 2026-10-12):
+	/// at once, from the player's eye along the player's aim, which the server supplies because a
+	/// server-side body's muzzle hangs in a bind pose. The client plays the swing itself. Before this
+	/// the server never dealt a networked player's swing, so the wrench neither hurt nor repaired
+	/// anything online.
+	/// </summary>
+	public void SwingApprovedByServer(Vector3 eye, Vector3 aim)
+	{
+		lastFired = Time.time;
+		ShootMeleeRay(new Ray(eye, aim.sqrMagnitude > 0f ? aim.normalized : Vector3.forward));
+	}
+
+	private static readonly RaycastHit[] _swingHits = new RaycastHit[16];
+
+	private static readonly IComparer<RaycastHit> ByDistance =
+		Comparer<RaycastHit>.Create((a, b) => a.distance.CompareTo(b.distance));
+
+	/// <summary>
+	/// The first thing the swing meets on <paramref name="mask"/>, never the swinger's own body: a
+	/// server-side body carries hitboxes on every bone, and an eye-level swing can start inside
+	/// its own arm. Offline the player's body has none in reach, so this is the original's first hit.
+	/// </summary>
+	protected bool FirstHitInReach(Ray ray, int mask, out RaycastHit hitInfo)
+	{
+		int count = Physics.SphereCastNonAlloc(ray, radius, _swingHits, range, mask);
+		System.Array.Sort(_swingHits, 0, count, ByDistance);
+		for (int i = 0; i < count; i++)
+		{
+			Hitbox own = _swingHits[i].collider.GetComponent<Hitbox>();
+			if (own != null && user != null && own.parent == user) continue;
+			hitInfo = _swingHits[i];
+			return true;
+		}
+		hitInfo = default;
+		return false;
+	}
+
+	protected virtual void ShootMeleeRay(Ray ray)
+	{
 		RaycastHit hitInfo;
-		if (Physics.SphereCast(ray, radius, out hitInfo, range, 66816))
+		if (FirstHitInReach(ray, 66816, out hitInfo))
 		{
 			Hitbox component = hitInfo.collider.GetComponent<Hitbox>();
 			HitSomething(hitInfo.collider);

@@ -1121,7 +1121,9 @@ namespace Ironfront.Net.Unity.Client
             // weapon needs lives with the view, which is the only thing holding one.
             view.PlayActiveWeaponFireCosmetics();
 
-            if (_tracers != null) _tracers.Fire(view.MuzzlePosition, direction);
+            // A wrench swing is a fire event too (owner's run of 2026-10-12), and it has no round.
+            if (_tracers != null && !Ironfront.Net.Replication.Combat.WeaponCatalog.IsMelee(message.WeaponId))
+                _tracers.Fire(view.MuzzlePosition, direction);
         }
 
         /// <summary>
