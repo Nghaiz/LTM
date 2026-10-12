@@ -458,6 +458,31 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void MapPainterAsksOnlyForTheFlagsTheSideDidNotHoldAtTheStart()
+        {
+            // Owner's run of 2026-10-12: "every flag on the map" included the side's own starting
+            // flags, which a player can only help take after losing them.
+            var tally = new MatchCareerTally();
+            tally.BeginRound(0f, mapFlags: 5, team0Held: 0b00011, team1Held: 0b10000);
+            tally.CreditCapture(Me, 0);   // its own, lost and taken back: not asked, not counted
+            tally.CreditCapture(Me, 2);
+            tally.CreditCapture(Me, 3);
+            var sheet = new RoundSheet();
+            tally.Fill(Me, TeamId.Team0, TeamId.Team0, 10f, finished: false, new MatchScoreTally(), ReadOnlySpan<RoundActor>.Empty, sheet);
+            Assert.Equal(3, sheet.Get(RoundFact.MapFlags));
+            Assert.Equal(2, sheet.Get(RoundFact.FlagsHelpedDistinct));
+
+            tally.CreditCapture(Me, 4);
+            var done = new RoundSheet();
+            tally.Fill(Me, TeamId.Team0, TeamId.Team0, 20f, finished: false, new MatchScoreTally(), ReadOnlySpan<RoundActor>.Empty, done);
+            Assert.Equal(3, done.Get(RoundFact.FlagsHelpedDistinct));
+
+            var enemy = new RoundSheet();
+            tally.Fill(Enemy, TeamId.Team1, TeamId.Team0, 20f, finished: false, new MatchScoreTally(), ReadOnlySpan<RoundActor>.Empty, enemy);
+            Assert.Equal(4, enemy.Get(RoundFact.MapFlags));
+        }
+
+        [Fact]
         public void AReportMidRoundOrForALeaverCarriesNoRanks()
         {
             var tally = new MatchCareerTally();

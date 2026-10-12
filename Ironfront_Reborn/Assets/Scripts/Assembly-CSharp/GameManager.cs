@@ -128,13 +128,17 @@ public class GameManager : MonoBehaviour
 		{
 			Ironfront.Net.Configuration.MapCatalog.TryGetId(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, out ushort mapId);
 			int flags = 0;
+			// The player's side's own flags at the start: ISLAND HOPPER asks only for the others.
+			var heldAtStart = new System.Collections.Generic.List<int>();
 			foreach (CapturePoint point in UnityEngine.Object.FindObjectsByType<CapturePoint>(FindObjectsSortMode.None))
 			{
-				if (point.canBeCaptured) flags++;
+				if (!point.canBeCaptured) continue;
+				flags++;
+				if (point.owner == practiceTeam) heldAtStart.Add(point.GetInstanceID());
 			}
 			Ironfront.Net.Unity.PracticeFeats.MatchStarted(new Ironfront.Net.Unity.PracticeMatch(
 				mapId, nightMode, victoryRule, victoryPoints, !noVehicles,
-				ActorManager.instance.team0Bots, ActorManager.instance.team1Bots, practiceTeam, flags), Time.time);
+				ActorManager.instance.team0Bots, ActorManager.instance.team1Bots, practiceTeam, flags), Time.time, heldAtStart);
 		}
 		// The HUD, the player and the decal pool are the client's half of a match. A dedicated
 		// server that instantiates them gets a Canvas nobody looks at, an FpsActorController

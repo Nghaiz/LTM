@@ -62,6 +62,9 @@ namespace Ironfront.Net.Replication.Match
 
         private float _roundStart;
         private int _mapFlags;
+
+        /// <summary>The flags each side held when the round began, by point id: theirs already, not to be taken.</summary>
+        private readonly ulong[] _heldAtStart = new ulong[2];
         private readonly bool[] _nearLoss = new bool[2];
 
         public MatchCareerTally() => Clear();
@@ -69,12 +72,21 @@ namespace Ironfront.Net.Replication.Match
         /// <summary>One fact of one actor this round.</summary>
         public long Get(ushort actor, RoundFact fact) => actor < Actors ? _facts[actor, (int)fact] : 0;
 
-        /// <summary>The round's Playing phase began at <paramref name="now"/>, on a map with <paramref name="mapFlags"/> flags.</summary>
-        public void BeginRound(float now, int mapFlags)
+        /// <summary>
+        /// The round's Playing phase began at <paramref name="now"/>, on a map with
+        /// <paramref name="mapFlags"/> flags, of which <paramref name="team0Held"/> and
+        /// <paramref name="team1Held"/> (bits by point id) were each side's already. MAP PAINTER asks a
+        /// player to help take the flags their side did not hold: helping take back a flag their side
+        /// started with would first need losing it (owner's run of 2026-10-12).
+        /// </summary>
+        public void BeginRound(float now, int mapFlags, ulong team0Held = 0, ulong team1Held = 0)
         {
             Clear();
             _roundStart = now;
             _mapFlags = Math.Max(0, mapFlags);
+            ulong onMap = _mapFlags >= 64 ? ulong.MaxValue : (1UL << _mapFlags) - 1;
+            _heldAtStart[0] = team0Held & onMap;
+            _heldAtStart[1] = team1Held & onMap;
         }
 
         /// <summary>

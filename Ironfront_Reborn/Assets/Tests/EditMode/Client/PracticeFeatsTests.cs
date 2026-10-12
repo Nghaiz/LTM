@@ -151,6 +151,21 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void IslandHopperAsksOnlyForTheFlagsTheSideDidNotHoldAtTheStart()
+        {
+            // Owner's run of 2026-10-12: a side's own starting flags cannot be helped without
+            // losing them first, so they are not asked and do not count.
+            PracticeFeats.MatchStarted(new PracticeMatch(Island, false, VictoryRule.Margin, 200, true, 10, 10, 0, 5), 0f,
+                new[] { 21, 22 });
+            PracticeFeats.PlayerHelpedCapture(21);
+            PracticeFeats.PlayerHelpedCapture(23);
+            PracticeFeats.PlayerHelpedCapture(24);
+            Assert.That(_earned, Does.Not.Contain(PracticeFeats.IslandHopper));
+            PracticeFeats.PlayerHelpedCapture(25);
+            Assert.That(_earned, Does.Contain(PracticeFeats.IslandHopper));
+        }
+
+        [Test]
         public void AFinishCountsByTheRoomsPointsNotItsLengthAndCadetNeedsAllThreeMaps()
         {
             // Owner's run of 2026-10-12: no minute limits. A 30-second round counts when its room is

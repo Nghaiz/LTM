@@ -107,6 +107,7 @@ namespace Ironfront.Net.Unity
         private static byte _vehicleKinds;
         private static bool _nightVisionUsed;
         private static readonly HashSet<int> FlagsHelped = new HashSet<int>();
+        private static readonly HashSet<int> FlagsHeldAtStart = new HashSet<int>();
         private static readonly Dictionary<int, int> KillsByActor = new Dictionary<int, int>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -118,8 +119,11 @@ namespace Ironfront.Net.Unity
             _running = false;
         }
 
-        /// <summary>An offline match began.</summary>
-        public static void MatchStarted(in PracticeMatch match, float now)
+        /// <summary>
+        /// An offline match began. <paramref name="flagsHeldAtStart"/> are the flag keys the player's
+        /// side already held: ISLAND HOPPER asks only for the others (owner's run of 2026-10-12).
+        /// </summary>
+        public static void MatchStarted(in PracticeMatch match, float now, IEnumerable<int>? flagsHeldAtStart = null)
         {
             _match = match;
             _running = true;
@@ -129,6 +133,9 @@ namespace Ironfront.Net.Unity
             _vehicleKinds = 0;
             _nightVisionUsed = false;
             FlagsHelped.Clear();
+            FlagsHeldAtStart.Clear();
+            if (flagsHeldAtStart != null)
+                foreach (int key in flagsHeldAtStart) FlagsHeldAtStart.Add(key);
             KillsByActor.Clear();
             RoundBegan?.Invoke();
         }
@@ -183,13 +190,16 @@ namespace Ironfront.Net.Unity
             }
         }
 
-        /// <summary>A flag turned to the player's side while they stood in it.</summary>
+        /// <summary>
+        /// A flag turned to the player's side while they stood in it. One their side held at the
+        /// start is not one to take: helping take it back would first need losing it.
+        /// </summary>
         public static void PlayerHelpedCapture(int flagKey)
         {
-            if (!_running) return;
+            if (!_running || FlagsHeldAtStart.Contains(flagKey)) return;
             FlagsHelped.Add(flagKey);
-            if (_match.MapId == Island && _match.CapturePoints > 0 && FlagsHelped.Count >= _match.CapturePoints)
-                Raise(IslandHopper);
+            int toTake = _match.CapturePoints - FlagsHeldAtStart.Count;
+            if (_match.MapId == Island && toTake > 0 && FlagsHelped.Count >= toTake) Raise(IslandHopper);
         }
 
         /// <summary>The player turned night vision on.</summary>
