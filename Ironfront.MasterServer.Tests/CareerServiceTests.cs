@@ -101,20 +101,20 @@ namespace Ironfront.MasterServer.Tests
         [Fact]
         public void AFinishedRoundIsARollCallHoweverShortItWas()
         {
-            // Owner's run of 2026-10-12: no minute limits. A 40-second round in a big enough room
-            // counts; the size of the room and being there from the start are what matter.
+            // Owner's run of 2026-10-12: no minute limits, and no "join before anyone scores". A
+            // 40-second round in a big enough room counts, and so does one a player loaded into
+            // 30 seconds before its end: the room's size and being there at the end are what matter.
             (CareerService career, SqliteDatabase db, int[] ids) = Players(3);
 
             List<string> fast = Round(career, ids[0], Facts(("finished", 1), ("secondsPlayed", 40)));
-            List<string> late = Round(career, ids[1], Facts(("finished", 1), ("secondsPlayed", 900), ("joinedLate", 1)));
+            List<string> late = Round(career, ids[1], Facts(("finished", 1), ("secondsPlayed", 30)));
             List<string> small = career.RecordRound(ids[2], Facts(("finished", 1), ("secondsPlayed", 900)), 0, 0, 0,
                 mapId: 1, night: false, final: true, now: 1, VictoryRule.Margin, 90);
 
             Assert.Contains("roll_call", fast);
-            Assert.DoesNotContain("roll_call", late);
+            Assert.Contains("roll_call", late);
             Assert.DoesNotContain("roll_call", small);
-            Assert.Equal(1, db.ReadCareer(ids[1])["matches"]);
-            Assert.False(db.ReadCareer(ids[1]).ContainsKey("roundsFinished"));
+            Assert.Equal(1, db.ReadCareer(ids[1])["roundsFinished"]);
             Assert.False(db.ReadCareer(ids[2]).ContainsKey("roundsFinished"));
         }
 
@@ -147,7 +147,7 @@ namespace Ironfront.MasterServer.Tests
                 Assert.True(a.Description.Contains(target), $"{a.Id}: '{target}' missing from \"{a.Description}\"");
                 if (a.Id != "first_past_the_post")
                     Assert.True(a.Description.Contains($"LEAD BY {CareerRules.MarginPoints(size)}"), a.Id);
-                if (!a.IsPractice) Assert.Contains("before anyone scores", a.Description);
+                Assert.DoesNotContain("anyone scores", a.Description);
                 Assert.DoesNotContain("minute", a.Description);
             }
             foreach (Achievement a in AchievementCatalog.All) Assert.DoesNotContain("minute", a.Description);
@@ -270,20 +270,19 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Theory]
-        [InlineData(1, 3, VictoryRule.Margin, 200, 0, true)]
-        [InlineData(1, 3, VictoryRule.Target, 500, 0, true)]
-        [InlineData(2, 3, VictoryRule.Margin, 200, 0, false)]
-        [InlineData(1, 2, VictoryRule.Margin, 200, 0, false)]
-        [InlineData(1, 3, VictoryRule.Margin, 190, 0, false)]
-        [InlineData(1, 3, VictoryRule.Target, 450, 0, false)]
-        [InlineData(1, 3, VictoryRule.Margin, 200, 1, false)]
-        public void OutnumberedIsTheOnlyHumanOnTheSideAgainstThreeInAPlatinumRoomFromTheStart(
-            long own, long enemy, VictoryRule rule, int points, long joinedLate, bool earned)
+        [InlineData(1, 3, VictoryRule.Margin, 200, true)]
+        [InlineData(1, 3, VictoryRule.Target, 500, true)]
+        [InlineData(2, 3, VictoryRule.Margin, 200, false)]
+        [InlineData(1, 2, VictoryRule.Margin, 200, false)]
+        [InlineData(1, 3, VictoryRule.Margin, 190, false)]
+        [InlineData(1, 3, VictoryRule.Target, 450, false)]
+        public void OutnumberedIsTheOnlyHumanOnTheSideAgainstThreeInAPlatinumRoom(
+            long own, long enemy, VictoryRule rule, int points, bool earned)
         {
             // The owner's 1v3 of 2026-10-12 was won in 593 s and refused by the old ten minutes.
             (CareerService career, _, int[] ids) = Players(1);
             List<string> got = career.RecordRound(ids[0], Facts(("finished", 1), ("won", 1), ("secondsPlayed", 593),
-                ("humansOwnSide", own), ("humansEnemySide", enemy), ("joinedLate", joinedLate)),
+                ("humansOwnSide", own), ("humansEnemySide", enemy)),
                 0, 0, 0, 2, false, true, 1, rule, points);
             Assert.Equal(earned, got.Contains("outnumbered"));
         }
@@ -384,11 +383,9 @@ namespace Ironfront.MasterServer.Tests
             (CareerService career, SqliteDatabase db, int[] ids) = Players(1);
             Dictionary<string, long> win = Facts(("finished", 1), ("won", 1), ("secondsPlayed", 90));
             Dictionary<string, long> loss = Facts(("finished", 1), ("won", 0), ("secondsPlayed", 400));
-            Dictionary<string, long> late = Facts(("finished", 1), ("won", 0), ("joinedLate", 1));
             Dictionary<string, long> left = Facts(("finished", 0), ("won", 0));
 
             for (int i = 0; i < 9; i++) Round(career, ids[0], win);
-            Round(career, ids[0], late);
             career.RecordRound(ids[0], loss, 0, 0, 0, 1, false, true, 1, VictoryRule.Margin, 190);
             Assert.Equal(9, db.ReadCareer(ids[0])["winStreak"]);
             Round(career, ids[0], left);

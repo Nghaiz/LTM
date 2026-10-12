@@ -59,12 +59,6 @@ namespace Ironfront.Net.Protocol.Achievements
         MapFlags,
         /// <summary>Distinct capture points among <see cref="MapFlags"/>'s that the player helped capture this round.</summary>
         FlagsHelpedDistinct,
-        /// <summary>
-        /// 1 when the player took their body after either side had scored: they joined a round
-        /// already under way, so it does not count for a round achievement (owner's run of
-        /// 2026-10-12). 0, or missing from an older server, for a player in it from the start.
-        /// </summary>
-        JoinedLate,
 
         // ---- kill kinds
         BoatRoadkills,

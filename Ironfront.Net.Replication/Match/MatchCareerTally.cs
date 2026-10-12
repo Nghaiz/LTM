@@ -91,17 +91,14 @@ namespace Ironfront.Net.Replication.Match
 
         /// <summary>
         /// A player took <paramref name="actor"/>'s body at <paramref name="now"/>: their time starts
-        /// here. <paramref name="roundUnderway"/> when either side had already scored: the round
-        /// was under way, so it counts for no round achievement (<see cref="RoundFact.JoinedLate"/>).
-        /// A player who joins before the round begins is in it from the start, because
-        /// <see cref="BeginRound"/> clears this.
+        /// here. When they joined does not decide whether the round counts for them (owner's run of
+        /// 2026-10-12): being there at its end does.
         /// </summary>
-        public void NoteJoined(ushort actor, float now, bool roundUnderway)
+        public void NoteJoined(ushort actor, float now)
         {
             if (actor >= Actors) return;
             Forget(actor);
             _joinTime[actor] = now;
-            if (roundUnderway) _facts[actor, (int)RoundFact.JoinedLate] = 1;
         }
 
         /// <summary>

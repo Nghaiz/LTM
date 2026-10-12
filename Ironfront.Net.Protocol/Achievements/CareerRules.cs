@@ -91,10 +91,10 @@ namespace Ironfront.Net.Protocol.Achievements
     /// <para>
     /// <b>No minute limits</b> (owner's run of 2026-10-12: "I won the 1v3 in under ten minutes by
     /// skill"). A round counts for an achievement when the room plays to at least the points of the
-    /// achievement's size (<see cref="MarginPoints"/>, <see cref="TargetPoints"/>), the player is
-    /// there at its end, and they were in it before either side scored
-    /// (<see cref="RoundFact.JoinedLate"/>), so nobody can join a round about to be won and share
-    /// it. A fast win is a skilled one, and it counts.
+    /// achievement's size (<see cref="MarginPoints"/>, <see cref="TargetPoints"/>) and the player is
+    /// there at its end, whenever they came in: a player still loading when someone scored the first
+    /// kill is as much in the round as anyone (owner, same day), and nobody from outside a room can
+    /// enter its running match. A fast win is a skilled one, and it counts.
     /// </para>
     /// <para>
     /// <b>The win streak is not here</b>: it needs the career it continues, and
@@ -164,15 +164,12 @@ namespace Ironfront.Net.Protocol.Achievements
             _ => null,
         };
 
-        /// <summary>The player was in the round before either side scored (or the server predates the fact).</summary>
-        public static bool InFromTheStart(RoundSheet round) => round.Get(RoundFact.JoinedLate) == 0;
-
         /// <summary>
         /// Whether the round counts for an achievement of round size <paramref name="size"/>: the
-        /// player is there at its end, was in it from the start, and the room is big enough.
+        /// player is there at its end, and the room is big enough.
         /// </summary>
         public static bool Counts(RoundSheet round, in RoundContext context, AchievementTier size)
-            => context.Final && round.Get(RoundFact.Finished) == 1 && InFromTheStart(round) && context.IsRoundOf(size);
+            => context.Final && round.Get(RoundFact.Finished) == 1 && context.IsRoundOf(size);
 
         /// <summary>Accuracy per mille, or -1 below <see cref="AccuracyMinShots"/>.</summary>
         public static long AccuracyPermille(long shots, long hits)
@@ -247,9 +244,9 @@ namespace Ironfront.Net.Protocol.Achievements
             if (present) Put(into, CareerStat.Matches, 1);
             if (won) Put(into, CareerStat.Wins, 1);
 
-            // Everything below is a round achievement: none counts a round the player left, or one
-            // they joined after the first point. The room's size gates each by its tier.
-            if (!present || !InFromTheStart(round)) return;
+            // Everything below is a round achievement: none counts a round the player left before
+            // its end. The room's size gates each by its tier.
+            if (!present) return;
             bool bronze = context.IsRoundOf(AchievementTier.Bronze);
             bool silver = context.IsRoundOf(AchievementTier.Silver);
             bool gold = context.IsRoundOf(AchievementTier.Gold);
@@ -319,12 +316,12 @@ namespace Ironfront.Net.Protocol.Achievements
         /// <summary>
         /// The win streak after a round (UNDEFEATED): one more for a win, back to zero for a loss
         /// or for leaving before the end, untouched by a round that does not count -- one smaller
-        /// than Platinum size (LEAD BY 200 / FIRST TO 500), or one the player joined after the
-        /// first point. Leaving resets it, so walking out of a round about to be lost cannot keep it.
+        /// than Platinum size (LEAD BY 200 / FIRST TO 500). Leaving resets it, so walking out of a
+        /// round about to be lost cannot keep it.
         /// </summary>
         public static long NextWinStreak(long streak, RoundSheet round, in RoundContext context)
         {
-            if (!context.Final || !InFromTheStart(round) || !context.IsRoundOf(AchievementTier.Platinum)) return streak;
+            if (!context.Final || !context.IsRoundOf(AchievementTier.Platinum)) return streak;
             bool won = round.Get(RoundFact.Finished) == 1 && round.Get(RoundFact.Won) == 1;
             return won ? streak + 1 : 0;
         }
