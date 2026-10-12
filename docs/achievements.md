@@ -585,6 +585,19 @@ practice cũ đòi 5 phút).
 - Game server in một dòng `[career] room N player P end|left: ...` cho mỗi báo cáo cuối hiệp, để lần sau
   trả lời được "vì sao chưa nhận" từ log thay vì đoán.
 
+### 7.7 Tiến độ thành tựu không bao giờ reset theo mùa (từ 12/10/2026)
+
+Anh báo STEEL RAIN, ROTORHEAD vẫn 0 sau nhiều trận. Nguyên nhân: mùa 2 (7.5) đã chuyển số liệu online
+của mùa 1 sang `career_stats_season1` rồi xoá khỏi career, nên mọi thanh tiến độ bắt đầu lại từ 0 (anh có
+17 mạng xe tăng, 12 mạng trực thăng và 520 kill ở mùa 1).
+
+**Sửa:** master gộp mỗi mùa đã đóng một lần vào bảng `career_history`; thành tựu, trang thành tựu và màn
+so sánh đọc **lịch sử + mùa hiện tại**, còn bảng xếp hạng vẫn chỉ đọc mùa hiện tại. Số của mùa 1 được hiệu
+chỉnh khi gộp, vì lỗi cộng dồn đã thổi phồng 4 con số của bảng điểm: `kills` lấy đúng bằng `botKills +
+playerKills` (bộ đếm theo từng hiệp, chính xác), còn `deaths`, `headshots`, `score` nhân cùng hệ số
+(maidang2804: 1.005 thành 525). Kiểm tra trên bản sao database thật ngày 12/10: anh có lại 17 mạng xe
+tăng, 21 mạng trực thăng, 429 kill, 265 headshot; không ai được mở nhầm thành tựu nào.
+
 ## 8. Mặc định đang áp dụng
 
 1. **Career cũ được giữ** (người có sẵn số liệu mở ngay các thành tựu cày đã đủ). Riêng số liệu online
