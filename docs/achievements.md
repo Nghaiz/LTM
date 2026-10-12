@@ -587,6 +587,20 @@ practice cũ đòi 5 phút).
 - Game server in một dòng `[career] room N player P end|left: ...` cho mỗi báo cáo cuối hiệp, để lần sau
   trả lời được "vì sao chưa nhận" từ log thay vì đoán.
 
+**Trao bù cho những hiệp luật cũ đã từ chối** (`CareerCorrections`, chạy một lần khi master khởi động,
+ghi log từng dòng): chỉ những hiệp mà log game server ngày 12/10/2026 cho thấy trọn vẹn (ai vào lúc nào,
+phe nào, luật, kết quả), chấm lại bằng luật mới.
+
+| Người chơi | Hiệp | Được cộng |
+|---|---|---|
+| nghaiz | Island phòng 3, 03:04:12-03:14:05 UTC, một mình đấu 3, thắng 574-371 sau 593 giây | `outnumberedWins` +1: OUTNUMBERED mở ở lần đăng nhập tới |
+| nghaiz, ptul2x5 | Forest Lake phòng 2 hiệp 2, 02:57:12-02:59:54, thắng 234-32 sau 162 giây | hiệp hoàn thành, trận thắng (cả cỡ Gold), thắng Forest Lake; ptul2x5 có chuỗi thắng 2 |
+| thongdzbodoiqua, nghianguancut | cùng hiệp đó, thua | hiệp hoàn thành |
+| nghaiz | GRAND TOUR, phần DUSTBOWL LEAD BY (practice, theo lời anh) | bit `prGrandTour` |
+
+Hiệp của mùa 1 không chấm lại được: log server của chúng đã bị xoá và master chưa bao giờ lưu phe, nên
+giữ nguyên.
+
 ### 7.7 Tiến độ thành tựu không bao giờ reset theo mùa (từ 12/10/2026)
 
 Anh báo STEEL RAIN, ROTORHEAD vẫn 0 sau nhiều trận. Nguyên nhân: mùa 2 (7.5) đã chuyển số liệu online

@@ -570,6 +570,43 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
+        public void ACorrectionIsFoldedOnceByEachStatsOwnRuleAndTheAchievementFollows()
+        {
+            (CareerService career, SqliteDatabase db, int[] ids) = Players(1);
+            db.WriteCareer(ids[0], new Dictionary<string, long> { ["roundsWon"] = 2, ["bestWinStreak"] = 3, ["prGrandTour"] = 94 });
+            var corrections = new[]
+            {
+                new CareerCorrection("pl0", CareerStat.OutnumberedWins, 1, "test"),
+                new CareerCorrection("pl0", CareerStat.RoundsWon, 1, "test"),
+                new CareerCorrection("pl0", CareerStat.BestWinStreak, 2, "test"),
+                new CareerCorrection("pl0", CareerStat.PrGrandTour, 1, "test"),
+                new CareerCorrection("nobody", CareerStat.RoundsWon, 1, "test"),
+            };
+
+            career.ApplyCorrectionsOnce("test-marker", corrections);
+            career.ApplyCorrectionsOnce("test-marker", corrections);
+
+            Dictionary<string, long> numbers = db.ReadCareer(ids[0]);
+            Assert.Equal(1, numbers["outnumberedWins"]);
+            Assert.Equal(3, numbers["roundsWon"]);       // added, once
+            Assert.Equal(3, numbers["bestWinStreak"]);   // a best is never lowered
+            Assert.Equal(95, numbers["prGrandTour"]);    // parts joined
+            Assert.Contains("outnumbered", career.Claim(ids[0], null, null, now: 9));
+        }
+
+        [Fact]
+        public void TheOwnersRunCorrectionsNameRealStatsAndCarryEvidence()
+        {
+            Assert.NotEmpty(CareerCorrections.OwnerRun20261012);
+            foreach (CareerCorrection correction in CareerCorrections.OwnerRun20261012)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(correction.Username));
+                Assert.True(correction.Value > 0);
+                Assert.True(correction.Evidence.Length > 20, correction.Username + " " + correction.Stat);
+            }
+        }
+
+        [Fact]
         public void AnAchievementTheCatalogueNoLongerHasIsKeptAndNotCounted()
         {
             // Owner, 2026-10-10: an update never costs a player an achievement. A row for an id this
