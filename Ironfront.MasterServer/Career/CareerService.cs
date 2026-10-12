@@ -142,6 +142,35 @@ namespace Ironfront.MasterServer.Career
             // wiped season 1's 17 tank kills). Every closed season is folded once into the history
             // the achievements add the current season to.
             for (int closed = 1; closed < season; closed++) FoldSeasonIntoHistory(closed);
+
+            // Rounds the old minute rules withheld, as the 2026-10-12 server logs prove them.
+            ApplyCorrectionsOnce(CareerCorrections.Marker, CareerCorrections.OwnerRun20261012);
+        }
+
+        /// <summary>
+        /// Folds each correction into the player's current career by the stat's own rule, once
+        /// (behind <paramref name="marker"/>), logging every row. An unknown account is logged and
+        /// skipped. The achievements follow at the player's next judging.
+        /// </summary>
+        internal void ApplyCorrectionsOnce(string marker, IReadOnlyList<CareerCorrection> corrections)
+        {
+            if (_database.ReadCareerMeta(marker) != 0) return;
+            foreach (CareerCorrection correction in corrections)
+            {
+                AccountRecord? account = _database.FindAccount(correction.Username);
+                if (account == null)
+                {
+                    MasterLog.Warn($"career correction {marker}: no account '{correction.Username}', skipped");
+                    continue;
+                }
+                string key = CareerStats.Key(correction.Stat);
+                Dictionary<string, long> career = _database.ReadCareer(account.PlayerId);
+                long before = career.TryGetValue(key, out long had) ? had : 0;
+                long after = CareerStats.Combine(correction.Stat, before, correction.Value);
+                if (after != before) _database.WriteCareer(account.PlayerId, new Dictionary<string, long> { [key] = after });
+                MasterLog.Warn($"career correction {marker}: {correction.Username} {key} {before} -> {after} ({correction.Evidence})");
+            }
+            _database.WriteCareerMeta(marker, 1);
         }
 
         /// <summary>The <c>career_meta</c> key marking the one-time seed of <see cref="CareerStat.GoldRoundsWon"/>.</summary>
