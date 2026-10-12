@@ -508,6 +508,68 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
+        public void AchievementsCountEveryClosedSeasonWhileTheRankingCountsThisOne()
+        {
+            // Owner's run of 2026-10-12: STEEL RAIN sat at 0 after season 2 archived 17 tank kills.
+            (SqliteDatabase db, int id) = SeasonOnePlayer(new Dictionary<string, long>
+            {
+                ["kills"] = 100, ["botKills"] = 40, ["playerKills"] = 10, ["deaths"] = 20, ["headshots"] = 30,
+                ["score"] = 300, ["tankKills"] = 99, ["longestKillMetres"] = 250, ["matches"] = 4, ["winStreak"] = 3,
+                ["weaponKillMask"] = 2,
+            });
+            var career = new CareerService(db);
+
+            Dictionary<string, long> history = db.ReadCareerHistory(id);
+            Assert.Equal(50, history["kills"]);       // exact: bot + player kills
+            Assert.Equal(10, history["deaths"]);      // scaled by 50 / 100
+            Assert.Equal(15, history["headshots"]);
+            Assert.Equal(150, history["score"]);
+            Assert.Equal(99, history["tankKills"]);
+            Assert.False(history.ContainsKey("winStreak"));
+            Assert.Empty(career.Leaderboard(id).Top);
+
+            List<string> earned = Round(career, id, Facts(("finished", 1), ("tankKills", 1), ("botKills", 1),
+                ("longestKillMetres", 310), ("weaponKillMask", 4)));
+            Assert.Contains("steel_rain", earned);
+            Assert.Contains("overwatch", earned);
+            Assert.Equal(1, db.ReadCareer(id)["tankKills"]);
+            Assert.Equal(100, career.Achievements(id).Career["tankKills"]);
+            Assert.Equal(6, career.Achievements(id).Career["weaponKillMask"]);
+            Assert.Equal(1, career.Leaderboard(id).Top.Single().Row.Matches);
+        }
+
+        [Fact]
+        public void AClosedSeasonIsFoldedIntoTheHistoryOnce()
+        {
+            (SqliteDatabase db, int id) = SeasonOnePlayer(new Dictionary<string, long> { ["tankKills"] = 7 });
+            _ = new CareerService(db);
+            _ = new CareerService(db);
+            Assert.Equal(7, db.ReadCareerHistory(id)["tankKills"]);
+        }
+
+        [Fact]
+        public void SeasonOneKeepsItsNumbersWhenTheyWereNeverInflated()
+        {
+            Dictionary<string, long> corrected = CareerService.CorrectSeasonOne(new Dictionary<string, long>
+            {
+                ["kills"] = 4, ["botKills"] = 4, ["deaths"] = 1,
+            });
+            Assert.Equal(4, corrected["kills"]);
+            Assert.Equal(1, corrected["deaths"]);
+        }
+
+        /// <summary>A database from before season 2, holding one player's season-1 numbers.</summary>
+        private static (SqliteDatabase, int) SeasonOnePlayer(Dictionary<string, long> numbers)
+        {
+            var database = new SqliteDatabase(":memory:");
+            database.WriteCareerMeta("season", 1);
+            Assert.True(database.InsertAccount("veteran", Password, "Veteran", 0));
+            int id = database.FindAccount("veteran")!.PlayerId;
+            database.WriteCareer(id, numbers);
+            return (database, id);
+        }
+
+        [Fact]
         public void AnAchievementTheCatalogueNoLongerHasIsKeptAndNotCounted()
         {
             // Owner, 2026-10-10: an update never costs a player an achievement. A row for an id this
