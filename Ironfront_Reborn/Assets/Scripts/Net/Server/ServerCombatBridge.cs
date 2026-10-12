@@ -464,7 +464,8 @@ namespace Ironfront.Net.Unity.Server
                 $"[net] actor {session.ActorId} spent a round of weapon {session.WeaponId} on a "
                 + "projectile launch and NOTHING WAS LAUNCHED, so the round was given back. Engine "
                 + $"weapon: {actor.DescribeCarriedWeapon()}. Weapon.CanFire is unholstered && "
-                + "!reloading && HasLoadedAmmo() && (auto || !holdingFire) && !CoolingDown().");
+                + "!reloading && HasLoadedAmmo() && (auto || !holdingFire) && !CoolingDown(); run "
+                + "with IRONFRONT_LOG_SHOTS=1 for the shot trace around it.");
             return false;
         }
 

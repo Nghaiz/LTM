@@ -214,8 +214,13 @@ namespace Ironfront.Net.Replication.Tests
                 "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerCombatBridge.cs");
 
             Assert.Contains(
-                "if (result.LaunchedProjectile) LaunchCarriedProjectile(session, actor, in result);",
+                "if (!LaunchCarriedProjectile(session, actor, in result, in weapon, in ammo)) return;",
                 bridge, StringComparison.Ordinal);
+
+            // A launch the engine refused gives its round back and tells no other client a shot
+            // was fired (owner's v4.6.2 playtest, the BIL SCALPEL): the early return above skips
+            // EmitWeaponFire, and the refund is published before the tick's snapshot.
+            Assert.Contains("GiveBackRefusedRound(session, in config);", bridge, StringComparison.Ordinal);
 
             // AFTER the authority's own `if (!result.Fired) return;`, never instead of it: a
             // launch that reached the engine without the server spending the round would be
