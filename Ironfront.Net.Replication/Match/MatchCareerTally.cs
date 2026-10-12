@@ -57,6 +57,8 @@ namespace Ironfront.Net.Replication.Match
         private readonly ulong[] _flagMask = new ulong[Actors];
         private readonly short[] _pairKills = new short[Actors * Actors];
         private readonly bool[] _killedBy = new bool[Actors * Actors];
+        private readonly float[] _blowPilotHeight = new float[Actors];
+        private readonly float[] _blowTime = new float[Actors];
 
         private float _roundStart;
         private int _mapFlags;
@@ -110,6 +112,20 @@ namespace Ironfront.Net.Replication.Match
             }
         }
 
+        /// <summary>
+        /// A lethal blow is landing on <paramref name="victim"/> at <paramref name="now"/>, while they
+        /// still sit where it found them: a helicopter pilot's height above the ground, -1 for
+        /// anyone else. The death that follows unseats the body at once, before the kill is
+        /// recorded, so a pilot read at the kill was never in the air and MID-AIR could not be
+        /// earned (owner's run of 2026-10-12: nobody had ever reported a pilot headshot).
+        /// </summary>
+        public void NoteLethalBlow(ushort victim, float pilotHeightMetres, float now)
+        {
+            if (victim >= Actors) return;
+            _blowPilotHeight[victim] = pilotHeightMetres;
+            _blowTime[victim] = now;
+        }
+
         /// <summary>Counts one resolved death at <paramref name="now"/> seconds.</summary>
         public void RecordKill(in CareerKill kill, float now)
         {
@@ -137,7 +153,7 @@ namespace Ironfront.Net.Replication.Match
             if (byVehicle && kill.VehicleType == VehicleIds.RHIB) Add(killer, RoundFact.BoatKills, 1);
 
             CountWeapon(killer, in kill, now);
-            CountDistances(killer, in kill);
+            CountDistances(killer, in kill, VictimPilotHeight(in kill, now));
             CountRuns(killer, in kill, now);
             CountNemesis(killer, in kill);
             CountStint(killer, in kill);
@@ -211,13 +227,20 @@ namespace Ironfront.Net.Replication.Match
             }
         }
 
-        private void CountDistances(ushort killer, in CareerKill kill)
+        /// <summary>The kill's own pilot height, or the one its lethal blow found in the same tick.</summary>
+        private float VictimPilotHeight(in CareerKill kill, float now)
+        {
+            if (kill.VictimPilotHeightMetres >= 0f || kill.Victim >= Actors) return kill.VictimPilotHeightMetres;
+            return Math.Abs(now - _blowTime[kill.Victim]) <= SameTick ? _blowPilotHeight[kill.Victim] : -1f;
+        }
+
+        private void CountDistances(ushort killer, in CareerKill kill, float victimPilotHeight)
         {
             int metres = kill.DistanceMetres;
             Max(killer, RoundFact.LongestKillMetres, metres);
             if (kill.Headshot) Max(killer, RoundFact.LongestHeadshotMetres, metres);
             if (kill.WeaponId == WeaponIds.EAGLE_76) Max(killer, RoundFact.LongestShotgunKillMetres, metres);
-            if (kill.Headshot && kill.VictimPilotHeightMetres >= CareerRules.AirborneMetres)
+            if (kill.Headshot && victimPilotHeight >= CareerRules.AirborneMetres)
                 Max(killer, RoundFact.LongestPilotHeadshotMetres, metres);
             if (CareerWeapons.IsPistol(kill.WeaponId) && CareerWeapons.IsSniperRifle(kill.VictimWeaponId))
                 Max(killer, RoundFact.LongestPistolOnSniperMetres, metres);
