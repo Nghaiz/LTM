@@ -69,9 +69,8 @@ cũng được tôi kiểm tra là làm được trước khi phát hành (mục
   tài khoản lần sau đăng nhập.
 - **"Hoàn thành / thắng một hiệp"** tính theo **điểm của phòng, không theo số phút** (từ 12/10/2026,
   mục 7.6): phòng phải chơi tới ít nhất LEAD BY / FIRST TO của cỡ thành tựu (Bronze 100 / 250,
-  Silver 120 / 300, Gold 150 / 400, Platinum 200 / 500, Mythic 400 / 1.000), người chơi phải vào hiệp
-  **trước khi phe nào ghi điểm** (hoặc được mang sang từ hiệp trước), và còn ở đó lúc hiệp kết thúc.
-  Thắng nhanh nhờ kỹ năng vẫn tính.
+  Silver 120 / 300, Gold 150 / 400, Platinum 200 / 500, Mythic 400 / 1.000), và người chơi còn ở đó
+  lúc hiệp kết thúc, **vào hiệp lúc nào cũng được**. Thắng nhanh nhờ kỹ năng vẫn tính.
 - **"Human player"** = người thật, không tính bot. Thành tựu nào không ghi thì bot và người đều tính.
 - **"Without dying"** = trong một mạng sống; chết là đếm lại từ đầu.
 - **"Shoot down" (bắn rơi) trực thăng** = phá huỷ nó khi có phi công phe địch ngồi trong và nó đang cách
@@ -116,25 +115,25 @@ người chơi tự đo (practice).
 
 | # | Tên | Thẻ | Mô tả trong game | 📊 | Đo bằng |
 |---|---|---|---|---|---|
-| 1 | ROLL CALL | ON | Finish an online round. The round must be LEAD BY 100 or FIRST TO 250 or more, and you must join it before anyone scores. | | có sẵn |
-| 2 | LIGHTS OUT | ON NM | Finish an online round in Night Mode. The round must be LEAD BY 100 or FIRST TO 250 or more, and you must join it before anyone scores. | | có sẵn |
+| 1 | ROLL CALL | ON | Finish an online round. The round must be LEAD BY 100 or FIRST TO 250 or more. | | có sẵn |
+| 2 | LIGHTS OUT | ON NM | Finish an online round in Night Mode. The round must be LEAD BY 100 or FIRST TO 250 or more. | | có sẵn |
 | 3 | BAPTISM OF FIRE | ON | Get 100 kills in online rounds. | 📊 | có sẵn |
 | 4 | STEADY HAND | ON | Get 50 headshot kills. | 📊 | có sẵn |
 | 5 | FLAG RUNNER | ON | Capture 10 flags: stand in a flag's zone when it turns to your side. | 📊 | có sẵn |
-| 6 | TASTE OF VICTORY | ON | Win 10 online rounds. Each round must be LEAD BY 100 or FIRST TO 250 or more, and you must join it before anyone scores. | 📊 | có sẵn |
+| 6 | TASTE OF VICTORY | ON | Win 10 online rounds. Each round must be LEAD BY 100 or FIRST TO 250 or more. | 📊 | có sẵn |
 | 7 | SPEED BUMP | ON | Run over 10 enemies with a vehicle. | 📊 | có sẵn |
 | 8 | BY THE BOOK | PR | Open every page of the How to play guide. | 📊 trang | client |
 | 9 | CADET | PR | Finish a practice round on each map: Dustbowl, Island and Forest Lake. Each round must be LEAD BY 100 or FIRST TO 250 or more. | 📊 0/3 | client |
 | 10 | TURNCOAT | PR | Win a practice round on the blue side and another on the red side. Each round must be LEAD BY 100 or FIRST TO 250 or more. | 📊 0/2 | client |
 | 11 | VICTORY LAP | ON 🔒 | Honk the horn within 3 seconds of running an enemy over. | | mới |
-| 12 | ★ BULLET SPONGE | ON 🔒 | Die more times than any other human player in an online round with at least 3 human players. The round must be LEAD BY 100 or FIRST TO 250 or more, and you must join it before anyone scores. | | mới |
-| 13 | ★ PARTICIPATION TROPHY | ON 🔒 | Finish an online round with the lowest score of everyone in it, bots included. The round must be LEAD BY 100 or FIRST TO 250 or more, and you must join it before anyone scores. | | mới |
+| 12 | ★ BULLET SPONGE | ON 🔒 | Die more times than any other human player in an online round with at least 3 human players. The round must be LEAD BY 100 or FIRST TO 250 or more. | | mới |
+| 13 | ★ PARTICIPATION TROPHY | ON 🔒 | Finish an online round with the lowest score of everyone in it, bots included. The round must be LEAD BY 100 or FIRST TO 250 or more. | | mới |
 
 ### 4.2 Silver (16)
 
 | # | Tên | Thẻ | Mô tả trong game | 📊 | Đo bằng |
 |---|---|---|---|---|---|
-| 14 | THREE FRONTS | ON | Finish an online round on each map: Dustbowl, Island and Forest Lake. Each round must be LEAD BY 120 or FIRST TO 300 or more, and you must join it before anyone scores. | 📊 0/3 | có sẵn |
+| 14 | THREE FRONTS | ON | Finish an online round on each map: Dustbowl, Island and Forest Lake. Each round must be LEAD BY 120 or FIRST TO 300 or more. | 📊 0/3 | có sẵn |
 | 15 | UNBROKEN | ON | Get 15 kills without dying. | kỷ lục | có sẵn |
 | 16 | PREDATOR | ON | Kill 100 human players. | 📊 | có sẵn |
 | 17 | DEAD CENTRE | ON | Get 500 headshot kills. | 📊 | có sẵn |
@@ -161,10 +160,10 @@ người chơi tự đo (practice).
 | 33 | COLD STEEL | ON | Get 25 melee kills. | 📊 | có sẵn |
 | 34 | ARMOURER | ON | Get a kill with each of the 12 weapons: RK-44, S-IND7, S-IND7 [SUP], 76 EAGLE, SL-DEFENDER, SIGNAL DMR, RECON LRR, FRAG, SPEARHEAD, BEU AW1, BIL SCALPEL and WRENCH. | 📊 0/12 | mới |
 | 35 | CAN OPENER | ON | Destroy 50 enemy vehicles. | 📊 | mới |
-| 36 | LONG CAMPAIGN | ON | Win 100 online rounds. Each round must be LEAD BY 150 or FIRST TO 400 or more, and you must join it before anyone scores. | 📊 | có sẵn |
-| 37 | TOP BRASS | ON | Be the MVP of 10 rounds: win with the most points of anyone in the round, bots included. Each round must be LEAD BY 150 or FIRST TO 400 or more, and you must join it before anyone scores. | 📊 0/10 | có sẵn |
-| 38 | ★ CLEAN SHEET | ON | Win an online round without dying once, with at least 10 kills. The round must be LEAD BY 150 or FIRST TO 400 or more, and you must join it before anyone scores. | | mới |
-| 39 | NAKED EYE | ON NM | Win a Night Mode round without turning on night vision, with at least 10 kills. The round must be LEAD BY 150 or FIRST TO 400 or more, and you must join it before anyone scores. | | mới |
+| 36 | LONG CAMPAIGN | ON | Win 100 online rounds. Each round must be LEAD BY 150 or FIRST TO 400 or more. | 📊 | có sẵn |
+| 37 | TOP BRASS | ON | Be the MVP of 10 rounds: win with the most points of anyone in the round, bots included. Each round must be LEAD BY 150 or FIRST TO 400 or more. | 📊 0/10 | có sẵn |
+| 38 | ★ CLEAN SHEET | ON | Win an online round without dying once, with at least 10 kills. The round must be LEAD BY 150 or FIRST TO 400 or more. | | mới |
+| 39 | NAKED EYE | ON NM | Win a Night Mode round without turning on night vision, with at least 10 kills. The round must be LEAD BY 150 or FIRST TO 400 or more. | | mới |
 | 40 | NIGHT TERROR | ON NM | Get 10 melee kills in one Night Mode round. | kỷ lục | mới |
 | 41 | HELL WEEK | PR | Get 75 kills in one practice round with 100 bots. | kỷ lục | client |
 | 42 | ISLAND HOPPER | PR | In one practice round on Island, help capture every flag your side did not hold when it began: be in its zone when it turns to your side. | | client |
@@ -182,15 +181,15 @@ người chơi tự đo (practice).
 | # | Tên | Thẻ | Mô tả trong game | 📊 | Đo bằng |
 |---|---|---|---|---|---|
 | 51 | WINDREADER | ON | Kill an enemy with a headshot from 500 m or more. | kỷ lục | có sẵn |
-| 52 | ALL FRONTS MASTERED | ON | Win 50 online rounds on each of the 3 maps. Each round must be LEAD BY 200 or FIRST TO 500 or more, and you must join it before anyone scores. | 📊 0/150 | mới |
+| 52 | ALL FRONTS MASTERED | ON | Win 50 online rounds on each of the 3 maps. Each round must be LEAD BY 200 or FIRST TO 500 or more. | 📊 0/150 | mới |
 | 53 | AIR DEFENSE | ON | On foot, shoot down 25 enemy helicopters: destroy them with their pilot aboard while they are 5 m or more above the ground. | 📊 | mới |
-| 54 | UNDEFEATED | ON | Win 10 online rounds in a row. Only rounds of LEAD BY 200 or FIRST TO 500 or more that you join before anyone scores count; losing one, or leaving it before it ends, resets the count. | chuỗi hiện tại | mới (master) |
+| 54 | UNDEFEATED | ON | Win 10 online rounds in a row. Only rounds of LEAD BY 200 or FIRST TO 500 or more count; losing one, or leaving it before it ends, resets the count. | chuỗi hiện tại | mới (master) |
 | 55 | MOONLIGHT MARKSMAN | ON NM | Kill an enemy with a headshot from 150 m or more in Night Mode. | kỷ lục | mới |
-| 56 | ★ OUTNUMBERED | ON | Win an online round as the only human player on your side against at least 3 human players. The round must be LEAD BY 200 or FIRST TO 500 or more, and you must join it before anyone scores. | | mới |
+| 56 | ★ OUTNUMBERED | ON | Win an online round as the only human player on your side against at least 3 human players. The round must be LEAD BY 200 or FIRST TO 500 or more. | | mới |
 | 57 | ★ ON BORROWED TIME | ON | After an enemy brings you down to 5 health or less, get 10 more kills without healing and without dying. | kỷ lục | mới |
-| 58 | ★ PACIFIST | ON | Win an online round with 0 kills and 0 deaths while capturing more flags than anyone else in it, bots included. The round must be LEAD BY 200 or FIRST TO 500 or more, and you must join it before anyone scores. | | mới |
+| 58 | ★ PACIFIST | ON | Win an online round with 0 kills and 0 deaths while capturing more flags than anyone else in it, bots included. The round must be LEAD BY 200 or FIRST TO 500 or more. | | mới |
 | 59 | ★ NEMESIS | ON | Kill the same human player 7 times in one round without them killing you once. | kỷ lục | mới |
-| 60 | ★ ABSOLUTE DOMINANCE | ON | Finish an online round first of everyone in it, bots included, in kills, in flag captures and in accuracy (at least 50 shots), with nobody dying fewer times than you. The round must be LEAD BY 200 or FIRST TO 500 or more, and you must join it before anyone scores. | | mới |
+| 60 | ★ ABSOLUTE DOMINANCE | ON | Finish an online round first of everyone in it, bots included, in kills, in flag captures and in accuracy (at least 50 shots), with nobody dying fewer times than you. The round must be LEAD BY 200 or FIRST TO 500 or more. | | mới |
 | 61 | DRILL SERGEANT | PR | Win a practice round alone, with no allied bots, against 20 or more enemy bots. The round must be LEAD BY 100 or FIRST TO 250 or more. | | client |
 | 62 | GRAND TOUR | PR | Win practice rounds on all 3 maps under both win rules, and win a Night Mode practice round. Every round must be LEAD BY 200 or FIRST TO 500 or more. | 📊 0/7 | client |
 | 63 | IMPOSSIBLE ANGLE | ON 🔒 | Shoot down an enemy helicopter that is 10 m or more above the ground with a tank's main gun. | | mới |
@@ -216,14 +215,14 @@ Ghi chú:
 | 66 | RAMPAGE | ON | Get 10 kills in a row, each one within 3 seconds of the last. | kỷ lục | có sẵn |
 | 67 | CURVATURE | ON | Kill an enemy with a headshot from 900 m or more. | kỷ lục | có sẵn |
 | 68 | PERFECT TEN | ON | Get 10 headshot kills in a row without dying. A kill that is not a headshot resets the count. | kỷ lục | có sẵn |
-| 69 | ★ DEAD EYE | ON | Win an online round with at least 15 kills and 100% accuracy: fire at least 15 bullets, and every one hits an enemy. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
-| 70 | ★ UNTOUCHABLE | ON | Win an online round without taking any damage, with at least 15 kills. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
-| 71 | BLADE ONLY | ON | Finish an online round with at least 25 kills, every one of them a melee kill. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | kỷ lục | mới |
+| 69 | ★ DEAD EYE | ON | Win an online round with at least 15 kills and 100% accuracy: fire at least 15 bullets, and every one hits an enemy. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | | mới |
+| 70 | ★ UNTOUCHABLE | ON | Win an online round without taking any damage, with at least 15 kills. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | | mới |
+| 71 | BLADE ONLY | ON | Finish an online round with at least 25 kills, every one of them a melee kill. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | kỷ lục | mới |
 | 72 | TANK ACE | ON | Get 50 kills in one tank without leaving it or it being destroyed. | kỷ lục | mới |
 | 73 | SKY KING | ON | Get 30 kills in one helicopter flight without leaving your seat or the helicopter being destroyed. | kỷ lục | mới |
-| 74 | MAP PAINTER | ON | In one round, help capture every flag your side did not hold when it began, never die, and win. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
-| 75 | HAIL MARY | ON | Win a round after the enemy came within 10 points of winning it. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
-| 76 | CREATURE OF THE NIGHT | ON NM | Win a Night Mode round with at least 30 kills and 0 deaths, without turning on night vision. The round must be LEAD BY 400 or FIRST TO 1,000 or more, and you must join it before anyone scores. | | mới |
+| 74 | MAP PAINTER | ON | In one round, help capture every flag your side did not hold when it began, never die, and win. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | | mới |
+| 75 | HAIL MARY | ON | Win a round after the enemy came within 10 points of winning it. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | | mới |
+| 76 | CREATURE OF THE NIGHT | ON NM | Win a Night Mode round with at least 30 kills and 0 deaths, without turning on night vision. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | | mới |
 | 77 | IMMACULATE | PR | Get 100 kills without dying in a practice round with 100 bots. | kỷ lục | client |
 | 78 | IRONCLAD | ON | Unlock all 79 other achievements. | 📊 0/79 | mới (master) |
 | 79 | MID-AIR | ON 🔒 | Kill an enemy helicopter pilot with a headshot from 300 m or more while the helicopter is 5 m or more above the ground. | | mới |
@@ -572,10 +571,11 @@ practice cũ đòi 5 phút).
 
 - Mỗi thành tựu về hiệp ghi rõ trong mô tả cỡ phòng nó cần; phòng mặc định (LEAD BY 200) đủ cho mọi
   thành tựu trừ Mythic.
-- **Chống "ăn ké"**: người vào hiệp sau khi đã có điểm (`joinedLate`, game server ghi lúc người chơi nhận
-  thân xác) không được tính hiệp đó cho thành tựu nào. Vào trước điểm đầu tiên, hoặc được mang sang từ
-  hiệp trước, là "từ đầu".
-- **UNDEFEATED**: chỉ tính hiệp cỡ Platinum chơi từ đầu; thua **hoặc rời hiệp** đều về 0 (trước đây rời
+- **Không có điều kiện "vào trước khi có điểm"** (anh bỏ ngày 12/10/2026): một pha bắn nhau ngay đầu
+  hiệp khi người khác còn đang load hay chưa deploy không được làm ai mất thành tựu, và câu đó làm mô tả
+  khó hiểu. Ai còn trong hiệp lúc nó kết thúc đều được tính. Người ngoài vốn không vào được trận đang
+  chạy: master chỉ cho thành viên phòng vào, và người đã chơi trận đó vào lại.
+- **UNDEFEATED**: chỉ tính hiệp cỡ Platinum; thua **hoặc rời hiệp** đều về 0 (trước đây rời
   trước 5 phút thì giữ được chuỗi).
 - **LONG CAMPAIGN** đếm riêng các trận thắng cỡ Gold (`goldRoundsWon`); lần khởi động đầu tiên của master
   bản mới chép `roundsWon` đã có sang để không ai mất tiến độ.

@@ -279,7 +279,7 @@ namespace Ironfront.Net.Unity.Server
             line.Append("[career] room ").Append(RoomId).Append(" player ").Append(playerId).Append(' ').Append(how).Append(':');
             foreach (KeyValuePair<string, long> fact in round.ToDictionary())
             {
-                bool always = fact.Key == "finished" || fact.Key == "won" || fact.Key == "joinedLate" || fact.Key == "secondsPlayed";
+                bool always = fact.Key == "finished" || fact.Key == "won" || fact.Key == "secondsPlayed";
                 if (fact.Value == 0 && !always) continue;
                 line.Append(' ').Append(fact.Key).Append('=').Append(fact.Value);
             }

@@ -426,7 +426,7 @@ namespace Ironfront.Net.Replication.Tests
             var tally = new MatchCareerTally();
             var scores = new MatchScoreTally();
             tally.BeginRound(100f, mapFlags: 4);
-            tally.NoteJoined(Me, 160f, roundUnderway: false);
+            tally.NoteJoined(Me, 160f);
             tally.CreditCapture(Me, 1);
             tally.CreditCapture(Me, 1);
             tally.CreditCapture(Me, 2);
@@ -516,27 +516,10 @@ namespace Ironfront.Net.Replication.Tests
         {
             var tally = new MatchCareerTally();
             for (int i = 0; i < 3; i++) tally.RecordKill(Kill(Human, bot: false), i);
-            tally.NoteJoined(Me, 10f, roundUnderway: false);
+            tally.NoteJoined(Me, 10f);
             Assert.Equal(0, Fact(tally, RoundFact.PlayerKills));
             tally.RecordKill(Kill(Human, bot: false), 11f);
             Assert.Equal(1, Fact(tally, RoundFact.NemesisBest));
-        }
-
-        [Fact]
-        public void AJoinAfterTheFirstPointIsLateAndTheNextRoundStartsEveryoneFromTheStart()
-        {
-            // Owner's run of 2026-10-12: the late-joiner guard that replaced the minute limits.
-            var tally = new MatchCareerTally();
-            tally.BeginRound(100f, mapFlags: 4);
-            tally.NoteJoined(Me, 101f, roundUnderway: false);
-            tally.NoteJoined(Human, 300f, roundUnderway: true);
-
-            Assert.Equal(0, Report(tally, Me).Get(RoundFact.JoinedLate));
-            Assert.True(Report(tally, Me).Has(RoundFact.JoinedLate));
-            Assert.Equal(1, Report(tally, Human).Get(RoundFact.JoinedLate));
-
-            tally.BeginRound(900f, mapFlags: 4);
-            Assert.Equal(0, Report(tally, Human).Get(RoundFact.JoinedLate));
         }
 
         private static RoundSheet Report(MatchCareerTally tally, ushort actor)

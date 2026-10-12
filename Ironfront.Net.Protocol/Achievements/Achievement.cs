@@ -145,8 +145,8 @@ namespace Ironfront.Net.Protocol.Achievements
         /// <summary>
         /// The size of round it counts (owner's run of 2026-10-12, replacing every minute limit):
         /// the room must play to at least <see cref="CareerRules.MarginPoints"/> (LEAD BY) or
-        /// <see cref="CareerRules.TargetPoints"/> (FIRST TO) of this size, and an online player must
-        /// be in the round before anyone scores. Null for an achievement that is not about a round.
+        /// <see cref="CareerRules.TargetPoints"/> (FIRST TO) of this size. Null for an achievement
+        /// that is not about a round.
         /// </summary>
         public AchievementTier? RoundSize { get; }
 

@@ -2364,13 +2364,7 @@ namespace Ironfront.Net.Unity.Server
             // it: without this, a player who joined into a leaver's slot wore the leaver's kills
             // and deaths on every board and in the end-of-match report to the master.
             _scoreTally.Forget(actor.ActorId);
-            // A round either side has scored in is under way: joining it counts for no round
-            // achievement (owner's run of 2026-10-12, the late-joiner guard that replaced the
-            // minute limits). A join before the first point, or before the round, is from the start.
-            MatchStateMachine joinedMatch = _match != null ? _match.Match : null;
-            bool roundUnderway = joinedMatch != null && joinedMatch.CountsDeaths
-                                 && joinedMatch.Score0 + joinedMatch.Score1 > 0;
-            _careerTally.NoteJoined(actor.ActorId, CareerNow, roundUnderway);
+            _careerTally.NoteJoined(actor.ActorId, CareerNow);
 
             var player = new ServerPlayer(
                 connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),
