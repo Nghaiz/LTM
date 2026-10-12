@@ -198,6 +198,25 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void APilotUnseatedByHisOwnDeathKeepsTheHeightHisLethalBlowFound()
+        {
+            // The server unseats a dead body before it records the kill, so the kill itself reads
+            // a pilot on the ground (-1): MID-AIR was out of reach online (owner's run of 2026-10-12).
+            var tally = new MatchCareerTally();
+            tally.NoteLethalBlow(Enemy, 12f, 2f);
+            tally.RecordKill(Kill(Enemy, distance: 320, headshot: true, weapon: WeaponIds.SL_DEFENDER), 2f);
+            Assert.Equal(320, Fact(tally, RoundFact.LongestPilotHeadshotMetres));
+
+            // A blow from another tick says nothing about this kill; a pilot at 4 m is not in the air.
+            var stale = new MatchCareerTally();
+            stale.NoteLethalBlow(Enemy, 12f, 1f);
+            stale.RecordKill(Kill(Enemy, distance: 320, headshot: true, weapon: WeaponIds.SL_DEFENDER), 2f);
+            stale.NoteLethalBlow(Other, 4f, 3f);
+            stale.RecordKill(Kill(Other, distance: 330, headshot: true, weapon: WeaponIds.SL_DEFENDER), 3f);
+            Assert.Equal(0, Fact(stale, RoundFact.LongestPilotHeadshotMetres));
+        }
+
+        [Fact]
         public void NemesisCountsOneHumansDeathsUntilTheyKillYou()
         {
             var tally = new MatchCareerTally();

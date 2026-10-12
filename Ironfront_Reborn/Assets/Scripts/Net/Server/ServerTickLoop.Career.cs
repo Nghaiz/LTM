@@ -36,6 +36,15 @@ namespace Ironfront.Net.Unity.Server
             _careerTally.RecordDamage(victimId, AreEnemies(victimId, attackerId), healthAfter, cause);
         }
 
+        /// <summary>
+        /// A lethal blow is about to land on <paramref name="victimId"/>: where they sit is read now,
+        /// because the death unseats the body before the kill is recorded (MID-AIR).
+        /// </summary>
+        internal void NoteCareerLethalBlow(ushort victimId)
+        {
+            if (CareerCounting) _careerTally.NoteLethalBlow(victimId, PilotHeightOf(victimId), CareerNow);
+        }
+
         /// <summary>A player lived through a fall with <paramref name="healthAfter"/> left.</summary>
         public void NoteCareerLanding(ushort actorId, float healthAfter)
         {

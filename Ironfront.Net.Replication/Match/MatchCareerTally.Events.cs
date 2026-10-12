@@ -161,6 +161,8 @@ namespace Ironfront.Net.Replication.Match
             _watchAlive[actor] = false;
             _watchHealth[actor] = 0f;
             _lastHitShot[actor] = -1;
+            _blowPilotHeight[actor] = -1f;
+            _blowTime[actor] = float.NegativeInfinity;
             _flagMask[actor] = 0;
             for (int other = 0; other < Actors; other++)
             {
