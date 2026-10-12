@@ -39,9 +39,12 @@ namespace Ironfront.Net.Unity.EditorTools
         {
             var written = new List<string>
             {
-                Capture("Rooms", panel => FillRoomBrowser(panel, 0, 4), "rooms.png"),
+                Capture("Rooms", panel => FillRoomBrowser(panel, 0, 6), "rooms.png"),
                 Capture("Rooms", panel => FillRoomBrowser(panel, 1, 4), "rooms-rejoin.png"),
                 Capture("Rooms", panel => FillRoomBrowser(panel, 3, 9), "rooms-rejoin-overflow.png"),
+                Capture("Rooms", panel => FillRoomBrowser(panel, 0, 0), "rooms-empty.png"),
+                Capture("Waiting Room", panel => FillWaitingRoom(panel, countdown: 0f), "waiting-room.png"),
+                Capture("Waiting Room", panel => FillWaitingRoom(panel, countdown: 7f), "waiting-room-countdown.png"),
                 Capture("Create Room", panel => FillCreateRoom(panel, Capacity(100, true, 0, 0, 0), 50, 2), "create-room.png"),
                 Capture("Create Room", panel => FillCreateRoom(panel, Capacity(52, true, 3, 48, 198), 64, 1), "create-room-limited.png"),
                 Capture("Create Room", panel => FillCreateRoom(panel, Capacity(0, false, 2, 200, 300), 0, 2), "create-room-full.png"),
@@ -150,6 +153,18 @@ namespace Ironfront.Net.Unity.EditorTools
             string[] names = { "Friday night", "Island hop", "Tank rush", "Slow burn", "Dawn raid",
                 "Harbour", "Ridge line", "Last stand", "Convoy" };
 
+            // One room of every medal size, both modes, a private one, a full one and a starting
+            // one, so the capture shows every chip and every status the browser can draw.
+            (GameMode Mode, VictoryRule Rule, ushort Points, int Players, byte Seats, byte Bots)[] shapes =
+            {
+                (GameMode.PointMatch, VictoryRule.Margin, 200, 3, 16, 100),
+                (GameMode.Night, VictoryRule.Target, 1000, 6, 8, 32),
+                (GameMode.PointMatch, VictoryRule.Margin, 150, 8, 8, 0),
+                (GameMode.PointMatch, VictoryRule.Target, 300, 4, 16, 50),
+                (GameMode.PointMatch, VictoryRule.Margin, 90, 1, 8, 0),
+                (GameMode.Night, VictoryRule.Margin, 400, 2, 16, 100),
+            };
+
             var mine = new List<RoomInfo>();
             for (int i = 0; i < rejoins; i++)
             {
@@ -164,16 +179,60 @@ namespace Ironfront.Net.Unity.EditorTools
             var rooms = new List<RoomInfo>();
             for (int i = 0; i < open; i++)
             {
+                var shape = shapes[i % shapes.Length];
                 rooms.Add(new RoomInfo
                 {
-                    RoomId = 1 + i, Name = names[i % names.Length], MapId = (ushort)(1 + (i % 2)),
-                    Players = 1 + (i % 5), MaxPlayers = 16, BotCount = (byte)(i % 3 == 0 ? 100 : i % 3 == 1 ? 32 : 0),
+                    RoomId = 1 + i, Name = names[i % names.Length], MapId = (ushort)(1 + (i % 3)),
+                    Players = shape.Players, MaxPlayers = shape.Seats, BotCount = shape.Bots,
                     State = (byte)(i == 3 ? Ironfront.Net.Protocol.RoomLifecycleState.Starting : Ironfront.Net.Protocol.RoomLifecycleState.Waiting),
                     IsPrivate = i == 1,
+                    GameMode = (byte)shape.Mode, VictoryRule = (byte)shape.Rule, VictoryPoints = shape.Points,
+                    NightVisionSeconds = (byte)(shape.Mode == GameMode.Night ? 45 : 0),
                 });
             }
 
             panel.GetComponent<MenuRoomBrowserScreen>().Draw(mine.ToArray(), rooms.ToArray(), busy: false);
+        }
+
+        /// <summary>
+        /// A private Night room on Forest Lake with three players, one of them the host and this
+        /// player, drawn by the screen's own code; <paramref name="countdown"/> seconds left to the
+        /// start when everybody is ready.
+        /// </summary>
+        private static void FillWaitingRoom(GameObject panel, float countdown)
+        {
+            bool allReady = countdown > 0f;
+            var room = new RoomState
+            {
+                RoomId = 7, Name = "Friday night ops", MapId = 3, State = (byte)RoomLifecycleState.Waiting,
+                BotCount = 32, MaxPlayers = 8, GameMode = (byte)GameMode.Night,
+                VictoryRule = (byte)VictoryRule.Margin, VictoryPoints = 400, NightVisionSeconds = 45,
+                HostPlayerId = 11, IsPrivate = true, StartsInMs = (long)(countdown * 1000f),
+                Members = new[]
+                {
+                    new RoomMember { PlayerId = 11, Name = "Nghaiz", Team = 0, Ready = true },
+                    new RoomMember { PlayerId = 12, Name = "Kien", Team = 0, Ready = allReady },
+                    new RoomMember { PlayerId = 13, Name = "Tuan Anh", Team = 1, Ready = true },
+                },
+            };
+
+            // The game's own team colours (ColorScheme.TeamColor: pure blue and pure red), which
+            // the Menu scene's bindings register in play; edit mode has none and draws grey.
+            ITeamPalette previous = NetClientBindings.TeamPalette;
+            NetClientBindings.TeamPalette = new CapturePalette();
+            try
+            {
+                panel.GetComponent<MenuRoomLobbyScreen>().DrawForCapture(room, selfPlayerId: 11, countdown);
+            }
+            finally
+            {
+                NetClientBindings.TeamPalette = previous;
+            }
+        }
+
+        private sealed class CapturePalette : ITeamPalette
+        {
+            public int TeamColourRgb(int team) => team == 0 ? 0x0000FF : team == 1 ? 0xFF0000 : 0xBFBFBF;
         }
 
         /// <summary>

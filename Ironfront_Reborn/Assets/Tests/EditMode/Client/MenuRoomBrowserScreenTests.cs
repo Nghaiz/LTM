@@ -50,15 +50,14 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
-        public void MapCell_ShowsTheRoomsBotsBesideItsMap()
+        public void Summary_CountsTheListedRoomsAndThePlayersInThem()
         {
-            var crowded = new RoomInfo { Name = "Crowded", MapId = 1, MaxPlayers = 8, BotCount = 100 };
-            var quiet = new RoomInfo { Name = "Quiet", MapId = 1, MaxPlayers = 8, BotCount = 0 };
+            var a = new RoomInfo { Name = "A", MapId = 1, Players = 3, MaxPlayers = 8 };
+            var b = new RoomInfo { Name = "B", MapId = 2, Players = 1, MaxPlayers = 8 };
 
-            StringAssert.StartsWith(MenuRoomBrowserScreen.MapLabel(crowded), MenuRoomBrowserScreen.MapCell(crowded));
-            StringAssert.Contains("100 bots", MenuRoomBrowserScreen.MapCell(crowded));
-            StringAssert.Contains("no bots", MenuRoomBrowserScreen.MapCell(quiet));
-            StringAssert.EndsWith("LEAD BY 200", MenuRoomBrowserScreen.MapCell(quiet));
+            Assert.AreEqual("No open rooms", MenuRoomBrowserScreen.SummaryLabel(new RoomInfo[0]));
+            Assert.AreEqual("1 open room  ·  1 player in them", MenuRoomBrowserScreen.SummaryLabel(new[] { b }));
+            Assert.AreEqual("2 open rooms  ·  4 players in them", MenuRoomBrowserScreen.SummaryLabel(new[] { a, b }));
         }
 
         [Test]
@@ -70,21 +69,20 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         /// <summary>
-        /// The lock belongs in the STATUS cell, and it has to be visible.
+        /// The STATUS chip is the lifecycle, FULL when no seat is left. A private room says so
+        /// with its own PRIVATE chip and lock sprite (owner's run of 2026-10-12, item 4), so its
+        /// status reads like any other room's.
         /// </summary>
-        /// <remarks>
-        /// ASCII rather than an emoji, for the reason the builder gives: the Canvas uses Unity's
-        /// built-in legacy font, a missing glyph renders as a blank, and a private room would then
-        /// be indistinguishable from a public one.
-        /// </remarks>
         [Test]
-        public void StatusLabel_MarksAPrivateRoomWithoutHidingItsLifecycle()
+        public void StatusLabel_IsTheLifecycleAndFullWhenNoSeatIsLeft()
         {
-            var open = new RoomInfo { Name = "Open", MapId = 0, MaxPlayers = 8 };
-            var locked = new RoomInfo { Name = "Locked", MapId = 0, MaxPlayers = 8, IsPrivate = true };
+            var open = new RoomInfo { Name = "Open", MapId = 0, Players = 3, MaxPlayers = 8 };
+            var locked = new RoomInfo { Name = "Locked", MapId = 0, Players = 3, MaxPlayers = 8, IsPrivate = true };
+            var full = new RoomInfo { Name = "Full", MapId = 0, Players = 8, MaxPlayers = 8 };
 
-            Assert.AreEqual("Waiting", MenuRoomBrowserScreen.StatusLabel(open));
-            Assert.AreEqual("[LOCKED] Waiting", MenuRoomBrowserScreen.StatusLabel(locked));
+            Assert.AreEqual("WAITING", MenuRoomBrowserScreen.StatusLabel(open));
+            Assert.AreEqual("WAITING", MenuRoomBrowserScreen.StatusLabel(locked));
+            Assert.AreEqual("FULL", MenuRoomBrowserScreen.StatusLabel(full));
         }
 
         [Test]
@@ -193,6 +191,27 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.NotNull(section, "_rejoinSection is not wired");
             Assert.IsFalse(section.activeSelf, "YOUR MATCHES must be hidden until there is a match to rejoin");
             Assert.NotNull(so.FindProperty("_openRoomsTable").objectReferenceValue, "_openRoomsTable is not wired");
+
+            // Every row's map picture, chips, seats bar and status dot (owner's run of 2026-10-12).
+            foreach (string array in new[] { "_rows", "_rejoinRows" })
+            {
+                SerializedProperty all = so.FindProperty(array);
+                for (int i = 0; i < all.arraySize; i++)
+                {
+                    foreach (string cell in new[]
+                             {
+                                 "Thumb", "Mode", "DayIcon", "NightIcon", "Rule", "Bots", "Medal", "MedalFace", "Lock",
+                                 "SeatsFill", "StatusDot",
+                             })
+                        Assert.NotNull(all.GetArrayElementAtIndex(i).FindPropertyRelative(cell).objectReferenceValue,
+                            $"{array}[{i}].{cell} is not wired");
+                }
+            }
+            Assert.AreEqual(MapPictureChoice.Count, so.FindProperty("_mapPictures").arraySize);
+            Assert.NotNull(so.FindProperty("_summaryText").objectReferenceValue, "_summaryText is not wired");
+            var empty = (GameObject)so.FindProperty("_emptyState").objectReferenceValue;
+            Assert.NotNull(empty, "_emptyState is not wired");
+            Assert.IsFalse(empty.activeSelf, "the empty state shows only when the list is empty");
 
             SerializedProperty rows = so.FindProperty("_rejoinRows");
             Assert.AreEqual(MenuRoomBrowserScreen.RejoinRows, rows.arraySize);
