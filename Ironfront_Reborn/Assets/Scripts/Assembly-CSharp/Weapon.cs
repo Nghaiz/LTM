@@ -361,6 +361,13 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	{
 		if ((unholstered || overrideHolstered) && !reloading)
 		{
+			// Down from the sights in the frame the reload starts, before its trigger (owner's run
+			// of 2026-10-12): the scope stops covering the reload, and the animator leaves Aim for
+			// Reload with aim already false. CanBeAimed() keeps the sights down until it is done.
+			if (aiming)
+			{
+				SetAiming(false);
+			}
 			if (fireLoopPlaying)
 			{
 				StopFireLoop();
