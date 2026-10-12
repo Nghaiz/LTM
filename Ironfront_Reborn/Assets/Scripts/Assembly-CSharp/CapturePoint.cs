@@ -536,6 +536,14 @@ public class CapturePoint : SpawnPoint
 				Ironfront.Net.Unity.PracticeFeats.PlayerHelpedCapture(GetInstanceID());
 			}
 		}
+		// The practice killfeed's flag line (owner's run of 2026-10-12): who took it, from whom.
+		if (NetContext.IsOffline && team != owner)
+		{
+			Ironfront.Net.Unity.PracticeFeed.ReportFlag(new Ironfront.Net.Unity.PracticeFlagChange(
+				GetInstanceID(), base.name,
+				team >= 0 ? (byte)team : Ironfront.Net.Protocol.TeamId.None,
+				owner >= 0 ? (byte)owner : Ironfront.Net.Protocol.TeamId.None));
+		}
 		owner = team;
 		pendingOwner = team;
 		// Null-guarded: SetOwner is now on the SERVER's path (it is how a flip reaches

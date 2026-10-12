@@ -86,8 +86,10 @@ namespace Ironfront.Net.Protocol.Achievements
 
         internal Achievement(int number, string id, string title, AchievementTier tier, AchievementTags tags,
             AchievementProgress progress, AchievementMeasure measure, CareerStat? stat, long target,
-            string description, string unit = "", AchievementPart[]? parts = null, string teaser = "")
+            string description, string unit = "", AchievementPart[]? parts = null, string teaser = "",
+            AchievementTier? roundSize = null)
         {
+            RoundSize = roundSize;
             Number = number;
             Id = id;
             Title = title;
@@ -139,6 +141,14 @@ namespace Ironfront.Net.Protocol.Achievements
 
         /// <summary>A hidden achievement's line before it is earned: a hint, never the rule.</summary>
         public string Teaser { get; }
+
+        /// <summary>
+        /// The size of round it counts (owner's run of 2026-10-12, replacing every minute limit):
+        /// the room must play to at least <see cref="CareerRules.MarginPoints"/> (LEAD BY) or
+        /// <see cref="CareerRules.TargetPoints"/> (FIRST TO) of this size. Null for an achievement
+        /// that is not about a round.
+        /// </summary>
+        public AchievementTier? RoundSize { get; }
 
         public bool Hidden => (Tags & AchievementTags.Hidden) != 0;
 

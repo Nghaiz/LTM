@@ -362,7 +362,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
             aim.onValueChanged.AddListener(v => Edit(() => _draft.ToggleAim = v));
             Toggle crouch = AddSwitch(y, "Toggle crouch", "One press of the crouch key crouches and the next stands, instead of holding it.");
             crouch.onValueChanged.AddListener(v => Edit(() => _draft.ToggleCrouch = v));
-            Toggle reload = AddSwitch(y, "Auto reload", "Reload by itself when the magazine runs dry.");
+            Toggle reload = AddSwitch(y, "Auto reload", "Reload the moment the magazine runs dry. Off, the trigger on an empty one reloads.");
             reload.onValueChanged.AddListener(v => Edit(() => _draft.AutoReload = v));
             Toggle hits = AddSwitch(y, "Hit indicators", "A mark and a click when your shot lands.");
             hits.onValueChanged.AddListener(v => Edit(() => _draft.HitIndicators = v));

@@ -427,7 +427,28 @@ public class FpsActorController : ActorController
 
 	public override bool Reload()
 	{
-		return inputSource.Reload();
+		return inputSource.Reload() || TriggerOnEmptyClip();
+	}
+
+	/// <summary>
+	/// A trigger pulled, or still held, on an empty clip reloads as R does (owner's run of
+	/// 2026-10-12): a magazine emptied with the button still down, or a click on an empty one,
+	/// starts the reload the way the big shooters do. <see cref="Fire"/>'s own gates apply, so a
+	/// sprint or an open menu reloads nothing, and a weapon with no spare rounds stays empty.
+	/// </summary>
+	/// <remarks>
+	/// Online this is the auto-reload option's path: the engine weapon starts the reload and
+	/// <see cref="SampleNetworkCombatButtons"/> mirrors it onto C_INPUT, so the server fills the
+	/// authoritative clip too.
+	/// </remarks>
+	private bool TriggerOnEmptyClip()
+	{
+		if (!actor.HasUnholsteredWeapon())
+		{
+			return false;
+		}
+		Weapon weapon = actor.activeWeapon;
+		return !weapon.reloading && !weapon.HasLoadedAmmo() && weapon.HasSpareAmmo() && Fire();
 	}
 
 	public override bool OnGround()

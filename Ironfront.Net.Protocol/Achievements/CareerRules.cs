@@ -47,11 +47,13 @@ namespace Ironfront.Net.Protocol.Achievements
     /// <summary>What the master itself knows about a round: never the game server's word.</summary>
     public readonly struct RoundContext
     {
-        public RoundContext(ushort mapId, bool night, bool final)
+        public RoundContext(ushort mapId, bool night, bool final, VictoryRule rule, int victoryPoints)
         {
             MapId = mapId;
             Night = night;
             Final = final;
+            Rule = rule;
+            VictoryPoints = victoryPoints;
         }
 
         public ushort MapId { get; }
@@ -64,6 +66,15 @@ namespace Ironfront.Net.Protocol.Achievements
         /// round runs, which may only feed numbers that can never shrink.
         /// </summary>
         public bool Final { get; }
+
+        /// <summary>The room's win rule: LEAD BY (margin) or FIRST TO (target).</summary>
+        public VictoryRule Rule { get; }
+
+        /// <summary>The room's points for that rule; 0 when the room is not known, which counts for no size.</summary>
+        public int VictoryPoints { get; }
+
+        /// <summary>Whether the room makes rounds of <paramref name="size"/> or bigger.</summary>
+        public bool IsRoundOf(AchievementTier size) => CareerRules.IsRoundOf(size, Rule, VictoryPoints);
     }
 
     /// <summary>
@@ -78,15 +89,20 @@ namespace Ironfront.Net.Protocol.Achievements
     /// <see cref="RoundContext.Final"/>.
     /// </para>
     /// <para>
+    /// <b>No minute limits</b> (owner's run of 2026-10-12: "I won the 1v3 in under ten minutes by
+    /// skill"). A round counts for an achievement when the room plays to at least the points of the
+    /// achievement's size (<see cref="MarginPoints"/>, <see cref="TargetPoints"/>) and the player is
+    /// there at its end, whenever they came in: a player still loading when someone scored the first
+    /// kill is as much in the round as anyone (owner, same day), and nobody from outside a room can
+    /// enter its running match. A fast win is a skilled one, and it counts.
+    /// </para>
+    /// <para>
     /// <b>The win streak is not here</b>: it needs the career it continues, and
     /// <c>CareerService</c> owns that read.
     /// </para>
     /// </remarks>
     public static class CareerRules
     {
-        /// <summary>A round counts for "finish" and "win" when the player played this long.</summary>
-        public const int QualifyingSeconds = 300;
-
         /// <summary>Health at or below which a player is "on 5 health or less".</summary>
         public const int LowHealth = 5;
 
@@ -108,13 +124,36 @@ namespace Ironfront.Net.Protocol.Achievements
         /// <summary>Seconds between kills that still make one RAMPAGE.</summary>
         public const float MultiKillWindowSeconds = 3f;
 
-        /// <summary>Seconds of play several achievements ask for, beyond the five minutes.</summary>
-        public const int LongRoundSeconds = 15 * 60;
-
-        public const int OutnumberedSeconds = 10 * 60;
-
         /// <summary>Wins per map ALL FRONTS MASTERED counts, at most.</summary>
         public const int AllFrontsWinsPerMap = 50;
+
+        /// <summary>
+        /// The LEAD BY points a room plays to, at least, for its rounds to be of
+        /// <paramref name="size"/> (owner's table of 2026-10-12). The lobby's own default, 200, is
+        /// Platinum: every achievement but a Mythic counts in a default room.
+        /// </summary>
+        public static int MarginPoints(AchievementTier size) => size switch
+        {
+            AchievementTier.Silver => 120,
+            AchievementTier.Gold => 150,
+            AchievementTier.Platinum => 200,
+            AchievementTier.Mythic => 400,
+            _ => 100,
+        };
+
+        /// <summary>The FIRST TO points a room plays to, at least, for its rounds to be of <paramref name="size"/>.</summary>
+        public static int TargetPoints(AchievementTier size) => size switch
+        {
+            AchievementTier.Silver => 300,
+            AchievementTier.Gold => 400,
+            AchievementTier.Platinum => 500,
+            AchievementTier.Mythic => 1000,
+            _ => 250,
+        };
+
+        /// <summary>Whether a room playing <paramref name="rule"/> to <paramref name="points"/> makes rounds of <paramref name="size"/> or bigger.</summary>
+        public static bool IsRoundOf(AchievementTier size, VictoryRule rule, int points)
+            => points >= (rule == VictoryRule.Target ? TargetPoints(size) : MarginPoints(size));
 
         /// <summary>The career stat counting a map's wins, or null for a map with none.</summary>
         public static CareerStat? WinsOnMap(ushort mapId) => mapId switch
@@ -125,9 +164,12 @@ namespace Ironfront.Net.Protocol.Achievements
             _ => null,
         };
 
-        /// <summary>Whether the round counts as finished: present at the end, five minutes played.</summary>
-        public static bool Qualifies(RoundSheet round, in RoundContext context)
-            => context.Final && round.Get(RoundFact.Finished) == 1 && round.Get(RoundFact.SecondsPlayed) >= QualifyingSeconds;
+        /// <summary>
+        /// Whether the round counts for an achievement of round size <paramref name="size"/>: the
+        /// player is there at its end, and the room is big enough.
+        /// </summary>
+        public static bool Counts(RoundSheet round, in RoundContext context, AchievementTier size)
+            => context.Final && round.Get(RoundFact.Finished) == 1 && context.IsRoundOf(size);
 
         /// <summary>Accuracy per mille, or -1 below <see cref="AccuracyMinShots"/>.</summary>
         public static long AccuracyPermille(long shots, long hits)
@@ -202,9 +244,15 @@ namespace Ironfront.Net.Protocol.Achievements
             if (present) Put(into, CareerStat.Matches, 1);
             if (won) Put(into, CareerStat.Wins, 1);
 
-            if (!Qualifies(round, in context)) return;
+            // Everything below is a round achievement: none counts a round the player left before
+            // its end. The room's size gates each by its tier.
+            if (!present) return;
+            bool bronze = context.IsRoundOf(AchievementTier.Bronze);
+            bool silver = context.IsRoundOf(AchievementTier.Silver);
+            bool gold = context.IsRoundOf(AchievementTier.Gold);
+            bool platinum = context.IsRoundOf(AchievementTier.Platinum);
+            bool mythic = context.IsRoundOf(AchievementTier.Mythic);
 
-            long seconds = round.Get(RoundFact.SecondsPlayed);
             long deaths = round.Get(RoundFact.Deaths);
             long points = round.Get(RoundFact.Score);
             long shots = round.Get(RoundFact.Shots);
@@ -212,43 +260,51 @@ namespace Ironfront.Net.Protocol.Achievements
             long captures = round.Get(RoundFact.FlagsCaptured);
             bool nightVisionOff = round.Get(RoundFact.NightVisionKnown) == 1 && round.Get(RoundFact.NightVisionUsed) == 0;
 
-            Put(into, CareerStat.RoundsFinished, 1);
-            if (context.Night) Put(into, CareerStat.NightRoundsFinished, 1);
-            if (context.MapId < 63) Put(into, CareerStat.MapsFinished, 1L << context.MapId);
-            if (won)
+            // Bronze: ROLL CALL, LIGHTS OUT, TASTE OF VICTORY, BULLET SPONGE, PARTICIPATION TROPHY.
+            if (bronze) Put(into, CareerStat.RoundsFinished, 1);
+            if (bronze && context.Night) Put(into, CareerStat.NightRoundsFinished, 1);
+            if (bronze && won) Put(into, CareerStat.RoundsWon, 1);
+            long humans = round.Get(RoundFact.HumansOwnSide) + round.Get(RoundFact.HumansEnemySide);
+            Feat(into, CareerStat.BulletSpongeRounds, bronze
+                && humans >= 3 && round.Has(RoundFact.MaxOtherHumanDeaths) && deaths > round.Get(RoundFact.MaxOtherHumanDeaths));
+            Feat(into, CareerStat.ParticipationRounds, bronze
+                && round.Has(RoundFact.MinOtherPoints) && points <= round.Get(RoundFact.MinOtherPoints));
+
+            // Silver: THREE FRONTS.
+            if (silver && context.MapId < 63) Put(into, CareerStat.MapsFinished, 1L << context.MapId);
+
+            // Gold: LONG CAMPAIGN, TOP BRASS, CLEAN SHEET, NAKED EYE.
+            if (gold && won) Put(into, CareerStat.GoldRoundsWon, 1);
+            Feat(into, CareerStat.MvpRounds, gold
+                && won && points > 0 && round.Has(RoundFact.MaxOtherPoints) && points >= round.Get(RoundFact.MaxOtherPoints));
+            Feat(into, CareerStat.CleanSheetRounds, gold && won && deaths == 0 && kills >= 10);
+            Feat(into, CareerStat.NakedEyeRounds, gold && context.Night && won && nightVisionOff && kills >= 10);
+
+            // Platinum: ALL FRONTS MASTERED, OUTNUMBERED, PACIFIST, ABSOLUTE DOMINANCE.
+            if (platinum && won)
             {
-                Put(into, CareerStat.RoundsWon, 1);
                 CareerStat? onMap = WinsOnMap(context.MapId);
                 if (onMap != null) Put(into, onMap.Value, 1);
             }
-
-            long humans = round.Get(RoundFact.HumansOwnSide) + round.Get(RoundFact.HumansEnemySide);
-            Feat(into, CareerStat.BulletSpongeRounds,
-                humans >= 3 && round.Has(RoundFact.MaxOtherHumanDeaths) && deaths > round.Get(RoundFact.MaxOtherHumanDeaths));
-            Feat(into, CareerStat.ParticipationRounds,
-                round.Has(RoundFact.MinOtherPoints) && points <= round.Get(RoundFact.MinOtherPoints));
-            Feat(into, CareerStat.MvpRounds,
-                won && points > 0 && round.Has(RoundFact.MaxOtherPoints) && points >= round.Get(RoundFact.MaxOtherPoints));
-            Feat(into, CareerStat.CleanSheetRounds, won && deaths == 0 && seconds >= LongRoundSeconds && kills >= 10);
-            Feat(into, CareerStat.NakedEyeRounds,
-                context.Night && won && nightVisionOff && seconds >= LongRoundSeconds && kills >= 10);
-            Feat(into, CareerStat.OutnumberedWins,
-                won && seconds >= OutnumberedSeconds && round.Has(RoundFact.HumansOwnSide)
+            Feat(into, CareerStat.OutnumberedWins, platinum
+                && won && round.Has(RoundFact.HumansOwnSide)
                 && round.Get(RoundFact.HumansOwnSide) == 1 && round.Get(RoundFact.HumansEnemySide) >= 3);
-            Feat(into, CareerStat.PacifistRounds,
-                won && kills == 0 && deaths == 0 && seconds >= LongRoundSeconds
+            Feat(into, CareerStat.PacifistRounds, platinum
+                && won && kills == 0 && deaths == 0
                 && round.Has(RoundFact.MaxOtherCaptures) && captures > round.Get(RoundFact.MaxOtherCaptures));
             long accuracy = AccuracyPermille(shots, hits);
-            Feat(into, CareerStat.DominanceRounds,
-                round.Has(RoundFact.MaxOtherKills) && round.Has(RoundFact.MaxOtherCaptures)
+            Feat(into, CareerStat.DominanceRounds, platinum
+                && round.Has(RoundFact.MaxOtherKills) && round.Has(RoundFact.MaxOtherCaptures)
                 && round.Has(RoundFact.MinOtherDeaths) && round.Has(RoundFact.BestOtherAccuracyPermille)
                 && kills >= round.Get(RoundFact.MaxOtherKills) && captures >= round.Get(RoundFact.MaxOtherCaptures)
                 && accuracy >= 0 && accuracy >= round.Get(RoundFact.BestOtherAccuracyPermille)
                 && deaths <= round.Get(RoundFact.MinOtherDeaths));
+
+            // Mythic: DEAD EYE, UNTOUCHABLE, BLADE ONLY, MAP PAINTER, HAIL MARY, CREATURE OF THE NIGHT.
+            if (!mythic) return;
             Feat(into, CareerStat.DeadEyeRounds, won && kills >= 15 && shots >= 15 && hits >= shots);
             Feat(into, CareerStat.UntouchableRounds,
-                won && round.Has(RoundFact.DamageTaken) && round.Get(RoundFact.DamageTaken) == 0 && deaths == 0
-                && seconds >= LongRoundSeconds && kills >= 15);
+                won && round.Has(RoundFact.DamageTaken) && round.Get(RoundFact.DamageTaken) == 0 && deaths == 0 && kills >= 15);
             if (kills > 0 && round.Get(RoundFact.MeleeKills) >= kills) Put(into, CareerStat.BladeOnlyBest, kills);
             Feat(into, CareerStat.MapPainterRounds,
                 won && deaths == 0 && round.Get(RoundFact.MapFlags) > 0
@@ -258,12 +314,14 @@ namespace Ironfront.Net.Protocol.Achievements
         }
 
         /// <summary>
-        /// The win streak after a round: one more for a win, back to zero for any other round that
-        /// counts, untouched by a round that does not (shorter than five minutes, or left).
+        /// The win streak after a round (UNDEFEATED): one more for a win, back to zero for a loss
+        /// or for leaving before the end, untouched by a round that does not count -- one smaller
+        /// than Platinum size (LEAD BY 200 / FIRST TO 500). Leaving resets it, so walking out of a
+        /// round about to be lost cannot keep it.
         /// </summary>
         public static long NextWinStreak(long streak, RoundSheet round, in RoundContext context)
         {
-            if (!context.Final || round.Get(RoundFact.SecondsPlayed) < QualifyingSeconds) return streak;
+            if (!context.Final || !context.IsRoundOf(AchievementTier.Platinum)) return streak;
             bool won = round.Get(RoundFact.Finished) == 1 && round.Get(RoundFact.Won) == 1;
             return won ? streak + 1 : 0;
         }

@@ -1,8 +1,8 @@
 ﻿#nullable enable
 
 using Ironfront.MasterClient;
-using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Protocol.Achievements;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -91,24 +91,37 @@ namespace Ironfront.Net.Unity.Client.Menu
         [Tooltip("The open-rooms table, header and rows, moved down under YOUR MATCHES.")]
         [SerializeField] private RectTransform? _openRoomsTable;
 
+        [Header("Room art and the list's state (owner's run of 2026-10-12)")]
+        [Tooltip("Every map's picture by day then at night, in MapCatalog order (MapPictureChoice).")]
+        [SerializeField] private Sprite[] _mapPictures = Array.Empty<Sprite>();
+
+        [Tooltip("How many open rooms are listed and how many players are in them.")]
+        [SerializeField] private Text? _summaryText;
+
+        [Tooltip("Shown in place of the table when no open room is listed.")]
+        [SerializeField] private GameObject? _emptyState;
+
+        [Tooltip("The empty state's sentence: no rooms at all, or none matching the search.")]
+        [SerializeField] private Text? _emptyText;
+
         /// <summary>
-        /// One visible room, as the cells the prototype's <c>.room-row</c> draws.
+        /// One visible room: its map's picture, its name and map, a chip for each setting, how full
+        /// it is and its status (owner's run of 2026-10-12, item 4: "icons, colours, badges, chips,
+        /// and more about each room").
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>A row used to be a single <see cref="Text"/>.</b> Every fact about the room was
-        /// joined into one sentence, so nothing lined up between rows, no column could be scanned,
-        /// and reading the list meant parsing eight sentences. The prototype gives each fact its own
-        /// cell with a header above them.
+        /// <b>A row used to be a single <see cref="Text"/>, then four plain cells.</b> The settings
+        /// sat in one sentence in the MAP cell ("Dustbowl · 100 bots · LEAD BY 200"), so nothing
+        /// lined up and a private room was a "[LOCKED]" prefix on its status. Each setting now has
+        /// its own chip in its own column, and every chip is computed by <see cref="RoomBadges"/>
+        /// from what the room list already carries.
         /// </para>
         /// <para>
-        /// <b>Only four of the prototype's six columns exist here.</b> MODE and PING are absent from
-        /// the room protocol: a <c>RoomInfo</c> carries a name, a map id, a player count, a
-        /// lifecycle and a privacy flag, and nothing else. The spec's rule is that a property the
-        /// protocol does not carry is reported as under development rather than invented, and a
-        /// column of blanks or zeroes would be inventing one — so those two columns are not drawn
-        /// at all. The readout above the table stays and stays labelled <c>master</c>, because that
-        /// is what it measures: this client's round trip to the master, not a per-room figure.
+        /// <b>The medal chip</b> names the largest achievement size a round in the room counts for
+        /// (<c>CareerRules.IsRoundOf</c>), so a player can see before joining which round
+        /// achievements the room can award. The readout above the table stays labelled
+        /// <c>master</c>: it is this client's round trip to the master, not a per-room ping.
         /// </para>
         /// </remarks>
         [Serializable]
@@ -119,6 +132,17 @@ namespace Ironfront.Net.Unity.Client.Menu
             public Text Map;
             public Text Players;
             public Text Status;
+            public Image Thumb;
+            public Text Mode;
+            public GameObject DayIcon;
+            public GameObject NightIcon;
+            public Text Rule;
+            public Text Bots;
+            public Text Medal;
+            public Graphic MedalFace;
+            public GameObject Lock;
+            public Image SeatsFill;
+            public Image StatusDot;
         }
 
         [Header("Controls")]
@@ -429,10 +453,9 @@ namespace Ironfront.Net.Unity.Client.Menu
                 if (!used) continue;
 
                 RoomInfo room = rejoins[i];
-                if (row.Name != null) row.Name.text = room.Name;
-                if (row.Map != null) row.Map.text = MapCell(room);
-                if (row.Players != null) row.Players.text = PlayerLabel(room);
+                FillRow(row, room, _mapPictures);
                 if (row.Status != null) row.Status.text = RejoinStatusLabel(room);
+                if (row.StatusDot != null) row.StatusDot.color = UiStyle.Orange;
             }
 
             float shift = RejoinSectionHeight(shownRejoins);
@@ -457,16 +480,81 @@ namespace Ironfront.Net.Unity.Client.Menu
 
                 if (!used) continue;
 
-                RoomInfo room = rooms[i];
-                if (row.Name != null) row.Name.text = room.Name;
-                if (row.Map != null) row.Map.text = MapCell(room);
-                if (row.Players != null) row.Players.text = PlayerLabel(room);
-                if (row.Status != null) row.Status.text = StatusLabel(room);
+                FillRow(row, rooms[i], _mapPictures);
             }
 
             if (_overflowText != null)
                 _overflowText.text = OverflowLabel(
                     Math.Max(0, rooms.Length - openRows), Math.Max(0, rejoins.Length - shownRejoins));
+
+            if (_summaryText != null) _summaryText.text = SummaryLabel(rooms);
+
+            bool empty = rooms.Length == 0;
+            if (_emptyState != null) _emptyState.SetActive(empty);
+            if (_emptyText != null && empty)
+            {
+                string query = _searchField != null ? _searchField.text : string.Empty;
+                _emptyText.text = string.IsNullOrWhiteSpace(query) && _modeFilter < 0
+                    ? "Create one and it shows here for everyone, or refresh in a moment."
+                    : "No open room matches the search or the mode filter.";
+            }
+        }
+
+        /// <summary>Writes one room into one row: its picture, name, map, chips, seats and status.</summary>
+        private static void FillRow(RoomRow row, RoomInfo room, Sprite[] pictures)
+        {
+            RoomSettings settings = room.Settings;
+
+            if (row.Thumb != null) MapPictureChoice.Show(row.Thumb, pictures, room.MapId, settings.Mode);
+            if (row.Name != null) row.Name.text = room.Name;
+            if (row.Map != null) row.Map.text = MapLabel(room);
+
+            bool night = RoomBadges.IsNight(settings);
+            if (row.Mode != null) row.Mode.text = RoomBadges.ModeLabel(settings);
+            if (row.DayIcon != null) row.DayIcon.SetActive(!night);
+            if (row.NightIcon != null) row.NightIcon.SetActive(night);
+            if (row.Rule != null) row.Rule.text = RoomBadges.RuleLabel(settings);
+            if (row.Bots != null) row.Bots.text = RoomBadges.BotsLabel(room.BotCount);
+
+            AchievementTier? tier = RoomBadges.MedalTier(settings);
+            Color medal = RoomBadges.MedalColour(tier);
+            if (row.Medal != null)
+            {
+                row.Medal.text = RoomBadges.MedalLabel(tier);
+                row.Medal.color = medal;
+            }
+            if (row.MedalFace != null) row.MedalFace.color = new Color(medal.r * 0.22f, medal.g * 0.22f, medal.b * 0.22f, 0.92f);
+
+            if (row.Lock != null) row.Lock.SetActive(room.IsPrivate);
+
+            if (row.Players != null) row.Players.text = PlayerLabel(room);
+            if (row.SeatsFill != null)
+            {
+                row.SeatsFill.fillAmount = RoomBadges.SeatsFill(room.Players, room.MaxPlayers);
+                row.SeatsFill.color = RoomBadges.SeatsColour(room.Players, room.MaxPlayers);
+            }
+
+            Color status = RoomBadges.StatusColour(room.Lifecycle, room.Players, room.MaxPlayers);
+            if (row.Status != null)
+            {
+                row.Status.text = StatusLabel(room);
+                row.Status.color = status;
+            }
+            if (row.StatusDot != null) row.StatusDot.color = status;
+        }
+
+        /// <summary>
+        /// The line above the table: how many open rooms are listed and how many players they hold,
+        /// so an empty-looking evening and a busy one read differently before anybody scrolls.
+        /// </summary>
+        internal static string SummaryLabel(RoomInfo[] rooms)
+        {
+            if (rooms.Length == 0) return "No open rooms";
+            int players = 0;
+            foreach (RoomInfo room in rooms) players += room.Players;
+            string roomWord = rooms.Length == 1 ? "open room" : "open rooms";
+            string playerWord = players == 1 ? "player" : "players";
+            return $"{rooms.Length} {roomWord}  ·  {players} {playerWord} in them";
         }
 
         /// <summary>
@@ -552,47 +640,22 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// Not "Unknown" for an id with no entry: a map id this build cannot name is a real thing a
         /// newer master can send, and the number is what makes it reportable.
         /// </remarks>
-        internal static string MapLabel(RoomInfo room)
-        {
-            // The catalog's display name, as the create and practice screens show it. The scene
-            // name read the same for Dustbowl and Island, so nothing showed the difference until
-            // Forest Lake listed as "ForestLake".
-            for (int i = 0; i < MapCatalog.All.Count; i++)
-            {
-                if (MapCatalog.All[i].Id == room.MapId) return MapCatalog.All[i].DisplayName;
-            }
+        internal static string MapLabel(RoomInfo room) => RoomBadges.MapName(room.MapId);
 
-            return $"map {room.MapId}";
-        }
-
-        /// <summary>
-        /// The MAP cell: the map, the room's bots beside it (protocol 13), so a 100-bot room
-        /// reads as one before anybody joins it, and the rule it is played to (protocol 14).
-        /// </summary>
+        /// <summary>The mode filter: every mode, or only rooms of the chosen one.</summary>
         internal static bool MatchesMode(RoomInfo room, int modeFilter)
             => modeFilter < 0 || room.GameMode == (byte)RoomSettingsChoice.Modes[modeFilter];
-
-        internal static string MapCell(RoomInfo room)
-            => (room.BotCount > 0
-                   ? $"{MapLabel(room)}  ·  {room.BotCount} bots"
-                   : $"{MapLabel(room)}  ·  no bots")
-               + "  ·  " + RoomSettingsChoice.Describe(room.Settings);
 
         /// <summary>The PLAYERS cell.</summary>
         internal static string PlayerLabel(RoomInfo room) => $"{room.Players}/{room.MaxPlayers}";
 
         /// <summary>
-        /// The STATUS cell: the lifecycle, marked when the room wants a password.
+        /// The STATUS chip: the lifecycle, or FULL for a waiting room with no seat left. A private
+        /// room says so with its own PRIVATE chip and lock icon, which is a sprite rather than a
+        /// font glyph, so it cannot render as a blank the way an emoji lock would.
         /// </summary>
-        /// <remarks>
-        /// The lock is a plain ASCII marker rather than an emoji: the Canvas uses Unity's built-in
-        /// legacy font, which has no glyph for one, and a missing glyph renders as a blank — a
-        /// private room would then be indistinguishable from a public one, which is criterion 1
-        /// failing quietly. It lives in this cell rather than in the name because the prototype's
-        /// own lock is a status, not part of the room's title.
-        /// </remarks>
         internal static string StatusLabel(RoomInfo room)
-            => room.IsPrivate ? "[LOCKED] " + Describe(room.Lifecycle) : Describe(room.Lifecycle);
+            => RoomBadges.StatusLabel(room.Lifecycle, room.Players, room.MaxPlayers);
 
         internal static bool MatchesSearch(RoomInfo room, string query)
         {
@@ -604,19 +667,5 @@ namespace Ironfront.Net.Unity.Client.Menu
             return MapLabel(room).IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static string Describe(RoomLifecycleState state)
-        {
-            switch (state)
-            {
-                case RoomLifecycleState.Waiting: return "Waiting";
-                case RoomLifecycleState.Starting: return "Starting";
-                case RoomLifecycleState.InMatch: return "In match";
-                case RoomLifecycleState.Ending: return "Ending";
-
-                // A lifecycle byte from a newer master. Shown as itself for the reason
-                // RoomInfo.Lifecycle does not throw on one: a list row must render.
-                default: return $"state {(byte)state}";
-            }
-        }
     }
 }

@@ -157,6 +157,45 @@ namespace Ironfront.Net.Replication.Match
         public int DeathsOf(ushort actorId)
             => actorId < ProtocolConstants.MAX_ACTORS ? _deaths[actorId] : 0;
 
+        /// <summary>
+        /// One <c>S_PLAYER_SCORES</c> row for <paramref name="actorId"/>: this tally's counts and
+        /// stats, with the side, status and ping only the caller knows.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The one projection from tally to row.</b> The server's broadcast and the practice
+        /// match's Tab board both build their rows here, so the two boards cannot count the same
+        /// death differently (owner's run of 2026-10-12: the practice board is the online one).
+        /// </para>
+        /// <para>
+        /// The counters are clamped rather than wrapped: a match that somehow passes 65535 kills
+        /// renders a stuck maximum, which reads as an anomaly, where a wrapped counter renders as a
+        /// small plausible number, which does not. The id is a byte because the row's is; a caller
+        /// holding a wider id skips the actor rather than truncating it onto somebody else's row.
+        /// </para>
+        /// </remarks>
+        public PlayerScoreEntry RowFor(byte actorId, byte team, PlayerStatusFlags status, ushort pingMs)
+            => new PlayerScoreEntry
+            {
+                ActorId    = actorId,
+                Kills      = ClampToU16(KillsOf(actorId)),
+                Deaths     = ClampToU16(DeathsOf(actorId)),
+                Team       = team,
+                HasStats   = true,
+                Status     = status,
+                Headshots  = ClampToU8(HeadshotsOf(actorId)),
+                Streak     = ClampToU8(StreakOf(actorId)),
+                BestStreak = ClampToU8(BestStreakOf(actorId)),
+                Points     = ClampToU16(PointsOf(actorId)),
+                PingMs     = pingMs,
+            };
+
+        private static byte ClampToU8(int value)
+            => value < 0 ? (byte)0 : value > byte.MaxValue ? byte.MaxValue : (byte)value;
+
+        private static ushort ClampToU16(int value)
+            => value < 0 ? (ushort)0 : value > ushort.MaxValue ? ushort.MaxValue : (ushort)value;
+
         /// <summary>True when this actor has neither killed nor died this match.</summary>
         /// <remarks>
         /// The predicate the end-of-match report filters on, named here rather than spelled as

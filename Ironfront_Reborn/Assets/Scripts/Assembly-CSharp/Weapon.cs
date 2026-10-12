@@ -361,6 +361,13 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	{
 		if ((unholstered || overrideHolstered) && !reloading)
 		{
+			// Down from the sights in the frame the reload starts, before its trigger (owner's run
+			// of 2026-10-12): the scope stops covering the reload, and the animator leaves Aim for
+			// Reload with aim already false. CanBeAimed() keeps the sights down until it is done.
+			if (aiming)
+			{
+				SetAiming(false);
+			}
 			if (fireLoopPlaying)
 			{
 				StopFireLoop();
@@ -423,6 +430,15 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		{
 			animator.SetLayerWeight(1, 1f);
 		}
+	}
+
+	/// <summary>
+	/// <see cref="CanFire"/>'s gates as a line for a server log, so a refused launch says which
+	/// one refused it (owner's v4.6.2 playtest: a BIL SCALPEL round spent with nothing launched).
+	/// </summary>
+	public virtual string DescribeFireGates()
+	{
+		return $"{name}({NetworkId}) canFire={CanFire()} unholstered={unholstered} reloading={reloading} ammo={ammo} auto={configuration.auto} holdingFire={holdingFire} coolingDown={CoolingDown()}";
 	}
 
 	public virtual bool CanFire()

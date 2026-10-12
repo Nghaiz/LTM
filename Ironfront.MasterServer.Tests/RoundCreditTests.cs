@@ -121,7 +121,7 @@ namespace Ironfront.MasterServer.Tests
         [Fact]
         public void AnEmptyRoomInAMatchWhoseServerHasNoPlayersIsRemovedAsBefore()
         {
-            var lobby = new LobbyService { ServerHasPlayers = _ => false };
+            var lobby = new LobbyService { ServerPlayers = _ => 0 };
             Room room = lobby.CreateRoom(Session(1, "One"), new RoomCreateRequest("Room", 1, 4, 0, false, null)).Room!;
             room.State = RoomLifecycleState.InMatch;
 
@@ -133,7 +133,7 @@ namespace Ironfront.MasterServer.Tests
         [Fact]
         public void ARosterPlayerRejoiningAnEmptyKeptRoomBecomesItsHost()
         {
-            var lobby = new LobbyService { ServerHasPlayers = _ => true };
+            var lobby = new LobbyService { ServerPlayers = _ => 1 };
             Room room = lobby.CreateRoom(Session(1, "One"), new RoomCreateRequest("Room", 1, 4, 0, false, null)).Room!;
             room.State = RoomLifecycleState.InMatch;
             LobbyService.EnrollRoster(room);
@@ -145,6 +145,70 @@ namespace Ironfront.MasterServer.Tests
             Assert.True(lobby.RejoinRoom(Session(1, "One"), room.RoomId).Ok);
             Assert.Equal(1, room.HostPlayerId);
             Assert.False(lobby.RemoveAbandoned(room.RoomId));
+        }
+
+        [Fact]
+        public async Task ARoomInAMatchListsThePlayersItsServerHasNotTheLinksLeft()
+        {
+            // Owner's run of 2026-10-12: a room three people were playing in listed "1/8", the one
+            // member whose master link had survived.
+            using var cts = new CancellationTokenSource(Timeout);
+            await using var server = new Phase03ServerHarness();
+            using var gameServer = new GameServerLink();
+            ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId) { Players = 3 };
+
+            var player = new MasterClient.MasterClient();
+            await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            int playerId = await SignInAsync(player, "linkless", "Linkless");
+
+            Room room = server.Lobby.CreateRoom(Session(972, "Host"),
+                new RoomCreateRequest("Counted", 1, 8, 0, false, null)).Room!;
+            Assert.True((await PumpAsync(player.JoinRoomAsync(room.RoomId, null, cts.Token), player)).Ok);
+            gameServer.MatchStarted(room.RoomId);
+            Assert.True(await MasterHostHarness.WaitUntilAsync(() => room.State == RoomLifecycleState.InMatch));
+            Assert.True(server.GameServers.TryGet(serverId, out GameServerRecord? record) && record != null);
+            Assert.True(await MasterHostHarness.WaitUntilAsync(() => record!.CurrentPlayers == 3));
+
+            // Their master link closes while they play on.
+            player.Dispose();
+            Assert.True(await MasterHostHarness.WaitUntilAsync(() => !server.Lobby.IsMember(room.RoomId, playerId)));
+            Assert.Single(room.Members);
+
+            using var observer = new MasterClient.MasterClient();
+            await observer.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            await SignInAsync(observer, "observer", "Observer");
+            RoomInfo[] rooms = await PumpAsync(observer.GetRoomsAsync(cts.Token), observer);
+            RoomInfo listed = Array.Find(rooms, candidate => candidate.Name == "Counted")!;
+
+            Assert.Equal(3, listed.Players);
+            Assert.Equal(8, listed.MaxPlayers);
+        }
+
+        [Fact]
+        public void AWaitingRoomIsItsMembersAndAStartingOneCountsThoseStillLoadingIn()
+        {
+            int onServer = 6;
+            var lobby = new LobbyService { ServerPlayers = _ => onServer };
+            Room room = lobby.CreateRoom(Session(1, "One"), new RoomCreateRequest("Room", 1, 8, 0, false, null)).Room!;
+            Assert.True(lobby.JoinRoom(Session(2, "Two"), room.RoomId, null).Ok);
+            Assert.True(lobby.JoinRoom(Session(3, "Three"), room.RoomId, null).Ok);
+
+            // No match yet, so no server's word: the members.
+            Assert.Equal(3, lobby.PlayersIn(room));
+
+            // Starting: one of the three is on the server, two are still loading the map.
+            room.State = RoomLifecycleState.Starting;
+            onServer = 1;
+            Assert.Equal(3, lobby.PlayersIn(room));
+
+            // In the match, two of them lose their master links and play on: the server's count.
+            room.State = RoomLifecycleState.InMatch;
+            onServer = 3;
+            Assert.True(lobby.LeaveRoom(2).Ok);
+            Assert.True(lobby.LeaveRoom(3).Ok);
+            Assert.Single(room.Members);
+            Assert.Equal(3, lobby.PlayersIn(room));
         }
 
         // ------------------------------------------------------------------ helpers

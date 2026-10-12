@@ -69,6 +69,13 @@ namespace Ironfront.Net.Unity.Server.Tests
                 float directionX, float directionY, float directionZ)
                 => false;
 
+            public string DescribeCarriedWeapon() => "fake";
+
+            public bool SwingCarriedMelee(
+                float originX, float originY, float originZ,
+                float directionX, float directionY, float directionZ)
+                => false;
+
             public bool ReleaseCarriedThrowable(
                 float originX, float originY, float originZ,
                 float directionX, float directionY, float directionZ)

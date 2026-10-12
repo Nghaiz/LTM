@@ -52,9 +52,12 @@ namespace Ironfront.Net.Protocol.Achievements
         Won,
         /// <summary>1 when the enemy came within <see cref="CareerRules.HailMaryPoints"/> of winning.</summary>
         NearLoss,
-        /// <summary>Capture points on the map.</summary>
+        /// <summary>
+        /// Capture points the player's side did not hold when the round began: the flags MAP PAINTER
+        /// asks them to help take. (Every capture point on the map before 2026-10-12.)
+        /// </summary>
         MapFlags,
-        /// <summary>Distinct capture points the player helped capture this round.</summary>
+        /// <summary>Distinct capture points among <see cref="MapFlags"/>'s that the player helped capture this round.</summary>
         FlagsHelpedDistinct,
 
         // ---- kill kinds

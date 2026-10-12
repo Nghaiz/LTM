@@ -83,6 +83,9 @@ namespace Ironfront.Net.Unity.Server
 
             if (remaining > 0f) return new DamageOutcome(remaining, died: false);
 
+            // Before IsAlive flips: the flip unseats the body, and MID-AIR needs the seat it died in.
+            if (loop != null) loop.NoteCareerLethalBlow(victimId);
+
             // Flipped here rather than left to the caller, so the next call for the same actor
             // takes the IsAlive branch above and reports died:false. That is what makes the
             // edge single-fire without anyone having to remember to make it so.

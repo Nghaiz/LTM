@@ -8,24 +8,28 @@ public class Wrench : MeleeWeapon
 
 	public AudioClip repairSound;
 
-	protected override void ShootMeleeRay()
+	protected override void ShootMeleeRay(Ray ray)
 	{
-		Ray ray = new Ray(configuration.muzzle.position, configuration.muzzle.forward);
 		RaycastHit hitInfo;
-		if (Physics.SphereCast(ray, radius, out hitInfo, range, 4096))
+		if (FirstHitInReach(ray, 4096, out hitInfo))
 		{
 			Vehicle componentInParent = hitInfo.collider.GetComponentInParent<Vehicle>();
-			bool flag = componentInParent.Repair(repairHealth);
-			HitSomething(hitInfo.collider);
-			if (flag)
+			// A collider on the vehicle layer with no Vehicle above it is scenery: nothing to repair.
+			if (componentInParent != null)
 			{
-				audio.PlayOneShot(repairSound);
-			}
-			if (!user.aiControlled)
-			{
-				IngameUi.instance.FlashVehicleBar(componentInParent.GetHealthRatio());
+				bool flag = componentInParent.Repair(repairHealth);
+				HitSomething(hitInfo.collider);
+				if (flag)
+				{
+					audio.PlayOneShot(repairSound);
+				}
+				// The local player's bar only: a server swing has no HUD (IngameUi is absent there).
+				if (user != null && !user.aiControlled && IngameUi.instance != null)
+				{
+					IngameUi.instance.FlashVehicleBar(componentInParent.GetHealthRatio());
+				}
 			}
 		}
-		base.ShootMeleeRay();
+		base.ShootMeleeRay(ray);
 	}
 }

@@ -57,9 +57,14 @@ namespace Ironfront.Net.Replication.Match
         private readonly ulong[] _flagMask = new ulong[Actors];
         private readonly short[] _pairKills = new short[Actors * Actors];
         private readonly bool[] _killedBy = new bool[Actors * Actors];
+        private readonly float[] _blowPilotHeight = new float[Actors];
+        private readonly float[] _blowTime = new float[Actors];
 
         private float _roundStart;
         private int _mapFlags;
+
+        /// <summary>The flags each side held when the round began, by point id: theirs already, not to be taken.</summary>
+        private readonly ulong[] _heldAtStart = new ulong[2];
         private readonly bool[] _nearLoss = new bool[2];
 
         public MatchCareerTally() => Clear();
@@ -67,15 +72,28 @@ namespace Ironfront.Net.Replication.Match
         /// <summary>One fact of one actor this round.</summary>
         public long Get(ushort actor, RoundFact fact) => actor < Actors ? _facts[actor, (int)fact] : 0;
 
-        /// <summary>The round's Playing phase began at <paramref name="now"/>, on a map with <paramref name="mapFlags"/> flags.</summary>
-        public void BeginRound(float now, int mapFlags)
+        /// <summary>
+        /// The round's Playing phase began at <paramref name="now"/>, on a map with
+        /// <paramref name="mapFlags"/> flags, of which <paramref name="team0Held"/> and
+        /// <paramref name="team1Held"/> (bits by point id) were each side's already. MAP PAINTER asks a
+        /// player to help take the flags their side did not hold: helping take back a flag their side
+        /// started with would first need losing it (owner's run of 2026-10-12).
+        /// </summary>
+        public void BeginRound(float now, int mapFlags, ulong team0Held = 0, ulong team1Held = 0)
         {
             Clear();
             _roundStart = now;
             _mapFlags = Math.Max(0, mapFlags);
+            ulong onMap = _mapFlags >= 64 ? ulong.MaxValue : (1UL << _mapFlags) - 1;
+            _heldAtStart[0] = team0Held & onMap;
+            _heldAtStart[1] = team1Held & onMap;
         }
 
-        /// <summary>A player took <paramref name="actor"/>'s body at <paramref name="now"/>: their time starts here.</summary>
+        /// <summary>
+        /// A player took <paramref name="actor"/>'s body at <paramref name="now"/>: their time starts
+        /// here. When they joined does not decide whether the round counts for them (owner's run of
+        /// 2026-10-12): being there at its end does.
+        /// </summary>
         public void NoteJoined(ushort actor, float now)
         {
             if (actor >= Actors) return;
@@ -101,6 +119,20 @@ namespace Ironfront.Net.Replication.Match
                 if (score1 - score0 >= near) _nearLoss[0] = true;
                 if (score0 - score1 >= near) _nearLoss[1] = true;
             }
+        }
+
+        /// <summary>
+        /// A lethal blow is landing on <paramref name="victim"/> at <paramref name="now"/>, while they
+        /// still sit where it found them: a helicopter pilot's height above the ground, -1 for
+        /// anyone else. The death that follows unseats the body at once, before the kill is
+        /// recorded, so a pilot read at the kill was never in the air and MID-AIR could not be
+        /// earned (owner's run of 2026-10-12: nobody had ever reported a pilot headshot).
+        /// </summary>
+        public void NoteLethalBlow(ushort victim, float pilotHeightMetres, float now)
+        {
+            if (victim >= Actors) return;
+            _blowPilotHeight[victim] = pilotHeightMetres;
+            _blowTime[victim] = now;
         }
 
         /// <summary>Counts one resolved death at <paramref name="now"/> seconds.</summary>
@@ -130,7 +162,7 @@ namespace Ironfront.Net.Replication.Match
             if (byVehicle && kill.VehicleType == VehicleIds.RHIB) Add(killer, RoundFact.BoatKills, 1);
 
             CountWeapon(killer, in kill, now);
-            CountDistances(killer, in kill);
+            CountDistances(killer, in kill, VictimPilotHeight(in kill, now));
             CountRuns(killer, in kill, now);
             CountNemesis(killer, in kill);
             CountStint(killer, in kill);
@@ -204,13 +236,20 @@ namespace Ironfront.Net.Replication.Match
             }
         }
 
-        private void CountDistances(ushort killer, in CareerKill kill)
+        /// <summary>The kill's own pilot height, or the one its lethal blow found in the same tick.</summary>
+        private float VictimPilotHeight(in CareerKill kill, float now)
+        {
+            if (kill.VictimPilotHeightMetres >= 0f || kill.Victim >= Actors) return kill.VictimPilotHeightMetres;
+            return Math.Abs(now - _blowTime[kill.Victim]) <= SameTick ? _blowPilotHeight[kill.Victim] : -1f;
+        }
+
+        private void CountDistances(ushort killer, in CareerKill kill, float victimPilotHeight)
         {
             int metres = kill.DistanceMetres;
             Max(killer, RoundFact.LongestKillMetres, metres);
             if (kill.Headshot) Max(killer, RoundFact.LongestHeadshotMetres, metres);
             if (kill.WeaponId == WeaponIds.EAGLE_76) Max(killer, RoundFact.LongestShotgunKillMetres, metres);
-            if (kill.Headshot && kill.VictimPilotHeightMetres >= CareerRules.AirborneMetres)
+            if (kill.Headshot && victimPilotHeight >= CareerRules.AirborneMetres)
                 Max(killer, RoundFact.LongestPilotHeadshotMetres, metres);
             if (CareerWeapons.IsPistol(kill.WeaponId) && CareerWeapons.IsSniperRifle(kill.VictimWeaponId))
                 Max(killer, RoundFact.LongestPistolOnSniperMetres, metres);

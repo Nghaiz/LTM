@@ -65,6 +65,12 @@ CREATE INDEX IF NOT EXISTS idx_achievements_id ON achievements(achievement_id);
 CREATE TABLE IF NOT EXISTS career_meta (
     key TEXT PRIMARY KEY,
     value INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS career_history (
+    player_id INTEGER NOT NULL REFERENCES accounts(player_id),
+    stat TEXT NOT NULL,
+    value INTEGER NOT NULL,
+    PRIMARY KEY (player_id, stat)
 );");
 
             // A database that has never held a career starts in the current season: there is
@@ -139,6 +145,112 @@ CREATE TABLE IF NOT EXISTS career_meta (
             }
             transaction.Commit();
             return removed;
+        }
+
+        /// <summary>A one-time marker in <c>career_meta</c>; 0 when it was never written.</summary>
+        public long ReadCareerMeta(string key)
+        {
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT value FROM career_meta WHERE key = $key";
+            cmd.Parameters.AddWithValue("$key", key);
+            object? value = cmd.ExecuteScalar();
+            return value is long stored ? stored : 0;
+        }
+
+        public void WriteCareerMeta(string key, long value)
+        {
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "INSERT INTO career_meta(key, value) VALUES ($key, $value) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+            cmd.Parameters.AddWithValue("$key", key);
+            cmd.Parameters.AddWithValue("$value", value);
+            cmd.ExecuteNonQuery();
+        }
+
+        /// <summary>The current career table and every season archive (<c>career_stats_season{n}</c>).</summary>
+        public List<string> CareerTables()
+        {
+            var tables = new List<string> { "career_stats" };
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'career_stats_season%' ORDER BY name";
+            using SqliteDataReader reader = cmd.ExecuteReader();
+            while (reader.Read()) tables.Add(reader.GetString(0));
+            return tables;
+        }
+
+        /// <summary>
+        /// Gives every player who has stat <paramref name="fromKey"/> but not <paramref name="toKey"/>
+        /// the same value under <paramref name="toKey"/>, in the current table and every archive, in
+        /// one transaction: a new counter starts from the history of the one it was split from.
+        /// </summary>
+        /// <returns>How many rows were written.</returns>
+        public int SeedStat(string fromKey, string toKey)
+        {
+            int written = 0;
+            List<string> tables = CareerTables();
+            using SqliteTransaction transaction = _connection.BeginTransaction();
+            foreach (string table in tables)
+            {
+                using SqliteCommand cmd = _connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = $"INSERT INTO {table}(player_id, stat, value) SELECT player_id, $to, value FROM {table} "
+                                  + "WHERE stat = $from AND value > 0 ON CONFLICT(player_id, stat) DO NOTHING";
+                cmd.Parameters.AddWithValue("$from", fromKey);
+                cmd.Parameters.AddWithValue("$to", toKey);
+                written += cmd.ExecuteNonQuery();
+            }
+            transaction.Commit();
+            return written;
+        }
+
+        /// <summary>
+        /// What every closed season left <paramref name="playerId"/>, by key: the base the
+        /// achievements add the current season to (<c>CareerService</c>, owner's run of 2026-10-12).
+        /// </summary>
+        public Dictionary<string, long> ReadCareerHistory(int playerId)
+        {
+            var history = new Dictionary<string, long>();
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT stat, value FROM career_history WHERE player_id = $id";
+            cmd.Parameters.AddWithValue("$id", playerId);
+            using SqliteDataReader reader = cmd.ExecuteReader();
+            while (reader.Read()) history[reader.GetString(0)] = reader.GetInt64(1);
+            return history;
+        }
+
+        /// <summary>Writes <paramref name="history"/> for <paramref name="playerId"/>, replacing the stats it names, in one transaction.</summary>
+        public void WriteCareerHistory(int playerId, IReadOnlyDictionary<string, long> history)
+        {
+            using SqliteTransaction transaction = _connection.BeginTransaction();
+            foreach (KeyValuePair<string, long> stat in history)
+            {
+                using SqliteCommand cmd = _connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = "INSERT INTO career_history(player_id, stat, value) VALUES ($id, $stat, $value) "
+                                  + "ON CONFLICT(player_id, stat) DO UPDATE SET value = excluded.value";
+                cmd.Parameters.AddWithValue("$id", playerId);
+                cmd.Parameters.AddWithValue("$stat", stat.Key);
+                cmd.Parameters.AddWithValue("$value", stat.Value);
+                cmd.ExecuteNonQuery();
+            }
+            transaction.Commit();
+        }
+
+        /// <summary>Every row of a season archive (<c>career_stats_season{n}</c>), by player; empty when there is no such season.</summary>
+        public Dictionary<int, Dictionary<string, long>> ReadSeasonArchive(int season)
+        {
+            var rows = new Dictionary<int, Dictionary<string, long>>();
+            string table = $"career_stats_season{season}";
+            if (!TableExists(table)) return rows;
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = $"SELECT player_id, stat, value FROM {table}";
+            using SqliteDataReader reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                int id = reader.GetInt32(0);
+                if (!rows.TryGetValue(id, out Dictionary<string, long>? stats)) rows[id] = stats = new Dictionary<string, long>();
+                stats[reader.GetString(1)] = reader.GetInt64(2);
+            }
+            return rows;
         }
 
         /// <summary>Every stat <paramref name="playerId"/> has, by key.</summary>

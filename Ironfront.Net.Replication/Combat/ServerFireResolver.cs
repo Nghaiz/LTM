@@ -234,7 +234,8 @@ namespace Ironfront.Net.Replication.Combat
             }
 
             state.LastFiredTime = nowSeconds;
-            state.AmmoInClip--;
+            // A weapon that never spends (the wrench's swing) keeps its clip, as the horn does.
+            if (config.SpendsAmmo) state.AmmoInClip--;
             ShotsFired++;
 
             return FireRejection.None;

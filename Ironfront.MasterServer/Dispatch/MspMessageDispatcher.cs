@@ -39,9 +39,10 @@ namespace Ironfront.MasterServer.Dispatch
             _career = new Career.CareerService(database);
             _lobby.RoomChanged += BroadcastRoom;
             _lobby.RoomRemoved += room => _gameServers.Release(room.AssignedGameServerId, room.RoomId);
-            _lobby.ServerHasPlayers = room => _gameServers.TryGet(room.AssignedGameServerId, out GameServerRecord? server)
-                                              && server is not null && server.AssignedRoomId == room.RoomId
-                                              && server.CurrentPlayers > 0;
+            _lobby.ServerPlayers = room => _gameServers.TryGet(room.AssignedGameServerId, out GameServerRecord? server)
+                                           && server is not null && server.AssignedRoomId == room.RoomId
+                ? server.CurrentPlayers
+                : 0;
         }
 
         /// <summary>Successful logins, total and per completed minute (phase 03 metrics).</summary>
@@ -306,7 +307,7 @@ namespace Ironfront.MasterServer.Dispatch
                 byte rejoinTeam = canRejoin && room.Roster.TryGetValue(session.PlayerId, out byte team) ? team : (byte)0;
                 rooms.Add(new
                 {
-                    roomId = room.RoomId, name = room.Name, mapId = room.MapId, players = room.Members.Count,
+                    roomId = room.RoomId, name = room.Name, mapId = room.MapId, players = _lobby.PlayersIn(room),
                     maxPlayers = room.MaxPlayers, state = (byte)room.State, isPrivate = room.IsPrivate,
                     canRejoin, rejoinTeam, botCount = room.BotCount,
                     gameMode = (byte)room.Settings.Mode, victoryRule = (byte)room.Settings.Rule,
@@ -698,7 +699,7 @@ namespace Ironfront.MasterServer.Dispatch
                      && server.AssignedRoomId is int roomId && roomId != 0 && _lobby.RemoveAbandoned(roomId))
             {
                 // A room kept with nobody in it while its players were still on this server
-                // (LobbyService.ServerHasPlayers): they have all gone now.
+                // (LobbyService.ServerPlayers): they have all gone now.
                 MasterLog.Warn($"room {roomId} closed: no member left and its game server {request.ServerId} has no players");
             }
 
@@ -866,7 +867,8 @@ namespace Ironfront.MasterServer.Dispatch
                 // The career and the achievements it earns (owner's list of 2026-10-09, item 4).
                 // The map and the mode are the room's, never the server's word.
                 List<string> earned = _career.RecordRound(result.PlayerId, result.Stats, result.Kills, result.Deaths,
-                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, final: true, endedAt);
+                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, final: true, endedAt,
+                    room?.Settings.Rule ?? VictoryRule.Margin, room?.Settings.VictoryPoints ?? 0);
                 PushUnlocked(result.PlayerId, earned);
             }
 
@@ -899,7 +901,8 @@ namespace Ironfront.MasterServer.Dispatch
             {
                 if (result.PlayerId <= 0) continue;
                 List<string> earned = _career.RecordRound(result.PlayerId, result.Stats, result.Kills, result.Deaths,
-                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, request.Final, now);
+                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, request.Final, now,
+                    room?.Settings.Rule ?? VictoryRule.Margin, room?.Settings.VictoryPoints ?? 0);
                 PushUnlocked(result.PlayerId, earned);
             }
         }
@@ -1014,11 +1017,20 @@ namespace Ironfront.MasterServer.Dispatch
         {
             var members = new List<object>();
             foreach (RoomMember member in room.Members) members.Add(new { playerId = member.PlayerId, name = member.DisplayName, team = member.Team, ready = member.Ready });
+
+            // The waiting room's name, host, lock and countdown (owner's run of 2026-10-12: the
+            // lobby redesign). The countdown goes as time LEFT, measured here, never as the
+            // deadline: a client clock can be a minute and a half out, and a deadline read against
+            // it would count down from the wrong number.
+            long startsInMs = room.IsCountingDown
+                ? Math.Max(0L, room.StartDeadlineUnixMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                : 0L;
             return new
             {
                 roomId = room.RoomId, members, state = (byte)room.State, mapId = room.MapId, botCount = room.BotCount, maxPlayers = room.MaxPlayers,
                 gameMode = (byte)room.Settings.Mode, victoryRule = (byte)room.Settings.Rule,
                 victoryPoints = room.Settings.VictoryPoints, nightVisionSeconds = room.Settings.NightVisionSeconds,
+                name = room.Name, hostPlayerId = room.HostPlayerId, isPrivate = room.IsPrivate, startsInMs,
             };
         }
 

@@ -551,7 +551,20 @@ namespace Ironfront.Net.Replication.Combat
             // placeholders; see BuildAuthored. Inert's
             // no-resupply reserve is what both prefabs say (-1), so taking it claims nothing
             // about them that they did not already author.
-            configs[WeaponIds.WRENCH] = Inert;
+            //
+            // Since the owner's run of 2026-10-12 the WRENCH is a melee delivery rather than
+            // inert: the authority approves the swing on the prefab's cooldown (0.35 s, one per
+            // press, never spends: its ammo is -1) and the engine's MeleeWeapon deals it, with the
+            // prefab's damage, so the numbers above are not restated here (damage 0 means "the
+            // engine's", as for the launchers). Inert, it was refused as out of ammo and the wrench
+            // did nothing online. The SUPER_WRENCH stays inert: it is practice-only.
+            configs[WeaponIds.WRENCH] = new WeaponConfig(
+                cooldown: 0.35f, spread: 0f, projectilesPerShot: 1, range: 1.5f,
+                damage: 0f, force: 0f, clipSize: 1,
+                spareAmmo: WeaponConfig.NoResupplySpareAmmo,
+                spendsAmmo: false,
+                delivery: WeaponDelivery.Melee,
+                automatic: false);
             configs[WeaponIds.SUPER_WRENCH] = Inert;
 
             // The horn (V6-D8). Numbers read off the CarHorn component on Assets/Prefab/jeep.prefab

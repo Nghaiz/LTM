@@ -60,6 +60,12 @@ namespace Ironfront.Net.Replication.Combat
         public readonly bool LaunchedProjectile;
 
         /// <summary>
+        /// A melee swing was approved (<see cref="WeaponDelivery.Melee"/>): the caller has the
+        /// engine's melee weapon deal it along <see cref="AimDirection"/> from <see cref="Origin"/>.
+        /// </summary>
+        public readonly bool SwungMelee;
+
+        /// <summary>
         /// True when this input reserved a delayed throwable; no ammo or projectile has been
         /// committed yet.
         /// </summary>
@@ -92,8 +98,10 @@ namespace Ironfront.Net.Replication.Combat
             bool effectiveTriggerDown = false,
             bool blockedBySprint = false,
             bool releaseBegan = false,
-            bool awaitsReport = false)
+            bool awaitsReport = false,
+            bool swungMelee = false)
         {
+            SwungMelee = swungMelee;
             AwaitsReport = awaitsReport;
             EffectiveTriggerDown = effectiveTriggerDown;
             BlockedBySprint = blockedBySprint;
@@ -175,6 +183,9 @@ namespace Ironfront.Net.Replication.Combat
         /// held a FRAG has found this row again.
         /// </remarks>
         public long ProjectilesLaunched { get; private set; }
+
+        /// <summary>Melee swings approved for the engine to deal.</summary>
+        public long MeleeSwings { get; private set; }
 
         /// <summary>
         /// Accepted input frames that carried the raw <see cref="InputButtons.Fire"/> bit,
@@ -433,6 +444,25 @@ namespace Ironfront.Net.Replication.Combat
                     effectiveTriggerDown: pull.Effective,
                     blockedBySprint: blockedBySprint,
                     releaseBegan: began);
+            }
+
+            // 4a'. A melee weapon swings: the same trigger rules approve it, and the engine's own
+            //      melee code deals it on the server body (the WRENCH; owner's run of 2026-10-12).
+            if (config.Delivery == WeaponDelivery.Melee)
+            {
+                FireRejection swingRejection = _fireResolver.ResolveLaunch(
+                    ref weapon, in config, shooterIsAlive, nowSeconds);
+
+                bool swung = swingRejection == FireRejection.None;
+                if (swung) MeleeSwings++;
+
+                return new CombatTickResult(
+                    swingRejection, swung, hitCount: 0,
+                    weaponChanged: weapon.AmmoInClip != ammoBefore,
+                    victimDied: false, deadActorId: 0, in aim, in origin,
+                    effectiveTriggerDown: pull.Effective,
+                    blockedBySprint: blockedBySprint,
+                    swungMelee: swung);
             }
 
             // 4a. A weapon that LAUNCHES does not sweep. Ledger X-42: the same trigger rules

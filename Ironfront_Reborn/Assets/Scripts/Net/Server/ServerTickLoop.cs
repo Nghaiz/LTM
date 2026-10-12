@@ -2648,9 +2648,8 @@ namespace Ironfront.Net.Unity.Server
         /// and leaves it when it is released; both paths already mark the scores dirty.
         /// </para>
         /// <para>
-        /// The counters are clamped to <c>ushort</c> rather than wrapped. A match that somehow
-        /// passes 65535 kills renders a stuck maximum, which reads as an anomaly; a wrapped
-        /// counter renders as a small plausible number, which does not.
+        /// Each row is <c>MatchScoreTally.RowFor</c>'s, which clamps the counters rather than
+        /// wrapping them; the practice match's board builds its rows there too.
         /// </para>
         /// </remarks>
         internal static int FillScoreRows(
@@ -2669,36 +2668,24 @@ namespace Ironfront.Net.Unity.Server
                 // credits the WRONG player, which is worse than crediting none.
                 if (actorId > byte.MaxValue) continue;
 
-                rows[count].ActorId = (byte)actorId;
-                rows[count].Kills   = ClampToU16(tally.KillsOf(actorId));
-                rows[count].Deaths  = ClampToU16(tally.DeathsOf(actorId));
-
                 // The side, from the actor the server owns rather than from the snapshot the
                 // client will receive. The snapshot carries a team too, but InterestManager sheds
                 // actors under a per-snapshot ceiling, so a client holds one only for the actors
                 // it currently sees -- and a scoreboard has to place every row. See
                 // PlayerScoreEntry.Team for why that is not a second source of truth.
-                rows[count].Team    = actor.Team;
-
-                // The stats tail (owner's report of 2026-09-30). Every field written every time:
-                // the row buffer is reused, and a field left over from another actor's row is a
-                // number on the wrong player.
-                rows[count].HasStats   = true;
-                rows[count].Status     = (actor.IsAlive ? PlayerStatusFlags.Alive : PlayerStatusFlags.None)
-                                         | (actor.IsSeatedOnServer ? PlayerStatusFlags.Seated : PlayerStatusFlags.None);
-                rows[count].Headshots  = ClampToU8(tally.HeadshotsOf(actorId));
-                rows[count].Streak     = ClampToU8(tally.StreakOf(actorId));
-                rows[count].BestStreak = ClampToU8(tally.BestStreakOf(actorId));
-                rows[count].Points     = ClampToU16(tally.PointsOf(actorId));
-                rows[count].PingMs     = pingMsOf != null ? pingMsOf(actorId) : (ushort)0;
+                //
+                // A whole row assigned at once: the buffer is reused, and a field left over from
+                // another actor's row is a number on the wrong player. The projection is the
+                // tally's, shared with the practice match's board (owner's run of 2026-10-12).
+                PlayerStatusFlags status = (actor.IsAlive ? PlayerStatusFlags.Alive : PlayerStatusFlags.None)
+                                           | (actor.IsSeatedOnServer ? PlayerStatusFlags.Seated : PlayerStatusFlags.None);
+                rows[count] = tally.RowFor(
+                    (byte)actorId, actor.Team, status, pingMsOf != null ? pingMsOf(actorId) : (ushort)0);
                 count++;
             }
 
             return count;
         }
-
-        private static byte ClampToU8(int value)
-            => value < 0 ? (byte)0 : value > byte.MaxValue ? byte.MaxValue : (byte)value;
 
         /// <summary>How often the score table goes out while nothing else moves it.</summary>
         private const float ScoresRefreshSeconds = 2f;
@@ -2728,12 +2715,6 @@ namespace Ironfront.Net.Unity.Server
 
             return 0;
         }
-
-        /// <summary>A tally count as the wire's <c>u16</c>, saturating rather than wrapping.</summary>
-        private static ushort ClampToU16(int value)
-            => value < 0 ? (ushort)0
-             : value > ushort.MaxValue ? ushort.MaxValue
-             : (ushort)value;
 
         /// <summary>
         /// UTF-8 for one name, truncated to what the wire carries.

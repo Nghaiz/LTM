@@ -200,7 +200,13 @@ namespace Ironfront.Net.Unity.Server
             // cooldown already stamped, so Weapon.CanFire() is the game's second opinion on a
             // decision the server has made. BEFORE the cosmetic emit, so the ordering reads the
             // way it happens.
-            if (result.LaunchedProjectile) LaunchCarriedProjectile(session, actor, in result);
+            if (result.SwungMelee) SwingCarriedMelee(session, actor, in result);
+            else if (result.LaunchedProjectile)
+            {
+                // A launch the engine refused fired nothing: its round is back in the clip, and
+                // no other client is told a shot was fired.
+                if (!LaunchCarriedProjectile(session, actor, in result, in weapon, in ammo)) return;
+            }
             else if (result.AwaitsReport) RecordReportedShot(session, frameTick, tick, now, in weapon, in result);
             else _loop.NoteCareerShot(session.ActorId, session.WeaponId, _hits, result.HitCount);
 
@@ -398,6 +404,29 @@ namespace Ironfront.Net.Unity.Server
                 + "until they agree again.");
         }
 
+        /// <summary>
+        /// Deals an approved melee swing (the WRENCH) with the body's engine melee weapon, from the
+        /// authority's eye along the frame's aim: its blow, its knock-down and the wrench's vehicle
+        /// repair are the original game's, and a kill names the wrench (owner's run of 2026-10-12).
+        /// </summary>
+        private void SwingCarriedMelee(ClientSession session, NetServerActor actor, in CombatTickResult result)
+        {
+            if (actor.SwingCarriedMelee(
+                    result.Origin.X, result.Origin.Y, result.Origin.Z,
+                    result.AimDirection.X, result.AimDirection.Y, result.AimDirection.Z))
+                return;
+
+            UnswungMeleeSwings++;
+            if (UnswungMeleeSwings != 1) return;
+            Debug.LogError(
+                $"[net] actor {session.ActorId} swung weapon {session.WeaponId}, but the body holds no "
+                + "melee weapon, so NOTHING WAS DEALT. The session and the body disagree about the "
+                + "loadout. Further misses are counted in UnswungMeleeSwings and not logged.");
+        }
+
+        /// <summary>Approved melee swings the body could not deal. Zero on a healthy server.</summary>
+        public long UnswungMeleeSwings { get; private set; }
+
         /// <summary>Launches this actor's carried projectile weapon. Ledger <b>X-42</b>.</summary>
         /// <remarks>
         /// <para>
@@ -414,20 +443,39 @@ namespace Ironfront.Net.Unity.Server
         /// hits at short range -- see that method's own remark.
         /// </para>
         /// </remarks>
-        private static void LaunchCarriedProjectile(
-            ClientSession session, NetServerActor actor, in CombatTickResult result)
+        /// <returns>False when the engine weapon refused and the round was given back.</returns>
+        private bool LaunchCarriedProjectile(
+            ClientSession session, NetServerActor actor, in CombatTickResult result,
+            in WeaponConfig config, in ActorAmmoSource ammo)
         {
             if (FireApprovedLaunch(session, actor, result.Origin, result.AimDirection))
-                return;
+                return true;
+
+            // Nothing left the tube, so the round goes back into the clip, published again before
+            // this tick's snapshot: the client shows a launch only when the server's clip drops
+            // (Javelin.PresentServerLaunch), so it shows nothing instead of smoke with no missile
+            // and a round that never came back (owner's v4.6.2 playtest of 2026-10-12, 02:58:40 on
+            // Forest Lake, the BIL SCALPEL).
+            GiveBackRefusedRound(session, in config);
+            PublishWeaponState(session, actor, in config, in ammo);
+            RefundedLaunches++;
 
             Debug.LogError(
                 $"[net] actor {session.ActorId} spent a round of weapon {session.WeaponId} on a "
-                + "projectile launch and NOTHING WAS LAUNCHED: the body is either holding no "
-                + "weapon at all, or its engine weapon refused the trigger. Weapon.CanFire is "
-                + "unholstered && !reloading && HasLoadedAmmo() && (auto || !holdingFire) && "
-                + "!CoolingDown(); run with IRONFRONT_LOG_SHOTS=1 to see which gate answered. "
-                + "Before this line said so, a refusal here spent the round, launched nothing "
-                + "and produced no message at all.");
+                + "projectile launch and NOTHING WAS LAUNCHED, so the round was given back. Engine "
+                + $"weapon: {actor.DescribeCarriedWeapon()}. Weapon.CanFire is unholstered && "
+                + "!reloading && HasLoadedAmmo() && (auto || !holdingFire) && !CoolingDown(); run "
+                + "with IRONFRONT_LOG_SHOTS=1 for the shot trace around it.");
+            return false;
+        }
+
+        /// <summary>Approved launches the engine weapon refused, whose round was given back.</summary>
+        public long RefundedLaunches { get; private set; }
+
+        /// <summary>The round an approved launch spent, back in the clip: the engine launched nothing.</summary>
+        internal static void GiveBackRefusedRound(ClientSession session, in WeaponConfig config)
+        {
+            if (session.Weapon.AmmoInClip < config.ClipSize) session.Weapon.AmmoInClip++;
         }
 
         /// <summary>

@@ -26,14 +26,27 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Whether the round is in the phase that counts (the score's own gate).</summary>
         internal bool CareerCounting => _match != null && _match.Match != null && _match.Match.CountsDeaths;
 
-        /// <summary>A Playing phase began on a map with <paramref name="mapFlags"/> capture points.</summary>
-        public void BeginCareerRound(int mapFlags) => _careerTally.BeginRound(CareerNow, mapFlags);
+        /// <summary>
+        /// A Playing phase began on a map with <paramref name="mapFlags"/> capture points, of which each
+        /// side already held the ones in its mask (bits by point id).
+        /// </summary>
+        public void BeginCareerRound(int mapFlags, ulong team0Held, ulong team1Held)
+            => _careerTally.BeginRound(CareerNow, mapFlags, team0Held, team1Held);
 
         /// <summary>Damage left <paramref name="victimId"/> on <paramref name="healthAfter"/>.</summary>
         public void NoteCareerDamage(ushort victimId, ushort attackerId, float healthAfter, CauseOfDeath cause)
         {
             if (!CareerCounting) return;
             _careerTally.RecordDamage(victimId, AreEnemies(victimId, attackerId), healthAfter, cause);
+        }
+
+        /// <summary>
+        /// A lethal blow is about to land on <paramref name="victimId"/>: where they sit is read now,
+        /// because the death unseats the body before the kill is recorded (MID-AIR).
+        /// </summary>
+        internal void NoteCareerLethalBlow(ushort victimId)
+        {
+            if (CareerCounting) _careerTally.NoteLethalBlow(victimId, PilotHeightOf(victimId), CareerNow);
         }
 
         /// <summary>A player lived through a fall with <paramref name="healthAfter"/> left.</summary>

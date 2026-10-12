@@ -352,6 +352,20 @@ namespace Ironfront.Net.Unity.Server
                 originX, originY, originZ, directionX, directionY, directionZ);
         }
 
+        /// <summary>The carried weapon's fire gates, for a log line. See <see cref="IGameplayActorSource.DescribeCarriedWeapon"/>.</summary>
+        public string DescribeCarriedWeapon() => Source != null ? Source.DescribeCarriedWeapon() : "no gameplay actor";
+
+        /// <summary>Deals an authority-approved melee swing. See <see cref="IGameplayActorSource.SwingCarriedMelee"/>.</summary>
+        /// <returns>False when nothing is bound, or the body holds no melee weapon.</returns>
+        public bool SwingCarriedMelee(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.SwingCarriedMelee(
+                originX, originY, originZ, directionX, directionY, directionZ);
+        }
+
         /// <summary>Releases an authority-approved delayed throwable.</summary>
         public bool ReleaseCarriedThrowable(
             float originX, float originY, float originZ,

@@ -283,8 +283,17 @@ namespace Ironfront.Tools.ClientWiringGate
                      "the player count never renders, so a full room looks the same as an empty "
                      + "one until the join is refused"),
                     ("_rows[].Status", RoomBrowserRows,
-                     "the lifecycle and lock glyph have nowhere to be written, so a locked or "
-                     + "in-progress room is presented as joinable"),
+                     "the lifecycle has nowhere to be written, so a full or in-progress room is "
+                     + "presented as joinable"),
+                    ("_rows[].Thumb", RoomBrowserRows,
+                     "a row shows no map picture, so the redesigned list (owner's run of "
+                     + "2026-10-12) opens every row on a blank square"),
+                    ("_rows[].Medal", RoomBrowserRows,
+                     "the medal chip has nowhere to be written, so a player cannot see which "
+                     + "achievements a room's rounds count for before joining it"),
+                    ("_rows[].Lock", RoomBrowserRows,
+                     "a private room has no PRIVATE chip, so it looks public until the join "
+                     + "asks for a password"),
                 },
                 ("_controller",
                  "every control on the browser is inert, so there is no way from the signed-in "
@@ -302,6 +311,9 @@ namespace Ironfront.Tools.ClientWiringGate
                 ("_overflowText",
                  "a ninth room is dropped SILENTLY rather than counted, so the browser lies "
                  + "about what the master returned"),
+                ("_emptyState",
+                 "an empty list draws nothing at all, which reads as a screen that failed to load "
+                 + "rather than as nobody hosting"),
                 ("_errorText",
                  "'that room is full' and the private-room prompt render nowhere, so a refused "
                  + "click looks like a dead button"),
@@ -370,6 +382,15 @@ namespace Ironfront.Tools.ClientWiringGate
                     ("_teamOneRows", RosterRowsPerSide,
                      "team 2's roster cannot show every member a full room can hold, so a "
                      + "player who switches side can vanish from BOTH columns"),
+                    ("_teamZeroSlots", RosterRowsPerSide,
+                     "team 1's rows have no plates, so a free seat and the room's last seat look "
+                     + "the same"),
+                    ("_teamOneSlots", RosterRowsPerSide,
+                     "team 2's rows have no plates, with the same consequence"),
+                    ("_teamZeroHostBadges", RosterRowsPerSide,
+                     "nobody on team 1 can be shown as the room's host"),
+                    ("_teamOneHostBadges", RosterRowsPerSide,
+                     "nobody on team 2 can be shown as the room's host"),
                 },
                 ("_controller",
                  "ready, switch side, chat and leave are all inert, so a player who reaches a "
@@ -408,7 +429,14 @@ namespace Ironfront.Tools.ClientWiringGate
                 ("_chatField",
                  "nothing can be typed, so criterion 6 has no message to send"),
                 ("_chatSendButton",
-                 "no listener is added, so lobby chat cannot be sent at all")),
+                 "no listener is added, so lobby chat cannot be sent at all"),
+                ("_versusText",
+                 "the start countdown has nowhere to show, so a room about to start looks idle "
+                 + "until the map loads"),
+                ("_mapPicture",
+                 "the room card shows no map, so the player reads the theatre off a chip"),
+                ("_medalChip",
+                 "the waiting room cannot say which achievements its rounds count for")),
 
             // Protocol 13: the create form's bots are a slider bounded by the servers' capacity.
             new Screen(

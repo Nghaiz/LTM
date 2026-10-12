@@ -75,6 +75,11 @@ namespace Ironfront.Net.Unity.Bindings
             // The killfeed's weapon pictures: the loadout screen's own sprites, by network id.
             NetClientBindings.WeaponIcon = WeaponIconOf;
 
+            // The practice match's score and soldiers, for its killfeed and Tab board (owner's run
+            // of 2026-10-12). Unconditional like the rest: it reads this process's own offline
+            // match per call, and nothing reads it except the practice presenter.
+            NetClientBindings.PracticeView = new PracticeMatchBinding();
+
             // The chat box's tabs want a pointer; the loadout screen and the Esc menu own it too.
             NetClientBindings.ChatPointer = FreePointerForChat;
             NetClientBindings.HornHeard = CarHorn.PlayNearest;
@@ -1062,6 +1067,27 @@ namespace Ironfront.Net.Unity.Bindings
             // -- stopping it there would stutter the loop.
             if (!weapon.configuration.auto) weapon.StopFire();
 
+            return true;
+        }
+
+        public string DescribeCarriedWeapon()
+        {
+            if (_actor == null) return "no actor";
+            Weapon weapon = _actor.activeWeapon;
+            string body = $"dead={_actor.dead} fallenOver={_actor.fallenOver} seated={_actor.IsSeated()}";
+            return weapon == null ? "nothing in hand, " + body : weapon.DescribeFireGates() + ", " + body;
+        }
+
+        public bool SwingCarriedMelee(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            if (_actor == null) return false;
+            if (!(_actor.activeWeapon is MeleeWeapon melee)) return false;
+
+            melee.SwingApprovedByServer(
+                new Vector3(originX, originY, originZ),
+                new Vector3(directionX, directionY, directionZ));
             return true;
         }
 

@@ -198,6 +198,25 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void APilotUnseatedByHisOwnDeathKeepsTheHeightHisLethalBlowFound()
+        {
+            // The server unseats a dead body before it records the kill, so the kill itself reads
+            // a pilot on the ground (-1): MID-AIR was out of reach online (owner's run of 2026-10-12).
+            var tally = new MatchCareerTally();
+            tally.NoteLethalBlow(Enemy, 12f, 2f);
+            tally.RecordKill(Kill(Enemy, distance: 320, headshot: true, weapon: WeaponIds.SL_DEFENDER), 2f);
+            Assert.Equal(320, Fact(tally, RoundFact.LongestPilotHeadshotMetres));
+
+            // A blow from another tick says nothing about this kill; a pilot at 4 m is not in the air.
+            var stale = new MatchCareerTally();
+            stale.NoteLethalBlow(Enemy, 12f, 1f);
+            stale.RecordKill(Kill(Enemy, distance: 320, headshot: true, weapon: WeaponIds.SL_DEFENDER), 2f);
+            stale.NoteLethalBlow(Other, 4f, 3f);
+            stale.RecordKill(Kill(Other, distance: 330, headshot: true, weapon: WeaponIds.SL_DEFENDER), 3f);
+            Assert.Equal(0, Fact(stale, RoundFact.LongestPilotHeadshotMetres));
+        }
+
+        [Fact]
         public void NemesisCountsOneHumansDeathsUntilTheyKillYou()
         {
             var tally = new MatchCareerTally();
@@ -439,6 +458,31 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void MapPainterAsksOnlyForTheFlagsTheSideDidNotHoldAtTheStart()
+        {
+            // Owner's run of 2026-10-12: "every flag on the map" included the side's own starting
+            // flags, which a player can only help take after losing them.
+            var tally = new MatchCareerTally();
+            tally.BeginRound(0f, mapFlags: 5, team0Held: 0b00011, team1Held: 0b10000);
+            tally.CreditCapture(Me, 0);   // its own, lost and taken back: not asked, not counted
+            tally.CreditCapture(Me, 2);
+            tally.CreditCapture(Me, 3);
+            var sheet = new RoundSheet();
+            tally.Fill(Me, TeamId.Team0, TeamId.Team0, 10f, finished: false, new MatchScoreTally(), ReadOnlySpan<RoundActor>.Empty, sheet);
+            Assert.Equal(3, sheet.Get(RoundFact.MapFlags));
+            Assert.Equal(2, sheet.Get(RoundFact.FlagsHelpedDistinct));
+
+            tally.CreditCapture(Me, 4);
+            var done = new RoundSheet();
+            tally.Fill(Me, TeamId.Team0, TeamId.Team0, 20f, finished: false, new MatchScoreTally(), ReadOnlySpan<RoundActor>.Empty, done);
+            Assert.Equal(3, done.Get(RoundFact.FlagsHelpedDistinct));
+
+            var enemy = new RoundSheet();
+            tally.Fill(Enemy, TeamId.Team1, TeamId.Team0, 20f, finished: false, new MatchScoreTally(), ReadOnlySpan<RoundActor>.Empty, enemy);
+            Assert.Equal(4, enemy.Get(RoundFact.MapFlags));
+        }
+
+        [Fact]
         public void AReportMidRoundOrForALeaverCarriesNoRanks()
         {
             var tally = new MatchCareerTally();
@@ -476,6 +520,14 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0, Fact(tally, RoundFact.PlayerKills));
             tally.RecordKill(Kill(Human, bot: false), 11f);
             Assert.Equal(1, Fact(tally, RoundFact.NemesisBest));
+        }
+
+        private static RoundSheet Report(MatchCareerTally tally, ushort actor)
+        {
+            var sheet = new RoundSheet();
+            tally.Fill(actor, TeamId.Team0, TeamId.None, 1000f, finished: false, new MatchScoreTally(),
+                ReadOnlySpan<RoundActor>.Empty, sheet);
+            return sheet;
         }
     }
 }
