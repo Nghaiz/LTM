@@ -97,10 +97,13 @@ namespace Ironfront.MasterServer.Configuration
         public static readonly string ProxyProtocolVariable = EnvRegistry.MasterProxyProtocol.Name;
 
         /// <summary>
-        /// Overrides the per-IP login rate limit. See
-        /// <see cref="Auth.AuthService(Data.SqliteDatabase, int)"/> for why it is a knob.
+        /// Overrides the per-IP budget of FAILED sign-ins. See
+        /// <see cref="Auth.AuthService(Data.SqliteDatabase, int, int)"/> for why it is a knob.
         /// </summary>
         public static readonly string LoginRatePerMinuteVariable = EnvRegistry.LoginRatePerMinute.Name;
+
+        /// <summary>Overrides the per-IP cap on every sign-in, failed or not.</summary>
+        public static readonly string LoginAttemptsPerMinuteVariable = EnvRegistry.LoginAttemptsPerMinute.Name;
 
         /// <summary>The bot budget, in units. See <see cref="Lobby.BotCapacity"/>.</summary>
         public static readonly string BotBudgetVariable = EnvRegistry.BotBudgetUnits.Name;
@@ -150,6 +153,7 @@ namespace Ironfront.MasterServer.Configuration
             int maxConnectionsPerIp,
             int maxTotalConnections,
             int loginRatePerMinute,
+            int loginAttemptsPerMinute,
             bool trustProxyProtocol,
             int botBudgetUnits,
             int matchCostUnits)
@@ -160,6 +164,7 @@ namespace Ironfront.MasterServer.Configuration
             MaxConnectionsPerIp       = maxConnectionsPerIp;
             MaxTotalConnections       = maxTotalConnections;
             LoginRatePerMinute        = loginRatePerMinute;
+            LoginAttemptsPerMinute    = loginAttemptsPerMinute;
             SharedSecret              = sharedSecret;
             Port                      = port;
             DatabasePath              = databasePath;
@@ -221,8 +226,11 @@ namespace Ironfront.MasterServer.Configuration
         /// <summary>Global connection cap.</summary>
         public int MaxTotalConnections { get; }
 
-        /// <summary>Per-IP login attempts per minute.</summary>
+        /// <summary>Per-IP failed sign-ins per minute.</summary>
         public int LoginRatePerMinute { get; }
+
+        /// <summary>Per-IP sign-ins per minute, failed or not.</summary>
+        public int LoginAttemptsPerMinute { get; }
 
         /// <summary>Whether client addresses come from PROXY headers. See <see cref="ProxyProtocolVariable"/>.</summary>
         public bool TrustProxyProtocol { get; }
@@ -309,6 +317,8 @@ namespace Ironfront.MasterServer.Configuration
                 read(MaxTotalConnectionsVariable), listenerDefaults.MaxTotalConnections, MaxTotalConnectionsVariable);
             int loginRate = EnvParse.PositiveInt(
                 read(LoginRatePerMinuteVariable), AuthService.DefaultRatePerMinute, LoginRatePerMinuteVariable);
+            int loginAttempts = EnvParse.PositiveInt(
+                read(LoginAttemptsPerMinuteVariable), AuthService.DefaultAttemptsPerMinute, LoginAttemptsPerMinuteVariable);
 
             bool trustProxyProtocol = ParseProxyProtocol(read(ProxyProtocolVariable));
             if (trustProxyProtocol && certificatePath.Length > 0)
@@ -330,7 +340,7 @@ namespace Ironfront.MasterServer.Configuration
                 secret, port, databasePath, logLevel,
                 certificatePath, certificatePassword,
                 metricsPort, metricsBind, csvPath, csvInterval, structuredLog,
-                maxPerIp, maxTotal, loginRate, trustProxyProtocol, botBudget, matchCost);
+                maxPerIp, maxTotal, loginRate, loginAttempts, trustProxyProtocol, botBudget, matchCost);
         }
 
         /// <summary>

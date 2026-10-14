@@ -200,7 +200,7 @@ namespace Ironfront.MasterServer
             };
 
             using var database = new SqliteDatabase(config.DatabasePath);
-            var auth = new AuthService(database, config.LoginRatePerMinute);
+            var auth = new AuthService(database, config.LoginRatePerMinute, config.LoginAttemptsPerMinute);
             var lobby = new LobbyService
             {
                 Capacity = new BotCapacity(config.BotBudgetUnits, config.MatchCostUnits),

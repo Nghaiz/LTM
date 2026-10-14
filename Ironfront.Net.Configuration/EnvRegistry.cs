@@ -432,7 +432,8 @@ namespace Ironfront.Net.Configuration
             "address. Raise these ONLY on a test rig:\n" +
             "\n" +
             "  IRONFRONT_MAX_CONNECTIONS_PER_IP=200\n" +
-            "  IRONFRONT_LOGIN_RATE_PER_MINUTE=500",
+            "  IRONFRONT_LOGIN_RATE_PER_MINUTE=500\n" +
+            "  IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE=500",
             "64",
             summary: "connections per source address; a school shares one");
 
@@ -443,12 +444,23 @@ namespace Ironfront.Net.Configuration
             "256",
             summary: "global cap; 0 removes it");
 
-        /// <summary>Per-IP login attempts per minute.</summary>
+        /// <summary>Failed sign-ins per source address per minute.</summary>
         public static readonly EnvVar LoginRatePerMinute = new EnvVar(
             "IRONFRONT_LOGIN_RATE_PER_MINUTE", "Limits", "master server",
-            "Per-IP login attempts per minute.",
+            "FAILED sign-ins (wrong password, bad remember token) from one address per minute: the\n" +
+            "brute-force guard. A correct password spends nothing from it, so a school signing in\n" +
+            "behind one address is not told to wait (it counted every sign-in until 2026-10-14).",
             "5",
-            summary: "login attempts per source IP; raise it on a test rig");
+            summary: "failed sign-ins per source address; the brute-force guard");
+
+        /// <summary>Every sign-in per source address per minute.</summary>
+        public static readonly EnvVar LoginAttemptsPerMinute = new EnvVar(
+            "IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE", "Limits", "master server",
+            "Every sign-in from one address per minute, failed or not. Each one runs bcrypt, so this\n" +
+            "bounds the CPU one address can spend; 60 is above a full school signing in at once.\n" +
+            "A load-test rig signing in more bots than this from one machine raises it too.",
+            "60",
+            summary: "every sign-in per source address; bounds bcrypt CPU");
 
         /// <summary>Take each client's address from a PROXY protocol header.</summary>
         public static readonly EnvVar MasterProxyProtocol = new EnvVar(
@@ -576,7 +588,7 @@ namespace Ironfront.Net.Configuration
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,
-            MaxConnectionsPerIp, MaxTotalConnections, LoginRatePerMinute, MasterProxyProtocol,
+            MaxConnectionsPerIp, MaxTotalConnections, LoginRatePerMinute, LoginAttemptsPerMinute, MasterProxyProtocol,
             BotBudgetUnits, MatchCostUnits,
             PacketCapturePath, Simulator, SimulatorSeed,
             InstallRoot, RemoteRoot, BackupDir, BackupRetentionDays,

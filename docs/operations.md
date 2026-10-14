@@ -378,6 +378,7 @@ address, so the production defaults refuse most of them:
 ```
 IRONFRONT_MAX_CONNECTIONS_PER_IP=200
 IRONFRONT_LOGIN_RATE_PER_MINUTE=500
+IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE=500
 ```
 
 `./deploy.sh restart-master` to apply, and **put them back afterwards**. They are the
