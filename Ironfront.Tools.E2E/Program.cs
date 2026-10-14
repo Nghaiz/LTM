@@ -156,7 +156,7 @@ namespace Ironfront.Tools.E2E
             LoginResult login;
             try
             {
-                login = await PumpAsync(master, master.LoginAsync(options.Username, PasswordHash, ct), ct)
+                login = await PumpAsync(master, master.LoginAsync(options.Username, PasswordHash, options.LoadableMaps, ct), ct)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -364,7 +364,7 @@ namespace Ironfront.Tools.E2E
             stopwatch.Restart();
             try
             {
-                await LoginAsync(partner, options.Username, ct).ConfigureAwait(false);
+                await LoginAsync(partner, options.Username, options.LoadableMaps, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -529,9 +529,9 @@ namespace Ironfront.Tools.E2E
 
             try
             {
-                await LoginAsync(host,  hostName,  ct).ConfigureAwait(false);
-                await LoginAsync(alpha, alphaName, ct).ConfigureAwait(false);
-                await LoginAsync(beta,  betaName,  ct).ConfigureAwait(false);
+                await LoginAsync(host,  hostName,  options.LoadableMaps, ct).ConfigureAwait(false);
+                await LoginAsync(alpha, alphaName, options.LoadableMaps, ct).ConfigureAwait(false);
+                await LoginAsync(beta,  betaName,  options.LoadableMaps, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -720,7 +720,7 @@ namespace Ironfront.Tools.E2E
         }
 
         /// <summary>Registers (ignoring "already exists") and then logs in, which is the assertion.</summary>
-        private static async Task LoginAsync(IMasterClient client, string username, CancellationToken ct)
+        private static async Task LoginAsync(IMasterClient client, string username, IReadOnlyList<ushort> loadableMaps, CancellationToken ct)
         {
             try
             {
@@ -732,7 +732,7 @@ namespace Ironfront.Tools.E2E
                 // A re-run against a surviving database. Login is what has to work.
             }
 
-            LoginResult login = await PumpAsync(client, client.LoginAsync(username, PasswordHash, ct), ct)
+            LoginResult login = await PumpAsync(client, client.LoginAsync(username, PasswordHash, loadableMaps, ct), ct)
                 .ConfigureAwait(false);
 
             if (!login.Ok)
@@ -812,7 +812,7 @@ namespace Ironfront.Tools.E2E
             }
 
             LoginResult hostLogin = await PumpAsync(
-                host, host.LoginAsync(options.HostUsername, PasswordHash, ct), ct).ConfigureAwait(false);
+                host, host.LoginAsync(options.HostUsername, PasswordHash, options.LoadableMaps, ct), ct).ConfigureAwait(false);
 
             if (!hostLogin.Ok)
                 throw new InvalidOperationException(
@@ -1018,6 +1018,14 @@ namespace Ironfront.Tools.E2E
             /// </remarks>
             public bool Partner { get; private set; }
             public ushort MapId { get; private set; } = 1;
+
+            /// <summary>
+            /// The maps every account here says it can load: the one the walk is on. A login that
+            /// declares none is a pre-Forest-Lake client to the master (MapSupport.Legacy, maps 1
+            /// and 2), which refused a Forest Lake room with MapNotInstalled (2006), so the walk
+            /// could never check map 3.
+            /// </summary>
+            public IReadOnlyList<ushort> LoadableMaps => new[] { MapId };
             public int TimeoutSeconds { get; private set; } = 90;
             public int ConnectWaitSeconds { get; private set; } = 15;
             public int PayloadWaitSeconds { get; private set; } = 20;
