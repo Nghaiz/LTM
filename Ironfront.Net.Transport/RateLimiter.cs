@@ -6,7 +6,24 @@ namespace Ironfront.Net.Transport
     /// <summary>Bounded fixed-window rate limiter for pre-authentication requests.</summary>
     public sealed class RateLimiter
     {
-        private const int MaxRequestsPerSecond = 5;
+        /// <summary>Connect requests one source address may make in a second.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>32, not the 5 it started at.</b> A school is one address for every player in it, and
+        /// a room's players all dial the game server in the same second when its match starts. Each
+        /// client resends its request every 250 ms for five seconds, so at 5 a second a full room
+        /// behind one address queued for four of those five, and the last of them could time out
+        /// before its turn. 32 is two full rooms (<c>MAX_PLAYERS</c> 16) in a second.
+        /// </para>
+        /// <para>
+        /// <b>Still a reflection bound, and a safe one.</b> An allowed request is answered with one
+        /// challenge to the claimed address, and the challenge (8 payload bytes) is smaller than
+        /// the request it answers, which carries the join ticket: a spoofed source is sent fewer
+        /// bytes than were spent on it.
+        /// </para>
+        /// </remarks>
+        public const int MaxRequestsPerSecond = 32;
+
         private const int MaxEntries = 10_000;
 
         private struct Entry
@@ -20,8 +37,25 @@ namespace Ironfront.Net.Transport
         private readonly List<uint> _staleEntries = new List<uint>(16);
 
         public int EntryCount => _entries.Count;
-
         public long RejectedCount { get; private set; }
+
+        private readonly HashSet<uint> _refusedSinceReport = new HashSet<uint>();
+        private long _rejectedAtReport;
+
+        /// <summary>
+        /// Refusals since the last call, and how many addresses they came from; false when there
+        /// were none. For a periodic log line: the counter alone was never printed, so a refused
+        /// handshake looked, from the server, like a player who never tried.
+        /// </summary>
+        public bool TryTakeRefusalReport(out long refused, out int addresses)
+        {
+            refused = RejectedCount - _rejectedAtReport;
+            addresses = _refusedSinceReport.Count;
+            if (refused == 0) return false;
+            _rejectedAtReport = RejectedCount;
+            _refusedSinceReport.Clear();
+            return true;
+        }
 
         public bool Allow(uint ipv4, double nowMs)
         {
@@ -46,6 +80,7 @@ namespace Ironfront.Net.Transport
             {
                 _entries[ipv4] = entry;
                 RejectedCount++;
+                _refusedSinceReport.Add(ipv4);
                 return false;
             }
 
