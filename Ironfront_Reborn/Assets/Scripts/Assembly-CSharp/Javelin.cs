@@ -501,9 +501,26 @@ public class Javelin : ScopedWeapon
 		return base.DescribeFireGates() + $" lock={HasLock()} locking={IsLocking()} aiming={aiming} networkAim={hasNetworkAim}";
 	}
 
+	/// <remarks>
+	/// <para>
+	/// <b>TrueDone, never Done.</b> <c>Action.Done</c> answers false ONCE when its timer
+	/// expires and true from the next call on, and this is asked from seven places, so which one
+	/// asked first decided whether the lock existed. On a server the two that collide are the
+	/// withhold check and the pull: <see cref="WithholdsTrigger"/> took the false, kept the
+	/// trigger from the combat authority, and <see cref="Fire"/> got the true and launched
+	/// through <c>Weapon.Fire</c> on its own -- a missile no round paid for, and
+	/// <c>holdingFire</c> latched with nothing on a server to clear it. Every launch the
+	/// authority approved after that was refused by the engine: 78 "NOTHING WAS LAUNCHED"
+	/// lines over 2026-10-12..14 on Island and Forest Lake, all BIL SCALPEL, all players.
+	/// </para>
+	/// <para>
+	/// The lock completes on the frame its two seconds run out instead of one question later,
+	/// which no player can see; offline nothing else changes.
+	/// </para>
+	/// </remarks>
 	private bool HasLock()
 	{
-		return IsLocking() && lockOnAction.Done();
+		return IsLocking() && lockOnAction.TrueDone();
 	}
 
 	/// <summary>
