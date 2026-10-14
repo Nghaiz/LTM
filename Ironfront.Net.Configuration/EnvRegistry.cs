@@ -423,16 +423,18 @@ namespace Ironfront.Net.Configuration
         /// <summary>Per-IP connection cap on the master.</summary>
         public static readonly EnvVar MaxConnectionsPerIp = new EnvVar(
             "IRONFRONT_MAX_CONNECTIONS_PER_IP", "Limits", "master server",
-            "The defaults below are sized for real players and are correct for production.\n" +
+            "Connections from one source address. A school, a dormitory or a cafe puts every\n" +
+            "player behind ONE address: on 2026-10-14 a class of ten was refused from the sixth\n" +
+            "player on while this was 5. 64 holds four full rooms behind one address, and the\n" +
+            "global cap below still bounds a flood from many addresses.\n" +
             "\n" +
-            "They are also what makes a single-machine load test impossible, because every bot\n" +
-            "shares one source address: with the defaults, a 16-client run gets 5 connections and\n" +
-            "5 logins and 11 errors. Raise them ONLY on a test rig:\n" +
+            "A single-machine load test needs more, because every bot shares one source\n" +
+            "address. Raise these ONLY on a test rig:\n" +
             "\n" +
             "  IRONFRONT_MAX_CONNECTIONS_PER_IP=200\n" +
             "  IRONFRONT_LOGIN_RATE_PER_MINUTE=500",
-            "5",
-            summary: "anti-flood cap; raise it only on a test rig");
+            "64",
+            summary: "connections per source address; a school shares one");
 
         /// <summary>Global connection cap on the master. 0 disables.</summary>
         public static readonly EnvVar MaxTotalConnections = new EnvVar(

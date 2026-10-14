@@ -31,7 +31,12 @@ namespace Ironfront.MasterServer.Net
         /// <summary>
         /// Anti connection-flood: phase 00 security table, "too many connections from one IP".
         /// </summary>
-        public int MaxConnectionsPerIp { get; set; } = 5;
+        /// <remarks>
+        /// 64, not the 5 it started at: a school or a cafe is one address for every player in
+        /// it, and on 2026-10-14 a class of ten was refused from the sixth on. See
+        /// <c>EnvRegistry.MaxConnectionsPerIp</c>.
+        /// </remarks>
+        public int MaxConnectionsPerIp { get; set; } = 64;
 
         /// <summary>
         /// Every connection starts with a PROXY protocol header, and the client address it
@@ -85,7 +90,7 @@ namespace Ironfront.MasterServer.Net
         /// it is raised to something a login screen fits inside and a squatter does not: five
         /// minutes. Nobody spends five minutes on a username and a password, and an attacker
         /// who does spend them is holding one slot out of
-        /// <see cref="MaxTotalConnections"/> against a <see cref="MaxConnectionsPerIp"/> of five
+        /// <see cref="MaxTotalConnections"/> against the <see cref="MaxConnectionsPerIp"/> cap
         /// — the per-IP cap, not this, is what bounds a single source.
         /// </para>
         /// <para>
