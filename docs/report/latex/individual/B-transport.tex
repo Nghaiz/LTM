@@ -1,0 +1,849 @@
+% =====================================================================================
+% B-transport.tex - PHẦN II của Nguyễn Minh Toàn: tầng giao vận UDP (Transport)
+% =====================================================================================
+\PhanLon{II. NỘI DUNG CÁ NHÂN - Phân hệ tầng giao vận UDP (Transport).}
+
+\lstdefinestyle{cs}{language={[Sharp]C}, keywordstyle=\color{tocblue}\bfseries,
+  commentstyle=\color{black!55}\itshape, morekeywords={var, stackalloc, ushort, uint, ulong}}
+
+\section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
+Phân hệ Transport là \textbf{tầng giao vận tin cậy được hiện thực trong không gian người dùng, trực tiếp trên socket UDP} thô của hệ điều hành, không sử dụng thư viện mạng bên thứ ba. Các chức năng mà UDP không cung cấp được bổ sung ở tầng này: đánh số thứ tự gói, xác nhận (ack) bằng bitfield, gửi lại, bốn kênh logic độc lập, phân mảnh và ghép mảnh, ước lượng RTT, điều khiển luồng, kiểm soát nghẽn, bắt tay chống giả mạo địa chỉ nguồn và bộ giả lập điều kiện mạng. Tầng này chỉ xử lý dữ liệu dưới dạng mảng byte, độc lập với ngữ nghĩa của tầng trên (snapshot, input hay chat), và dùng chung được cho client, server và công cụ kiểm thử.
+
+% -------------------------------------------------------------------------------------
+\subsection{Kiến trúc thư viện Transport}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, lay/.style={box, text width=3.4cm, minimum height=1.3cm},
+                    rowname/.style={font=\small\bfseries, align=left, text width=2.5cm, anchor=west}]
+  \node[rowname] at (0,0) {Ứng dụng};
+  \node[lay, fill=cOrange] (u1) at (4.6,0)  {\textbf{Client Unity}\\{\footnotesize Khởi tạo giao vận client}};
+  \node[lay, fill=cOrange] (u2) at (8.4,0)  {\textbf{Game server}\\{\footnotesize Khởi tạo giao vận server}};
+  \node[lay, fill=cOrange] (u3) at (12.2,0) {\textbf{Bộ kiểm thử}\\{\footnotesize Bot và kiểm nghiệm tải}};
+  \node[font=\footnotesize] at (8.4,-1.05) {Giao diện dùng chung - trao đổi mảng byte và mã kênh logic};
+  \node[rowname] at (0,-2.1) {Mặt tiền API};
+  \node[lay, fill=cBlue]   (a1) at (4.6,-2.1)  {\textbf{Client giao vận}\\{\footnotesize Quản lý kết nối client}};
+  \node[lay, fill=cBlue]   (a2) at (8.4,-2.1)  {\textbf{Server giao vận}\\{\footnotesize Bảng kết nối, giới hạn tốc độ}};
+  \node[lay, fill=cPurple] (a3) at (12.2,-2.1) {\textbf{Giao vận nội bộ}\\{\footnotesize Trong bộ nhớ, phục vụ test}};
+  \node[rowname] at (0,-3.8) {Mỗi kết nối};
+  \node[lay, fill=cBlue] (k1) at (4.6,-3.8)  {\textbf{Quản lý phiên}\\{\footnotesize Trạng thái, RTT, giữ kết nối}};
+  \node[lay, fill=cBlue] (k2) at (8.4,-3.8)  {\textbf{Tầng độ tin cậy}\\{\footnotesize Số thứ tự, ACK, gửi lại}};
+  \node[lay, fill=cBlue] (k3) at (12.2,-3.8) {\textbf{Tập hợp 4 kênh}\\{\footnotesize Quản lý thứ tự từng kênh}};
+  \node[lay, fill=cBlue] (k4) at (4.6,-5.3)  {\textbf{Bộ ghép mảnh}\\{\footnotesize Ghép mảnh, tối đa 8 nhóm}};
+  \node[lay, fill=cBlue] (k5) at (8.4,-5.3)  {\textbf{Kiểm soát nghẽn}\\{\footnotesize Trạng thái mạng TỐT / XẤU}};
+  \node[lay, fill=cBlue] (k6) at (12.2,-5.3) {\textbf{Điều khiển luồng}\\{\footnotesize Cửa sổ trượt kiểm soát áp lực}};
+  \node[rowname] at (0,-7.1) {Socket};
+  \node[lay, fill=cGreen] (s1) at (4.6,-7.1)  {\textbf{Điểm cuối UDP}\\{\footnotesize Socket không chặn}};
+  \node[lay, fill=cGray]  (s2) at (8.4,-7.1)  {\textbf{Bể nhớ đệm}\\{\footnotesize Tái sử dụng, ghi nhật ký}};
+  \node[lay, fill=cGray]  (s3) at (12.2,-7.1) {\textbf{Bộ giả lập mạng}\\{\footnotesize Mất gói, trễ, rung pha}};
+  \node[font=\footnotesize] at (8.4,-8.25) {Socket UDP hệ điều hành};
+\end{tikzpicture}
+\caption{Biểu đồ thành phần kiến trúc thư viện giao vận UDP}
+\label{fig:B-thanhphan}
+\end{figure}
+
+Thư viện được phân tầng theo trách nhiệm. \code{UdpPeer} là lớp duy nhất gọi API socket của hệ điều hành; lớp
+\code{Connection} và các thành phần bên dưới nó hiện thực các chức năng của một giao thức giao vận (tương ứng tầng 4
+trong mô hình OSI) cho từng kết nối logic; \code{UdpTransportClient}/\code{UdpTransportServer} là mặt tiền API mà tầng
+ứng dụng sử dụng. Nhờ tách lớp socket, cùng một logic độ tin cậy chạy được trên socket thật, trên
+\code{LoopbackTransport} (trong bộ nhớ) và phía sau \code{NetworkSimulator}.
+
+% -------------------------------------------------------------------------------------
+\subsection{Lựa chọn UDP và mô hình lập trình socket}
+\textbf{Lý do chọn UDP thay cho TCP.} Dữ liệu của game bắn súng thời gian thực phần lớn là trạng thái có thời hạn
+sử dụng ngắn: một snapshot 50 ms trước đã vô giá trị khi snapshot mới tới. TCP đảm bảo giao đúng thứ tự trên một luồng
+byte duy nhất, nên khi một segment bị mất, mọi dữ liệu phía sau (kể cả snapshot mới hơn) bị giữ lại trong bộ đệm nhận
+của nhân cho tới khi segment đó được gửi lại - hiện tượng \textbf{head-of-line blocking}. Với tỉ lệ mất gói vài phần
+trăm, độ trễ tăng thêm ít nhất một RTO cho toàn bộ luồng. UDP giao từng datagram độc lập, cho phép tầng ứng dụng tự
+quyết định dữ liệu nào cần tin cậy, dữ liệu nào chỉ cần bản mới nhất.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{3.4cm}|Y|Y|}
+\hline
+\hd{Đặc điểm} & \hd{TCP (\code{SocketType.Stream})} & \hd{Transport trên UDP (\code{SocketType.Dgram})} \\ \hline
+Đơn vị dữ liệu & Luồng byte, không có ranh giới bản tin & Datagram có ranh giới; mỗi \code{ReceiveFrom} trả đúng một gói \\ \hline
+Thứ tự và tin cậy & Bắt buộc cho toàn bộ luồng & Chọn theo từng kênh (4 kênh, xem mục~\ref{sec:B-kenh}) \\ \hline
+Mất một gói & Chặn mọi dữ liệu phía sau & Chỉ ảnh hưởng kênh tin cậy chứa gói đó \\ \hline
+Trạng thái kết nối & Do nhân HĐH quản lý (bắt tay 3 bước, \code{accept}) & Do ứng dụng quản lý (\code{Connection}, bắt tay có cookie) \\ \hline
+Số socket phía server & Một socket cho mỗi client & \textbf{Một socket} cho toàn bộ client, phân kênh theo (IP, cổng) \\ \hline
+Gộp gói nhỏ & Thuật toán Nagle, cần tắt bằng \code{NoDelay} & Không có; mỗi \code{SendTo} là một datagram \\ \hline
+\end{tabularx}
+\end{center}
+
+\textbf{Vòng đời socket.} Hình~\ref{fig:B-socket} trình bày các lời gọi API socket thực tế của client và server.
+Server mở \textbf{một} socket UDP gắn vào cổng 27015 và nhận datagram của mọi client qua \code{ReceiveFrom}; địa chỉ
+nguồn trả về là căn cứ để xác định kết nối. Client dùng \textbf{socket UDP có kết nối} (\code{Connect} trên socket
+datagram): lời gọi này không gửi gói nào ra mạng, chỉ ghi địa chỉ đích mặc định vào socket, sau đó nhân hệ điều hành tự
+lọc bỏ datagram đến từ địa chỉ khác và client dùng được \code{Send}/\code{Receive} không cần tham số địa chỉ.
+
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.64cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{G}{0.9}{srv : UdpTransport-\\Server}
+  \seqactor{SP}{4.5}{UdpPeer\\(server)}
+  \seqactor{OS}{8.4}{Nhân HĐH\\(ngăn xếp UDP/IP)}
+  \seqactor{CP}{12.2}{UdpPeer\\(client)}
+  \seqactor{CL}{15.3}{UdpTransport-\\Client}
+  \seqbegin
+  \seqmsg{G}{SP}{new UdpPeer(27015)}
+  \seqmsg{SP}{OS}{socket(InterNetwork, Dgram, Udp)}
+  \seqmsg{SP}{OS}{Blocking = false; SO\_RCVBUF = SO\_SNDBUF = 1 MB}
+  \seqret{OS}{SP}{kích thước bộ đệm thực tế được cấp}
+  \seqmsg{SP}{OS}{bind(0.0.0.0 : 27015)}
+  \seqmsg{CL}{CP}{new UdpPeer(0)}
+  \seqmsg{CP}{OS}{socket(), bind(cổng tạm thời)}
+  \seqmsg{CP}{OS}{connect(server) - không gửi gói}
+  \seqmsg{CP}{OS}{send(datagram CONNECT\_REQUEST)}
+  \seqfragbegin
+  \seqmsg{G}{SP}{Poll(nowMs)}
+  \seqmsg{SP}{OS}{poll(timeout 0, SelectRead)}
+  \seqret{OS}{SP}{true: có datagram chờ đọc}
+  \seqmsg{SP}{OS}{recvfrom(buffer 1200 B, SocketAddress)}
+  \seqret{OS}{SP}{số byte, địa chỉ nguồn (IP, cổng)}
+  \seqself{SP}{GspHeader.TryParse; EndpointKey(IP, cổng)}
+  \seqret{SP}{G}{PacketReceived(header, datagram, endpoint)}
+  \seqfragend{G}{OS}{loop}{có datagram và chưa đọc quá 1024 gói}
+  \seqmsg{G}{SP}{Send(datagram, endpoint)}
+  \seqmsg{SP}{OS}{sendto(datagram, SocketAddress đã lưu đệm)}
+  \seqend{G,SP,OS,CP,CL}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự các lời gọi API socket UDP phía server và client}
+\label{fig:B-socket}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.2cm}|Y|}
+\hline
+\hd{Bước xử lý} & \hd{Nguyên lý thiết kế và hiện thực kỹ thuật} \\ \hline
+1. Khởi tạo socket & Mở socket UDP thô (Datagram), đặt cờ không chặn, cấu hình kích thước bộ đệm nhận/gửi của hệ điều hành lên 1 MB. \\ \hline
+2. Khắc phục lỗi hệ điều hành & Tắt cơ chế tự động báo lỗi ngắt kết nối cổng ICMP trên Windows để tránh làm hỏng vòng lặp nhận chung của server. \\ \hline
+3. Vòng lặp rút cạn gói tin & Sử dụng cơ chế thăm dò trạng thái sẵn sàng đọc với thời gian chờ 0 (không chặn); đọc liên tục các datagram đang chờ trong bộ đệm hệ thống. \\ \hline
+4. Giới hạn ngân sách gói tin & Giới hạn tối đa 1\,024 datagram mỗi chu kỳ thăm dò để chống tấn công làm tràn luồng xử lý và bảo đảm chu kỳ khung hình ổn định. \\ \hline
+5. Tái sử dụng vùng nhớ đệm & Cấp phát sẵn vùng đệm cố định 1\,200 byte; thu hồi ngay sau khi phân tích xong header; loại bỏ hoàn toàn việc cấp phát bộ nhớ động trong vòng lặp gửi/nhận. \\ \hline
+\end{tabularx}
+\end{center}
+\vspace{-4pt}
+\begin{center}\footnotesize\itshape Bảng quy trình khởi tạo socket và thuật toán rút cạn gói tin không chặn\end{center}
+
+Các quyết định kỹ thuật tầng socket:
+\begin{itemize}
+  \item \textbf{Vào/ra không chặn, một luồng.} Socket được thiết lập ở chế độ không chặn; mỗi chu kỳ, hệ thống kiểm tra trạng thái sẵn sàng đọc rồi xử lý toàn bộ datagram đang chờ. Không dùng luồng nhận riêng nên toàn bộ trạng thái kết nối nằm trên một luồng duy nhất, loại bỏ hoàn toàn yêu cầu khóa đồng bộ dữ liệu.
+  \item \textbf{Giới hạn số datagram mỗi lần đọc.} Mỗi chu kỳ đọc tối đa 1024 datagram để đảm bảo không bị kẹt luồng khi có đột biến lưu lượng.
+  \item \textbf{Bộ đệm socket 1 MB.} Server yêu cầu bộ đệm nhận 1 MB để hấp thụ các đợt bùng nổ lưu lượng, đồng thời giám sát dung lượng thực tế được cấp bởi nhân hệ điều hành.
+  \item \textbf{Phân kênh theo địa chỉ nguồn.} Server tra cứu kết nối bằng cặp địa chỉ IP và cổng; mã định danh kết nối trong header phải khớp với phiên đã đăng ký.
+  \item \textbf{Không cấp phát trong vòng gửi - nhận.} Tái sử dụng cấu trúc địa chỉ nguồn và bộ đệm cố định, bảo đảm không tạo rác bộ nhớ trong suốt trận đấu.
+\end{itemize}
+
+% -------------------------------------------------------------------------------------
+\subsection{Định dạng gói tin GSP}\label{sec:B-gsp}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, fld/.style={draw=cLine, minimum height=1.2cm, align=center, font=\scriptsize, inner sep=1pt, anchor=west}]
+  % 16 byte = 16 cm... dùng 0.98 cm / byte
+  \def\b{0.98}
+  \node[fld, fill=cBlue,   minimum width=2*\b cm] (p)  at (0,0)      {\textbf{protocolId}\\u16 0x4946};
+  \node[fld, fill=cBlue,   minimum width=1*\b cm] (t)  at (p.east)   {\textbf{type}\\u8};
+  \node[fld, fill=cBlue,   minimum width=1*\b cm] (f)  at (t.east)   {\textbf{flags}\\u8};
+  \node[fld, fill=cGreen,  minimum width=2*\b cm] (s)  at (f.east)   {\textbf{sequence}\\u16};
+  \node[fld, fill=cGreen,  minimum width=2*\b cm] (a)  at (s.east)   {\textbf{ack}\\u16};
+  \node[fld, fill=cGreen,  minimum width=4*\b cm] (ab) at (a.east)   {\textbf{ackBitfield}\\u32: 32 gói trước ack};
+  \node[fld, fill=cOrange, minimum width=2*\b cm] (c)  at (ab.east)  {\textbf{connection}\\\textbf{Id} u16};
+  \node[fld, fill=cOrange, minimum width=2*\b cm] (l)  at (c.east)   {\textbf{payload}\\\textbf{Length}\\u16 $\le$ 1184};
+  \foreach \n/\o in {p/0, t/2, f/3, s/4, a/6, ab/8, c/12, l/14} { \node[font=\scriptsize, anchor=north west] at (\n.south west) {\o}; }
+  \node[font=\scriptsize, anchor=north east] at (l.south east) {16};
+  % envelope + fragment header
+  \node[fld, fill=cPurple, minimum width=2.4cm] (e1) at (0,-2.4)  {\textbf{channelId}\\u8: 0..3};
+  \node[fld, fill=cPurple, minimum width=4.2cm] (e2) at (e1.east) {\textbf{channelSequence}\\u16, riêng từng kênh};
+  \node[font=\footnotesize, anchor=north] at ($(e1.south west)!0.5!(e2.south east)+(0,-0.1)$) {Envelope kênh 3 byte (mọi gói PAYLOAD)};
+  \node[fld, fill=cPurple, minimum width=3.6cm] (g1) at (8.1,-2.4)  {\textbf{fragmentGroupId}\\u16};
+  \node[fld, fill=cPurple, minimum width=2.0cm] (g2) at (g1.east)   {\textbf{index}\\u8};
+  \node[fld, fill=cPurple, minimum width=2.0cm] (g3) at (g2.east)   {\textbf{count}\\u8 $\le$ 64};
+  \node[font=\footnotesize, anchor=north] at ($(g1.south west)!0.5!(g3.south east)+(0,-0.1)$) {Header phân mảnh 4 byte (khi cờ FRAGMENTED)};
+\end{tikzpicture}
+\caption{Header GSP 16 byte (little-endian), envelope kênh và header phân mảnh}
+\label{fig:B-header}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{2.6cm}|Y|}
+\hline
+\hd{Trường} & \hd{Giá trị} \\ \hline
+Bit \code{flags} & 0 RELIABLE $\cdot$ 1 FRAGMENTED $\cdot$ 2 ORDERED $\cdot$ 3 COMPRESSED (dự phòng) $\cdot$ 4-7 phải bằng 0 \\ \hline
+\code{packetType} & 0x01 CONNECT\_REQUEST $\cdot$ 0x02 CONNECT\_CHALLENGE $\cdot$ 0x03 CONNECT\_RESPONSE $\cdot$ 0x04 CONNECT\_ACCEPTED $\cdot$ 0x05 CONNECT\_DENIED $\cdot$ 0x06 DISCONNECT $\cdot$ 0x07 KEEPALIVE $\cdot$ 0x10 PAYLOAD $\cdot$ 0x11 FRAGMENT \\ \hline
+\end{tabularx}
+\end{center}
+
+\textbf{Kích thước datagram tối đa 1200 byte.} Một datagram UDP vượt quá MTU của đường truyền bị tầng IP phân mảnh;
+mất một mảnh IP bất kỳ làm mất cả datagram, và nhiều tường lửa, thiết bị NAT huỷ luôn các mảnh IP. Giới hạn 1200 byte
+dữ liệu UDP cộng 28 byte header (IPv4 20 byte, UDP 8 byte) cho gói IP 1228 byte, nhỏ hơn MTU tối thiểu 1280 byte mà
+IPv6 bắt buộc mọi liên kết phải hỗ trợ và nhỏ hơn MTU 1492 byte của PPPoE hay MTU đã bị giảm của các đường hầm VPN.
+Sau 16 byte header GSP, phần dữ liệu còn tối đa 1184 byte; bản tin lớn hơn được phân mảnh ở tầng Transport (mục~\ref{sec:B-manh}).
+
+\textbf{Tuần tự hoá nhị phân.} Header có vị trí trường cố định, ghi theo thứ tự byte little-endian bằng các hàm
+\code{Endian.WriteU16LE/WriteU32LE} trên \code{Span<byte>}, không dùng \code{BinaryFormatter} hay JSON. Thứ tự byte được
+quy định tường minh trong đặc tả giao thức thay vì phụ thuộc kiến trúc máy, nên client và server trên các nền tảng khác
+nhau đọc cùng một chuỗi byte như nhau. Khi nhận, \code{TryParse} kiểm tra theo thứ tự: đủ 16 byte, \code{protocolId}
+bằng 0x4946 (loại bỏ gói lạc từ ứng dụng khác), \code{payloadLength} $\le$ 1184 và không vượt quá số byte thực nhận.
+Dữ liệu đến từ mạng được xem là không tin cậy: mọi độ dài đều được đối chiếu với kích thước bộ đệm trước khi đọc.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.2cm}|Y|}
+\hline
+\hd{Thao tác nhị phân} & \hd{Nguyên lý thiết kế và hiện thực kỹ thuật} \\ \hline
+1. Tuần tự hoá nhị phân (Gửi) & Ghi tuần tự các trường dữ liệu theo thứ tự byte little-endian vào bộ nhớ đệm nhị phân; kiểm tra giới hạn kích thước mảng trước khi ghi. \\ \hline
+2. Kiểm tra tính toàn vẹn (Nhận) & Kiểm tra kích thước tối thiểu (16 byte); đối chiếu mã giao thức nhận dạng tiêu chuẩn; loại bỏ các gói tin rác từ ứng dụng khác. \\ \hline
+3. Kiểm soát tải trọng & Đọc chiều dài tải trọng, đối chiếu với ngưỡng an toàn tối đa (1\,184 byte) và bảo đảm dữ liệu nhận thực tế đủ độ dài trước khi chuyển giao. \\ \hline
+\end{tabularx}
+\end{center}
+\vspace{-4pt}
+\begin{center}\footnotesize\itshape Bảng quy trình tuần tự hoá và xác thực tính hợp lệ của header nhị phân 16 byte\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Bắt tay không lưu trạng thái}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{C}{2.2}{Client (UdpTransportClient)}
+  \seqactor{S}{12.8}{Server (UdpTransportServer)}
+  \seqbegin
+  \seqmsg{C}{S}{CONNECT\_REQUEST \{version, joinTicket 64 byte, clientSalt u64\}}
+  \seqself{S}{RateLimiter theo IP, kiểm tra version và chỗ trống;\\serverSalt = HMAC(khoá, IP, cổng, clientSalt, epoch 30 s)\\không lưu trạng thái, chưa kiểm tra vé}
+  \seqret{S}{C}{CONNECT\_CHALLENGE \{serverSalt\}}
+  \seqself{C}{response = clientSalt XOR serverSalt}
+  \seqmsg{C}{S}{CONNECT\_RESPONSE \{response, clientSalt, joinTicket\}}
+  \seqself{S}{tính lại serverSalt: địa chỉ nguồn đã được xác minh;\\kiểm tra vé (HMAC, hạn), gắn playerId, cấp connectionId}
+  \seqfragbegin
+  \seqret{S}{C}{CONNECT\_ACCEPTED \{connectionId, serverTick, mapId, playerId\}}
+  \seqfragelse{C}{S}{vé sai / hết hạn / playerId đang chơi}
+  \seqret{S}{C}{CONNECT\_DENIED \{lý do 1..6\}}
+  \seqfragend{C}{S}{alt}{vé hợp lệ}
+  \seqend{C,S}
+\end{tikzpicture}
+\caption{Bắt tay challenge - response dùng cookie HMAC: server không cấp phát tài nguyên cho địa chỉ chưa được xác minh}
+\label{fig:B-battay}
+\end{figure}
+
+Với UDP, địa chỉ nguồn trong gói tin có thể bị giả mạo tuỳ ý vì không có bắt tay ở tầng giao vận. Cơ chế trên áp
+dụng nguyên lý của \textbf{SYN cookie} trong TCP: thay vì lưu một bản ghi chờ cho mỗi yêu cầu, server mã hoá thông tin
+cần kiểm tra vào chính giá trị gửi đi và tính lại khi nhận phản hồi:
+\[
+  \mathit{serverSalt} = \mbox{HMAC-SHA256}\big(K,\ \mathit{IP} \,\|\, \mathit{port} \,\|\, \mathit{clientSalt}
+  \,\|\, \lfloor t / 30\,\mathrm{s} \rfloor\big)[0..7], \qquad
+  \mathit{response} = \mathit{clientSalt} \oplus \mathit{serverSalt}
+\]
+Khoá $K$ 32 byte sinh ngẫu nhiên khi server khởi động và không rời khỏi tiến trình. Chỉ bên thực sự nhận được gói
+challenge tại địa chỉ đã khai mới tính được \textit{response} đúng, nên một \code{CONNECT_RESPONSE} hợp lệ chứng minh quyền
+sở hữu địa chỉ nguồn. Thành phần epoch giới hạn thời gian dùng lại cookie bị bắt được; server chấp nhận epoch hiện tại
+và epoch liền trước để bắt tay diễn ra đúng lúc chuyển epoch không bị từ chối. Giá trị \textit{serverSalt} bằng 0 được
+thay bằng 1, vì khi đó \textit{response} trùng với \textit{clientSalt} và bất kỳ bên quan sát nào cũng trả lời được.
+
+% -------------------------------------------------------------------------------------
+\subsection{Máy trạng thái kết nối}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[init] (i) at (-0.6,0) {};
+  \node[st, text width=2.4cm] (d)  at (1.8,0)    {Disconnected};
+  \node[st, text width=2.4cm] (c)  at (7.2,0)    {Connecting};
+  \node[st, text width=2.4cm] (h)  at (12.6,0)   {Challenged};
+  \node[st, text width=2.4cm, fill=cGreen] (ok) at (12.6,-3.4) {Connected};
+  \draw[arr] (i) -- (d);
+  \draw[arr] (d) -- node[lbl, above=3pt]{Connect()} (c);
+  \draw[arr] (c) -- node[lbl, above=3pt]{nhận CHALLENGE} (h);
+  \draw[arr] (h) -- node[lbl, right=3pt]{nhận CONNECT\_ACCEPTED} (ok);
+  \draw[arr] (c.north) -- ++(0,0.9) -| node[lbl, pos=0.25, above=2pt]{5 s hết giờ / CONNECT\_DENIED} ($(d.north)+(0.4,0)$);
+  \draw[arr] (h.north) -- ++(0,1.8) -| node[lbl, pos=0.25, above=2pt]{5 s hết giờ} ($(d.north)+(-0.4,0)$);
+  \draw[arr] (ok.west) -| node[lbl, pos=0.3, below=3pt]{DISCONNECT (gửi 3 lần) / 10 s không nhận gói / vượt số lần gửi lại} (d.south);
+  \draw[arr] (ok.south east) .. controls +(1.2,-0.8) and +(1.3,0.4) .. node[lbl, right=2pt]{KEEPALIVE\\mỗi 1 s} (ok.east);
+  \node[font=\footnotesize, align=left, anchor=north west] at (3.3,-0.55) {CONNECT\_REQUEST gửi lại mỗi 250 ms,\\tối đa 20 lần};
+\end{tikzpicture}
+\caption{Máy trạng thái \texttt{ConnectionState} của một kết nối}
+\label{fig:B-trangthai}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Cơ chế ack bằng bitfield và gửi lại}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, cell/.style={draw=cLine, minimum width=2.1cm, minimum height=1.1cm, align=center, font=\footnotesize, anchor=west}]
+  \node[cell, fill=cGreen]  (c0) at (0,0)     {\textbf{seq 103}\\đã nhận};
+  \node[cell, fill=cOrange] (c1) at (c0.east) {\textbf{seq 102}\\MẤT};
+  \node[cell, fill=cGreen]  (c2) at (c1.east) {\textbf{seq 101}\\đã nhận};
+  \node[cell, fill=cOrange] (c3) at (c2.east) {\textbf{seq 100}\\MẤT};
+  \node[cell, fill=cGreen]  (c4) at (c3.east) {\textbf{seq 99}\\đã nhận};
+  \node[cell, fill=cGreen]  (c5) at (c4.east) {\textbf{seq 98}\\đã nhận};
+  \node[cell, fill=cGreen]  (c6) at (c5.east) {\textbf{seq 97}\\đã nhận};
+  \foreach \n/\t in {c0/{ack = 103}, c1/{bit0 = 0}, c2/{bit1 = 1}, c3/{bit2 = 0}, c4/{bit3 = 1}, c5/{bit4 = 1}, c6/{bit5 = 1}}
+    { \node[font=\footnotesize] at ($(\n.south)+(0,-0.3)$) {\t}; }
+\end{tikzpicture}
+\caption{Ví dụ ack bitfield: \texttt{ack = 103}, \texttt{ackBitfield = ...111010}; bên gửi xác định được gói 102 và 100 bị mất.
+Mỗi header mang trạng thái nhận của 33 gói nên không cần gói ACK riêng}
+\label{fig:B-bitfield}
+\end{figure}
+
+\textbf{Số học sequence modulo $2^{16}$.} Trường \code{sequence} 16 bit quay vòng về 0 sau 65\,535, tức khoảng 36 phút ở
+30 gói/giây. Phép so sánh thông thường \texttt{a > b} sai tại điểm quay vòng (gói 0 mới hơn gói 65\,535). Mọi phép so
+sánh sequence trong mã nguồn đi qua lớp \code{SequenceMath}, dùng khoảng cách có dấu theo số học modulo:
+\[
+  d(a,b) = \big((a - b) \bmod 2^{16}\big) \mbox{ diễn giải là số nguyên có dấu 16 bit}, \qquad
+  a \mbox{ mới hơn } b \iff 0 < d(a,b) \le 2^{15}
+\]
+Trong C\#, $d(a,b)$ được tính bằng một phép ép kiểu \code{(short)(a - b)}: phép trừ tràn tự nhiên theo modulo $2^{16}$
+và ép sang \code{short} cho kết quả trong khoảng $[-32768, 32767]$. Hai sequence cách nhau dưới nửa không gian số được
+so sánh đúng bất kể quay vòng; bộ kiểm thử có trường hợp biên 65\,535 $\rightarrow$ 0.
+
+\textbf{Cập nhật cửa sổ nhận.} Bên nhận giữ \code{remoteSequence} (sequence mới nhất đã nhận) và thanh ghi 32 bit
+\code{receivedBitfield}, trong đó bit $i$ bằng 1 nếu đã nhận gói $\mathit{remoteSequence} - 1 - i$. Khi gói mới hơn tới với
+khoảng cách $d$, thanh ghi được dịch trái $d$ bit và bật bit của \code{remoteSequence} cũ; khi gói cũ hơn tới muộn (đảo
+thứ tự) trong phạm vi 32, chỉ bật bit tương ứng. Bên gửi duyệt \code{ack} và 32 bit để xác nhận từng gói trong vòng đệm
+gửi 1024 ô (chỉ số = \code{sequence mod 1024}).
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.2cm}|Y|}
+\hline
+\hd{Thao tác cửa sổ trượt} & \hd{Nguyên lý thiết kế và hiện thực kỹ thuật} \\ \hline
+1. Nhận gói tin mới hơn & Tính khoảng cách số thứ tự theo số học modulo 16-bit. Nếu khoảng cách dương, dịch trái thanh ghi bitfield tương ứng và ghi nhận số thứ tự mới nhất. \\ \hline
+2. Nhận gói tin đến muộn & Nếu gói tin có số thứ tự cũ hơn nhưng nằm trong phạm vi 32 gói gần nhất, bật bit tương ứng trong thanh ghi để xác nhận đã nhận thành công. \\ \hline
+3. Quét và giải phóng ACK & Khi nhận trường ACK và bitfield từ đối tác, duyệt qua số thứ tự xác nhận và 32 bit lịch sử; giải phóng các gói tin đã nhận khỏi bộ đệm gửi 1\,024 ô. \\ \hline
+\end{tabularx}
+\end{center}
+\vspace{-4pt}
+\begin{center}\footnotesize\itshape Bảng thuật toán cập nhật cửa sổ trượt và xử lý xác nhận bitfield 32-bit\end{center}
+
+\textbf{Ước lượng RTT và thời gian chờ gửi lại (RTO).} Mỗi lần một gói được ack, thời gian từ lúc gửi tới lúc nhận ack
+là một mẫu RTT $R$. Theo \textbf{thuật toán Karn}, gói đã từng được gửi lại không cho mẫu RTT vì không xác định được ack
+ứng với lần gửi nào. RTT làm mượt (SRTT) và độ dao động (jitter) được cập nhật theo trung bình trượt hàm mũ (EWMA), cùng
+dạng với thuật toán Jacobson/Karels trong TCP:
+\[
+  \mathit{jitter} \leftarrow \mathit{jitter} + 0{,}25\,\big(|R - \mathit{SRTT}| - \mathit{jitter}\big), \qquad
+  \mathit{SRTT} \leftarrow 0{,}9\,\mathit{SRTT} + 0{,}1\,R
+\]
+\[
+  \mathit{RTO} = \min\!\big(1000,\ \max(30,\ 1{,}5\,\mathit{SRTT} + 4\,\mathit{jitter})\big)\ \mathrm{ms}
+\]
+Hệ số nhân 1,5 (thấp hơn mức của TCP) phù hợp với dữ liệu game cần gửi lại nhanh; cận dưới 30 ms tránh gửi lại dồn dập
+trên mạng LAN, cận trên 1000 ms giới hạn thời gian treo của kênh tin cậy.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  % ---- cột gửi
+  \node[font=\small\bfseries] at (4,1.0) {Gửi};
+  \node[bxB, text width=3.6cm] (a)  at (4,0)    {\texttt{Send(channel, payload, reliable)}};
+  \node[dec, text width=1.7cm] (d1) at (4,-1.8) {reliable?};
+  \node[dec, text width=2.2cm] (d2) at (4,-4.0) {chưa ack\\< 64 gói?};
+  \node[bxO, text width=1.7cm] (q)  at (7.9,-4.0) {Tạm hoãn gói tin cậy mới};
+  \node[bxB, text width=3.6cm] (k)  at (4,-6.1)  {Sao chép vào BufferPool, lưu theo sequence};
+  \node[bxG, text width=3.6cm] (w)  at (4,-7.9)  {Ghi header + envelope\\gửi datagram};
+  \draw[arr] (a) -- (d1);
+  \draw[arr] (d1) -- node[lbl, right=2pt]{có} (d2);
+  \draw[arr] (d2) -- node[lbl, above=2pt]{không} (q);
+  \draw[arr] (d2) -- node[lbl, right=2pt]{có} (k);
+  \draw[arr] (k) -- (w);
+  \draw[arr] (d1.west) -- node[lbl, above=2pt]{không} (0.6,-1.8) |- (w.west);
+  % ---- cột nhận ack / gửi lại
+  \draw[cLine, dashed] (9.0,1.2) -- (9.0,-8.6);
+  \node[font=\small\bfseries] at (12.6,1.0) {Nhận ack và gửi lại};
+  \node[bxB, text width=3.8cm] (r)  at (12.6,0)    {Gói đến mang ack + bitfield};
+  \node[bxB, text width=3.8cm] (x)  at (12.6,-1.8) {Đánh dấu đã nhận, trả buffer; mẫu RTT chỉ từ lần gửi đầu (Karn)};
+  \node[bxB, text width=3.8cm] (t)  at (12.6,-4.0) {\texttt{Poll()}: gói quá RTO\\(30-1000 ms)};
+  \node[dec, text width=2.2cm] (d3) at (12.6,-6.1) {đã gửi lại\\> 10 lần?};
+  \node[bxO, text width=3.8cm] (z)  at (12.6,-7.9) {Đóng kết nối\\\texttt{TransportError}};
+  \draw[arr] (r) -- (x);
+  \draw[arr] (t) -- (d3);
+  \draw[arr] (d3) -- node[lbl, right=2pt]{có} (z);
+  \draw[arr] (d3.west) -- node[lbl, above=2pt]{không: gửi lại} (8.2,-6.1) |- ($(w.east)+(0,0.2)$);
+\end{tikzpicture}
+\caption{Luồng gửi tin cậy, xử lý ack và gửi lại trong \texttt{ReliabilityLayer}}
+\label{fig:B-guilai}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Kênh, phân mảnh và kiểm soát nghẽn}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[bxB, text width=3.2cm] (in)  at (3.2,0)   {Datagram PAYLOAD\\đã giải header};
+  \node[bxB, text width=2.6cm] (in2) at (10.4,0)  {Datagram FRAGMENT};
+  \node[bxB, text width=3.6cm] (fa)  at (10.4,-1.6) {FragmentAssembler\\{\footnotesize tối đa 8 nhóm, huỷ sau 2 s}};
+  \node[dec, text width=2.0cm] (e)   at (6.8,-3.6) {channelId\\trong envelope};
+  \node[bxG, text width=2.4cm] (c0)  at (1.8,-6.0) {Giao ngay\\không thứ tự};
+  \node[dec, text width=2.3cm] (c1)  at (6.8,-6.0) {channelSequence\\mới hơn?};
+  \node[dec, text width=2.3cm] (c2)  at (12.6,-6.0) {đúng sequence\\kế tiếp?};
+  \node[bxG, text width=2.2cm] (d1)  at (5.2,-8.6) {Giao};
+  \node[bxO, text width=2.2cm] (x1)  at (8.4,-8.6) {Huỷ gói cũ};
+  \node[bxG, text width=2.8cm] (d2)  at (11.2,-8.6) {Giao + xả gói đệm liền sau};
+  \node[bxO, text width=2.0cm] (b2)  at (14.5,-8.6) {Đệm chờ};
+  \draw[arr] (in2) -- (fa);
+  \draw[arr] (in.south) -- (3.2,-2.4) -| (e.north);
+  \draw[arr] (fa.south) -- (10.4,-2.4) -| (e.north);
+  \draw[arr] (e.west) -| node[lbl, pos=0.25, above=2pt]{kênh 0} (c0.north);
+  \draw[arr] (e) -- node[lbl, right=2pt]{kênh 1 / 3} (c1);
+  \draw[arr] (e.east) -| node[lbl, pos=0.25, above=2pt]{kênh 2} (c2.north);
+  \draw[arr] (c1.south) -- ++(0,-0.4) -| node[lbl, pos=0.75, left=2pt]{có} (d1.north);
+  \draw[arr] (c1.south) -- ++(0,-0.4) -| node[lbl, pos=0.75, right=2pt]{không} (x1.north);
+  \draw[arr] (c2.south) -- ++(0,-0.4) -| node[lbl, pos=0.75, left=2pt]{có} (d2.north);
+  \draw[arr] (c2.south) -- ++(0,-0.4) -| node[lbl, pos=0.75, right=2pt]{sớm} (b2.north);
+\end{tikzpicture}
+\caption{Xử lý phía nhận theo kênh: kênh 2 chờ đúng thứ tự, kênh 1 và 3 bỏ gói cũ}
+\label{fig:B-kenh}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[init] (i) at (0.6,0) {};
+  \node[st, fill=cGreen, text width=2.2cm] (g) at (3.2,0) {GOOD};
+  \node[st, fill=cOrange, text width=2.2cm] (b) at (11.2,0) {BAD};
+  \draw[arr] (i) -- (g);
+  \draw[arr] ($(g.east)+(0,0.2)$) -- node[lbl, above=3pt]{RTT làm mượt > 250 ms} ($(b.west)+(0,0.2)$);
+  \draw[arr] ($(b.west)+(0,-0.2)$) -- node[lbl, below=3pt]{RTT < 200 ms và đã ở BAD $\ge$ 10 s} ($(g.east)+(0,-0.2)$);
+  \node[font=\footnotesize, align=center, anchor=north] at ($(g.south)+(0,-0.25)$) {snapshot 20 Hz};
+  \node[font=\footnotesize, align=center, anchor=north] at ($(b.south)+(0,-0.25)$) {snapshot 10 Hz, giảm chi tiết};
+\end{tikzpicture}
+\caption{Kiểm soát nghẽn hai chế độ có trễ (hysteresis) 250/200 ms; RTT làm mượt theo EWMA 0,9/0,1}
+\label{fig:B-nghen}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Giao diện lập trình và giao diện chẩn đoán}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm,
+  cls/.style={draw=cLine, rectangle split, rectangle split parts=2, rectangle split part fill={cBlue,white},
+    font=\footnotesize, inner sep=4pt}]
+  \node[cls, anchor=north] (ic) at (2.9,0) {\begin{tabular}{@{}c@{}}\textit{«interface»}\\\textbf{ITransportClient}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + State : ConnectionState \\ + SmoothedRttMs : float \\ + Stats : TransportStats \\
+      + Connect(host, port, joinTicket) \\ + Send(channelId, payload, reliable) \\ + Disconnect() \\ + Poll() \\
+      + OnMessage, OnConnected, \\ \quad OnDisconnected \\
+    \end{tabular}};
+  \node[cls, anchor=north] (is) at (8.4,0) {\begin{tabular}{@{}c@{}}\textit{«interface»}\\\textbf{ITransportServer}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + ConnectionCount : int \\ + Start(port, maxConnections) \\ + Send(connectionId, channel, \\ \quad payload, reliable) \\
+      + Broadcast(channel, payload, reliable) \\ + Disconnect(connectionId, reason) \\ + Poll() \\
+      + OnValidateTicket, OnClientConnected, \\ \quad OnClientDisconnected \\
+    \end{tabular}};
+  \node[cls, anchor=north] (ts) at (13.9,0) {\textbf{TransportStats}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + BytesSent, BytesReceived \\ + PacketsSent, Received \\ + PacketsLost, Resent \\ + SmoothedRttMs, JitterMs \\
+      + CongestionMode \\ + PendingFragmentGroups \\
+    \end{tabular}};
+  \node[bxY, text width=2.9cm] (uc) at (1.3,-7.4) {UdpTransportClient};
+  \node[bxY, text width=2.9cm] (lb) at (4.6,-7.4) {LoopbackTransport};
+  \node[bxY, text width=2.9cm] (us) at (8.4,-7.4) {UdpTransportServer};
+  \draw[darr, -{Triangle[open, length=3mm]}] (uc.north) -- (uc.north |- ic.south);
+  \draw[darr, -{Triangle[open, length=3mm]}] (lb.north) -- (lb.north |- ic.south);
+  \draw[darr, -{Triangle[open, length=3mm]}] (us.north) -- (us.north |- is.south);
+  \draw[arr] (is.east |- ts.west) -- (ts.west);
+\end{tikzpicture}
+\caption{Giao diện lập trình công khai của Transport (giữ ổn định từ tuần đầu của dự án)}
+\label{fig:B-api}
+\end{figure}
+
+Giao diện chỉ nhận và trả \code{ReadOnlySpan<byte>}/\code{ReadOnlyMemory<byte>} cùng id kênh, không chứa kiểu dữ liệu
+nào của tầng game. Mọi sự kiện (\code{OnMessage}, \code{OnConnected}\ldots) được phát đồng bộ bên trong \code{Poll()} trên
+luồng gọi, nên tầng ứng dụng không phải xử lý đồng bộ hoá giữa các luồng.
+
+\begin{figure}[H]
+\centering
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|Y|Y|}
+\hline
+\hd{Thông số chẩn đoán thời gian thực (Overlay)} & \hd{Kết quả phân tích luồng gói tin (Packet Analyzer)} \\ \hline
+Trạng thái: \textbf{Đã kết nối (Connected)} \newline
+RTT ước lượng: \textbf{48,2 ms} (Dao động: 3,1 ms) \newline
+Tỷ lệ mất gói: Lên 0,4\% / Xuống 1,2\% \newline
+Băng thông mạng: Lên 0,9 KB/s / Xuống 1,7 KB/s \newline
+Mức độ nghẽn: \textbf{TỐT (GOOD)} \newline
+Bộ đệm tái sử dụng: 12 ô trong bể nhớ \newline
+Tổng gói gửi / nhận: 18\,422 / 12\,291 \newline
+Gói bị mất / gửi lại: 147 / 52 &
+Thời gian phân tích: Từ giây 12,0 đến 15,0 \newline
+Lưu lượng gửi ra: 118 datagram (87 byte trung bình) \newline
+Lưu lượng nhận vào: 94 datagram (41 byte trung bình) \newline
+Khoảng trống ACK: 2 gói tin cần truyền lại \newline
+Độ trễ trung vị RTT p50: 44 ms \newline
+Phân mảnh: 0 nhóm (toàn bộ gói $\le$ 1200 byte) \newline
+Độ tin cậy: Kênh có thứ tự hoạt động chính xác \\ \hline
+\end{tabularx}
+\end{center}
+\caption{Giao diện chẩn đoán: hiển thị thông số mạng thời gian thực (trái) và phân tích luồng gói tin (phải)}
+\label{fig:B-chandoan}
+\end{figure}
+
+% =====================================================================================
+\section{Luồng xử lý và giải pháp đã ứng dụng}
+Mục này trình bày chi tiết các luồng xử lý và giải pháp mà phân hệ tầng giao vận UDP hiện thực: thiết lập kết nối có xác thực, cấu trúc header nhị phân, bắt tay không trạng thái chống giả mạo, bốn kênh truyền logic độc lập, phân mảnh và ghép mảnh dữ liệu lớn, kiểm soát nghẽn mạng và công cụ giám sát chẩn đoán.
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng thiết lập kết nối UDP có xác thực}
+\textbf{Bài toán.} UDP không có khái niệm kết nối: bất kỳ máy nào cũng gửi được datagram tới cổng 27015 với địa chỉ
+nguồn giả mạo. Nếu server cấp phát bộ nhớ, sinh số ngẫu nhiên hoặc kiểm tra chữ ký ngay khi nhận yêu cầu kết nối,
+kẻ tấn công có thể gửi hàng loạt yêu cầu với địa chỉ nguồn giả để làm đầy bảng kết nối đang chờ và khiến các client
+hợp lệ bị loại khỏi quá trình bắt tay. Đồng thời, server phải xác thực được client kết nối đúng là người đã được Master
+Server cấp vé vào trận.
+
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{B}{0.6}{Khởi tạo\\Client}
+  \seqactor{C}{3.5}{Quản lý\\kết nối client}
+  \seqactor{S}{7.9}{Máy chủ\\giao vận UDP}
+  \seqactor{R}{11.1}{Bộ giới hạn\\tần suất IP}
+  \seqactor{K}{13.6}{Bộ tạo\\Cookie HMAC}
+  \seqactor{V}{15.9}{Bộ kiểm tra\\vé xác thực}
+  \seqbegin
+  \seqmsg{B}{C}{Yêu cầu kết nối (kèm vé xác thực)}
+  \seqself{C}{Sinh số ngẫu nhiên bảo mật;\\chuyển trạng thái: Đang kết nối}
+  \seqfragbegin
+  \seqmsg{C}{S}{CONNECT\_REQUEST \{phiên bản, vé, salt client\}}
+  \seqfragend{C}{S}{loop}{mỗi 250 ms, tối đa 20 lần}
+  \seqmsg{S}{R}{Kiểm tra tần suất yêu cầu}
+  \seqret{R}{S}{Cho phép (tối đa 5 yêu cầu/giây/IP)}
+  \seqmsg{S}{K}{Tạo cookie từ IP, cổng, salt client, epoch}
+  \seqret{K}{S}{Salt máy chủ = HMAC-SHA256(...)}
+  \seqret{S}{C}{CONNECT\_CHALLENGE \{salt máy chủ\}}
+  \seqself{C}{Tính toán đáp án: salt client XOR salt server;\\chuyển trạng thái: Đã nhận thử thách}
+  \seqmsg{C}{S}{CONNECT\_RESPONSE \{đáp án, salt client, vé\}}
+  \seqmsg{S}{K}{Xác minh tính đúng đắn của đáp án}
+  \seqret{K}{S}{Hợp lệ: địa chỉ nguồn đã được chứng minh}
+  \seqmsg{S}{V}{Xác minh tính toàn vẹn của vé xác thực}
+  \seqret{V}{S}{Vé hợp lệ: chữ ký đúng, còn hạn sử dụng}
+  \seqfragbegin
+  \seqself{S}{Cấp mã kết nối, liên kết người chơi,\\khởi tạo phiên, lưu bản ghi phát lại}
+  \seqret{S}{C}{CONNECT\_ACCEPTED \{mã kết nối, tick server, bản đồ\}}
+  \seqret{C}{B}{Thông báo kết nối thành công}
+  \seqfragelse{B}{V}{Vé sai, hết hạn hoặc người chơi đang kết nối}
+  \seqret{S}{C}{CONNECT\_DENIED \{Lỗi vé / Đã kết nối\}}
+  \seqret{C}{B}{Thông báo kết nối bị từ chối}
+  \seqfragend{B}{V}{alt}{Hợp lệ}
+  \seqend{B,C,S,R,K,V}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự thiết lập kết nối: server không lưu trạng thái cho tới khi địa chỉ nguồn được xác minh}
+\label{fig:B-luong-ketnoi}
+\end{figure}
+
+\textbf{Diễn giải luồng.}
+\begin{enumerate}
+  \item Client sinh \code{clientSalt} bằng bộ sinh số ngẫu nhiên an toàn mật mã (\code{RandomNumberGenerator}) và gửi
+        \code{CONNECT_REQUEST}. Gói có kích thước cố định; gói sai kích thước bị huỷ mà không phản hồi. Vì chính gói
+        yêu cầu cũng có thể bị mất trên đường truyền, client gửi lại mỗi 250 ms, tối đa 20 lần (5 giây).
+  \item Server kiểm tra theo thứ tự chi phí tăng dần: giới hạn tần suất theo IP, phiên bản giao thức, địa chỉ đã có kết
+        nối hay chưa, còn chỗ trống hay không. Server \textbf{không lưu trạng thái} cho yêu cầu này mà tính
+        \code{serverSalt} bằng HMAC-SHA256 trên (địa chỉ, cổng, clientSalt, epoch 30 s) và gửi \code{CONNECT_CHALLENGE}
+        về địa chỉ nguồn đã khai.
+  \item Chỉ client thực sự sở hữu địa chỉ đó mới nhận được challenge và tính được \code{clientSalt} XOR
+        \code{serverSalt}. Khi \code{CONNECT_RESPONSE} tới, server tính lại cookie (chấp nhận epoch hiện tại và epoch liền
+        trước) để xác minh; từ thời điểm này địa chỉ nguồn được xem là đáng tin cậy.
+  \item Chỉ sau bước xác minh, server mới thực hiện các thao tác tốn tài nguyên: kiểm tra HMAC của joinTicket, đọc
+        \code{playerId} và từ chối nếu \code{playerId} đó đang có kết nối khác. Nếu hợp lệ, server lấy một
+        \code{connectionId} từ hàng đợi id còn trống, tạo \code{Connection} và gửi \code{CONNECT_ACCEPTED}.
+  \item \code{CONNECT_ACCEPTED} cũng có thể bị mất. Server giữ một bản ghi nhỏ theo địa chỉ; nếu client gửi lại
+        \code{CONNECT_RESPONSE} với đúng đáp án, server gửi lại \code{CONNECT_ACCEPTED} đã cấp thay vì tạo kết nối thứ hai
+        (thao tác bắt tay có tính luỹ đẳng).
+\end{enumerate}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.6cm}|Y|}
+\hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
+Tấn công làm ngập \code{CONNECT_REQUEST} với địa chỉ nguồn giả mạo, làm đầy bảng kết nối đang chờ & Cookie không trạng thái theo nguyên lý SYN cookie (\code{HandshakeCookie}): \code{serverSalt} là HMAC của địa chỉ, cổng, clientSalt và epoch 30 s, được tính lại khi cần và không bao giờ lưu \\ \hline
+Server bị lợi dụng để khuếch đại lưu lượng (reflection/amplification) & Challenge là một gói nhỏ gửi về địa chỉ đã khai; \code{RateLimiter} giới hạn 5 yêu cầu/giây/IP, bảng theo dõi tối đa 10\,000 IP và tự dọn sau 10 s \\ \hline
+Một vé bị lộ được dùng cho nhiều kết nối & Ràng buộc \code{playerId} trong vé với \code{connectionId}; vé thứ hai bị từ chối với lý do \code{AlreadyConnected}, phiên đang chơi không bị ngắt \\ \hline
+Gói \code{CONNECT_ACCEPTED} bị mất & Bản ghi phát lại theo địa chỉ (\code{AcceptedHandshake}), hết hạn sau 10 s \\ \hline
+Con trỏ ack bị khởi tạo sai từ bộ đếm sequence của gói điều khiển & Gói bắt tay \textbf{không} cập nhật con trỏ ack; gói dữ liệu đầu tiên mới khởi tạo nó \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng gửi và nhận một bản tin}
+Tầng trên (Replication) chỉ gọi \texttt{Send(channelId, payload, reliable)} và nhận lại \code{OnMessage(payload)}.
+Toàn bộ các bước ở giữa - đánh số, dựng header, lưu bản sao để gửi lại, ghi vào socket, phân loại theo kênh - do
+Transport đảm nhiệm. Toàn bộ xử lý chạy trên luồng gọi \code{Poll()}, không tạo luồng riêng, nên không cần khoá.
+
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{A}{0.6}{Tầng Đồng bộ\\(Bên gửi)}
+  \seqactor{C}{3.4}{Quản lý kết nối\\bên gửi}
+  \seqactor{L}{6.6}{Tầng độ tin cậy\\gửi/nhận}
+  \seqactor{P}{9.7}{Điểm cuối\\socket UDP}
+  \seqactor{Q}{12.6}{Quản lý kết nối\\bên nhận}
+  \seqactor{H}{15.5}{Quản lý 4 kênh\\logic}
+  \seqbegin
+  \seqmsg{A}{C}{Gửi dữ liệu tin cậy (kênh 2, payload)}
+  \seqself{C}{Kiểm tra áp lực điều khiển luồng (< 64 gói chưa ack);\\đóng gói envelope \{mã kênh, số thứ tự kênh\}}
+  \seqmsg{C}{L}{Tạo số thứ tự mới và đính kèm ACK hiện tại}
+  \seqret{L}{C}{Số thứ tự sequence, ACK, bitfield 32-bit}
+  \seqmsg{C}{L}{Ghi nhận gói đã gửi}
+  \seqself{L}{Lưu bản sao vào bộ đệm tái sử dụng,\\giữ lại cho tới khi được xác nhận}
+  \seqmsg{C}{P}{Chuyển datagram hoàn chỉnh cho socket}
+  \seqmsg{P}{Q}{Truyền datagram UDP qua mạng ($\le$ 1200 byte)}
+  \seqself{Q}{Kiểm tra tính hợp lệ của header;\\đối chiếu mã kết nối và địa chỉ IP nguồn}
+  \seqself{Q}{Xử lý trường ACK đính kèm và cập nhật cửa sổ nhận}
+  \seqmsg{Q}{H}{Chuyển giao dữ liệu kênh 2}
+  \seqret{H}{Q}{Giao theo đúng thứ tự bảo đảm của kênh}
+  \seqret{Q}{A}{Gửi phản hồi ACK ngay lập tức cho gói tin cậy}
+  \seqend{A,C,L,P,Q,H}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự gửi - nhận một bản tin tin cậy qua kênh 2}
+\label{fig:B-luong-guinhan}
+\end{figure}
+
+\textbf{Các giải pháp tối ưu đường xử lý gói tin.}
+\begin{itemize}
+  \item \textbf{Ack đính kèm (piggyback).} Mọi header đều mang \code{ack} và \code{ackBitfield} 32 bit, nên một gói xác
+        nhận được 33 gói cùng lúc và không cần gói ACK riêng. Riêng khi nhận gói tin cậy, bên nhận gửi ngay một
+        \code{KEEPALIVE} để bên gửi không phải chờ tới chu kỳ keep-alive 1 giây mới nhận được ack.
+  \item \textbf{Không cấp phát bộ nhớ trong vòng gửi - nhận.} Mọi mảng byte lấy từ \code{BufferPool} với kích thước cố
+        định 1200 byte. Đo trên .NET 8 Release: \code{BufferPool} 10,4 ns/lần, \code{ArrayPool.Shared} 17,4 ns,
+        \texttt{new byte[]} 16,7 ns; sau giai đoạn khởi động, \code{Poll} và \code{Send} cấp phát 0 byte, loại bỏ các lần
+        dừng do bộ gom rác trong vòng mô phỏng.
+  \item \textbf{Giới hạn số gói mỗi lần nhận.} Mỗi lần \code{Poll} đọc tối đa 1024 gói; phần còn lại được xử lý ở lượt
+        sau (33 ms). Nếu không giới hạn, khi bị tấn công làm ngập gói, luồng mô phỏng bị giữ trong vòng nhận và server
+        ngừng mô phỏng.
+  \item \textbf{Bộ đệm socket 1 MB và cảnh báo khi hệ điều hành giới hạn.} Linux mặc định giới hạn \code{rmem_max}
+        khoảng 208 KB mà không báo lỗi; \code{UdpPeer} đọc lại kích thước thực tế và ghi cảnh báo. Trên Windows, tắt
+        \code{SIO_UDP_CONNRESET} để thông báo ICMP ``port unreachable'' không làm lỗi lần nhận kế tiếp.
+  \item \textbf{Không phản hồi gói không hợp lệ.} Header sai, \code{connectionId} không khớp địa chỉ hoặc cờ dự trữ khác 0
+        đều bị huỷ mà không phản hồi; phản hồi các gói này sẽ biến server thành công cụ dò quét cổng.
+\end{itemize}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng phát hiện mất gói và gửi lại}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{L}{1.6}{Tầng độ tin cậy\\bên gửi}
+  \seqactor{P}{6.4}{Điểm cuối\\socket}
+  \seqactor{R}{10.6}{Quản lý kết nối\\bên nhận}
+  \seqactor{H}{14.6}{Quản lý thứ tự\\kênh logic}
+  \seqbegin
+  \seqmsg{P}{R}{Gói sequence 100 (kênh 2, thứ tự 7)}
+  \seqmsg{R}{H}{Chuyển giao thứ tự 7}
+  \seqlost{P}{R}{Gói sequence 101 (kênh 2, thứ tự 8) - BỊ MẤT}
+  \seqmsg{P}{R}{Gói sequence 102 (kênh 2, thứ tự 9)}
+  \seqmsg{R}{H}{Thứ tự 9 đến sớm}
+  \seqself{H}{Lưu đệm thứ tự 9,\\chờ nhận được thứ tự 8}
+  \seqret{R}{P}{Gói kế tiếp mang ACK = 102, bitfield báo mất 101}
+  \seqmsg{P}{L}{Xử lý ACK và bitfield nhận được}
+  \seqself{L}{Đánh dấu 100, 102 đã nhận;\\tính mẫu RTT theo thuật toán Karn}
+  \seqfragbegin
+  \seqself{L}{Kiểm tra định kỳ: gói 101 quá hạn RTO thích ứng}
+  \seqmsg{L}{P}{Truyền lại gói 101 từ bộ đệm lưu trữ}
+  \seqfragend{L}{P}{loop}{chưa nhận được ACK và số lần gửi lại $\le$ 10}
+  \seqmsg{P}{R}{Gói 101 truyền lại (kênh 2, thứ tự 8)}
+  \seqmsg{R}{H}{Nhận thành công thứ tự 8}
+  \seqret{H}{R}{Chuyển giao thứ tự 8 rồi xả tiếp thứ tự 9 đang đệm}
+  \seqend{L,P,R,H}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự mất gói trên kênh tin cậy: bitfield chỉ ra gói mất, RTO kích hoạt gửi lại, kênh giữ đúng thứ tự}
+\label{fig:B-luong-mat}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.2cm}|Y|}
+\hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
+Xác định gói bị mất mà không tốn gói ACK riêng & Cửa sổ nhận 32 bit dịch theo khoảng cách sequence; bên gửi duyệt \code{ack} và 32 bit để xác nhận từng gói (\code{ProcessIncomingAck}) \\ \hline
+Số thứ tự 16 bit quay vòng sau khoảng 36 phút ở 30 gói/giây & So sánh bằng \texttt{SequenceMath.IsNewer / Distance} theo số học modulo $2^{16}$, không dùng phép so sánh thông thường; có kiểm thử biên tại 65535 $\rightarrow$ 0 \\ \hline
+RTT bị đo sai khi gói đã được gửi lại & Thuật toán Karn: chỉ lấy mẫu RTT khi gói được ack mà chưa từng gửi lại; SRTT làm mượt EWMA 0,9/0,1, jitter theo hệ số 0,25 \\ \hline
+Thời gian chờ gửi lại quá dài hoặc gửi lại dồn dập & RTO động = 1,5 $\times$ SRTT + 4 $\times$ jitter, giới hạn trong [30; 1000] ms \\ \hline
+Gói tin cậy mất vĩnh viễn làm kênh có thứ tự bị treo & Quá 10 lần gửi lại hoặc trùng ô vòng đệm 1024 thì \textbf{đóng kết nối} với \code{TransportError}, thay vì duy trì một kết nối không còn giao được dữ liệu \\ \hline
+Bên nhận quá tải & Điều khiển luồng: tối đa 64 gói tin cậy chưa ack; \code{KEEPALIVE} thông báo số gói đang chờ và mức áp lực, bên gửi tạm dừng gói tin cậy mới khi áp lực > 80\% \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Bốn kênh truyền và luồng phân loại khi nhận}\label{sec:B-kenh}
+Mỗi gói \code{PAYLOAD} có envelope 3 byte gồm \code{channelId} và \code{channelSequence} \textbf{riêng từng kênh},
+tách biệt với sequence của kết nối. Nhờ vậy, các gói \code{KEEPALIVE} hay gói của kênh khác không làm thay đổi thứ tự
+đánh giá snapshot trên kênh 1.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{1cm}|L{3.8cm}|Y|L{3.8cm}|}
+\hline
+\hd{Kênh} & \hd{Đảm bảo} & \hd{Cách xử lý phía nhận (\code{ChannelSet.Receive})} & \hd{Dữ liệu} \\ \hline
+0 & Không tin cậy, không thứ tự & Giao ngay & Ping/pong \\ \hline
+1 & Không tin cậy, có thứ tự & Giao nếu \code{channelSequence} mới hơn gói đã giao; gói cũ bị huỷ và đếm \code{StalePacketsDropped} & Snapshot server $\rightarrow$ client \\ \hline
+2 & Tin cậy, có thứ tự & Cửa sổ 256 ô: gói đúng thứ tự thì giao và xả các gói liền sau đang đệm; gói đến sớm được chép vào bộ đệm; gói trùng hoặc ngoài cửa sổ bị bỏ & Sự kiện, spawn, chat \\ \hline
+3 & Không tin cậy, có thứ tự & Như kênh 1 nhưng bộ đếm riêng & Input client $\rightarrow$ server \\ \hline
+\end{tabularx}
+\end{center}
+\textbf{Giải pháp chống head-of-line blocking:} độ tin cậy được áp dụng \textbf{theo kênh}. Thí nghiệm
+kiểm chứng kênh độc lập cho thấy khi kênh 2 đang thiếu sequence 0, snapshot kênh 1 vẫn được giao ngay (1 gói), còn
+kênh 2 đệm gói sau và chỉ giao cả hai khi gói thiếu tới. Nếu dùng TCP, snapshot phải chờ gói sự kiện bị mất được gửi lại.
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng cắt và ghép mảnh bản tin lớn}\label{sec:B-manh}
+Datagram được giới hạn 1200 byte để tránh phân mảnh ở tầng IP trên các đường truyền có PPPoE, VPN hoặc đường hầm
+(payload tối đa 1184 byte sau header 16 byte, xem mục~\ref{sec:B-gsp}). Bản tin lớn hơn - ví dụ danh sách người chơi khi mới vào
+trận - được phân mảnh ở tầng Transport, nơi từng mảnh được đánh số và gửi lại riêng khi bị mất.
+
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{A}{0.6}{Tầng Đồng bộ}
+  \seqactor{C}{4.0}{Quản lý kết nối\\bên gửi}
+  \seqactor{Q}{9.0}{Quản lý kết nối\\bên nhận}
+  \seqactor{F}{13.2}{Bộ tái ghép mảnh}
+  \seqbegin
+  \seqmsg{A}{C}{Gửi bản tin lớn (kênh 2, payload 3000 byte)}
+  \seqself{C}{Kích thước vượt ngưỡng 1184 byte:\\cấp mã nhóm mới, chia làm 3 mảnh}
+  \seqfragbegin
+  \seqmsg{C}{Q}{FRAGMENT \{mã nhóm, chỉ số i, tổng số 3\} - cờ tin cậy \& phân mảnh}
+  \seqmsg{Q}{F}{Lưu đệm mảnh i của nhóm vào bộ nhớ}
+  \seqret{F}{Q}{Chưa đủ mảnh}
+  \seqfragend{A}{F}{loop}{i = 0..2, truyền từng mảnh tin cậy}
+  \seqfragbegin
+  \seqret{F}{Q}{Đủ 3 mảnh: ghép hoàn chỉnh thành mảng dữ liệu gốc}
+  \seqselfl{Q}{Đọc envelope, chuyển giao cho kênh tương ứng}
+  \seqret{Q}{A}{Chuyển giao bản tin hoàn chỉnh 3000 byte}
+  \seqfragelse{A}{F}{Nhóm quá hạn 2 s hoặc vượt quá 8 nhóm dở dang}
+  \seqselfl{F}{Huỷ nhóm cũ nhất, thu hồi bộ đệm}
+  \seqfragend{A}{F}{alt}{Đủ mảnh}
+  \seqend{A,C,Q,F}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự cắt và ghép mảnh với bộ nhớ có giới hạn}
+\label{fig:B-luong-manh}
+\end{figure}
+
+\textbf{Giải pháp.} (1) Mảnh luôn được gửi \textbf{tin cậy} kể cả khi tầng trên yêu cầu không tin cậy, vì thiếu một mảnh
+thì toàn bộ bản tin không sử dụng được. (2) Giới hạn bộ nhớ cho dữ liệu do bên gửi kiểm soát: tối đa 64 mảnh mỗi nhóm,
+8 nhóm dở dang mỗi kết nối, nhóm quá 2 giây bị huỷ, và nếu \code{count} của một mảnh khác với nhóm thì huỷ cả nhóm.
+(3) Trước khi cắt, kiểm tra tổng số gói tin cậy chưa ack và số mảnh không vượt quá 64, tránh một bản tin lớn chiếm toàn
+bộ cửa sổ gửi. Kiểm thử: bản tin 20 KB được ghép đúng từng byte khi các mảnh đến ngược thứ tự.
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng duy trì kết nối, kiểm soát nghẽn và ngắt kết nối}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{T}{0.6}{Chu kỳ kiểm tra\\định kỳ}
+  \seqactor{C}{4.2}{Quản lý kết nối}
+  \seqactor{G}{8.2}{Bộ kiểm soát\\nghẽn mạng}
+  \seqactor{F}{11.9}{Bộ điều khiển\\luồng truyền}
+  \seqactor{Q}{15.0}{Đối tác kết nối}
+  \seqbegin
+  \seqfragbegin
+  \seqmsg{T}{C}{Kích hoạt chu kỳ cập nhật}
+  \seqmsg{C}{G}{Cập nhật thời gian và độ trễ RTT trung bình}
+  \seqret{G}{C}{Chế độ mạng: TỐT (20 Hz) / XẤU (10 Hz)}
+  \seqfragbegin
+  \seqmsg{C}{Q}{KEEPALIVE \{gói tin cậy chờ xác nhận, mức áp lực\}}
+  \seqfragend{C}{Q}{opt}{$\ge$ 1 s từ lần keep-alive trước}
+  \seqret{Q}{C}{KEEPALIVE từ đối tác}
+  \seqmsg{C}{F}{Cập nhật mức áp lực của đối tác}
+  \seqret{F}{C}{Tạm dừng gửi gói tin cậy mới nếu áp lực > 80\%}
+  \seqfragend{T}{Q}{loop}{mỗi chu kỳ khi kết nối còn hiệu lực}
+  \seqfragbegin
+  \seqself{C}{Xử lý quá hạn: giải phóng bộ đệm, xóa kênh, xóa mảnh}
+  \seqret{C}{T}{Thông báo mất kết nối do quá hạn thời gian}
+  \seqfragelse{T}{Q}{Chủ động ngắt kết nối}
+  \seqmsg{C}{Q}{DISCONNECT \{lý do\} gửi liên tiếp 3 lần}
+  \seqret{C}{T}{Thông báo ngắt kết nối theo yêu cầu}
+  \seqfragelse{T}{Q}{Gói tin cậy bị hủy sau 10 lần gửi lại thất bại}
+  \seqret{C}{T}{Thông báo ngắt kết nối do lỗi truyền giao vận}
+  \seqfragend{T}{Q}{alt}{không nhận gói nào trong 10 s}
+  \seqend{T,C,G,F,Q}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự duy trì kết nối, điều khiển luồng và các trường hợp kết thúc kết nối}
+\label{fig:B-luong-giu}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.2cm}|Y|}
+\hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
+Thiết bị NAT xoá ánh xạ cổng khi kết nối không có lưu lượng; cần phát hiện client đã mất kết nối & \code{KEEPALIVE} mỗi 1 s giữ ánh xạ NAT; không nhận gói nào trong 10 s thì xem như client rời trận (đúng yêu cầu ``mất kết nối quá 10 giây'' của đề tài) \\ \hline
+Keep-alive không được gửi trên kết nối đang có lưu lượng cao & Hẹn giờ theo thời điểm gửi \textbf{keep-alive} gần nhất, không theo thời điểm gửi gói bất kỳ; nếu không, kết nối gửi snapshot 20 Hz sẽ không bao giờ gửi keep-alive và thông tin điều khiển luồng không được cập nhật \\ \hline
+Gói báo ngắt kết nối có thể bị mất & \code{DISCONNECT} gửi 3 lần liên tiếp, không cần ack; bên kia vẫn có cơ chế dự phòng timeout 10 s \\ \hline
+Mạng nghẽn làm RTT tăng & Hai chế độ có trễ (hysteresis): SRTT > 250 ms chuyển sang BAD (snapshot 10 Hz, giảm chi tiết); trở về GOOD khi SRTT < 200 ms và đã ở BAD đủ 10 s; nếu vừa về GOOD chưa tới 10 s đã xấu lại thì thời gian chờ tăng lên 20 s để tránh dao động trạng thái \\ \hline
+Rò rỉ tài nguyên khi đóng kết nối & \code{Fail} có tính luỹ đẳng: trả mọi buffer của \code{ReliabilityLayer}, \code{ChannelSet}, \code{FragmentAssembler}; server trả \code{connectionId} về hàng đợi và gỡ ràng buộc \code{playerId} để người chơi kết nối lại được \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Bộ giả lập mạng, ghi phát lại gói và đo hiệu năng}
+\textbf{Bộ giả lập mạng.} \code{NetworkSimulator} được đặt ngay dưới \code{UdpPeer.Send}: với mỗi datagram, bộ giả lập
+quyết định ngẫu nhiên việc huỷ, nhân đôi hoặc giữ lại trong một khoảng trễ (có jitter, có thể trễ thêm để tạo đảo thứ
+tự), sau đó gửi ra socket khi tới thời điểm đến hạn trong \code{Poll}. Bộ sinh số ngẫu nhiên dùng hạt giống cố định nên
+cùng cấu hình tạo ra cùng chuỗi sự cố, giúp tái hiện lỗi một cách tất định. Bộ giả lập được kích hoạt qua biến môi
+trường \code{IRONFRONT_SIM=typical}, không cần biên dịch lại.
+
+\begin{center}\small
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\hd{Hồ sơ} & \hd{Trễ} & \hd{Jitter} & \hd{Mất gói} & \hd{Đảo thứ tự} & \hd{Trùng gói} \\ \hline
+\code{lan} & 1 ms & 0 & 0 & 0 & 0 \\ \hline
+\code{good} & 30 ms & 5 ms & 0,5\% & 0 & 0 \\ \hline
+\code{typical} & 50 ms & 20 ms & 5\% & 2\% & 0 \\ \hline
+\code{bad} & 100 ms & 50 ms & 15\% & 5\% & 2\% \\ \hline
+\code{awful} & 150 ms & 100 ms & 30\% & 10\% & 5\% \\ \hline
+\end{tabular}
+\end{center}
+
+\textbf{Ghi và phát lại gói.} Khi kích hoạt cấu hình ghi nhật ký gói tin, bộ ghi gói lưu lại mọi datagram vào tệp dữ liệu có đánh phiên bản (chiều, thời điểm, địa chỉ, byte thô). Công cụ phân tích gói đọc lại tệp, lọc theo khoảng thời gian và mã kết nối, giải mã header, ước lượng khoảng trống sequence và ghép cặp ack để tính RTT (Hình~\ref{fig:B-chandoan}). Vì dữ liệu có thể chứa vé xác thực, tệp chỉ được lưu trong thư mục được cấu hình bảo mật cục bộ.
+
+\textbf{Kết quả đo thực nghiệm (môi trường kiểm thử chuẩn, chế độ tối ưu hóa).}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{5.6cm}|Y|}
+\hline
+\hd{Phép đo} & \hd{Kết quả} \\ \hline
+Phân tích header GSP & 3,5 ns/lần, 0 byte cấp phát động \\ \hline
+16 kết nối, 30 Hz, 10 phút & 16/16 kết nối ổn định, bộ đệm không phải cấp thêm \\ \hline
+64 kết nối, 30 Hz, 20 s (đã khởi động) & 64/64 kết nối; CPU chiếm dụng 0,39\% một nhân; 0 byte cấp phát động \\ \hline
+Ack bitfield bật / tắt & Một gói ack xác nhận 33 gói / 1 gói; còn 7 / 39 gói tin cậy chờ \\ \hline
+Kiểm soát nghẽn & RTT cao: tần suất chuyển đổi linh hoạt 20 $\rightarrow$ 10 Hz an toàn \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Kiểm thử phân hệ}
+Bộ kiểm thử tự động gồm 85 kịch bản kiểm thử toàn diện, chạy kiểm tra tự động trên Linux và Windows:
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.6cm}|c|Y|}
+\hline
+\hd{Nhóm kiểm thử} & \hd{Số kịch bản} & \hd{Kịch bản tiêu biểu} \\ \hline
+Kiểm thử gói điều khiển và socket & 22 & Gói điều khiển, quá hạn thời gian 10 s, ngắt kết nối, socket thật \\ \hline
+Kiểm thử tầng độ tin cậy và ACK & 19 & Xác nhận bitfield, số thứ tự quay vòng, thuật toán Karn, RTO động \\ \hline
+Kiểm thử độ bền bắt tay và bảo mật & 12 & Cookie sai, cookie hết hạn, vé sai, vé trùng, chống tấn công lụt yêu cầu \\ \hline
+Kiểm thử kênh logic và phân mảnh & 11 & Đảo thứ tự, gói trùng, phân loại kênh, ghép mảnh ngược thứ tự, giới hạn nhóm \\ \hline
+Kiểm thử độ bền kênh tin cậy & 8 & Kênh tin cậy duy trì ổn định qua giai đoạn mất gói kéo dài \\ \hline
+Kiểm thử giới hạn socket & 8 & Ngân sách đọc gói tin, kiểm soát dung lượng bộ đệm, loại bỏ gói header sai \\ \hline
+Kiểm thử chẩn đoán và nhật ký & 5 & Ghi và phân tích nhật ký gói, định dạng hiển thị thông số chẩn đoán \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Bảng ánh xạ hình vẽ với chức năng cá nhân thực hiện}
+\label{sec:B-mapping-hinh-ve}
+Bảng tổng hợp đối chiếu toàn bộ các sơ đồ kiến trúc, cấu trúc gói tin, giao diện và luồng xử lý do cá nhân thực hiện tương ứng với các chức năng cụ thể trong phân hệ tầng giao vận UDP:
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{2.2cm}|L{4.2cm}|Y|}
+\hline
+\hd{Hình vẽ} & \hd{Tên hình vẽ / biểu đồ} & \hd{Chức năng cá nhân thực hiện} \\ \hline
+Hình~\ref{fig:B-thanhphan} & Sơ đồ thành phần phân hệ & Thiết kế cấu trúc phân tầng thư viện giao vận UDP: trừu tượng hoá socket hệ điều hành, quản lý kết nối logic, độ tin cậy và giao diện API độc lập. \\ \hline
+Hình~\ref{fig:B-socket} & Sơ đồ tương tác socket UDP & Hiện thực tương tác tầng socket chế độ không chặn (non-blocking), kiểm soát ngân sách đọc (1\,024 gói/chu kỳ) và tối ưu hóa bộ nhớ nhận/gửi. \\ \hline
+Hình~\ref{fig:B-header} & Cấu trúc datagram nhị phân & Thiết kế và hiện thực định dạng header nhị phân 16 byte tối ưu: mã giao thức nhận dạng, số thứ tự sequence, trường ACK đính kèm và cờ điều khiển. \\ \hline
+Hình~\ref{fig:B-battay} & Bắt tay xác thực cookie & Thiết kế cơ chế bắt tay 3 bước không lưu trạng thái (Stateless Cookie HMAC), xác minh địa chỉ IP nguồn và triệt tiêu nguy cơ tấn công khuếch đại lưu lượng. \\ \hline
+Hình~\ref{fig:B-trangthai} & Máy trạng thái kết nối & Xây dựng máy trạng thái kết nối UDP quản lý vòng đời phiên: ngắt kết nối, đang bắt tay, kết nối thành công, nghẽn mạng và thu hồi tài nguyên. \\ \hline
+Hình~\ref{fig:B-bitfield} & Cơ chế ACK bitfield 32-bit & Hiện thực cơ chế xác nhận gói tin bằng bitfield: một gói xác nhận đồng thời 33 gói tin liên tiếp, giảm thiểu đáng kể số lượng gói ACK độc lập. \\ \hline
+Hình~\ref{fig:B-guilai} & Ước lượng RTT và RTO động & Hiện thực thuật toán Karn và Jacobson lọc nhiễu RTT, tự động cập nhật thời gian chờ gửi lại (RTO) thích ứng theo biến động mạng. \\ \hline
+Hình~\ref{fig:B-kenh} & Mô hình 4 kênh truyền & Hiện thực 4 kênh truyền logic độc lập trên một kết nối UDP (tin cậy/không tin cậy, có/không thứ tự); khắc phục triệt để hiện tượng head-of-line blocking. \\ \hline
+Hình~\ref{fig:B-nghen} & Kiểm soát nghẽn thích ứng & Hiện thực thuật toán kiểm soát nghẽn: giám sát RTT và tỷ lệ mất gói để tự động hạ tần suất gửi dữ liệu khi đường truyền quá tải. \\ \hline
+Hình~\ref{fig:B-api} & Giao diện lập trình phân hệ & Thiết kế giao diện lập trình độc lập, cung cấp các hàm gửi nhận dữ liệu và đăng ký sự kiện mạng cho các tầng ứng dụng phía trên. \\ \hline
+Hình~\ref{fig:B-chandoan} & Giao diện chẩn đoán mạng & Xây dựng công cụ đo lường và theo dõi thời gian thực: tính toán RTT, jitter, tỷ lệ mất gói, kiểm soát nghẽn và phân tích gói tin. \\ \hline
+Hình~\ref{fig:B-luong-ketnoi} & Sơ đồ tuần tự thiết lập kết nối & Hiện thực luồng bắt tay UDP: sinh salt ngẫu nhiên, xác minh phản hồi challenge, kiểm tra vé xác thực joinTicket và cấp phát mã định danh kết nối. \\ \hline
+Hình~\ref{fig:B-luong-guinhan} & Sơ đồ tuần tự gửi nhận dữ liệu & Hiện thực luồng truyền nhận bản tin tin cậy: đóng gói envelope, đính kèm ACK, chép dữ liệu vào bộ đệm gửi và chuyển giao theo đúng thứ tự kênh. \\ \hline
+Hình~\ref{fig:B-luong-mat} & Sơ đồ tuần tự xử lý mất gói & Hiện thực cơ chế phát hiện mất gói kép (quá hạn RTO và 3 ACK trùng lặp), tự động phát lại các gói tin bị mất trên kênh tin cậy. \\ \hline
+Hình~\ref{fig:B-luong-manh} & Sơ đồ tuần tự ghép mảnh & Hiện thực luồng tiếp nhận các mảnh dữ liệu, quản lý tối đa 8 nhóm dở dang với thời gian sống 2 s, ghép thành bản tin hoàn chỉnh an toàn. \\ \hline
+Hình~\ref{fig:B-luong-giu} & Sơ đồ tuần tự duy trì kết nối & Hiện thực nhịp tim giữ ánh xạ NAT (1 s), điều khiển luồng khi bên nhận áp lực cao (>80\%), chuyển chế độ nghẽn và ngắt kết nối khi quá 10 s im lặng. \\ \hline
+\end{tabularx}
+\end{center}
