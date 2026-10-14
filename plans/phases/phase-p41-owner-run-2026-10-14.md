@@ -1,6 +1,6 @@
 # Phase P41: the owner's run of 2026-10-14 (v4.6.3 public test)
 
-Status: **server and master fixes shipped** (see "Delivered"); **client items open** (see "Client
+Status: **shipped and deployed 2026-10-15** (see "Delivered"); **client items open** (see "Client
 backlog"). One PR per item, each merged to `develop` before the next. Owner rules: single-threaded,
 no subagents, CI only matters at the end and before deploys, **no client changes**: v4.6.3 stays the
 released client, so everything here was fixed on the game servers and the master only, and every
@@ -41,6 +41,38 @@ fix had to work with the v4.6.3 client as it is.
 | F7 | Master | A second sign-in on one connection leaked its old session for 24 h: `onlineNow` showed 10-16 with no client connected | durability CSV | #644 |
 | F8 | Game server | 78 "NOTHING WAS LAUNCHED" (BIL SCALPEL, players only): the engine's `Action.Done()` lies once, so the lock check withheld the pull while the pull launched on its own and latched `holdingFire` for the life. P40's F7 was the same root cause | server logs, `JavelinLockOnServerTests` | #640 |
 | F9 | Game server | UDP handshake limit of 5 requests/s per address, never logged: a room behind one address queued for most of the 5 s handshake | `RateLimiter` | #645: 32/s and a log line |
+| F10 | Master | Fly keeps minutes of log, so the 13:33 error burst could not be explained afterwards | durability CSV only | #647: `IRONFRONT_LOG_FILE`, `/data/master.log` |
+| F11 | Tools | The master deploy swapped the image only; `master.toml`'s env never reached the machine (why the cap took a flyctl deploy) | `deploy-master-fly.ps1` | #649: the toml's `[env]` applied and read back |
+| F12 | Tests | A #641 test read the career before the handler had written it (~1 run in 7) | PR #647's ubuntu build-test | #650 |
+| F13 | Tools | The E2E walker declared no maps, so a Forest Lake walk was refused (`MapNotInstalled`) and the live check never covered map 3 | live walk | #651 |
+| F14 | Tools | The stamped in-Editor server build lived in scratch scripts; `delayCall` never fires with the Editor in the background | this run | #652: `tools/build-server-in-editor.ps1` |
+
+Other open PRs (owner's item 5): dependabot #622 (`upload-artifact` 4 -> 7 in the smoke workflows;
+`ci.yml` was already on 7) and #623 (test host patch bumps) merged. Sagitoaz's #319 closed as
+superseded: its code landed byte-identical in #318, its tracker in #428, and its one missing file
+(`tools/playtest-local.ps1`) was removed on purpose in #332. ngtukien's #293 (the team report,
+opened against `main`) became #648 on the owner's decision: `docs/report/` only, without its two
+edits that made the commit-scope check always pass.
+
+## Delivered (2026-10-15)
+
+- **Master** (fly, `kien-master-2026`): revision `1ca8ad3c` at 00:57 (+07), image
+  `@sha256:1d37d69a...7133`, deployed with `tools/deploy-master-fly.ps1`, which applied
+  `IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE=60` and `IRONFRONT_LOG_FILE=/data/master.log` from the toml
+  and read them back. Rollback: `@sha256:098d35b6...5243` (`e533641`, the `:main` image of the
+  14:22 flyctl deploy); config backup `D:\Coding\LTM-backups\master-config-before-20261015-005740.json`;
+  DB backup `tmp/master-db/snap-20261015-predeploy.db`. Startup in `/data/master.log`:
+  `max 64 connections/IP`, all three game servers heartbeating.
+- **Game servers** (Azure VM): image `ironfront-game-server:1ca8ad3` (stamped `1ca8ad3c` in both
+  server and shared assemblies, built in the open Editor), registered as Dustbowl 4, Island 5,
+  Forest Lake 6. Rollback image `6f87318` kept; `7f6da77` pruned on the VM and locally. Pre-deploy
+  logs: `tmp/azure-logs/6f87318-20261015-predeploy/`.
+- **Live end-to-end** (`Ironfront.Tools.E2E`, #651): Forest Lake, Dustbowl and Island each walked
+  login -> join -> signed ticket -> UDP -> snapshots (E2E PASS); a corrupted ticket refused.
+- **After the deploy**: 0 rooms, 0 phantom online sessions (the old process showed 12), 0 errors.
+- Not yet observed with players: the launcher (F8) and the handshake line (F9) show themselves in the
+  next match. The check: `docker logs` should hold no `NOTHING WAS LAUNCHED`, and any
+  `handshake: ... over the per-address limit` line says the classroom limit still bites.
 
 ## Checked, not defects
 
