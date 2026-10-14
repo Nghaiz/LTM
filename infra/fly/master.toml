@@ -42,6 +42,9 @@ primary_region = "sin"
   # non-IP value (a Fly hostname, a template placeholder) is not a valid setting here.
   IRONFRONT_METRICS_BIND              = "127.0.0.1"
   IRONFRONT_STRUCTURED_LOG            = "1"
+  # A copy of the log on the volume: fly's log API keeps minutes, so an incident's lines are
+  # gone before anyone reads them (2026-10-14). Read it in the machine: tail /data/master.log
+  IRONFRONT_LOG_FILE                  = "/data/master.log"
   IRONFRONT_LOG_LEVEL                 = "Warn"
   IRONFRONT_MAX_CONNECTIONS_PER_IP    = "64"
   IRONFRONT_MAX_TOTAL_CONNECTIONS     = "256"

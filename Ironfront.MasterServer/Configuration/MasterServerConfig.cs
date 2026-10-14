@@ -73,6 +73,9 @@ namespace Ironfront.MasterServer.Configuration
         /// <summary>Set to 1/true to emit the JSON event stream on stdout.</summary>
         public static readonly string StructuredLogVariable = EnvRegistry.StructuredLog.Name;
 
+        /// <summary>A copy of the log on disk. See <see cref="Diagnostics.LogFile"/>.</summary>
+        public static readonly string LogFileVariable = EnvRegistry.LogFile.Name;
+
         /// <summary>
         /// Overrides <see cref="Net.TcpListenerHostOptions.MaxConnectionsPerIp"/>.
         /// </summary>
@@ -150,6 +153,7 @@ namespace Ironfront.MasterServer.Configuration
             string metricsCsvPath,
             int metricsCsvIntervalSeconds,
             bool structuredLog,
+            string logFilePath,
             int maxConnectionsPerIp,
             int maxTotalConnections,
             int loginRatePerMinute,
@@ -176,6 +180,7 @@ namespace Ironfront.MasterServer.Configuration
             MetricsCsvPath            = metricsCsvPath;
             MetricsCsvIntervalSeconds = metricsCsvIntervalSeconds;
             StructuredLog             = structuredLog;
+            LogFilePath               = logFilePath;
         }
 
         /// <summary>
@@ -219,6 +224,9 @@ namespace Ironfront.MasterServer.Configuration
 
         /// <summary>Whether the JSON event stream is on.</summary>
         public bool StructuredLog { get; }
+
+        /// <summary>Where the log is copied to; empty for stdout only.</summary>
+        public string LogFilePath { get; }
 
         /// <summary>Per-IP connection cap. See <see cref="MaxConnectionsPerIpVariable"/>.</summary>
         public int MaxConnectionsPerIp { get; }
@@ -309,6 +317,7 @@ namespace Ironfront.MasterServer.Configuration
                 read(MetricsCsvIntervalVariable), DefaultMetricsCsvIntervalSeconds, MetricsCsvIntervalVariable);
 
             bool structuredLog = EnvParse.Flag(read(StructuredLogVariable));
+            string logFilePath = EnvParse.Trimmed(read(LogFileVariable));
 
             var listenerDefaults = new TcpListenerHostOptions();
             int maxPerIp = EnvParse.PositiveInt(
@@ -339,7 +348,7 @@ namespace Ironfront.MasterServer.Configuration
             return new MasterServerConfig(
                 secret, port, databasePath, logLevel,
                 certificatePath, certificatePassword,
-                metricsPort, metricsBind, csvPath, csvInterval, structuredLog,
+                metricsPort, metricsBind, csvPath, csvInterval, structuredLog, logFilePath,
                 maxPerIp, maxTotal, loginRate, loginAttempts, trustProxyProtocol, botBudget, matchCost);
         }
 

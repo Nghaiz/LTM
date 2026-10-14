@@ -69,6 +69,10 @@ namespace Ironfront.MasterServer
 
             MasterLog.Level = config.LogLevel;
 
+            // First, so the file holds everything the console does from here on. A copy on the
+            // data volume is the only log that outlives fly's few-minute buffer (LogFile).
+            LogFile.Open(config.LogFilePath);
+
             // Registered before anything else can log. Both values are process-lifetime
             // constants, which is exactly the case redaction can cover.
             StructuredLog.Redact(config.SharedSecret);
