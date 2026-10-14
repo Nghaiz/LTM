@@ -121,7 +121,7 @@ challenges; `dns-manual` needs a re-run before expiry. See
 ```
 
 From a machine **outside Azure**, or it measures the VM's loopback. Raise
-`IRONFRONT_MAX_CONNECTIONS_PER_IP` and `IRONFRONT_LOGIN_RATE_PER_MINUTE` in `.env`
+`IRONFRONT_MAX_CONNECTIONS_PER_IP`, `IRONFRONT_LOGIN_RATE_PER_MINUTE` and `IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE` in `.env`
 (`./deploy.sh restart-master`) — every bot shares one source address — and put them back
 afterwards.
 

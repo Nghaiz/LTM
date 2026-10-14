@@ -22,6 +22,7 @@ namespace Ironfront.Tools.MspBench
     /// IRONFRONT_MAX_CONNECTIONS_PER_IP=2000
     /// IRONFRONT_MAX_TOTAL_CONNECTIONS=0
     /// IRONFRONT_LOGIN_RATE_PER_MINUTE=5000
+    /// IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE=5000
     /// </code>
     /// </para>
     /// <para>

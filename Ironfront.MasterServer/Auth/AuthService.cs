@@ -55,6 +55,7 @@ namespace Ironfront.MasterServer.Auth
     {
         public long StartedAt { get; set; }
         public int Attempts { get; set; }
+        public int Failures { get; set; }
     }
 
     public sealed partial class AuthService
@@ -62,8 +63,18 @@ namespace Ironfront.MasterServer.Auth
         private const int BcryptCost = 11;
         private const int MaxFailedLogins = 10;
 
-        /// <summary>The phase-01 security table's number: 5 login attempts per minute per IP.</summary>
+        /// <summary>
+        /// The phase-01 security table's number, 5 a minute per address, counting FAILED attempts
+        /// since 2026-10-14. See <see cref="AuthService(SqliteDatabase, int, int)"/>.
+        /// </summary>
         public const int DefaultRatePerMinute = 5;
+
+        /// <summary>
+        /// Every sign-in attempt from one address in a minute, failed or not: each runs bcrypt, so
+        /// this is what bounds the CPU one address can spend. Sized against the per-address
+        /// connection cap of 64: a full school signing in at once stays under it.
+        /// </summary>
+        public const int DefaultAttemptsPerMinute = 60;
 
         private const long LockDurationMs = 15 * 60 * 1000;
         private const long SessionDurationMs = 24 * 60 * 60 * 1000;
@@ -71,6 +82,7 @@ namespace Ironfront.MasterServer.Auth
 
         private readonly SqliteDatabase _database;
         private readonly int _ratePerMinute;
+        private readonly int _attemptsPerMinute;
         private readonly Dictionary<uint, RateWindow> _rates = new Dictionary<uint, RateWindow>();
         private readonly Dictionary<string, Session> _sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
 
@@ -97,12 +109,22 @@ namespace Ironfront.MasterServer.Auth
         /// say "this address is the test rig", which is a deployment statement, not a change
         /// to the defence.
         /// </para>
+        /// <para>
+        /// <b>Failed attempts, since 2026-10-14.</b> It counted every attempt, and a school puts
+        /// every player behind one address: a class signing in at the start of a lesson was told
+        /// to wait from the sixth player on, having got nothing wrong. A guess is a FAILED attempt,
+        /// so failures are what this budget counts now and a correct password spends nothing from
+        /// it. <paramref name="attemptsPerMinute"/> still caps every attempt, so signing in
+        /// correctly in a loop cannot pin the CPU on bcrypt either.
+        /// </para>
         /// </remarks>
-        public AuthService(SqliteDatabase database, int ratePerMinute)
+        public AuthService(SqliteDatabase database, int ratePerMinute, int attemptsPerMinute = DefaultAttemptsPerMinute)
         {
             _database = database ?? throw new ArgumentNullException(nameof(database));
             if (ratePerMinute < 1) throw new ArgumentOutOfRangeException(nameof(ratePerMinute));
+            if (attemptsPerMinute < 1) throw new ArgumentOutOfRangeException(nameof(attemptsPerMinute));
             _ratePerMinute = ratePerMinute;
+            _attemptsPerMinute = attemptsPerMinute;
         }
 
         /// <summary>
@@ -183,8 +205,8 @@ namespace Ironfront.MasterServer.Auth
             long now = UnixMs();
             if (!AllowAttempt(ip, now))
                 return new AuthResult(false, ErrorCode.RateLimited, null, RateRetryAfterSeconds(ip, now));
-            if (!IsValidUsername(username)) return new AuthResult(false, ErrorCode.InvalidUsername, null);
-            if (!IsValidSha256(passwordHash)) return new AuthResult(false, ErrorCode.WrongCredentials, null);
+            if (!IsValidUsername(username)) return Failed(ip, ErrorCode.InvalidUsername);
+            if (!IsValidSha256(passwordHash)) return Failed(ip, ErrorCode.WrongCredentials);
 
             AccountRecord? account = _database.FindAccount(username);
 
@@ -201,7 +223,7 @@ namespace Ironfront.MasterServer.Auth
                 if (account is not null && !account.IsBanned && account.LockedUntil <= now)
                     _database.RecordLoginFailure(account.PlayerId, MaxFailedLogins, now + LockDurationMs);
 
-                return new AuthResult(false, ErrorCode.WrongCredentials, null);
+                return Failed(ip, ErrorCode.WrongCredentials);
             }
 
             if (account.IsBanned) return new AuthResult(false, ErrorCode.AccountBanned, null);
@@ -272,6 +294,10 @@ namespace Ironfront.MasterServer.Auth
             return true;
         }
 
+        /// <summary>
+        /// Whether this address may make one more attempt now, counting it. Refused once its
+        /// window holds <c>ratePerMinute</c> failures or <c>attemptsPerMinute</c> attempts.
+        /// </summary>
         private bool AllowAttempt(uint ip, long now)
         {
             if (!_rates.TryGetValue(ip, out RateWindow? window) || now - window.StartedAt >= 60_000)
@@ -279,7 +305,17 @@ namespace Ironfront.MasterServer.Auth
                 _rates[ip] = new RateWindow { StartedAt = now, Attempts = 1 }; return true;
             }
             window.Attempts++;
-            return window.Attempts <= _ratePerMinute;
+            return window.Attempts <= _attemptsPerMinute && window.Failures < _ratePerMinute;
+        }
+
+        /// <summary>
+        /// A refusal that spends the address's failure budget: a wrong or malformed credential.
+        /// The window exists, because <see cref="AllowAttempt"/> ran first.
+        /// </summary>
+        private AuthResult Failed(uint ip, ErrorCode code)
+        {
+            if (_rates.TryGetValue(ip, out RateWindow? window)) window.Failures++;
+            return new AuthResult(false, code, null);
         }
 
         private Session CreateSession(int playerId, string displayName, uint ip, long now)

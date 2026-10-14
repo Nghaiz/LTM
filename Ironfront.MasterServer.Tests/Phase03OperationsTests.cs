@@ -429,6 +429,8 @@ namespace Ironfront.MasterServer.Tests
                 [MasterServerConfig.SharedSecretVariable]        = Phase03ServerHarness.SharedSecret,
                 [MasterServerConfig.MaxConnectionsPerIpVariable] = "200",
                 [MasterServerConfig.MaxTotalConnectionsVariable] = "0",
+                [MasterServerConfig.LoginRatePerMinuteVariable]  = "500",
+                [MasterServerConfig.LoginAttemptsPerMinuteVariable] = "700",
                 [MasterServerConfig.StructuredLogVariable]       = "1",
             }));
 
@@ -437,6 +439,8 @@ namespace Ironfront.MasterServer.Tests
             // ignored.
             Assert.Equal(200, config.MaxConnectionsPerIp);
             Assert.Equal(0, config.MaxTotalConnections);
+            Assert.Equal(500, config.LoginRatePerMinute);
+            Assert.Equal(700, config.LoginAttemptsPerMinute);
             Assert.True(config.StructuredLog);
         }
 
