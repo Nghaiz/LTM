@@ -125,7 +125,7 @@ services:
       IRONFRONT_STRUCTURED_LOG: "1"
       # Defaults are sized for real players. Raise ONLY for a single-machine load test,
       # where every bot shares one source address (see .env.example).
-      IRONFRONT_MAX_CONNECTIONS_PER_IP: ${IRONFRONT_MAX_CONNECTIONS_PER_IP:-5}
+      IRONFRONT_MAX_CONNECTIONS_PER_IP: ${IRONFRONT_MAX_CONNECTIONS_PER_IP:-64}
       IRONFRONT_MAX_TOTAL_CONNECTIONS: ${IRONFRONT_MAX_TOTAL_CONNECTIONS:-256}
       IRONFRONT_LOGIN_RATE_PER_MINUTE: ${IRONFRONT_LOGIN_RATE_PER_MINUTE:-5}
     deploy:

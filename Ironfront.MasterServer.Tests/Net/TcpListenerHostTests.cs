@@ -33,9 +33,9 @@ namespace Ironfront.MasterServer.Tests.Net
         [Fact]
         public async Task Accepts32SimultaneousConnections()
         {
-            // The per-IP limit has to be lifted above 32 here: every loopback client shares
-            // the 127.0.0.1 key, so the default limit of 5 would refuse the 6th onward and
-            // this would measure the limit instead of the accept path.
+            // The per-IP limit is set explicitly above 32: every loopback client shares the
+            // 127.0.0.1 key, so a lower cap would refuse the rest and this would measure the
+            // limit instead of the accept path.
             await using var harness = new MasterHostHarness(o => o.MaxConnectionsPerIp = 64);
 
             var clients = new List<TcpClient>();
@@ -99,6 +99,27 @@ namespace Ironfront.MasterServer.Tests.Net
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => harness.Host.TotalRejectedByIpLimit >= 1));
 
             Assert.Equal(5, harness.Host.ConnectionCount);
+        }
+
+        /// <summary>
+        /// A full room behind one address is admitted with the shipped defaults.
+        /// </summary>
+        /// <remarks>
+        /// A school is one address for every player in it. On 2026-10-14 a class of ten shared
+        /// one, and with the cap at 5 the master refused everyone from the sixth on. Loopback is
+        /// that school here: every client below is 127.0.0.1.
+        /// </remarks>
+        [Fact]
+        public async Task AFullRoomBehindOneAddressIsAdmittedByDefault()
+        {
+            await using var harness = new MasterHostHarness(o => o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30));
+
+            for (int i = 0; i < ProtocolConstants.MAX_PLAYERS; i++) await harness.ConnectAsync();
+            bool admitted = await MasterHostHarness.WaitUntilAsync(
+                () => harness.Host.ConnectionCount == ProtocolConstants.MAX_PLAYERS);
+
+            Assert.True(admitted, $"expected {ProtocolConstants.MAX_PLAYERS} live connections, saw {harness.Host.ConnectionCount}");
+            Assert.Equal(0, harness.Host.TotalRejectedByIpLimit);
         }
 
         /// <summary>
