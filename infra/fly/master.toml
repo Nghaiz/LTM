@@ -43,7 +43,7 @@ primary_region = "sin"
   IRONFRONT_METRICS_BIND              = "127.0.0.1"
   IRONFRONT_STRUCTURED_LOG            = "1"
   IRONFRONT_LOG_LEVEL                 = "Warn"
-  IRONFRONT_MAX_CONNECTIONS_PER_IP    = "5"
+  IRONFRONT_MAX_CONNECTIONS_PER_IP    = "64"
   IRONFRONT_MAX_TOTAL_CONNECTIONS     = "256"
   IRONFRONT_LOGIN_RATE_PER_MINUTE     = "5"
   # The two per-IP limits above only mean something because of this. Fly's edge opens its own
