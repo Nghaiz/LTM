@@ -308,13 +308,16 @@ namespace Ironfront.MasterServer.Tests
             });
 
             // A report the master does take, sent after it on the same link: once it is in, the
-            // one before it has been handled.
+            // one before it has been handled. Waited on by its LAST effect, the career row: the
+            // handler writes match_results first, so a wait on that row could read the career a
+            // moment before it was written (KeyNotFoundException, ~1 run in 7 on CI).
             gameServer.MatchEnded(ours.RoomId + 100, new[]
             {
                 new MatchPlayerResult { PlayerId = playerId, Kills = 1, Deaths = 1, Score = 1 },
             });
             Assert.True(await MasterHostHarness.WaitUntilAsync(
-                () => server.Database.FindMatchResults(ours.RoomId + 100).Count == 1));
+                () => server.Database.ReadCareer(playerId).ContainsKey("matches")));
+            Assert.Single(server.Database.FindMatchResults(ours.RoomId + 100));
 
             Assert.Empty(server.Database.FindMatchResults(ours.RoomId));
             Assert.Equal(1, server.Database.ReadCareer(playerId)["matches"]);
