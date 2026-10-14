@@ -83,6 +83,29 @@ if ! fly secrets list --app "$MASTER_APP" 2>/dev/null | grep -q IRONFRONT_SHARED
     die "IRONFRONT_SHARED_SECRET is not set on $MASTER_APP — fly secrets set IRONFRONT_SHARED_SECRET=\"<key>\" --app $MASTER_APP"
 fi
 
+# A restart forgets every room and drops every player to the login screen while the game servers
+# play on. On 2026-10-14 a deploy at 14:22 (+07) landed with Island and Forest Lake mid-round, and
+# Island's round never reached its players' careers. So read the newest durability row (one a
+# minute) and refuse while any room is open, unless FORCE=1. tools/deploy-master-fly.ps1 has the
+# same check. A machine that cannot be reached (a first deploy) has nothing to lose.
+activity=$(fly ssh console --app "$MASTER_APP" \
+    -C "sh -c 'head -1 /data/durability.csv; tail -1 /data/durability.csv'" 2>/dev/null | tr -d '\r' || true)
+rooms=$(printf '%s\n' "$activity" | awk -F, '
+    /^tsUtc,/ { for (i = 1; i <= NF; i++) { if ($i == "roomsActive") r = i; if ($i == "roomsInMatch") m = i } }
+    /^[0-9][0-9][0-9][0-9]-/ { row = $0 }
+    END { if (r && row != "") { split(row, v, ","); print v[r] " " v[m] " " v[1] } }')
+if [ -n "$rooms" ]; then
+    read -r rooms_open rooms_in_match sampled_at <<< "$rooms"
+    echo "==> master at $sampled_at: $rooms_open room(s) open, $rooms_in_match in a match"
+    if [ "$rooms_open" -gt 0 ]; then
+        [ "${FORCE:-0}" = "1" ] \
+            || die "$rooms_open room(s) are open ($rooms_in_match in a match); a restart forgets them and drops their players. Wait for them to close, or FORCE=1."
+        echo "[fly-deploy] WARNING: FORCE=1 with $rooms_open room(s) open" >&2
+    fi
+else
+    echo "[fly-deploy] WARNING: could not read what the master hosts (no machine yet?)" >&2
+fi
+
 # ---- Deploy ---------------------------------------------------------------------------
 echo "==> deploying master ($MASTER_APP) from $IRONFRONT_MASTER_IMAGE"
 # --ha=false: without it Fly provisions a standby second machine, and two masters share

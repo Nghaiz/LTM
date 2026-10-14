@@ -5,12 +5,20 @@
 #   pwsh tools/deploy-master-fly.ps1 -Tag main
 #   pwsh tools/deploy-master-fly.ps1 -Image ghcr.io/nghaiz/ironfront-master@sha256:...   # pin, or roll back
 #   pwsh tools/deploy-master-fly.ps1 -DryRun                 # resolve and back up, change nothing
+#   pwsh tools/deploy-master-fly.ps1 -Force                  # deploy even with rooms open
 #
 # What it does, in order: resolves the image to a digest (a tag moves; a digest is what was
-# tested), saves the machine's current config as the rollback, swaps config.image, posts the
-# update, waits for the machine to be started, and reads back the image the machine actually runs
-# with its revision label. Rolling back is this script with -Image set to the digest the backup
-# names.
+# tested), saves the machine's current config as the rollback, reads what the master is hosting
+# right now, swaps config.image, posts the update, waits for the machine to be started, and reads
+# back the image the machine actually runs with its revision label. Rolling back is this script
+# with -Image set to the digest the backup names.
+#
+# IT REFUSES WHILE ANY ROOM IS OPEN. A restart forgets every room and drops every player to the
+# login screen, while the game servers play on. On 2026-10-14 the master was redeployed at 14:22
+# (+07) with Island and Forest Lake both mid-round, and Island's round was lost to the careers of
+# the six players who finished it. The check reads the newest row of /data/durability.csv (one a
+# minute, so up to a minute old): any room open, waiting or in a match, refuses; players connected
+# with no room only warn. -Force deploys anyway, for a fix that cannot wait.
 #
 # FLY_API_TOKEN comes from the repo's gitignored .env. It is a 'FlyV1 fm2_...' macaroon sent as
 # the WHOLE Authorization value, never 'Bearer ...', and it is never printed: every HTTP error is
@@ -22,7 +30,8 @@ param(
     [string]$App = 'kien-master-2026',
     [string]$Repository = 'ghcr.io/nghaiz/ironfront-master',
     [string]$BackupDir = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'LTM-backups'),
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Force
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -71,6 +80,26 @@ $machine.config | ConvertTo-Json -Depth 40 | Set-Content -Encoding utf8 $backup
 Write-Host "rollback config saved: $backup"
 
 if ($before -eq $Image) { Write-Host 'already on that image; nothing to do.'; exit 0 }
+
+# What the master is hosting, from the newest durability row: the header and the last line, read
+# in the machine (the image has busybox sh, head and tail; no curl for the metrics port).
+$exec = Invoke-Fly POST "/machines/$($machine.id)/exec" @{ cmd = 'sh -c "head -1 /data/durability.csv; tail -1 /data/durability.csv"'; timeout = 20 }
+$rows = @(($exec.stdout -split "`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($rows.Count -lt 2) { throw 'Could not read /data/durability.csv on the machine. Pass -Force to deploy without knowing what it hosts.' }
+$columns = $rows[0].Split(','); $values = $rows[-1].Split(',')
+$now = @{}; for ($i = 0; $i -lt $columns.Count; $i++) { $now[$columns[$i]] = $values[$i] }
+$roomsOpen = [int]$now.roomsActive; $roomsInMatch = [int]$now.roomsInMatch
+$clients = [int]$now.connCurrent - [int]$now.gsRegistered
+Write-Host ("master at $($now.tsUtc): $roomsOpen room(s) open, $roomsInMatch in a match, " +
+    "$clients client connection(s), $($now.gsRegistered) game server(s)")
+if ($roomsOpen -gt 0) {
+    $why = "$roomsOpen room(s) are open ($roomsInMatch in a match): a restart forgets them and drops their players."
+    if (-not $Force) { throw "Refusing to restart the master: $why Wait for the rooms to close, or pass -Force." }
+    Write-Warning "-Force: $why"
+} elseif ($clients -gt 0) {
+    Write-Warning "$clients client connection(s) with no room: they go back to the login screen."
+}
+
 if ($DryRun) { Write-Host "dry run: would move to $Image"; exit 0 }
 
 $config = $machine.config
