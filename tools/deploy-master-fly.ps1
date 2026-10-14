@@ -9,9 +9,16 @@
 #
 # What it does, in order: resolves the image to a digest (a tag moves; a digest is what was
 # tested), saves the machine's current config as the rollback, reads what the master is hosting
-# right now, swaps config.image, posts the update, waits for the machine to be started, and reads
-# back the image the machine actually runs with its revision label. Rolling back is this script
-# with -Image set to the digest the backup names.
+# right now, swaps config.image AND applies infra/fly/master.toml's [env], posts the update, waits
+# for the machine to be started, and reads back the image the machine actually runs with its
+# revision label. Rolling back is this script with -Image set to the digest the backup names.
+#
+# THE ENV COMES FROM master.toml. This script used to swap the image only, so the machine kept
+# whatever env it was last given by `fly deploy` and master.toml's limits never reached it: on
+# 2026-10-14 raising the per-IP cap meant a separate flyctl deploy, mid-match. Every IRONFRONT_*
+# variable is now set from the toml (and one the toml no longer has is removed); fly's own keys
+# are left alone. The differences are printed, and a deploy whose image is current still runs when
+# the env differs. Secrets stay in `fly secrets`, never in the toml.
 #
 # IT REFUSES WHILE ANY ROOM IS OPEN. A restart forgets every room and drops every player to the
 # login screen, while the game servers play on. On 2026-10-14 the master was redeployed at 14:22
@@ -54,6 +61,22 @@ function Invoke-Fly([string]$Method, [string]$Path, $Body = $null) {
     }
 }
 
+# The [env] table of infra/fly/master.toml: KEY = "value" lines up to the next table. Values are
+# plain strings there by convention; anything else is refused rather than guessed at.
+function Read-TomlEnv([string]$path) {
+    $envTable = [ordered]@{}
+    $inEnv = $false
+    foreach ($raw in Get-Content $path) {
+        $line = $raw.Trim()
+        if ($line -match '^\[') { $inEnv = ($line -eq '[env]'); continue }
+        if (-not $inEnv -or $line -eq '' -or $line.StartsWith('#')) { continue }
+        if ($line -notmatch '^([A-Z0-9_]+)\s*=\s*"([^"]*)"\s*(#.*)?$') { throw "master.toml [env]: cannot read '$line'." }
+        $envTable[$Matches[1]] = $Matches[2]
+    }
+    if ($envTable.Count -eq 0) { throw "master.toml has no [env] table." }
+    return $envTable
+}
+
 function Resolve-Digest([string]$tag) {
     $owner = ($Repository -split '/')[1]
     $package = ($Repository -split '/')[2]
@@ -79,7 +102,25 @@ $backup = Join-Path $BackupDir ("master-config-before-" + (Get-Date -Format 'yyy
 $machine.config | ConvertTo-Json -Depth 40 | Set-Content -Encoding utf8 $backup
 Write-Host "rollback config saved: $backup"
 
-if ($before -eq $Image) { Write-Host 'already on that image; nothing to do.'; exit 0 }
+# The env the machine should run: its own, with every IRONFRONT_* variable taken from the toml.
+$wanted = Read-TomlEnv (Join-Path $repoRoot 'infra/fly/master.toml')
+$current = [ordered]@{}
+foreach ($p in $machine.config.env.PSObject.Properties) { $current[$p.Name] = [string]$p.Value }
+$nextEnv = [ordered]@{}
+foreach ($k in $current.Keys) { if (-not $k.StartsWith('IRONFRONT_')) { $nextEnv[$k] = $current[$k] } }
+foreach ($k in $wanted.Keys) { $nextEnv[$k] = $wanted[$k] }
+$envChanges = @()
+foreach ($k in $wanted.Keys) {
+    if (-not $current.Contains($k)) { $envChanges += "  + $k=$($wanted[$k])" }
+    elseif ($current[$k] -ne $wanted[$k]) { $envChanges += "  ~ $k=$($current[$k]) -> $($wanted[$k])" }
+}
+foreach ($k in $current.Keys) {
+    if ($k.StartsWith('IRONFRONT_') -and -not $wanted.Contains($k)) { $envChanges += "  - $k (not in master.toml)" }
+}
+if ($envChanges.Count -gt 0) { Write-Host "env from master.toml:"; $envChanges | ForEach-Object { Write-Host $_ } }
+else { Write-Host 'env already matches master.toml.' }
+
+if ($before -eq $Image -and $envChanges.Count -eq 0) { Write-Host 'already on that image and env; nothing to do.'; exit 0 }
 
 # What the master is hosting, from the newest durability row: the header and the last line, read
 # in the machine (the image has busybox sh, head and tail; no curl for the metrics port).
@@ -104,6 +145,7 @@ if ($DryRun) { Write-Host "dry run: would move to $Image"; exit 0 }
 
 $config = $machine.config
 $config.image = $Image
+$config.env = $nextEnv
 Invoke-Fly POST "/machines/$($machine.id)" @{ config = $config } | Out-Null
 Invoke-Fly GET "/machines/$($machine.id)/wait?state=started&timeout=60" | Out-Null
 
@@ -111,3 +153,7 @@ $after = Invoke-Fly GET "/machines/$($machine.id)"
 $revision = $after.image_ref.labels.'org.opencontainers.image.revision'
 Write-Host "now running $($after.config.image) state=$($after.state) revision=$revision"
 if ($after.config.image -ne $Image -or $after.state -ne 'started') { throw 'The machine is not on the new image and started.' }
+foreach ($k in $wanted.Keys) {
+    if ([string]$after.config.env.$k -ne $wanted[$k]) { throw "The machine's $k is '$($after.config.env.$k)', not '$($wanted[$k])'." }
+}
+Write-Host "env read back: $($wanted.Count) IRONFRONT_* variable(s) as master.toml says."
