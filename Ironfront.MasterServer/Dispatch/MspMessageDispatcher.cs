@@ -158,12 +158,23 @@ namespace Ironfront.MasterServer.Dispatch
 
             Session? session = connection.Session;
             if (session is null) return;
+            _auth.RemoveSession(session.Token);
+
+            // Only when this was the player's live connection. A player whose link dropped signs
+            // in again on a new one at once, while the old one lingers until its heartbeat times
+            // out (45 s); closing it used to take the player out of their room, matchmaking and
+            // chat, and unmap the NEW connection, which then got no room, chat or unlock pushes.
+            // Every reconnect inside that window lost its room a little later. The school's
+            // network on 2026-10-14 dropped links all afternoon.
+            if (!_connectionsByPlayer.TryGetValue(session.PlayerId, out ClientConnection? live)
+                || !ReferenceEquals(live, connection))
+                return;
+
             _connectionsByPlayer.Remove(session.PlayerId);
             _chat.RemovePlayer(session.PlayerId);
             _matchmaking.Cancel(session.PlayerId);
             ServiceResult result = _lobby.LeaveRoom(session.PlayerId);
             if (result.Ok && result.Room is not null && result.Room.Members.Count > 0) BroadcastRoom(result.Room);
-            _auth.RemoveSession(session.Token);
         }
 
         public void Tick(long nowUnixMs)
@@ -259,6 +270,12 @@ namespace Ironfront.MasterServer.Dispatch
             // What this client can load, so it is never listed, joined, created or matchmade into
             // a room on a map it lacks (MapSupport). Absent on every client before P30.
             session.Maps = MapSupport.FromLogin(maps);
+
+            // Signing in again on the same connection replaces its session; the replaced one is
+            // retired here or it outlives the connection by a day, counted as "online now" the
+            // whole time (the durability CSV showed 10-16 online with no client connected).
+            if (connection.Session is { } replaced && !ReferenceEquals(replaced, session))
+                _auth.RemoveSession(replaced.Token);
             connection.SetSession(session);
             _connectionsByPlayer[session.PlayerId] = connection;
             Logins.Increment();

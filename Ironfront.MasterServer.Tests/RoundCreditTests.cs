@@ -350,6 +350,61 @@ namespace Ironfront.MasterServer.Tests
             Assert.Empty(server.Database.FindMatchResults(room.RoomId + 100));
         }
 
+        // ------------------------------------------------------------------ a reconnect
+        //
+        // A dropped link is signed in again on a new connection at once, while the old one lingers
+        // until its heartbeat times out. Closing the old one used to sign the player out of the new.
+
+        [Fact]
+        public async Task ClosingAStaleConnectionKeepsThePlayerInTheirRoom()
+        {
+            using var cts = new CancellationTokenSource(Timeout);
+            await using var server = new Phase03ServerHarness();
+            using var gameServer = new GameServerLink();
+            ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId);
+
+            var stale = new MasterClient.MasterClient();
+            await stale.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            int playerId = await SignInAsync(stale, "roamer", "Roamer");
+            Room room = server.Lobby.CreateRoom(Session(990, "Host"),
+                new RoomCreateRequest("Back", 1, 8, 0, false, null)).Room!;
+            Assert.True((await PumpAsync(stale.JoinRoomAsync(room.RoomId, null, cts.Token), stale)).Ok);
+
+            // The same player, back on a new connection while the old one is still open.
+            using var fresh = new MasterClient.MasterClient();
+            await fresh.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            Assert.True((await PumpAsync(fresh.LoginAsync("roamer", PasswordHash), fresh)).Ok);
+            Assert.True(await MasterHostHarness.WaitUntilAsync(() => server.Host.ConnectionCount == 3));
+
+            stale.Dispose();
+            Assert.True(await MasterHostHarness.WaitUntilAsync(() => server.Host.ConnectionCount == 2));
+
+            Assert.True(server.Lobby.IsMember(room.RoomId, playerId), "the old link's close took the player out of the room");
+            RoomInfo[] rooms = await PumpAsync(fresh.GetRoomsAsync(cts.Token), fresh);
+            Assert.Contains(rooms, listed => listed.Name == "Back");
+        }
+
+        [Fact]
+        public async Task SigningInAgainOnOneConnectionRetiresTheSessionItReplaces()
+        {
+            using var cts = new CancellationTokenSource(Timeout);
+            await using var server = new Phase03ServerHarness();
+
+            using var client = new MasterClient.MasterClient();
+            await client.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            await SignInAsync(client, "twice", "Twice");
+            Assert.True((await PumpAsync(client.LoginAsync("twice", PasswordHash), client)).Ok);
+
+            // One connection, one session: the first would otherwise be held, and counted online,
+            // for the 24 hours a session lives.
+            Assert.True(await MasterHostHarness.WaitUntilAsync(
+                async () => (await server.Collector.CollectAsync()).AccountsOnlineNow == 1));
+            client.Dispose();
+            Assert.True(await MasterHostHarness.WaitUntilAsync(
+                async () => (await server.Collector.CollectAsync()).AccountsOnlineNow == 0));
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static async Task<ushort> RegisterAsync(Phase03ServerHarness server, GameServerLink gameServer, CancellationToken ct)
