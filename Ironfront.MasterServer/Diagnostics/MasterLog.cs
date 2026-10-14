@@ -93,7 +93,9 @@ namespace Ironfront.MasterServer.Diagnostics
         {
             // UTC, because phase 03 puts this on a VPS in some other timezone and a log
             // whose timestamps need mental arithmetic is a log nobody reads.
-            Console.Out.WriteLine($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z [{tag}] {message}");
+            string line = $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z [{tag}] {message}";
+            Console.Out.WriteLine(line);
+            LogFile.Append(line);
         }
     }
 }

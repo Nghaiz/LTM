@@ -357,6 +357,14 @@ namespace Ironfront.Net.Configuration
             "0",
             summary: "1 to emit JSON events on stdout beside the human log");
 
+        /// <summary>A copy of the master's log on disk.</summary>
+        public static readonly EnvVar LogFile = new EnvVar(
+            "IRONFRONT_LOG_FILE", "Logging", "master server",
+            "Also write every log line and JSON event to this file, rotated at 8 MB to <file>.1.\n" +
+            "Empty writes to stdout only. On fly, set it to a path on the /data volume: fly's log\n" +
+            "API keeps minutes, so without it an incident's lines are gone before anyone looks.",
+            summary: "copy of the log on disk; empty for stdout only");
+
         // ---- TLS -----------------------------------------------------------------------
 
         /// <summary>PKCS#12 bundle the master presents.</summary>
@@ -585,7 +593,7 @@ namespace Ironfront.Net.Configuration
             ClientMasterHost, ClientMasterPort,
             ClientMasterTls, ClientMasterTlsTargetHost, ClientMasterTlsPinnedFingerprint,
             ClientPlayerId, ClientDisplayName, ClientTeam,
-            LogLevel, StructuredLog,
+            LogLevel, StructuredLog, LogFile,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,
             MaxConnectionsPerIp, MaxTotalConnections, LoginRatePerMinute, LoginAttemptsPerMinute, MasterProxyProtocol,
