@@ -44,7 +44,7 @@ namespace Ironfront.MasterServer.Tests
             await using var server = new Phase03ServerHarness();
             using var gameServer = new GameServerLink();
             ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
-            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId) { Players = 2 };
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId);
 
             var player = new MasterClient.MasterClient();
             await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);
@@ -54,6 +54,9 @@ namespace Ironfront.MasterServer.Tests
             Room room = server.Lobby.CreateRoom(Session(970, "Host"),
                 new RoomCreateRequest("Credit", 1, 4, 0, false, null)).Room!;
             Assert.True((await PumpAsync(player.JoinRoomAsync(room.RoomId, null, cts.Token), player)).Ok);
+            // Its players arrive with the room: a server reporting players before it has one is
+            // still playing an earlier master's match, and is not handed a room.
+            heartbeats.Players = 2;
             gameServer.MatchStarted(room.RoomId);
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => room.State == RoomLifecycleState.InMatch));
 
@@ -80,7 +83,7 @@ namespace Ironfront.MasterServer.Tests
             await using var server = new Phase03ServerHarness();
             using var gameServer = new GameServerLink();
             ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
-            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId) { Players = 1 };
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId);
 
             var player = new MasterClient.MasterClient();
             await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);
@@ -89,6 +92,9 @@ namespace Ironfront.MasterServer.Tests
             Room room = server.Lobby.CreateRoom(Session(971, "Host"),
                 new RoomCreateRequest("Kept", 1, 4, 0, false, null)).Room!;
             Assert.True((await PumpAsync(player.JoinRoomAsync(room.RoomId, null, cts.Token), player)).Ok);
+            // Its players arrive with the room: a server reporting players before it has one is
+            // still playing an earlier master's match, and is not handed a room.
+            heartbeats.Players = 1;
             Assert.True(server.Lobby.LeaveRoom(971).Ok);
             gameServer.MatchStarted(room.RoomId);
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => room.State == RoomLifecycleState.InMatch));
@@ -156,7 +162,7 @@ namespace Ironfront.MasterServer.Tests
             await using var server = new Phase03ServerHarness();
             using var gameServer = new GameServerLink();
             ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
-            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId) { Players = 3 };
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId);
 
             var player = new MasterClient.MasterClient();
             await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);
@@ -165,6 +171,9 @@ namespace Ironfront.MasterServer.Tests
             Room room = server.Lobby.CreateRoom(Session(972, "Host"),
                 new RoomCreateRequest("Counted", 1, 8, 0, false, null)).Room!;
             Assert.True((await PumpAsync(player.JoinRoomAsync(room.RoomId, null, cts.Token), player)).Ok);
+            // Its players arrive with the room: a server reporting players before it has one is
+            // still playing an earlier master's match, and is not handed a room.
+            heartbeats.Players = 3;
             gameServer.MatchStarted(room.RoomId);
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => room.State == RoomLifecycleState.InMatch));
             Assert.True(server.GameServers.TryGet(serverId, out GameServerRecord? record) && record != null);
@@ -209,6 +218,136 @@ namespace Ironfront.MasterServer.Tests
             Assert.True(lobby.LeaveRoom(3).Ok);
             Assert.Single(room.Members);
             Assert.Equal(3, lobby.PlayersIn(room));
+        }
+
+        // ------------------------------------------------------- after a master restart
+        //
+        // 2026-10-14: the master was redeployed at 14:22 (+07) with Island and Forest Lake both
+        // mid-round. Every game server re-registered as a fresh record with no room while its
+        // players played on, and Island's round in room 13, which ended three minutes later,
+        // reached no career: OwnsRoom refused the report.
+
+        [Fact]
+        public async Task ARoundThatStartedBeforeAMasterRestartIsCredited()
+        {
+            using var cts = new CancellationTokenSource(Timeout);
+            await using var server = new Phase03ServerHarness();
+            using var gameServer = new GameServerLink();
+            ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId) { Players = 2 };
+
+            using var player = new MasterClient.MasterClient();
+            await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            int playerId = await SignInAsync(player, "survivor", "Survivor");
+
+            // Room 13 is the earlier master's; this one has never heard of it.
+            Assert.False(server.Lobby.TryGetRoomById(13, out _));
+            gameServer.MatchEnded(13, new[]
+            {
+                new MatchPlayerResult { PlayerId = playerId, Kills = 9, Deaths = 4, Score = 9 },
+            });
+
+            Assert.True(await MasterHostHarness.WaitUntilAsync(
+                () => server.Database.ReadCareer(playerId).ContainsKey("matches")));
+            Assert.Equal(1, server.Database.ReadCareer(playerId)["matches"]);
+            Assert.Equal(9, server.Database.ReadCareer(playerId)["kills"]);
+            Assert.Single(server.Database.FindMatchResults(13));
+        }
+
+        [Fact]
+        public async Task AServerStillPlayingAnEarlierMastersMatchIsNotHandedARoom()
+        {
+            using var cts = new CancellationTokenSource(Timeout);
+            await using var server = new Phase03ServerHarness();
+            using var gameServer = new GameServerLink();
+            ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId) { Players = 3 };
+            Assert.True(server.GameServers.TryGet(serverId, out GameServerRecord? record) && record != null);
+            Assert.True(await MasterHostHarness.WaitUntilAsync(() => record!.CurrentPlayers == 3));
+
+            using var player = new MasterClient.MasterClient();
+            await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            await SignInAsync(player, "newcomer", "Newcomer");
+            Room room = server.Lobby.CreateRoom(Session(980, "Host"),
+                new RoomCreateRequest("Next", 1, 8, 0, false, null)).Room!;
+
+            // Three players are still on it: a room handed to it now would join their round.
+            JoinResult refused = await PumpAsync(player.JoinRoomAsync(room.RoomId, null, cts.Token), player);
+            Assert.False(refused.Ok);
+            Assert.Equal((int)ErrorCode.NoGameServerAvailable, refused.ErrorCode);
+            Assert.Equal(0, record!.AssignedRoomId);
+
+            // They have left: the server is free.
+            heartbeats.Players = 0;
+            Assert.True(await MasterHostHarness.WaitUntilAsync(() => record.CurrentPlayers == 0));
+            JoinResult admitted = await PumpAsync(player.JoinRoomAsync(room.RoomId, null, cts.Token), player);
+            Assert.True(admitted.Ok);
+            Assert.Equal(room.RoomId, record.AssignedRoomId);
+        }
+
+        [Fact]
+        public async Task AnEarlierRoundReportNamingOneOfThisMastersRoomsIsRefused()
+        {
+            using var cts = new CancellationTokenSource(Timeout);
+            await using var server = new Phase03ServerHarness();
+            using var gameServer = new GameServerLink();
+            ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId) { Players = 1 };
+
+            using var player = new MasterClient.MasterClient();
+            await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            int playerId = await SignInAsync(player, "bystander", "Bystander");
+
+            // Room ids restart with the master, so an old round can name a room this master has
+            // since created for somebody else. That room's results are not the old round's.
+            Room ours = server.Lobby.CreateRoom(Session(981, "Host"),
+                new RoomCreateRequest("Ours", 1, 8, 0, false, null)).Room!;
+            gameServer.MatchEnded(ours.RoomId, new[]
+            {
+                new MatchPlayerResult { PlayerId = playerId, Kills = 5, Deaths = 1, Score = 5 },
+            });
+
+            // A report the master does take, sent after it on the same link: once it is in, the
+            // one before it has been handled.
+            gameServer.MatchEnded(ours.RoomId + 100, new[]
+            {
+                new MatchPlayerResult { PlayerId = playerId, Kills = 1, Deaths = 1, Score = 1 },
+            });
+            Assert.True(await MasterHostHarness.WaitUntilAsync(
+                () => server.Database.FindMatchResults(ours.RoomId + 100).Count == 1));
+
+            Assert.Empty(server.Database.FindMatchResults(ours.RoomId));
+            Assert.Equal(1, server.Database.ReadCareer(playerId)["matches"]);
+        }
+
+        [Fact]
+        public async Task AServerThisMasterGaveARoomCannotReportAnother()
+        {
+            using var cts = new CancellationTokenSource(Timeout);
+            await using var server = new Phase03ServerHarness();
+            using var gameServer = new GameServerLink();
+            ushort serverId = await RegisterAsync(server, gameServer, cts.Token);
+            await using var heartbeats = new GameServerHeartbeatLoop(gameServer, serverId) { Players = 0 };
+
+            using var player = new MasterClient.MasterClient();
+            await player.ConnectAsync("127.0.0.1", server.Port, cts.Token);
+            int playerId = await SignInAsync(player, "member", "Member");
+            Room room = server.Lobby.CreateRoom(Session(982, "Host"),
+                new RoomCreateRequest("Given", 1, 8, 0, false, null)).Room!;
+            Assert.True((await PumpAsync(player.JoinRoomAsync(room.RoomId, null, cts.Token), player)).Ok);
+
+            gameServer.MatchEnded(room.RoomId + 100, new[]
+            {
+                new MatchPlayerResult { PlayerId = playerId, Kills = 5, Deaths = 1, Score = 5 },
+            });
+            gameServer.MatchEnded(room.RoomId, new[]
+            {
+                new MatchPlayerResult { PlayerId = playerId, Kills = 1, Deaths = 1, Score = 1 },
+            });
+            Assert.True(await MasterHostHarness.WaitUntilAsync(
+                () => server.Database.FindMatchResults(room.RoomId).Count == 1));
+
+            Assert.Empty(server.Database.FindMatchResults(room.RoomId + 100));
         }
 
         // ------------------------------------------------------------------ helpers
