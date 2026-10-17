@@ -35,6 +35,7 @@
 # Usage:
 #   pwsh tools/backup-live-stack.ps1
 #   pwsh tools/backup-live-stack.ps1 -SkipImages                    # data and config only, ~10 MB
+#   pwsh tools/backup-live-stack.ps1 -SkipGameServers               # the master alone (the VM is off)
 #   pwsh tools/backup-live-stack.ps1 -EnvFile D:\Coding\LTM\.env    # from a git worktree (no .env)
 
 [CmdletBinding()]
@@ -45,7 +46,8 @@ param(
     [string] $VmHost = '20.205.152.66',
     [string] $User = 'irondev',
     [string] $KeyPath = (Join-Path $HOME '.ssh/nghaiz_ed25519_ctf'),
-    [switch] $SkipImages
+    [switch] $SkipImages,
+    [switch] $SkipGameServers
 )
 
 $ErrorActionPreference = 'Stop'
@@ -175,8 +177,16 @@ function Save-Image([string]$image, [string]$file) {
 $script:token = Read-EnvValue 'FLY_API_TOKEN'
 $localSecret = Read-EnvValue 'IRONFRONT_SHARED_SECRET'
 
+# Asked before anything is written, so a VM that is off leaves no half backup behind.
+if (-not $SkipGameServers) {
+    & ssh @sshArgs $target 'true' 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "cannot reach the game-server VM $target over ssh ($LASTEXITCODE). If it is off on purpose, pass -SkipGameServers to back up the master alone."
+    }
+}
+
 Write-Host "[backup] writing to $work"
-foreach ($d in 'master', 'gameservers/logs', 'gameservers/vm-ironfront', 'secrets') {
+foreach ($d in 'master', 'secrets') {
     New-Item -ItemType Directory -Force -Path (Join-Path $work $d) | Out-Null
 }
 $secretsDir = Join-Path $work 'secrets'
@@ -209,8 +219,11 @@ $live = @{}; for ($i = 0; $i -lt $columns.Count; $i++) { $live[$columns[$i]] = $
 $facts['master at backup'] = "$($live.tsUtc): $($live.accountsTotal) accounts, $($live.onlineNow) online, $($live.roomsActive) room(s), $($live.gsRegistered) game server(s) registered"
 
 Write-Host '[backup] master database (the master''s --backup, in the machine) ...'
+# IRONFRONT_LOG_FILE emptied for this one process: it inherits the machine's env, so it would open
+# /data/master.log beside the live master, and .NET's FileMode.Append on Linux is not O_APPEND. Each
+# process writes at its own offset, so one overwrote the other's line on both runs of 2026-10-18.
 Invoke-FlyExec -TimeoutSec 120 @('sh', '-c',
-    'rm -f /tmp/ltm-backup.db /tmp/ltm-backup.db.gz; cd /app && dotnet Ironfront.MasterServer.dll --backup /tmp/ltm-backup.db > /tmp/ltm-backup.log 2>&1 || { cat /tmp/ltm-backup.log; exit 1; }; gzip /tmp/ltm-backup.db') | Out-Null
+    'rm -f /tmp/ltm-backup.db /tmp/ltm-backup.db.gz; cd /app && IRONFRONT_LOG_FILE= dotnet Ironfront.MasterServer.dll --backup /tmp/ltm-backup.db > /tmp/ltm-backup.log 2>&1 || { cat /tmp/ltm-backup.log; exit 1; }; gzip /tmp/ltm-backup.db') | Out-Null
 $dbGz = Join-Path $work 'master/ironfront.db.gz'
 Receive-FlyFile '/tmp/ltm-backup.db.gz' $dbGz
 Invoke-FlyExec @('rm', '-f', '/tmp/ltm-backup.db.gz', '/tmp/ltm-backup.log') | Out-Null
@@ -255,54 +268,65 @@ foreach ($name in $secretNames) { $flySecrets[$name] = (Invoke-FlyExec -Secret @
 Copy-Item -LiteralPath $EnvFile (Join-Path $secretsDir 'repo.env')
 
 # ---- the game servers (Azure VM) ----
-Write-Host '[backup] game-server VM: files, logs, inventory ...'
-foreach ($f in @(Invoke-Vm 'cd ~/ironfront && ls -A')) {
-    $destination = if ($f -eq '.env') { Join-Path $secretsDir 'vm-ironfront.env' } else { Join-Path $work "gameservers/vm-ironfront/$f" }
-    Copy-FromVm "ironfront/$f" $destination
+$vmSecret = $null
+if ($SkipGameServers) {
+    $facts['game servers'] = 'skipped (-SkipGameServers): no VM files, logs, inventory or game-server image'
+} else {
+    Write-Host '[backup] game-server VM: files, logs, inventory ...'
+    foreach ($d in 'gameservers/logs', 'gameservers/vm-ironfront') { New-Item -ItemType Directory -Force -Path (Join-Path $work $d) | Out-Null }
+    foreach ($f in @(Invoke-Vm 'cd ~/ironfront && ls -A')) {
+        $destination = if ($f -eq '.env') { Join-Path $secretsDir 'vm-ironfront.env' } else { Join-Path $work "gameservers/vm-ironfront/$f" }
+        Copy-FromVm "ironfront/$f" $destination
+    }
+    $vmEnv = Join-Path $secretsDir 'vm-ironfront.env'
+    $vmSecret = if (Test-Path $vmEnv) {
+        ((Get-Content $vmEnv | Where-Object { $_ -match '^IRONFRONT_SHARED_SECRET=' } | Select-Object -First 1) -replace '^IRONFRONT_SHARED_SECRET=', '').Trim()
+    } else { '' }
+
+    $containers = @(Invoke-Vm "sudo docker ps -a --format '{{.Names}}' | grep '^ironfront-gs-' || true" | Where-Object { $_ })
+    if ($containers.Count -gt 0) {
+        Invoke-Vm ('rm -rf /tmp/ltm-backup && mkdir -m 700 /tmp/ltm-backup && for c in ' + ($containers -join ' ') +
+                   '; do sudo docker logs -t $c 2>&1 | gzip -c > /tmp/ltm-backup/$c.log.gz; done') | Out-Null
+        foreach ($c in $containers) { Copy-FromVm "/tmp/ltm-backup/$c.log.gz" (Join-Path $work "gameservers/logs/$c.log.gz") }
+        Invoke-Vm 'rm -rf /tmp/ltm-backup' | Out-Null
+    } else { Write-Warning 'no ironfront-gs-* container on the VM: there are no game-server logs to keep.' }
+
+    $inventory = Invoke-Vm (@(
+        'echo "== taken (UTC)"; date -u +%FT%TZ',
+        'echo "== os"; . /etc/os-release; echo "$PRETTY_NAME, kernel $(uname -r)"; uptime',
+        'echo "== disk"; df -h /',
+        'echo "== docker"; sudo docker version --format "engine {{.Server.Version}}"; sudo docker compose version',
+        'echo "== containers"; sudo docker ps -a --format "{{.Names}} | {{.Image}} | {{.Status}} | {{.Ports}}"',
+        'echo "== images"; sudo docker images --format "{{.Repository}}:{{.Tag}} {{.ID}} {{.Size}}"',
+        'echo "== enabled at boot"; systemctl is-enabled docker containerd',
+        'echo "== udp listeners"; sudo ss -ulnp',
+        'echo "== docker apt source"; cat /etc/apt/sources.list.d/docker* 2>/dev/null',
+        'echo "== packages installed by hand"; apt-mark showmanual | tr "\n" " "; echo',
+        'echo "== ssh keys allowed for this user (type and comment)"; awk "{print \$1, \$NF}" ~/.ssh/authorized_keys'
+    ) -join '; ')
+    Set-Content -Encoding utf8 (Join-Path $work 'gameservers/vm-inventory.txt') $inventory
+    $imds = Invoke-Vm "curl -s -H Metadata:true --noproxy '*' 'http://169.254.169.254/metadata/instance?api-version=2021-02-01'"
+    Set-Content -Encoding utf8 (Join-Path $work 'gameservers/azure-imds.json') $imds
+    $compute = ($imds | ConvertFrom-Json).compute
+    $facts['game-server VM'] = "$($compute.name) $($compute.vmSize) in $($compute.location), resource group $($compute.resourceGroupName), $($compute.storageProfile.osDisk.diskSizeGB) GB $($compute.storageProfile.osDisk.managedDisk.storageAccountType) disk, address $VmHost"
+    $facts['game-server containers'] = (@(Invoke-Vm "sudo docker ps -a --filter name=^ironfront-gs- --format '{{.Names}} {{.Image}} ({{.Status}})'") -join '; ')
 }
-$vmEnv = Join-Path $secretsDir 'vm-ironfront.env'
-$vmSecret = if (Test-Path $vmEnv) {
-    ((Get-Content $vmEnv | Where-Object { $_ -match '^IRONFRONT_SHARED_SECRET=' } | Select-Object -First 1) -replace '^IRONFRONT_SHARED_SECRET=', '').Trim()
-} else { '' }
+
 $masterSecret = $flySecrets['IRONFRONT_SHARED_SECRET']
-$facts['shared secret'] = "the master's = repo .env: $($masterSecret -ceq $localSecret); = VM .env: $($masterSecret -ceq $vmSecret)"
+$vmMatch = if ($null -eq $vmSecret) { 'not read (-SkipGameServers)' } else { $masterSecret -ceq $vmSecret }
+$facts['shared secret'] = "the master's = repo .env: $($masterSecret -ceq $localSecret); = VM .env: $vmMatch"
 if ($masterSecret -cne $localSecret) {
     Write-Warning 'the repo .env holds a different IRONFRONT_SHARED_SECRET from the master: deploys from it would not register. secrets/fly-secrets.env has the master''s.'
 }
-
-$containers = @(Invoke-Vm "sudo docker ps -a --format '{{.Names}}' | grep '^ironfront-gs-' || true" | Where-Object { $_ })
-if ($containers.Count -gt 0) {
-    Invoke-Vm ('rm -rf /tmp/ltm-backup && mkdir -m 700 /tmp/ltm-backup && for c in ' + ($containers -join ' ') +
-               '; do sudo docker logs -t $c 2>&1 | gzip -c > /tmp/ltm-backup/$c.log.gz; done') | Out-Null
-    foreach ($c in $containers) { Copy-FromVm "/tmp/ltm-backup/$c.log.gz" (Join-Path $work "gameservers/logs/$c.log.gz") }
-    Invoke-Vm 'rm -rf /tmp/ltm-backup' | Out-Null
-} else { Write-Warning 'no ironfront-gs-* container on the VM: there are no game-server logs to keep.' }
-
-$inventory = Invoke-Vm (@(
-    'echo "== taken (UTC)"; date -u +%FT%TZ',
-    'echo "== os"; . /etc/os-release; echo "$PRETTY_NAME, kernel $(uname -r)"; uptime',
-    'echo "== disk"; df -h /',
-    'echo "== docker"; sudo docker version --format "engine {{.Server.Version}}"; sudo docker compose version',
-    'echo "== containers"; sudo docker ps -a --format "{{.Names}} | {{.Image}} | {{.Status}} | {{.Ports}}"',
-    'echo "== images"; sudo docker images --format "{{.Repository}}:{{.Tag}} {{.ID}} {{.Size}}"',
-    'echo "== enabled at boot"; systemctl is-enabled docker containerd',
-    'echo "== udp listeners"; sudo ss -ulnp',
-    'echo "== docker apt source"; cat /etc/apt/sources.list.d/docker* 2>/dev/null',
-    'echo "== packages installed by hand"; apt-mark showmanual | tr "\n" " "; echo',
-    'echo "== ssh keys allowed for this user (type and comment)"; awk "{print \$1, \$NF}" ~/.ssh/authorized_keys'
-) -join '; ')
-Set-Content -Encoding utf8 (Join-Path $work 'gameservers/vm-inventory.txt') $inventory
-$imds = Invoke-Vm "curl -s -H Metadata:true --noproxy '*' 'http://169.254.169.254/metadata/instance?api-version=2021-02-01'"
-Set-Content -Encoding utf8 (Join-Path $work 'gameservers/azure-imds.json') $imds
-$compute = ($imds | ConvertFrom-Json).compute
-$facts['game-server VM'] = "$($compute.name) $($compute.vmSize) in $($compute.location), resource group $($compute.resourceGroupName), $($compute.storageProfile.osDisk.diskSizeGB) GB $($compute.storageProfile.osDisk.managedDisk.storageAccountType) disk, address $VmHost"
-$facts['game-server containers'] = (@(Invoke-Vm "sudo docker ps -a --filter name=^ironfront-gs- --format '{{.Names}} {{.Image}} ({{.Status}})'") -join '; ')
 
 # ---- images ----
 if ($SkipImages) {
     $facts['images'] = 'skipped (-SkipImages)'
 } else {
-    foreach ($image in @(Invoke-Vm "sudo docker ps -a --filter name=^ironfront-gs- --format '{{.Image}}' | sort -u" | Where-Object { $_ })) {
+    $gameServerImages = if ($SkipGameServers) { @() } else {
+        @(Invoke-Vm "sudo docker ps -a --filter name=^ironfront-gs- --format '{{.Image}}' | sort -u" | Where-Object { $_ })
+    }
+    foreach ($image in $gameServerImages) {
         $vmId = ([string](Invoke-Vm "sudo docker image inspect --format '{{.Id}}' $image")).Trim()
         $localId = [string](& docker image inspect --format '{{.Id}}' $image 2>$null)
         $file = Join-Path $work ('gameservers/' + ($image -replace '[:/]', '_') + '.tar')

@@ -14,10 +14,12 @@ The game servers keep nothing between matches: careers and achievements are writ
 ```powershell
 pwsh tools/backup-live-stack.ps1                     # ~2 minutes, ~320 MB
 pwsh tools/backup-live-stack.ps1 -SkipImages         # data, config and secrets only
+pwsh tools/backup-live-stack.ps1 -SkipGameServers    # the master alone, while the VM is off
 pwsh tools/backup-live-stack.ps1 -EnvFile D:\Coding\LTM\.env    # when run from a git worktree
 ```
 
-It needs the master machine started and the VM reachable over ssh, and writes
+It needs the master machine started and, unless `-SkipGameServers`, the VM reachable over ssh
+(checked before anything is written). It writes
 `../LTM-backups/live-stack-<yyyyMMdd-HHmm>/` beside the repo:
 
 ```
