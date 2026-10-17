@@ -250,6 +250,10 @@ into shell history. The command shares the running master's `/data/ironfront.db`
 
 ## 5. Backup and restore
 
+**The live stack (fly master + Azure game servers) is backed up with
+`pwsh tools/backup-live-stack.ps1` and restored per [`live-stack-backup.md`](live-stack-backup.md).**
+This section describes the phase-03 single-VM layout.
+
 A host **systemd timer** runs the backup every six hours (cron does not reliably inherit the
 service environment; the timer reads `/opt/ironfront/.env` explicitly). Install and enable it
 per [`infra/systemd/README.md`](../infra/systemd/README.md):
