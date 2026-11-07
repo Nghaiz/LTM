@@ -210,6 +210,19 @@ foreach ($v in $volumes) {
         $facts["fly snapshots of $($v.name)"] = "$($snapshots.Count) kept by fly (retention $($v.snapshot_retention) days); they die with the volume"
     } catch { Write-Warning "could not list the snapshots of $($v.id): $($_.Exception.Message)" }
 }
+# What moving to another fly account needs besides the data: the app's org and hostname (an app name is
+# global, so a new account gets a NEW hostname, and every client and game server dials this one), its
+# IPs and certificates, and the names of its secrets. GraphQL, because the Machines API has no IPs.
+$gqlBody = @{ query = "query { app(name: `"$App`") { name hostname organization { slug name } ipAddresses { nodes { address type region } } certificates { nodes { hostname clientStatus } } secrets { name createdAt } } }" } | ConvertTo-Json -Compress
+$appInfo = [ordered]@{
+    machinesApi = Invoke-FlyRequest @{ Method = 'GET'; Uri = "https://api.machines.dev/v1/apps/$App"; Headers = @{ Authorization = $script:token }; SkipHeaderValidation = $true; TimeoutSec = 60 } "Machines API GET /apps/$App"
+    graphql     = (Invoke-FlyRequest @{ Method = 'POST'; Uri = 'https://api.fly.io/graphql'; Headers = @{ Authorization = $script:token }; SkipHeaderValidation = $true; TimeoutSec = 60; Body = $gqlBody; ContentType = 'application/json' } 'fly GraphQL app query').data.app
+}
+ConvertTo-Json -InputObject $appInfo -Depth 20 | Set-Content -Encoding utf8 (Join-Path $work 'master/fly-app.json')
+$g = $appInfo.graphql
+$facts['fly app'] = "$($g.name) in org $($g.organization.slug), hostname $($g.hostname); IPs: " +
+    ((@($g.ipAddresses.nodes) | ForEach-Object { "$($_.type) $($_.address)" }) -join ', ') +
+    "; certificates: $(@($g.certificates.nodes).Count); secret names listed: $(@($g.secrets).Count)"
 $facts['master machine'] = "$($machine.id) $($machine.state) in $($machine.region), $($machine.config.guest.cpu_kind) $($machine.config.guest.cpus) cpu / $($machine.config.guest.memory_mb) MB"
 $facts['master image'] = "$($machine.config.image) (revision $revision)"
 
@@ -256,6 +269,17 @@ Receive-FlyFile '/tmp/ltm-data.tgz' (Join-Path $work 'master/data-files.tar.gz')
 Invoke-FlyExec @('rm', '-f', '/tmp/ltm-data.tgz') | Out-Null
 $facts['master data files'] = (@($listing -split "`n" | Where-Object { $_ -and $_ -notmatch '/$' }) -join ', ')
 
+# Every file on the volume, hashed in the machine, so "the backup holds all of /data" is checked rather
+# than assumed: each one must be in the tarball or be the database the --backup above copied.
+$dataManifest = Invoke-FlyExec -TimeoutSec 120 @('sh', '-c', 'cd /data && find . -path ./lost+found -prune -o -type f -exec sha256sum {} + | sort -k2')
+Set-Content -Encoding utf8 (Join-Path $work 'master/data-manifest.sha256') $dataManifest
+$inTar = @($listing -split "`n" | ForEach-Object { $_.Trim() -replace '^\./', '' } | Where-Object { $_ -and $_ -notmatch '/$' })
+$dbFiles = 'ironfront.db', 'ironfront.db-wal', 'ironfront.db-shm'
+$onVolume = @($dataManifest -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { (($_ -split '\s+', 2)[1]).Trim() -replace '^\./', '' })
+$uncovered = @($onVolume | Where-Object { $inTar -notcontains $_ -and $dbFiles -notcontains $_ })
+if ($uncovered.Count -gt 0) { throw "/data holds file(s) the backup did not take: $($uncovered -join ', ')" }
+$facts['master /data coverage'] = "$($onVolume.Count) file(s) on the volume, every one in data-files.tar.gz or the database backup"
+
 Write-Host '[backup] master secrets ...'
 $configEnv = @($machine.config.env.PSObject.Properties.Name)
 $processEnv = @((Invoke-FlyExec @('sh', '-c', 'env | cut -d= -f1')) -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -265,6 +289,11 @@ $flySecrets = [ordered]@{}
 foreach ($name in $secretNames) { $flySecrets[$name] = (Invoke-FlyExec -Secret @('printenv', $name)).TrimEnd("`n") }
 [IO.File]::WriteAllText((Join-Path $secretsDir 'fly-secrets.env'),
     (($flySecrets.Keys | ForEach-Object { "$_=$($flySecrets[$_])" }) -join "`n") + "`n")
+# The whole environment the master runs with, whatever the names: fly secrets cannot be read back
+# from the API (this token lists none), so a secret outside IRONFRONT_* would otherwise be lost
+# with the account. Kept in secrets/; the variables fly itself sets (FLY_*) are new on any machine.
+[IO.File]::WriteAllText((Join-Path $secretsDir 'master-process-env.env'), (Invoke-FlyExec -Secret @('env')))
+$facts['master env'] = "$($processEnv.Count) variable(s) in secrets/master-process-env.env; secrets beyond the machine config: $($secretNames -join ', ')"
 Copy-Item -LiteralPath $EnvFile (Join-Path $secretsDir 'repo.env')
 
 # ---- the game servers (Azure VM) ----
