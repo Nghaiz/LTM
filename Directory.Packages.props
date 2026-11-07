@@ -31,18 +31,18 @@
   </PropertyGroup>
 
   <ItemGroup Label="Master Server">
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.33" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.14" />
     <!--
       Pinned ahead of what Microsoft.Data.Sqlite 8.0.12 asks for (2.1.6). Every
       SQLitePCLRaw.lib.e_sqlite3 up to and including 2.1.11 bundles a SQLite build carrying
       GHSA-2m69-gcr7-jv3q (High), which the CI vulnerable-package scan fails on. Referenced
       directly by Ironfront.MasterServer so this version wins over the transitive one; the
-      test project inherits it through the project reference. Drop this pin once
-      Microsoft.Data.Sqlite ships a net8.0 build that already resolves to 2.1.12 or later.
+      test project inherits it through the project reference. Microsoft.Data.Sqlite 10.0.14
+      asks for 2.1.13; the pin stays one ahead so the newest bundled SQLite ships.
     -->
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.14" />
-    <PackageVersion Include="BCrypt.Net-Next" Version="4.2.0" />
-    <PackageVersion Include="System.Text.Json" Version="10.0.12" />
+    <PackageVersion Include="BCrypt.Net-Next" Version="4.2.1" />
+    <PackageVersion Include="System.Text.Json" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup Label="Benchmarks">
@@ -73,7 +73,7 @@
       When you next bump System.Text.Json, bump this line to the same version in the SAME
       commit.
     -->
-    <PackageVersion Include="System.IO.Pipelines" Version="10.0.12" />
+    <PackageVersion Include="System.IO.Pipelines" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup Label="Build tooling">
