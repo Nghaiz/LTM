@@ -189,11 +189,15 @@ namespace Ironfront.Net.Unity.Client
 
             // The bodies the local player's rounds are tested against (14.0.6).
             NetShotReports.Tester = this;
+
+            // Who drives the vehicles this client cannot seat anyone in, for their engine notes.
+            NetClientBindings.RemoteSeatTaken = SeatTaken;
         }
 
         private void OnDisable()
         {
             if (ReferenceEquals(NetShotReports.Tester, this)) NetShotReports.Tester = null;
+            if (ReferenceEquals(NetClientBindings.RemoteSeatTaken?.Target, this)) NetClientBindings.RemoteSeatTaken = null;
             if (_client == null) return;
             _client.Router.OnSpawnActor -= OnSpawn;
             _client.Router.OnDespawnActor -= OnDespawn;

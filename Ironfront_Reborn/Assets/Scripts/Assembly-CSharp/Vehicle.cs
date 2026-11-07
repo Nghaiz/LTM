@@ -247,6 +247,21 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// The eject path logs the same corruption with more detail when a world reset meets one.
 	/// </para>
 	/// </remarks>
+	/// <summary>
+	/// Someone drives this vehicle: <see cref="HasDriver"/>, or, on a client, a remote player in
+	/// the driver's seat, which this peer never seats (<see cref="NetClientBindings.RemoteSeatTaken"/>).
+	/// For cosmetics only -- the engine note; nothing that moves the body reads it.
+	/// </summary>
+	public bool DriverAboard()
+	{
+		if (HasDriver())
+		{
+			return true;
+		}
+		Func<Transform, int, bool> remote = NetClientBindings.RemoteSeatTaken;
+		return NetworkDriven && remote != null && remote(base.transform, 0);
+	}
+
 	public bool HasDriver()
 	{
 		Actor driver = seats[0].occupant;
