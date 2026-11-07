@@ -8,24 +8,25 @@ namespace Ironfront.MasterServer.Career
     /// The hidden rule for one player looking at another (achievements v2, <c>docs/achievements.md</c>
     /// section 6.2). Kept by the master, never by the client: what is not sent cannot leak.
     /// </summary>
+    /// <remarks>
+    /// <b>Who holds a hidden achievement is no secret; how it is earned is.</b> Until 2026-11-08 a
+    /// hidden achievement the viewer lacked was dropped from the other player's list, so the
+    /// ranking's comparison could only say CLASSIFIED and never that they had it. The owner ruled
+    /// that it must show, locked: the unlock is sent, and the client keeps the row's badge,
+    /// rule and progress hidden. The career numbers that would give the rule away stay unsent.
+    /// </remarks>
     internal static class CareerPrivacy
     {
         /// <summary>
-        /// The unlocks a viewer holding <paramref name="viewerHeld"/> may see: every achievement that
-        /// is not hidden, and a hidden one only when the viewer holds it too. Ids the catalogue no
-        /// longer has are dropped.
+        /// The unlocks another player may see: all of them, hidden ones included, less ids the
+        /// catalogue no longer has.
         /// </summary>
-        public static List<(string Id, long At)> VisibleUnlocks(IEnumerable<(string Id, long At)> unlocked, ISet<string> viewerHeld)
+        public static List<(string Id, long At)> KnownUnlocks(IEnumerable<(string Id, long At)> unlocked)
         {
-            var visible = new List<(string, long)>();
+            var known = new List<(string, long)>();
             foreach ((string id, long at) in unlocked)
-            {
-                Achievement? achievement = AchievementCatalog.Find(id);
-                if (achievement == null) continue;
-                if (achievement.Hidden && !viewerHeld.Contains(id)) continue;
-                visible.Add((id, at));
-            }
-            return visible;
+                if (AchievementCatalog.Find(id) != null) known.Add((id, at));
+            return known;
         }
 
         /// <summary>
