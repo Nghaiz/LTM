@@ -120,7 +120,9 @@ public class Boat : Vehicle
 	/// <remarks>
 	/// The note used to be set only after the early return above, so on a client the boat's
 	/// engine started at pitch 0 when its driver sat down and stayed there: a running engine
-	/// nobody could hear (2026-11-07).
+	/// nobody could hear (2026-11-07). And it asked <see cref="Vehicle.HasDriver"/>, which on a
+	/// client is true only for this client's own player: a boat someone else drove was silent
+	/// (2026-11-08); <see cref="Vehicle.DriverAboard"/> counts the remote crew.
 	/// </remarks>
 	private void UpdateReplicatedEngineNote()
 	{
@@ -128,7 +130,7 @@ public class Boat : Vehicle
 		float speed = hasLastReplicatedPosition ? ((position - lastReplicatedPosition).magnitude / Time.fixedDeltaTime) : 0f;
 		lastReplicatedPosition = position;
 		hasLastReplicatedPosition = true;
-		float target = HasDriver() ? (1f + Mathf.Clamp01(speed / 10f)) : 0f;
+		float target = DriverAboard() ? (1f + Mathf.Clamp01(speed / 10f)) : 0f;
 		if (target > 0f && !audio.isPlaying)
 		{
 			audio.Play();

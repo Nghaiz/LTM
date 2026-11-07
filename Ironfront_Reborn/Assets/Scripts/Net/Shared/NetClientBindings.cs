@@ -226,6 +226,17 @@ namespace Ironfront.Net.Unity
         public static LocalCrewProbe LocalCrew { get; set; }
 
         /// <summary>
+        /// Whether a remote player sits at a seat of a vehicle this client draws, from the last
+        /// snapshot. Set by the remote actor registry; null offline and on a server.
+        /// </summary>
+        /// <remarks>
+        /// A client seats only its own player, so <c>Vehicle.HasDriver</c> is false on a car
+        /// someone else drives, and its engine never started (2026-11-08): this is how a
+        /// vehicle hears about the crew it cannot seat.
+        /// </remarks>
+        public static Func<Transform, int, bool> RemoteSeatTaken { get; set; }
+
+        /// <summary>
         /// True when a matchmade match was left through <see cref="LeaveMatch"/>, false when
         /// there was none to leave.
         /// </summary>
@@ -384,6 +395,7 @@ namespace Ironfront.Net.Unity
             ExplosionPredictor = null;
             HornHeard = null;
             LocalCrew = null;
+            RemoteSeatTaken = null;
         }
 
         /// <summary>

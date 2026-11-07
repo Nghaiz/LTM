@@ -59,19 +59,17 @@ public class Car : Vehicle
 	}
 
 	/// <summary>
-	/// Drives the steering-wheel prop and the engine note from the replicated steer angle.
-	/// V5-D3.
+	/// Drives the steering-wheel prop from the replicated steer angle. V5-D3.
 	/// </summary>
 	/// <remarks>
 	/// <c>Update()</c> reads <c>steerAngle</c> to rotate the wheel prop, and on a replicated
 	/// car nothing integrates it any more -- so without this every remote car drives past with
-	/// its steering wheel dead centre through every corner. The engine note follows the same
-	/// value because the throttle it used to chase is not local either.
+	/// its steering wheel dead centre through every corner. The engine note of a replicated car
+	/// follows the speed the snapshots move it at (<see cref="UpdateEngineNote"/>).
 	/// </remarks>
 	public override void ApplyReplicatedSubtypeTail(byte subtypeA, byte subtypeB)
 	{
 		steerAngle = VehicleSubtypeTail.UnpackSteerAngle(subtypeA);
-		enginePitchTarget = HasDriver() ? 0.5f : 0f;
 	}
 
 	public Transform steeringWheel;
@@ -84,6 +82,21 @@ public class Car : Vehicle
 	// the engine should sound like, and the audio block (still per-frame, because it is
 	// cosmetic) reads it. It was a local before the split.
 	private float enginePitchTarget;
+
+	/// <summary>The note of an engine idling with a driver aboard.</summary>
+	private const float IdlePitch = 0.5f;
+
+	/// <summary>How far the note climbs over idle at <see cref="ReplicatedNoteTopSpeed"/> on a car this peer does not drive.</summary>
+	private const float ReplicatedPitchRange = 0.6f;
+
+	/// <summary>The speed, m/s, a replicated car's note tops out at (72 km/h).</summary>
+	private const float ReplicatedNoteTopSpeed = 20f;
+
+	private Vector3 lastNotePosition;
+
+	private bool hasLastNotePosition;
+
+	private float replicatedSpeed;
 
 	protected override void Awake()
 	{
@@ -105,9 +118,13 @@ public class Car : Vehicle
 		{
 			wheelConfiguration.collider.brakeTorque = 0f;
 		}
-		audio.Play();
-		enginePitch = 0f;
-		audio.pitch = 0f;
+		// The engine starts from cold only if it had stopped; one still spinning down keeps its
+		// note. UpdateEngineNote starts the clip -- see its remark for why not here.
+		if (!audio.isPlaying)
+		{
+			enginePitch = 0f;
+			audio.pitch = 0f;
+		}
 	}
 
 	protected override void DriverExited()
@@ -232,12 +249,66 @@ public class Car : Vehicle
 		Vector3 localEulerAngles = steeringWheel.localEulerAngles;
 		localEulerAngles.z = steerAngle * wheelSteerMultiplier;
 		steeringWheel.localEulerAngles = localEulerAngles;
-		enginePitch = Mathf.MoveTowards(enginePitch, enginePitchTarget, Time.deltaTime);
+		UpdateEngineNote();
+	}
+
+	/// <summary>
+	/// Whether the engine runs, and the note it runs at. The clip plays while a driver is aboard
+	/// and stops only once the engine is off and has spun down.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why it exists</b> (owner report 2026-11-07: "the jeep and the motorbike sometimes lose
+	/// their engine sound while driving, online and offline"). The clip was started only in
+	/// <c>DriverEntered</c>, at pitch 0, and stopped here whenever the pitch stood at 0. When a
+	/// driver got in during an Update that ran before this car's, the fixed step had not yet
+	/// raised the target from 0: the frame stopped the clip it had just started, and nothing
+	/// ever started it again, so the whole drive was silent. On a client the target came from
+	/// the snapshot tail as <c>HasDriver() ? 0.5 : 0</c>, and <c>HasDriver</c> is false on a car
+	/// someone else drives, and for a moment on one's own during a seat change: the note fell
+	/// to 0, the clip stopped, and the engine stayed silent until the driver got out and in.
+	/// </para>
+	/// <para>
+	/// Now the engine's state decides the clip, every frame: a driver aboard
+	/// (<see cref="Vehicle.DriverAboard"/>, which counts a remote driver) starts it if it is not
+	/// playing, never below idle; the fixed step's throttle raises the note on a car this peer
+	/// drives, and on one it does not, the speed the snapshots move it at.
+	/// </para>
+	/// </remarks>
+	private void UpdateEngineNote()
+	{
+		bool running = !dead && DriverAboard();
+		float target = 0f;
+		if (running)
+		{
+			target = NetworkDriven
+				? IdlePitch + ReplicatedPitchRange * Mathf.Clamp01(ReplicatedSpeed() / ReplicatedNoteTopSpeed)
+				: Mathf.Max(IdlePitch, enginePitchTarget);
+			if (!audio.isPlaying && audio.isActiveAndEnabled)
+			{
+				audio.Play();
+			}
+		}
+		enginePitch = Mathf.MoveTowards(enginePitch, target, Time.deltaTime);
 		audio.pitch = enginePitch;
-		if (audio.isPlaying && enginePitch == 0f)
+		if (!running && enginePitch == 0f && audio.isPlaying)
 		{
 			audio.Stop();
 		}
+	}
+
+	/// <summary>How fast the snapshots move this car, m/s, smoothed over a few frames.</summary>
+	private float ReplicatedSpeed()
+	{
+		Vector3 position = base.transform.position;
+		if (hasLastNotePosition && Time.deltaTime > 0f)
+		{
+			float now = (position - lastNotePosition).magnitude / Time.deltaTime;
+			replicatedSpeed = Mathf.Lerp(replicatedSpeed, now, Mathf.Clamp01(Time.deltaTime * 8f));
+		}
+		lastNotePosition = position;
+		hasLastNotePosition = true;
+		return replicatedSpeed;
 	}
 
 	public bool CanTurnTowards(Vector3 deltaPosition)
