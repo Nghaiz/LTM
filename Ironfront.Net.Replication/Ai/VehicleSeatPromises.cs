@@ -14,6 +14,12 @@ namespace Ironfront.Net.Replication.Ai
 
         /// <summary>Seats nobody sits in or has claimed.</summary>
         public int FreeSeats;
+
+        /// <summary>
+        /// Where the vehicle's kind stands in the side's choice, best first
+        /// (<see cref="VehicleRules.PreferenceRank"/>): a helicopter or a tank is crewed before a jeep.
+        /// </summary>
+        public int Rank;
     }
 
     /// <summary>
@@ -39,6 +45,12 @@ namespace Ironfront.Net.Replication.Ai
     /// <b>One vehicle filled before the next is started</b>, so the bots sent for one jeep arrive
     /// together and form one squad for it rather than half a squad for each of two.
     /// </para>
+    /// <para>
+    /// <b>The best kind first</b> (2026-11-08). The vehicle with the most seats left was started
+    /// first, so a four-seat jeep always came before a tank: the bot soak of that day found the
+    /// Dustbowl HQ tanks standing empty a minute or more in 117 of 120 samples while 95 bots a side
+    /// came back for a vehicle. The owner asked for helicopters and tanks first (2026-10-08).
+    /// </para>
     /// </remarks>
     public sealed class VehicleSeatPromises
     {
@@ -63,8 +75,9 @@ namespace Ironfront.Net.Replication.Ai
         /// its index in <paramref name="candidates"/>, or -1 when every seat is taken or promised.
         /// </summary>
         /// <remarks>
-        /// A vehicle already being filled comes first; then the one with the most seats left; ties
-        /// go to the lower key, so the same input gives the same answer.
+        /// A vehicle already being filled comes first; then the best kind (<see cref="IdleVehicle.Rank"/>);
+        /// then the one with the most seats left; ties go to the lower key, so the same input gives
+        /// the same answer.
         /// </remarks>
         public int Choose(ReadOnlySpan<IdleVehicle> candidates, float now)
         {
@@ -73,6 +86,7 @@ namespace Ironfront.Net.Replication.Ai
             int best = -1;
             bool bestFilling = false;
             int bestLeft = 0;
+            int bestRank = 0;
             for (int i = 0; i < candidates.Length; i++)
             {
                 int promised = Promised(candidates[i].Key, now);
@@ -80,15 +94,18 @@ namespace Ironfront.Net.Replication.Ai
                 if (left <= 0) continue;
 
                 bool filling = promised > 0;
+                int rank = candidates[i].Rank;
                 bool better = best < 0
                     || (filling && !bestFilling)
-                    || (filling == bestFilling && left > bestLeft)
-                    || (filling == bestFilling && left == bestLeft && candidates[i].Key < candidates[best].Key);
+                    || (filling == bestFilling && rank < bestRank)
+                    || (filling == bestFilling && rank == bestRank && left > bestLeft)
+                    || (filling == bestFilling && rank == bestRank && left == bestLeft && candidates[i].Key < candidates[best].Key);
                 if (!better) continue;
 
                 best = i;
                 bestFilling = filling;
                 bestLeft = left;
+                bestRank = rank;
             }
 
             if (best < 0) return -1;

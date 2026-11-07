@@ -40,6 +40,13 @@ namespace Ironfront.Net.Replication.Ai
     /// that and walked the whole way. Defending now refuses a vehicle only within
     /// <see cref="RideDistance"/> of the flag, the same line an attack rides from.
     /// </para>
+    /// <para>
+    /// <b>Nothing worth having is left parked (owner, 2026-11-08).</b> A squad holding a flag still
+    /// leaves a car where it stands -- it has nowhere to drive it -- but crews a tank or a
+    /// helicopter within <see cref="GuardCrewReach"/>: a tank holds a flag better than the squad
+    /// on foot beside it, and once the squad is aboard the commander gives it a job of its own.
+    /// The owner's words: never leave the vehicles at the HQs and the flags standing empty.
+    /// </para>
     /// </remarks>
     public static class VehicleRules
     {
@@ -56,6 +63,18 @@ namespace Ironfront.Net.Replication.Ai
         public const float ArmourStandoff = 80f;
 
         /// <summary>
+        /// How close, in metres, a vehicle must be for a squad already on its way to take it
+        /// (2026-11-08): one it walks past, not one it turns aside for.
+        /// </summary>
+        public const float PassingReach = 40f;
+
+        /// <summary>
+        /// How close to a squad holding a flag a tank or a helicopter must stand for the squad to
+        /// crew it rather than leave it parked (2026-11-08): the HQ pads stand 31-38 m from the flag.
+        /// </summary>
+        public const float GuardCrewReach = 50f;
+
+        /// <summary>
         /// Whether a squad takes a vehicle <paramref name="vehicleDistance"/> metres away, with its
         /// objective <paramref name="objectiveDistance"/> away (infinite when it has none, which
         /// keeps the original's "take what is near" for a squad nobody has given a job).
@@ -68,7 +87,7 @@ namespace Ironfront.Net.Replication.Ai
             }
             if (role == SquadRole.Defend && objectiveDistance < RideDistance)
             {
-                return false;
+                return (kind == VehicleKind.Armour || kind == VehicleKind.Aircraft) && vehicleDistance <= GuardCrewReach;
             }
             if (vehicleDistance > objectiveDistance * MaxDetourShare + DetourSlack)
             {

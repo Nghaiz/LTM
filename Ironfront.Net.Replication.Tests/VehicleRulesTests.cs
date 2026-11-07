@@ -26,11 +26,23 @@ namespace Ironfront.Net.Replication.Tests
 
         [Theory]
         [InlineData(VehicleKind.Transport)]
+        [InlineData(VehicleKind.Boat)]
+        public void ASquadHoldingAFlag_LeavesACarOrABoatWhereItStands(VehicleKind kind)
+            => Assert.False(VehicleRules.ShouldBoard(kind, SquadRole.Defend, Near, 5f));
+
+        /// <summary>
+        /// Owner, 2026-11-08: no vehicle left standing empty at an HQ or a flag. A squad holding the
+        /// flag crews the tank or the helicopter parked at it; one further off it leaves alone.
+        /// </summary>
+        [Theory]
         [InlineData(VehicleKind.Armour)]
         [InlineData(VehicleKind.Aircraft)]
-        [InlineData(VehicleKind.Boat)]
-        public void ASquadHoldingAFlag_StaysOnFoot(VehicleKind kind)
-            => Assert.False(VehicleRules.ShouldBoard(kind, SquadRole.Defend, Near, 5f));
+        public void ASquadHoldingAFlag_CrewsATankOrAHelicopterParkedAtIt(VehicleKind kind)
+        {
+            Assert.True(VehicleRules.ShouldBoard(kind, SquadRole.Defend, Near, 5f));
+            Assert.True(VehicleRules.ShouldBoard(kind, SquadRole.Defend, Near, VehicleRules.GuardCrewReach));
+            Assert.False(VehicleRules.ShouldBoard(kind, SquadRole.Defend, Near, VehicleRules.GuardCrewReach + 1f));
+        }
 
         /// <summary>
         /// Phase P32: a squad respawned at an HQ and sent to hold a flag across the map takes the
