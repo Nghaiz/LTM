@@ -52,9 +52,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
-      # Pinned to 8.0.x to match the LTS the team develops against, and enforced on every
+      # Pinned to 10.0.x to match the LTS the team develops against, and enforced on every
       # developer machine by global.json. If you bump this, bump global.json AND LangVersion
       # in Directory.Build.props in the same PR, or CI will accept syntax that other
       # developers' SDKs reject.
@@ -242,7 +242,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -317,7 +317,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Cache NuGet packages
         uses: actions/cache@v6

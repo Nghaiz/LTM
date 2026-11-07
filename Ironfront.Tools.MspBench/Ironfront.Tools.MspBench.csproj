@@ -23,7 +23,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Ironfront.Tools.MspBench</RootNamespace>
     <AssemblyName>Ironfront.Tools.MspBench</AssemblyName>
     <Description>Phase-04 TCP experiments: framing, Nagle, Pipelines comparison, capacity.</Description>
@@ -36,7 +36,6 @@
 
   <ItemGroup>
     <!-- Version lives in Directory.Packages.props. This project is the ONLY consumer. -->
-    <PackageReference Include="System.IO.Pipelines" />
   </ItemGroup>
 
 </Project>

@@ -6,22 +6,22 @@
     "",
     "WHY THIS FILE EXISTS: Directory.Build.props pins LangVersion to 12.0 and warns that a",
     "developer on a newer SDK could commit C# 13+ syntax that compiles locally and fails in",
-    "CI. That warning had no enforcement — a teammate with the .NET 9 or 10 SDK installed",
+    "CI. That warning had no enforcement — a teammate with a newer .NET SDK installed",
     "would still build fine on their machine. This file turns that silent divergence into an",
     "immediate, readable error at the first `dotnet` command:",
     "",
-    "  A compatible .NET SDK was not found. Requested: 8.0.100 (rollForward latestFeature)",
+    "  A compatible .NET SDK was not found. Requested: 10.0.100 (rollForward latestFeature)",
     "",
-    "rollForward=latestFeature accepts ANY 8.0.x SDK at or above 8.0.100 (so 8.0.423 on one",
-    "machine and 8.0.100 on another are both fine) and rejects 9.x / 10.x outright, which is",
-    "exactly the boundary .github/workflows/ci.yml enforces with dotnet-version: 8.0.x.",
+    "rollForward=latestFeature accepts ANY 10.0.x SDK at or above 10.0.100 (so 10.0.403 on one",
+    "machine and 10.0.100 on another are both fine) and rejects 11.x outright, which is",
+    "exactly the boundary .github/workflows/ci.yml enforces with dotnet-version: 10.0.x.",
     "",
-    "If the team ever moves to .NET 9, three files change in the SAME PR: this one, the",
+    "If the team ever moves to .NET 11, three files change in the SAME PR: this one, the",
     "LangVersion in Directory.Build.props, and dotnet-version in ci.yml."
   ],
 
   "sdk": {
-    "version": "8.0.100",
+    "version": "10.0.100",
     "rollForward": "latestFeature",
     "allowPrerelease": false
   }

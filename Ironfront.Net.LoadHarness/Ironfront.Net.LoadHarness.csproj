@@ -18,7 +18,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Ironfront.Net.LoadHarness</RootNamespace>
     <AssemblyName>Ironfront.Net.LoadHarness</AssemblyName>
     <Description>Synthetic GSP clients for measuring the Unity game server.</Description>

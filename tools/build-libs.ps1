@@ -83,9 +83,9 @@ try {
     if (Test-Path $publishRoot) { Remove-Item $publishRoot -Recurse -Force }
 
     foreach ($lib in $libs) {
-        # -f is not optional. Ironfront.Net.Transport multi-targets netstandard2.1 and net8.0,
+        # -f is not optional. Ironfront.Net.Transport multi-targets netstandard2.1 and net10.0,
         # and `dotnet publish` on a cross-targeting project fails outright (NETSDK1129) rather
-        # than picking one. Pinning it also stops a net8.0 asset from reaching Unity, which
+        # than picking one. Pinning it also stops a net10.0 asset from reaching Unity, which
         # cannot load one.
         dotnet publish (Join-Path $repoRoot "$lib/$lib.csproj") -c $Configuration -f netstandard2.1 -o $publishRoot --nologo | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $lib" }
