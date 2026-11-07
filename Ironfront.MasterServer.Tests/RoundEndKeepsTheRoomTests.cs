@@ -77,7 +77,7 @@ namespace Ironfront.MasterServer.Tests
 
             // The report is stored...
             Assert.True(await MasterHostHarness.WaitUntilAsync(
-                () => server.Database.FindMatchResults(room.RoomId).Count == 1));
+                () => server.ReadDatabase(db => db.FindMatchResults(room.RoomId)).Count == 1));
 
             // ...and the room is still the server's, in its match, with everybody still on it.
             Assert.Equal(RoomLifecycleState.InMatch, room.State);

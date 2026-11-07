@@ -69,7 +69,7 @@ namespace Ironfront.MasterServer.Tests
             });
 
             Assert.True(await MasterHostHarness.WaitUntilAsync(
-                () => server.Database.ReadCareer(playerId).ContainsKey("matches")));
+                () => server.ReadDatabase(db => db.ReadCareer(playerId)).ContainsKey("matches")));
             Dictionary<string, long> career = server.Database.ReadCareer(playerId);
             Assert.Equal(7, career["kills"]);
             Assert.Equal(3, career["deaths"]);
@@ -114,7 +114,7 @@ namespace Ironfront.MasterServer.Tests
                 new MatchPlayerResult { PlayerId = playerId, Kills = 2, Deaths = 1, Score = 2 },
             });
             Assert.True(await MasterHostHarness.WaitUntilAsync(
-                () => server.Database.ReadCareer(playerId).ContainsKey("matches")));
+                () => server.ReadDatabase(db => db.ReadCareer(playerId)).ContainsKey("matches")));
             Assert.Equal(1, server.Database.ReadCareer(playerId)["matches"]);
             Assert.Single(server.Database.FindMatchResults(room.RoomId));
 
@@ -248,7 +248,7 @@ namespace Ironfront.MasterServer.Tests
             });
 
             Assert.True(await MasterHostHarness.WaitUntilAsync(
-                () => server.Database.ReadCareer(playerId).ContainsKey("matches")));
+                () => server.ReadDatabase(db => db.ReadCareer(playerId)).ContainsKey("matches")));
             Assert.Equal(1, server.Database.ReadCareer(playerId)["matches"]);
             Assert.Equal(9, server.Database.ReadCareer(playerId)["kills"]);
             Assert.Single(server.Database.FindMatchResults(13));
@@ -316,7 +316,7 @@ namespace Ironfront.MasterServer.Tests
                 new MatchPlayerResult { PlayerId = playerId, Kills = 1, Deaths = 1, Score = 1 },
             });
             Assert.True(await MasterHostHarness.WaitUntilAsync(
-                () => server.Database.ReadCareer(playerId).ContainsKey("matches")));
+                () => server.ReadDatabase(db => db.ReadCareer(playerId)).ContainsKey("matches")));
             Assert.Single(server.Database.FindMatchResults(ours.RoomId + 100));
 
             Assert.Empty(server.Database.FindMatchResults(ours.RoomId));
@@ -348,7 +348,7 @@ namespace Ironfront.MasterServer.Tests
                 new MatchPlayerResult { PlayerId = playerId, Kills = 1, Deaths = 1, Score = 1 },
             });
             Assert.True(await MasterHostHarness.WaitUntilAsync(
-                () => server.Database.FindMatchResults(room.RoomId).Count == 1));
+                () => server.ReadDatabase(db => db.FindMatchResults(room.RoomId)).Count == 1));
 
             Assert.Empty(server.Database.FindMatchResults(room.RoomId + 100));
         }

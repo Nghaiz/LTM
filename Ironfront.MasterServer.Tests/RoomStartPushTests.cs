@@ -146,8 +146,16 @@ namespace Ironfront.MasterServer.Tests
             await LoginAsync(alpha, "p40_host");
             await LoginAsync(beta,  "p40_guest");
 
+            // Every push is kept, not just the last: one Poll drains all that have arrived, so a
+            // pump starved past the 6 s countdown on a busy runner gets the armed push and the
+            // expired one together, and the second used to hide the first.
             RoomState? latest = null;
-            alpha.OnRoomStatePush += state => latest = state;
+            long armedStartsInMs = 0;
+            alpha.OnRoomStatePush += state =>
+            {
+                latest = state;
+                if (state.StartsInMs > 0) armedStartsInMs = state.StartsInMs;
+            };
 
             CreateRoomResult created = await PumpAsync(
                 alpha.CreateRoomAsync(new CreateRoomRequest
@@ -169,8 +177,8 @@ namespace Ironfront.MasterServer.Tests
 
             await PumpAsync(alpha.SetReadyAsync(true), alpha, beta);
             await PumpAsync(beta.SetReadyAsync(true),  alpha, beta);
-            Assert.True(await PumpUntilAsync(() => latest!.StartsInMs > 0, alpha, beta), "no push carried the armed countdown");
-            Assert.InRange(latest!.StartsInMs, 1, 6_000);
+            Assert.True(await PumpUntilAsync(() => armedStartsInMs > 0, alpha, beta), "no push carried the armed countdown");
+            Assert.InRange(armedStartsInMs, 1, 6_000);
 
             await PumpAsync(beta.SetReadyAsync(false), alpha, beta);
             Assert.True(await PumpUntilAsync(() => latest!.StartsInMs == 0, alpha, beta), "the withdrawn ready left a countdown showing");
