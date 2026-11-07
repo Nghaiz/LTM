@@ -136,5 +136,25 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(DrivingRules.RecoveriesBeforeGivingUp > 3);
             Assert.True(DrivingRules.RecoveryMemorySeconds >= 30f);
         }
+
+        /// <summary>
+        /// 2026-11-08: a bot's boat that ran aground on the way put its squad ashore wherever it
+        /// stopped. Short of its goal it backs off twice first; at its goal it has arrived.
+        /// </summary>
+        [Fact]
+        public void ABoatAgroundShortOfItsGoalBacksOffTwice_ThenItsSquadGoesAshore()
+        {
+            float far = DrivingRules.BoatAgroundShortMetres + 100f;
+            Assert.True(DrivingRules.BoatBacksOff(far, 0));
+            Assert.True(DrivingRules.BoatBacksOff(far, 1));
+            Assert.False(DrivingRules.BoatBacksOff(far, DrivingRules.BoatBackOffsBeforeGoingAshore));
+        }
+
+        [Fact]
+        public void ABoatBeachedAtItsGoalPutsItsSquadAshore()
+        {
+            Assert.False(DrivingRules.BoatBacksOff(DrivingRules.BoatAgroundShortMetres - 1f, 0));
+            Assert.True(DrivingRules.BoatBacksOff(DrivingRules.BoatAgroundShortMetres, 0));
+        }
     }
 }

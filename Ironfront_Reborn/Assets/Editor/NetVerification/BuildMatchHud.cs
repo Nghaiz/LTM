@@ -142,6 +142,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 PlaceFlagIndicator(contents, log);
                 Text team = BuildTeamReadout(root, out GameObject teamChip, log);
                 BuildSeatPrompt(root, log);
+                BuildSeatList(root, log);
                 KillfeedRowView[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
                     root, out Text killer, out Text timer, out Button deployButton, log);
@@ -331,6 +332,92 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_detail", detail);
             so.ApplyModifiedPropertiesWithoutUndo();
             log.AppendLine("seat prompt: built hidden; SeatPromptView places it over the vehicle the seat key would ask for, only while the player looks at it.");
+        }
+
+        /// <summary>Canvas units from the bottom edge to the seat list: clear of the health panel.</summary>
+        public const float SeatListBottom = 150f;
+
+        /// <summary>
+        /// The seats of the vehicle the player is in, bottom-left above the health panel, filled
+        /// by <see cref="VehicleSeatsView"/>. One row per seat key, F1 to F8.
+        /// </summary>
+        private static void BuildSeatList(GameObject root, StringBuilder log)
+        {
+            var host = new GameObject("Seat List Layer", typeof(RectTransform));
+            host.transform.SetParent(root.transform, worldPositionStays: false);
+            Stretch((RectTransform)host.transform);
+            VehicleSeatsView view = host.AddComponent<VehicleSeatsView>();
+
+            float width = VehicleSeatsView.Width;
+            float rowHeight = VehicleSeatsView.RowHeight;
+            float header = VehicleSeatsView.HeaderHeight;
+            int seats = VehicleSeatsView.MaxSeats;
+
+            AngularPanel panel = Angular(host, "Seat List", Vector2.zero,
+                new Vector2(width, header + seats * rowHeight + VehicleSeatsView.FooterHeight),
+                CutAction, WithAlpha(Surface, 0.86f));
+            Place(panel, Vector2.zero, Vector2.zero, new Vector2(CornerInset, SeatListBottom),
+                new Vector2(width, header + seats * rowHeight + VehicleSeatsView.FooterHeight));
+            var group = panel.gameObject.AddComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            Text kicker = Label(panel.gameObject, "Kicker", "SEATS", 11, TextAnchor.MiddleLeft, bold: true);
+            kicker.color = CyanSoft;
+            Place(kicker, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(12f, -9f), new Vector2(60f, 14f));
+            Text title = Label(panel.gameObject, "Vehicle", string.Empty, 15, TextAnchor.MiddleRight, bold: true);
+            Place(title, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-12f, -7f), new Vector2(170f, 18f));
+
+            var rows = new Object[seats];
+            var backings = new Object[seats];
+            var keys = new Object[seats];
+            var roles = new Object[seats];
+            var states = new Object[seats];
+            for (int i = 0; i < seats; i++)
+            {
+                var row = new GameObject("Seat " + (i + 1), typeof(RectTransform));
+                row.transform.SetParent(panel.transform, worldPositionStays: false);
+                var rowRect = (RectTransform)row.transform;
+                rowRect.anchorMin = new Vector2(0f, 1f);
+                rowRect.anchorMax = new Vector2(1f, 1f);
+                rowRect.pivot = new Vector2(0.5f, 1f);
+                rowRect.anchoredPosition = new Vector2(0f, -(header + i * rowHeight));
+                rowRect.sizeDelta = new Vector2(-12f, rowHeight - 2f);
+
+                Image backing = Picture(row, "Backing", new Color(1f, 1f, 1f, 0.04f));
+                Stretch(backing.rectTransform);
+
+                Text key = Label(row, "Key", "F" + (i + 1), 13, TextAnchor.MiddleCenter, bold: true);
+                Place(key, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(4f, 0f), new Vector2(30f, rowHeight - 2f));
+                Text role = Label(row, "Role", string.Empty, 15, TextAnchor.MiddleLeft, bold: true);
+                Place(role, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(40f, 0f), new Vector2(130f, rowHeight - 2f));
+                Text state = Label(row, "State", string.Empty, 12, TextAnchor.MiddleRight, bold: true);
+                Place(state, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-8f, 0f), new Vector2(70f, rowHeight - 2f));
+
+                row.SetActive(false);
+                rows[i] = row;
+                backings[i] = backing;
+                keys[i] = key;
+                roles[i] = role;
+                states[i] = state;
+            }
+
+            Text hint = Label(panel.gameObject, "Hint", "F1 - F8  CHANGE SEAT", 11, TextAnchor.MiddleLeft, bold: true);
+            hint.color = CyanSoft;
+            Place(hint, Vector2.zero, Vector2.zero, new Vector2(12f, 4f), new Vector2(width - 24f, VehicleSeatsView.FooterHeight - 6f));
+
+            var so = new SerializedObject(view);
+            Assign(so, "_panel", (RectTransform)panel.transform);
+            Assign(so, "_group", group);
+            Assign(so, "_title", title);
+            AssignArray(so, "_rows", rows);
+            AssignArray(so, "_rowBackings", backings);
+            AssignArray(so, "_rowKeys", keys);
+            AssignArray(so, "_rowRoles", roles);
+            AssignArray(so, "_rowStates", states);
+            so.ApplyModifiedPropertiesWithoutUndo();
+            log.AppendLine($"seat list: built hidden, bottom-left {SeatListBottom:0} up; VehicleSeatsView shows it while seated in a vehicle of two seats or more.");
         }
 
         /// <summary>

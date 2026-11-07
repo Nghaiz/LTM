@@ -180,7 +180,7 @@ người chơi tự đo (practice).
 
 | # | Tên | Thẻ | Mô tả trong game | 📊 | Đo bằng |
 |---|---|---|---|---|---|
-| 51 | WINDREADER | ON | Kill an enemy with a headshot from 500 m or more. | kỷ lục | có sẵn |
+| 51 | WINDREADER | ON | Kill an enemy with a headshot from 400 m or more. | kỷ lục | có sẵn |
 | 52 | ALL FRONTS MASTERED | ON | Win 50 online rounds on each of the 3 maps. Each round must be LEAD BY 200 or FIRST TO 500 or more. | 📊 0/150 | mới |
 | 53 | AIR DEFENSE | ON | On foot, shoot down 25 enemy helicopters: destroy them with their pilot aboard while they are 5 m or more above the ground. | 📊 | mới |
 | 54 | UNDEFEATED | ON | Win 10 online rounds in a row. Only rounds of LEAD BY 200 or FIRST TO 500 or more count; losing one, or leaving it before it ends, resets the count. | chuỗi hiện tại | mới (master) |
@@ -213,7 +213,7 @@ Ghi chú:
 |---|---|---|---|---|---|
 | 65 | CENTURION | ON | Get 100 kills without dying. | kỷ lục | có sẵn |
 | 66 | RAMPAGE | ON | Get 10 kills in a row, each one within 3 seconds of the last. | kỷ lục | có sẵn |
-| 67 | CURVATURE | ON | Kill an enemy with a headshot from 900 m or more. | kỷ lục | có sẵn |
+| 67 | CURVATURE | ON | Kill an enemy with a headshot from 700 m or more. | kỷ lục | có sẵn |
 | 68 | PERFECT TEN | ON | Get 10 headshot kills in a row without dying. A kill that is not a headshot resets the count. | kỷ lục | có sẵn |
 | 69 | ★ DEAD EYE | ON | Win an online round with at least 15 kills and 100% accuracy: fire at least 15 bullets, and every one hits an enemy. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | | mới |
 | 70 | ★ UNTOUCHABLE | ON | Win an online round without taking any damage, with at least 15 kills. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | | mới |
@@ -225,7 +225,7 @@ Ghi chú:
 | 76 | CREATURE OF THE NIGHT | ON NM | Win a Night Mode round with at least 30 kills and 0 deaths, without turning on night vision. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | | mới |
 | 77 | IMMACULATE | PR | Get 100 kills without dying in a practice round with 100 bots. | kỷ lục | client |
 | 78 | IRONCLAD | ON | Unlock all 79 other achievements. | 📊 0/79 | mới (master) |
-| 79 | MID-AIR | ON 🔒 | Kill an enemy helicopter pilot with a headshot from 300 m or more while the helicopter is 5 m or more above the ground. | | mới |
+| 79 | MID-AIR | ON 🔒 | Kill an enemy helicopter pilot with a headshot from 200 m or more while the helicopter is 5 m or more above the ground. | | mới |
 | 80 | ★ COUNTER-SNIPER | ON 🔒 | With your pistol, kill an enemy holding a sniper or marksman rifle (SL-DEFENDER, SIGNAL DMR or RECON LRR) from more than 150 m. | | mới |
 
 Ghi chú:
@@ -320,14 +320,43 @@ Những cái bị nghi nhưng làm được (giữ nguyên):
 
 | Thành tựu | Vì sao làm được |
 |---|---|
-| CURVATURE (headshot 900 m) | Vùng chơi Dustbowl rộng 1.700 x 1.600 m, Forest Lake 2.000 x 1.500 m. Camera vẽ tới 2.000 m. Ngoài 500 m server vẫn gửi kẻ địch nằm trong 15 độ trước mặt. SL-DEFENDER bắn xa 1.000 m, có ống ngắm 25x, chỉnh zero tới 1.000 m và đo xa; headshot ở 900 m gây 288 sát thương. Island (700 x 700 m) không đủ xa. |
-| WINDREADER (headshot 500 m) | Như trên. SL-DEFENDER, RECON LRR (1.000 m) và SIGNAL DMR (800 m) đều với tới. |
+| CURVATURE (headshot 900 m, nay 700 m, xem 4.11) | Vùng chơi Dustbowl rộng 1.700 x 1.600 m, Forest Lake 2.000 x 1.500 m. Camera vẽ tới 2.000 m. Ngoài 500 m server vẫn gửi kẻ địch nằm trong 15 độ trước mặt. SL-DEFENDER bắn xa 1.000 m, có ống ngắm 25x, chỉnh zero tới 1.000 m và đo xa; headshot ở 900 m gây 288 sát thương. Island (700 x 700 m) không đủ xa. |
+| WINDREADER (headshot 500 m, nay 400 m, xem 4.11) | Như trên. SL-DEFENDER, RECON LRR (1.000 m) và SIGNAL DMR (800 m) đều với tới. |
 | COUNTER-SNIPER (súng ngắn, trên 150 m) | S-IND7 bắn xa 200 m; headshot ở 151 m gây 104,6, đủ hạ. Khó vì đạn toả và rơi khoảng 1 m, nhưng làm được, nhất là với bot cầm súng bắn tỉa nằm yên một chỗ. |
 | BUCKSHOT SNIPER (shotgun 60 m) | Đạn chì bay tới 80 m, mỗi viên còn 9,6 sát thương ở 60 m. Chỉ cần phát kết liễu là shotgun. |
 | MID-AIR | Ghế trực thăng kín, chỉ đạn SL-DEFENDER xuyên được, qua kính buồng lái. Đúng thiết kế. |
 | ON BORROWED TIME | Game không tự hồi máu, chỉ medipack mới hồi. |
 | TOUCHDOWN, MAN OVERBOARD, VICTORY LAP | Trực thăng và xuồng đều có hộp va chạm để cán; còi chỉ có trên jeep và quad bike. |
 | GOLD STANDARD | Cần một mạng giết bằng cờ lê vàng trong practice; ISEEGOLD chỉ mở khoá cờ lê. Câu thông báo giữ nguyên. |
+
+### 4.11 Cân lại thành tựu headshot xa và ống ngắm (08/11/2026)
+
+Chủ dự án báo: súng bắn tỉa như không bắn tới, không nhìn thấy được ở 800 đến 1.000 m; CURVATURE
+không thể làm được; ống ngắm quá ngắn. Đo lại trong Editor (Dustbowl, mục tiêu cách 926 m):
+
+- **Sương mù.** Sương kiểu bình phương mũ: Island 0,003 làm người lính ở 500 m chỉ còn khoảng 10% màu
+  của mình; Forest Lake 0,001 ở 900 m còn 44%. Ống ngắm phóng đại bao nhiêu cũng vậy.
+- **Ống ngắm.** SL-DEFENDER mở lên ở 6x; muốn 12x hay 25x phải lăn chuột, nhưng màn hình không nói
+  điều đó, cũng không nói phím nào chỉnh zero. Ở 25x đầu người cách 900 m chỉ cao khoảng 7 px (1080p),
+  đạn bay 1,6 giây.
+- **Bản đồ.** Island chỉ rộng 540 m, hai cờ xa nhất cách nhau 328 m. Chỉ Dustbowl (cờ xa nhất 1.181 m)
+  và Forest Lake (1.268 m) có tầm bắn trên 400 m.
+- **Mạng** không chặn: ngoài 500 m server vẫn gửi kẻ địch trong 15 độ trước mặt, và xe cũng vậy.
+
+Sửa:
+
+| Phần | Trước | Sau |
+|---|---|---|
+| Ống ngắm SL-DEFENDER | 6x, 12x, 25x | 6x, 12x, 25x, 35x (đầu người ở 700 m cao 12 px) |
+| Sương trong ống ngắm | như mắt thường | mật độ chia cho căn bậc hai độ phóng đại (25x: còn 1/5); bot vẫn nhìn qua sương thật |
+| Dòng dưới tâm ngắm | `6x  ZERO 100 m  RANGE 926 m` | thêm 5 giây đầu một dòng phím: `WHEEL ZOOM 6-35x · PGUP / PGDN ZERO · SHIFT HOLD BREATH` (theo phím người chơi đã gán); ZERO tô cam khi lệch tầm đo từ 50 m |
+| WINDREADER (Platinum) | headshot 500 m | headshot **400 m** |
+| CURVATURE (Mythic) | headshot 900 m | headshot **700 m** |
+| MID-AIR (Mythic ẩn) | phi công, 300 m | phi công, **200 m** |
+
+Giữ nguyên: OVERWATCH (giết từ 300 m, Silver), MOONLIGHT MARKSMAN (đêm, 150 m), COUNTER-SNIPER (súng
+ngắn trên 150 m, súng ngắn bắn xa 200 m), BUCKSHOT SNIPER (60 m, shotgun bắn xa 80 m). Ai đã có kỷ lục
+đủ mốc mới sẽ nhận thành tựu ở lần đăng nhập kế tiếp.
 
 ---
 
@@ -411,7 +440,7 @@ Steam chỉ cho so với bạn bè; ở đây so được với **mọi người
    best 64          [badge] CENTURION · Get 100 kills without dying.               best 41
  ✔ 09 Oct 2026      [badge] NINE LIVES · Survive a fall with 5 health or less.     ✔ 30 Sep 2026   (cả hai đã có)
  ✔ 07 Oct 2026      [badge] VICTORY LAP · Honk the horn within 3 seconds ...       chưa có         (chỉ mình có)
- chưa có            [bóng đen] TOUCHDOWN · Not every landing happens on a pad.    CLASSIFIED      (mình chưa có)
+ chưa có            [bóng đen] TOUCHDOWN · Not every landing happens on a pad.    ✔ 05 Oct 2026 · CLASSIFIED   (mình chưa có, họ có)
 ```
 
   - Cột giữa là thành tựu; trái là mình, phải là họ; thanh tiến độ hai bên mọc đối xứng ra từ giữa.
@@ -420,9 +449,14 @@ Steam chỉ cho so với bạn bè; ở đây so được với **mọi người
 - **Luật thành tựu ẩn (master kiểm soát, client không tự lọc):**
   - **Cả hai đã mở** → hiện đầy đủ.
   - **Chỉ mình đã mở** → mình thấy đầy đủ, cột của họ hiện "chưa có".
-  - **Mình chưa mở** (dù họ có hay không) → dòng hiện tên, bóng đen, câu gợi ý; **cột của họ chỉ hiện
-    CLASSIFIED, không cho biết họ đã có hay chưa**. Đầu trang chỉ ghi tổng số ẩn mỗi người đã có.
-  - Master **không bao giờ gửi** ngày mở hay tiến độ của một thành tựu ẩn mà người xem chưa có.
+  - **Mình chưa mở, họ đã có** → dòng hiện tên, bóng đen, câu gợi ý (khoá, vẫn giấu nội dung); **cột
+    của họ hiện ✔, ngày mở và chữ CLASSIFIED** màu tím của thành tựu ẩn. Dòng tính vào bộ lọc "Only
+    them" như mọi dòng khác. Thẻ người chơi không đưa nó vào 3 thành tựu hiếm nhất (thẻ đó vẽ huy
+    hiệu thật).
+  - **Cả hai chưa mở** → dòng như trên, cột của họ hiện "chưa có".
+  - Master **gửi** mọi thành tựu người kia đã mở, kể cả thành tựu ẩn người xem chưa có, nhưng **không
+    bao giờ gửi** số career chỉ thành tựu ẩn đó đọc (nó chính là tiến độ, sẽ lộ luật). Chủ dự án chốt
+    ngày 2026-11-08: trước đó cột của họ chỉ hiện CLASSIFIED, không cho biết họ đã có hay chưa.
 
 ### 6.3 Icon
 

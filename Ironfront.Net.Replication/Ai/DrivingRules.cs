@@ -165,6 +165,24 @@ namespace Ironfront.Net.Replication.Ai
         public static float CarReverseSteer(float left, float right, int attempt)
             => -NoseTurn(left, right, attempt);
 
+        /// <summary>
+        /// A boat that runs aground this far or further, in metres, from where it was going has
+        /// stopped short of its goal, not arrived at it (2026-11-08).
+        /// </summary>
+        public const float BoatAgroundShortMetres = 40f;
+
+        /// <summary>Times a boat aground short of its goal backs off before its squad goes ashore.</summary>
+        public const int BoatBackOffsBeforeGoingAshore = 2;
+
+        /// <summary>
+        /// Whether a boat that has stopped, <paramref name="goalDistance"/> metres from where it was
+        /// going, backs off its beach (true) or puts its squad ashore to walk the rest (false), after
+        /// <paramref name="backOffs"/> back-offs lately. A boat beached at its goal has arrived; one
+        /// short of it tries the water again, twice, before its squad gives it up.
+        /// </summary>
+        public static bool BoatBacksOff(float goalDistance, int backOffs)
+            => goalDistance >= BoatAgroundShortMetres && backOffs < BoatBackOffsBeforeGoingAshore;
+
         private static float Closeness(float distance, float lookahead)
         {
             if (!(lookahead > 0f) || float.IsNaN(distance) || distance >= lookahead) return 0f;

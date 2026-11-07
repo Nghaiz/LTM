@@ -94,6 +94,15 @@ namespace Ironfront.Editor.Verification
         static readonly Dictionary<Squad, float> BoardingSince = new Dictionary<Squad, float>();
         static readonly Dictionary<Vehicle, VehicleTrack> VehicleTracks = new Dictionary<Vehicle, VehicleTrack>();
 
+        /// <summary>When each live vehicle was first seen with nobody in it, cleared when somebody sits.</summary>
+        static readonly Dictionary<Vehicle, float> EmptySince = new Dictionary<Vehicle, float>();
+
+        /// <summary>Seconds an empty vehicle at a flag must have stood empty to count as idle there (owner, 2026-11-08).</summary>
+        const float IdleAtFlagAfter = 60f;
+
+        /// <summary>Metres from a flag a vehicle counts as parked at it.</summary>
+        const float AtFlagMetres = 80f;
+
         /// <summary>Metres a boarded vehicle must get from where it was first seen not to count as trapped there.</summary>
         const float LeftSpawnMetres = 15f;
 
@@ -316,6 +325,7 @@ namespace Ironfront.Editor.Verification
             Tracks.Clear();
             BoardingSince.Clear();
             VehicleTracks.Clear();
+            EmptySince.Clear();
             _lastOwners = null;
             _baseOwners = null;
 
@@ -764,13 +774,24 @@ namespace Ironfront.Editor.Verification
             List<Vehicle> vehicles = ActorManager.instance.vehicles;
             if (vehicles != null)
             {
+                float now = Time.time;
                 foreach (Vehicle vehicle in vehicles)
                 {
                     if (vehicle == null || vehicle.dead) continue;
                     t.vehicleSamples++;
                     bool empty = vehicle.EmptySeats() == vehicle.seats.Length;
-                    if (!empty) continue;
+                    if (!empty)
+                    {
+                        EmptySince.Remove(vehicle);
+                        continue;
+                    }
                     t.emptyVehicleSamples++;
+                    if (!EmptySince.TryGetValue(vehicle, out float since))
+                    {
+                        since = now;
+                        EmptySince.Add(vehicle, now);
+                    }
+                    SampleIdleAtFlag(t, flags, vehicle, now - since);
                     for (int i = 0; i < flags.Length; i++)
                     {
                         if (flags[i] == null || _baseOwners[i] < 0) continue;
@@ -811,6 +832,46 @@ namespace Ironfront.Editor.Verification
                 {
                     if (baseOwner == 0) t.hqLost0++; else t.hqLost1++;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Counts an empty vehicle by where it stands -- at an HQ, at another flag, or out in the
+        /// field -- and, at any flag, whether it has stood empty for <see cref="IdleAtFlagAfter"/>
+        /// (owner, 2026-11-08: "never leave the vehicles at the HQs and the flags empty and unused").
+        /// </summary>
+        static void SampleIdleAtFlag(BotSoakTactics t, SpawnPoint[] flags, Vehicle vehicle, float emptyFor)
+        {
+            SpawnPoint at = null;
+            bool hq = false;
+            float best = AtFlagMetres;
+            for (int i = 0; i < flags.Length; i++)
+            {
+                if (flags[i] == null) continue;
+                float distance = Vector3.Distance(flags[i].transform.position, vehicle.transform.position);
+                if (distance >= best) continue;
+                best = distance;
+                at = flags[i];
+                hq = _baseOwners[i] >= 0;
+            }
+            int kind = (int)Squad.KindOf(vehicle);
+            if (at == null)
+            {
+                t.emptyFieldSamples++;
+                return;
+            }
+            if (!hq) t.emptyAtFlagSamples++;
+            if (emptyFor < IdleAtFlagAfter) return;
+            t.idleAtFlagSamples++;
+            if (kind >= 0 && kind < t.idleAtFlagByKind.Length) t.idleAtFlagByKind[kind]++;
+            bool free = vehicle.AiShouldEnter() && vehicle.ClaimedSeatCount == 0 && !vehicle.claimedByPlayer;
+            if (free) t.idleAtFlagFree++;
+            if (at.owner < 0) t.idleAtNeutralFlag++;
+            if (emptyFor > t.longestIdleSeconds)
+            {
+                t.longestIdleSeconds = emptyFor;
+                t.longestIdle = vehicle.name + " at " + at.name + (hq ? " (HQ)" : string.Empty)
+                                + ", flag owner " + at.owner + (free ? ", free" : ", not boardable");
             }
         }
 
@@ -1114,6 +1175,24 @@ namespace Ironfront.Editor.Verification
         /// <summary>Flags held, summed over samples.</summary>
         public int flagsHeld0;
         public int flagsHeld1;
+
+        /// <summary>Empty vehicles within 80 m of a flag that is not an HQ, and empty ones at no flag, summed over samples.</summary>
+        public int emptyAtFlagSamples;
+        public int emptyFieldSamples;
+
+        /// <summary>
+        /// Empty vehicles at any flag (HQ or not) that had stood empty for a minute or more, summed
+        /// over samples; by kind; of those, the ones a bot could have boarded (free), and the ones at
+        /// a flag nobody holds. The owner's complaint of 2026-11-08, as a number.
+        /// </summary>
+        public int idleAtFlagSamples;
+        public int[] idleAtFlagByKind = new int[4];
+        public int idleAtFlagFree;
+        public int idleAtNeutralFlag;
+
+        /// <summary>The longest any vehicle stood empty at a flag, in seconds, and which.</summary>
+        public float longestIdleSeconds;
+        public string longestIdle;
     }
 
     [Serializable]

@@ -28,16 +28,18 @@ namespace Ironfront.MasterServer.Data
     public sealed partial class SqliteDatabase : IDisposable
     {
         private readonly SqliteConnection _connection;
+        private readonly string _connectionString;
 
         public SqliteDatabase(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Database path is required.", nameof(path));
-            _connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            _connectionString = new SqliteConnectionStringBuilder
             {
                 DataSource = path,
                 Mode = SqliteOpenMode.ReadWriteCreate,
                 Cache = SqliteCacheMode.Shared
-            }.ToString());
+            }.ToString();
+            _connection = new SqliteConnection(_connectionString);
             _connection.Open();
             Execute("PRAGMA journal_mode=WAL;");
             Execute("PRAGMA synchronous=NORMAL;");
@@ -236,6 +238,19 @@ CREATE INDEX IF NOT EXISTS idx_results_player ON match_results(player_id);");
             using SqliteCommand cmd = _connection.CreateCommand(); cmd.CommandText = sql; cmd.ExecuteNonQuery();
         }
 
-        public void Dispose() => _connection.Dispose();
+        /// <summary>Closes the database and lets go of its file.</summary>
+        /// <remarks>
+        /// Microsoft.Data.Sqlite pools connections by connection string, so <c>Dispose</c> alone
+        /// hands the connection back to the pool with the file still open, and on Windows the
+        /// database and its <c>-wal</c>/<c>-shm</c> cannot be deleted until the process exits.
+        /// The master test harness deletes its database on dispose; that delete failed quietly
+        /// and every run left about 110 files in the temp directory (found 2026-11-07). The
+        /// backup path below already clears its pool for the same reason.
+        /// </remarks>
+        public void Dispose()
+        {
+            _connection.Dispose();
+            SqliteConnection.ClearPool(new SqliteConnection(_connectionString));
+        }
     }
 }

@@ -19,14 +19,23 @@ build gate ever since.
 
 ## Chơi game / Play
 
-Tải file `IronfrontReborn-<version>-windows-x64.zip` ở trang
-[**Releases**](https://github.com/Nghaiz/LTM/releases/latest), giải nén ra một thư mục mới rồi
-mở `Ironfront.exe`. Không cần Unity, không cần cấu hình: server đã chạy sẵn trên Internet và địa
-chỉ của nó nằm trong game. Hướng dẫn chi tiết có trong `README.txt` bên trong file zip.
+Vào trang [**Releases**](https://github.com/Nghaiz/LTM/releases/latest) và tải file zip đúng hệ
+điều hành, rồi giải nén ra một thư mục mới:
 
-Download the zip from [Releases](https://github.com/Nghaiz/LTM/releases/latest), extract it
-into a new folder and run `Ironfront.exe` (Windows 10/11, 64-bit). Cutting a release:
-[docs/releasing.md](docs/releasing.md).
+| Hệ điều hành | File | Mở |
+|---|---|---|
+| Windows 10/11, 64-bit | `IronfrontReborn-<version>-windows-x64.zip` | `Ironfront.exe` |
+| macOS (Intel và Apple Silicon) | `IronfrontReborn-<version>-macos.zip` | kéo `Ironfront.app` vào Applications. Lần đầu vào System Settings > Privacy & Security, bấm "Open Anyway" |
+| Linux, x86_64 | `IronfrontReborn-<version>-linux-x64.zip` | `Ironfront.x86_64` |
+
+Không cần Unity, không cần cấu hình: server đã chạy sẵn trên Internet và địa chỉ của nó nằm trong
+game. Chỉ bản mới nhất đăng nhập được, nên khi có bản mới hãy tải lại. Hướng dẫn chi tiết có
+trong `README.txt` bên trong file zip.
+
+Download the zip for your OS from [Releases](https://github.com/Nghaiz/LTM/releases/latest),
+extract it into a new folder and run the player: `Ironfront.exe` on Windows 10/11 64-bit,
+`Ironfront.app` on macOS (universal), `Ironfront.x86_64` on Linux. Only the newest release can
+sign in. Cutting a release: [docs/releasing.md](docs/releasing.md).
 
 ---
 
@@ -57,11 +66,11 @@ flowchart TD
 
     T["Ironfront.Net.Transport<br/><i>netstandard2.1 · the transport track</i><br/>UDP reliability, acks, channels, fragmentation"]
     R["Ironfront.Net.Replication<br/><i>netstandard2.1 · the replication track</i><br/>snapshots, delta encoding, interest management"]
-    M["Ironfront.MasterServer<br/><i>net8.0 exe · the master-server track</i><br/>auth, lobby, rooms, matchmaking over TCP"]
-    L["Ironfront.Tools.LoadTest<br/><i>net8.0 exe · the master-server track</i><br/>headless bot clients"]
+    M["Ironfront.MasterServer<br/><i>net10.0 exe · the master-server track</i><br/>auth, lobby, rooms, matchmaking over TCP"]
+    L["Ironfront.Tools.LoadTest<br/><i>net10.0 exe · the master-server track</i><br/>headless bot clients"]
     U["Ironfront_Reborn<br/><i>Unity 6 · the client track</i><br/>client, rendering, prediction"]
-    C["Ironfront.Net.Protocol.Tests<br/><i>net8.0 · the replication track</i><br/>conformance suite — the referee"]
-    S["tools/SpecChecker<br/><i>net8.0 exe</i><br/>fails the build on spec drift"]
+    C["Ironfront.Net.Protocol.Tests<br/><i>net10.0 · the replication track</i><br/>conformance suite — the referee"]
+    S["tools/SpecChecker<br/><i>net10.0 exe</i><br/>fails the build on spec drift"]
 
     P --> T
     P --> R
@@ -77,15 +86,15 @@ flowchart TD
 
 The three `netstandard2.1` libraries must **never** reference `UnityEngine`. They are built as
 plain .NET assemblies and copied into `Ironfront_Reborn/Assets/Plugins` by
-`tools/build-libs.ps1`, which is also what lets B, C and D work without ever opening the Unity
-Editor.
+`tools/build-libs.ps1`, which is also what lets the libraries be built and tested without
+opening the Unity Editor.
 
 ---
 
 ## Quick start
 
-Requires the **.NET 8 SDK** (`global.json` pins the feature band — a 9.x or 10.x SDK is
-rejected on purpose) and **PowerShell 7+** for the scripts.
+Requires the **.NET 10 SDK** (`global.json` pins 10.0.100 with `latestFeature`, so any 10.0.x
+works and an 11.x SDK is rejected on purpose) and **PowerShell 7+** for the scripts.
 
 ```bash
 git clone git@github.com:Nghaiz/LTM.git
@@ -142,6 +151,20 @@ pwsh tools/ci.ps1
 Unity: `UNITY_PATH` is set locally, so `tools/ci.ps1` step 4 runs a real batch-mode compile —
 the only check that resolves types. `tools/UnitySyntaxCheck` parses but resolves nothing, so it
 cannot catch a CS0246. Do not trust it alone before merging Unity-side code.
+
+---
+
+## Where it runs
+
+| Part | Where | How it is deployed |
+|---|---|---|
+| Master server (auth, lobby, rooms) | AWS EC2 `ap-southeast-2`, `52-62-179-111.sslip.io`, ports 443 and 27000 (TLS, Let's Encrypt). Moved from fly.io on 2026-11-07 | Docker image `ghcr.io/nghaiz/ironfront-master`; [`infra/terraform/aws/master/`](infra/terraform/aws/master/README.md) and its `deploy.sh` |
+| Game servers (Dustbowl, Island, Forest Lake) | One Azure VM, three containers | Docker image `ironfront-game-server`; `pwsh tools/deploy-gameservers-azure.ps1` |
+| Player builds | GitHub Releases: Windows, macOS, Linux zips | [`docs/releasing.md`](docs/releasing.md) |
+| Backups | Master database: daily to S3. Whole stack: `pwsh tools/backup-live-stack.ps1` | [`docs/live-stack-backup.md`](docs/live-stack-backup.md) |
+
+Play-testing goes against this live stack, not a local one. (`tools/run-integration.ps1` still
+starts a throwaway local master, for the two-process integration check only.)
 
 ---
 

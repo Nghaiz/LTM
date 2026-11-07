@@ -10,9 +10,13 @@ log() { echo "==> $*"; }
 
 command -v aws >/dev/null 2>&1 || die "aws CLI not on PATH"
 command -v jq >/dev/null 2>&1 || die "jq not on PATH"
-command -v terraform >/dev/null 2>&1 || die "terraform not on PATH"
 
-tf_out() { terraform -chdir="$AWS_DIR" output -raw "$1"; }
+# Terraform is only needed to look up what the environment did not name: a machine without the
+# state (or without terraform) deploys with INSTANCE_ID, REGION and BUCKET set.
+tf_out() {
+    command -v terraform >/dev/null 2>&1 || die "terraform not on PATH; set INSTANCE_ID, REGION and BUCKET instead"
+    terraform -chdir="$AWS_DIR" output -raw "$1"
+}
 
 INSTANCE_ID="${INSTANCE_ID:-$(tf_out instance_id)}"
 REGION="${REGION:-$(tf_out region)}"

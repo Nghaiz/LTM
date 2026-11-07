@@ -60,6 +60,9 @@ aws ssm start-session --region ap-southeast-2 --target "$(terraform output -raw 
 ./infra/terraform/aws/master/deploy.sh                    # newest 'develop' image
 IRONFRONT_MASTER_IMAGE=ghcr.io/nghaiz/ironfront-master@sha256:... ./infra/terraform/aws/master/deploy.sh
 FORCE=1 ./infra/terraform/aws/master/deploy.sh            # even with rooms open
+# From a machine without the Terraform state (the IDs come from `terraform output`):
+INSTANCE_ID=i-0d82a32b23a370c59 REGION=ap-southeast-2 BUCKET=ironfront-master-backups-b647cb91eaa1e49f82570f2dfe \
+  ./infra/terraform/aws/master/deploy.sh
 ```
 
 `deploy.sh` refuses while a room is open, because a restart drops every player (the 2026-10-14
@@ -87,6 +90,14 @@ To rotate the secret: `aws ssm put-parameter --overwrite ...`, then
   backup, so run `ironfront-backup.sh` first.
 - **Renewing the certificate restarts the master at 20:00 UTC (03:00 +07), not immediately.**
   The old certificate is still valid for about 30 days when certbot renews, so waiting is safe.
+- **`/opt/ironfront/data/from-fly/` is the rest of the fly volume**: its logs, `durability.csv` and
+  the 2026-09-30 database snapshot, copied on 2026-11-07 and checked against the fly machine's own
+  hashes (`MANIFEST-fly-2026-11-07.sha256` beside them). The master never reads it;
+  `tools/backup-live-stack.ps1` backs it up with the rest of `/data`. The database itself was
+  compared row by row after the cutover: nothing was missing.
+- **SSM Run Command runs `sh`, not bash.** A command that uses `set -o pipefail` or other bashisms
+  fails before its first line; wrap it as `bash <<'EOS' ... EOS`. The scripts in `files/` are
+  executables with their own bash shebang, so calling them is fine.
 - **No PROXY protocol** (the old fly deployment needed it). Clients connect directly, so the per-IP limits see
   real addresses.
 - **State is local** (`terraform.tfstate`, gitignored). It holds no secret, but it is the only

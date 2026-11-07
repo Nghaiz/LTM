@@ -112,6 +112,26 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		return seat != null ? (int)seat.animation : 0;
 	}
 
+	/// <summary>What seat <paramref name="seatIndex"/> is for, for the client's seat walk and the HUD.</summary>
+	public Ironfront.Net.Unity.NetSeatRole GetSeatRole(int seatIndex)
+	{
+		if (seats == null || seatIndex < 0 || seatIndex >= seats.Length || seats[seatIndex] == null)
+		{
+			return Ironfront.Net.Unity.NetSeatRole.None;
+		}
+		switch (seats[seatIndex].type)
+		{
+		case Seat.Type.Driver:
+			return Ironfront.Net.Unity.NetSeatRole.Driver;
+		case Seat.Type.Pilot:
+			return Ironfront.Net.Unity.NetSeatRole.Pilot;
+		case Seat.Type.Gunner:
+			return Ironfront.Net.Unity.NetSeatRole.Gunner;
+		default:
+			return Ironfront.Net.Unity.NetSeatRole.Passenger;
+		}
+	}
+
 	public float maxHealth = 1000f;
 
 	public float crashDamageSpeedThrehshold = 2f;
@@ -227,6 +247,21 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// The eject path logs the same corruption with more detail when a world reset meets one.
 	/// </para>
 	/// </remarks>
+	/// <summary>
+	/// Someone drives this vehicle: <see cref="HasDriver"/>, or, on a client, a remote player in
+	/// the driver's seat, which this peer never seats (<see cref="NetClientBindings.RemoteSeatTaken"/>).
+	/// For cosmetics only -- the engine note; nothing that moves the body reads it.
+	/// </summary>
+	public bool DriverAboard()
+	{
+		if (HasDriver())
+		{
+			return true;
+		}
+		Func<Transform, int, bool> remote = NetClientBindings.RemoteSeatTaken;
+		return NetworkDriven && remote != null && remote(base.transform, 0);
+	}
+
 	public bool HasDriver()
 	{
 		Actor driver = seats[0].occupant;

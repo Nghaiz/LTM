@@ -24,6 +24,7 @@ Usage:
   python tools/prune_ghcr.py --require-live   # refuse to run without LIVE_MASTER_IMAGE
 """
 import argparse
+import base64
 import datetime
 import json
 import os
@@ -70,6 +71,31 @@ def list_versions(owner, pkg):
     return versions
 
 
+def github_token():
+    """The caller's GitHub token: GH_TOKEN / GITHUB_TOKEN (CI), else `gh auth token` (a laptop)."""
+    for name in ("GH_TOKEN", "GITHUB_TOKEN"):
+        if os.environ.get(name):
+            return os.environ[name]
+    result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def registry_token(owner, pkg):
+    """A registry pull token for one package.
+
+    Asked for with the caller's GitHub token, not anonymously: an anonymous token reads a PUBLIC
+    package only, and a package pushed by hand starts private. On 2026-11-07 the game-server
+    package came back private and every run of this script failed with HTTP 401 on it.
+    """
+    req = urllib.request.Request(
+        f"https://ghcr.io/token?scope=repository:{owner}/{pkg}:pull&service=ghcr.io")
+    secret = github_token()
+    if secret:
+        basic = base64.b64encode(f"{owner}:{secret}".encode()).decode()
+        req.add_header("Authorization", f"Basic {basic}")
+    return json.load(urllib.request.urlopen(req))["token"]
+
+
 def child_digests(owner, pkg, digest, token):
     req = urllib.request.Request(
         f"https://ghcr.io/v2/{owner}/{pkg}/manifests/{digest}",
@@ -111,8 +137,7 @@ def plan(owner, pkg, keep_days, keep_recent, pinned):
     if not roots:
         sys.exit(f"{pkg}: nothing would be kept; refusing")
 
-    token = json.load(urllib.request.urlopen(
-        f"https://ghcr.io/token?scope=repository:{owner}/{pkg}:pull"))["token"]
+    token = registry_token(owner, pkg)
     keep = set(roots)
     for digest in roots:
         keep |= child_digests(owner, pkg, digest, token)

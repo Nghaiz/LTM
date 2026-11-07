@@ -1,4 +1,5 @@
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Protocol.Achievements;
 using Ironfront.Net.Replication.Combat;
 using NUnit.Framework;
 
@@ -35,7 +36,41 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.IsTrue(sniper.HasRangefinder);
             Assert.IsTrue(sniper.AdjustableZero);
             Assert.AreEqual(100, sniper.ZeroMinMetres);
-            Assert.GreaterOrEqual(sniper.ZeroMaxMetres, 900, "CURVATURE is a 900 m headshot");
+            long curvature = AchievementCatalog.Find("curvature")!.Target;
+            Assert.GreaterOrEqual(sniper.ZeroMaxMetres, curvature, "CURVATURE's headshot must be a dialled zero, not a guess");
+        }
+
+        /// <summary>
+        /// Owner report 2026-11-08, "the sniper's zoom is too short": CURVATURE's head must be a
+        /// mark one can lay a crosshair on, at least 10 px tall at 1080 p at the scope's top power.
+        /// </summary>
+        [Test]
+        public void TheSnipersTopPowerShowsCurvaturesHeadAtTenPixels()
+        {
+            ScopeProfile sniper = ScopeProfiles.SlDefender;
+            float top = sniper.MagnificationAt(sniper.Magnifications.Count - 1);
+            float fov = ScopeProfiles.VerticalFovFor(top, 60f);
+            long metres = AchievementCatalog.Find("curvature")!.Target;
+            double headDegrees = System.Math.Atan(0.25 / metres) * 180.0 / System.Math.PI;
+            Assert.GreaterOrEqual(1080.0 * headDegrees / fov, 10.0, $"{top}x at {metres} m");
+        }
+
+        /// <summary>The same report's other half: past 500 m the haze, not the zoom, hid the target.</summary>
+        [Test]
+        public void AScopeThinsTheHazeItsPictureIsDrawnThrough()
+        {
+            Assert.AreEqual(1f, ScopeProfiles.HazeScale(1f));
+            Assert.AreEqual(1f, ScopeProfiles.HazeScale(0.5f), "nothing below the naked eye");
+            Assert.AreEqual(0.2f, ScopeProfiles.HazeScale(25f), 1e-5f);
+            Assert.Less(ScopeProfiles.HazeScale(35f), ScopeProfiles.HazeScale(25f));
+
+            // Exponential squared haze: what share of its colour a body keeps at d metres.
+            static double Kept(double density, double metres) => System.Math.Exp(-System.Math.Pow(density * metres, 2));
+            const double ForestLake = 0.001, Island = 0.003;
+            Assert.Less(Kept(ForestLake, 900), 0.5, "the defect: under half a soldier's colour at 900 m");
+            Assert.Greater(Kept(ForestLake * ScopeProfiles.HazeScale(25f), 900), 0.95);
+            Assert.Less(Kept(Island, 500), 0.15, "the defect on Island at its longest");
+            Assert.Greater(Kept(Island * ScopeProfiles.HazeScale(6f), 500), 0.65, "even at the lowest power");
         }
 
         [Test]

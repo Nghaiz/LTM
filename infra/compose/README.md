@@ -1,5 +1,10 @@
 # infra/compose — the running stack
 
+> **History (2026-11-07):** this single-VM stack no longer runs anywhere. The live master is on
+> AWS EC2 ([`infra/terraform/aws/master/`](../terraform/aws/master/README.md)) and the game
+> servers are on their own Azure VM (`infra/docker/gameservers.compose.yml`). This directory
+> stays as the self-hosting layout.
+
 One master + two headless game servers on a single Azure VM, from immutable GHCR images.
 Terraform (`infra/terraform/azure/`) builds the VM and network; this directory is what runs on
 it. **This is process/capacity resilience, not high availability** — a VM, disk or region

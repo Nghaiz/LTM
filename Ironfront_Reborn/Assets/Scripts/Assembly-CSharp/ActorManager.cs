@@ -803,6 +803,7 @@ public class ActorManager : MonoBehaviour
 				// A seated bot's claim is dropped when it sits, so claims count only the bots still
 				// walking to a seat.
 				FreeSeats = vehicle.EmptySeats() - vehicle.ClaimedSeatCount,
+				Rank = Ironfront.Net.Replication.Ai.VehicleRules.PreferenceRank(Squad.KindOf(vehicle)),
 			};
 		}
 

@@ -89,13 +89,22 @@ namespace Ironfront.MasterServer.Diagnostics
             }
         }
 
-        private static void Write(string tag, string message)
-        {
+        /// <summary>
+        /// Waits until every line logged so far has reached the console and the log file, or
+        /// until <paramref name="timeout"/> has passed. Lines are written on their own thread
+        /// (<see cref="LogWriter"/>), so a process that is about to end calls this first.
+        /// </summary>
+        /// <returns>False if the timeout passed first.</returns>
+        public static bool Flush(TimeSpan timeout) => LogWriter.Flush(timeout);
+
+        /// <summary>One finished log line: UTC timestamp, tag, message.</summary>
+        internal static string Format(string tag, string message)
             // UTC, because phase 03 puts this on a VPS in some other timezone and a log
             // whose timestamps need mental arithmetic is a log nobody reads.
-            string line = $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z [{tag}] {message}";
-            Console.Out.WriteLine(line);
-            LogFile.Append(line);
-        }
+            => $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}Z [{tag}] {message}";
+
+        // Queued, never written here: the caller is usually the logic thread, and a console
+        // nobody drains would stop it (#669; LogWriter has the story).
+        private static void Write(string tag, string message) => LogWriter.Enqueue(null, Format(tag, message));
     }
 }

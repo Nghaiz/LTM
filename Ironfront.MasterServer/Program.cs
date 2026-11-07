@@ -46,6 +46,20 @@ namespace Ironfront.MasterServer
     {
         public static async Task<int> Main(string[] args)
         {
+            try
+            {
+                return await MainCoreAsync(args).ConfigureAwait(false);
+            }
+            finally
+            {
+                // Log lines are written on their own thread (LogWriter). The last ones (a refused
+                // configuration, "stopped") must reach the console before the process ends.
+                MasterLog.Flush(TimeSpan.FromSeconds(5));
+            }
+        }
+
+        private static async Task<int> MainCoreAsync(string[] args)
+        {
             int loaded = DotEnv.LoadFromAncestors(null, out string envPath);
 
             if (args.Length > 0 && IsHelp(args[0]))

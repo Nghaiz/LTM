@@ -525,6 +525,18 @@ namespace Ironfront.Net.Unity.Client
 
             if (message.Result == SeatChangeResult.Entered)
             {
+                // A switch between two seats of the vehicle this client is already in (F1-F8).
+                // The old seat's turret pose goes with it, and a driver who moved to the gun
+                // stops predicting the hull.
+                bool switched = _occupiedVehicleId == message.VehicleId
+                                && _occupiedSeatIndex != message.SeatIndex;
+                if (switched)
+                {
+                    NetTurretAim.ClearLocal();
+                    if (message.SeatIndex != DriverSeatIndex && _drivenVehicleId == message.VehicleId)
+                        Release();
+                }
+
                 // Occupancy is tracked for EVERY seat; prediction stays the driver's alone. A
                 // gunner steers nothing and predicts nothing, and still has a turret to aim
                 // (V6 task 2) — before V6 a non-driver sent no vehicle input at all, so no turret

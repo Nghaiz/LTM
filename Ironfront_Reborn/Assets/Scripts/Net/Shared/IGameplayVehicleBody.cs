@@ -81,6 +81,12 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         int GetSeatAnimation(int seatIndex) => 0;
 
+        /// <summary>
+        /// What seat <paramref name="seatIndex"/> is for, or <see cref="NetSeatRole.None"/> for a
+        /// seat this vehicle does not have. Maps to <c>Seat.type</c>.
+        /// </summary>
+        NetSeatRole GetSeatRole(int seatIndex) => NetSeatRole.None;
+
         /// <summary>The body the interpolator and the corrector write, or null without one.</summary>
         Rigidbody Rigidbody { get; }
 
