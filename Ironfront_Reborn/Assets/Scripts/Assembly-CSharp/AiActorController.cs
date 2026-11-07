@@ -2418,11 +2418,109 @@ public class AiActorController : ActorController
 		{
 			return Vector3.zero;
 		}
+		NoteSwimming();
+		if (hasPath && !MakingForShore())
+		{
+			return GetWaypointDeltaBlockable().ToGround().normalized;
+		}
+		if (TryShoreStroke(out Vector3 stroke))
+		{
+			return stroke;
+		}
 		if (hasPath)
 		{
 			return GetWaypointDeltaBlockable().ToGround().normalized;
 		}
 		return Vector3.zero;
+	}
+
+	/// <summary>
+	/// Seconds of swimming after which a bot gives up where its path goes and makes for the
+	/// nearest land: well inside the forty seconds of breath, so it arrives breathing.
+	/// </summary>
+	private const float SwimAshoreAfterSeconds = 15f;
+
+	/// <summary>How often a bot making for the shore looks for it again, seconds.</summary>
+	private const float ShoreSearchSeconds = 2f;
+
+	/// <summary>A gap in the strokes this long ends one swim; the next stroke starts another.</summary>
+	private const float SwimGapSeconds = 1f;
+
+	private float swimmingSince = -1f;
+
+	private float lastStrokeAt = -1f;
+
+	private float nextShoreSearch;
+
+	private bool hasShore;
+
+	private Vector3 shore;
+
+	private bool toldShore;
+
+	private static readonly System.Func<float, float, float> GroundAt = delegate(float x, float z)
+	{
+		return Ironfront.Net.Unity.TerrainSurface.TryGetHeight(new Vector3(x, 0f, z), out float height) ? height : float.NegativeInfinity;
+	};
+
+	/// <summary>Called on every stroke: starts the clock of a new swim after a gap.</summary>
+	private void NoteSwimming()
+	{
+		float now = Time.time;
+		if (lastStrokeAt < 0f || now - lastStrokeAt > SwimGapSeconds)
+		{
+			swimmingSince = now;
+			hasShore = false;
+			toldShore = false;
+			nextShoreSearch = now;
+		}
+		lastStrokeAt = now;
+	}
+
+	/// <summary>
+	/// Whether this swimmer should leave its path for the shore: it has swum too long to trust
+	/// the path to get it out before its breath does (owner's playtest 2026-11-07: two bots drowned
+	/// at the surface off Island).
+	/// </summary>
+	private bool MakingForShore()
+	{
+		return swimmingSince >= 0f && Time.time - swimmingSince > SwimAshoreAfterSeconds;
+	}
+
+	/// <summary>
+	/// A stroke toward the nearest place this bot can stand (<see cref="Ironfront.Net.Unity.ShoreFinder"/>),
+	/// searched again every <see cref="ShoreSearchSeconds"/>. False when none is in reach.
+	/// </summary>
+	private bool TryShoreStroke(out Vector3 stroke)
+	{
+		stroke = Vector3.zero;
+		Vector3 at = actor.transform.position;
+		if (Time.time >= nextShoreSearch)
+		{
+			nextShoreSearch = Time.time + ShoreSearchSeconds;
+			float surface = Ironfront.Net.Replication.Movement.MovementCore.SurfaceAt(at.x, at.z);
+			hasShore = Ironfront.Net.Unity.ShoreFinder.TryFind(at.x, at.z, surface, Actor.SwimEndDepth, Actor.SwimClimbLip, GroundAt, out float x, out float z);
+			if (hasShore)
+			{
+				shore = new Vector3(x, surface, z);
+				if (!toldShore)
+				{
+					toldShore = true;
+					Debug.Log("[bots] " + base.name + " swims for the shore " + Vector3.Distance(at.ToGround(), shore.ToGround()).ToString("F0") + " m away" + (hasPath ? " after " + (Time.time - swimmingSince).ToString("F0") + " s in the water." : ": it has no path out."));
+				}
+			}
+		}
+		if (!hasShore)
+		{
+			return false;
+		}
+		Vector3 toShore = (shore - at).ToGround();
+		if (toShore.sqrMagnitude < 0.01f)
+		{
+			return false;
+		}
+		stroke = toShore.normalized;
+		return true;
 	}
 
 	private Vector3 LocalAvoidanceVelocity()
