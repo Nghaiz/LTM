@@ -72,7 +72,9 @@ if [ ! -s "$lineage/fullchain.pem" ]; then
 
     if [ -n "${IRONFRONT_ACME_EMAIL:-}" ]; then email_args=(-m "$IRONFRONT_ACME_EMAIL"); else email_args=(--register-unsafely-without-email); fi
     log "requesting a Let's Encrypt certificate for $IRONFRONT_DOMAIN"
-    certbot certonly --standalone --preferred-challenges http --non-interactive --agree-tos \
+    # certbot runs the deploy hook on this first issuance too. The master has not started yet, so
+    # the hook must not schedule the deferred restart it does on a renewal.
+    IRONFRONT_RENEW_NO_RESTART=1 certbot certonly --standalone --preferred-challenges http --non-interactive --agree-tos \
         "${email_args[@]}" -d "$IRONFRONT_DOMAIN" \
         --deploy-hook "$ROOT/bin/ironfront-renew-hook.sh" \
         || die "certbot failed for $IRONFRONT_DOMAIN (port 80 reachable? DNS -> $IRONFRONT_EXPECTED_IP?)"
