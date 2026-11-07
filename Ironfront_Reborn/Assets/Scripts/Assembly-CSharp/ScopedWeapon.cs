@@ -146,6 +146,16 @@ public class ScopedWeapon : Weapon
 
 	internal bool AdjustableZero => Profile != null && Profile.AdjustableZero;
 
+	internal bool VariableZoom => Profile != null && Profile.VariableZoom;
+
+	internal int ZeroMinMetres => Profile != null ? Profile.ZeroMinMetres : 0;
+
+	internal int ZeroMaxMetres => Profile != null ? Profile.ZeroMaxMetres : 0;
+
+	internal float LowestMagnification => Profile != null ? Profile.MagnificationAt(0) : 1f;
+
+	internal float HighestMagnification => Profile != null ? Profile.MagnificationAt(Profile.Magnifications.Count - 1) : 1f;
+
 	internal bool HasRangefinder => Profile != null && Profile.HasRangefinder;
 
 	internal float RangeMetres => rangeMetres;
@@ -176,6 +186,7 @@ public class ScopedWeapon : Weapon
 			UpdateBreath(false, Time.deltaTime);
 			return;
 		}
+		ScopeHaze.Hold(PlayerFpParent.instance != null ? PlayerFpParent.instance.fpCamera : null, CurrentMagnification);
 		bool keys = !LocalTextEntry.OwnsKeyboard;
 		if (keys)
 		{

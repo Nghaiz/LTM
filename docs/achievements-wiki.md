@@ -107,7 +107,7 @@ The top of a skill, a role, or a rare situation.
 
 | # | Badge | Achievement | How to earn it | Kind |
 |---|---|---|---|---|
-| 51 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/windreader.png" width="64" alt="WINDREADER"> | **WINDREADER**<br>`windreader` | Kill an enemy with a headshot from 500 m or more. | Online |
+| 51 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/windreader.png" width="64" alt="WINDREADER"> | **WINDREADER**<br>`windreader` | Kill an enemy with a headshot from 400 m or more. | Online |
 | 52 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/all_fronts_mastered.png" width="64" alt="ALL FRONTS MASTERED"> | **ALL FRONTS MASTERED**<br>`all_fronts_mastered` | Win 50 online rounds on each of the 3 maps. Each round must be LEAD BY 200 or FIRST TO 500 or more. | Online |
 | 53 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/air_defense.png" width="64" alt="AIR DEFENSE"> | **AIR DEFENSE**<br>`air_defense` | On foot, shoot down 25 enemy helicopters: destroy them with their pilot aboard while they are 5 m or more above the ground. | Online |
 | 54 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/undefeated.png" width="64" alt="UNDEFEATED"> | **UNDEFEATED**<br>`undefeated` | Win 10 online rounds in a row. Only rounds of LEAD BY 200 or FIRST TO 500 or more count; losing one, or leaving it before it ends, resets the count. | Online |
@@ -130,7 +130,7 @@ The moments players talk about for years.
 |---|---|---|---|---|
 | 65 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/centurion.png" width="64" alt="CENTURION"> | **CENTURION**<br>`centurion` | Get 100 kills without dying. | Online |
 | 66 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/rampage.png" width="64" alt="RAMPAGE"> | **RAMPAGE**<br>`rampage` | Get 10 kills in a row, each one within 3 seconds of the last. | Online |
-| 67 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/curvature.png" width="64" alt="CURVATURE"> | **CURVATURE**<br>`curvature` | Kill an enemy with a headshot from 900 m or more. | Online |
+| 67 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/curvature.png" width="64" alt="CURVATURE"> | **CURVATURE**<br>`curvature` | Kill an enemy with a headshot from 700 m or more. | Online |
 | 68 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/perfect_ten.png" width="64" alt="PERFECT TEN"> | **PERFECT TEN**<br>`perfect_ten` | Get 10 headshot kills in a row without dying. A kill that is not a headshot resets the count. | Online |
 | 69 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/dead_eye.png" width="64" alt="DEAD EYE"> | **DEAD EYE**<br>`dead_eye` | Win an online round with at least 15 kills and 100% accuracy: fire at least 15 bullets, and every one hits an enemy. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | Online |
 | 70 | <img src="../Ironfront_Reborn/Assets/Resources/IronfrontUi/Achievements/untouchable.png" width="64" alt="UNTOUCHABLE"> | **UNTOUCHABLE**<br>`untouchable` | Win an online round without taking any damage, with at least 15 kills. The round must be LEAD BY 400 or FIRST TO 1,000 or more. | Online |
