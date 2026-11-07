@@ -1,5 +1,10 @@
 # fly.io — master server only
 
+> **Being replaced (2026-11-07) by EC2: [`infra/terraform/aws/master/`](../terraform/aws/master/README.md).**
+> Keep this app running until the cutover. Released clients and the game servers still dial
+> `kien-master-2026.fly.dev:443` until a client release and a game-server redeploy point them at
+> the new host.
+
 `deploy.sh` puts the **master server** on fly.io. The **game server is deliberately absent**,
 and the section below is the reason rather than an omission.
 
