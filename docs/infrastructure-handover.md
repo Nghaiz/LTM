@@ -137,7 +137,7 @@ The password argument is the client-side SHA-256, not the plaintext.
 
 ### Take a backup / restore one
 
-**The live stack (fly master + Azure game servers) is backed up with
+**The live stack (EC2 master + Azure game servers) is backed up with
 `pwsh tools/backup-live-stack.ps1` and restored per [`live-stack-backup.md`](live-stack-backup.md).**
 The rest of this section describes the phase-03 single-VM layout.
 
