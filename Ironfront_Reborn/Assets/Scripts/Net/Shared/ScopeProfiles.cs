@@ -63,9 +63,11 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>SL-DEFENDER</b>, the bolt-action sniper (an AWM, .338-class): a variable 6-25x scope as
-    /// on its real counterpart, a zero from 100 m to 1,000 m in 100 m clicks, and a rangefinder,
-    /// so a 900 m shot is a reading and a click rather than a guess. <b>RECON LRR</b>, the
+    /// <b>SL-DEFENDER</b>, the bolt-action sniper (an AWM, .338-class): a variable scope stepping
+    /// 6, 12, 25 and 35x (the top of a 7-35x tactical scope; 35x was added on 2026-11-08 after the
+    /// owner's "the sniper's zoom is too short to see 800-1,000 m": at 25x a head 700 m off is
+    /// 8 px tall at 1080 p, at 35x 12), a zero from 100 m to 1,000 m in 100 m clicks, and a
+    /// rangefinder, so a long shot is a reading and a click rather than a guess. <b>RECON LRR</b>, the
     /// semi-automatic long-range rifle (a Kel-Tec RFB, .308-class): a fixed 6x with its own BDC
     /// chevrons and a zero to 800 m. <b>SIGNAL DMR</b> keeps its 4x prism sight on the rifle, a
     /// model the camera looks through, and so has no profile here.
@@ -80,11 +82,18 @@ namespace Ironfront.Net.Unity
     /// Magnification is relative to the player's own field of view (the options' FOV), as a real
     /// scope's is to the eye.
     /// </para>
+    /// <para>
+    /// <b>Haze through the glass</b> (<see cref="HazeScale"/>). The maps' haze is exponential
+    /// squared, and on Island (density 0.003) a body 500 m off keeps a tenth of its colour; on
+    /// Forest Lake (0.001) one at 900 m keeps under half. A scope draws its picture with the haze
+    /// divided by the square root of its power, as the long-range games do for readability.
+    /// Only the scope's own picture: bots look through the map's haze as before.
+    /// </para>
     /// </remarks>
     public static class ScopeProfiles
     {
         public static readonly ScopeProfile SlDefender = new ScopeProfile(
-            new[] { 6f, 12f, 25f }, zeroMinMetres: 100, zeroMaxMetres: 1000, zeroStepMetres: 100,
+            new[] { 6f, 12f, 25f, 35f }, zeroMinMetres: 100, zeroMaxMetres: 1000, zeroStepMetres: 100,
             rangefinder: true, swayDegrees: 0.09f);
 
         public static readonly ScopeProfile ReconLrr = new ScopeProfile(
@@ -111,6 +120,14 @@ namespace Ironfront.Net.Unity
             float half = Mathf.Tan(normalVerticalFov * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1f, magnification);
             return 2f * Mathf.Atan(half) * Mathf.Rad2Deg;
         }
+
+        /// <summary>
+        /// The share of the map's haze density a scope at <paramref name="magnification"/> draws
+        /// its picture with: 1 for the naked eye, one over the square root of the power above it
+        /// (0.41 at 6x, 0.2 at 25x).
+        /// </summary>
+        public static float HazeScale(float magnification)
+            => magnification <= 1f ? 1f : 1f / Mathf.Sqrt(magnification);
 
         /// <summary>
         /// How much slower the mouse turns at <paramref name="magnification"/> than at the scope's
