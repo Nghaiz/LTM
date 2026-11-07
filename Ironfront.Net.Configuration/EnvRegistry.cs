@@ -299,9 +299,9 @@ namespace Ironfront.Net.Configuration
             "IRONFRONT_GAMESERVER_MASTER_TLS, and a SEPARATE variable because the two are not\n" +
             "the same link: a game server can reach the master over a private network in\n" +
             "plaintext while every client reaches that same master through a public name which\n" +
-            "terminates TLS. fly.io is exactly that shape -- its app config carries a tls\n" +
-            "handler on the MSP port, so a plaintext client fails the handshake before it can\n" +
-            "even show a login screen.\n" +
+            "terminates TLS. The live master (AWS EC2 since 2026-11-07, and fly.io before it)\n" +
+            "serves TLS on its public ports, so a plaintext client fails the handshake before it\n" +
+            "can even show a login screen.\n" +
             "\n" +
             "The plumbing this drives was already complete and merely unreachable:\n" +
             "MasterSession.ConnectAsync has taken a MasterClientTlsOptions since the\n" +
@@ -326,8 +326,8 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar ClientMasterTlsPinnedFingerprint = new EnvVar(
             "IRONFRONT_CLIENT_MASTER_TLS_PINNED_FINGERPRINT_SHA256", "Game client", "game client",
             "SHA-256 certificate fingerprint for a self-signed master certificate. Leave empty\n" +
-            "for a publicly trusted certificate -- fly.io's edge certificate is one, so the fly\n" +
-            "deployment wants this empty. Never use an accept-any-certificate switch.",
+            "for a publicly trusted certificate -- the live master's Let's Encrypt certificate is\n" +
+            "one, so the live deployment wants this empty. Never use an accept-any-certificate switch.",
             summary: "optional SHA-256 pin for a self-signed master certificate");
 
         /// <summary>The V5-D6 driver-prediction fallback, as one flag.</summary>
@@ -361,8 +361,9 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar LogFile = new EnvVar(
             "IRONFRONT_LOG_FILE", "Logging", "master server",
             "Also write every log line and JSON event to this file, rotated at 8 MB to <file>.1.\n" +
-            "Empty writes to stdout only. On fly, set it to a path on the /data volume: fly's log\n" +
-            "API keeps minutes, so without it an incident's lines are gone before anyone looks.",
+            "Empty writes to stdout only. In a deployment, set it to a path on the data volume (the\n" +
+            "EC2 master uses /data/master.log): a console log rotates away, so without it an\n" +
+            "incident's lines are gone before anyone looks.",
             summary: "copy of the log on disk; empty for stdout only");
 
         // ---- TLS -----------------------------------------------------------------------
@@ -474,13 +475,14 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar MasterProxyProtocol = new EnvVar(
             "IRONFRONT_MASTER_PROXY_PROTOCOL", "Limits", "master server",
             "1 when the master sits behind a proxy that sends a PROXY protocol header (v1 or v2)\n" +
-            "ahead of every connection, as fly's proxy_proto handler does. The per-IP connection\n" +
+            "ahead of every connection, as fly.io's proxy_proto handler did for the master until\n" +
+            "2026-11-07 (the EC2 master takes connections directly). The per-IP connection\n" +
             "cap and login rate above then count each client's own address. Without it they count\n" +
             "the proxy's, which is every player at once. A connection that does not open with a\n" +
             "valid header is closed, so leave this unset wherever clients connect directly. Cannot\n" +
             "be combined with IRONFRONT_TLS_CERT_PATH: the header arrives in the clear.",
             "",
-            summary: "1 behind fly's proxy_proto: per-IP limits see real clients");
+            summary: "1 behind a PROXY-protocol proxy: per-IP sees real clients");
 
         /// <summary>What the game servers can carry, in bot units. See <see cref="MatchCostUnits"/>.</summary>
         public static readonly EnvVar BotBudgetUnits = new EnvVar(
