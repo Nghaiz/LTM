@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Deploy a master image to the EC2 master (the replacement for infra/fly/deploy.sh and
-# tools/deploy-master-fly.ps1).
+# Deploy a master image to the EC2 master.
 #
 #   ./infra/terraform/aws/master/deploy.sh                                   # newest image tagged 'develop'
 #   TAG=main ./infra/terraform/aws/master/deploy.sh
@@ -33,3 +32,12 @@ force=""
 [ "${FORCE:-0}" = "1" ] && force="--force"
 log "deploying $image to $INSTANCE_ID ($REGION)"
 ssm_run "/opt/ironfront/bin/ironfront-deploy.sh '$image' $force"
+
+# .github/workflows/ghcr-retention.yml never prunes the digest named here. A deploy that cannot
+# record it leaves the new image protected only by its age, so say so loudly.
+if command -v gh >/dev/null 2>&1 && gh variable set LIVE_MASTER_IMAGE --repo "${GITHUB_REPO:-Nghaiz/LTM}" --body "$image"; then
+    log "recorded LIVE_MASTER_IMAGE=$image for ghcr-retention"
+else
+    echo "[deploy.sh] WARNING: could not set the LIVE_MASTER_IMAGE repository variable; run:" >&2
+    echo "  gh variable set LIVE_MASTER_IMAGE --repo Nghaiz/LTM --body '$image'" >&2
+fi

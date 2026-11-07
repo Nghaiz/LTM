@@ -1,7 +1,7 @@
 # cp terraform.tfvars.example terraform.tfvars   (gitignored; nothing here is secret anyway)
 
 # The image the master boots with the FIRST time. Later deploys: ./infra/terraform/aws/master/deploy.sh.
-# What fly runs:  fly machine list --app kien-master-2026 --json | jq -r '.[0].config.image'
+# What runs now: gh variable get LIVE_MASTER_IMAGE --repo Nghaiz/LTM
 master_image = "ghcr.io/nghaiz/ironfront-master@sha256:<64 hex>"
 
 # region         = "ap-southeast-2"   # the only region the org SCP allows

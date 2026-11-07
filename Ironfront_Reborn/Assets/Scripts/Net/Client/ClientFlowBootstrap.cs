@@ -59,12 +59,15 @@ namespace Ironfront.Net.Unity.Client
         /// <b>A released build carries no <c>.env</c> and no launcher</b>, so whatever is
         /// serialized here is the whole of what a player who double-clicks the exe gets. It used
         /// to be <c>127.0.0.1:27000</c> plaintext, which only reached a master on the player's
-        /// own machine, and local hosting no longer exists. Port 443 because the fly app's shared
-        /// IPv4 routes 80/443 only (see <c>infra/fly/master.toml</c>); TLS because fly
-        /// terminates it there. The host is not a secret: it is the address every player's
-        /// client has to reach. <c>docs/releasing.md</c> says what to do when it changes.
+        /// own machine, and local hosting no longer exists. The master runs on AWS EC2
+        /// (<c>infra/terraform/aws/master</c>) and serves TLS itself, with a Let's Encrypt
+        /// certificate for this name, on 443 and 27000 alike; 443 because it is the port a school
+        /// or cafe firewall is least likely to block. The host is an sslip.io name for the
+        /// instance's Elastic IP, so it changes if that IP is ever released. It is not a secret:
+        /// it is the address every player's client has to reach. <c>docs/releasing.md</c> says
+        /// what to do when it changes.
         /// </remarks>
-        public const string PublicMasterHost = "kien-master-2026.fly.dev";
+        public const string PublicMasterHost = "52-62-179-111.sslip.io";
 
         /// <inheritdoc cref="PublicMasterHost"/>
         public const int PublicMasterPort = 443;

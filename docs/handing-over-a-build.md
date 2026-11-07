@@ -121,7 +121,7 @@ starting point.
 
 ## 5. Play a match
 
-Nothing runs locally any more: the master is `kien-master-2026.fly.dev` and both game servers run
+Nothing runs locally any more: the master is `52-62-179-111.sslip.io` (AWS EC2, `infra/terraform/aws/master`) and the game servers run
 on the Azure VM (`tools/deploy-gameservers-azure.ps1`). Once everybody has the same build,
 `tools/play-lan.ps1 -PlayerId <id>` opens one client against them. Rooms on both maps
 (Dustbowl and Island) must be creatable from the room browser.

@@ -61,11 +61,11 @@ namespace Ironfront.Net.Configuration.Tests
         {
             GameClientConfig config = Apply(
                 ("IRONFRONT_CLIENT_MASTER_TLS", "1"),
-                ("IRONFRONT_CLIENT_MASTER_TLS_TARGET_HOST", "kien-master-2026.fly.dev"),
+                ("IRONFRONT_CLIENT_MASTER_TLS_TARGET_HOST", "52-62-179-111.sslip.io"),
                 ("IRONFRONT_CLIENT_MASTER_TLS_PINNED_FINGERPRINT_SHA256", "AA:BB:CC"));
 
             Assert.True(config.MasterTlsEnabled);
-            Assert.Equal("kien-master-2026.fly.dev", config.MasterTlsTargetHost);
+            Assert.Equal("52-62-179-111.sslip.io", config.MasterTlsTargetHost);
             Assert.Equal("AA:BB:CC", config.MasterTlsPinnedFingerprintSha256);
         }
 
@@ -98,10 +98,10 @@ namespace Ironfront.Net.Configuration.Tests
         public void TheClientsMasterHostIsNotTheGameServers()
         {
             GameClientConfig config = Apply(
-                ("IRONFRONT_CLIENT_MASTER_HOST", "kien-master-2026.fly.dev"),
+                ("IRONFRONT_CLIENT_MASTER_HOST", "52-62-179-111.sslip.io"),
                 ("IRONFRONT_MASTER_HOST", "192.168.94.130"));
 
-            Assert.Equal("kien-master-2026.fly.dev", config.MasterHost);
+            Assert.Equal("52-62-179-111.sslip.io", config.MasterHost);
         }
     }
 }

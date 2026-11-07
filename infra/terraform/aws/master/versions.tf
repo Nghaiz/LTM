@@ -1,6 +1,6 @@
 # Ironfront master on AWS EC2 — provider pins.
 #
-# Replaces the fly.io app kien-master-2026 (infra/fly/). Auth is whatever the AWS CLI is logged in
+# Replaced the fly.io app kien-master-2026 (destroyed 2026-11-07). Auth is whatever the AWS CLI is logged in
 # as (`aws login` / SSO / env vars); nothing here holds a credential.
 
 terraform {

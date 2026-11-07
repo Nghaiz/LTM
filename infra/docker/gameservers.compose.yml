@@ -1,6 +1,6 @@
 # infra/docker/gameservers.compose.yml -- the three Linux game servers (Dustbowl, Island, Forest Lake) as
 # containers on the Azure VM ironfront-game (20.205.152.66, Standard_B2as_v2, Singapore),
-# registered with the fly master. Deploy with tools/deploy-gameservers-azure.ps1, which ships the
+# registered with the EC2 master (infra/terraform/aws/master). Deploy with tools/deploy-gameservers-azure.ps1, which ships the
 # image, writes the VM's .env beside this file and runs compose there. Nothing runs locally.
 #
 # Build the image from the Unity Linux server artifact first:
@@ -23,11 +23,12 @@ x-gameserver: &gameserver
   # .CapJobWorkers caps a headless server at 2 on a bigger host and logs the count it kept.
   environment: &gameserver-env
     IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET (pass --env-file .env)}
-    IRONFRONT_MASTER_HOST: kien-master-2026.fly.dev
-    # 443 with TLS: fly's shared IPv4 routes only 80/443, selecting the app by SNI.
+    IRONFRONT_MASTER_HOST: 52-62-179-111.sslip.io
+    # 443 with TLS: the master serves the same TLS listener on 443 and 27000, with a Let's Encrypt
+    # certificate for this name, so CA validation needs no pin.
     IRONFRONT_MASTER_PORT: "443"
     IRONFRONT_GAMESERVER_MASTER_TLS: "1"
-    IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST: kien-master-2026.fly.dev
+    IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST: 52-62-179-111.sslip.io
     # What the master hands players as the address to dial: the VM's public address.
     IRONFRONT_GAMESERVER_PUBLIC_IP: ${IRONFRONT_GAMESERVER_PUBLIC_IP_ADVERTISED:-20.205.152.66}
     IRONFRONT_GAMESERVER_TRANSPORT: udp

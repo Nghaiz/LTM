@@ -1,33 +1,32 @@
 #!/usr/bin/env pwsh
 # tools/backup-live-stack.ps1 -- copies what the live stack holds onto this PC, so either host can be
-# stopped, lost or replaced: the fly master's database, data files, machine config and secrets, the
-# Azure VM's compose files, env, logs and inventory, and both server images.
+# stopped, lost or replaced: the EC2 master's database, data files, config and secret, the Azure
+# VM's compose files, env, logs and inventory, and both server images.
 #
 # WHAT GIT CANNOT GIVE BACK. Everything else is rebuilt from the repo at the deployed revision:
-#   - the accounts, careers, achievements and match history: the master's SQLite database on the fly
-#     volume is the only copy;
-#   - the fly secret IRONFRONT_SHARED_SECRET. `fly secrets` is write-only, so it is read inside the
-#     machine here and compared with the repo .env and the VM .env, because deploy-gameservers-azure.ps1
+#   - the accounts, careers, achievements and match history: the master's SQLite database. The EC2
+#     instance also copies it to S3 every day (infra/terraform/aws/master), this is the off-AWS copy;
+#   - IRONFRONT_SHARED_SECRET, held in SSM Parameter Store (/ironfront/shared-secret). It is read
+#     here and compared with the repo .env and the VM .env, because deploy-gameservers-azure.ps1
 #     takes the game servers' copy from the repo .env;
 #   - the game-server image. Deploys side-load it from this PC's Docker and the VM keeps only the one
 #     that runs, so no registry holds it, and rebuilding it takes Unity;
-#   - the logs: /data/master.log on the volume, and `docker logs` of each map's container, which a
-#     redeploy or `compose down` deletes.
+#   - the logs: /opt/ironfront/data/master.log on the instance, and `docker logs` of each map's
+#     container, which a redeploy or `compose down` deletes.
 #
-# HOW IT READS THE MASTER. No flyctl: the Machines API with the repo .env's FLY_API_TOKEN as the whole
-# Authorization value, never printed, and nothing read from the machine is printed either. Files come
-# back through `exec` as 1 MiB base64 chunks (1.5 MiB was measured to arrive whole), and each file is
-# checked against its sha256 in the machine. The database is copied with the master's own `--backup`
-# (SQLite's online backup API): copying ironfront.db while the master writes leaves out what is still
-# in ironfront.db-wal, and fails silently.
+# HOW IT READS THE MASTER. The aws CLI, logged in to the account that owns the instance: SSM Run
+# Command runs the instance's own /opt/ironfront/bin/ironfront-backup.sh (the master's `--backup`,
+# SQLite's online backup API -- copying ironfront.db while the master writes leaves out what is
+# still in ironfront.db-wal, and fails silently), which puts the copy in S3, and it is downloaded
+# from there. The data files take the same route under data-files/. Nothing secret is printed.
 #
 # IMAGES are `docker save`d without --platform. With --platform the tar keeps only the amd64 manifest,
 # so `docker load` gives back a different image id than the one that runs; without it the tar holds
 # the image's own index, which every blob name in the tar is checked against.
 #
 # WHERE IT WRITES. ../LTM-backups/live-stack-<yyyyMMdd-HHmm>/ beside the repo (the folder
-# deploy-master-fly.ps1 writes its config backups to), never inside it: secrets/ holds the shared
-# secret and the fly token, and only this Windows user may read it. Work happens in <dir>.partial,
+# earlier tooling used), never inside it: secrets/ holds the shared secret, and only this Windows
+# user may read it. Work happens in <dir>.partial,
 # renamed when every check has passed, so a folder without that suffix is a complete backup.
 #
 # Restoring: docs/live-stack-backup.md, copied into the backup as RESTORE.md.
@@ -36,13 +35,18 @@
 #   pwsh tools/backup-live-stack.ps1
 #   pwsh tools/backup-live-stack.ps1 -SkipImages                    # data and config only, ~10 MB
 #   pwsh tools/backup-live-stack.ps1 -SkipGameServers               # the master alone (the VM is off)
+#   (needs the aws CLI logged in: `aws login`, or AWS_PROFILE set)
 #   pwsh tools/backup-live-stack.ps1 -EnvFile D:\Coding\LTM\.env    # from a git worktree (no .env)
 
 [CmdletBinding()]
 param(
     [string] $OutDir = '',
     [string] $EnvFile = '',
-    [string] $App = 'kien-master-2026',
+    # The EC2 master (infra/terraform/aws/master: `terraform output`).
+    [string] $InstanceId = 'i-0d82a32b23a370c59',
+    [string] $Region = 'ap-southeast-2',
+    [string] $Bucket = 'ironfront-master-backups-b647cb91eaa1e49f82570f2dfe',
+    [string] $SecretParameter = '/ironfront/shared-secret',
     [string] $VmHost = '20.205.152.66',
     [string] $User = 'irondev',
     [string] $KeyPath = (Join-Path $HOME '.ssh/nghaiz_ed25519_ctf'),
@@ -71,55 +75,31 @@ function Read-EnvValue([string]$name) {
 
 function Get-FileSha256([string]$path) { (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant() }
 
-# Every call here is a read or is safe to repeat, so a call that got NO response (a dropped
-# connection, seen against this app on 2026-10-18) is retried. An HTTP error is not.
-function Invoke-FlyRequest([hashtable]$request, [string]$what) {
-    for ($attempt = 1; ; $attempt++) {
-        try { return Invoke-RestMethod @request }
-        catch {
-            $status = $_.Exception.Response.StatusCode.value__
-            if ($status -or $attempt -ge 3) { throw "$what failed with HTTP $(if ($status) { $status } else { 'none (no response)' })." }
-            Write-Warning "$what got no response (attempt $attempt of 3); retrying."
-            Start-Sleep -Seconds (2 * $attempt)
-        }
-    }
+# The aws CLI, with --output json parsed. A failure is reported by exit code and the CLI's own
+# message, which never contains a secret value (get-parameter output is not echoed on failure).
+function Invoke-Aws([string[]]$Argv) {
+    $out = & aws @Argv --region $Region --output json
+    if ($LASTEXITCODE -ne 0) { throw "aws $($Argv[0]) $($Argv[1]) failed ($LASTEXITCODE)." }
+    if ($out) { return (($out -join "`n") | ConvertFrom-Json) }
 }
 
-function Invoke-Fly([string]$Method, [string]$Path) {
-    $request = @{ Method = $Method; Uri = "https://api.machines.dev/v1/apps/$App$Path"
-                  Headers = @{ Authorization = $script:token }; SkipHeaderValidation = $true; TimeoutSec = 120 }
-    return Invoke-FlyRequest $request "Machines API $Method $Path"
-}
-
-# Runs argv in the master machine and returns its stdout. -Secret keeps the output out of any error.
-function Invoke-FlyExec([string[]]$Argv, [int]$TimeoutSec = 60, [switch]$Secret) {
-    $request = @{ Method = 'POST'; Uri = "https://api.machines.dev/v1/apps/$App/machines/$($script:machineId)/exec"
-                  Headers = @{ Authorization = $script:token }; SkipHeaderValidation = $true; TimeoutSec = $TimeoutSec + 60
-                  Body = (@{ command = $Argv; timeout = $TimeoutSec } | ConvertTo-Json -Depth 5); ContentType = 'application/json' }
-    $result = Invoke-FlyRequest $request "exec in the master ($($Argv -join ' '))"
-    if ($result.exit_code -ne 0) {
-        $detail = if ($Secret) { '' } else { ' -- ' + ("$($result.stdout) $($result.stderr)".Trim() -replace '\s+', ' ') }
-        throw "exec in the master exited $($result.exit_code): $($Argv -join ' ')$detail"
-    }
-    return [string]$result.stdout
-}
-
-function Receive-FlyFile([string]$remote, [string]$local) {
-    $lines = @((Invoke-FlyExec @('sh', '-c', "stat -c %s '$remote' && sha256sum '$remote'")) -split "`n")
-    $size = [long]$lines[0].Trim()
-    $want = ($lines[1].Trim() -split '\s+')[0]
-    $stream = [IO.File]::Create($local)
+# Runs a shell command as root on the instance through SSM Run Command and returns its stdout
+# (SSM keeps the first 24,000 characters: anything big goes through S3 instead).
+function Invoke-Master([string]$command, [int]$TimeoutSec = 600) {
+    $paramFile = Join-Path ([IO.Path]::GetTempPath()) "ltm-ssm-$PID.json"
+    @{ commands = @($command); executionTimeout = @("$TimeoutSec") } | ConvertTo-Json -Compress | Set-Content -Encoding ascii $paramFile
     try {
-        for ($i = 0L; $i * $chunkBytes -lt $size; $i++) {
-            $b64 = Invoke-FlyExec @('sh', '-c', "dd if='$remote' bs=$chunkBytes skip=$i count=1 2>/dev/null | base64 -w0")
-            $bytes = [Convert]::FromBase64String($b64.Trim())
-            $expected = [Math]::Min([long]$chunkBytes, $size - $i * $chunkBytes)
-            if ($bytes.Length -ne $expected) { throw "$remote chunk $i came back with $($bytes.Length) bytes, not $expected." }
-            $stream.Write($bytes, 0, $bytes.Length)
-        }
-    } finally { $stream.Dispose() }
-    $got = Get-FileSha256 $local
-    if ($got -ne $want) { throw "$remote arrived with sha256 $got; the machine's copy is $want." }
+        $sent = Invoke-Aws @('ssm', 'send-command', '--instance-ids', $InstanceId, '--document-name', 'AWS-RunShellScript',
+                             '--comment', 'ironfront: backup-live-stack.ps1', '--parameters', "file://$paramFile")
+    } finally { Remove-Item $paramFile -ErrorAction SilentlyContinue }
+    $id = $sent.Command.CommandId
+    do {
+        Start-Sleep -Seconds 3
+        $inv = & aws ssm get-command-invocation --region $Region --command-id $id --instance-id $InstanceId --output json 2>$null | ConvertFrom-Json
+        $status = if ($inv) { $inv.Status } else { 'Pending' }
+    } while ($status -in 'Pending', 'InProgress', 'Delayed')
+    if ($status -ne 'Success') { throw "on the master, '$command' ended $status`: $($inv.StandardErrorContent)" }
+    return [string]$inv.StandardOutputContent
 }
 
 function Expand-GzipFile([string]$source, [string]$destination) {
@@ -174,7 +154,6 @@ function Save-Image([string]$image, [string]$file) {
     if ($LASTEXITCODE -ne 0) { throw "docker save $image failed ($LASTEXITCODE)." }
 }
 
-$script:token = Read-EnvValue 'FLY_API_TOKEN'
 $localSecret = Read-EnvValue 'IRONFRONT_SHARED_SECRET'
 
 # Asked before anything is written, so a VM that is off leaves no half backup behind.
@@ -193,40 +172,31 @@ $secretsDir = Join-Path $work 'secrets'
 & icacls $secretsDir /inheritance:r /grant:r "${env:USERDOMAIN}\${env:USERNAME}:(OI)(CI)F" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "icacls could not restrict $secretsDir ($LASTEXITCODE)." }
 
-# ---- the master (fly) ----
-$machines = @(Invoke-Fly GET '/machines')
-if ($machines.Count -ne 1) { throw "expected one machine in $App, found $($machines.Count)." }
-$machine = $machines[0]
-$script:machineId = $machine.id
-if ($machine.state -ne 'started') { throw "machine $($machine.id) is $($machine.state): start it first, exec needs it running." }
-$revision = [string]$machine.image_ref.labels.'org.opencontainers.image.revision'
-ConvertTo-Json -InputObject $machine -Depth 40 | Set-Content -Encoding utf8 (Join-Path $work 'master/machine.json')
-$volumes = @(Invoke-Fly GET '/volumes')
-ConvertTo-Json -InputObject $volumes -Depth 20 | Set-Content -Encoding utf8 (Join-Path $work 'master/volumes.json')
-foreach ($v in $volumes) {
-    try {
-        $snapshots = @(Invoke-Fly GET "/volumes/$($v.id)/snapshots")
-        ConvertTo-Json -InputObject $snapshots -Depth 10 | Set-Content -Encoding utf8 (Join-Path $work "master/snapshots-$($v.id).json")
-        $facts["fly snapshots of $($v.name)"] = "$($snapshots.Count) kept by fly (retention $($v.snapshot_retention) days); they die with the volume"
-    } catch { Write-Warning "could not list the snapshots of $($v.id): $($_.Exception.Message)" }
-}
-$facts['master machine'] = "$($machine.id) $($machine.state) in $($machine.region), $($machine.config.guest.cpu_kind) $($machine.config.guest.cpus) cpu / $($machine.config.guest.memory_mb) MB"
-$facts['master image'] = "$($machine.config.image) (revision $revision)"
+# ---- the master (AWS EC2) ----
+$instance = (Invoke-Aws @('ec2', 'describe-instances', '--instance-ids', $InstanceId)).Reservations[0].Instances[0]
+if ($instance.State.Name -ne 'running') { throw "instance $InstanceId is $($instance.State.Name): start it first." }
+ConvertTo-Json -InputObject $instance -Depth 20 | Set-Content -Encoding utf8 (Join-Path $work 'master/instance.json')
+$facts['master instance'] = "$InstanceId $($instance.State.Name) in $($instance.Placement.AvailabilityZone), $($instance.InstanceType), address $($instance.PublicIpAddress)"
 
-$csv = @((Invoke-FlyExec @('sh', '-c', 'head -1 /data/durability.csv; tail -1 /data/durability.csv')) -split "`n" | Where-Object { $_.Trim() })
+$masterRef = (Invoke-Master 'cut -d= -f2- /opt/ironfront/master.env').Trim()
+$revision = (Invoke-Master 'docker inspect -f ''{{index .Config.Labels "org.opencontainers.image.revision"}}'' ironfront-master').Trim()
+Invoke-Master 'cat /opt/ironfront/compose.yaml /opt/ironfront/master.env /opt/ironfront/aws.env' |
+    Set-Content -Encoding utf8 (Join-Path $work 'master/config.txt')
+$facts['master image'] = "$masterRef (revision $revision)"
+
+$csv = @((Invoke-Master 'head -1 /opt/ironfront/data/durability.csv; tail -1 /opt/ironfront/data/durability.csv') -split "`n" | Where-Object { $_.Trim() })
 $columns = $csv[0].Split(','); $values = $csv[-1].Split(',')
 $live = @{}; for ($i = 0; $i -lt $columns.Count; $i++) { $live[$columns[$i]] = $values[$i] }
 $facts['master at backup'] = "$($live.tsUtc): $($live.accountsTotal) accounts, $($live.onlineNow) online, $($live.roomsActive) room(s), $($live.gsRegistered) game server(s) registered"
 
-Write-Host '[backup] master database (the master''s --backup, in the machine) ...'
-# IRONFRONT_LOG_FILE emptied for this one process: it inherits the machine's env, so it would open
-# /data/master.log beside the live master, and .NET's FileMode.Append on Linux is not O_APPEND. Each
-# process writes at its own offset, so one overwrote the other's line on both runs of 2026-10-18.
-Invoke-FlyExec -TimeoutSec 120 @('sh', '-c',
-    'rm -f /tmp/ltm-backup.db /tmp/ltm-backup.db.gz; cd /app && IRONFRONT_LOG_FILE= dotnet Ironfront.MasterServer.dll --backup /tmp/ltm-backup.db > /tmp/ltm-backup.log 2>&1 || { cat /tmp/ltm-backup.log; exit 1; }; gzip /tmp/ltm-backup.db') | Out-Null
+Write-Host '[backup] master database (the master''s --backup on the instance, through S3) ...'
+$backupOut = Invoke-Master '/opt/ironfront/bin/ironfront-backup.sh manual'
+$s3Uri = ([regex]::Match($backupOut, 's3://\S+\.db\.gz')).Value
+if (-not $s3Uri) { throw "ironfront-backup.sh did not report where it wrote: $backupOut" }
 $dbGz = Join-Path $work 'master/ironfront.db.gz'
-Receive-FlyFile '/tmp/ltm-backup.db.gz' $dbGz
-Invoke-FlyExec @('rm', '-f', '/tmp/ltm-backup.db.gz', '/tmp/ltm-backup.log') | Out-Null
+& aws s3 cp --only-show-errors --region $Region $s3Uri $dbGz
+if ($LASTEXITCODE -ne 0) { throw "aws s3 cp $s3Uri failed ($LASTEXITCODE)." }
+$facts['database in S3'] = $s3Uri
 $db = Join-Path $work 'master/ironfront.db'
 Expand-GzipFile $dbGz $db
 Remove-Item $dbGz
@@ -249,22 +219,19 @@ if ($accounts -ne [int]$live.accountsTotal) {
     Write-Warning "the backup holds $accounts accounts, the master reported $($live.accountsTotal) a minute before (a sign-up in between?)."
 }
 
-Write-Host '[backup] master /data files (logs, durability.csv, older copies) ...'
-$listing = Invoke-FlyExec -TimeoutSec 120 @('sh', '-c',
-    'cd /data && rm -f /tmp/ltm-data.tgz && tar czf /tmp/ltm-data.tgz $(ls -A | grep -vx -e lost+found -e ironfront.db -e ironfront.db-wal -e ironfront.db-shm); rc=$?; [ $rc -le 1 ] && tar tzf /tmp/ltm-data.tgz')
-Receive-FlyFile '/tmp/ltm-data.tgz' (Join-Path $work 'master/data-files.tar.gz')
-Invoke-FlyExec @('rm', '-f', '/tmp/ltm-data.tgz') | Out-Null
+Write-Host '[backup] master data files (logs, durability.csv, replaced databases) ...'
+$dataKey = "data-files/data-files-$(Get-Date -Format 'yyyyMMdd-HHmmss').tar.gz"
+$listing = Invoke-Master ('cd /opt/ironfront/data && tar czf /tmp/ltm-data.tgz --exclude=ironfront.db --exclude=ironfront.db-wal --exclude=ironfront.db-shm --exclude=".backup-*" . ' +
+    "&& /snap/bin/aws s3 cp --only-show-errors --region $Region /tmp/ltm-data.tgz s3://$Bucket/$dataKey && tar tzf /tmp/ltm-data.tgz; rm -f /tmp/ltm-data.tgz")
+& aws s3 cp --only-show-errors --region $Region "s3://$Bucket/$dataKey" (Join-Path $work 'master/data-files.tar.gz')
+if ($LASTEXITCODE -ne 0) { throw "aws s3 cp s3://$Bucket/$dataKey failed ($LASTEXITCODE)." }
 $facts['master data files'] = (@($listing -split "`n" | Where-Object { $_ -and $_ -notmatch '/$' }) -join ', ')
 
-Write-Host '[backup] master secrets ...'
-$configEnv = @($machine.config.env.PSObject.Properties.Name)
-$processEnv = @((Invoke-FlyExec @('sh', '-c', 'env | cut -d= -f1')) -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$secretNames = @($processEnv | Where-Object { $_ -like 'IRONFRONT_*' -and $configEnv -notcontains $_ } | Sort-Object -Unique)
-if ($secretNames -notcontains 'IRONFRONT_SHARED_SECRET') { throw 'the master runs without IRONFRONT_SHARED_SECRET among its secrets.' }
-$flySecrets = [ordered]@{}
-foreach ($name in $secretNames) { $flySecrets[$name] = (Invoke-FlyExec -Secret @('printenv', $name)).TrimEnd("`n") }
-[IO.File]::WriteAllText((Join-Path $secretsDir 'fly-secrets.env'),
-    (($flySecrets.Keys | ForEach-Object { "$_=$($flySecrets[$_])" }) -join "`n") + "`n")
+Write-Host '[backup] master secret ...'
+$masterSecret = [string](& aws ssm get-parameter --region $Region --name $SecretParameter --with-decryption --query Parameter.Value --output text)
+if ($LASTEXITCODE -ne 0 -or -not $masterSecret.Trim()) { throw "could not read $SecretParameter from SSM ($LASTEXITCODE)." }
+$masterSecret = $masterSecret.Trim()
+[IO.File]::WriteAllText((Join-Path $secretsDir 'master-secrets.env'), "IRONFRONT_SHARED_SECRET=$masterSecret`n")
 Copy-Item -LiteralPath $EnvFile (Join-Path $secretsDir 'repo.env')
 
 # ---- the game servers (Azure VM) ----
@@ -312,11 +279,10 @@ if ($SkipGameServers) {
     $facts['game-server containers'] = (@(Invoke-Vm "sudo docker ps -a --filter name=^ironfront-gs- --format '{{.Names}} {{.Image}} ({{.Status}})'") -join '; ')
 }
 
-$masterSecret = $flySecrets['IRONFRONT_SHARED_SECRET']
 $vmMatch = if ($null -eq $vmSecret) { 'not read (-SkipGameServers)' } else { $masterSecret -ceq $vmSecret }
 $facts['shared secret'] = "the master's = repo .env: $($masterSecret -ceq $localSecret); = VM .env: $vmMatch"
 if ($masterSecret -cne $localSecret) {
-    Write-Warning 'the repo .env holds a different IRONFRONT_SHARED_SECRET from the master: deploys from it would not register. secrets/fly-secrets.env has the master''s.'
+    Write-Warning 'the repo .env holds a different IRONFRONT_SHARED_SECRET from the master: deploys from it would not register. secrets/master-secrets.env has the master''s.'
 }
 
 # ---- images ----
@@ -344,7 +310,6 @@ if ($SkipImages) {
         $facts["image $image"] = "$vmId, from $from, $blobs blobs verified"
     }
 
-    $masterRef = [string]$machine.config.image
     $masterTag = 'ironfront-master:' + $revision.Substring(0, [Math]::Min(8, $revision.Length))
     & docker image inspect $masterRef *> $null
     $pulled = $LASTEXITCODE -ne 0
@@ -360,7 +325,7 @@ if ($SkipImages) {
         if ($pulled) { & docker rmi $masterRef | Out-Null }
     }
     $blobs = Assert-SavedImage $file $masterId $masterTag
-    $facts["image $masterTag"] = "$masterId (= the digest fly runs), $blobs blobs verified"
+    $facts["image $masterTag"] = "$masterId (= the digest the master runs), $blobs blobs verified"
 }
 
 # ---- restore guide, manifest, done ----
@@ -368,8 +333,8 @@ Copy-Item (Join-Path $repo 'docs/live-stack-backup.md') (Join-Path $work 'RESTOR
 $head = (& git -C $repo rev-parse --short HEAD 2>$null)
 $manifest = @('Ironfront live-stack backup', "taken $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz') by tools/backup-live-stack.ps1 at $head", '')
 foreach ($k in $facts.Keys) { $manifest += ('{0,-26} {1}' -f $k, $facts[$k]) }
-$manifest += @('', 'secrets/ (this Windows user only): fly-secrets.env = the master''s fly secrets, repo.env = the repo .env',
-               '  (FLY_API_TOKEN, IRONFRONT_SHARED_SECRET), vm-ironfront.env = the VM''s compose env.', '', 'files (sha256  bytes  path):')
+$manifest += @('', 'secrets/ (this Windows user only): master-secrets.env = the master''s secret from SSM, repo.env = the repo .env',
+               '  (IRONFRONT_SHARED_SECRET), vm-ironfront.env = the VM''s compose env.', '', 'files (sha256  bytes  path):')
 Get-ChildItem -LiteralPath $work -Recurse -File | Sort-Object FullName | ForEach-Object {
     $manifest += ('{0}  {1,10}  {2}' -f (Get-FileSha256 $_.FullName), $_.Length, $_.FullName.Substring($work.Length + 1).Replace('\', '/'))
 }

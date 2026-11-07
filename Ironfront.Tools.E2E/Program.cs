@@ -1134,7 +1134,7 @@ namespace Ironfront.Tools.E2E
         5 never reached Starting · 6 never reached InMatch · 64 usage
 
   Run it against the live master, e.g.:
-    --master-host kien-master-2026.fly.dev --master-port 443 --master-tls --map-id 2
+    --master-host 52-62-179-111.sslip.io --master-port 443 --master-tls --map-id 2
   and once more with --negative, which must be refused.");
         }
     }

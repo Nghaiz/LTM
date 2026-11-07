@@ -3,7 +3,7 @@
 #
 # Replaces the live database with a backup: stops the master, moves the current database (and its
 # -wal/-shm) aside to data/replaced-<time>/, puts the backup in place, starts the master.
-# Used by infra/terraform/aws/master/migrate-from-fly.sh for the fly -> EC2 copy; works for any backups/ key.
+# Works for any backups/ key (it carried the fly database over at the 2026-11-07 cutover).
 
 set -euo pipefail
 

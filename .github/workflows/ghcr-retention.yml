@@ -5,8 +5,9 @@ name: ghcr-retention
 # images.yml adds a master image on every push to develop and main and nothing removed
 # them: 693 versions had piled up by 2026-09-29. This keeps every name-tagged image
 # (branch, semver, release), timestamp-only images from the last 30 days plus the 10
-# newest, and the image the Fly master machine runs. FLY_API_TOKEN is required: without
-# it the live master image would be protected only by its age, so the job refuses.
+# newest, and the image the live master runs: the repository variable LIVE_MASTER_IMAGE,
+# which infra/terraform/aws/master/deploy.sh sets after every deploy. It is required:
+# without it the live master image would be protected only by its age, so the job refuses.
 #
 # Manual dispatch defaults to a dry run; the schedule applies.
 
@@ -38,9 +39,9 @@ jobs:
       - name: Prune
         env:
           GH_TOKEN: ${{ github.token }}
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          LIVE_MASTER_IMAGE: ${{ vars.LIVE_MASTER_IMAGE }}
           APPLY: ${{ github.event_name == 'schedule' || inputs.apply }}
         run: |
-          args="--require-fly"
+          args="--require-live"
           if [ "$APPLY" = "true" ]; then args="$args --apply"; fi
           python3 tools/prune_ghcr.py $args

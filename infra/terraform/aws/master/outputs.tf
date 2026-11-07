@@ -1,5 +1,5 @@
 output "instance_id" {
-  description = "EC2 instance id: target of deploy.sh / migrate-from-fly.sh and of `aws ssm start-session`."
+  description = "EC2 instance id: target of deploy.sh and of `aws ssm start-session`."
   value       = aws_instance.master.id
 }
 

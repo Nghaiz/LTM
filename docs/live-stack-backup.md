@@ -4,7 +4,7 @@ The live stack is two hosts, and only a few things on them are not in git:
 
 | Host | What runs | State git cannot give back |
 |---|---|---|
-| fly.io app `kien-master-2026` (region `sin`, one machine) | the master, TLS at fly's edge on 443/27000 | the SQLite database on the 1 GB volume `ironfront_data` (`/data/ironfront.db`: accounts, careers, achievements, match history), `/data/master.log`, `/data/durability.csv`, and the fly secret `IRONFRONT_SHARED_SECRET` |
+| AWS EC2 `i-0d82a32b23a370c59` (`ap-southeast-2`, m7i-flex.large, Elastic IP `52.62.179.111`, [`infra/terraform/aws/master`](../infra/terraform/aws/master/README.md)) | the master in Docker, TLS (Let's Encrypt) on `52-62-179-111.sslip.io:443` and `:27000` | the SQLite database (`/opt/ironfront/data/ironfront.db`: accounts, careers, achievements, match history; copied daily to S3), `master.log`, `durability.csv` beside it, and `IRONFRONT_SHARED_SECRET` in SSM Parameter Store `/ironfront/shared-secret` |
 | Azure VM `ironfront-game` (resource group `ironfront-gameservers`, Southeast Asia, Standard_B2as_v2, Ubuntu 24.04, `20.205.152.66`) | three game servers in Docker, one per map, UDP 27015-27017, from `~/ironfront/gameservers.compose.yml` | the game-server image (side-loaded from this PC, in no registry), `~/ironfront/.env`, and each container's `docker logs` |
 
 The game servers keep nothing between matches: careers and achievements are written to the master.
@@ -18,7 +18,7 @@ pwsh tools/backup-live-stack.ps1 -SkipGameServers    # the master alone, while t
 pwsh tools/backup-live-stack.ps1 -EnvFile D:\Coding\LTM\.env    # when run from a git worktree
 ```
 
-It needs the master machine started and, unless `-SkipGameServers`, the VM reachable over ssh
+It needs the aws CLI logged in to the master's account, the instance running and, unless `-SkipGameServers`, the VM reachable over ssh
 (checked before anything is written). It writes
 `../LTM-backups/live-stack-<yyyyMMdd-HHmm>/` beside the repo:
 
@@ -27,10 +27,10 @@ MANIFEST.txt            what was running, the database's row counts, sha256 of e
 RESTORE.md              this page
 master/
   ironfront.db          consistent copy made by the master's own --backup, integrity-checked
-  data-files.tar.gz     everything else on /data: master.log(.1), durability.csv, older copies
-  machine.json          the machine as fly reports it: image digest, env, services, mounts, size
-  volumes.json, snapshots-<volume>.json
-  ironfront-master_<rev>.tar        docker save of the image the machine runs, tagged
+  data-files.tar.gz     everything else in /opt/ironfront/data: master.log(.1), durability.csv, replaced databases
+  instance.json         the instance as EC2 reports it: type, AZ, addresses
+  config.txt            compose.yaml, master.env (the image digest) and aws.env from the instance
+  ironfront-master_<rev>.tar        docker save of the image the master runs, tagged
 gameservers/
   vm-ironfront/         the VM's compose file and sample.sh
   logs/                 docker logs -t of every ironfront-gs-* container, gzipped
@@ -38,13 +38,12 @@ gameservers/
   azure-imds.json       the VM's Azure metadata (size, region, disk, resource group)
   ironfront-game-server_<rev>.tar   docker save of the running image, tagged
 secrets/                readable by this Windows user only
-  fly-secrets.env       the master's fly secrets, read inside the machine (fly cannot export them)
-  repo.env              the repo .env: FLY_API_TOKEN, IRONFRONT_SHARED_SECRET, ...
+  master-secrets.env    the master's IRONFRONT_SHARED_SECRET, from SSM Parameter Store
+  repo.env              the repo .env: IRONFRONT_SHARED_SECRET, ...
   vm-ironfront.env      the VM's compose env (the same shared secret, image, ports, address)
 ```
 
-The script refuses to call a backup good unless every file read from the master matches its
-sha256 in the machine, the database passes `PRAGMA integrity_check`, and every blob in each image
+The script refuses to call a backup good unless the database passes `PRAGMA integrity_check`, and every blob in each image
 tar hashes to its own name with the running image's id among them. A folder still named
 `*.partial` is an interrupted run: delete it and run again.
 
@@ -65,7 +64,7 @@ seconds. A Standard SKU public IP is static, so the address does not change. Che
 
 ```powershell
 pwsh tools/deploy-gameservers-azure.ps1 -Status
-dotnet run --project Ironfront.Tools.E2E -- --master-host kien-master-2026.fly.dev --master-port 443 --master-tls --map-id 1
+dotnet run --project Ironfront.Tools.E2E -- --master-host 52-62-179-111.sslip.io --master-port 443 --master-tls --map-id 1
 # and --map-id 2, --map-id 3
 ```
 
@@ -100,29 +99,28 @@ protocol meanwhile, the old servers are refused and need a current image anyway.
 Only one host may serve the master at a time: with two, the master holds two servers per map
 and a room can land on either.
 
-### C. The master's database back onto its volume
+### C. The master's database
 
-Only when `/data/ironfront.db` is lost or damaged. Two sources:
+Only when `/opt/ironfront/data/ironfront.db` is lost or damaged. Two sources:
 
-- **Fly's own volume snapshots**: daily, kept 5 days (`snapshots-<volume>.json` lists them). A
-  snapshot becomes a new volume with `fly volumes create ironfront_data --snapshot-id <id> --region sin --app kien-master-2026`
-  ([docs](https://fly.io/docs/flyctl/volumes-create/)); the machine is then pointed at that volume.
-  Snapshots are deleted with the volume, so they do not cover losing the app.
-- **This backup's `master/ironfront.db`**, which survives anything:
-  1. Upload it beside the live file as `/data/ironfront.db.restore` and give it to the image's user
-     (`chown app:app`): `flyctl ssh sftp shell` + `put`, or base64 chunks through the Machines API
-     `exec` the way this script reads files.
-  2. Restart the machine ONCE with an entrypoint that swaps the files before the master opens
-     them (Machines API: GET the machine, set `config.init.entrypoint`, POST it, as
-     `deploy-master-fly.ps1` does for `config.image`):
-     ```sh
-     sh -c 'cd /data && if [ -f ironfront.db.restore ]; then t=$(date +%Y%m%d%H%M%S); mv ironfront.db ironfront.db.replaced-$t; [ ! -f ironfront.db-wal ] || mv ironfront.db-wal ironfront.db.replaced-$t-wal; rm -f ironfront.db-shm; mv ironfront.db.restore ironfront.db; fi; cd /app && exec dotnet Ironfront.MasterServer.dll'
-     ```
-     The old database keeps its `-wal` under the new name, so it stays a readable pair.
-  3. Sign in with a known account, then POST the machine's original config back (no override).
+- **The daily S3 copies** in `s3://ironfront-master-backups-b647cb91eaa1e49f82570f2dfe/backups/`
+  (19:30 UTC, kept 30 days, versioned). From a shell on the instance
+  (`aws ssm start-session --region ap-southeast-2 --target i-0d82a32b23a370c59`):
+  ```sh
+  aws s3 ls s3://ironfront-master-backups-b647cb91eaa1e49f82570f2dfe/backups/
+  sudo /opt/ironfront/bin/ironfront-restore.sh backups/<file>.db.gz
+  ```
+  It checks the file's integrity, stops the master, moves the live database (and its `-wal`/`-shm`)
+  to `data/replaced-<time>/`, puts the backup in place and starts the master. This is how the fly
+  database was carried over on 2026-11-07, so the procedure has been run for real.
+- **This backup's `master/ironfront.db`**, which survives losing the AWS account: gzip it, upload it
+  to the bucket under `backups/` (`aws s3 cp ironfront.db.gz s3://<bucket>/backups/ironfront-<time>-manual.db.gz`),
+  then run `ironfront-restore.sh` on that key as above.
 
-  Restore after the rooms have closed: a master restart drops every player to the login screen.
-  **This procedure has not been drilled yet**; drill it on a throwaway fly app before relying on it.
+A **rebuilt instance** (`terraform apply -replace=aws_instance.master`, or a new account) restores
+the newest S3 copy by itself on its first boot.
+
+Restore after the rooms have closed: a master restart drops every player to the login screen.
 
 Rotating `IRONFRONT_SHARED_SECRET` does not touch the database: passwords are bcrypt hashes that
 never involve it. The secret only signs join tickets and authenticates game servers.
@@ -130,31 +128,25 @@ never involve it. The secret only signs join tickets and authenticates game serv
 ### D. The master at a new address
 
 The master's address is compiled into every released client (`ClientFlowBootstrap` in
-`Menu.unity`: `kien-master-2026.fly.dev:443`, TLS; pinned by `ReleasedClientMasterEndpointTests`)
+`Menu.unity`: `52-62-179-111.sslip.io:443`, TLS; pinned by `ReleasedClientMasterEndpointTests`)
 and set in the game servers' compose (`IRONFRONT_MASTER_HOST`,
 `IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST`). A new address therefore means a new client release,
 a compose change and a game-server redeploy, and every player has to download the new release.
 
-- **Only the fly account changes:** keep the app and its address. `fly apps move kien-master-2026 --org <org>`
-  moves it, with its machine, volume data, secrets and certificates, to another organization; the
-  user running it must belong to both, and the app is down for a few minutes
-  ([docs](https://fly.io/docs/apps/move-app-org/)).
-- **A new fly app:** rename `app` in `infra/fly/master.toml`, `FIRST_RUN=1 ./infra/fly/deploy.sh`
-  with the digest from `machine.json` (GHCR keeps it while fly runs it; otherwise
-  `docker load -i master/ironfront-master_<rev>.tar` and push it to a registry fly can pull),
-  `fly secrets set IRONFRONT_SHARED_SECRET=<from secrets/fly-secrets.env>`, restore the database
-  (C), then release a client with the new host.
+The host is an sslip.io name made from the Elastic IP, so **releasing the Elastic IP changes the
+address**. Do not `terraform destroy` the module or release the IP. A rebuilt instance keeps the
+address, because the Elastic IP is a separate resource. To move to a domain of your own, point its
+A record at the IP, then set `master_domain` and rebuild the instance.
 
-`grep -rn "kien-master-2026.fly.dev"` lists the places to change: the scene and
-`ClientFlowBootstrap`, the compose file, `tools/play-lan.ps1`, the E2E walker, the macOS and Linux
-smoke workflows and two tests.
+`grep -rn "52-62-179-111.sslip.io"` lists the places to change: the scene and `ClientFlowBootstrap`, the compose file,
+`tools/play-lan.ps1`, the E2E walker, the macOS and Linux smoke workflows and two tests.
 
 ### E. Rotating credentials
 
 | Credential | Rotate | Then |
 |---|---|---|
-| `FLY_API_TOKEN` | new token in the fly dashboard or `flyctl tokens create deploy` | update the repo `.env` and the `FLY_API_TOKEN` repository secret (`ghcr-retention.yml` reads it to keep the digest fly runs) |
-| `IRONFRONT_SHARED_SECRET` (32+ characters) | `fly secrets set` on the master (restarts it) | the same value in the repo `.env`, then `deploy-gameservers-azure.ps1`; the old secret's servers are refused until then |
+| AWS access | the account owner (an organization account: the SCP allows `ap-southeast-2` only) | `aws login`; `deploy.sh` and this script need SSM and S3 rights |
+| `IRONFRONT_SHARED_SECRET` (32+ characters) | `aws ssm put-parameter --overwrite --name /ironfront/shared-secret ...`, then `sudo systemctl restart ironfront-master` on the instance | the same value in the repo `.env`, then `deploy-gameservers-azure.ps1`; the old secret's servers are refused until then |
 | SSH access to the VM | Azure portal, the VM, *Reset password*, reset the SSH public key of the user | pass `-KeyPath` / `-User` to the scripts |
 
 ## Game servers on another machine, such as a home PC

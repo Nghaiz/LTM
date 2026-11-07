@@ -1,4 +1,4 @@
-# Shared by infra/terraform/aws/master/deploy.sh and infra/terraform/aws/master/migrate-from-fly.sh. Source it; do not run it.
+# Shared helpers for infra/terraform/aws/master/deploy.sh. Source it; do not run it.
 #
 # Reads the instance id, region and bucket from `terraform output` in infra/terraform/aws/master/, and runs commands
 # on the instance through SSM Run Command — no SSH key, no open port 22.

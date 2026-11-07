@@ -185,6 +185,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
       noncurrent_days = 7
     }
   }
+
+  rule {
+    id     = "expire-data-files"
+    status = "Enabled"
+    filter {
+      prefix = "data-files/"
+    }
+    expiration {
+      days = var.backup_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -226,9 +240,10 @@ data "aws_iam_policy_document" "master" {
   }
 
   statement {
-    sid       = "ReadWriteBackups"
-    actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = ["${aws_s3_bucket.backups.arn}/backups/*"]
+    sid     = "ReadWriteBackups"
+    actions = ["s3:GetObject", "s3:PutObject"]
+    # backups/: the daily database copies. data-files/: logs and CSV, for tools/backup-live-stack.ps1.
+    resources = ["${aws_s3_bucket.backups.arn}/backups/*", "${aws_s3_bucket.backups.arn}/data-files/*"]
   }
 }
 

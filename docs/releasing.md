@@ -18,7 +18,7 @@ have to be true without any help from the environment:
 
 | Needs | Where it comes from |
 |---|---|
-| The master's address | `ClientFlowBootstrap` in `Menu.unity`: `kien-master-2026.fly.dev:443`, TLS on. The constants are `ClientFlowBootstrap.PublicMasterHost` / `PublicMasterPort`, and `ReleasedClientMasterEndpointTests` fails CI if the scene, the field initializers or `play-lan.ps1` disagree with them |
+| The master's address | `ClientFlowBootstrap` in `Menu.unity`: `52-62-179-111.sslip.io:443`, TLS on. The constants are `ClientFlowBootstrap.PublicMasterHost` / `PublicMasterPort`, and `ReleasedClientMasterEndpointTests` fails CI if the scene, the field initializers or `play-lan.ps1` disagree with them |
 | The game server's address | The master sends it with the room join, alongside a signed ticket. Moving or resizing the Azure game servers never needs a new client release |
 | The client role | `ClientFlowBootstrap` declares the process a client on the shipped route into a match, before the map loads. `IRONFRONT_ROLE` is only needed for launches that skip the menu |
 
@@ -90,7 +90,7 @@ parent directory of `build/windows` is picked up by `DotEnv.LoadFromAncestors`, 
 2. Start two copies from a shell with every `IRONFRONT_*` variable removed, or from Explorer.
 3. Each log must say, near the top:
    ```
-   [flow] master = kien-master-2026.fly.dev:443 (TLS, cert name 'kien-master-2026.fly.dev', no pin).
+   [flow] master = 52-62-179-111.sslip.io:443 (TLS, cert name '52-62-179-111.sslip.io', no pin).
    [net] build <sha> built <time> (client, shared assembly)
    ```
 4. Sign both in, put them in one room, ready both, deploy both. Two players are the minimum for

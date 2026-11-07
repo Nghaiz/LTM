@@ -1,6 +1,7 @@
 # AWS EC2 — master server
 
-Replaces the fly.io app `kien-master-2026` ([`infra/fly/`](../../../fly/)). One EC2 instance
+Replaced the fly.io app `kien-master-2026` on 2026-11-07. That app has been destroyed, and its
+database was carried over at the cutover. One EC2 instance
 runs the master in Docker and **starts it on its own**: no SSH and no manual steps on the box.
 
 | | |
@@ -21,8 +22,7 @@ runs the master in Docker and **starts it on its own**: no SSH and no manual ste
 |---|---|
 | `*.tf` | VPC, security group, Elastic IP, IAM role (SSM core + read the secret + the backup bucket), S3 bucket, instance |
 | `files/` | Written onto the instance by cloud-init: `compose.yaml`, the systemd units, `/opt/ironfront/bin/*.sh` |
-| `deploy.sh` | Deploys a new master image over SSM. Replaces `infra/fly/deploy.sh` and `tools/deploy-master-fly.ps1` |
-| `migrate-from-fly.sh` | Copies the database from fly onto EC2 (`STOP_FLY=1` for the real cutover) |
+| `deploy.sh` | Deploys a new master image over SSM and records it in the `LIVE_MASTER_IMAGE` repository variable, so `ghcr-retention.yml` never prunes it |
 | `lib.sh` | Shared helpers: `terraform output` plus SSM Run Command |
 
 ## How the instance boots
@@ -87,7 +87,7 @@ To rotate the secret: `aws ssm put-parameter --overwrite ...`, then
   backup, so run `ironfront-backup.sh` first.
 - **Renewing the certificate restarts the master at 20:00 UTC (03:00 +07), not immediately.**
   The old certificate is still valid for about 30 days when certbot renews, so waiting is safe.
-- **No PROXY protocol here** (fly needed it). Clients connect directly, so the per-IP limits see
+- **No PROXY protocol** (the old fly deployment needed it). Clients connect directly, so the per-IP limits see
   real addresses.
 - **State is local** (`terraform.tfstate`, gitignored). It holds no secret, but it is the only
   record of what was created. Hand it over along with the repo, or move it to an S3 backend.

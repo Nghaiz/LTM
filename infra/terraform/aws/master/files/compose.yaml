@@ -7,7 +7,8 @@
 # the PFX password are in /opt/ironfront/.env (root, 0600), written by ironfront-bootstrap.sh from
 # SSM Parameter Store on every start.
 #
-# The env below is infra/fly/master.toml's [env] with the two fly-only differences:
+# The env below is the old fly deployment's [env] (master.toml, removed 2026-11-07) with two
+# differences:
 #   - TLS is served by the master itself (Let's Encrypt PFX) — there is no edge to terminate it;
 #   - no PROXY protocol — clients connect directly, so the per-IP limits see real addresses.
 
