@@ -10,8 +10,8 @@ namespace Ironfront.Net.Replication.Tests
     /// </summary>
     public class VehicleSeatPromisesTests
     {
-        private static IdleVehicle Vehicle(int key, int flag, int seats)
-            => new IdleVehicle { Key = key, Flag = flag, FreeSeats = seats };
+        private static IdleVehicle Vehicle(int key, int flag, int seats, int rank = 0)
+            => new IdleVehicle { Key = key, Flag = flag, FreeSeats = seats, Rank = rank };
 
         [Fact]
         public void NoEmptyVehicle_SendsNobody()
@@ -59,6 +59,39 @@ namespace Ironfront.Net.Replication.Tests
 
             var fresh = new VehicleSeatPromises();
             Assert.Equal(1, fresh.Choose(new[] { Vehicle(9, 0, 4), Vehicle(3, 1, 4) }, 0f));
+        }
+
+        [Fact]
+        public void AHelicopterOrATankIsCrewedBeforeAJeepWithMoreSeats()
+        {
+            // 2026-11-08: the jeep's four seats always beat the tank's two, so the HQ tanks stood
+            // empty all match. The kind comes before the seats now.
+            int tank = VehicleRules.PreferenceRank(VehicleKind.Armour);
+            int jeep = VehicleRules.PreferenceRank(VehicleKind.Transport);
+            int helicopter = VehicleRules.PreferenceRank(VehicleKind.Aircraft);
+
+            var promises = new VehicleSeatPromises();
+            IdleVehicle[] hq = { Vehicle(1, 0, 4, jeep), Vehicle(2, 0, 2, tank), Vehicle(3, 0, 3, helicopter) };
+
+            Assert.Equal(2, promises.Choose(hq, 0f));   // the helicopter first
+            Assert.Equal(2, promises.Choose(hq, 0f));
+            Assert.Equal(2, promises.Choose(hq, 0f));
+            Assert.Equal(1, promises.Choose(hq, 0f));   // then the tank
+            Assert.Equal(1, promises.Choose(hq, 0f));
+            Assert.Equal(0, promises.Choose(hq, 0f));   // the jeep last
+        }
+
+        [Fact]
+        public void AVehicleBeingFilledStillComesBeforeABetterKind()
+        {
+            // The bots sent for one vehicle arrive together: a tank parked after the first bot was
+            // sent for a jeep waits until the jeep's seats are promised.
+            var promises = new VehicleSeatPromises();
+            IdleVehicle[] jeepOnly = { Vehicle(1, 0, 4, 2) };
+            Assert.Equal(0, promises.Choose(jeepOnly, 0f));
+
+            IdleVehicle[] both = { Vehicle(1, 0, 4, 2), Vehicle(2, 0, 2, 1) };
+            Assert.Equal(0, promises.Choose(both, 0f));
         }
 
         [Fact]

@@ -302,6 +302,11 @@ public class AiActorController : ActorController
 	/// </summary>
 	private float antiStuckSteer;
 
+	/// <summary>Times this bot's boat has backed off a beach lately, and when it last did.</summary>
+	private int boatBackOffs;
+
+	private float boatBackOffAt = -1000f;
+
 	private bool waitForPlayer;
 
 	private int recentAntiStuckEvents;
@@ -995,9 +1000,41 @@ public class AiActorController : ActorController
 					{
 						if (vehicleType == typeof(Boat))
 						{
-							actor.seat.vehicle.stuck = true;
-							squad.ExitVehicle();
-							squad.MoveTo(lastGotoPoint);
+							// A boat aground short of where it was going backs off first (2026-11-08):
+							// it used to put its squad ashore wherever it stopped, so a boat that ran onto
+							// an island or a sandbar on the way left its squad to swim the rest. Since
+							// #677 a beached hull has full power astern, so backing off works.
+							Vehicle boat = actor.seat.vehicle;
+							if (Time.time - boatBackOffAt > DrivingRules.RecoveryMemorySeconds)
+							{
+								boatBackOffs = 0;
+							}
+							if (DrivingRules.BoatBacksOff(Vector3.Distance(boat.transform.position, lastGotoPoint), boatBackOffs))
+							{
+								boatBackOffs++;
+								boatBackOffAt = Time.time;
+								nextFeelAt = 0f;
+								SenseObstacles(boat);
+								antiStuckSteer = DrivingRules.NoseTurn(feelerLeft, feelerRight, boatBackOffs);
+								forceAntiStuckReverse = true;
+								yield return new WaitForSeconds(DrivingRules.ReverseSeconds(boatBackOffs));
+								forceAntiStuckReverse = false;
+								yield return new WaitForSeconds(1f);
+								if (!actor.IsSeated() || actor.seat.vehicle == null)
+								{
+									continue;
+								}
+								RecalculatePath();
+								lastSampleTime = Time.time;
+								lastSampledVehiclePosition = actor.seat.vehicle.transform.position;
+							}
+							else
+							{
+								boatBackOffs = 0;
+								boat.stuck = true;
+								squad.ExitVehicle();
+								squad.MoveTo(lastGotoPoint);
+							}
 						}
 						else if (vehicleType == typeof(Car) || vehicleType == typeof(Tank))
 						{
@@ -1249,50 +1286,23 @@ public class AiActorController : ActorController
 					{
 						squad.FollowCommand();
 					}
+					else if (hasPath && !squad.HasVehicle() && !actor.IsPassenger() && (squad.state == Squad.State.Moving || squad.state == Squad.State.MovingThenDigIn) && Time.time >= nextPassingVehicleCheck)
+					{
+						// A squad on its way takes a vehicle it walks past (2026-11-08). The search
+						// below ran only for a squad with no path, and a squad a spawn wave formed got
+						// its order and its path at once: it walked past the jeep, the tank and the
+						// helicopter parked at its own flag, and they stood there until a bot respawned
+						// for them (bot soak, Dustbowl: three vehicles a minute or more empty at a flag
+						// in every sample).
+						nextPassingVehicleCheck = Time.time + PassingVehicleCheckSeconds;
+						TryBoardVehicle(VehiclesWithin(VehicleRules.PassingReach));
+					}
 					else if (!hasPath && !hasFlightTarget && squad.state != Squad.State.EnterVehicle)
 					{
 						bool enteringVehicle = false;
 						if (!squad.HasVehicle())
 						{
-							List<Vehicle> nearbyVehicles = NearbyNonFullVehicles();
-							foreach (Vehicle vehicle in nearbyVehicles)
-							{
-								// Taken with a purpose (phase P28, part 3): not by a squad holding a flag or
-								// sneaking, not for a short walk, not at the cost of a long detour.
-								if (!squad.ShouldBoard(vehicle))
-								{
-									continue;
-								}
-								int emptySeats = vehicle.EmptySeats();
-								if (vehicle.claimedByPlayer)
-								{
-									if (actor.team != FpsActorController.playerTeam)
-									{
-										break;
-									}
-									emptySeats++;
-								}
-								if (emptySeats >= squad.members.Count)
-								{
-									squad.EnterVehicle(vehicle);
-									enteringVehicle = true;
-									break;
-								}
-								// A tank is crewed by part of the squad instead of standing empty (phase P28):
-								// the original wanted a seat for every member, so a squad of four never took a
-								// tank with fewer. The rest carry on with the squad's order on foot. Since P32 a
-								// helicopter is crewed the same way, and a car by two or more: a squad of five
-								// beside a four-seat jeep used to walk past it.
-								if (!vehicle.claimedByPlayer && CrewSplitFits(Squad.KindOf(vehicle), emptySeats))
-								{
-									Squad crew = squad.SplitCrew(emptySeats);
-									if (crew != null)
-									{
-										crew.EnterVehicle(vehicle);
-										break;
-									}
-								}
-							}
+							enteringVehicle = TryBoardVehicle(NearbyNonFullVehicles());
 						}
 						if (!enteringVehicle && !actor.IsPassenger())
 						{
@@ -2567,6 +2577,12 @@ public class AiActorController : ActorController
 		{
 			return NetVehicleAxisRelay.CarAxesFor(this);
 		}
+		if (forceAntiStuckReverse)
+		{
+			// Backing off a beach (AiVehicle): full astern, the nose swung toward the open side.
+			// The hull turns by torque either way, so the steer is NoseTurn's, as a tank's is.
+			return new Vector2(antiStuckSteer, -1f);
+		}
 		if (!hasPath)
 		{
 			return Vector2.zero;
@@ -3608,6 +3624,89 @@ public class AiActorController : ActorController
 	/// anyway: any seat in a tank or a helicopter, two or more in a car. A boat is never boarded
 	/// from here (<see cref="Vehicle.AiShouldEnter"/> refuses anything in water).
 	/// </summary>
+	/// <summary>How often a squad on its way looks at the vehicles beside it, in seconds.</summary>
+	private const float PassingVehicleCheckSeconds = 2f;
+
+	private float nextPassingVehicleCheck;
+
+	private static readonly List<Vehicle> passingVehicles = new List<Vehicle>(8);
+
+	/// <summary>
+	/// Boards the first of <paramref name="vehicles"/> (best first) the squad should take: the whole
+	/// squad when it fits, else a crew split off for it. True when the whole squad is boarding.
+	/// </summary>
+	private bool TryBoardVehicle(List<Vehicle> vehicles)
+	{
+		foreach (Vehicle vehicle in vehicles)
+		{
+			// Taken with a purpose (phase P28, part 3): not by a squad sneaking, not for a short
+			// walk, not at the cost of a long detour.
+			if (!squad.ShouldBoard(vehicle))
+			{
+				continue;
+			}
+			int emptySeats = vehicle.EmptySeats();
+			if (vehicle.claimedByPlayer)
+			{
+				if (actor.team != FpsActorController.playerTeam)
+				{
+					break;
+				}
+				emptySeats++;
+			}
+			if (emptySeats >= squad.members.Count)
+			{
+				squad.EnterVehicle(vehicle);
+				return true;
+			}
+			// A tank is crewed by part of the squad instead of standing empty (phase P28): the
+			// original wanted a seat for every member, so a squad of four never took a tank with
+			// fewer. The rest carry on with the squad's order on foot. Since P32 a helicopter is
+			// crewed the same way, and a car by two or more: a squad of five beside a four-seat
+			// jeep used to walk past it.
+			if (!vehicle.claimedByPlayer && CrewSplitFits(Squad.KindOf(vehicle), emptySeats))
+			{
+				Squad crew = squad.SplitCrew(emptySeats);
+				if (crew != null)
+				{
+					crew.EnterVehicle(vehicle);
+					break;
+				}
+			}
+		}
+		return false;
+	}
+
+	/// <summary>
+	/// The vehicles a bot of this side may board within <paramref name="radius"/> of the squad,
+	/// best first (<see cref="VehicleRules.ComparePreference"/>), in a list reused between calls.
+	/// </summary>
+	private List<Vehicle> VehiclesWithin(float radius)
+	{
+		passingVehicles.Clear();
+		Vector3 at = actor.CenterPosition();
+		float reach = radius * radius;
+		foreach (Vehicle vehicle in ActorManager.instance.vehicles)
+		{
+			if (vehicle == null || (vehicle.transform.position - at).sqrMagnitude > reach)
+			{
+				continue;
+			}
+			if (!vehicle.AiShouldEnter() || (vehicle.ownerTeam >= 0 && vehicle.ownerTeam != actor.team))
+			{
+				continue;
+			}
+			passingVehicles.Add(vehicle);
+		}
+		if (passingVehicles.Count > 1)
+		{
+			passingVehicles.Sort((Vehicle x, Vehicle y) => VehicleRules.ComparePreference(
+				Squad.KindOf(x), x.maxHealth, Vector3.Distance(x.transform.position, at),
+				Squad.KindOf(y), y.maxHealth, Vector3.Distance(y.transform.position, at)));
+		}
+		return passingVehicles;
+	}
+
 	private static bool CrewSplitFits(VehicleKind kind, int emptySeats)
 	{
 		switch (kind)
