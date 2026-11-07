@@ -18,8 +18,9 @@ namespace Ironfront.Net.Unity.Client.Overlay
     /// </summary>
     /// <remarks>
     /// Code-built inside <see cref="RankingPage"/>, which it replaces while open. The model is
-    /// <see cref="AchievementCompare"/>; the hidden rule was kept by the master before any of it
-    /// arrived, so a hidden row this player lacks says CLASSIFIED on the other side.
+    /// <see cref="AchievementCompare"/>. A hidden row this player lacks keeps its silhouette and
+    /// teaser, and the other side says whether they hold it, its date marked CLASSIFIED in the
+    /// hidden achievements' violet.
     /// </remarks>
     public sealed class AchievementCompareView
     {
@@ -33,6 +34,9 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         private static readonly Color MineInk = UiStyle.Cyan;
         private static readonly Color TheirInk = UiStyle.Amber;
+
+        /// <summary>The violet of a hidden card's fog (<see cref="AchievementCardFx"/>), as rich text.</summary>
+        private const string ClassifiedInk = "#9D6BFF";
 
         private sealed class RowView
         {
@@ -402,9 +406,11 @@ namespace Ironfront.Net.Unity.Client.Overlay
         private static void BindSide(in ComparePair pair, bool mine, Text text, Image track, Image fill, bool held)
         {
             string said = AchievementCompare.SideText(pair, mine);
+            if (said.EndsWith(AchievementCompare.ClassifiedSuffix, StringComparison.Ordinal))
+                said = said.Substring(0, said.Length - AchievementCompare.ClassifiedSuffix.Length)
+                       + "<color=" + ClassifiedInk + ">" + AchievementCompare.ClassifiedSuffix + "</color>";
             text.text = held ? "✓  " + said : said;
             text.color = held ? (mine ? MineInk : TheirInk)
-                : !mine && pair.Classified ? UiStyle.Faint
                 : said == "NOT YET" ? UiStyle.Faint
                 : UiStyle.Ink;
             float done = AchievementCompare.SideFraction(pair, mine);

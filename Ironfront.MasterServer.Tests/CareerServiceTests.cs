@@ -676,7 +676,7 @@ namespace Ironfront.MasterServer.Tests
         // ------------------------------------------------------------------ comparing players (section 6.2)
 
         [Fact]
-        public void AProfileKeepsAHiddenAchievementAndItsProgressFromAViewerWhoLacksIt()
+        public void AProfileShowsAHiddenAchievementButKeepsItsProgressFromAViewerWhoLacksIt()
         {
             (CareerService career, SqliteDatabase db, int[] ids) = Players(3);
             int target = ids[0], stranger = ids[1], holder = ids[2];
@@ -689,12 +689,14 @@ namespace Ironfront.MasterServer.Tests
             ProfileView seenByStranger = career.Profile(stranger, target)!;
             ProfileView seenByHolder = career.Profile(holder, target)!;
 
-            Assert.DoesNotContain(seenByStranger.Unlocked, u => u.Id == "buckshot_sniper");
+            // Owner ruling 2026-11-08: who holds a hidden achievement shows, locked; how it is
+            // earned does not. The unlock is sent, the stat behind it is not.
+            Assert.Contains(seenByStranger.Unlocked, u => u.Id == "buckshot_sniper" && u.At == 7);
             Assert.False(seenByStranger.Career.ContainsKey("longestShotgunKillMetres"));
             Assert.Equal(12, seenByStranger.Career["kills"]);
             Assert.Equal(1, seenByStranger.Totals.Hidden);
             Assert.Contains(seenByStranger.Unlocked, u => u.Id == "roll_call");
-            Assert.Equal(seenByStranger.Unlocked.Count + 1, seenByStranger.Totals.Count);
+            Assert.Equal(seenByStranger.Unlocked.Count, seenByStranger.Totals.Count);
 
             Assert.Contains(seenByHolder.Unlocked, u => u.Id == "buckshot_sniper" && u.At == 7);
             Assert.Equal(40, seenByHolder.Career["longestShotgunKillMetres"]);

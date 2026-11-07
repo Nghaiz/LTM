@@ -168,7 +168,7 @@ namespace Ironfront.MasterServer.Tests
         }
 
         [Fact]
-        public async Task AnotherPlayersProfileArrivesWithTheHiddenRuleKept()
+        public async Task AnotherPlayersProfileArrivesWithItsHiddenUnlocksButNotTheirProgress()
         {
             using var cts = new CancellationTokenSource(Timeout);
             await using var server = new Phase03ServerHarness();
@@ -191,7 +191,8 @@ namespace Ironfront.MasterServer.Tests
             Assert.Equal("rival", profile.Player!.Name);
             Assert.Equal(1, profile.Player.Rank);
             Assert.Equal(2, profile.Player.Achievements);
-            Assert.Equal(new[] { "roll_call" }, profile.Unlocked.Select(u => u.Id));
+            Assert.Equal(new[] { "buckshot_sniper", "roll_call" }, profile.Unlocked.Select(u => u.Id).OrderBy(id => id, StringComparer.Ordinal));
+            Assert.Equal(6, profile.Unlocked.Single(u => u.Id == "buckshot_sniper").At);
             Assert.Equal(1, profile.Hidden);
             Assert.Equal(5, profile.Tiers.Length);
             Assert.Equal(12, profile.Career["kills"]);

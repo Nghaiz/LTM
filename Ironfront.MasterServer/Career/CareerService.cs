@@ -384,7 +384,7 @@ namespace Ironfront.MasterServer.Career
                 Rank = board.You?.Rank ?? 0,
                 Row = board.You?.Row ?? new CareerRow { PlayerId = playerId, Name = account.DisplayName },
                 Totals = AchievementTotals.Of(theirs.Select(u => u.Id)),
-                Unlocked = CareerPrivacy.VisibleUnlocks(theirs, mine),
+                Unlocked = CareerPrivacy.KnownUnlocks(theirs),
                 Career = CareerPrivacy.VisibleCareer(Lifetime(playerId), mine),
             };
         }

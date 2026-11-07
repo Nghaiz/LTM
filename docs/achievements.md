@@ -411,7 +411,7 @@ Steam chỉ cho so với bạn bè; ở đây so được với **mọi người
    best 64          [badge] CENTURION · Get 100 kills without dying.               best 41
  ✔ 09 Oct 2026      [badge] NINE LIVES · Survive a fall with 5 health or less.     ✔ 30 Sep 2026   (cả hai đã có)
  ✔ 07 Oct 2026      [badge] VICTORY LAP · Honk the horn within 3 seconds ...       chưa có         (chỉ mình có)
- chưa có            [bóng đen] TOUCHDOWN · Not every landing happens on a pad.    CLASSIFIED      (mình chưa có)
+ chưa có            [bóng đen] TOUCHDOWN · Not every landing happens on a pad.    ✔ 05 Oct 2026 · CLASSIFIED   (mình chưa có, họ có)
 ```
 
   - Cột giữa là thành tựu; trái là mình, phải là họ; thanh tiến độ hai bên mọc đối xứng ra từ giữa.
@@ -420,9 +420,14 @@ Steam chỉ cho so với bạn bè; ở đây so được với **mọi người
 - **Luật thành tựu ẩn (master kiểm soát, client không tự lọc):**
   - **Cả hai đã mở** → hiện đầy đủ.
   - **Chỉ mình đã mở** → mình thấy đầy đủ, cột của họ hiện "chưa có".
-  - **Mình chưa mở** (dù họ có hay không) → dòng hiện tên, bóng đen, câu gợi ý; **cột của họ chỉ hiện
-    CLASSIFIED, không cho biết họ đã có hay chưa**. Đầu trang chỉ ghi tổng số ẩn mỗi người đã có.
-  - Master **không bao giờ gửi** ngày mở hay tiến độ của một thành tựu ẩn mà người xem chưa có.
+  - **Mình chưa mở, họ đã có** → dòng hiện tên, bóng đen, câu gợi ý (khoá, vẫn giấu nội dung); **cột
+    của họ hiện ✔, ngày mở và chữ CLASSIFIED** màu tím của thành tựu ẩn. Dòng tính vào bộ lọc "Only
+    them" như mọi dòng khác. Thẻ người chơi không đưa nó vào 3 thành tựu hiếm nhất (thẻ đó vẽ huy
+    hiệu thật).
+  - **Cả hai chưa mở** → dòng như trên, cột của họ hiện "chưa có".
+  - Master **gửi** mọi thành tựu người kia đã mở, kể cả thành tựu ẩn người xem chưa có, nhưng **không
+    bao giờ gửi** số career chỉ thành tựu ẩn đó đọc (nó chính là tiến độ, sẽ lộ luật). Chủ dự án chốt
+    ngày 2026-11-08: trước đó cột của họ chỉ hiện CLASSIFIED, không cho biết họ đã có hay chưa.
 
 ### 6.3 Icon
 

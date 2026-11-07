@@ -9,8 +9,9 @@ namespace Ironfront.Client.Flow.Tests
 {
     /// <summary>
     /// The global ranking's comparison (achievements v2, section 6.2): the pairing, the "who holds
-    /// it" filter, the cells each side shows, and that nothing about a hidden achievement the viewer
-    /// lacks can be read off the screen.
+    /// it" filter, the cells each side shows, and that of a hidden achievement the viewer lacks only
+    /// whether the other player holds it can be read off the screen, never how it is earned (owner
+    /// ruling 2026-11-08: it must show, locked, its content still hidden).
     /// </summary>
     public sealed class AchievementCompareTests
     {
@@ -62,21 +63,34 @@ namespace Ironfront.Client.Flow.Tests
         }
 
         [Fact]
-        public void AHiddenAchievementTheViewerLacksIsClassifiedAndNeverOnlyTheirs()
+        public void AHiddenAchievementTheViewerLacksShowsTheyHoldItAndStaysClassified()
         {
-            Achievement hidden = AchievementCatalog.All.First(a => a.Hidden);
-            // Even if a master ever sent it, the viewer's side decides: still classified.
+            Achievement hidden = AchievementCatalog.All.First(a => a.Hidden && a.Progress != AchievementProgress.None);
             List<ComparePair> pairs = AchievementCompare.Build(Mine(), new HashSet<string>(), null, Theirs(hidden.Id));
             ComparePair pair = Pair(pairs, hidden.Id);
 
             Assert.True(pair.Classified);
-            Assert.False(pair.TheyHold);
-            Assert.Equal("CLASSIFIED", AchievementCompare.SideText(pair, mine: false));
+            Assert.True(pair.TheyHold);
+            Assert.EndsWith(AchievementCompare.ClassifiedSuffix, AchievementCompare.SideText(pair, mine: false));
             Assert.Equal("NOT YET", AchievementCompare.SideText(pair, mine: true));
             Assert.Equal(-1f, AchievementCompare.SideFraction(pair, mine: false));
-            Assert.False(AchievementCompare.Passes(pair, null, CompareOwnership.OnlyThem, null));
-            Assert.True(AchievementCompare.Passes(pair, null, CompareOwnership.Neither, null));
+            Assert.Equal(-1f, AchievementCompare.SideFraction(pair, mine: true));
+            Assert.Equal(hidden.Teaser, AchievementBoard.DescriptionText(pair.Mine));
+            Assert.True(AchievementCompare.Passes(pair, null, CompareOwnership.OnlyThem, null));
+            Assert.False(AchievementCompare.Passes(pair, null, CompareOwnership.Neither, null));
             Assert.DoesNotContain(AchievementCompare.Rarest(pairs, 80), e => e.Achievement.Id == hidden.Id);
+        }
+
+        [Fact]
+        public void AHiddenAchievementNeitherHoldsReadsNotYetForThem()
+        {
+            Achievement hidden = AchievementCatalog.All.First(a => a.Hidden);
+            ComparePair pair = Pair(AchievementCompare.Build(Mine(), new HashSet<string>(), null, Theirs()), hidden.Id);
+
+            Assert.True(pair.Classified);
+            Assert.False(pair.TheyHold);
+            Assert.Equal("NOT YET", AchievementCompare.SideText(pair, mine: false));
+            Assert.True(AchievementCompare.Passes(pair, null, CompareOwnership.Neither, null));
         }
 
         [Fact]
