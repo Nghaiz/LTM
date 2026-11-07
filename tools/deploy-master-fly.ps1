@@ -57,7 +57,12 @@ function Invoke-Fly([string]$Method, [string]$Path, $Body = $null) {
         return Invoke-RestMethod @request
     } catch {
         $status = $_.Exception.Response.StatusCode.value__
-        throw "Machines API $Method $Path failed with HTTP $status."
+        # The response BODY is fly's JSON error ({"error": "..."}), which names the reason (a 403 for
+        # a read-only token reads differently from one for a suspended org). It never carries the
+        # request headers, so the token stays out of it; the exception MESSAGE is what can echo them.
+        $detail = "$($_.ErrorDetails.Message)".Trim()
+        if ($detail.Length -gt 300) { $detail = $detail.Substring(0, 300) }
+        throw "Machines API $Method $Path failed with HTTP $status.$(if ($detail) { " fly: $detail" })"
     }
 }
 
