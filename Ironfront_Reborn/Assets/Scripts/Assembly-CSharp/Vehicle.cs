@@ -112,6 +112,26 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		return seat != null ? (int)seat.animation : 0;
 	}
 
+	/// <summary>What seat <paramref name="seatIndex"/> is for, for the client's seat walk and the HUD.</summary>
+	public Ironfront.Net.Unity.NetSeatRole GetSeatRole(int seatIndex)
+	{
+		if (seats == null || seatIndex < 0 || seatIndex >= seats.Length || seats[seatIndex] == null)
+		{
+			return Ironfront.Net.Unity.NetSeatRole.None;
+		}
+		switch (seats[seatIndex].type)
+		{
+		case Seat.Type.Driver:
+			return Ironfront.Net.Unity.NetSeatRole.Driver;
+		case Seat.Type.Pilot:
+			return Ironfront.Net.Unity.NetSeatRole.Pilot;
+		case Seat.Type.Gunner:
+			return Ironfront.Net.Unity.NetSeatRole.Gunner;
+		default:
+			return Ironfront.Net.Unity.NetSeatRole.Passenger;
+		}
+	}
+
 	public float maxHealth = 1000f;
 
 	public float crashDamageSpeedThrehshold = 2f;

@@ -125,14 +125,16 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void LockedOutAndAlreadySeatedAreDistinguishableOnTheWire()
         {
-            (SeatArbiter arbiter, _) = Fixture(seatCount: 2);
+            (SeatArbiter arbiter, VehicleRegistry registry) = Fixture(seatCount: 2);
+            AddVehicle(registry, OtherJeep, seatCount: 2);
 
             arbiter.Decide(Enter(conn: 10, actor: 1), nowTick: 100);
 
-            // Seated, asking for a different seat on the same vehicle.
+            // Seated, asking for a seat on a DIFFERENT vehicle.
             Assert.Equal(
                 SeatChangeResult.RejectedAlreadySeated,
-                arbiter.Decide(Enter(conn: 10, actor: 1, seat: 1), nowTick: 100).Result);
+                arbiter.Decide(
+                    new SeatRequest(10, 1, OtherJeep, 0, SeatAction.Enter), nowTick: 100).Result);
 
             arbiter.Decide(Leave(conn: 10, actor: 1), nowTick: 100);
 
@@ -143,27 +145,83 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
-        /// Network seat switching is leave-then-enter, two requests (V4-D8). There is no atomic
-        /// switch on the wire, and asking for one is refused rather than silently honoured.
+        /// Another seat of the vehicle the actor is already in is a SWITCH: one decision that
+        /// frees the old seat and books the new one, with no lockout. The original game's F1-F8
+        /// (<c>Actor.SwitchSeat</c>), which the network path refused until 2026-11-08 -- and with
+        /// it the RHIB's bow gun, seat 4 of 5, which no player could otherwise reach.
         /// </summary>
         [Fact]
-        public void SwitchingSeatsIsRefusedAndMustBeExpressedAsLeaveThenEnter()
+        public void AnotherSeatOfTheSameVehicleIsASwitchThatMovesTheBooking()
+        {
+            (SeatArbiter arbiter, VehicleRegistry registry) = Fixture(seatCount: 5);
+
+            arbiter.Decide(Enter(conn: 10, actor: 1, seat: 0), nowTick: 100);
+            SeatDecision moved = arbiter.Decide(Enter(conn: 10, actor: 1, seat: 4), nowTick: 100);
+
+            Assert.Equal(SeatChangeResult.Entered, moved.Result);
+            Assert.True(moved.IsSwitch);
+            Assert.True(moved.Broadcast);
+            Assert.Equal((byte)0, moved.PreviousSeatIndex);
+            Assert.Equal((byte)4, moved.SeatIndex);
+            Assert.Equal(0, registry.OccupantOf(Jeep, 0));
+            Assert.Equal((ushort)1, registry.OccupantOf(Jeep, 4));
+
+            // The freed seat is open to the next player in the same tick.
+            Assert.Equal(
+                SeatChangeResult.Entered,
+                arbiter.Decide(Enter(conn: 11, actor: 2, seat: 0), nowTick: 100).Result);
+        }
+
+        /// <summary>A switch into a taken seat is refused and leaves the switcher where it sat.</summary>
+        [Fact]
+        public void ASwitchIntoATakenSeatIsRefusedAndMovesNobody()
+        {
+            (SeatArbiter arbiter, VehicleRegistry registry) = Fixture(seatCount: 3);
+
+            arbiter.Decide(Enter(conn: 10, actor: 1, seat: 0), nowTick: 100);
+            arbiter.Decide(Enter(conn: 11, actor: 2, seat: 2), nowTick: 100);
+
+            SeatDecision refused = arbiter.Decide(Enter(conn: 10, actor: 1, seat: 2), nowTick: 100);
+
+            Assert.Equal(SeatChangeResult.RejectedOccupied, refused.Result);
+            Assert.False(refused.IsSwitch);
+            Assert.Equal((ushort)1, registry.OccupantOf(Jeep, 0));
+            Assert.Equal((ushort)2, registry.OccupantOf(Jeep, 2));
+        }
+
+        /// <summary>A switch the scene refuses is rolled back to the seat it came from.</summary>
+        [Fact]
+        public void RollingBackASwitchPutsTheActorBackInItsOldSeat()
+        {
+            (SeatArbiter arbiter, VehicleRegistry registry) = Fixture(seatCount: 3);
+
+            arbiter.Decide(Enter(conn: 10, actor: 1, seat: 0), nowTick: 100);
+            SeatDecision moved = arbiter.Decide(Enter(conn: 10, actor: 1, seat: 2), nowTick: 100);
+            Assert.True(moved.IsSwitch);
+            Assert.Equal((ushort)1, registry.OccupantOf(Jeep, 2));
+
+            arbiter.Rollback(in moved);
+
+            Assert.Equal((ushort)1, registry.OccupantOf(Jeep, 0));
+            Assert.Equal(0, registry.OccupantOf(Jeep, 2));
+        }
+
+        /// <summary>
+        /// A switch starts no lockout: the actor never stood on the ground, so a second switch,
+        /// and a leave, are answered at once.
+        /// </summary>
+        [Fact]
+        public void ASwitchStartsNoLockout()
         {
             (SeatArbiter arbiter, _) = Fixture(seatCount: 3);
 
             arbiter.Decide(Enter(conn: 10, actor: 1, seat: 0), nowTick: 100);
-
-            Assert.Equal(
-                SeatChangeResult.RejectedAlreadySeated,
-                arbiter.Decide(Enter(conn: 10, actor: 1, seat: 2), nowTick: 100).Result);
-
-            arbiter.Decide(Leave(conn: 10, actor: 1), nowTick: 100);
+            arbiter.Decide(Enter(conn: 10, actor: 1, seat: 2), nowTick: 100);
 
             Assert.Equal(
                 SeatChangeResult.Entered,
-                arbiter.Decide(
-                    Enter(conn: 10, actor: 1, seat: 2),
-                    nowTick: 100 + SeatArbiter.ReentryLockoutTicks).Result);
+                arbiter.Decide(Enter(conn: 10, actor: 1, seat: 1), nowTick: 100).Result);
+            Assert.Equal(0u, arbiter.LockedUntilTick(1));
         }
 
         /// <summary>A request naming a dead vehicle is refused, and says so specifically.</summary>
@@ -369,6 +427,14 @@ namespace Ironfront.Net.Replication.Tests
 
             return (new SeatArbiter(registry), registry);
         }
+
+        private const ushort OtherJeep = 2;
+
+        private static void AddVehicle(VehicleRegistry registry, ushort id, byte seatCount)
+            => registry.Add(
+                VehicleState.Spawned(
+                    id, 0, VehicleKind.Car, seatCount, maxHealth: 100f, ownerTeam: 0),
+                new VehicleCaptureTests.FakePose());
 
         private static SeatRequest Enter(ushort conn, ushort actor, byte seat = DriverSeat)
             => new SeatRequest(conn, actor, Jeep, seat, SeatAction.Enter);

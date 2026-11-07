@@ -137,7 +137,13 @@ namespace Ironfront.Net.Unity.Server
             if (decision.Result != SeatChangeResult.Entered)
                 return vehicle.TryLeaveSeat(actor.gameObject);
 
-            if (!vehicle.TryEnterSeat(actor.gameObject, decision.SeatIndex)) return false;
+            // A switch moves a body that is already welded into this hull; EnterSeat would refuse
+            // it as seated. The capsule stays out of the physics world throughout, but SetSeated
+            // below is repeated anyway because the move goes through LeaveSeat for one statement.
+            bool placed = decision.IsSwitch
+                ? vehicle.TrySwitchSeat(actor.gameObject, decision.SeatIndex)
+                : vehicle.TryEnterSeat(actor.gameObject, decision.SeatIndex);
+            if (!placed) return false;
 
             // The capsule leaves the physics world in the SAME step that welds the body into the
             // hull. ServerPlayer.Tick does it too, but only on an owed netcode tick (30 Hz against

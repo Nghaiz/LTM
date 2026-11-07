@@ -459,6 +459,19 @@ namespace Ironfront.Net.Unity.Bindings
             Seat[] seats = hull.seats;
             if (seats == null || seatIndex >= seats.Length) return;
 
+            // A switch: the server moved this body between two seats of the hull it is already
+            // in (SeatDecision.IsSwitch, sent as an Entered). EnterSeat refuses a seated body, so
+            // the move is the one Actor.SwitchSeat makes offline.
+            if (local.actor.IsSeated() && local.actor.seat.vehicle == hull)
+            {
+                if (local.actor.seat != seats[seatIndex] && !local.actor.TrySwitchSeat(seats[seatIndex]))
+                {
+                    Debug.LogWarning("[net] the client could not move to the seat the server switched it to "
+                        + "(vehicle " + hull.NetworkId + ", seat " + seatIndex + ").");
+                }
+                return;
+            }
+
             // The bool is checked for the same reason ServerSeatBridge checks it (V4-D7): a false
             // means the live scene refused a seat the server has already booked, so the two
             // sides now disagree about where this body is. There is nothing to roll back on this

@@ -614,6 +614,16 @@ namespace Ironfront.Net.Unity.Bindings
             return true;
         }
 
+        /// <inheritdoc />
+        public bool TrySwitchSeat(GameObject actorObject, int seatIndex)
+        {
+            Seat seat = SeatAt(seatIndex);
+            if (seat == null || actorObject == null) return false;
+
+            Actor actor = actorObject.GetComponent<Actor>();
+            return actor != null && actor.TrySwitchSeat(seat);
+        }
+
         /// <summary>
         /// The vehicle's own colliders, read fresh: occupants are parented under their seats, so
         /// a cached read would hold whoever happened to be sitting there, and a burning tank

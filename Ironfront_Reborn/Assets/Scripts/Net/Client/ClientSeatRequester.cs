@@ -79,6 +79,11 @@ namespace Ironfront.Net.Unity.Client
         private byte _pendingSeatIndex;
         private float _pendingExpiresAt;
 
+        // True while the request in flight is a switch between two seats of the vehicle this
+        // client already sits in. A refused switch is final: walking on to "the next free seat"
+        // would move a player who asked for one particular seat into another.
+        private bool _pendingSwitch;
+
         // Set when a RejectedLockedOut answer arrives, which is the ONE refusal the protocol
         // documents as "ask again shortly" (SeatChangeResult.RejectedLockedOut).
         private ushort _retryVehicleId;
@@ -190,6 +195,8 @@ namespace Ironfront.Net.Unity.Client
 
             SendDueRetry();
 
+            if (TrySendSeatSwitch()) return;
+
             // Not while the chat box owns the keyboard: F is a letter people type.
             bool pressed = GameKeys.Down(GameAction.Use) && !LocalTextEntry.OwnsKeyboard;
             if (!TryReadLocalSeatIntent(pressed, out Vector3 standingAt))
@@ -216,6 +223,55 @@ namespace Ironfront.Net.Unity.Client
 
             Send(vehicleId, seatIndex, SeatAction.Enter);
         }
+
+        /// <summary>
+        /// F1-F8 while seated: ask for that seat of the vehicle this client is in.
+        /// </summary>
+        /// <remarks>
+        /// The original game's seat keys (<c>FpsActorController</c>, offline). Online they moved a
+        /// camera the server never moved until 2026-11-08, so they were switched off at client
+        /// role; the server now arbitrates a switch as one decision (<c>SeatDecision.IsSwitch</c>)
+        /// and this asks for it. Not while the chat box owns the keyboard.
+        /// </remarks>
+        /// <returns>True when a key was handled this frame.</returns>
+        private bool TrySendSeatSwitch()
+        {
+            if (_stage == null || _stage.OccupiedVehicleId == 0) return false;
+            if (LocalTextEntry.OwnsKeyboard) return false;
+
+            int wanted = -1;
+            for (int i = 0; i < SeatKeys.Length; i++)
+            {
+                if (Input.GetKeyDown(SeatKeys[i]))
+                {
+                    wanted = i;
+                    break;
+                }
+            }
+            if (wanted < 0) return false;
+
+            if (_pendingVehicleId != 0)
+            {
+                PressesWhileWaiting++;
+                return true;
+            }
+
+            ushort vehicleId = _stage.OccupiedVehicleId;
+            if (wanted == _stage.OccupiedSeatIndex) return true;
+            if (_registry == null || !_registry.TryFind(vehicleId, out NetClientVehicle vehicle)) return true;
+            if (!vehicle.Exists || wanted >= vehicle.SeatCount) return true;
+
+            Send(vehicleId, (byte)wanted, SeatAction.Enter);
+            _pendingSwitch = true;
+            return true;
+        }
+
+        /// <summary>The seat keys, seat 0 first: the original game's F1-F8.</summary>
+        internal static readonly KeyCode[] SeatKeys =
+        {
+            KeyCode.F1, KeyCode.F2, KeyCode.F3, KeyCode.F4,
+            KeyCode.F5, KeyCode.F6, KeyCode.F7, KeyCode.F8,
+        };
 
         /// <summary>
         /// The vehicle the seat key would ask for right now, for the on-screen prompt: the same
@@ -391,6 +447,7 @@ namespace Ironfront.Net.Unity.Client
             _pendingVehicleId = vehicleId;
             _pendingSeatIndex = seatIndex;
             _pendingExpiresAt = Time.time + _answerTimeoutSeconds;
+            _pendingSwitch    = false;
         }
 
         /// <summary>
@@ -432,6 +489,7 @@ namespace Ironfront.Net.Unity.Client
             if (message.Result == SeatChangeResult.Entered || message.Result == SeatChangeResult.Left)
             {
                 _pendingVehicleId = 0;
+                _pendingSwitch    = false;
                 _retryVehicleId   = 0;
                 LastRefusalText   = string.Empty;
                 return;
@@ -442,8 +500,13 @@ namespace Ironfront.Net.Unity.Client
 
             ushort vehicleId = _pendingVehicleId;
             byte seatIndex   = _pendingSeatIndex;
+            bool wasSwitch   = _pendingSwitch;
 
             _pendingVehicleId = 0;
+            _pendingSwitch    = false;
+
+            // A refused switch leaves the player where they sat; there is no walk to make.
+            if (wasSwitch) return;
 
             // An answer to a request this component never sent — a leave arbitrated for this
             // actor by something else, or a refusal that arrived after the timeout cleared the
@@ -482,8 +545,13 @@ namespace Ironfront.Net.Unity.Client
             if (_registry == null || !_registry.TryFind(vehicleId, out NetClientVehicle vehicle)) return;
             if (!vehicle.Exists) return;
 
-            int next = refusedSeatIndex + 1;
-            if (next >= vehicle.SeatCount) return;
+            // Driver, then the guns, then the benches (SeatEntryOrder): by index, the RHIB's bow
+            // gun came after every passenger seat.
+            IGameplayVehicleBody body = vehicle.Body;
+            int next = SeatEntryOrder.Next(
+                i => body != null ? body.GetSeatRole(i) : NetSeatRole.None,
+                vehicle.SeatCount, refusedSeatIndex);
+            if (next < 0) return;
 
             Send(vehicleId, (byte)next, SeatAction.Enter);
         }
