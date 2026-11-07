@@ -36,7 +36,7 @@
   -->
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Ironfront.Client.Input.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
   </PropertyGroup>

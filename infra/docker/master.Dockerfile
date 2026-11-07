@@ -12,10 +12,10 @@
 # ---------------------------------------------------------------------------
 # Build stage
 # ---------------------------------------------------------------------------
-# Pinned to the 8.0 SDK. global.json requests 8.0.100 with rollForward=latestFeature,
-# so any 8.0.x the base image ships satisfies it and a 9.x/10.x never sneaks in — the
+# Pinned to the 10.0 SDK. global.json requests 10.0.100 with rollForward=latestFeature,
+# so any 10.0.x the base image ships satisfies it and an 11.x never sneaks in — the
 # same boundary .github/workflows/ci.yml enforces.
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy the build contract first (props + central package versions + SDK pin) and the
@@ -46,9 +46,9 @@ RUN dotnet publish Ironfront.MasterServer/Ironfront.MasterServer.csproj \
 # ---------------------------------------------------------------------------
 # runtime (not aspnet): this is a raw-TCP console process, and the metrics endpoint is
 # deliberately not HTTP (see MetricsEndpoint.cs), so there is no ASP.NET Core to carry.
-FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
 
-# The .NET 8 images define a non-root user `app` (UID/GID 1654). Create the runtime
+# The .NET images define a non-root user `app` (UID/GID 1654). Create the runtime
 # mount points and hand them to that user BEFORE dropping privileges, so a bind-mounted
 # host directory chowned to 1654 lines up. /data holds the SQLite database and the
 # durability CSV; /tls holds the read-only PFX.

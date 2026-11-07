@@ -115,6 +115,21 @@ namespace Ironfront.MasterServer.Tests
             ? string.Empty
             : Security.TlsCertificates.FingerprintSha256(_certificate);
 
+        /// <summary>
+        /// Reads the database on a connection of its own, for a test polling while the master runs.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Database"/> belongs to the host's loop, and a SqliteConnection is not
+        /// thread-safe: a test reading through it while the loop wrote left the connection's
+        /// command list corrupt, and it threw a NullReferenceException on Dispose (Windows CI,
+        /// 2026-10-18).
+        /// </remarks>
+        public T ReadDatabase<T>(Func<SqliteDatabase, T> read)
+        {
+            using var reader = new SqliteDatabase(_databasePath);
+            return read(reader);
+        }
+
         public async ValueTask DisposeAsync()
         {
             _cts.Cancel();
