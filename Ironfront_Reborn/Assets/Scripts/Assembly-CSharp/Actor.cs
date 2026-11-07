@@ -1126,10 +1126,10 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	/// How shallow the water must be under a swimmer before it stands up again. Lower than
 	/// <see cref="SwimStartDepth"/>, so a body at the edge does not swim and stand every frame.
 	/// </summary>
-	private static float SwimEndDepth => SwimStartDepth - 0.2f;
+	internal static float SwimEndDepth => SwimStartDepth - 0.2f;
 
 	/// <summary>How far over the surface a bank may rise before a swimmer cannot climb onto it.</summary>
-	private const float SwimClimbLip = 0.6f;
+	internal const float SwimClimbLip = 0.6f;
 
 	/// <summary>How far under the surface the bottom is looked for. Deeper counts as open water.</summary>
 	private const float SwimFloorProbe = 30f;

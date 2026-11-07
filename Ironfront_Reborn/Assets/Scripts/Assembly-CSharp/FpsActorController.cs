@@ -1564,6 +1564,16 @@ public class FpsActorController : ActorController
 				KeepSwimCameraAboveTheSurface();
 			}
 		}
+		// After the camera is placed, so the frame held is this one. See FrozenDeathView.
+		deathView.Tick(actor != null && actor.dead && LoadoutUi.IsOpen(), tpCamera);
+	}
+
+	/// <summary>The corpse camera's last frame, held behind the death screen's loadout.</summary>
+	private readonly FrozenDeathView deathView = new FrozenDeathView();
+
+	private void OnDestroy()
+	{
+		deathView.Thaw();
 	}
 
 	// How far over the surface the camera behind a swimmer is held.
