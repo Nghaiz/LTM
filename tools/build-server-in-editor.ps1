@@ -15,7 +15,7 @@
 #      over the bridge never fired (2026-10-15), while an update handler ran within a second.
 #      Not a blocking call either: a build outlasts the bridge's call timeout, and the server
 #      re-executes a call that times out.
-#   3. Waits on that FILE, not on the Console. console-get-logs returns the oldest entries of its
+#   3. Waits on that FILE, not on the Console. The console returns the oldest entries of its
 #      window first, so a poll of the latest build lines never sees them.
 #   4. Checks the server's Managed DLLs were rewritten (Unity keeps the executable when only managed
 #      code changed, so the executable's time proves nothing) and prints the stamp they carry.
@@ -45,11 +45,25 @@ function Invoke-Editor([string]$tool, [string]$argsJson) {
     return ($out -join "`n")
 }
 
+function Invoke-EditorCode([string]$className, [string]$body) {
+    $code = "public class $className { public static object Main() { $body } }"
+    $payload = @{ csharpCode = $code; className = $className; methodName = 'Main' } | ConvertTo-Json -Compress
+    return Invoke-Editor 'script-execute' $payload
+}
+
+# Unity MCP 1.x dropped editor-application-get-state and assets-refresh (its tools moved to RQL);
+# the idle probe reads rql-query "editor", the refresh is one line through script-execute.
+function Invoke-EditorRefresh {
+    Invoke-EditorCode 'InEditorRefresh' 'UnityEditor.AssetDatabase.Refresh(); return "refreshed";' | Out-Null
+}
+
 function Wait-EditorIdle([int]$seconds = 600) {
     $deadline = (Get-Date).AddSeconds($seconds)
     while ((Get-Date) -lt $deadline) {
-        $state = Invoke-Editor 'editor-application-get-state' '{}'
-        if ($state -match '"IsCompiling":false' -and $state -match '"IsUpdating":false') { return }
+        # A domain reload drops the bridge for a few seconds: a failed probe is "not idle yet".
+        try { $state = Invoke-Editor 'rql-query' '{"query":"editor"}' }
+        catch { $state = '' }
+        if ($state -match 'isCompiling:false' -and $state -match 'isUpdating:false') { return }
         Start-Sleep -Seconds 3
     }
     throw "the Editor was still compiling or importing after $seconds s"
@@ -76,7 +90,7 @@ $before = if (Test-Path $serverDll) { (Get-Item $serverDll).LastWriteTimeUtc } e
 
 $stamp = Write-BuildStamp -RepoRoot $repoRoot -Dirty $false
 try {
-    Invoke-Editor 'assets-refresh' '{}' | Out-Null
+    Invoke-EditorRefresh
     Start-Sleep -Seconds 5
     Wait-EditorIdle
 
@@ -113,7 +127,7 @@ public class InEditorServerBuild { static EditorApplication.CallbackFunction onc
 }
 finally {
     Restore-BuildStamp -Originals $stamp.Originals
-    Invoke-Editor 'assets-refresh' '{}' | Out-Null
+    Invoke-EditorRefresh
     Start-Sleep -Seconds 5
     Wait-EditorIdle
     & git -C $repoRoot checkout -- Ironfront_Reborn/Assets/Scenes/Menu.unity 2>$null
