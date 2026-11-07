@@ -145,6 +145,8 @@ namespace Ironfront.MasterServer.Diagnostics
             {
                 Output.WriteLine(line);
             }
+
+            LogFile.Append(line);
         }
     }
 }

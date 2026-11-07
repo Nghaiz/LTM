@@ -357,6 +357,14 @@ namespace Ironfront.Net.Configuration
             "0",
             summary: "1 to emit JSON events on stdout beside the human log");
 
+        /// <summary>A copy of the master's log on disk.</summary>
+        public static readonly EnvVar LogFile = new EnvVar(
+            "IRONFRONT_LOG_FILE", "Logging", "master server",
+            "Also write every log line and JSON event to this file, rotated at 8 MB to <file>.1.\n" +
+            "Empty writes to stdout only. On fly, set it to a path on the /data volume: fly's log\n" +
+            "API keeps minutes, so without it an incident's lines are gone before anyone looks.",
+            summary: "copy of the log on disk; empty for stdout only");
+
         // ---- TLS -----------------------------------------------------------------------
 
         /// <summary>PKCS#12 bundle the master presents.</summary>
@@ -423,16 +431,19 @@ namespace Ironfront.Net.Configuration
         /// <summary>Per-IP connection cap on the master.</summary>
         public static readonly EnvVar MaxConnectionsPerIp = new EnvVar(
             "IRONFRONT_MAX_CONNECTIONS_PER_IP", "Limits", "master server",
-            "The defaults below are sized for real players and are correct for production.\n" +
+            "Connections from one source address. A school, a dormitory or a cafe puts every\n" +
+            "player behind ONE address: on 2026-10-14 a class of ten was refused from the sixth\n" +
+            "player on while this was 5. 64 holds four full rooms behind one address, and the\n" +
+            "global cap below still bounds a flood from many addresses.\n" +
             "\n" +
-            "They are also what makes a single-machine load test impossible, because every bot\n" +
-            "shares one source address: with the defaults, a 16-client run gets 5 connections and\n" +
-            "5 logins and 11 errors. Raise them ONLY on a test rig:\n" +
+            "A single-machine load test needs more, because every bot shares one source\n" +
+            "address. Raise these ONLY on a test rig:\n" +
             "\n" +
             "  IRONFRONT_MAX_CONNECTIONS_PER_IP=200\n" +
-            "  IRONFRONT_LOGIN_RATE_PER_MINUTE=500",
-            "5",
-            summary: "anti-flood cap; raise it only on a test rig");
+            "  IRONFRONT_LOGIN_RATE_PER_MINUTE=500\n" +
+            "  IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE=500",
+            "64",
+            summary: "connections per source address; a school shares one");
 
         /// <summary>Global connection cap on the master. 0 disables.</summary>
         public static readonly EnvVar MaxTotalConnections = new EnvVar(
@@ -441,12 +452,23 @@ namespace Ironfront.Net.Configuration
             "256",
             summary: "global cap; 0 removes it");
 
-        /// <summary>Per-IP login attempts per minute.</summary>
+        /// <summary>Failed sign-ins per source address per minute.</summary>
         public static readonly EnvVar LoginRatePerMinute = new EnvVar(
             "IRONFRONT_LOGIN_RATE_PER_MINUTE", "Limits", "master server",
-            "Per-IP login attempts per minute.",
+            "FAILED sign-ins (wrong password, bad remember token) from one address per minute: the\n" +
+            "brute-force guard. A correct password spends nothing from it, so a school signing in\n" +
+            "behind one address is not told to wait (it counted every sign-in until 2026-10-14).",
             "5",
-            summary: "login attempts per source IP; raise it on a test rig");
+            summary: "failed sign-ins per source address; the brute-force guard");
+
+        /// <summary>Every sign-in per source address per minute.</summary>
+        public static readonly EnvVar LoginAttemptsPerMinute = new EnvVar(
+            "IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE", "Limits", "master server",
+            "Every sign-in from one address per minute, failed or not. Each one runs bcrypt, so this\n" +
+            "bounds the CPU one address can spend; 60 is above a full school signing in at once.\n" +
+            "A load-test rig signing in more bots than this from one machine raises it too.",
+            "60",
+            summary: "every sign-in per source address; bounds bcrypt CPU");
 
         /// <summary>Take each client's address from a PROXY protocol header.</summary>
         public static readonly EnvVar MasterProxyProtocol = new EnvVar(
@@ -571,10 +593,10 @@ namespace Ironfront.Net.Configuration
             ClientMasterHost, ClientMasterPort,
             ClientMasterTls, ClientMasterTlsTargetHost, ClientMasterTlsPinnedFingerprint,
             ClientPlayerId, ClientDisplayName, ClientTeam,
-            LogLevel, StructuredLog,
+            LogLevel, StructuredLog, LogFile,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,
-            MaxConnectionsPerIp, MaxTotalConnections, LoginRatePerMinute, MasterProxyProtocol,
+            MaxConnectionsPerIp, MaxTotalConnections, LoginRatePerMinute, LoginAttemptsPerMinute, MasterProxyProtocol,
             BotBudgetUnits, MatchCostUnits,
             PacketCapturePath, Simulator, SimulatorSeed,
             InstallRoot, RemoteRoot, BackupDir, BackupRetentionDays,

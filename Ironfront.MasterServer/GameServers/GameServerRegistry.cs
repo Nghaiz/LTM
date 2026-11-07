@@ -21,6 +21,21 @@ namespace Ironfront.MasterServer.GameServers
         public long LastHeartbeatAt { get; set; }
         public int AssignedRoomId { get; set; }
 
+        /// <summary>Whether this master has handed this registration a room since it registered.</summary>
+        public bool HasHostedForThisMaster { get; set; }
+
+        /// <summary>
+        /// Players on a server this master never gave a room: a match that started under an
+        /// earlier master process, before a restart, still being played.
+        /// </summary>
+        /// <remarks>
+        /// A master restart forgets every room, and each game server re-registers as a fresh,
+        /// roomless record while its players play on. On 2026-10-14 the master was redeployed at
+        /// 14:22 (+07) with Island and Forest Lake both mid-round. The heartbeat still says how many
+        /// players there are, and that is the only thing that knows.
+        /// </remarks>
+        public bool IsHostingAnEarlierMastersMatch => !HasHostedForThisMaster && CurrentPlayers > 0;
+
         public bool IsHealthy(long now) => now - LastHeartbeatAt <= 15_000 && CpuPercent < 90f && AverageTickMs < 40f;
         public bool Supports(ushort mapId)
         {
@@ -107,6 +122,14 @@ namespace Ironfront.MasterServer.GameServers
         /// is hosting a room and the field is ~0 across the whole candidate set. Sorting by a
         /// column that cannot vary would read as load-spreading while doing nothing.
         /// </para>
+        /// <para>
+        /// <b>A server still playing an earlier master's match is not free</b>
+        /// (<see cref="GameServerRecord.IsHostingAnEarlierMastersMatch"/>). After a restart it is
+        /// roomless here but full of players there, and a room handed to it now would have its
+        /// tickets adopted into their round. It becomes free when its heartbeat says they have
+        /// left. A server this master allocated is judged by its room alone, as before: its
+        /// player count lags a release by up to a heartbeat, and the next room must not wait on it.
+        /// </para>
         /// </remarks>
         public GameServerRecord? Allocate(ushort mapId, int roomId, long now)
         {
@@ -114,9 +137,14 @@ namespace Ironfront.MasterServer.GameServers
             foreach (GameServerRecord server in _servers.Values)
             {
                 if (!server.IsHealthy(now) || server.AssignedRoomId != 0 || !server.Supports(mapId)) continue;
+                if (server.IsHostingAnEarlierMastersMatch) continue;
                 if (best is null || IsBetterHostThan(server, best)) best = server;
             }
-            if (best is not null) best.AssignedRoomId = roomId;
+            if (best is not null)
+            {
+                best.AssignedRoomId = roomId;
+                best.HasHostedForThisMaster = true;
+            }
             return best;
         }
 
@@ -166,7 +194,7 @@ namespace Ironfront.MasterServer.GameServers
                 {
                     byMap.TryGetValue(mapId, out (int Servers, int Free) counts);
                     counts.Servers++;
-                    if (server.AssignedRoomId == 0) counts.Free++;
+                    if (server.AssignedRoomId == 0 && !server.IsHostingAnEarlierMastersMatch) counts.Free++;
                     byMap[mapId] = counts;
                 }
             }
@@ -190,6 +218,25 @@ namespace Ironfront.MasterServer.GameServers
             => _servers.TryGetValue(serverId, out GameServerRecord? server) &&
                server.OwnerConnectionId == ownerConnectionId &&
                server.AssignedRoomId == roomId;
+
+        /// <summary>
+        /// Whether this server, on this connection, can only be reporting a round that started
+        /// under an earlier master process: it has never been given a room by this one.
+        /// </summary>
+        /// <remarks>
+        /// The caller must still check that the room is not one of this master's own, since room
+        /// ids restart with the process. On 2026-10-14 Island's round in room 13 ended three minutes
+        /// after the master restarted; <see cref="OwnsRoom"/> refused the report, and the round
+        /// never reached the careers of the six players who finished it.
+        /// </remarks>
+        public bool IsReportingAnEarlierMastersRound(int ownerConnectionId, ushort serverId, out GameServerRecord? server)
+        {
+            server = null;
+            if (!_servers.TryGetValue(serverId, out GameServerRecord? record) || record.OwnerConnectionId != ownerConnectionId) return false;
+            if (record.AssignedRoomId != 0 || record.HasHostedForThisMaster) return false;
+            server = record;
+            return true;
+        }
 
         public void Release(ushort serverId, int roomId)
         {

@@ -57,7 +57,7 @@ namespace Ironfront.MasterServer.Security
                 // Exportable so the same object can be re-serialised by the fingerprint tooling
                 // and by tests; EphemeralKeySet is deliberately NOT used because it is
                 // unsupported for server authentication on Windows.
-                return new X509Certificate2(path, password, X509KeyStorageFlags.Exportable);
+                return X509CertificateLoader.LoadPkcs12FromFile(path, password, X509KeyStorageFlags.Exportable);
             }
             catch (CryptographicException ex)
             {
@@ -119,7 +119,7 @@ namespace Ironfront.MasterServer.Security
             RandomNumberGenerator.Fill(passwordBytes);
             string transportPassword = Convert.ToHexString(passwordBytes);
 
-            return new X509Certificate2(
+            return X509CertificateLoader.LoadPkcs12(
                 unusable.Export(X509ContentType.Pfx, transportPassword),
                 transportPassword,
                 X509KeyStorageFlags.Exportable);

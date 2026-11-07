@@ -21,6 +21,7 @@ backend.tf
 
 # Saved plans
 *.tfplan
+tf.plan
 
 # Committed on purpose — do NOT ignore:
 !*.example

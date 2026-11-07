@@ -53,10 +53,10 @@ namespace Ironfront.MasterServer.Auth
             long now = UnixMs();
             if (!AllowAttempt(ip, now))
                 return new AuthResult(false, ErrorCode.RateLimited, null, RateRetryAfterSeconds(ip, now));
-            if (!IsValidRememberToken(token)) return new AuthResult(false, ErrorCode.SessionExpired, null);
+            if (!IsValidRememberToken(token)) return Failed(ip, ErrorCode.SessionExpired);
 
             AccountRecord? account = _database.TakeRememberToken(HashRememberToken(token), now);
-            if (account is null) return new AuthResult(false, ErrorCode.SessionExpired, null);
+            if (account is null) return Failed(ip, ErrorCode.SessionExpired);
 
             // The token proved ownership as a password would have, so the named refusals apply.
             if (account.IsBanned) return new AuthResult(false, ErrorCode.AccountBanned, null);

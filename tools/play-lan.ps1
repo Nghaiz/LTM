@@ -42,20 +42,19 @@ param(
     # The MASTER server -- accounts, room browser, tickets. This is the address the menu talks
     # to, and the one that decides whether you can get into a match at all.
     #
-    # Defaults to the fly.io master, which is the one that is actually up and is reachable from
-    # anywhere. It used to default to the sandbox k8s node, an address on a VMware NAT subnet
+    # Defaults to the public master on AWS EC2 (infra/terraform/aws/master), which is the one
+    # that is actually up and is reachable from anywhere. It used to default to the sandbox k8s node, an address on a VMware NAT subnet
     # that only the machine hosting that VM can route to -- so the default was useful to exactly
     # one person and silently useless to everyone else.
-    [string] $MasterHost = "kien-master-2026.fly.dev",
+    [string] $MasterHost = "52-62-179-111.sslip.io",
 
-    # 443, not 27000, and NOT because this is HTTP. A fly app is IPv6-only by default; the free
-    # shared IPv4 that makes it reachable from an IPv4-only machine routes ports 80 and 443
-    # only, picking the app by TLS SNI. infra/fly/master.toml therefore exposes the same MSP
-    # listener on both, and 443 is the one an IPv4 client can use. 27000 still works over IPv6.
+    # 443, not 27000, and NOT because this is HTTP. The master exposes the same MSP listener on
+    # both; 443 is the port a school or cafe firewall is least likely to block, and it is what
+    # the released client dials.
     [int] $MasterPort = 443,
 
-    # TLS is ON by default because the default master terminates TLS at fly's edge and a
-    # plaintext dial fails the handshake before a login screen can appear. Pass this when
+    # TLS is ON by default because the default master serves TLS (a Let's Encrypt certificate)
+    # and a plaintext dial fails the handshake before a login screen can appear. Pass this when
     # pointing at a plaintext master -- a local one, or a LAN box.
     [switch] $NoMasterTls,
 

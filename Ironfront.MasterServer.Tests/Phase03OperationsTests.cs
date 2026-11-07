@@ -427,15 +427,20 @@ namespace Ironfront.MasterServer.Tests
             MasterServerConfig config = MasterServerConfig.FromEnvironment(Read(new Dictionary<string, string>
             {
                 [MasterServerConfig.SharedSecretVariable]        = Phase03ServerHarness.SharedSecret,
-                [MasterServerConfig.MaxConnectionsPerIpVariable] = "64",
+                [MasterServerConfig.MaxConnectionsPerIpVariable] = "200",
                 [MasterServerConfig.MaxTotalConnectionsVariable] = "0",
+                [MasterServerConfig.LoginRatePerMinuteVariable]  = "500",
+                [MasterServerConfig.LoginAttemptsPerMinuteVariable] = "700",
                 [MasterServerConfig.StructuredLogVariable]       = "1",
             }));
 
-            // The default of 5 makes a 16-bot run from one machine impossible: bots 6..16 are
-            // all the same address and are refused before they log in.
-            Assert.Equal(64, config.MaxConnectionsPerIp);
+            // A load-test rig's bots are all one address, past even the production default of
+            // 64. Not 64 here: an override equal to the default would pass with the variable
+            // ignored.
+            Assert.Equal(200, config.MaxConnectionsPerIp);
             Assert.Equal(0, config.MaxTotalConnections);
+            Assert.Equal(500, config.LoginRatePerMinute);
+            Assert.Equal(700, config.LoginAttemptsPerMinute);
             Assert.True(config.StructuredLog);
         }
 

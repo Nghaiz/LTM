@@ -90,14 +90,14 @@ Rollback is exact because images are digest-pinned — see [`operations.md` § 9
 ### Provision a new VM from nothing
 
 ```bash
-cd infra/terraform
+cd infra/terraform/azure
 cp terraform.tfvars.example terraform.tfvars   # SSH key, admin CIDR, domain
 # PREFLIGHT the region/SKU first (az vm list-skus) — see the terraform README
 terraform init && terraform apply
 ```
 
 Then DNS → `issue-cert.sh` → deliver `.env` → `./deploy.sh up` → enable the timers. Full
-sequence in [`infra/terraform/README.md`](../infra/terraform/README.md) and the VM's
+sequence in [`infra/terraform/azure/README.md`](../infra/terraform/azure/README.md) and the VM's
 `BOOTSTRAP.md`. Azure VMs sync time by default, but confirm `timedatectl` shows NTP active —
 joinTickets expire after 60 seconds and a drifting clock produces random join failures with no
 other symptom.
@@ -121,7 +121,7 @@ challenges; `dns-manual` needs a re-run before expiry. See
 ```
 
 From a machine **outside Azure**, or it measures the VM's loopback. Raise
-`IRONFRONT_MAX_CONNECTIONS_PER_IP` and `IRONFRONT_LOGIN_RATE_PER_MINUTE` in `.env`
+`IRONFRONT_MAX_CONNECTIONS_PER_IP`, `IRONFRONT_LOGIN_RATE_PER_MINUTE` and `IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE` in `.env`
 (`./deploy.sh restart-master`) — every bot shares one source address — and put them back
 afterwards.
 
@@ -136,6 +136,10 @@ docker compose exec master dotnet Ironfront.MasterServer.dll \
 The password argument is the client-side SHA-256, not the plaintext.
 
 ### Take a backup / restore one
+
+**The live stack (fly master + Azure game servers) is backed up with
+`pwsh tools/backup-live-stack.ps1` and restored per [`live-stack-backup.md`](live-stack-backup.md).**
+The rest of this section describes the phase-03 single-VM layout.
 
 The host `ironfront-backup.timer` runs every 6 hours against the **running** database and
 uploads to Blob via the VM's managed identity. The restore drill (local and from-Blob) is in
@@ -179,7 +183,7 @@ rebuilt from the repository?*
 | Held outside the repository | If it is lost | Recovery |
 |---|---|---|
 | GitHub account `Nghaiz` | no pushes, no Actions, no GHCR publish | the repository is public and cloneable; a new account re-runs `images.yml` to republish. Nothing in it is unrecoverable |
-| Azure subscription + the VM | the deployed stack stops | `infra/terraform` re-provisions from scratch. The VM holds no source of truth |
+| Azure subscription + the VM | the deployed stack stops | `infra/terraform/azure` re-provisions from scratch. The VM holds no source of truth |
 | `IRONFRONT_SHARED_SECRET` | game servers cannot register with the master | regenerate and set it on all three services. It authenticates them to each other; it protects no stored data |
 | TLS PFX + its password | the master cannot present a certificate | re-issue with `tools/issue-cert.sh`. Let's Encrypt, so re-issuable at will |
 | Backup Blob container + its key | historical account data | **the only genuinely irreplaceable item.** Everything else on this list is regenerable |
@@ -203,7 +207,7 @@ rehearsal is the item that stays open, and it is the one that guards the one irr
 ## 6. Related
 
 - [`operations.md`](operations.md) — day-to-day runbook
-- [`infra/terraform/README.md`](../infra/terraform/README.md) — provisioning
+- [`infra/terraform/azure/README.md`](../infra/terraform/azure/README.md) — provisioning
 - [`infra/compose/README.md`](../infra/compose/README.md) — the stack and its gotchas
 - [`infra/tls/README.md`](../infra/tls/README.md) — certificates
 - [`report-chapter-master-server.md`](report-chapter-master-server.md) — design rationale and measurements

@@ -73,6 +73,9 @@ namespace Ironfront.MasterServer.Configuration
         /// <summary>Set to 1/true to emit the JSON event stream on stdout.</summary>
         public static readonly string StructuredLogVariable = EnvRegistry.StructuredLog.Name;
 
+        /// <summary>A copy of the log on disk. See <see cref="Diagnostics.LogFile"/>.</summary>
+        public static readonly string LogFileVariable = EnvRegistry.LogFile.Name;
+
         /// <summary>
         /// Overrides <see cref="Net.TcpListenerHostOptions.MaxConnectionsPerIp"/>.
         /// </summary>
@@ -97,10 +100,13 @@ namespace Ironfront.MasterServer.Configuration
         public static readonly string ProxyProtocolVariable = EnvRegistry.MasterProxyProtocol.Name;
 
         /// <summary>
-        /// Overrides the per-IP login rate limit. See
-        /// <see cref="Auth.AuthService(Data.SqliteDatabase, int)"/> for why it is a knob.
+        /// Overrides the per-IP budget of FAILED sign-ins. See
+        /// <see cref="Auth.AuthService(Data.SqliteDatabase, int, int)"/> for why it is a knob.
         /// </summary>
         public static readonly string LoginRatePerMinuteVariable = EnvRegistry.LoginRatePerMinute.Name;
+
+        /// <summary>Overrides the per-IP cap on every sign-in, failed or not.</summary>
+        public static readonly string LoginAttemptsPerMinuteVariable = EnvRegistry.LoginAttemptsPerMinute.Name;
 
         /// <summary>The bot budget, in units. See <see cref="Lobby.BotCapacity"/>.</summary>
         public static readonly string BotBudgetVariable = EnvRegistry.BotBudgetUnits.Name;
@@ -147,9 +153,11 @@ namespace Ironfront.MasterServer.Configuration
             string metricsCsvPath,
             int metricsCsvIntervalSeconds,
             bool structuredLog,
+            string logFilePath,
             int maxConnectionsPerIp,
             int maxTotalConnections,
             int loginRatePerMinute,
+            int loginAttemptsPerMinute,
             bool trustProxyProtocol,
             int botBudgetUnits,
             int matchCostUnits)
@@ -160,6 +168,7 @@ namespace Ironfront.MasterServer.Configuration
             MaxConnectionsPerIp       = maxConnectionsPerIp;
             MaxTotalConnections       = maxTotalConnections;
             LoginRatePerMinute        = loginRatePerMinute;
+            LoginAttemptsPerMinute    = loginAttemptsPerMinute;
             SharedSecret              = sharedSecret;
             Port                      = port;
             DatabasePath              = databasePath;
@@ -171,6 +180,7 @@ namespace Ironfront.MasterServer.Configuration
             MetricsCsvPath            = metricsCsvPath;
             MetricsCsvIntervalSeconds = metricsCsvIntervalSeconds;
             StructuredLog             = structuredLog;
+            LogFilePath               = logFilePath;
         }
 
         /// <summary>
@@ -215,14 +225,20 @@ namespace Ironfront.MasterServer.Configuration
         /// <summary>Whether the JSON event stream is on.</summary>
         public bool StructuredLog { get; }
 
+        /// <summary>Where the log is copied to; empty for stdout only.</summary>
+        public string LogFilePath { get; }
+
         /// <summary>Per-IP connection cap. See <see cref="MaxConnectionsPerIpVariable"/>.</summary>
         public int MaxConnectionsPerIp { get; }
 
         /// <summary>Global connection cap.</summary>
         public int MaxTotalConnections { get; }
 
-        /// <summary>Per-IP login attempts per minute.</summary>
+        /// <summary>Per-IP failed sign-ins per minute.</summary>
         public int LoginRatePerMinute { get; }
+
+        /// <summary>Per-IP sign-ins per minute, failed or not.</summary>
+        public int LoginAttemptsPerMinute { get; }
 
         /// <summary>Whether client addresses come from PROXY headers. See <see cref="ProxyProtocolVariable"/>.</summary>
         public bool TrustProxyProtocol { get; }
@@ -301,6 +317,7 @@ namespace Ironfront.MasterServer.Configuration
                 read(MetricsCsvIntervalVariable), DefaultMetricsCsvIntervalSeconds, MetricsCsvIntervalVariable);
 
             bool structuredLog = EnvParse.Flag(read(StructuredLogVariable));
+            string logFilePath = EnvParse.Trimmed(read(LogFileVariable));
 
             var listenerDefaults = new TcpListenerHostOptions();
             int maxPerIp = EnvParse.PositiveInt(
@@ -309,6 +326,8 @@ namespace Ironfront.MasterServer.Configuration
                 read(MaxTotalConnectionsVariable), listenerDefaults.MaxTotalConnections, MaxTotalConnectionsVariable);
             int loginRate = EnvParse.PositiveInt(
                 read(LoginRatePerMinuteVariable), AuthService.DefaultRatePerMinute, LoginRatePerMinuteVariable);
+            int loginAttempts = EnvParse.PositiveInt(
+                read(LoginAttemptsPerMinuteVariable), AuthService.DefaultAttemptsPerMinute, LoginAttemptsPerMinuteVariable);
 
             bool trustProxyProtocol = ParseProxyProtocol(read(ProxyProtocolVariable));
             if (trustProxyProtocol && certificatePath.Length > 0)
@@ -329,8 +348,8 @@ namespace Ironfront.MasterServer.Configuration
             return new MasterServerConfig(
                 secret, port, databasePath, logLevel,
                 certificatePath, certificatePassword,
-                metricsPort, metricsBind, csvPath, csvInterval, structuredLog,
-                maxPerIp, maxTotal, loginRate, trustProxyProtocol, botBudget, matchCost);
+                metricsPort, metricsBind, csvPath, csvInterval, structuredLog, logFilePath,
+                maxPerIp, maxTotal, loginRate, loginAttempts, trustProxyProtocol, botBudget, matchCost);
         }
 
         /// <summary>

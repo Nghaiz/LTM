@@ -194,7 +194,7 @@ jobs:
           need() {
             if grep -q "$1" "$log"; then echo "ok   $2"; else echo "::error::missing from the player log: $2"; failed=yes; fi
           }
-          need '\[flow\] master = kien-master-2026.fly.dev:443 (TLS' "[flow] master = kien-master-2026.fly.dev:443 (TLS ..."
+          need '\[flow\] master = 52-62-179-111.sslip.io:443 (TLS' "[flow] master = 52-62-179-111.sslip.io:443 (TLS ..."
           need '\[flow\] client flow up; title screen ready' "[flow] client flow up; title screen ready"
           if [ "$practice" = yes ]; then
             # Practice runs offline: no loopback server and no client bootstrap, hence no [net] build
@@ -210,7 +210,7 @@ jobs:
 
       - name: Keep the logs and screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-smoke-${{ matrix.arch }}
           path: |

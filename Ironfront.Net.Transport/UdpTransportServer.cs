@@ -215,10 +215,25 @@ namespace Ironfront.Net.Transport
 
             if (_nowMs - _lastRateCleanupMs >= 10_000.0)
             {
+                ReportRefusedHandshakes(_nowMs - _lastRateCleanupMs);
                 _rateLimiter.Cleanup(_nowMs);
                 CleanupChallenges();
                 _lastRateCleanupMs = _nowMs;
             }
+        }
+
+        /// <summary>
+        /// One line per cleanup interval in which the per-address handshake limit refused anything.
+        /// A refused request is resent by its client, so a line now and then is a crowd connecting
+        /// at once; a line every interval is somebody flooding, or a crowd bigger than the limit.
+        /// </summary>
+        private void ReportRefusedHandshakes(double intervalMs)
+        {
+            if (!_rateLimiter.TryTakeRefusalReport(out long refused, out int addresses)) return;
+            NetLog.Warn(
+                $"handshake: {refused} connect request(s) from {addresses} address(es) over the "
+                + $"per-address limit of {RateLimiter.MaxRequestsPerSecond}/s in the last "
+                + $"{intervalMs / 1000.0:F0} s; each is resent by its client.");
         }
 
         public void Dispose()

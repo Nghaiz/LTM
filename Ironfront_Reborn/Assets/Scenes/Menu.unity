@@ -181367,7 +181367,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6404976c56fe427ab5f2ee9d38f89abd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Ironfront.Net.Unity.Client::Ironfront.Net.Unity.Client.ClientFlowBootstrap
-  _masterHost: kien-master-2026.fly.dev
+  _masterHost: 52-62-179-111.sslip.io
   _masterPort: 443
   _masterTls: 1
   _verbose: 1

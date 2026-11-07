@@ -43,8 +43,8 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(host, Field(block, "_masterHost"));
             Assert.Equal(port, Field(block, "_masterPort"));
 
-            // fly terminates TLS at the edge: a plaintext dial completes TCP, reports connected,
-            // and dies on the first request with nothing on screen to say why.
+            // The master serves TLS: a plaintext dial completes TCP, reports connected, and dies
+            // on the first request with nothing on screen to say why.
             Assert.Equal("1", Field(block, "_masterTls"));
         }
 

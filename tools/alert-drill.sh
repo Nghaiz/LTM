@@ -194,7 +194,7 @@ else
     IRONFRONT_METRICS_PORT="$METRICS_PORT" \
     IRONFRONT_METRICS_BIND="127.0.0.1" \
     IRONFRONT_DB_PATH="$OUT_DIR/drill.db" \
-    dotnet "$REPO_ROOT/Ironfront.MasterServer/bin/Release/net8.0/Ironfront.MasterServer.dll" \
+    dotnet "$REPO_ROOT/Ironfront.MasterServer/bin/Release/net10.0/Ironfront.MasterServer.dll" \
         > "$MASTER_LOG" 2>&1 &
     MASTER_PID=$!
 

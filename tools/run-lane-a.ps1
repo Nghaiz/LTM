@@ -131,7 +131,7 @@ try {
     # --------------------------------------------------------------- the harness
     try {
         $harnessArgs = @(
-            "Ironfront.Net.LoadHarness/bin/Release/net8.0/Ironfront.Net.LoadHarness.dll",
+            "Ironfront.Net.LoadHarness/bin/Release/net10.0/Ironfront.Net.LoadHarness.dll",
             "--clients", "$Clients",
             "--seconds", "$Seconds",
             "--behavior", $Behavior,

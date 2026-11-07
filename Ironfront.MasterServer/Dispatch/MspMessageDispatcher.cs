@@ -158,12 +158,23 @@ namespace Ironfront.MasterServer.Dispatch
 
             Session? session = connection.Session;
             if (session is null) return;
+            _auth.RemoveSession(session.Token);
+
+            // Only when this was the player's live connection. A player whose link dropped signs
+            // in again on a new one at once, while the old one lingers until its heartbeat times
+            // out (45 s); closing it used to take the player out of their room, matchmaking and
+            // chat, and unmap the NEW connection, which then got no room, chat or unlock pushes.
+            // Every reconnect inside that window lost its room a little later. The school's
+            // network on 2026-10-14 dropped links all afternoon.
+            if (!_connectionsByPlayer.TryGetValue(session.PlayerId, out ClientConnection? live)
+                || !ReferenceEquals(live, connection))
+                return;
+
             _connectionsByPlayer.Remove(session.PlayerId);
             _chat.RemovePlayer(session.PlayerId);
             _matchmaking.Cancel(session.PlayerId);
             ServiceResult result = _lobby.LeaveRoom(session.PlayerId);
             if (result.Ok && result.Room is not null && result.Room.Members.Count > 0) BroadcastRoom(result.Room);
-            _auth.RemoveSession(session.Token);
         }
 
         public void Tick(long nowUnixMs)
@@ -259,6 +270,12 @@ namespace Ironfront.MasterServer.Dispatch
             // What this client can load, so it is never listed, joined, created or matchmade into
             // a room on a map it lacks (MapSupport). Absent on every client before P30.
             session.Maps = MapSupport.FromLogin(maps);
+
+            // Signing in again on the same connection replaces its session; the replaced one is
+            // retired here or it outlives the connection by a day, counted as "online now" the
+            // whole time (the durability CSV showed 10-16 online with no client connected).
+            if (connection.Session is { } replaced && !ReferenceEquals(replaced, session))
+                _auth.RemoveSession(replaced.Token);
             connection.SetSession(session);
             _connectionsByPlayer[session.PlayerId] = connection;
             Logins.Increment();
@@ -851,9 +868,8 @@ namespace Ironfront.MasterServer.Dispatch
 
         private void HandleMatchEnded(ClientConnection connection, MatchEndedRequest request)
         {
-            if (!_gameServers.OwnsRoom(connection.Id, request.ServerId, request.RoomId)) return;
+            if (!MayReportRound(connection, request.ServerId, request.RoomId, out Room? room, out ushort mapId)) return;
             long endedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            _lobby.TryGetRoomById(request.RoomId, out Room? room);
             foreach (MatchPlayerResult result in request.Results ?? Array.Empty<MatchPlayerResult>())
             {
                 // Every player the room's own game server reports, as GS_MATCH_PROGRESS already
@@ -867,7 +883,7 @@ namespace Ironfront.MasterServer.Dispatch
                 // The career and the achievements it earns (owner's list of 2026-10-09, item 4).
                 // The map and the mode are the room's, never the server's word.
                 List<string> earned = _career.RecordRound(result.PlayerId, result.Stats, result.Kills, result.Deaths,
-                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, final: true, endedAt,
+                    result.Score, mapId, room?.Settings.Mode == GameMode.Night, final: true, endedAt,
                     room?.Settings.Rule ?? VictoryRule.Margin, room?.Settings.VictoryPoints ?? 0);
                 PushUnlocked(result.PlayerId, earned);
             }
@@ -894,18 +910,62 @@ namespace Ironfront.MasterServer.Dispatch
         /// </remarks>
         private void HandleMatchProgress(ClientConnection connection, MatchProgressRequest request)
         {
-            if (!_gameServers.OwnsRoom(connection.Id, request.ServerId, request.RoomId)) return;
+            if (!MayReportRound(connection, request.ServerId, request.RoomId, out Room? room, out ushort mapId)) return;
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            _lobby.TryGetRoomById(request.RoomId, out Room? room);
             foreach (MatchPlayerResult result in request.Results ?? Array.Empty<MatchPlayerResult>())
             {
                 if (result.PlayerId <= 0) continue;
                 List<string> earned = _career.RecordRound(result.PlayerId, result.Stats, result.Kills, result.Deaths,
-                    result.Score, room?.MapId ?? 0, room?.Settings.Mode == GameMode.Night, request.Final, now,
+                    result.Score, mapId, room?.Settings.Mode == GameMode.Night, request.Final, now,
                     room?.Settings.Rule ?? VictoryRule.Margin, room?.Settings.VictoryPoints ?? 0);
                 PushUnlocked(result.PlayerId, earned);
             }
         }
+
+        /// <summary>
+        /// Whether a round report is this game server's to make, the room it is for when this
+        /// master has one, and the map the round was played on.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Its own room, as before.</b> A server reports the room this master handed it.
+        /// </para>
+        /// <para>
+        /// <b>Or a round from before this master started.</b> A restart forgets every room while
+        /// the game servers play on, and each re-registers as a fresh record with no room, so
+        /// <c>OwnsRoom</c> refused every report of the round under way. On 2026-10-14 Island's
+        /// round in room 13 ended three minutes after the 14:22 (+07) redeploy and reached no
+        /// career. Such a report is accepted from a server this master has never given a room,
+        /// for a room id this master is not using (ids restart with the process). The map is the
+        /// server's own when it plays one; the room's rules died with the old master, so the
+        /// career gets the defaults (day, lead-by rule), which only Night and first-to
+        /// achievements can tell apart.
+        /// </para>
+        /// </remarks>
+        private bool MayReportRound(ClientConnection connection, ushort serverId, int roomId, out Room? room, out ushort mapId)
+        {
+            _lobby.TryGetRoomById(roomId, out room);
+            if (_gameServers.OwnsRoom(connection.Id, serverId, roomId))
+            {
+                mapId = room?.MapId ?? 0;
+                return true;
+            }
+
+            mapId = 0;
+            if (room is not null) return false;
+            if (!_gameServers.IsReportingAnEarlierMastersRound(connection.Id, serverId, out GameServerRecord? server) || server is null)
+                return false;
+
+            mapId = server.MapIds.Length == 1 ? server.MapIds[0] : (ushort)0;
+            if (_earlierMastersRounds.Add((serverId, roomId)))
+                MasterLog.Warn(
+                    $"game server {serverId} reports room {roomId}, which started before this master did: "
+                    + $"its rounds are credited on map {mapId} with the default rules");
+            return true;
+        }
+
+        /// <summary>The (server, room) pairs <see cref="MayReportRound"/> has already logged.</summary>
+        private readonly HashSet<(ushort ServerId, int RoomId)> _earlierMastersRounds = new HashSet<(ushort ServerId, int RoomId)>();
 
         // ------------------------------------------------------------------ career (item 4)
 

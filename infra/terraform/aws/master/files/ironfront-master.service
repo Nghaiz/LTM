@@ -1,0 +1,30 @@
+# /etc/systemd/system/ironfront-master.service — the master container, started at boot.
+#
+# ExecStartPre does everything the master needs first (secret, certificate, PFX, database restore;
+# see ironfront-bootstrap.sh). A failed start retries every 30 s for as long as it takes — on the
+# first boot that covers the SSM parameter not existing yet or the Elastic IP not being attached.
+#
+#   journalctl -u ironfront-master -f      # bootstrap progress
+#   docker logs -f ironfront-master        # the master itself (also /opt/ironfront/data/master.log)
+
+[Unit]
+Description=Ironfront master server (docker compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/ironfront
+ExecStartPre=/opt/ironfront/bin/ironfront-bootstrap.sh
+ExecStart=/usr/bin/docker compose --project-directory /opt/ironfront --env-file /opt/ironfront/master.env up -d --remove-orphans --force-recreate
+ExecStop=/usr/bin/docker compose --project-directory /opt/ironfront --env-file /opt/ironfront/master.env down
+TimeoutStartSec=15min
+TimeoutStopSec=60
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -44,13 +44,43 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
-        public void RateLimiterAllowsFiveRequestsThenRejectsTheRest()
+        public void RateLimiterAllowsItsBudgetThenRejectsTheRest()
         {
             var limiter = new RateLimiter();
-            for (int i = 0; i < 5; i++) Assert.True(limiter.Allow(1, i));
+            for (int i = 0; i < RateLimiter.MaxRequestsPerSecond; i++) Assert.True(limiter.Allow(1, i * 0.01));
 
-            Assert.False(limiter.Allow(1, 5));
+            Assert.False(limiter.Allow(1, 500));
             Assert.True(limiter.Allow(1, 1001));
+        }
+
+        /// <summary>
+        /// A room's players behind one address all dial in the second its match starts, each
+        /// resending every 250 ms (2026-10-14: a class on one school address).
+        /// </summary>
+        [Fact]
+        public void AFullRoomBehindOneAddressGetsThroughInItsFirstSecond()
+        {
+            var limiter = new RateLimiter();
+            int admitted = 0;
+            for (int player = 0; player < ProtocolConstants.MAX_PLAYERS; player++)
+                if (limiter.Allow(0xC6336407, player * 10.0)) admitted++;
+
+            Assert.Equal(ProtocolConstants.MAX_PLAYERS, admitted);
+        }
+
+        [Fact]
+        public void RefusalsAreReportedOnceWithTheirAddresses()
+        {
+            var limiter = new RateLimiter();
+            Assert.False(limiter.TryTakeRefusalReport(out _, out _));
+
+            for (int i = 0; i < RateLimiter.MaxRequestsPerSecond + 3; i++) limiter.Allow(1, 0);
+            for (int i = 0; i < RateLimiter.MaxRequestsPerSecond + 2; i++) limiter.Allow(2, 0);
+
+            Assert.True(limiter.TryTakeRefusalReport(out long refused, out int addresses));
+            Assert.Equal(5, refused);
+            Assert.Equal(2, addresses);
+            Assert.False(limiter.TryTakeRefusalReport(out _, out _));
         }
 
         [Fact]

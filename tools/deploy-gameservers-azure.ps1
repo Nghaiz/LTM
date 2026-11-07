@@ -1,9 +1,11 @@
 #!/usr/bin/env pwsh
 # tools/deploy-gameservers-azure.ps1 -- put a game-server image on the Azure VM and run every map
-# there with infra/docker/gameservers.compose.yml, registered with the fly master.
+# there with infra/docker/gameservers.compose.yml, registered with the master on AWS EC2
+# (52-62-179-111.sslip.io:443, infra/terraform/aws/master; fly.io until 2026-11-07).
 #
 # THE HOST (since 2026-09-28). Azure VM "ironfront-game", Standard_B2as_v2 in Southeast Asia
-# (Singapore, the same city as the fly master: TCP connect 2-3 ms). Its network security group
+# (Singapore; the master is in Sydney and carries only lobby and login, so gameplay UDP never
+# crosses that distance). Its network security group
 # admits UDP 27015-27017 (27018-27020 and 27115/27116 are dropped at the Azure edge), so this runs
 # the compose file on 27015/27016/27017 and advertises the VM's public address. Log in as irondev with the key below; irondev has passwordless sudo.
 #
@@ -12,13 +14,14 @@
 #      into `docker load` over ssh -C through cmd.exe, whose pipes carry bytes unchanged
 #      (~135 MB on the wire, about 20 s from the owner's line).
 #   2. Copies the compose file and writes ~/ironfront/.env (mode 600) with the shared secret from
-#      this repo's .env -- the secret the fly master signs tickets with -- plus the image, ports
+#      this repo's .env -- the secret the master signs tickets with, SSM /ironfront/shared-secret
+#      on the EC2 instance -- plus the image, ports
 #      and advertised address. The secret is never echoed.
 #   3. `docker compose up -d`, then waits until EVERY container logs
 #      "[net] master link: registered as server N". A server that binds its port and never
 #      registers answers every join NoGameServerAvailable, so a port check would be a false green.
 #
-# Only one host may serve the fly master at a time, or the master holds two servers per map and a
+# Only one host may serve the master at a time, or the master holds two servers per map and a
 # room can land on either. Nothing else hosts them since 2026-09-28.
 #
 # Usage:
