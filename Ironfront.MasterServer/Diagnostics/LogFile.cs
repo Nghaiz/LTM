@@ -30,6 +30,7 @@ namespace Ironfront.MasterServer.Diagnostics
         /// </summary>
         public const long MaxBytesPerFile = 8L * 1024 * 1024;
 
+        private static readonly TimeSpan CloseFlushTimeout = TimeSpan.FromSeconds(5);
         private static readonly object Gate = new object();
         private static StreamWriter? Writer;
         private static string FilePath = string.Empty;
@@ -77,9 +78,14 @@ namespace Ironfront.MasterServer.Diagnostics
             }
         }
 
-        /// <summary>Flushes and closes the file. Lines after this go to the console only.</summary>
+        /// <summary>
+        /// Writes the lines already logged, then closes the file. Lines after this go to the
+        /// console only.
+        /// </summary>
         public static void Close()
         {
+            // Outside the gate: the writer thread takes it in Append to write what is queued.
+            LogWriter.Flush(CloseFlushTimeout);
             lock (Gate) CloseUnsafe();
         }
 
