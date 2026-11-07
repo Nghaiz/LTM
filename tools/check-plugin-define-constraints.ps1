@@ -124,9 +124,55 @@ foreach ($item in $expected | Sort-Object Dll) {
 
 Write-Host "[plugin-constraints] $($expected.Count) MCP bridge DLL(s) declared by $nugetRel/.nuget-installed.json"
 
-if ($violations.Count -eq 0 -and $missing.Count -eq 0) {
-    Write-Host "[plugin-constraints] PASS — every bridge DLL is UNITY_EDITOR-only."
+# THE CLOSURE, NOT ONLY THE BRIDGE. 2026-11-07: the 1.7.1 upgrade (#665) rewrote nine dependency
+# metas -- SignalR, Http.Connections, Bcl.Memory, Extensions.Features -- to `defineConstraints: []`.
+# The six bridge DLLs above were fixed and this gate passed, while every player build died in the
+# linker on 'Microsoft.Extensions.Options, Version=8.0.0.0' (Unity's console shows only "UnityEditor.dll
+# assembly is referenced by user code"). So every DLL in the folder is checked: editor-only, or named
+# in the shared list, in both directions.
+$sharedListPath = Join-Path $PSScriptRoot 'nuget-player-shared-dlls.txt'
+if (-not (Test-Path $sharedListPath)) {
+    Write-Host "[plugin-constraints] FAIL — $sharedListPath is missing. It names the NuGet DLLs the player may use;"
+    Write-Host "without it this gate cannot tell a shared DLL from a leaked bridge dependency."
+    exit 1
+}
+$shared = @(Get-Content $sharedListPath | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
+$bridgeNames = @($expected | ForEach-Object { $_.Dll })
+$closureLeaks = @()
+$staleShared = @()
+$folderDlls = @(Get-ChildItem -LiteralPath $nugetAbs -Filter '*.dll' -File | ForEach-Object { $_.Name })
+foreach ($dll in $folderDlls | Sort-Object) {
+    if ($bridgeNames -contains $dll) { continue }
+    $meta = Join-Path $nugetAbs "$dll.meta"
+    $editorOnly = (Test-Path $meta) -and (@(Get-Content -LiteralPath $meta | Where-Object { $_ -match $editorOnlyPattern }).Count -gt 0)
+    if ($shared -contains $dll) {
+        if ($editorOnly) { $staleShared += "$dll — listed as player-shared but its .meta is now UNITY_EDITOR-only" }
+    } elseif (-not $editorOnly) {
+        $closureLeaks += $dll
+    }
+}
+foreach ($dll in $shared) {
+    if ($folderDlls -notcontains $dll) { $staleShared += "$dll — listed as player-shared but not in $nugetRel" }
+}
+Write-Host "[plugin-constraints] $($folderDlls.Count - $bridgeNames.Count) other DLL(s) in $nugetRel; $($shared.Count) listed as player-shared"
+
+if ($violations.Count -eq 0 -and $missing.Count -eq 0 -and $closureLeaks.Count -eq 0 -and $staleShared.Count -eq 0) {
+    Write-Host "[plugin-constraints] PASS — every bridge DLL and every unlisted dependency is UNITY_EDITOR-only."
     exit 0
+}
+
+foreach ($dll in $closureLeaks) {
+    Write-Host "  $nugetRel/$dll  — a bridge dependency without UNITY_EDITOR: players link it, then fail to resolve what it references"
+}
+foreach ($s in $staleShared) {
+    Write-Host "  $s  (remove the line from tools/nuget-player-shared-dlls.txt)"
+}
+if ($violations.Count -eq 0 -and $missing.Count -eq 0) {
+    Write-Host ""
+    Write-Host "[plugin-constraints] FAIL — fix each line above: add '- UNITY_EDITOR' under defineConstraints in"
+    Write-Host "the DLL's .meta (the MCP package's NuGet restore writes [] on upgrade), or, only if the game"
+    Write-Host "itself uses it, name it in tools/nuget-player-shared-dlls.txt with the reason."
+    exit 1
 }
 
 Write-Host ""
