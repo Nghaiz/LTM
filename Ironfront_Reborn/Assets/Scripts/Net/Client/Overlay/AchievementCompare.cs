@@ -18,7 +18,7 @@ namespace Ironfront.Net.Unity.Client.Overlay
         Neither,
     }
 
-    /// <summary>One achievement side by side: this player's entry, the other player's, and whether theirs is classified.</summary>
+    /// <summary>One achievement side by side: this player's entry, the other player's, and whether it is classified.</summary>
     public readonly struct ComparePair
     {
         public ComparePair(AchievementEntry mine, AchievementEntry theirs, bool classified)
@@ -32,15 +32,18 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         public AchievementEntry Theirs { get; }
 
-        /// <summary>A hidden achievement this player has not earned: the other side reads CLASSIFIED, whatever it holds.</summary>
+        /// <summary>
+        /// A hidden achievement this player has not earned: its badge, rule and progress stay
+        /// hidden on both sides, and the other side still says whether they hold it.
+        /// </summary>
         public bool Classified { get; }
 
         public Achievement Achievement => Mine.Achievement;
 
         public bool IHold => Mine.Earned;
 
-        /// <summary>Whether the other player is known to hold it; never true for a classified row.</summary>
-        public bool TheyHold => !Classified && Theirs.Earned;
+        /// <summary>Whether the other player holds it, a classified row included.</summary>
+        public bool TheyHold => Theirs.Earned;
     }
 
     /// <summary>One side's totals in the comparison's header.</summary>
@@ -72,15 +75,20 @@ namespace Ironfront.Net.Unity.Client.Overlay
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The master keeps the hidden rule;</b> this only draws what it sent. A hidden achievement
-    /// this player lacks is never in the other player's list, so its row reads CLASSIFIED on their
-    /// side, counts as not held by them for the filters, and so shows under "neither" and never
-    /// under "only them". Who holds a secret cannot be read off the filters either.
+    /// <b>A hidden achievement shows who holds it, never how.</b> The master sends the other
+    /// player's hidden unlocks too (owner ruling 2026-11-08: "hidden achievements someone else has
+    /// earned must show in the comparison, locked, their content still hidden") and keeps back the
+    /// career numbers behind them. A hidden row this player lacks keeps its silhouette and teaser;
+    /// the other side reads the date it was earned and CLASSIFIED, or NOT YET, and the row counts
+    /// for the filters like any other, so it shows under "only them".
     /// </para>
     /// <para>Engine-free, like <see cref="AchievementBoard"/>, whose entries it pairs.</para>
     /// </remarks>
     public static class AchievementCompare
     {
+        /// <summary>After the other player's date on a hidden row this player lacks.</summary>
+        public const string ClassifiedSuffix = "  ·  CLASSIFIED";
+
         /// <summary>
         /// All eighty, paired. <paramref name="mine"/> is this player's answer from the master (null
         /// when there is none); rarity comes from it for both sides.
@@ -176,15 +184,18 @@ namespace Ironfront.Net.Unity.Client.Overlay
         }
 
         /// <summary>
-        /// One side's cell: the date it was earned, the progress ("642 / 1,000", "BEST 412 M"),
-        /// NOT YET, or CLASSIFIED for the other side of a hidden achievement this player lacks.
-        /// A hidden achievement never shows progress on either side.
+        /// One side's cell: the date it was earned, the progress ("642 / 1,000", "BEST 412 M") or
+        /// NOT YET. The other player's date on a classified row says CLASSIFIED beside it. A hidden
+        /// achievement never shows progress on either side.
         /// </summary>
         public static string SideText(in ComparePair pair, bool mine)
         {
-            if (!mine && pair.Classified) return "CLASSIFIED";
             AchievementEntry entry = mine ? pair.Mine : pair.Theirs;
-            if (entry.Earned) return entry.EarnedAt > 0 ? DateText(entry.EarnedAt) : "EARNED";
+            if (entry.Earned)
+            {
+                string earned = entry.EarnedAt > 0 ? DateText(entry.EarnedAt) : "EARNED";
+                return !mine && pair.Classified ? earned + ClassifiedSuffix : earned;
+            }
             if (!ShowsProgress(pair, mine)) return "NOT YET";
             return AchievementBoard.ProgressText(entry);
         }
@@ -198,13 +209,14 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         /// <summary>
         /// The other player's rarest achievements this player may see, rarest first, for the player
-        /// card; the higher metal first where the share ties or is not known.
+        /// card; the higher metal first where the share ties or is not known. A classified one is
+        /// left out: the card shows its badge, which a silhouette would only stand in for.
         /// </summary>
         public static List<AchievementEntry> Rarest(IReadOnlyList<ComparePair> pairs, int count)
         {
             var held = new List<AchievementEntry>();
             foreach (ComparePair pair in pairs)
-                if (pair.TheyHold) held.Add(pair.Theirs);
+                if (pair.TheyHold && !pair.Classified) held.Add(pair.Theirs);
 
             held.Sort((x, y) =>
             {
@@ -220,7 +232,6 @@ namespace Ironfront.Net.Unity.Client.Overlay
 
         private static bool ShowsProgress(in ComparePair pair, bool mine)
         {
-            if (!mine && pair.Classified) return false;
             AchievementEntry entry = mine ? pair.Mine : pair.Theirs;
             if (entry.Earned || pair.Achievement.Hidden) return false;
             return pair.Achievement.Progress != AchievementProgress.None && entry.Measure > 0;

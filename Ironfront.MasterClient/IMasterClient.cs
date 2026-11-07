@@ -98,7 +98,10 @@ namespace Ironfront.MasterClient
         /// <summary>Their row; its rank is 0 before their first online match. Null when the account does not exist.</summary>
         public LeaderboardRow? Player { get; set; }
 
-        /// <summary>What they hold that this player may see: a hidden achievement only when this player holds it too.</summary>
+        /// <summary>
+        /// Everything they hold, hidden achievements included; the viewer's client keeps a hidden
+        /// one's badge, rule and progress hidden until the viewer holds it too.
+        /// </summary>
         public AchievementUnlock[] Unlocked { get; set; } = Array.Empty<AchievementUnlock>();
 
         /// <summary>How many hidden achievements they hold in all, seen or not.</summary>
