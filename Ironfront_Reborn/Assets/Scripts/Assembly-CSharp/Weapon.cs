@@ -248,11 +248,33 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		}
 	}
 
+	/// <summary>
+	/// Sets the third-person model the way a body with no first-person view carries it.
+	/// </summary>
+	/// <remarks>
+	/// Night Vision has no third-person model, and a player's body on the dedicated server is
+	/// controlled by the AI controller, so it comes through here. It used to throw in the middle
+	/// of Actor.SpawnLoadoutWeapons: the later gear slots stayed empty and no weapon was unholstered
+	/// (Dustbowl 2026-10-15, twice in room 7).
+	/// </remarks>
+	public void PoseForThirdPerson()
+	{
+		if (thirdPersonTransform == null)
+		{
+			return;
+		}
+		thirdPersonTransform.localEulerAngles = new Vector3(0f, 0f, -90f);
+		thirdPersonTransform.localPosition = thirdPersonOffset;
+		thirdPersonTransform.localScale = new Vector3(thirdPersonScale, thirdPersonScale, thirdPersonScale);
+	}
+
 	public virtual void FindRenderers(bool thirdperson)
 	{
 		if (thirdperson)
 		{
-			renderers = new List<Renderer>(thirdPersonTransform.GetComponentsInChildren<Renderer>());
+			renderers = thirdPersonTransform != null
+				? new List<Renderer>(thirdPersonTransform.GetComponentsInChildren<Renderer>())
+				: new List<Renderer>();
 		}
 		else
 		{

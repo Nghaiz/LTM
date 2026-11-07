@@ -52,6 +52,49 @@ namespace Ironfront.Net.Unity.Client.Tests
             }
         }
 
+        /// <summary>
+        /// A player's body on the dedicated server takes the third-person branch of
+        /// <c>Actor.SpawnWeapon</c>, so every weapon a loadout can hold has to survive it, the
+        /// goggles with no third-person model included.
+        /// </summary>
+        [Test]
+        public void EveryRegisteredWeaponCanBeArmedOnABodyWithNoFirstPersonView()
+        {
+            Type weaponType = TypeNamed("Weapon");
+            var failures = new List<string>();
+            int armed = 0;
+            bool sawOneWithNoThirdPersonModel = false;
+
+            foreach ((byte id, GameObject prefab) in RegisteredWeapons())
+            {
+                GameObject instance = UnityEngine.Object.Instantiate(prefab);
+                try
+                {
+                    Component weapon = instance.GetComponent(weaponType);
+                    if (weapon == null) continue;
+
+                    armed++;
+                    if ((Transform)Field(weapon, "thirdPersonTransform") == null) sawOneWithNoThirdPersonModel = true;
+
+                    weaponType.GetMethod("PoseForThirdPerson").Invoke(weapon, null);
+                    weaponType.GetMethod("FindRenderers").Invoke(weapon, new object[] { true });
+                }
+                catch (TargetInvocationException ex)
+                {
+                    failures.Add($"{prefab.name} (id {id}): {ex.InnerException?.GetType().Name}");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(instance);
+                }
+            }
+
+            Assert.Greater(armed, 0, "the registry gave no weapon to arm");
+            Assert.IsTrue(sawOneWithNoThirdPersonModel,
+                "no registered weapon lacks a third-person model, so this test no longer proves the guard");
+            Assert.IsEmpty(failures, string.Join("\n", failures));
+        }
+
         [Test]
         public void EveryGunFiresOnTheServerAsItsPrefabFiresOnTheClient()
         {

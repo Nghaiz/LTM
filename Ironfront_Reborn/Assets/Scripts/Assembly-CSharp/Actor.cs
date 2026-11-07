@@ -538,9 +538,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (aiControlled)
 		{
 			UnityEngine.Object.Destroy(component.animator);
-			component.thirdPersonTransform.localEulerAngles = new Vector3(0f, 0f, -90f);
-			component.thirdPersonTransform.localPosition = component.thirdPersonOffset;
-			component.thirdPersonTransform.localScale = new Vector3(component.thirdPersonScale, component.thirdPersonScale, component.thirdPersonScale);
+			component.PoseForThirdPerson();
 			component.CullFpsObjects();
 		}
 		else
