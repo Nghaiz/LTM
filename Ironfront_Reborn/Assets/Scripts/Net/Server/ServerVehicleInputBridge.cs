@@ -136,6 +136,16 @@ namespace Ironfront.Net.Unity.Server
         {
             if (!decision.Accepted) return;
 
+            // A switch is a Left from the old seat and an Entered into the new one, in one
+            // decision. The old half first: a driver moving to the gun stops steering, and the
+            // old seat's turret stops chasing an aim nobody is giving it any more.
+            if (decision.IsSwitch)
+            {
+                if (decision.PreviousSeatIndex == VehicleInputAuthority.DriverSeatIndex)
+                    Remove(decision.ActorId);
+                _turrets?.ClearTarget(decision.VehicleId, decision.PreviousSeatIndex);
+            }
+
             if (decision.Result == SeatChangeResult.Entered
                 && decision.SeatIndex == VehicleInputAuthority.DriverSeatIndex)
             {

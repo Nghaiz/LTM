@@ -74,6 +74,10 @@ namespace Ironfront.Net.Unity.Client
         private readonly Dictionary<ushort, Transform> _seatedIn =
             new Dictionary<ushort, Transform>(ProtocolConstants.MAX_ACTORS);
 
+        // The seat index each body in _seatedIn sits at, for the seat list.
+        private readonly Dictionary<ushort, byte> _seatIndexIn =
+            new Dictionary<ushort, byte>(ProtocolConstants.MAX_ACTORS);
+
         // How far the ground under each standing body sat from its replicated feet at the last
         // probe, NaN when there was none within reach. See TryFooting.
         private readonly Dictionary<ushort, float> _footing =
@@ -291,6 +295,7 @@ namespace Ironfront.Net.Unity.Client
                 if (hasSample)
                 {
                     _seatedIn[pair.Key] = SeatVehicleOf(in sample.State);
+                    _seatIndexIn[pair.Key] = sample.State.SeatIndex;
                     view.SetSeatAnimation(SeatAnimationOf(in sample.State));
                     view.Apply(in sample.State);
 
@@ -612,6 +617,23 @@ namespace Ironfront.Net.Unity.Client
             return count;
         }
 
+        /// <summary>
+        /// Whether a living remote body sits at seat <paramref name="seatIndex"/> of
+        /// <paramref name="vehicle"/>, from the last sampled snapshot. For the seat list: a
+        /// client seats only its own player, so the rest of the crew is known only from here.
+        /// </summary>
+        internal bool SeatTaken(Transform vehicle, int seatIndex)
+        {
+            if (vehicle == null) return false;
+            foreach (KeyValuePair<ushort, Transform> seat in _seatedIn)
+            {
+                if (seat.Value != vehicle) continue;
+                if (!_seatIndexIn.TryGetValue(seat.Key, out byte index) || index != seatIndex) continue;
+                if (_views.TryGetValue(seat.Key, out RemoteActorView crew) && crew != null && crew.IsAlive) return true;
+            }
+            return false;
+        }
+
         private void ApplyVehicleMarkers(byte localTeam, bool hasLocalBody, Vector3 localPosition, Transform localVehicle)
         {
             IMinimapMarkers minimap = NetClientBindings.Minimap;
@@ -752,6 +774,7 @@ namespace Ironfront.Net.Unity.Client
             _views.Remove(message.ActorId);
             _centrePivotActors.Remove(message.ActorId);
             _seatedIn.Remove(message.ActorId);
+            _seatIndexIn.Remove(message.ActorId);
             _footing.Remove(message.ActorId);
 
             // BEFORE the transform goes back to the pool. The marker is keyed by that

@@ -150,6 +150,12 @@ namespace Ironfront.Net.Replication.Vehicles
             if (decision.Result == SeatChangeResult.Entered)
             {
                 _registry.TrySetOccupant(decision.VehicleId, decision.SeatIndex, 0);
+
+                // A refused switch puts the actor back in the seat it came from, which nobody
+                // could have taken in between: the decision booked both halves at once.
+                if (decision.IsSwitch)
+                    _registry.TrySetOccupant(
+                        decision.VehicleId, decision.PreviousSeatIndex, decision.ActorId);
                 return;
             }
 
@@ -209,10 +215,25 @@ namespace Ironfront.Net.Replication.Vehicles
                 if (seatedIn == request.VehicleId && seatedAt == request.SeatIndex)
                     return Accept(in request, SeatChangeResult.Entered, changedNothing: true);
 
-                // Seated elsewhere. V4-D8: the network path has no atomic switch, so this is
-                // refused and the client sends Leave then Enter — two independently arbitrated
-                // requests, which is what restores the lockout and the capacity check that
-                // Actor.SwitchSeat bypasses.
+                // Another seat of the vehicle it is ALREADY in: the switch the original game makes
+                // with F1-F8 (Actor.SwitchSeat). Booked as one move -- the old seat freed and the
+                // new one taken in the same decision -- so nobody can take either seat between the
+                // two halves, and with no lockout and no reach check: the body never leaves the
+                // hull. V4-D8 refused this and asked the client for Leave then Enter, which no
+                // client ever sent; the price was a boat whose bow gun is seat 4 of 5 and that no
+                // player could reach unless four others were already aboard (2026-11-07).
+                // The target seat was checked free above.
+                if (seatedIn == request.VehicleId)
+                {
+                    _registry.TrySetOccupant(seatedIn, seatedAt, 0);
+                    _registry.TrySetOccupant(request.VehicleId, request.SeatIndex, request.ActorId);
+                    return new SeatDecision(
+                        SeatChangeResult.Entered, request.ConnectionId, request.ActorId,
+                        request.VehicleId, request.SeatIndex, previousSeatIndex: seatedAt);
+                }
+
+                // Seated in a DIFFERENT vehicle: refused. Leaving one hull and boarding another is
+                // two arbitrated requests, which keeps the re-entry lockout and the reach check.
                 return SeatDecision.Refuse(in request, SeatChangeResult.RejectedAlreadySeated);
             }
 

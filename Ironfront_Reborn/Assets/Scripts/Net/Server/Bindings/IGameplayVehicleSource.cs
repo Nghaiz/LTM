@@ -166,6 +166,13 @@ namespace Ironfront.Net.Unity.Server
         /// <returns>False when it was not in one.</returns>
         bool TryLeaveSeat(GameObject actor);
 
+        /// <summary>
+        /// Moves an actor already seated in THIS vehicle to another of its seats: the server half
+        /// of an arbitrated switch (<c>SeatDecision.IsSwitch</c>), <c>Actor.SwitchSeat</c>'s move.
+        /// </summary>
+        /// <returns>False when the live scene refused, which the bridge turns into a rollback.</returns>
+        bool TrySwitchSeat(GameObject actor, int seatIndex) => false;
+
         /// <summary>The world-space bounds enclosing every collider of this vehicle.</summary>
         /// <remarks>Default-implemented as "unknown" so fakes predating it keep compiling.</remarks>
         bool TryGetBounds(out Bounds bounds)

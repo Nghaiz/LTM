@@ -299,6 +299,7 @@ public class FpsActorController : ActorController
 	private void Awake()
 	{
 		NetClientBindings.OfflineSeatCandidate = ProbeOfflineSeat;
+		NetClientBindings.LocalCrew = ProbeLocalCrew;
 		instance = this;
 
 		// P12 D-1. The prefab used to author `team: 0` on this body, and that literal was the
@@ -1357,9 +1358,9 @@ public class FpsActorController : ActorController
 		// F1-F8 move the body between the seats of its vehicle -- LeaveSeat and EnterSeat, both
 		// local. Seat authority is the server's at client role (design D2, ledger X-30, and the
 		// Use key's own guard below): a networked client switching here moved its camera to
-		// another seat while the server kept it driving, and the protocol has no switch to ask
-		// for. Offline they are the original game's keys, unchanged. Found auditing bug 4 of the
-		// 2026-09-28 playtest, the keys nobody knew were live.
+		// another seat while the server kept it driving. Online the same keys ask the server
+		// instead (ClientSeatRequester.TrySendSeatSwitch, 2026-11-08), and the HUD's seat list
+		// names them. Offline they are the original game's keys, unchanged.
 		bool offlineSeatKeys = !NetContext.IsClient;
 		if (offlineSeatKeys && Input.GetKeyDown(KeyCode.F1))
 		{
@@ -1485,6 +1486,41 @@ public class FpsActorController : ActorController
 			}
 		}
 		return true;
+	}
+
+	/// <summary>
+	/// The seats of the vehicle this player sits in, for the HUD's seat list. See
+	/// <see cref="NetClientBindings.LocalCrew"/>.
+	/// </summary>
+	private int ProbeLocalCrew(Ironfront.Net.Unity.LocalSeatLine[] into, out Transform vehicle,
+		out Ironfront.Net.Protocol.VehicleKind kind, out int localSeat)
+	{
+		vehicle = null;
+		kind = Ironfront.Net.Protocol.VehicleKind.Car;
+		localSeat = -1;
+		if (into == null || actor == null || actor.dead || !actor.IsSeated() || actor.seat.vehicle == null)
+		{
+			return 0;
+		}
+		Vehicle body = actor.seat.vehicle;
+		if (body.seats == null)
+		{
+			return 0;
+		}
+		vehicle = body.transform;
+		kind = body is Tank ? Ironfront.Net.Protocol.VehicleKind.Tank : body is Helicopter ? Ironfront.Net.Protocol.VehicleKind.Helicopter : body is Boat ? Ironfront.Net.Protocol.VehicleKind.Boat : Ironfront.Net.Protocol.VehicleKind.Car;
+		int count = Mathf.Min(body.seats.Length, into.Length);
+		for (int i = 0; i < count; i++)
+		{
+			Seat seat = body.seats[i];
+			if (seat == actor.seat)
+			{
+				localSeat = i;
+			}
+			into[i].Role = seat != null ? body.GetSeatRole(i) : Ironfront.Net.Unity.NetSeatRole.None;
+			into[i].Taken = seat != null && seat.occupant != null && seat.occupant != actor && !seat.occupant.dead;
+		}
+		return count;
 	}
 
 	private void SampleUseRay()

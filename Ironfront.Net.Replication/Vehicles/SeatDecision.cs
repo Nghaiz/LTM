@@ -56,16 +56,37 @@ namespace Ironfront.Net.Replication.Vehicles
         /// </remarks>
         public readonly bool ChangedNothing;
 
+        /// <summary><see cref="PreviousSeatIndex"/> when the actor was not moved from another seat.</summary>
+        public const byte NoPreviousSeat = byte.MaxValue;
+
+        /// <summary>
+        /// The seat of the SAME vehicle the actor moved out of, for an accepted switch; otherwise
+        /// <see cref="NoPreviousSeat"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>A switch is an <see cref="SeatChangeResult.Entered"/> on the wire.</b> The client
+        /// already knows which seat it was in, so naming the new seat is all it needs; the old
+        /// one is kept here only so <see cref="SeatArbiter.Rollback"/> can put the actor back
+        /// when the scene refuses the move, and so the bridge knows to move a seated body rather
+        /// than seat a standing one.
+        /// </remarks>
+        public readonly byte PreviousSeatIndex;
+
+        /// <summary>True for an accepted move between two seats of one vehicle.</summary>
+        public bool IsSwitch => PreviousSeatIndex != NoPreviousSeat;
+
         public SeatDecision(
             SeatChangeResult result, ushort connectionId, ushort actorId,
-            ushort vehicleId, byte seatIndex, bool changedNothing = false)
+            ushort vehicleId, byte seatIndex, bool changedNothing = false,
+            byte previousSeatIndex = NoPreviousSeat)
         {
-            Result         = result;
-            ConnectionId   = connectionId;
-            ActorId        = actorId;
-            VehicleId      = vehicleId;
-            SeatIndex      = seatIndex;
-            ChangedNothing = changedNothing;
+            Result            = result;
+            ConnectionId      = connectionId;
+            ActorId           = actorId;
+            VehicleId         = vehicleId;
+            SeatIndex         = seatIndex;
+            ChangedNothing    = changedNothing;
+            PreviousSeatIndex = previousSeatIndex;
         }
 
         /// <summary>True when the request was granted.</summary>

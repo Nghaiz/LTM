@@ -13,6 +13,26 @@ namespace Ironfront.Net.Unity
         out Transform vehicle, out Vector3 seat, out VehicleKind kind,
         out int crew, out int seats, out bool enemyCrew);
 
+    /// <summary>One seat of the vehicle the local player sits in, as the HUD's seat list draws it.</summary>
+    public struct LocalSeatLine
+    {
+        /// <summary>What the seat is for.</summary>
+        public NetSeatRole Role;
+
+        /// <summary>
+        /// Somebody else sits there, as far as this process seats bodies. A networked client
+        /// seats only its own player, so the list adds the remote crew it reads from snapshots.
+        /// </summary>
+        public bool Taken;
+    }
+
+    /// <summary>
+    /// The seats of the vehicle the local player sits in: fills <paramref name="into"/> from seat 0
+    /// and returns how many it wrote, or 0 when the player is not seated.
+    /// </summary>
+    public delegate int LocalCrewProbe(
+        LocalSeatLine[] into, out Transform vehicle, out VehicleKind kind, out int localSeat);
+
     /// <summary>
     /// Where <c>Assembly-CSharp</c> hands this assembly the client-side singletons it may no
     /// longer name: the local player's rig and the HUD. The client mirror of
@@ -195,6 +215,17 @@ namespace Ironfront.Net.Unity
         public static OfflineSeatProbe OfflineSeatCandidate { get; set; }
 
         /// <summary>
+        /// The vehicle the local player sits in and who else is aboard, for the seat list. Set by
+        /// the player controller; null when no local player exists (a headless server, a test).
+        /// </summary>
+        /// <remarks>
+        /// Read from the local body's own seat, which is right on both sides of the wire: a
+        /// networked client seats its own player through <c>LocalPlayerRigBinding</c> when the
+        /// server says so, exactly as the offline game does when the key is pressed.
+        /// </remarks>
+        public static LocalCrewProbe LocalCrew { get; set; }
+
+        /// <summary>
         /// True when a matchmade match was left through <see cref="LeaveMatch"/>, false when
         /// there was none to leave.
         /// </summary>
@@ -352,6 +383,7 @@ namespace Ironfront.Net.Unity
             LocalTeam = null;
             ExplosionPredictor = null;
             HornHeard = null;
+            LocalCrew = null;
         }
 
         /// <summary>

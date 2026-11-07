@@ -789,7 +789,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	/// it. Reading the property unguarded would snap every bot to face north.
 	/// </para>
 	/// </remarks>
-	private Vector3 AimDirection()
+	public Vector3 AimDirection()
 	{
 		NetServerActor networked = GetComponent<NetServerActor>();
 		if (networked != null && !float.IsNaN(networked.YawDegrees))
@@ -2309,12 +2309,30 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (IsSeated())
 		{
 			Vehicle vehicle = seat.vehicle;
-			if (targetSeat >= 0 && targetSeat < vehicle.seats.Length && !vehicle.seats[targetSeat].IsOccupied())
+			if (targetSeat >= 0 && targetSeat < vehicle.seats.Length)
 			{
-				LeaveSeat();
-				EnterSeat(vehicle.seats[targetSeat]);
+				TrySwitchSeat(vehicle.seats[targetSeat]);
 			}
 		}
+	}
+
+	/// <summary>
+	/// Moves this seated body to another free seat of the same vehicle: the F1-F8 move, shared by
+	/// the offline keys and by both ends of an arbitrated network switch.
+	/// </summary>
+	/// <returns>False, with nothing moved, when the target is not a free seat of this vehicle.</returns>
+	public bool TrySwitchSeat(Seat target)
+	{
+		if (dead || !IsSeated() || target == null || target == seat)
+		{
+			return false;
+		}
+		if (target.vehicle != seat.vehicle || target.vehicle.dead || target.IsOccupied())
+		{
+			return false;
+		}
+		LeaveSeat();
+		return EnterSeat(target);
 	}
 
 	public void Hurt(float x)
