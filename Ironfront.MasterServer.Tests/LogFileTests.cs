@@ -25,6 +25,18 @@ namespace Ironfront.MasterServer.Tests
             if (Directory.Exists(_directory)) Directory.Delete(_directory, recursive: true);
         }
 
+        /// <summary>
+        /// A command runs beside the live master and inherits its log path. Two writers share one
+        /// offset on Linux and overwrite each other's lines (#656), so only the server may open it.
+        /// </summary>
+        [Fact]
+        public void OnlyTheServerOwnsTheLogFile()
+        {
+            Assert.True(Program.OwnsLogFile(Array.Empty<string>()));
+            Assert.False(Program.OwnsLogFile(new[] { "--backup", "/tmp/copy.db" }));
+            Assert.False(Program.OwnsLogFile(new[] { "--create-account", "name", "hash", "Name" }));
+        }
+
         [Fact]
         public void TheLogAndTheEventStreamBothReachTheFile()
         {

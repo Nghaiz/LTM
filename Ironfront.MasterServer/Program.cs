@@ -71,7 +71,12 @@ namespace Ironfront.MasterServer
 
             // First, so the file holds everything the console does from here on. A copy on the
             // data volume is the only log that outlives fly's few-minute buffer (LogFile).
-            LogFile.Open(config.LogFilePath);
+            //
+            // The server only. A command runs through `exec` beside the live master and inherits
+            // its IRONFRONT_LOG_FILE; .NET does not open the file with O_APPEND on Linux, so two
+            // writers share one offset and overwrite each other's lines (#656). A command prints
+            // to stdout, which its caller reads anyway.
+            if (OwnsLogFile(args)) LogFile.Open(config.LogFilePath);
 
             // Registered before anything else can log. Both values are process-lifetime
             // constants, which is exactly the case redaction can cover.
@@ -92,6 +97,12 @@ namespace Ironfront.MasterServer
 
             return await RunServerAsync(config).ConfigureAwait(false);
         }
+
+        /// <summary>
+        /// Whether this process writes the log file: the running server does, a one-shot
+        /// command (any argument) does not.
+        /// </summary>
+        public static bool OwnsLogFile(string[] args) => args.Length == 0;
 
         private static async Task<int> RunCommandAsync(string[] args, MasterServerConfig config)
         {

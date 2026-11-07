@@ -41,6 +41,17 @@ MANIFEST_TYPES = ",".join([
 ])
 
 
+def package_exists(owner, pkg):
+    """False only for a package GitHub says is gone; any other failure stays an error."""
+    result = subprocess.run(["gh", "api", f"users/{owner}/packages/container/{pkg}", "--jq", ".name"],
+                            capture_output=True, text=True)
+    if result.returncode == 0:
+        return True
+    if "Package not found" in result.stdout + result.stderr:
+        return False
+    sys.exit(f"{pkg}: could not read the package: {result.stderr.strip() or result.stdout.strip()}")
+
+
 def list_versions(owner, pkg):
     out = subprocess.run(
         ["gh", "api", "--paginate", f"users/{owner}/packages/container/{pkg}/versions?per_page=100",
@@ -132,6 +143,11 @@ def main():
         live = set()
 
     for pkg in PACKAGES:
+        # Game-server images are side-loaded to the VM, so that package can legitimately not
+        # exist. Its absence must not stop the pruning of the packages that do.
+        if not package_exists(owner, pkg):
+            print(f"warning: {pkg}: no such package on GHCR, nothing to prune")
+            continue
         versions, keep = plan(owner, pkg, args.keep_days, args.keep_recent,
                               live if pkg == "ironfront-master" else set())
         doomed = [v for v in versions if v["digest"] not in keep]
