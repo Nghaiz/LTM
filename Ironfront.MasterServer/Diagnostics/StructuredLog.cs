@@ -139,14 +139,13 @@ namespace Ironfront.MasterServer.Diagnostics
             return line;
         }
 
+        // Queued, like MasterLog's lines and on the same queue, so the two keep their order
+        // and neither can stall the logic thread on a slow console (#669).
         private static void Write(string line)
         {
-            lock (Gate)
-            {
-                Output.WriteLine(line);
-            }
-
-            LogFile.Append(line);
+            TextWriter output;
+            lock (Gate) output = Output;
+            LogWriter.Enqueue(output, line);
         }
     }
 }
