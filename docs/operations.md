@@ -22,7 +22,7 @@ holds (metrics, backups, alerting, load test), it is kept and re-pointed at the 
 ## 1. Layout
 
 ```
-Azure VM (Standard_B2ms: 2 vCPU / 8 GB, Ubuntu 24.04)  ── provisioned by infra/terraform
+Azure VM (Standard_B2ms: 2 vCPU / 8 GB, Ubuntu 24.04)  ── provisioned by infra/terraform/azure
 │
 │  docker compose (infra/compose/compose.yaml), project "ironfront"
 ├─ ironfront-master-1          :27000/tcp  lobby, auth, matchmaking   (TLS)
@@ -52,12 +52,12 @@ over SSH, never open it in the NSG.
 
 ## 2. First-time setup
 
-The full sequence lives in [`infra/terraform/README.md`](../infra/terraform/README.md) and
+The full sequence lives in [`infra/terraform/azure/README.md`](../infra/terraform/azure/README.md) and
 the VM's own `/opt/ironfront/BOOTSTRAP.md`. In brief:
 
 ```bash
 # 1. Provision the cloud (preflight the region/SKU FIRST — see the terraform README).
-cd infra/terraform
+cd infra/terraform/azure
 cp terraform.tfvars.example terraform.tfvars     # SSH key, admin CIDR, domain
 terraform init && terraform apply
 terraform output public_ip_address
@@ -512,7 +512,7 @@ to bind `2705` and quietly binding `27015` keeps receiving players who cannot re
 
 ## 11. Related
 
-- [`infra/terraform/README.md`](../infra/terraform/README.md) — provisioning the VM and Blob
+- [`infra/terraform/azure/README.md`](../infra/terraform/azure/README.md) — provisioning the VM and Blob
 - [`infra/compose/README.md`](../infra/compose/README.md) — the stack, ports and the gotchas
 - [`infra/tls/README.md`](../infra/tls/README.md) — issuing and renewing the certificate
 - [`infra/systemd/README.md`](../infra/systemd/README.md) — the backup and alert timers

@@ -1,0 +1,8 @@
+[Unit]
+Description=Ironfront master database backup to S3
+Requires=docker.service
+After=docker.service ironfront-master.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ironfront/bin/ironfront-backup.sh daily

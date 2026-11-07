@@ -1,0 +1,60 @@
+# Ironfront master on EC2 — written to /opt/ironfront/compose.yaml by cloud-init.
+#
+# Run by ironfront-master.service, never by hand without the same flags:
+#   docker compose --project-directory /opt/ironfront --env-file /opt/ironfront/master.env up -d
+#
+# master.env holds only the image digest (ironfront-deploy.sh rewrites it). The shared secret and
+# the PFX password are in /opt/ironfront/.env (root, 0600), written by ironfront-bootstrap.sh from
+# SSM Parameter Store on every start.
+#
+# The env below is the old fly deployment's [env] (master.toml, removed 2026-11-07) with two
+# differences:
+#   - TLS is served by the master itself (Let's Encrypt PFX) — there is no edge to terminate it;
+#   - no PROXY protocol — clients connect directly, so the per-IP limits see real addresses.
+
+name: ironfront
+
+services:
+  master:
+    image: ${IRONFRONT_MASTER_IMAGE:?set IRONFRONT_MASTER_IMAGE in /opt/ironfront/master.env}
+    container_name: ironfront-master
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The master drains for up to 20 s on SIGINT (the image's STOPSIGNAL).
+    stop_grace_period: 25s
+    ports:
+      - "27000:27000"
+      # Same listener on 443: what released clients and the game servers dial.
+      - "443:27000"
+      # Metrics: host loopback only. The container binds 0.0.0.0 because Docker's port proxy
+      # reaches it over the bridge; THIS binding is what keeps it off the Internet.
+      - "127.0.0.1:27001:27001"
+    volumes:
+      - /opt/ironfront/data:/data
+      - /opt/ironfront/tls:/tls:ro
+    env_file:
+      - /opt/ironfront/.env
+    environment:
+      IRONFRONT_MASTER_PORT: "27000"
+      IRONFRONT_DB_PATH: /data/ironfront.db
+      IRONFRONT_METRICS_CSV: /data/durability.csv
+      IRONFRONT_METRICS_PORT: "27001"
+      IRONFRONT_METRICS_BIND: "0.0.0.0"
+      IRONFRONT_STRUCTURED_LOG: "1"
+      IRONFRONT_LOG_FILE: /data/master.log
+      IRONFRONT_LOG_LEVEL: Warn
+      IRONFRONT_MAX_CONNECTIONS_PER_IP: "64"
+      IRONFRONT_MAX_TOTAL_CONNECTIONS: "256"
+      IRONFRONT_LOGIN_RATE_PER_MINUTE: "5"
+      IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE: "60"
+      IRONFRONT_TLS_CERT_PATH: /tls/master.pfx
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }

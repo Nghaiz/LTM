@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Ironfront master database backup (19:30 UTC = 02:30 +07)
+
+[Timer]
+OnCalendar=*-*-* 19:30:00 UTC
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

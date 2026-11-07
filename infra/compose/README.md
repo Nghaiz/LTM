@@ -1,7 +1,7 @@
 # infra/compose — the running stack
 
 One master + two headless game servers on a single Azure VM, from immutable GHCR images.
-Terraform (`infra/terraform/`) builds the VM and network; this directory is what runs on
+Terraform (`infra/terraform/azure/`) builds the VM and network; this directory is what runs on
 it. **This is process/capacity resilience, not high availability** — a VM, disk or region
 failure is a full outage. Say so in the report; do not call it HA.
 

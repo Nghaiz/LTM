@@ -396,11 +396,16 @@ jobs:
       - name: Terraform fmt
         run: terraform -chdir=infra/terraform fmt -check -recursive
 
-      # -backend=false: validate the configuration without contacting a state backend.
+      # -backend=false: validate the configuration without contacting a state backend. One root
+      # module per platform/role under infra/terraform/ (azure, aws/master).
       - name: Terraform validate
         run: |
-          terraform -chdir=infra/terraform init -backend=false -input=false
-          terraform -chdir=infra/terraform validate
+          for dir in infra/terraform/azure infra/terraform/aws/master; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
 
   # Unity compilation needs a licensed Editor on the runner, which the free tier does not
   # provide. The client track runs `pwsh tools/ci.ps1` locally with UNITY_PATH set instead. Enable

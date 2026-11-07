@@ -9,7 +9,8 @@ Kept, per package:
   - every image carrying a name tag (branch, semver, release tag: anything that is not
     only the <YYYY-MM-DDTHH-MM-SSVN> timestamp images.yml stamps on every build);
   - timestamp-only images younger than --keep-days, and the --keep-recent newest ones;
-  - the image each Fly machine of $MASTER_APP runs, when FLY_API_TOKEN is set.
+  - the image the live master runs: $LIVE_MASTER_IMAGE (the repository variable of the same
+    name, which infra/terraform/aws/master/deploy.sh sets after every deploy).
 
 Every kept image is expanded through its registry manifest, so the platform manifest and
 the attestation under an index survive with it. A version API row is one manifest, not
@@ -20,7 +21,7 @@ Only the packages named in PACKAGES are ever touched.
 Usage:
   python tools/prune_ghcr.py                  # print the plan, delete nothing
   python tools/prune_ghcr.py --apply          # delete
-  python tools/prune_ghcr.py --require-fly    # refuse to run without FLY_API_TOKEN
+  python tools/prune_ghcr.py --require-live   # refuse to run without LIVE_MASTER_IMAGE
 """
 import argparse
 import datetime
@@ -76,20 +77,16 @@ def child_digests(owner, pkg, digest, token):
     return {m["digest"] for m in json.load(urllib.request.urlopen(req)).get("manifests", [])}
 
 
-def fly_digests(owner):
-    """Digests the Fly master machines run, or None when no token is available."""
-    token = os.environ.get("FLY_API_TOKEN")
-    app = os.environ.get("MASTER_APP", "kien-master-2026")
-    if not token:
+def live_digests(owner):
+    """Digests the live master runs, from $LIVE_MASTER_IMAGE (comma-separated), or None if unset."""
+    value = os.environ.get("LIVE_MASTER_IMAGE", "").strip()
+    if not value:
         return None
-    req = urllib.request.Request(f"https://api.machines.dev/v1/apps/{app}/machines",
-                                 headers={"Authorization": f"Bearer {token}"})
     pinned = set()
-    for machine in json.load(urllib.request.urlopen(req)):
-        image = machine["config"]["image"]
-        if f"ghcr.io/{owner}/ironfront-master@" not in image:
-            sys.exit(f"Fly machine {machine['id']} runs {image}, not a digest of ironfront-master;"
-                     " refusing to guess what it depends on")
+    for image in (v.strip() for v in value.split(",") if v.strip()):
+        if f"ghcr.io/{owner}/ironfront-master@sha256:" not in image:
+            sys.exit(f"LIVE_MASTER_IMAGE names {image}, not a digest of ironfront-master;"
+                     " refusing to guess what the live master depends on")
         pinned.add(image.split("@", 1)[1])
     return pinned
 
@@ -108,7 +105,7 @@ def plan(owner, pkg, keep_days, keep_recent, pinned):
 
     for digest in pinned:
         if digest not in known:
-            sys.exit(f"{pkg}: live Fly image {digest} is not in the registry -- it is already gone,"
+            sys.exit(f"{pkg}: live master image {digest} is not in the registry -- it is already gone,"
                      " fix that before pruning anything")
         roots.add(digest)
     if not roots:
@@ -131,15 +128,15 @@ def main():
     parser.add_argument("--keep-days", type=int, default=30)
     parser.add_argument("--keep-recent", type=int, default=10)
     parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--require-fly", action="store_true")
+    parser.add_argument("--require-live", action="store_true")
     args = parser.parse_args()
     owner = args.owner.lower()
 
-    live = fly_digests(owner)
+    live = live_digests(owner)
     if live is None:
-        if args.require_fly:
-            sys.exit("FLY_API_TOKEN is not set; the live master image cannot be protected")
-        print("warning: FLY_API_TOKEN not set -- the live master image is kept only by age")
+        if args.require_live:
+            sys.exit("LIVE_MASTER_IMAGE is not set; the live master image cannot be protected")
+        print("warning: LIVE_MASTER_IMAGE not set -- the live master image is kept only by age")
         live = set()
 
     for pkg in PACKAGES:
