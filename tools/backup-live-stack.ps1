@@ -64,7 +64,6 @@ if (-not $OutDir) {
 $OutDir = [IO.Path]::GetFullPath($OutDir)
 $work = "$OutDir.partial"
 if ((Test-Path $OutDir) -or (Test-Path $work)) { throw "$OutDir (or its .partial) already exists; pass another -OutDir." }
-$chunkBytes = 1MB
 $facts = [ordered]@{}
 
 function Read-EnvValue([string]$name) {
@@ -99,7 +98,11 @@ function Invoke-Master([string]$command, [int]$TimeoutSec = 600) {
         $status = if ($inv) { $inv.Status } else { 'Pending' }
     } while ($status -in 'Pending', 'InProgress', 'Delayed')
     if ($status -ne 'Success') { throw "on the master, '$command' ended $status`: $($inv.StandardErrorContent)" }
-    return [string]$inv.StandardOutputContent
+    # get-command-invocation returns only the first 24,000 characters of stdout. A listing cut there
+    # would make the coverage check below compare against half a file list, so it is refused instead.
+    $stdout = [string]$inv.StandardOutputContent
+    if ($stdout.Length -ge 24000) { throw "on the master, the output of '$command' reached SSM's 24,000-character cap and was truncated." }
+    return $stdout
 }
 
 function Expand-GzipFile([string]$source, [string]$destination) {
@@ -221,11 +224,23 @@ if ($accounts -ne [int]$live.accountsTotal) {
 
 Write-Host '[backup] master data files (logs, durability.csv, replaced databases) ...'
 $dataKey = "data-files/data-files-$(Get-Date -Format 'yyyyMMdd-HHmmss').tar.gz"
-$listing = Invoke-Master ('cd /opt/ironfront/data && tar czf /tmp/ltm-data.tgz --exclude=ironfront.db --exclude=ironfront.db-wal --exclude=ironfront.db-shm --exclude=".backup-*" . ' +
+$listing = Invoke-Master ('cd /opt/ironfront/data && tar czf /tmp/ltm-data.tgz --anchored --exclude=./ironfront.db --exclude=./ironfront.db-wal --exclude=./ironfront.db-shm --exclude=''./.backup-*'' . ' +
     "&& /snap/bin/aws s3 cp --only-show-errors --region $Region /tmp/ltm-data.tgz s3://$Bucket/$dataKey && tar tzf /tmp/ltm-data.tgz; rm -f /tmp/ltm-data.tgz")
 & aws s3 cp --only-show-errors --region $Region "s3://$Bucket/$dataKey" (Join-Path $work 'master/data-files.tar.gz')
 if ($LASTEXITCODE -ne 0) { throw "aws s3 cp s3://$Bucket/$dataKey failed ($LASTEXITCODE)." }
 $facts['master data files'] = (@($listing -split "`n" | Where-Object { $_ -and $_ -notmatch '/$' }) -join ', ')
+
+# Every file under /opt/ironfront/data, hashed on the instance, so "the backup holds all of the data" is
+# checked rather than assumed: each one must be in the tarball or be the live database --backup copied.
+$dataManifest = Invoke-Master 'cd /opt/ironfront/data && find . -type f -exec sha256sum {} + | sort -k2'
+Set-Content -Encoding utf8 (Join-Path $work 'master/data-manifest.sha256') $dataManifest
+$inTar = @($listing -split "`n" | ForEach-Object { $_.Trim() -replace '^\./', '' } | Where-Object { $_ -and $_ -notmatch '/$' })
+$dbFiles = 'ironfront.db', 'ironfront.db-wal', 'ironfront.db-shm'
+$onDisk = @($dataManifest -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { (($_ -split '\s+', 2)[1]).Trim() -replace '^\*?\./', '' })  # '*' = sha256sum's binary-mode mark
+# .backup-* is the in-flight copy ironfront-backup.sh writes and removes; only the top-level database is skipped.
+$uncovered = @($onDisk | Where-Object { $inTar -notcontains $_ -and $dbFiles -notcontains $_ -and $_ -notlike '.backup-*' })
+if ($uncovered.Count -gt 0) { throw "the master's data holds file(s) the backup did not take: $($uncovered -join ', ')" }
+$facts['master data coverage'] = "$($onDisk.Count) file(s) under /opt/ironfront/data, every one in data-files.tar.gz or the database backup"
 
 Write-Host '[backup] master secret ...'
 $masterSecret = [string](& aws ssm get-parameter --region $Region --name $SecretParameter --with-decryption --query Parameter.Value --output text)

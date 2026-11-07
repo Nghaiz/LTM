@@ -1,0 +1,16 @@
+# DLLs in Ironfront_Reborn/Assets/Plugins/NuGet that are deliberately NOT UNITY_EDITOR-only.
+# Read by tools/check-plugin-define-constraints.ps1. Every other DLL in that folder belongs to the
+# Unity MCP bridge's closure and must carry `defineConstraints: - UNITY_EDITOR`.
+#
+# One file name per line. Each entry was unconstrained, and the Linux dedicated server and the
+# players built with it, from 2026-08-25 (MCP 0.90, #175) to 2026-10-15 (the last stamped server,
+# 1ca8ad3). System.Text.Json reaches the game through Ironfront.Net.Configuration; the rest are its
+# dependency closure in this folder. The gate fails on an entry that is gone or has become
+# editor-only, so this list cannot outlive what it describes: remove the line in that case.
+Microsoft.Bcl.AsyncInterfaces.dll
+Microsoft.Extensions.DependencyInjection.Abstractions.dll
+Microsoft.Extensions.Logging.Abstractions.dll
+System.IO.Pipelines.dll
+System.Runtime.CompilerServices.Unsafe.dll
+System.Text.Encodings.Web.dll
+System.Text.Json.dll
