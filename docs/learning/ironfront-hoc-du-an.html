@@ -1,0 +1,1308 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Học Ironfront Reborn</title>
+<meta name="description" content="Tài liệu học nội bộ chia 4 phần để cả nhóm hiểu dự án Ironfront: Reborn từ client, master server, database, game server đến hạ tầng.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f2ec; --bg2:#ffffff; --bg3:#faf9f5; --ink:#1b1d22; --ink2:#535866; --ink3:#868b98; --line:#e2dfd6; --soft:#eeece4;
+  --accent:#c2410c; --accent2:#9a3412; --code:#f1efe8; --hero1:#1f2a1f; --hero2:#2c3a2a;
+  --nghia:#7048e8; --kien:#c9741a; --trung:#0e8a63; --toan:#2563d6; --db:#c9741a; --infra:#5b6170;
+  --nghia-bg:#efeafe; --kien-bg:#fcf1e3; --trung-bg:#e1f5ed; --toan-bg:#e5edfc; --infra-bg:#eceef2;
+  --ok:#0e8a63; --bad:#c2321f; --bad-bg:#fde6e1;
+  --shadow:0 1px 2px rgba(20,20,10,.05),0 10px 30px -12px rgba(20,20,10,.16);
+  --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1115; --bg2:#171a21; --bg3:#1c2029; --ink:#eceae4; --ink2:#a9aebb; --ink3:#767c8a; --line:#2a2f3a; --soft:#222733;
+    --accent:#fb923c; --accent2:#fdba74; --code:#1f2430; --hero1:#121812; --hero2:#1b261a;
+    --nghia:#a78bfa; --kien:#f2a54a; --trung:#34d399; --toan:#6ea0ff; --db:#f2a54a; --infra:#9aa1b2;
+    --nghia-bg:#272042; --kien-bg:#33261a; --trung-bg:#16302a; --toan-bg:#1a2742; --infra-bg:#232834;
+    --ok:#34d399; --bad:#ff8a73; --bad-bg:#3d1f1a;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1115; --bg2:#171a21; --bg3:#1c2029; --ink:#eceae4; --ink2:#a9aebb; --ink3:#767c8a; --line:#2a2f3a; --soft:#222733;
+  --accent:#fb923c; --accent2:#fdba74; --code:#1f2430; --hero1:#121812; --hero2:#1b261a;
+  --nghia:#a78bfa; --kien:#f2a54a; --trung:#34d399; --toan:#6ea0ff; --db:#f2a54a; --infra:#9aa1b2;
+  --nghia-bg:#272042; --kien-bg:#33261a; --trung-bg:#16302a; --toan-bg:#1a2742; --infra-bg:#232834;
+  --ok:#34d399; --bad:#ff8a73; --bad-bg:#3d1f1a;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:76px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 "Be Vietnam Pro","Segoe UI",system-ui,-apple-system,"Noto Sans",sans-serif;-webkit-font-smoothing:antialiased}
+code,.mono,pre{font-family:"JetBrains Mono","Cascadia Code",Consolas,monospace}
+code{font-size:.86em;background:var(--code);padding:1px 6px;border-radius:6px;word-break:break-word;border:1px solid var(--line)}
+pre{background:var(--code);border:1px solid var(--line);padding:14px 16px;border-radius:12px;overflow-x:auto;font-size:13px;line-height:1.55;margin:10px 0}
+pre code{background:none;border:0;padding:0}
+a{color:var(--accent)}
+b,strong{font-weight:700}
+h1,h2,h3,h4{letter-spacing:-.02em;line-height:1.2}
+h2{font-size:clamp(26px,3.2vw,36px);margin:0 0 10px}
+h3{font-size:21px;margin:34px 0 12px}
+h4{font-size:16px;margin:18px 0 8px}
+p{margin:0 0 12px}
+
+/* top bar */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:60;background:linear-gradient(90deg,var(--nghia),var(--kien),var(--trung),var(--toan))}
+.topbar{position:sticky;top:0;z-index:50;height:60px;display:flex;align-items:center;gap:12px;padding:0 16px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;white-space:nowrap}
+.logo{width:30px;height:30px;border-radius:9px;background:conic-gradient(var(--nghia) 0 20%,var(--kien) 0 49%,var(--trung) 0 76%,var(--toan) 0);display:grid;place-items:center}
+.logo i{width:14px;height:14px;border-radius:4px;background:var(--bg)}
+.topbar .sp{flex:1}
+.iconbtn{border:1px solid var(--line);background:var(--bg2);color:var(--ink);border-radius:10px;height:36px;padding:0 12px;cursor:pointer;font:600 14px/1 inherit;display:inline-flex;align-items:center;gap:6px}
+.iconbtn:hover{border-color:var(--ink3)}
+#menuBtn{display:none}
+
+/* layout */
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);max-width:1400px;margin:0 auto}
+.side{position:sticky;top:60px;height:calc(100vh - 60px);overflow:auto;padding:22px 10px 30px 16px;border-right:1px solid var(--line)}
+.side .grp{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin:16px 10px 6px}
+.side a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;color:var(--ink2);text-decoration:none;font-size:14px;font-weight:500}
+.side a:hover{background:var(--soft);color:var(--ink)}
+.side a.on{background:var(--bg2);color:var(--ink);box-shadow:var(--shadow);font-weight:700}
+.side a .n{font:600 11px/1 "JetBrains Mono",monospace;color:var(--ink3);width:18px}
+.side a .pd{width:8px;height:8px;border-radius:50%;background:var(--pc);margin-left:auto}
+main{overflow-wrap:break-word;min-width:0;padding:0 clamp(16px,3vw,40px) 60px}
+@media (max-width:1100px){
+  .layout{grid-template-columns:1fr}
+  .side{position:fixed;top:60px;left:0;width:280px;z-index:45;background:var(--bg);transform:translateX(-100%);transition:transform .25s;box-shadow:var(--shadow)}
+  .side.open{transform:none}
+  #menuBtn{display:inline-flex}
+}
+section.sec{padding:56px 0 30px;border-bottom:1px solid var(--line)}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font:700 12px/1 "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+.eyebrow .num{background:var(--accent);color:#fff;border-radius:6px;padding:4px 7px}
+.lead{font-size:17.5px;color:var(--ink2);max-width:800px}
+
+/* hero */
+.hero{margin:22px 0 0;border-radius:24px;padding:clamp(26px,5vw,56px);color:#f3f1ea;position:relative;overflow:hidden;background:
+ radial-gradient(900px 400px at 85% -10%,rgba(251,146,60,.35),transparent 60%),
+ radial-gradient(700px 400px at -10% 110%,rgba(52,211,153,.22),transparent 60%),
+ linear-gradient(135deg,var(--hero1),var(--hero2))}
+.hero:after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(180deg,#000,transparent 85%);pointer-events:none}
+.hero>*{position:relative;z-index:1}
+.hero h1{font-size:clamp(32px,5.4vw,60px);line-height:1.05;margin:10px 0 18px;letter-spacing:-.035em}
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,#fdba74,#fb923c);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:#cfd3c8;font-size:18px;max-width:760px}
+.hero .tag{display:inline-block;font:600 12px/1 "JetBrains Mono",monospace;letter-spacing:.12em;color:#fdba74;border:1px solid rgba(253,186,116,.4);padding:7px 10px;border-radius:99px}
+.hstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:30px}
+.hstats div{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px 16px}
+.hstats b{display:block;font-size:26px;letter-spacing:-.02em;color:#fff}
+.hstats span{font-size:13.5px;color:#bfc4b8}
+.who{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.who a{display:inline-flex;align-items:center;gap:8px;padding:7px 14px 7px 7px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;text-decoration:none;font-weight:600;font-size:14px}
+.who a i{width:26px;height:26px;border-radius:50%;background:var(--pc);display:grid;place-items:center;font-style:normal;font-weight:800;font-size:13px}
+@media (max-width:760px){.hstats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* generic */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:980px){.g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.card.flat{box-shadow:none}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12.5px;font-weight:600;background:var(--soft);color:var(--ink2);margin:2px 4px 2px 0;white-space:nowrap}
+.chip.wrap{white-space:normal;line-height:1.35}
+.chip .d{width:7px;height:7px;border-radius:50%;background:var(--pc)}
+.ptag{background:var(--pb);color:var(--pc)}
+.p-nghia{--pc:var(--nghia);--pb:var(--nghia-bg)} .p-kien{--pc:var(--kien);--pb:var(--kien-bg)}
+.p-trung{--pc:var(--trung);--pb:var(--trung-bg)} .p-toan{--pc:var(--toan);--pb:var(--toan-bg)}
+.p-infra{--pc:var(--infra);--pb:var(--infra-bg)}
+.callout{border:1px solid var(--line);border-left:4px solid var(--accent);background:var(--bg2);padding:14px 18px;border-radius:12px;margin:18px 0}
+.callout.blue{border-left-color:var(--toan)} .callout.green{border-left-color:var(--trung)} .callout.violet{border-left-color:var(--nghia)} .callout.orange{border-left-color:var(--kien)}
+.callout b:first-child{display:block;margin-bottom:4px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--bg2)}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink3);background:var(--bg3);font-weight:700}
+.btn{border:1px solid var(--line);background:var(--bg2);color:var(--ink);padding:8px 14px;border-radius:10px;cursor:pointer;font:600 14px/1.2 inherit}
+.btn:hover{border-color:var(--ink3)}
+.btn.on,.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.35;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.diagram{width:100%;height:auto;display:block}
+.dcard{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow)}
+.cap{font-size:13px;color:var(--ink3);margin-top:8px}
+svg text{font-family:"Be Vietnam Pro","Segoe UI",system-ui,sans-serif}
+svg .mono{font-family:"JetBrains Mono",Consolas,monospace}
+.clickable{cursor:pointer}
+.clickable:hover .nb{filter:brightness(1.06)}
+.sel .nb{stroke-width:3.5}
+.pulse{animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.dash{stroke-dasharray:7 6;animation:dashmove 1.4s linear infinite}
+@keyframes dashmove{to{stroke-dashoffset:-26}}
+.grid>*,.split>*,.phead>*,.feat>*,.hflow>*{min-width:0}
+.splitwrap{grid-template-columns:240px minmax(0,1fr)!important}
+@media (max-width:760px){.splitwrap{grid-template-columns:1fr!important}}
+.split{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+.panel{position:sticky;top:76px}
+.panel h3{margin-top:4px}
+
+/* tree */
+.tree{font:13.5px/1.5 "JetBrains Mono",Consolas,monospace}
+.tree ul{list-style:none;margin:0;padding-left:16px;border-left:1px dashed var(--line);margin-left:6px}
+.tree>ul{border:0;padding:0;margin:0}
+.tree li{margin:1px 0}
+.tree .it{display:inline-flex;align-items:center;gap:8px;padding:3px 9px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+.tree .it:hover{background:var(--soft)}
+.tree .it.sel{border-color:var(--pc);background:var(--pb)}
+.tree .dot{width:9px;height:9px;border-radius:3px;background:var(--pc);flex:none}
+.tree .tw{display:inline-block;width:16px;color:var(--ink3);cursor:pointer;user-select:none;text-align:center}
+.tree li.closed>ul{display:none}
+
+/* flows */
+.vflow{position:relative;margin:8px 0;padding-left:0;list-style:none;counter-reset:s}
+.vflow li{position:relative;display:grid;grid-template-columns:34px 116px minmax(0,1fr);gap:12px;padding:12px 0;border-bottom:1px dashed var(--line);align-items:start}
+.vflow li:last-child{border-bottom:0}
+.vflow li:before{counter-increment:s;content:counter(s);width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font:700 12px/1 "JetBrains Mono",monospace;margin-top:2px}
+.vflow .ly{font-size:12px;font-weight:700;padding:4px 8px;border-radius:8px;text-align:center;background:var(--pb);color:var(--pc);align-self:start}
+.vflow .wh{font-size:14.5px}
+.vflow .wh code{font-size:12.5px}
+@media (max-width:640px){.vflow li{grid-template-columns:30px minmax(0,1fr)}.vflow .ly{grid-column:2;justify-self:start}.vflow .wh{grid-column:2}}
+.hflow{display:flex;flex-wrap:wrap;gap:0;align-items:stretch;margin:12px 0}
+.hflow .st{flex:1 1 150px;min-width:140px;background:var(--bg2);border:1px solid var(--line);border-top:4px solid var(--pc,var(--accent));border-radius:12px;padding:10px 12px;font-size:14px}
+.hflow .st b{display:block;font-size:13px;color:var(--pc,var(--accent));margin-bottom:2px}
+.hflow .ar{display:flex;align-items:center;padding:0 6px;color:var(--ink3);font-weight:800}
+@media (max-width:640px){.hflow{flex-direction:column}.hflow .ar{justify-content:center;transform:rotate(90deg);height:22px}}
+
+/* features */
+.feat{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.feat{grid-template-columns:1fr}}
+.flist{display:flex;flex-direction:column;gap:4px;position:sticky;top:76px;max-height:calc(100vh - 100px);overflow:auto;padding-right:4px}
+@media (max-width:900px){.flist{position:static;flex-direction:row;flex-wrap:wrap;max-height:none}}
+.flist button{all:unset;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:10px;font-size:14.5px;font-weight:600;color:var(--ink2);border:1px solid transparent}
+.flist button:hover{background:var(--soft)}
+.flist button.on{background:var(--bg2);color:var(--ink);border-color:var(--line);box-shadow:var(--shadow)}
+.flist button .k{font:700 11px/1 "JetBrains Mono",monospace;color:var(--ink3);width:20px}
+.flist .grp{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin:12px 12px 2px}
+@media (max-width:900px){.flist .grp{width:100%}}
+.fsee{background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
+
+/* tabs */
+.ptabs{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 6px}
+.ptabs button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 16px 8px 8px;border-radius:99px;border:1px solid var(--line);background:var(--bg2);font-weight:700}
+.ptabs button i{width:30px;height:30px;border-radius:50%;background:var(--pc);color:#fff;display:grid;place-items:center;font-style:normal;font-size:14px}
+.ptabs button small{display:block;font-weight:500;color:var(--ink3);font-size:12px;line-height:1.2}
+.ptabs button.on{border-color:var(--pc);background:var(--pb)}
+.pane{display:none}
+.pane.on{display:block;animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.phead{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:16px;align-items:center;margin-top:12px}
+@media (max-width:760px){.phead{grid-template-columns:1fr}}
+.ring{width:84px;height:84px;flex:none}
+.reading{list-style:none;padding:0;margin:0;counter-reset:r}
+.reading li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);align-items:baseline}
+.reading li:before{counter-increment:r;content:counter(r);font:700 12px/1 "JetBrains Mono",monospace;color:var(--pc)}
+.reading .t{font-size:12px;color:var(--ink3);white-space:nowrap}
+.check{list-style:none;padding:0;margin:0}
+.check li{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px}
+.check li:hover{background:var(--soft)}
+.check input{width:18px;height:18px;margin-top:4px;accent-color:var(--pc);flex:none;cursor:pointer}
+.check label{cursor:pointer}
+.check li.done label{text-decoration:line-through;color:var(--ink3)}
+details.qa{border:1px solid var(--line);border-radius:12px;background:var(--bg2);margin:8px 0;overflow:hidden}
+details.qa summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style:none;display:flex;gap:10px}
+details.qa summary:before{content:"+";font:700 16px/1.3 "JetBrains Mono",monospace;color:var(--pc,var(--accent))}
+details.qa[open] summary:before{content:"−"}
+details.qa div{padding:0 16px 14px 42px;color:var(--ink2)}
+.folders{display:flex;flex-wrap:wrap;gap:6px}
+.folders code{background:var(--pb);color:var(--pc);border-color:transparent;font-weight:600}
+
+/* bytes */
+.bytes{display:flex;border-radius:12px;overflow:hidden;margin:10px 0 4px;border:1px solid var(--line)}
+.bytes div{padding:10px 6px;text-align:center;color:#fff;font:600 12px/1.3 "JetBrains Mono",monospace;border-right:1px solid rgba(255,255,255,.35);min-width:0;overflow:hidden}
+.bytes div small{display:block;font-weight:400;opacity:.85;font-size:10.5px}
+.bytes div:last-child{border-right:0}
+.byteswrap{overflow-x:auto}.byteswrap .bytes{min-width:620px}
+.ruler{display:flex;font:11px/1 "JetBrains Mono",monospace;color:var(--ink3)}
+
+/* ack demo */
+.pk{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.pk button{all:unset;cursor:pointer;width:58px;padding:8px 0;text-align:center;border-radius:10px;border:2px solid var(--toan);font:700 13px/1.2 "JetBrains Mono",monospace;background:var(--toan-bg);color:var(--toan)}
+.pk button.lost{border-style:dashed;border-color:var(--bad);background:var(--bad-bg);color:var(--bad)}
+.pk button small{display:block;font-size:10px;font-weight:500}
+.bits{display:flex;gap:3px;flex-wrap:wrap;margin:8px 0}
+.bits span{width:22px;height:26px;border-radius:5px;display:grid;place-items:center;font:700 12px/1 "JetBrains Mono",monospace;background:var(--soft);color:var(--ink3)}
+.bits span.one{background:var(--toan);color:#fff}
+.bits span.zero{background:var(--bad-bg);color:var(--bad)}
+
+/* flip */
+.flip{perspective:1200px;min-height:230px;cursor:pointer}
+.flip .in{position:relative;min-height:230px;height:100%;transition:transform .6s;transform-style:preserve-3d}
+.flip.on .in{transform:rotateY(180deg)}
+.flip .f,.flip .b{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:16px;padding:18px;border:1px solid var(--line);overflow:auto}
+.flip .f{background:var(--bg2);display:flex;flex-direction:column;justify-content:space-between;box-shadow:var(--shadow)}
+.flip .f .qn{font:700 11px/1 "JetBrains Mono",monospace;letter-spacing:.1em;color:var(--kien)}
+.flip .f p{font-weight:700;font-size:17px;margin:10px 0}
+.flip .f small{color:var(--ink3)}
+.flip .b{background:var(--kien-bg);transform:rotateY(180deg);font-size:14.5px}
+.flip:focus-visible{outline:2px solid var(--kien);outline-offset:3px;border-radius:16px}
+
+/* timeline */
+.tl{position:relative;padding-left:28px}
+.tl:before{content:"";position:absolute;left:10px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.tl .t{position:relative;margin-bottom:18px}
+.tl .t:before{content:"";position:absolute;left:-24px;top:6px;width:14px;height:14px;border-radius:50%;background:var(--accent);border:3px solid var(--bg)}
+.donut{width:220px;height:220px}
+.kbd{font:600 12px/1 "JetBrains Mono",monospace;padding:3px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:var(--bg2)}
+footer{padding:36px 0;color:var(--ink3);font-size:13.5px}
+.hide-sm{}
+@media (max-width:640px){.hide-sm{display:none}}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="topbar">
+  <button class="iconbtn" id="menuBtn" aria-label="Mở mục lục">☰</button>
+  <div class="brand"><span class="logo"><i></i></span>Ironfront <span style="color:var(--ink3);font-weight:500" class="hide-sm">· tài liệu học nhóm</span></div>
+  <div class="sp"></div>
+  <button class="iconbtn" id="themeBtn" aria-label="Đổi giao diện sáng tối">◐ <span class="hide-sm">Giao diện</span></button>
+</div>
+
+<div class="layout">
+<aside class="side" id="side">
+  <div class="grp">Bức tranh chung</div>
+  <a href="#mo-dau"><span class="n">00</span>Mở đầu</a>
+  <a href="#kien-truc"><span class="n">01</span>Kiến trúc tổng thể</a>
+  <a href="#thu-muc"><span class="n">02</span>Bản đồ thư mục</a>
+  <a href="#chia-viec"><span class="n">03</span>Chia việc 4 người</a>
+  <a href="#hanh-trinh"><span class="n">04</span>Hành trình 1 trận</a>
+  <a href="#chuc-nang"><span class="n">05</span>Chức năng hoàn chỉnh</a>
+  <div class="grp">Phần từng người</div>
+  <a href="#tung-nguoi" data-goto="nghia" class="p-nghia"><span class="n">06</span>Nghĩa<span class="pd"></span></a>
+  <a href="#tung-nguoi" data-goto="kien" class="p-kien"><span class="n">06</span>Kiên<span class="pd"></span></a>
+  <a href="#tung-nguoi" data-goto="trung" class="p-trung"><span class="n">06</span>Trung<span class="pd"></span></a>
+  <a href="#tung-nguoi" data-goto="toan" class="p-toan"><span class="n">06</span>Toàn<span class="pd"></span></a>
+  <div class="grp">Trọng tâm</div>
+  <a href="#database" class="p-kien"><span class="n">07</span>Database<span class="pd"></span></a>
+  <a href="#on-tap"><span class="n">08</span>Thẻ ôn database</a>
+  <a href="#lich-hoc"><span class="n">09</span>Lịch học 4 tuần</a>
+</aside>
+
+<main>
+
+<!-- ===================== 00 MỞ ĐẦU ===================== -->
+<section class="sec" id="mo-dau" style="padding-top:20px">
+  <div class="hero">
+    <span class="tag">LTM · NHÓM 4 NGƯỜI · CẬP NHẬT 08/11/2026</span>
+    <h1>Hiểu <em>Ironfront: Reborn</em><br>từ cú click đầu tiên đến dòng ghi vào database</h1>
+    <p>Ironfront là game bắn súng nhiều người chơi. Phần game gốc là một bản Unity chơi một mình. Nhóm viết lại toàn bộ phần mạng bằng tay trên socket TCP và UDP thô: không Mirror, không Photon, không Netcode for GameObjects, không KCP. Trang này chia dự án thành 4 phần để 4 người học song song, rồi ghép lại thành một câu chuyện liền mạch.</p>
+    <div class="who">
+      <a href="#tung-nguoi" data-goto="nghia" class="p-nghia"><i>N</i>Nghĩa · toàn cảnh + giao thức + đóng gói</a>
+      <a href="#tung-nguoi" data-goto="kien" class="p-kien"><i>K</i>Kiên · master + database + máy chủ</a>
+      <a href="#tung-nguoi" data-goto="trung" class="p-trung"><i>T</i>Trung · mọi thứ trên máy người chơi</a>
+      <a href="#tung-nguoi" data-goto="toan" class="p-toan"><i>T</i>Toàn · mọi thứ trong một trận</a>
+    </div>
+    <div class="hstats">
+      <div><b>3 tiến trình</b><span>client Unity, master .NET 10, game server Unity headless</span></div>
+      <div><b>2 giao thức</b><span>MSP trên TCP+TLS, GSP trên UDP tự viết</span></div>
+      <div><b>v14</b><span>phiên bản giao thức, hằng số chỉ ở một file</span></div>
+      <div><b>8 bảng</b><span>SQLite, một file, sao lưu 6 giờ một lần</span></div>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:20px">
+    <div class="card flat"><b>Đọc theo thứ tự</b><br><span style="color:var(--ink2);font-size:14.5px">Mục 01 đến 05 là phần chung cả 4 người phải nắm. Mục 06 chia theo người. Mục 07 và 08 là database, phần dễ bị hỏi nhất.</span></div>
+    <div class="card flat"><b>Mọi thứ đều bấm được</b><br><span style="color:var(--ink2);font-size:14.5px">Khối trong sơ đồ, thư mục, bảng database, từng bước trận đấu, từng tính năng. Bấm vào để xem giải thích và tên hàm.</span></div>
+    <div class="card flat"><b>Tiến độ lưu trên máy bạn</b><br><span style="color:var(--ink2);font-size:14.5px">Ô tick trong danh sách việc được trình duyệt nhớ (localStorage). Không gửi đi đâu, xoá được ở mục 09.</span></div>
+  </div>
+</section>
+
+<!-- ===================== 01 KIẾN TRÚC ===================== -->
+<section class="sec" id="kien-truc">
+  <div class="eyebrow"><span class="num">01</span>Kiến trúc tổng thể</div>
+  <h2>Ba chương trình, hai đường truyền, một database</h2>
+  <p class="lead">Mọi thứ trong repo phục vụ một trong ba chương trình dưới đây. Chấm tròn chạy trên đường nối là dữ liệu đang đi. Bấm vào một khối để xem nó làm gì và ai trong nhóm học nó.</p>
+  <div class="split" style="margin-top:18px">
+    <div class="dcard"><svg class="diagram" id="archSvg" viewBox="0 0 1000 560" role="img" aria-label="Sơ đồ kiến trúc tổng thể"></svg></div>
+    <div class="card panel" id="archPanel"></div>
+  </div>
+
+  <h3>Vì sao lại cần cả TCP lẫn UDP?</h3>
+  <p>Câu này gần như chắc chắn bị hỏi. Cả 4 người phải trả lời được bằng lời của mình.</p>
+  <div class="tablewrap"><table>
+    <tr><th style="width:150px"></th><th>TCP · master server</th><th>UDP · game server</th></tr>
+    <tr><td><b>Chở gì</b></td><td>Đăng nhập, danh sách phòng, tạo và vào phòng, ghép trận, chat sảnh, bảng xếp hạng, game server báo cáo</td><td>Mọi thứ trong trận: phím bấm, trạng thái thế giới, sự kiện bắn trúng, chết, xe</td></tr>
+    <tr><td><b>Tần suất</b></td><td>Vài gói mỗi phút</td><td>20 đến 60 gói mỗi giây mỗi chiều</td></tr>
+    <tr><td><b>Mất gói thì</b></td><td>Không được phép mất. Mất "đăng nhập thành công" là không vào được game. TCP tự gửi lại và giữ thứ tự</td><td>Kệ nó. Snapshot cũ 200 ms đã vô giá trị, gói sau mang trạng thái mới hơn</td></tr>
+    <tr><td><b>Nếu đổi ngược</b></td><td>Phải tự viết lại cơ chế tin cậy mà TCP có sẵn</td><td><b>Head-of-line blocking</b>: mất 1 gói là mọi gói phía sau phải đứng chờ gửi lại, hình giật dây chuyền. Nagle và delayed ACK còn cộng thêm 40 đến 200 ms</td></tr>
+    <tr><td><b>Đóng khung</b></td><td>4 byte độ dài + 2 byte loại tin + nội dung, tối đa 64 KB</td><td>Mỗi datagram một gói: header 16 byte + dữ liệu, tối đa 1200 byte</td></tr>
+    <tr><td><b>Vì sao không WebSocket</b></td><td colspan="2">WebSocket chạy trên TCP nên dính nguyên head-of-line blocking, lại thêm handshake HTTP và khung riêng. Nó sinh ra để vượt tường lửa của trình duyệt, game desktop không cần.</td></tr>
+  </table></div>
+
+  <h3>Ai được quyết định cái gì</h3>
+  <p>Server quyết định tất cả những gì ảnh hưởng tới kết quả trận. Client chỉ gửi "tôi bấm phím gì" và tự vẽ cho đẹp. Nhờ vậy hack tốc độ, dịch chuyển, đạn vô hạn bị chặn ngay từ thiết kế chứ không cần phần mềm chống gian lận.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Việc</th><th>Ai quyết</th><th>Client được làm gì</th></tr>
+    <tr><td>Vị trí nhân vật</td><td>Server</td><td>Đoán trước (prediction) rồi sửa lại khi server trả lời (reconciliation)</td></tr>
+    <tr><td>Trúng đạn, sát thương</td><td>Server</td><td>Hiện tia lửa, tiếng súng ngay; báo "tôi thấy mình trúng" để server xét lại</td></tr>
+    <tr><td>Máu, chết, hồi sinh</td><td>Server</td><td>Chỉ hiển thị</td></tr>
+    <tr><td>Độ toả đạn, đạn còn lại, thời gian hồi súng</td><td>Server</td><td>Hiện độ giật cho cảm giác thật, không ảnh hưởng viên đạn thật</td></tr>
+    <tr><td>Bot AI</td><td>Server</td><td>Nội suy vị trí để vẽ</td></tr>
+    <tr><td>Chiếm cờ, điểm, thắng thua</td><td>Server</td><td>Chỉ hiển thị</td></tr>
+    <tr><td>Lên xuống xe</td><td>Server</td><td>Gửi yêu cầu, chờ duyệt</td></tr>
+    <tr><td>Camera, giao diện, âm thanh, ragdoll xác chết</td><td>Client</td><td>Toàn quyền, không bao giờ đồng bộ</td></tr>
+  </table></div>
+
+  <h3>Bốn kỹ thuật netcode kinh điển trong dự án</h3>
+  <div class="grid g4">
+    <div class="card p-trung" style="border-top:4px solid var(--pc)"><b>1. Client-side prediction</b><p style="font-size:14.5px;color:var(--ink2);margin:6px 0 0">Bấm W là nhân vật đi ngay, không chờ server. Client lưu lại input đã gửi kèm số tick.</p></div>
+    <div class="card p-toan" style="border-top:4px solid var(--pc)"><b>2. Reconciliation</b><p style="font-size:14.5px;color:var(--ink2);margin:6px 0 0">Snapshot về kèm "tick input cuối server đã xử lý". Lệch quá ngưỡng thì nhảy về vị trí server rồi chạy lại các input sau đó.</p></div>
+    <div class="card p-nghia" style="border-top:4px solid var(--pc)"><b>3. Interpolation</b><p style="font-size:14.5px;color:var(--ink2);margin:6px 0 0">Người khác được vẽ lùi 100 ms, nội suy giữa 2 snapshot đã có. Đổi 100 ms trễ lấy chuyển động mượt.</p></div>
+    <div class="card p-kien" style="border-top:4px solid var(--pc)"><b>4. Lag compensation</b><p style="font-size:14.5px;color:var(--ink2);margin:6px 0 0">Khi xét phát bắn, server tua hitbox về đúng lúc người bắn nhìn thấy mục tiêu, có giới hạn để chống giả ping cao.</p></div>
+  </div>
+</section>
+
+<!-- ===================== 02 THƯ MỤC ===================== -->
+<section class="sec" id="thu-muc">
+  <div class="eyebrow"><span class="num">02</span>Bản đồ thư mục</div>
+  <h2>Vì sao repo chia ra nhiều project như vậy</h2>
+  <p class="lead">Phần mạng được viết thành các thư viện .NET thuần, cấm tham chiếu <code>UnityEngine</code>. Lý do: test bằng xUnit chạy trong vài giây thay vì mở Unity, người làm master không cần cài Unity, và tránh xung đột file <code>.meta</code>, scene. Script <code>tools/build-libs.ps1</code> build các thư viện này thành DLL rồi chép vào <code>Ironfront_Reborn/Assets/Plugins</code>.</p>
+
+  <h3>Lớp phụ thuộc: ai được dùng ai</h3>
+  <div class="dcard"><svg class="diagram" id="layerSvg" viewBox="0 0 1000 330" role="img" aria-label="Sơ đồ phụ thuộc giữa các project"></svg></div>
+  <p class="cap">Mũi tên đọc là "dùng", lấy đúng từ <code>ProjectReference</code> trong các file <code>.csproj</code>. Protocol nằm dưới cùng; Net.Configuration cũng không phụ thuộc ai. MasterServer là chương trình riêng, Unity không nạp nó. MasterLink là thư viện duy nhất dùng hai thư viện cùng tầng (Replication và MasterClient). Script <code>tools/check-net-layering.ps1</code> làm hỏng build nếu ai đó cho thư viện thuần tham chiếu ngược lên Unity.</p>
+
+  <h3>Cây thư mục chính (bấm để xem vai trò)</h3>
+  <div class="split">
+    <div class="card tree" id="tree"></div>
+    <div class="card panel" id="treePanel"><h3>Chọn một thư mục</h3><p style="color:var(--ink2)">Bấm ▸ để mở rộng. Màu ô vuông là người phụ trách.</p></div>
+  </div>
+
+  <h3>Danh mục đủ 100% mục ở gốc repo</h3>
+  <p>Ảnh chụp cây thư mục trong VS Code có bao nhiêu mục thì bảng này có bấy nhiêu, cộng các file cấu hình ẩn. Mỗi mục đúng một người phụ trách. Cột cuối là câu trả lời ngắn nếu hội đồng chỉ vào đó hỏi "cái này để làm gì".</p>
+  <div class="row" id="rootFilter" style="margin:10px 0"></div>
+  <div class="tablewrap"><table id="rootTable"></table></div>
+  <p class="cap" id="rootCount"></p>
+</section>
+
+<!-- ===================== 03 CHIA VIỆC ===================== -->
+<section class="sec" id="chia-viec">
+  <div class="eyebrow"><span class="num">03</span>Chia việc</div>
+  <h2>Bốn phần, ranh giới rõ, không chồng chéo</h2>
+  <p class="lead">Mỗi phần đi theo một sợi chỉ, nên những gì một người học đều gọi nhau hoặc phụ thuộc nhau. Hỏi "cái này chạy ở máy nào, lúc nào" là biết ngay ai phụ trách. Nghĩa nhẹ nhất nhưng không mỏng: giao thức là thứ ba người kia đều dựa vào. Kiên giữ database, phần bị hỏi nhiều nhất, nên phần còn lại của Kiên chỉ là những gì xoay quanh master và máy chủ chạy nó; các mảnh phía client chuyển hết sang Trung.</p>
+  <div class="grid g4" style="margin-top:14px">
+    <div class="card flat p-nghia" style="border-top:4px solid var(--pc)"><b style="color:var(--pc)">Nghĩa · cái gì đi trên dây</b><p style="font-size:14px;color:var(--ink2);margin:6px 0 0">Luật chung của mọi gói tin, và cách một snapshot được nén trước khi lên dây. Công cụ đi kèm: E2E kiểm cả đường đi, PacketReplay đọc gói đã bắt.</p></div>
+    <div class="card flat p-kien" style="border-top:4px solid var(--pc)"><b style="color:var(--pc)">Kiên · thứ phải sống lâu</b><p style="font-size:14px;color:var(--ink2);margin:6px 0 0">Tài khoản, phòng, sự nghiệp ở master và SQLite; máy chủ chạy master, sao lưu DB, CI build image. Công cụ đi kèm đều đo master (LoadTest, MspBench).</p></div>
+    <div class="card flat p-trung" style="border-top:4px solid var(--pc)"><b style="color:var(--pc)">Trung · mọi thứ trên máy người chơi</b><p style="font-size:14px;color:var(--ink2);margin:6px 0 0">Game gốc, màn hình, cách client nói với master (MasterClient), cấu hình client (Net.Configuration), rồi build ra file zip và phát hành.</p></div>
+    <div class="card flat p-toan" style="border-top:4px solid var(--pc)"><b style="color:var(--pc)">Toàn · mọi thứ trong một trận</b><p style="font-size:14px;color:var(--ink2);margin:6px 0 0">UDP, vòng tick, xét trúng đạn, rồi báo kết quả về master qua MasterLink. Công cụ đi kèm đều đo game server (LoadHarness, Transport.Bench).</p></div>
+  </div>
+  <div class="grid splitwrap" style="align-items:center;margin-top:16px" id="splitWrap">
+    <svg class="donut" id="donut" viewBox="0 0 220 220" role="img" aria-label="Biểu đồ khối lượng"></svg>
+    <div class="grid g2" id="peopleCards"></div>
+  </div>
+  <h3>Bốn đường ranh giới cần nhớ</h3>
+  <p style="color:var(--ink2)">Ranh giới luôn là một tin nhắn hoặc một interface: mỗi người học đúng nửa của mình, rồi hai người ngồi đối chiếu (lịch tuần 3).</p>
+  <div class="grid g2">
+    <div class="callout violet" style="margin:0"><b>Nghĩa ↔ Toàn</b>Snapshot chứa gì, nén ra sao, ai được nhận (Quantize, BitWriter, SnapshotBuilder, DeltaEncoder, InterestManager): <b>Nghĩa</b>. Gói đó được gửi, xác nhận, gửi lại ra sao, và server dùng dữ liệu thật để xét trúng đạn: <b>Toàn</b>.</div>
+    <div class="callout green" style="margin:0"><b>Trung ↔ Toàn</b>Thuật toán prediction, nội suy, tua hitbox nằm trong thư viện Replication: <b>Toàn</b>. Unity gọi chúng ở component nào, lúc nào trong frame, vẽ người khác ra sao: <b>Trung</b>. <code>Assets/Scripts/Net/Server/</code> thuộc Toàn dù nằm trong Unity.</div>
+    <div class="callout orange" style="margin:0"><b>Kiên ↔ Toàn</b>Master phát JoinTicket, nhận <code>GS_MATCH_ENDED</code> và ghi DB: <b>Kiên</b>. Game server kiểm vé, đếm số liệu, gửi kết quả qua <code>Net.MasterLink</code>: <b>Toàn</b>. Cấu trúc 64 byte của vé: <b>Nghĩa</b>.</div>
+    <div class="callout green" style="margin:0"><b>Kiên ↔ Trung</b>Master nhận <code>LOGIN_REQ</code>, <code>ROOM_*</code> và trả lời: <b>Kiên</b>. Client gửi chúng qua <code>MasterClient</code>, giữ phiên, dịch mã lỗi thành câu dễ hiểu, đọc cấu hình qua <code>Net.Configuration</code>: <b>Trung</b>. Image và máy chủ: <b>Kiên</b>; bản build và zip cho người chơi: <b>Trung</b>.</div>
+  </div>
+</section>
+
+<!-- ===================== 04 HÀNH TRÌNH ===================== -->
+<section class="sec" id="hanh-trinh">
+  <div class="eyebrow"><span class="num">04</span>Luồng giao tiếp</div>
+  <h2>Hành trình của một trận đấu, 10 bước</h2>
+  <p class="lead">Đây là xương sống cả nhóm cần thuộc. Bấm "Tiếp", bấm số bước, hoặc bấm thẳng vào mũi tên trong sơ đồ. Mỗi bước ghi tin nhắn gì, hàm nào xử lý, và ai học bước đó.</p>
+  <div class="row" style="margin:14px 0">
+    <button class="btn" id="jPrev">← Trước</button>
+    <button class="btn primary" id="jNext">Tiếp →</button>
+    <button class="btn" id="jPlay">▶ Tự chạy</button>
+    <div class="row" id="jDots"></div>
+  </div>
+  <div class="split">
+    <div class="dcard"><svg class="diagram" id="seqSvg" role="img" aria-label="Sơ đồ tuần tự"></svg></div>
+    <div class="card panel" id="jPanel"></div>
+  </div>
+</section>
+
+<!-- ===================== 05 CHỨC NĂNG ===================== -->
+<section class="sec" id="chuc-nang">
+  <div class="eyebrow"><span class="num">05</span>Chức năng hoàn chỉnh</div>
+  <h2>18 tính năng, mỗi tính năng đi qua những lớp nào</h2>
+  <p class="lead">Khi bị hỏi "tính năng X chạy thế nào", hãy trả lời theo đúng khung này: người chơi thấy gì, rồi lần lượt từng lớp (Client, Master, Game Server, SQLite, Hạ tầng), mỗi lớp là hàm nào. Màu của lớp cho biết ai học đoạn đó.</p>
+  <div class="feat" style="margin-top:16px">
+    <div class="flist" id="flist"></div>
+    <div class="card" id="fdetail"></div>
+  </div>
+</section>
+
+<!-- ===================== 06 TỪNG NGƯỜI ===================== -->
+<section class="sec" id="tung-nguoi">
+  <div class="eyebrow"><span class="num">06</span>Phần từng người</div>
+  <h2>Đi sâu vào phần của mình</h2>
+  <p class="lead">Mỗi phần có: mục tiêu, kiến thức nền, thứ tự đọc kèm thời gian ước tính, luồng chính, sơ đồ riêng, bảng "hàm nào ở đâu làm gì", toàn bộ thư mục gốc phải trả lời được, danh sách việc tick được, và câu hỏi tự kiểm tra.</p>
+  <div class="ptabs" id="ptabs"></div>
+  <div id="panes"></div>
+</section>
+
+<!-- ===================== 07 DATABASE ===================== -->
+<section class="sec p-kien" id="database">
+  <div class="eyebrow" style="color:var(--kien)"><span class="num" style="background:var(--kien)">07</span>Trọng tâm · phần của Kiên</div>
+  <h2>Database: từng bảng, từng câu SQL, từng lý do</h2>
+  <p class="lead">Master server dùng SQLite qua <code>Microsoft.Data.Sqlite</code>, không dùng ORM: mọi câu SQL viết tay và đều có tham số. Code nằm trong <code>Ironfront.MasterServer/Data/</code>, chia 3 file theo chủ đề nhưng chung một class <code>SqliteDatabase</code> (partial class). Chỉ master chạm vào DB; game server và client không bao giờ kết nối thẳng.</p>
+
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><span class="chip ptag">256 dòng</span><h4 style="margin:8px 0 4px" class="mono">SqliteDatabase.cs</h4><span style="color:var(--ink2);font-size:14.5px">Mở kết nối, bật WAL, tạo <code>accounts</code> và <code>match_results</code>. Tài khoản, đăng nhập, khoá, cấm, kết quả trận, đếm tài khoản, sao lưu.</span></div>
+    <div class="card"><span class="chip ptag">116 dòng</span><h4 style="margin:8px 0 4px" class="mono">SqliteDatabase.RememberTokens.cs</h4><span style="color:var(--ink2);font-size:14.5px">Bảng <code>remember_tokens</code> cho tính năng ghi nhớ đăng nhập. Chèn, lấy-và-xoá, dọn token hết hạn.</span></div>
+    <div class="card"><span class="chip ptag">396 dòng</span><h4 style="margin:8px 0 4px" class="mono">SqliteDatabase.Career.cs</h4><span style="color:var(--ink2);font-size:14.5px">Chỉ số sự nghiệp, thành tựu, mùa giải, lịch sử, bảng xếp hạng.</span></div>
+  </div>
+
+  <h3>Sơ đồ quan hệ (bấm vào bảng)</h3>
+  <div class="split">
+    <div class="dcard"><svg class="diagram" id="erSvg" role="img" aria-label="Sơ đồ quan hệ các bảng"></svg>
+      <p class="cap" style="padding:0 8px">Đường nối là <code>REFERENCES accounts(player_id)</code>. Chữ <b>1</b> ở phía accounts, <b>N</b> ở phía bảng con: một tài khoản có nhiều dòng ở bảng con. Bảng xám là bảng lưu trữ, không có khoá ngoại.</p></div>
+    <div class="card panel" id="erPanel"></div>
+  </div>
+
+  <h3>Toàn bộ schema, đúng như trong code</h3>
+  <details class="qa p-kien" open><summary>CREATE TABLE trong SqliteDatabase.cs, RememberTokens.cs, Career.cs</summary><div style="padding-left:16px">
+<pre><code>PRAGMA journal_mode=WAL;
+PRAGMA synchronous=NORMAL;
+
+CREATE TABLE IF NOT EXISTS accounts (
+    player_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT NOT NULL,
+    display_name  TEXT NOT NULL,
+    created_at    INTEGER NOT NULL,
+    last_login_at INTEGER,
+    failed_logins INTEGER NOT NULL DEFAULT 0,
+    locked_until  INTEGER NOT NULL DEFAULT 0,
+    is_banned     INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username COLLATE NOCASE);
+
+CREATE TABLE IF NOT EXISTS match_results (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id   INTEGER NOT NULL,
+    player_id INTEGER NOT NULL REFERENCES accounts(player_id),
+    kills     INTEGER NOT NULL,
+    deaths    INTEGER NOT NULL,
+    score     INTEGER NOT NULL,
+    ended_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_results_player ON match_results(player_id);
+
+CREATE TABLE IF NOT EXISTS remember_tokens (
+    token_hash TEXT PRIMARY KEY,
+    player_id  INTEGER NOT NULL REFERENCES accounts(player_id),
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_remember_player ON remember_tokens(player_id);
+
+CREATE TABLE IF NOT EXISTS career_stats (
+    player_id INTEGER NOT NULL REFERENCES accounts(player_id),
+    stat      TEXT NOT NULL,
+    value     INTEGER NOT NULL,
+    PRIMARY KEY (player_id, stat)
+);
+CREATE TABLE IF NOT EXISTS achievements (
+    player_id      INTEGER NOT NULL REFERENCES accounts(player_id),
+    achievement_id TEXT NOT NULL,
+    unlocked_at    INTEGER NOT NULL,
+    PRIMARY KEY (player_id, achievement_id)
+);
+CREATE INDEX IF NOT EXISTS idx_achievements_id ON achievements(achievement_id);
+CREATE TABLE IF NOT EXISTS career_meta (
+    key   TEXT PRIMARY KEY,
+    value INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS career_history (
+    player_id INTEGER NOT NULL REFERENCES accounts(player_id),
+    stat      TEXT NOT NULL,
+    value     INTEGER NOT NULL,
+    PRIMARY KEY (player_id, stat)
+);
+-- tạo lúc đổi mùa, tên sinh động: career_stats_season{mùa cũ}
+CREATE TABLE IF NOT EXISTS career_stats_season1 (
+    player_id INTEGER NOT NULL, stat TEXT NOT NULL, value INTEGER NOT NULL,
+    PRIMARY KEY (player_id, stat)
+);</code></pre></div></details>
+
+  <h3>Bốn thiết lập kết nối, mỗi cái có lý do</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Thiết lập</th><th>Nghĩa là gì</th><th>Vì sao chọn</th></tr>
+    <tr><td><code>Mode = ReadWriteCreate</code></td><td>Chưa có file thì tạo mới</td><td>Máy chủ mới tinh chạy được ngay, không cần bước khởi tạo riêng</td></tr>
+    <tr><td><code>journal_mode = WAL</code></td><td>Ghi thay đổi vào file <code>-wal</code> trước, gộp vào file chính sau (checkpoint)</td><td>Người đọc không bị người ghi chặn; sao lưu chạy được khi master đang chạy</td></tr>
+    <tr><td><code>synchronous = NORMAL</code></td><td>Ít lần fsync hơn FULL</td><td>Nhanh hơn. Trong WAL, mất điện có thể mất vài giao dịch cuối nhưng file không hỏng</td></tr>
+    <tr><td><code>Cache = Shared</code>, một kết nối dùng chung</td><td>Cả master dùng một <code>SqliteConnection</code></td><td>Mọi logic chạy trên một luồng nên không cần pool, không tranh khoá</td></tr>
+  </table></div>
+
+  <h3>Lúc master khởi động, database được dựng thế nào</h3>
+  <div class="hflow p-kien">
+    <div class="st"><b>1 · Mở file</b><code>new SqliteDatabase(path)</code> với đường dẫn từ <code>IRONFRONT_DB_PATH</code></div><div class="ar">→</div>
+    <div class="st"><b>2 · PRAGMA</b>WAL + synchronous NORMAL</div><div class="ar">→</div>
+    <div class="st"><b>3 · CREATE IF NOT EXISTS</b>tạo bảng còn thiếu, không đụng dữ liệu cũ</div><div class="ar">→</div>
+    <div class="st"><b>4 · Ghi mùa</b>DB mới tinh: <code>career_meta.season = 2</code></div><div class="ar">→</div>
+    <div class="st"><b>5 · CareerService</b>mùa trong DB cũ hơn 2 thì chạy <code>BeginCareerSeason</code>; chạy các việc một lần chưa có cờ</div>
+  </div>
+  <div class="callout orange"><b>Không có công cụ migration.</b>Không EF Migrations, không Flyway. Schema lớn lên bằng <code>CREATE TABLE IF NOT EXISTS</code>. Việc chỉ được chạy một lần (gieo số liệu thắng hạng vàng, sửa số sai của vài người, chép lịch sử mùa) được đánh dấu bằng một khoá trong <code>career_meta</code>: chạy xong ghi 1, lần sau thấy 1 thì bỏ qua. Đây cũng là lý do chỉ số được lưu theo dòng: thêm chỉ số mới không cần <code>ALTER TABLE</code>.</div>
+
+  <h3>Đăng nhập: tám bước kiểm tra theo đúng thứ tự</h3>
+  <p>Hàm <code>AuthService.Login</code> trong <code>Ironfront.MasterServer/Auth/AuthService.cs</code>. Thứ tự là có chủ ý, câu "tại sao bước này đứng trước bước kia" rất hay gặp.</p>
+  <div class="dcard"><svg class="diagram" id="authSvg" role="img" aria-label="Lưu đồ đăng nhập"></svg></div>
+  <div class="callout orange"><b>Chỉ nói "bị khoá" hay "bị cấm" với người đã nhập đúng mật khẩu.</b>Trên đường đoán mò (đường duy nhất kẻ tấn công đi được) mọi câu trả lời đều là <code>WrongCredentials</code>, y hệt username không tồn tại. Thông báo thật thà cho chủ tài khoản và sự im lặng với kẻ dò nằm trên hai nhánh khác nhau, nên không phải đánh đổi.</div>
+
+  <h3>Mật khẩu đi từ bàn phím đến database</h3>
+  <div class="hflow p-kien">
+    <div class="st p-trung"><b>Người chơi gõ</b><code>matkhau123</code></div><div class="ar">→</div>
+    <div class="st p-trung"><b>Client · PasswordHasher</b><code>SHA256(mật khẩu + username viết thường)</code>, hex. Mật khẩu gốc không rời máy</div><div class="ar">→</div>
+    <div class="st p-infra"><b>Đường truyền</b>TCP bọc TLS</div><div class="ar">→</div>
+    <div class="st"><b>Master · Register</b><code>BCrypt.HashPassword(chuỗi SHA, cost 11)</code>, mỗi lần một salt</div><div class="ar">→</div>
+    <div class="st"><b>accounts.password_hash</b>chỉ có chuỗi bcrypt <code>$2a$11$…</code></div>
+  </div>
+  <p style="color:var(--ink2)">Giới hạn cần nói thật: với server, chuỗi SHA <i>chính là</i> mật khẩu, kẻ nghe lén được nó thì phát lại được. Băm phía client bảo vệ mật khẩu gốc người dùng dùng lại ở nơi khác; TLS mới là thứ bảo vệ đường truyền. Hai lớp bổ sung cho nhau chứ không thay nhau.</p>
+
+  <h3>Ghi nhớ đăng nhập</h3>
+  <div class="grid g2">
+    <div class="card"><h4 style="margin-top:0">Cấp token · <code>IssueRememberToken</code></h4>
+      <ol style="margin:0;padding-left:20px;font-size:15px">
+        <li>Sinh chuỗi ngẫu nhiên 43 ký tự, gửi về client cất trong máy.</li>
+        <li>DB chỉ lưu <b>SHA-256</b> của chuỗi đó ở <code>token_hash</code> (cũng là khoá chính). Lộ file DB cũng không đăng nhập được.</li>
+        <li>Hạn 30 ngày (<code>RememberDurationMs</code>). Tối đa 8 máy mỗi tài khoản; chèn xong xoá bớt token cũ nhất:</li>
+      </ol>
+<pre><code>DELETE FROM remember_tokens WHERE player_id = $id
+  AND token_hash NOT IN (
+    SELECT token_hash FROM remember_tokens WHERE player_id = $id
+    ORDER BY created_at DESC, rowid DESC LIMIT $keep)</code></pre></div>
+    <div class="card"><h4 style="margin-top:0">Dùng token · <code>TakeRememberToken</code></h4>
+      <ol style="margin:0;padding-left:20px;font-size:15px">
+        <li><code>SELECT player_id, expires_at</code> theo hash, rồi <code>DELETE</code> ngay. Token chỉ dùng được <b>một lần</b>, kể cả khi đã hết hạn cũng bị xoá.</li>
+        <li>Còn hạn thì trả tài khoản; master tạo session mới và cấp token mới.</li>
+        <li>Ai chép trộm token dùng trước thì lần sau chủ thật bị bắt nhập mật khẩu, tức là có dấu hiệu bị lộ.</li>
+        <li>Mỗi giờ <code>DeleteExpiredRememberTokens</code> dọn token hết hạn để bảng không phình.</li>
+      </ol></div>
+  </div>
+
+  <h3>Kết quả trận chảy vào database</h3>
+  <ol class="vflow">
+    <li class="p-toan"><span class="ly">Game Server</span><span class="wh">Hết hiệp, <code>ServerMasterReporter</code> gom kết quả từng người, <code>GameServerMatchReporter</code> gửi <code>GS_MATCH_ENDED {serverId, roomId, results[]}</code> qua TCP.</span></li>
+    <li class="p-kien"><span class="ly">Master</span><span class="wh"><code>MspMessageDispatcher.HandleMatchEnded</code> gọi <code>MayReportRound</code>: kết nối này có đúng là game server đang giữ phòng đó không. Báo cáo giả từ chỗ khác bị bỏ.</span></li>
+    <li class="p-kien"><span class="ly">SQLite</span><span class="wh">Mỗi người: <code>InsertMatchResult(roomId, playerId, kills, deaths, score, endedAt)</code> vào <code>match_results</code>.</span></li>
+    <li class="p-kien"><span class="ly">Master</span><span class="wh"><code>CareerService.RecordRound</code> gộp chỉ số hiệp vào sự nghiệp theo luật gộp của từng chỉ số (bảng dưới), rồi <code>WriteCareer</code> ghi trong <b>một transaction</b>.</span></li>
+    <li class="p-kien"><span class="ly">SQLite</span><span class="wh">Xét thành tựu: <code>INSERT OR IGNORE INTO achievements</code>. Trả về 1 dòng là vừa mở khoá, 0 là đã có từ trước.</span></li>
+    <li class="p-trung"><span class="ly">Client</span><span class="wh">Master đẩy <code>ACHIEVEMENT_UNLOCKED_PUSH {ids}</code>, client hiện thông báo.</span></li>
+  </ol>
+  <p style="color:var(--ink2)">Trong lúc trận chạy, cứ 15 giây game server gửi <code>GS_MATCH_PROGRESS</code> để thành tựu hiện ra sau vài giây thay vì chờ hết hiệp. Dòng có <code>final = true</code> là người đã rời trận: chỉ số của họ được ghi vào sự nghiệp ngay lúc đó.</p>
+
+  <h3>Luật gộp chỉ số (<code>CareerCombine</code>)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Luật</th><th>Cách gộp hiệp vào sự nghiệp</th><th>Ví dụ</th></tr>
+    <tr><td><b>Sum</b></td><td>Cộng dồn</td><td><code>kills</code>, <code>deaths</code>, <code>matches</code>, <code>wins</code>, <code>headshots</code></td></tr>
+    <tr><td><b>Max</b></td><td>Giữ giá trị lớn nhất từng đạt</td><td>các chỉ số "tốt nhất một hiệp"</td></tr>
+    <tr><td><b>Or</b></td><td>Gộp bitmask (bật thêm bit)</td><td><code>WeaponKillMask</code>: đã giết bằng những súng nào; <code>MapsFinished</code></td></tr>
+    <tr><td><b>Set</b></td><td>Ghi đè bằng giá trị mới</td><td><code>WinStreak</code>: chuỗi thắng hiện tại</td></tr>
+  </table></div>
+  <p class="cap">Tên chỉ số trong cột <code>stat</code> là camelCase của enum <code>CareerStat</code> (ví dụ <code>kills</code>), định nghĩa ở <code>Ironfront.Net.Protocol/Achievements/CareerStat.cs</code>. Chỉ số bắt đầu bằng <code>Pr</code> là của chế độ luyện tập, do chính client báo về.</p>
+
+  <h3>Đổi mùa giải trong một transaction</h3>
+  <div class="hflow p-kien">
+    <div class="st"><b>Đọc mùa</b><code>ReadCareerSeason()</code> = 1</div><div class="ar">→</div>
+    <div class="st"><b>BEGIN</b><code>BeginTransaction()</code></div><div class="ar">→</div>
+    <div class="st"><b>Tạo bảng lưu trữ</b><code>career_stats_season1</code></div><div class="ar">→</div>
+    <div class="st"><b>Chép rồi xoá</b>từng chỉ số online: <code>INSERT OR REPLACE … SELECT</code>, rồi <code>DELETE</code></div><div class="ar">→</div>
+    <div class="st"><b>Ghi mùa mới</b>upsert <code>career_meta</code></div><div class="ar">→</div>
+    <div class="st"><b>COMMIT</b>lỗi giữa chừng thì không có gì thay đổi</div>
+  </div>
+  <p style="color:var(--ink2)"><b>Vì sao có mùa 2.</b> Số liệu mùa 1 (v4.6.0, v4.6.1) sai cả hai chiều: game server gửi lại tổng cộng dồn sau mỗi hiệp nên bị cộng trùng (có người hiện 1.005 kill trong khi thực tế khoảng 555), và hiệp của người rớt kết nối master giữa chừng bị bỏ mất. Chủ dự án chọn mở bảng xếp hạng mới thay vì vá dở (11/10/2026). Thành tựu không bị xoá; tổng các mùa đã đóng được chép vào <code>career_history</code> để hồ sơ vẫn đầy đủ.</p>
+
+  <h3>Sao lưu và khôi phục</h3>
+  <div class="dcard"><svg class="diagram" id="backupSvg" role="img" aria-label="Luồng sao lưu"></svg></div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="callout orange" style="margin:0"><b>Vì sao không <code>cp ironfront.db</code>?</b>Đó là chép byte của một file đang được ghi. Ở chế độ WAL còn tệ hơn: một phần dữ liệu đã commit nằm trong <code>ironfront.db-wal</code>, chỉ chép file chính có thể ra bản vừa hỏng vừa cũ. Backup API đọc qua chính SQLite và cho ra một file hợp lệ tại một thời điểm thật.</div>
+    <div class="callout orange" style="margin:0"><b>Chi tiết "nhỏ mà chết người"</b><code>BackupTo</code> mở kết nối đích với <code>Pooling = false</code>. Nếu để pool, kết nối trả về pool vẫn giữ file mở, lần sao lưu thứ hai vào cùng đường dẫn sẽ hỏng ở bước xoá file cũ. Lỗi này do test <code>BackingUpTwiceOverwritesRatherThanMergingIntoTheOldFile</code> bắt được. Một bản sao lưu chưa từng khôi phục thử thì chưa phải bản sao lưu, nên bộ test khôi phục thật.</div>
+  </div>
+
+  <h3>Tự luyện SQL (chạy trên bản sao, không chạy trên DB thật)</h3>
+<pre><code>-- 1. Bao nhiêu tài khoản, bao nhiêu người đã từng đăng nhập
+SELECT COUNT(*) AS tong, COUNT(last_login_at) AS da_dang_nhap FROM accounts;
+
+-- 2. Top 10 kill mùa hiện tại
+SELECT a.display_name, s.value AS kills
+FROM career_stats s JOIN accounts a ON a.player_id = s.player_id
+WHERE s.stat = 'kills' ORDER BY s.value DESC LIMIT 10;
+
+-- 3. Tài khoản đang bị khoá (thời gian là mili giây Unix)
+SELECT username, failed_logins, datetime(locked_until/1000, 'unixepoch') AS mo_khoa_luc
+FROM accounts WHERE locked_until > CAST(strftime('%s','now') AS INTEGER) * 1000;
+
+-- 4. Mỗi thành tựu có bao nhiêu người
+SELECT achievement_id, COUNT(*) AS so_nguoi FROM achievements
+GROUP BY achievement_id ORDER BY so_nguoi DESC;
+
+-- 5. Mười hiệp gần nhất của một người
+SELECT room_id, kills, deaths, score, datetime(ended_at/1000,'unixepoch') AS luc
+FROM match_results WHERE player_id = 1 ORDER BY ended_at DESC LIMIT 10;
+
+-- 6. Kiểm chứng khoá ngoại KHÔNG được bật
+PRAGMA foreign_keys;   -- trả 0</code></pre>
+</section>
+
+<!-- ===================== 08 ÔN TẬP ===================== -->
+<section class="sec p-kien" id="on-tap">
+  <div class="eyebrow" style="color:var(--kien)"><span class="num" style="background:var(--kien)">08</span>Thẻ ôn tập database</div>
+  <h2>Bấm để lật, tự trả lời trước khi xem</h2>
+  <p class="lead">Thẻ có đánh dấu <b>bẫy</b> là câu dễ trả lời sai nếu chỉ đọc lướt schema. Kiên phải trả lời trôi chảy hết; ba người còn lại nên trả lời được nhóm "thiết kế" và "luồng".</p>
+  <div class="row" id="qfilter" style="margin:12px 0"></div>
+  <div class="grid g3" id="flips"></div>
+</section>
+
+<!-- ===================== 09 LỊCH ===================== -->
+<section class="sec" id="lich-hoc">
+  <div class="eyebrow"><span class="num">09</span>Kế hoạch</div>
+  <h2>Lịch 4 tuần gợi ý</h2>
+  <div class="grid g2" style="align-items:start">
+    <div class="tl">
+      <div class="t"><b>Tuần 1 · Học chung</b><br><span style="color:var(--ink2)">Cả nhóm đọc mục 01 đến 05. Mỗi người cài .NET 10 SDK, chạy <code>dotnet build Ironfront.sln</code> và <code>dotnet test Ironfront.sln</code>. Nghĩa trình bày 20 phút: TCP và UDP, server quyết định, 4 kỹ thuật netcode.</span></div>
+      <div class="t"><b>Tuần 2 · Đào phần mình</b><br><span style="color:var(--ink2)">Làm hết nửa đầu danh sách việc. Mỗi người viết một trang ghi chú dạng "hàm X ở file Y làm Z, được gọi từ W".</span></div>
+      <div class="t"><b>Tuần 3 · Nối các đầu dây</b><br><span style="color:var(--ink2)">Trung + Toàn: prediction và vẽ người khác. Kiên + Toàn: JoinTicket và kết quả trận qua MasterLink. Kiên + Trung: một LOGIN_REQ từ MasterClient tới AuthService. Nghĩa + Toàn: snapshot từ lúc dựng đến lúc lên dây. Mỗi cặp 30 phút, ghi lại câu hỏi chưa trả lời được.</span></div>
+      <div class="t"><b>Tuần 4 · Diễn tập bảo vệ</b><br><span style="color:var(--ink2)">Mỗi người trình bày 10 phút, ba người kia hỏi bằng câu tự kiểm tra và bảng danh mục thư mục gốc. Kiên được hỏi riêng 15 phút về database bằng thẻ ở mục 08.</span></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Tiến độ cả nhóm</h3>
+      <p class="cap" style="margin-top:-6px">Tính từ các ô đã tick trên máy này.</p>
+      <div id="teamProgress"></div>
+      <button class="btn" id="resetAll" style="margin-top:10px">Xoá hết dấu tick</button>
+    </div>
+  </div>
+</section>
+
+<footer>Tổng hợp từ mã nguồn repo LTM ngày 08/11/2026, commit <code>19044c0f</code>, cùng các tài liệu <code>docs/architecture.md</code>, <code>docs/codebase-map.md</code>, <code>docs/report-chapter-*.md</code>, <code>plans/00-shared/protocol-spec.md</code>. Khi code đổi mà trang này chưa đổi, tin code. File chỉ nằm trên máy, không đăng lên đâu.</footer>
+</main>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ============ helpers ============ */
+const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const NS="http://www.w3.org/2000/svg";
+function E(tag,attrs,text,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)if(attrs[k]!=null)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;if(parent)parent.appendChild(e);return e}
+const tw=(t,s,mono)=>[...String(t)].length*s*(mono?0.62:0.56);
+const COL={nghia:"var(--nghia)",kien:"var(--kien)",trung:"var(--trung)",toan:"var(--toan)",infra:"var(--infra)",ink:"var(--ink2)",bad:"var(--bad)"};
+const BG={nghia:"var(--nghia-bg)",kien:"var(--kien-bg)",trung:"var(--trung-bg)",toan:"var(--toan-bg)",infra:"var(--infra-bg)"};
+function markers(svg){const d=E("defs",{},null,svg);Object.keys(COL).forEach(k=>{const m=E("marker",{id:svg.id+"-m-"+k,viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"10",markerHeight:"10",markerUnits:"userSpaceOnUse",orient:"auto-start-reverse"},null,d);E("path",{d:"M0,0 L10,5 L0,10 z",fill:COL[k]},null,m)});return k=>"url(#"+svg.id+"-m-"+k+")"}
+const PILLS=[];
+function pill(svg,x,y,text,c,opt){opt=opt||{};const s=opt.size||12,w=tw(text,s,opt.mono)+22,h=s+12;const g=E("g",{},null,svg);const r=E("rect",{class:"nb",x:x-w/2,y:y-h/2,width:w,height:h,rx:h/2,fill:"var(--bg2)",stroke:COL[c]||c,"stroke-width":1.4},null,g);const t=E("text",{x,y:y+s*0.36,"text-anchor":"middle","font-size":s,"font-weight":700,fill:COL[c]||c,class:opt.mono?"mono":null},text,g);
+ const fit=()=>{const m=t.getComputedTextLength();if(m>0){const ww=m+20;r.setAttribute("x",x-ww/2);r.setAttribute("width",ww)}};fit();PILLS.push(fit);return g}
+const refitPills=()=>PILLS.forEach(f=>f());if(document.fonts&&document.fonts.ready)document.fonts.ready.then(refitPills);
+function node(svg,o){const g=E("g",{class:o.click?"clickable":""},null,svg);
+  if(o.cyl){E("path",{class:"nb",d:`M${o.x},${o.y+12} a${o.w/2},12 0 0 1 ${o.w},0 v${o.h-24} a${o.w/2},12 0 0 1 ${-o.w},0 z`,fill:BG[o.c],stroke:COL[o.c],"stroke-width":2},null,g);E("path",{d:`M${o.x},${o.y+12} a${o.w/2},12 0 0 0 ${o.w},0`,fill:"none",stroke:COL[o.c],"stroke-width":2},null,g)}
+  else E("rect",{class:"nb",x:o.x,y:o.y,width:o.w,height:o.h,rx:o.rx||16,fill:o.fill||BG[o.c],stroke:COL[o.c],"stroke-width":2,"stroke-dasharray":o.dashed?"7 5":null},null,g);
+  const cx=o.x+o.w/2;let ty=o.y+(o.ty||34);
+  E("text",{x:cx,y:ty,"text-anchor":"middle","font-size":o.fs||17,"font-weight":800,fill:COL[o.c]},o.t,g);
+  (o.sub||[]).forEach((s,i)=>E("text",{x:cx,y:ty+22+i*18,"text-anchor":"middle","font-size":12.5,fill:"var(--ink2)"},s,g));
+  if(o.who)E("text",{x:cx,y:o.y+o.h-12,"text-anchor":"middle","font-size":11.5,"font-weight":700,fill:COL[o.c]},o.who,g);
+  return g}
+function path(svg,d,c,mk,opt){opt=opt||{};return E("path",{d,fill:"none",stroke:COL[c],"stroke-width":opt.w||2.4,"stroke-dasharray":opt.dash?"7 6":null,class:opt.anim?"dash":null,"marker-end":mk?mk(c):null,id:opt.id||null},null,svg)}
+function dotAlong(svg,id,c,dur,begin){const ci=E("circle",{r:5.5,fill:COL[c]},null,svg);const am=E("animateMotion",{dur:dur+"s",begin:(begin||0)+"s",repeatCount:"indefinite"},null,ci);E("mpath",{href:"#"+id},null,am)}
+
+/* theme + nav */
+const root=document.documentElement;const th=store.get("if2-theme",null);if(th)root.dataset.theme=th;
+$("#themeBtn").onclick=()=>{const dark=root.dataset.theme?root.dataset.theme==="dark":matchMedia("(prefers-color-scheme: dark)").matches;root.dataset.theme=dark?"light":"dark";store.set("if2-theme",root.dataset.theme)};
+$("#menuBtn").onclick=()=>$("#side").classList.toggle("open");
+$$("#side a").forEach(a=>a.addEventListener("click",()=>$("#side").classList.remove("open")));
+const secs=$$("section.sec");
+addEventListener("scroll",()=>{const h=document.body.scrollHeight-innerHeight;$("#progress").style.width=(h>0?scrollY/h*100:0)+"%";let cur="";secs.forEach(s=>{if(s.getBoundingClientRect().top<140)cur=s.id});
+  $$("#side a").forEach(a=>{const on=a.getAttribute("href")==="#"+cur&&(!a.dataset.goto||a.dataset.goto===curTab);a.classList.toggle("on",on)})},{passive:true});
+
+/* ============ PEOPLE (summary) ============ */
+const ORDER=["nghia","kien","trung","toan"];
+const P={nghia:{name:"Nghĩa",w:20,role:"Toàn cảnh · giao thức · đóng gói snapshot"},kien:{name:"Kiên",w:25,role:"Master server · database · máy chủ"},trung:{name:"Trung",w:30,role:"Client: Unity, MasterClient, phát hành"},toan:{name:"Toàn",w:25,role:"UDP tự viết · game server · MasterLink"}};
+
+/* ============ ARCH ============ */
+(function(){const svg=$("#archSvg");const mk=markers(svg);
+ // edges first
+ path(svg,"M270,250 H345 V180 H430","kien",mk,{id:"eTcp"});
+ path(svg,"M270,320 H345 V440 H430","toan",mk,{id:"eUdp"});
+ path(svg,"M550,390 V250","kien",mk,{id:"eGs",dash:true});
+ path(svg,"M670,185 H770","kien",mk,{id:"eDb"});
+ path(svg,"M770,450 H670","infra",mk,{id:"eImg",dash:true,anim:true});
+ path(svg,"M870,390 V300 H620 V250","infra",mk,{id:"eImg2",dash:true,anim:true});
+ dotAlong(svg,"eTcp","kien",2.4);dotAlong(svg,"eUdp","toan",.9);dotAlong(svg,"eUdp","toan",.9,.3);dotAlong(svg,"eUdp","toan",.9,.6);dotAlong(svg,"eGs","kien",3);dotAlong(svg,"eDb","kien",1.8);
+ const nodes=[
+  {k:"proto",x:350,y:16,w:300,h:66,c:"nghia",t:"Ironfront.Net.Protocol",sub:["luật chung: gói tin, hằng số, mã lỗi"],ty:30,fs:15},
+  {k:"client",x:40,y:220,w:230,h:130,c:"trung",t:"Client",sub:["Unity 6 · Windows · macOS · Linux","menu, HUD, dự đoán, vẽ"],who:"Trung"},
+  {k:"master",x:430,y:120,w:240,h:130,c:"kien",t:"Master Server",sub:[".NET 10 · một logic thread","đăng nhập · phòng · ghép trận"],who:"Kiên"},
+  {k:"db",x:770,y:125,w:190,h:120,c:"kien",t:"SQLite",sub:["ironfront.db · WAL"],cyl:true,ty:62,fs:16},
+  {k:"gs",x:430,y:390,w:240,h:130,c:"toan",t:"Game Server",sub:["Unity headless · 30 tick/giây","quyết định mọi thứ trong trận"],who:"Toàn"},
+  {k:"infra",x:770,y:390,w:200,h:130,c:"infra",t:"Hạ tầng",sub:["GitHub Actions → GHCR","AWS EC2 · Azure VM · Docker"],who:"Kiên",dashed:true}];
+ nodes.forEach(n=>{n.click=true;const g=node(svg,n);g.dataset.k=n.k;g.addEventListener("click",()=>showArch(n.k))});
+ pill(svg,345,215,"TCP + TLS · cổng 27000","kien");
+ pill(svg,345,395,"UDP · 30 / 20 Hz","toan");
+ pill(svg,550,320,"TCP: đăng ký · heartbeat · kết quả trận","kien",{size:11.5});
+ pill(svg,720,165,"SQL","kien");
+ pill(svg,720,470,"image","infra");
+ pill(svg,745,300,"deploy","infra");
+ E("text",{x:500,y:100,"text-anchor":"middle","font-size":11.5,fill:"var(--ink3)"},"↓ cả 3 chương trình đều tham chiếu thư viện này ↓",svg);
+})();
+const ARCH={
+ client:{p:"trung",t:"Client (Unity)",b:`<p>Game người chơi tải về từ trang Releases. Gồm hai lớp: <b>game gốc</b> (nhân vật, súng, đạn, xe, AI, A*) được khôi phục lại, và <b>mạng phía client</b> (đăng nhập, sảnh, phòng chờ, vào trận, vẽ người khác).</p><p>Client <b>dự đoán</b> chuyển động của chính mình để không thấy trễ, và vẽ người khác lùi 100 ms để nội suy cho mượt. Nó không bao giờ gửi vị trí, chỉ gửi phím bấm.</p><p><code>Ironfront_Reborn/Assets/Scripts/</code></p>`},
+ master:{p:"kien",t:"Master Server",b:`<p>Chương trình .NET 10 chạy độc lập, không cần Unity. Lo đăng nhập, phòng, ghép trận, chat sảnh, bảng xếp hạng, thành tựu. Không chạy game.</p><p><b>Điểm đáng nhớ nhất:</b> mọi logic chạy trên <b>một luồng duy nhất</b>. Nhận và gửi dữ liệu dùng thread pool (async), còn xử lý thì xếp hàng vào một queue. Không cần <code>lock</code>, hai người không thể tranh nhau chỗ trống cuối của phòng.</p><p>Khi phòng đủ người, master chọn một game server khoẻ và phát cho mỗi người một <b>JoinTicket</b> ký HMAC.</p>`},
+ db:{p:"kien",t:"SQLite",b:`<p>Một file <code>ironfront.db</code> trên máy chạy master; trong Docker là <code>/data/ironfront.db</code> gắn volume ra ngoài. 7 bảng sống và 1 bảng lưu trữ mùa cũ.</p><p>Chỉ master đọc ghi. Game server muốn ghi kết quả thì gửi cho master qua TCP.</p><p><a href="#database">Xem kỹ ở mục 07 →</a></p>`},
+ gs:{p:"toan",t:"Game Server",b:`<p>Cùng project Unity với client nhưng build headless (không hình, không tiếng), chạy trên Linux trong Docker. Mỗi tiến trình giữ một trận.</p><p>Mỗi 1/30 giây: đọc gói UDP, áp phím bấm, chạy vật lý và AI bot, xét trúng đạn; 20 lần mỗi giây gửi snapshot cho từng người.</p><p>Nó kiểm JoinTicket bằng khoá bí mật dùng chung, <b>không hỏi lại master</b>. Master chết thì trận đang chạy vẫn tiếp tục.</p>`},
+ infra:{p:"kien",t:"Hạ tầng",b:`<p><code>ci.yml</code> build và test mỗi lần đẩy code, chặn merge khi đỏ. <code>images.yml</code> đóng image Docker đẩy lên GHCR.</p><p>Master đang chạy trên AWS EC2 (vùng Sydney). Game server chạy trên một VM Azure. Máy được dựng bằng Terraform, chạy bằng Docker Compose, sao lưu bằng systemd timer.</p><p>Bí mật chỉ nằm trong <code>.env</code> trên máy chủ, không bao giờ vào git, image hay Terraform.</p>`},
+ proto:{p:"nghia",t:"Ironfront.Net.Protocol",b:`<p>Thư viện "luật chơi chung": định dạng từng gói tin, mã lỗi, enum, hằng số (30 Hz, 1200 byte, 16 người chơi). Cả client, game server và master đều dùng.</p><p>Quy tắc cứng: hằng số chỉ khai báo ở <code>ProtocolConstants.cs</code>. Công cụ <code>tools/SpecChecker</code> làm hỏng build nếu đặc tả và code lệch nhau; <code>Protocol.Tests</code> là "trọng tài" kiểm từng byte.</p>`}};
+function showArch(k){const a=ARCH[k];$$("#archSvg .clickable").forEach(g=>g.classList.toggle("sel",g.dataset.k===k));$("#archPanel").className="card panel p-"+a.p;$("#archPanel").innerHTML=`<span class="chip ptag"><span class="d"></span>${P[a.p].name} học phần này</span><h3>${a.t}</h3>${a.b}`}
+showArch("master");
+
+/* ============ LAYERS ============ */
+(function(){const svg=$("#layerSvg");const mk=markers(svg);
+ svg.setAttribute("viewBox","0 0 1000 370");
+ const B=(x,y,w,t,c,sub)=>{node(svg,{x,y,w,h:58,c,t,sub:[sub],ty:25,fs:14})};
+ const P=(d,c)=>path(svg,d,c||"ink",mk,{w:1.7});
+ // Unity -> the five DLLs it loads (one bus, then a drop per box)
+ E("path",{d:"M360,78 V108 M95,108 H800",fill:"none",stroke:"var(--trung)","stroke-width":1.7},null,svg);
+ [95,265,435,605,800].forEach(x=>P(`M${x},108 V150`,"trung"));
+ // MasterServer -> Configuration, MasterServer -> Protocol (around the right edge)
+ P("M900,78 V150","kien");P("M960,49 H986 V320 H652","kien");
+ // MasterLink -> Replication, MasterLink -> MasterClient
+ P("M360,179 H342","toan");P("M510,179 H528","toan");
+ // Transport, Replication, MasterClient -> Protocol
+ P("M95,208 V240 H330 V290","ink");P("M265,208 V228 H400 V290","ink");P("M605,208 V240 H470 V290","ink");
+ B(20,20,680,"Ironfront_Reborn (Unity 6)","trung","nạp 6 DLL trong Assets/Plugins, do tools/build-libs.ps1 build và chép vào");
+ B(760,20,200,"MasterServer","kien",".NET 10 · không qua Unity");
+ B(20,150,150,"Net.Transport","toan","UDP tự viết");B(190,150,150,"Net.Replication","toan","đồng bộ, chiến đấu");B(360,150,150,"Net.MasterLink","toan","GS báo kết quả");
+ B(530,150,150,"MasterClient","trung","TCP tới master");B(760,150,200,"Net.Configuration","trung",".env · bản đồ · độc lập");
+ B(250,290,400,"Ironfront.Net.Protocol","nghia","netstandard2.1 · gói tin, hằng số, mã lỗi · không phụ thuộc ai");
+})();
+
+/* ============ TREE ============ */
+const TREE=[
+ {n:"Ironfront.Net.Protocol/",p:"nghia",d:"Định dạng gói tin, hằng số, mã lỗi, enum, JoinTicket. Mọi bên dùng chung. netstandard2.1, cấm dùng UnityEngine.",c:[
+   {n:"ProtocolConstants.cs",p:"nghia",d:"Nguồn sự thật duy nhất cho mọi hằng số: PROTOCOL_ID 0x4946, version 14, MTU 1200, tick 30 Hz, snapshot 20 Hz, 16 người chơi, 100 bot, 128 actor, 24 xe."},
+   {n:"Msp/",p:"nghia",d:"Master Server Protocol: khung TCP (u32 độ dài + u16 loại tin), đọc khung từ luồng byte, luật kênh chat."},
+   {n:"Gsp/",p:"nghia",d:"Game Server Protocol: header UDP 16 byte, phong bì kênh 3 byte, cắt và ghép mảnh."},
+   {n:"Messages/",p:"nghia",d:"Nội dung từng loại tin: snapshot, input, đăng nhập, phòng, kết quả trận..."},
+   {n:"Enums/",p:"nghia",d:"Loại gói, kênh, cờ trạng thái actor, mã lỗi chung."},
+   {n:"Security/",p:"nghia",d:"JoinTicket 64 byte ký HMAC-SHA256 và bộ làm sạch tên người chơi."},
+   {n:"Io/",p:"nghia",d:"SpanWriter/SpanReader: ghi đọc số nguyên little-endian trên Span, không cấp phát."},
+   {n:"Achievements/",p:"kien",d:"Danh mục thành tựu và chỉ số sự nghiệp (CareerStat) dùng chung giữa client và master."},
+   {n:"Quantize.cs · SequenceMath.cs",p:"nghia",d:"Nén float thành số nguyên nhỏ; so sánh số thứ tự 16 bit có quay vòng."}]},
+ {n:"Ironfront.Net.Transport/",p:"toan",d:"Lớp UDP tự viết: bắt tay có cookie, tin cậy bằng ack bitfield, 4 kênh, phân mảnh, kiểm soát nghẽn, chống flood. Một luồng, gọi Poll() mỗi frame.",c:[
+   {n:"UdpTransportServer.cs · UdpTransportClient.cs",p:"toan",d:"Hai đầu của kết nối. Server không có hàm kiểm vé thì từ chối hết (fail-closed)."},
+   {n:"Connection.cs · ReliabilityLayer.cs",p:"toan",d:"Trạng thái một kết nối, ack, gửi lại gói tin cậy (luôn đóng số thứ tự mới khi gửi lại)."},
+   {n:"ChannelSet.cs · FragmentAssembler.cs",p:"toan",d:"Bốn kênh với luật giao nhận riêng; ghép mảnh tối đa 64 mảnh."},
+   {n:"HandshakeCookie.cs · RateLimiter.cs",p:"toan",d:"Chống giả IP khi bắt tay; cắt địa chỉ gửi quá nhiều."},
+   {n:"CongestionControl.cs · FlowControl.cs",p:"toan",d:"Giảm tốc gửi khi mạng nghẽn."},
+   {n:"PacketLogger.cs",p:"nghia",d:"Ghi file bắt gói .ifpcap khi đặt biến IRONFRONT_PCAP, để PacketReplay phân tích."},
+   {n:"Simulation/ · Loopback/",p:"toan",d:"Mạng giả lập (trễ, mất gói) và transport trong bộ nhớ cho test."}]},
+ {n:"Ironfront.Net.Replication/",p:"toan",d:"Đồng bộ trạng thái và chiến đấu phía server. Thư viện thuần .NET nên test nhanh.",c:[
+   {n:"Serialization/",p:"nghia",d:"BitWriter/BitReader: đọc ghi theo từng bit."},
+   {n:"SnapshotBuilder.cs · DeltaEncoder.cs · DeltaDecoder.cs · WorldSnapshot.cs",p:"nghia",d:"Dựng snapshot đã lượng tử hoá, chỉ ghi trường thay đổi so với bản client đã xác nhận."},
+   {n:"Interest/",p:"nghia",d:"InterestManager: gửi nhân vật nào cho ai, bao lâu một lần."},
+   {n:"Server/",p:"toan",d:"Kiểm vé, cấp actorId, nhận input, lịch tick, LOD cho bot, router tin nhắn phía server."},
+   {n:"Client/",p:"toan",d:"Phần client không dính Unity: sửa dự đoán, nội suy, bảng điểm, killfeed, bảng tên."},
+   {n:"Combat/",p:"toan",d:"Xét trúng đạn: lịch sử hitbox, tua thời gian, đạn đạo, nổ, ngã, xét báo cáo trúng của client."},
+   {n:"Movement/",p:"toan",d:"MovementCore: mô phỏng di chuyển chạy giống hệt ở client và server."},
+   {n:"Match/",p:"toan",d:"Máy trạng thái trận, luật thắng, điểm chiếm cờ, kiểm đếm số liệu sự nghiệp."},
+   {n:"Vehicles/ · Projectiles/ · Ai/ · World/",p:"toan",d:"Đồng bộ xe, đạn bay, hành vi bot, vùng chơi."}]},
+ {n:"Ironfront.MasterServer/",p:"kien",d:"Master: TCP + TLS, một logic thread, SQLite. .NET 10, 32 file, khoảng 8.300 dòng.",c:[
+   {n:"Program.cs",p:"kien",d:"Điểm vào: đọc .env, dựng config, mở DB, tạo service, chạy host. Lệnh phụ --create-account, --backup."},
+   {n:"Net/",p:"kien",d:"TcpListenerHost (accept + logic loop), ClientConnection (cắt khung), PROXY header, endpoint số liệu cổng 27001."},
+   {n:"Dispatch/",p:"kien",d:"MspMessageDispatcher: switch theo loại tin, gọi đúng handler (1.143 dòng)."},
+   {n:"Auth/",p:"kien",d:"Đăng ký, đăng nhập, rate limit, khoá, session, remember token."},
+   {n:"Lobby/",p:"kien",d:"Phòng, ghép trận, chat, ngân sách bot, bản đồ hỗ trợ."},
+   {n:"GameServers/",p:"kien",d:"Danh bạ game server: đăng ký, heartbeat, cấp phát cho phòng, dọn server chết."},
+   {n:"Career/",p:"kien",d:"Chỉ số sự nghiệp, thành tựu, xếp hạng, quyền riêng tư hồ sơ, sửa số sai."},
+   {n:"Data/",p:"kien",d:"SqliteDatabase: toàn bộ SQL. Trọng tâm bị hỏi."},
+   {n:"Diagnostics/ · Security/ · Configuration/",p:"kien",d:"Log có cấu trúc, số liệu, chứng chỉ TLS, cấu hình từ biến môi trường."}]},
+ {n:"Ironfront_Reborn/",p:"trung",d:"Project Unity 6. Một codebase build ra cả client lẫn game server headless.",c:[
+   {n:"Assets/Scripts/Assembly-CSharp/",p:"trung",d:"Game gốc chơi một mình được khôi phục: Actor, Weapon, Projectile, Hitbox, AI, xe, A* (362 file)."},
+   {n:"Assets/Scripts/Net/Client/",p:"trung",d:"Mạng phía client trong Unity: máy trạng thái màn hình, menu, HUD, vẽ người khác, dự đoán (120 file)."},
+   {n:"Assets/Scripts/Net/Server/",p:"toan",d:"Game server trong Unity: vòng tick, các stage, cầu nối chiến đấu và xe, nối master (46 file)."},
+   {n:"Assets/Scripts/Net/Shared/",p:"trung",d:"Dùng ở cả hai phía: NetContext, mô phỏng di chuyển, phím, tuỳ chọn, giao diện (interface) cho binding (90 file)."},
+   {n:"Assets/Scripts/Net/Input/",p:"trung",d:"Nguồn input tách khỏi Input.* của Unity."},
+   {n:"Assets/Scripts/Net/Diagnostics/",p:"toan",d:"Đo đạc và ghi log chẩn đoán cho các lần chạy thử tự động."},
+   {n:"Assets/Scripts/NetBindings/",p:"trung",d:"Bộ chuyển đổi: gắn code mạng vào game gốc qua interface, không sửa game gốc nhiều."},
+   {n:"Assets/Scripts/Rendering/",p:"trung",d:"Tối ưu hiển thị: cỏ, bóng cây, mức chất lượng."},
+   {n:"Assets/Scenes/",p:"trung",d:"Splash, Menu, Dustbowl, ForestLake, Island."},
+   {n:"Assets/Editor/",p:"trung",d:"Công cụ Editor: dựng canvas menu, HUD, build server."},
+   {n:"Assets/Plugins/",p:"trung",d:"DLL của các thư viện .NET (do build-libs.ps1 chép vào) và plugin bên thứ ba."},
+   {n:"Assets/Tests/",p:"trung",d:"Test EditMode chạy trong Unity Test Runner."},
+   {n:"Packages/ · ProjectSettings/",p:"trung",d:"Gói Unity và thiết lập project (layer, input, quality)."}]},
+ {n:"infra/",p:"kien",d:"Hạ tầng dạng code.",c:[
+   {n:"terraform/aws/master/",p:"kien",d:"Dựng EC2 cho master."},{n:"terraform/azure/",p:"kien",d:"Dựng VM cho game server và Blob cho sao lưu, truy cập bằng managed identity."},
+   {n:"docker/",p:"kien",d:"Dockerfile của master và game server."},{n:"compose/",p:"kien",d:"compose.yaml và script deploy: master, game server, volume /data, cổng 27000."},
+   {n:"systemd/",p:"kien",d:"Timer sao lưu (00/6:00) và cảnh báo."},{n:"tls/",p:"kien",d:"Xin và gia hạn chứng chỉ."}]},
+ {n:"tools/",p:"kien",d:"Script build, deploy, sao lưu, phát hành, và các cổng kiểm tra chạy trong CI."},
+ {n:".github/workflows/",p:"kien",d:"ci.yml, images.yml, linux-smoke, macos-smoke, codeql, ghcr-retention."},
+ {n:"docs/ · plans/",p:"nghia",d:"Tài liệu kiến trúc, báo cáo từng chương, vận hành; kế hoạch theo phase và đặc tả giao thức plans/00-shared/protocol-spec.md."}
+];
+function renderTree(nodes){return "<ul>"+nodes.map(n=>`<li class="${n.c?"closed":""}"><span class="tw">${n.c?"▸":""}</span><span class="it p-${n.p}" data-p="${n.p}" data-n="${esc(n.n)}" data-d="${esc(n.d)}"><i class="dot"></i>${esc(n.n)}</span>${n.c?renderTree(n.c):""}</li>`).join("")+"</ul>"}
+$("#tree").innerHTML=renderTree(TREE);
+$("#tree").addEventListener("click",e=>{const t=e.target.closest(".tw");if(t&&t.textContent){const li=t.parentElement;li.classList.toggle("closed");t.textContent=li.classList.contains("closed")?"▸":"▾";return}
+ const it=e.target.closest(".it");if(!it)return;$$("#tree .it").forEach(x=>x.classList.remove("sel"));it.classList.add("sel");const li=it.parentElement;if(li.classList.contains("closed")){li.classList.remove("closed");li.querySelector(".tw").textContent="▾"}
+ $("#treePanel").className="card panel p-"+it.dataset.p;$("#treePanel").innerHTML=`<span class="chip ptag"><span class="d"></span>${P[it.dataset.p].name}</span><h3 class="mono" style="font-size:17px">${it.dataset.n}</h3><p>${it.dataset.d}</p>`});
+
+/* ============ ROOT COVERAGE ============ */
+const ROOT=[
+ ["README.md","nghia","Tài liệu","Giới thiệu, cách tải game, cách build và test. Câu chốt: netcode viết tay hoàn toàn, chỉ dùng socket của hệ điều hành."],
+ ["docs/","nghia","Tài liệu","Kiến trúc, báo cáo từng chương (master, đồng bộ trạng thái, transport), vận hành, phát hành, sổ tay sự cố. Nên đọc trước code."],
+ ["plans/","nghia","Tài liệu","Kế hoạch theo phase (phases/phase-p21 đến p34), sổ nợ kỹ thuật, và đặc tả giao thức protocol-spec.md mà code bắt buộc phải khớp."],
+ ["Ironfront.sln","nghia","Cấu hình build","Solution gom mọi project .NET để dotnet build/test một lần. Unity không nằm trong solution."],
+ ["Directory.Build.props","nghia","Cấu hình build","Thiết lập chung cho mọi project .NET, khỏi lặp từng .csproj."],
+ ["Directory.Packages.props","nghia","Cấu hình build","Quản lý phiên bản NuGet tập trung (Microsoft.Data.Sqlite, BCrypt.Net-Next, xUnit...)."],
+ ["global.json","nghia","Cấu hình build","Ghim .NET SDK 10.0.x; SDK 11 bị từ chối có chủ ý để mọi máy build giống nhau."],
+ [".editorconfig","nghia","Cấu hình build","Quy ước định dạng code cho mọi editor."],
+ ["LICENSE","nghia","Pháp lý","Giấy phép mã nguồn."],
+ [".claude/ · .agents/ · .mcp.json","nghia","Công cụ AI","Cấu hình trợ lý lập trình dùng khi phát triển. Không thuộc sản phẩm, game chạy không cần."],
+ ["Ironfront.Net.Protocol/","nghia","Thư viện .NET","Định dạng gói tin, hằng số, mã lỗi, JoinTicket. Mọi bên dùng chung."],
+ ["Ironfront.Net.Protocol.Tests/","nghia","Test","Trọng tài: kiểm từng gói tin đúng byte theo đặc tả."],
+ ["Ironfront.Tools.E2E/","nghia","Công cụ","Kiểm tra đầu cuối dạng đạt/không đạt: đăng nhập, vào phòng, đi UDP vào game server."],
+ ["Ironfront.Tools.PacketReplay/","nghia","Công cụ","Phát lại và phân tích file bắt gói .ifpcap."],
+ ["Ironfront.MasterServer/","kien","Chương trình","Master TCP: đăng nhập, phòng, ghép trận, chat, sự nghiệp, SQLite."],
+ ["Ironfront.MasterServer.Tests/","kien","Test","Test master: đăng nhập, khoá, phòng, ghép trận, sao lưu và khôi phục DB thật."],
+ ["Ironfront.MasterClient/","trung","Thư viện .NET","Client TCP nói chuyện với master: MasterClient.cs (đăng nhập, phòng, chat, nhận push), tuỳ chọn TLS, và GameServerLink cho game server. Unity gọi nó qua MasterSession."],
+ ["Ironfront.Net.MasterLink/","toan","Thư viện .NET","GameServerMatchReporter: game server gửi GS_MATCH_PROGRESS mỗi 15 s và GS_MATCH_ENDED cuối hiệp về master."],
+ ["Ironfront.Net.Configuration/","trung","Thư viện .NET","Đọc .env (DotEnv, EnvParse), EnvRegistry liệt kê mọi biến, GameClientConfig và GameServerConfig, MapCatalog (danh mục bản đồ), NetRoleDeclaration."],
+ ["Ironfront.Net.Configuration.Tests/","trung","Test","Test đọc .env và biến bắt buộc."],
+ ["Ironfront.Tools.LoadTest/","kien","Công cụ","Bot client không giao diện để thử tải master và game server."],
+ ["Ironfront.Tools.MspBench/","kien","Công cụ","Thí nghiệm TCP cho báo cáo: đóng khung, Nagle, so với System.IO.Pipelines, sức chứa."],
+ ["infra/","kien","Hạ tầng","Terraform (AWS, Azure), Dockerfile, compose, systemd timer, TLS."],
+ ["tools/","kien","Script","Deploy, sao lưu, tạo .env, và cổng kiểm tra trong CI (SpecChecker, check-net-layering, check-plugin-dll-freshness...). Bốn script build-libs, build-player, build-server, package-release thì Trung học."],
+ [".github/","kien","CI/CD","ci.yml chặn merge khi đỏ; images.yml đẩy image lên GHCR; CodeQL; dọn GHCR. Riêng linux-smoke và macos-smoke chạy thử bản build người chơi, Trung nên biết."],
+ ["build/","trung","Sản phẩm build","Bản build Unity theo nền tảng (windows, macos, linux, server) do build-player.ps1 và build-server.ps1 tạo ra. Bị gitignore."],
+ ["artifacts/","trung","Sản phẩm build","Zip phát hành do package-release.ps1 đóng gói, cùng log của các lần chạy thử. Bị gitignore."],
+ [".env · .env.example","kien","Bí mật","Biến môi trường. .env chứa khoá thật và bị gitignore; .env.example là mẫu, tạo .env bằng tools/new-env.ps1."],
+ [".dockerignore · .gitignore · .gitattributes","kien","Cấu hình","Chặn .env, *.pfx, khoá, Library của Unity lọt vào image hay git; quy tắc xuống dòng và file nhị phân."],
+ ["Ironfront_Reborn/","trung","Unity","Project Unity 6: game gốc, mạng phía client, mạng phía server (Net/Server do Toàn học)."],
+ ["Ironfront.Client.Flow.Tests/","trung","Test","Test .NET biên dịch thẳng file .cs của Unity (GameFlowController, PasswordHasher, MasterErrorText...) để test không cần mở Unity."],
+ ["Ironfront.Client.Input.Tests/","trung","Test","Test nguồn input (IInputSource) và ánh xạ trục trực thăng."],
+ ["ui-pack/","trung","Thiết kế UI","Bản mẫu giao diện 8 màn hình bằng HTML/CSS/JS; tham chiếu khi dựng menu trong Unity."],
+ ["ironfront-reborn-ui-pack-HUD/","trung","Thiết kế UI","Bản mẫu 10 màn hình có HUD trong trận, ảnh xuất riêng để đưa vào Unity."],
+ ["tmp/","trung","Nháp","Script thăm dò Editor dùng một lần (bệ xe, mép bản đồ, đường thuyền) và file mô tả bài tập lớn. Không phải code sản phẩm."],
+ ["unity-server-build.log","trung","Log","Log lần build server Unity gần nhất."],
+ ["Ironfront.Net.Transport/","toan","Thư viện .NET","UDP tự viết: bắt tay, tin cậy, ack, kênh, phân mảnh, nghẽn, chống flood."],
+ ["Ironfront.Net.Transport.Tests/","toan","Test","Mất gói, sai thứ tự, gửi lại, phân mảnh trên mạng giả lập."],
+ ["Ironfront.Net.Transport.Bench/","toan","Công cụ","Đo hiệu năng transport, ví dụ bật/tắt ack bitfield với 16 kết nối."],
+ ["Ironfront.Net.Replication/","toan","Thư viện .NET","Đồng bộ trạng thái và chiến đấu phía server. Phần đóng gói (Serialization, Interest, Delta) do Nghĩa học."],
+ ["Ironfront.Net.Replication.Tests/","toan","Test","Prediction, nội suy, lag compensation, delta, interest (Nghĩa đọc phần Delta và Interest)."],
+ ["Ironfront.Net.LoadHarness/","toan","Công cụ","Client GSP tổng hợp để đo game server Unity: giả nhiều người chơi, diễn tập chiến đấu, đối chiếu trạng thái."],
+ ["Ironfront.Net.LoadHarness.Tests/","toan","Test","Test cách đếm kết quả và kịch bản chiến đấu của bộ đo."],
+ ["Ironfront.Tools.TacticsTrainer/","toan","Công cụ","Huấn luyện trọng số chỉ huy đội bot bằng mô phỏng chiếm cờ (CMA-ES); kết quả dùng cho AI bot trên server."]];
+let rootSel="all";
+function renderRoot(){const rows=ROOT.filter(r=>rootSel==="all"||r[1]===rootSel);
+ $("#rootTable").innerHTML=`<tr><th>Mục ở gốc repo</th><th>Loại</th><th>Ai</th><th>Bị hỏi thì trả lời</th></tr>`+rows.map(r=>`<tr class="p-${r[1]}"><td><code style="background:var(--pb);color:var(--pc);border-color:transparent;font-weight:700">${esc(r[0])}</code></td><td style="white-space:nowrap;color:var(--ink2)">${r[2]}</td><td><span class="chip ptag"><span class="d"></span>${P[r[1]].name}</span></td><td>${r[3]}</td></tr>`).join("");
+ $("#rootCount").textContent=`${ROOT.length} mục, mục nào cũng có người: `+ORDER.map(k=>`${P[k].name} ${ROOT.filter(r=>r[1]===k).length}`).join(" · ")+". Mỗi project test thuộc người học phần code mà nó kiểm tra."}
+$("#rootFilter").innerHTML=[["all","Tất cả"],...ORDER.map(k=>[k,P[k].name])].map((x,i)=>`<button class="btn ${i?"":"on"}" data-r="${x[0]}">${x[1]}</button>`).join("");
+$$("#rootFilter button").forEach(b=>b.onclick=()=>{rootSel=b.dataset.r;$$("#rootFilter button").forEach(x=>x.classList.toggle("on",x===b));renderRoot()});renderRoot();
+
+/* ============ SPLIT ============ */
+(function(){const svg=$("#donut");let a0=-Math.PI/2;const R=90,r=58,cx=110,cy=110;
+ ORDER.forEach(k=>{const a1=a0+P[k].w/100*2*Math.PI,lg=a1-a0>Math.PI?1:0;
+  const p=(a,rr)=>[cx+rr*Math.cos(a),cy+rr*Math.sin(a)];const[x1,y1]=p(a0,R),[x2,y2]=p(a1,R),[x3,y3]=p(a1,r),[x4,y4]=p(a0,r);
+  E("path",{d:`M${x1},${y1} A${R},${R} 0 ${lg} 1 ${x2},${y2} L${x3},${y3} A${r},${r} 0 ${lg} 0 ${x4},${y4} z`,fill:COL[k],stroke:"var(--bg)","stroke-width":3},null,svg);
+  const[mx,my]=p((a0+a1)/2,(R+r)/2);E("text",{x:mx,y:my+4,"text-anchor":"middle","font-size":12,"font-weight":800,fill:"#fff"},P[k].w+"%",svg);a0=a1});
+ E("text",{x:cx,y:cy-2,"text-anchor":"middle","font-size":13,"font-weight":700,fill:"var(--ink)"},"khối lượng",svg);E("text",{x:cx,y:cy+16,"text-anchor":"middle","font-size":11,fill:"var(--ink3)"},"ước tính",svg)})();
+const SUM={nghia:"Bức tranh lớn, mô hình server quyết định, định dạng gói tin TCP và UDP, hằng số, cấu trúc JoinTicket, cấu hình build. Thêm phần đóng gói snapshot: nén số, ghi bit, delta, interest management.",
+ kien:"Toàn bộ master server (đăng nhập, phòng, ghép trận, chat, sự nghiệp, thành tựu), SQLite (trọng tâm), và máy chủ chạy nó: Docker, Terraform, TLS, sao lưu, CI build image, .env phía máy chủ.",
+ trung:"Game gốc (nhân vật, súng, đạn, AI, xe), phía client của mạng trong Unity (màn hình, menu, HUD, vẽ người khác), cách client nói với master (MasterClient), cấu hình client (Net.Configuration), và đường từ project Unity ra file zip phát hành.",
+ toan:"Transport UDP tự viết (bắt tay, tin cậy, kênh, phân mảnh, chống flood), prediction, nội suy, lag compensation, xét trúng đạn, vòng tick của game server trong Unity, báo kết quả về master (MasterLink), công cụ đo tải."};
+$("#peopleCards").innerHTML=ORDER.map(k=>`<div class="card p-${k}" style="border-top:5px solid var(--pc)"><div class="row" style="justify-content:space-between"><b style="font-size:18px">${P[k].name}</b><span class="chip ptag">${P[k].w}%</span></div><div style="font-size:13px;color:var(--pc);font-weight:700;margin:2px 0 6px">${P[k].role}</div><p style="font-size:14.5px;color:var(--ink2);margin:0 0 8px">${SUM[k]}</p><a href="#tung-nguoi" data-goto="${k}" style="font-weight:700;font-size:14px">Vào phần của ${P[k].name} →</a></div>`).join("");
+
+/* ============ JOURNEY ============ */
+const LANES=[{k:"C",t:"Client",c:"trung"},{k:"M",t:"Master",c:"kien"},{k:"G",t:"Game Server",c:"toan"},{k:"D",t:"SQLite",c:"kien"}];
+const LX={C:90,M:270,G:450,D:610};
+const STEPS=[
+ {f:"C",to:"M",l:"LOGIN_REQ",p:"kien",t:"Đăng nhập qua TCP",b:"Client mở kết nối TCP bọc TLS tới cổng 27000, gửi <code>LOGIN_REQ {username, SHA256(mật khẩu + username), clientVersion, maps, remember}</code>. Ở master: <code>TcpListenerHost</code> nhận byte trên thread pool, <code>ClientConnection</code> cắt khung MSP, đẩy vào hàng đợi; logic thread lấy ra, <code>MspMessageDispatcher.Dispatch</code> gọi <code>AuthService.Login</code>.",code:"MasterSession → TcpListenerHost → ClientConnection → Dispatch → AuthService.Login"},
+ {f:"M",to:"D",l:"SELECT accounts",p:"kien",t:"Tra tài khoản",b:"<code>FindAccount</code> đọc dòng theo username, không phân biệt hoa thường. <code>BCrypt.Verify</code> so mật khẩu (chạy cả khi không có tài khoản để thời gian luôn như nhau). Đúng: <code>RecordLoginSuccess</code> ghi <code>last_login_at</code>. Sai: <code>RecordLoginFailure</code> tăng bộ đếm, đủ 10 thì khoá 15 phút.",code:"SqliteDatabase.FindAccount · RecordLoginSuccess / RecordLoginFailure"},
+ {f:"M",to:"C",l:"LOGIN_RES",p:"kien",t:"Nhận phiên làm việc",b:"Master tạo session trong RAM (24 giờ) và trả <code>LOGIN_RES {ok, sessionToken, playerId, displayName, rememberToken}</code>. Client chuyển trạng thái sang <code>Lobby</code>. Từ đây client gửi <code>HEARTBEAT</code> mỗi 15 giây; master không nghe gì 45 giây thì cắt kết nối.",code:"AuthService.CreateSession · GameFlowController → GameFlowState.Lobby"},
+ {f:"C",to:"M",l:"ROOM_CREATE / JOIN / MATCHMAKE",p:"kien",t:"Vào phòng",b:"Người chơi xem <code>ROOM_LIST</code>, tạo phòng (kiểm ngân sách bot), vào phòng (kiểm mật khẩu phòng), hoặc ghép trận nhanh. Đổi đội, bấm Sẵn sàng. Mọi thay đổi master chủ động đẩy <code>ROOM_STATE_PUSH</code> về cả phòng, client không phải hỏi lại.",code:"LobbyService.CreateRoom / JoinRoom / SetTeam / SetReady · MatchmakingService.Enqueue"},
+ {f:"M",to:"M",l:"đếm ngược 10 s",p:"kien",t:"Đếm ngược và chọn server",b:"Khi mọi người trong phòng đã Sẵn sàng và có ít nhất 2 người, <code>LobbyService.Tick</code> bật đồng hồ 10 giây. Ai bỏ Sẵn sàng thì đồng hồ tắt. Hết giờ, phòng chuyển <code>Starting</code> và <code>GameServerRegistry.Allocate</code> chọn một game server khoẻ (heartbeat trong 15 s, CPU dưới 90%, tick dưới 40 ms) có bản đồ đó.",code:"LobbyService.Tick · GameServerRegistry.Allocate"},
+ {f:"M",to:"G",l:"GS_ROOM_ASSIGNED",p:"kien",t:"Phát vé vào trận",b:"Master gửi <code>GS_ROOM_ASSIGNED {roomId, mapId, botsPerTeam}</code> cho game server, và gửi mỗi người chơi <code>ROOM_JOIN_RES {ip, port, joinTicket}</code>. JoinTicket 64 byte: playerId, serverId, roomId, hạn (60 giây), đội, tên, và 32 byte chữ ký HMAC-SHA256 bằng khoá chung.",code:"JoinTicket.Issue · Dispatcher gửi GsRoomAssigned"},
+ {f:"C",to:"G",l:"CONNECT + vé (UDP)",p:"toan",t:"Đổi từ TCP sang UDP",b:"Client gửi <code>CONNECT_REQUEST</code> kèm vé. Server chưa lưu gì, chỉ đáp <code>CONNECT_CHALLENGE</code> với salt tính từ địa chỉ (cookie). Client trả <code>CONNECT_RESPONSE</code> chứng minh địa chỉ thật. Lúc đó server mới kiểm HMAC và hạn của vé, gắn playerId với connectionId, đáp <code>CONNECT_ACCEPTED</code>.",code:"MatchTransportHandoff → UdpTransportClient → HandshakeCookie → TicketValidator"},
+ {f:"G",to:"C",l:"S_SNAPSHOT 20 Hz ⇄ C_INPUT 30 Hz",p:"toan",t:"Vòng lặp trong trận",b:"Client gửi <code>C_INPUT</code> 30 lần mỗi giây, mỗi gói lặp 3 frame gần nhất phòng mất gói. Server tick 30 Hz, áp input, chạy vật lý và AI, rồi gửi <code>S_SNAPSHOT</code> 20 Hz đã nén delta và lọc theo khoảng cách. Client dự đoán bản thân và sửa khi lệch; người khác được vẽ lùi 100 ms.",code:"ServerTickLoop · ServerInputStage · ServerSnapshotStage · PredictionReconciler · SnapshotInterpolator"},
+ {f:"C",to:"G",l:"FIRE + C_SHOT_REPORT",p:"toan",t:"Một phát súng",b:"Client hiện ngay tia lửa, tiếng, độ giật. Input mang nút FIRE; server kiểm thời gian hồi, đạn, trạng thái trước khi tốn bất kỳ phép tính nào. Viên trúng mà game của người bắn thấy được gửi bằng <code>C_SHOT_REPORT</code>; server xét lại bằng <code>ReportedHitJudge</code> (tầm bắn, hướng ngắm, vị trí thân mục tiêu đã ghi ở tick đó, tường chắn) rồi tự trừ máu. Kết quả về bằng <code>S_HIT_CONFIRM</code>, <code>S_DEATH</code> và snapshot sau.",code:"ServerCombatBridge · ReportedHitJudge · LagCompensator · HitboxHistory"},
+ {f:"G",to:"M",l:"GS_MATCH_ENDED",p:"kien",t:"Hết hiệp, ghi sổ",b:"Game server gửi kết quả từng người qua TCP. Master ghi <code>match_results</code>, gộp <code>career_stats</code>, xét <code>achievements</code>, đẩy thông báo mở khoá về client. Phòng vẫn giữ game server để chơi hiệp tiếp; phòng chỉ đóng khi người cuối cùng rời đi.",code:"GameServerMatchReporter → HandleMatchEnded → InsertMatchResult · CareerService.RecordRound"}];
+(function(){const svg=$("#seqSvg");const H=78+STEPS.length*62;svg.setAttribute("viewBox",`0 0 690 ${H}`);const mk=markers(svg);
+ LANES.forEach(L=>{const x=LX[L.k],w=tw(L.t,13)+30;E("rect",{x:x-w/2,y:10,width:w,height:34,rx:10,fill:BG[L.c],stroke:COL[L.c],"stroke-width":2},null,svg);E("text",{x,y:32,"text-anchor":"middle","font-size":13,"font-weight":800,fill:COL[L.c]},L.t,svg);E("line",{x1:x,y1:46,x2:x,y2:H-8,stroke:"var(--line)","stroke-width":2,"stroke-dasharray":"4 6"},null,svg)});
+ window.__msgs=STEPS.map((s,i)=>{const y=86+i*62,g=E("g",{class:"clickable",style:"transition:opacity .3s"},null,svg);const c=s.p==="toan"?"toan":(s.f==="C"?"trung":"kien");
+  const x1=LX[s.f],x2=LX[s.to];
+  if(s.f===s.to){path(g,`M${x1},${y-6} h44 v18 h-40`,c,mk)}else{const dir=x2>x1?1:-1;E("line",{x1:x1+dir*4,y1:y,x2:x2-dir*6,y2:y,stroke:COL[c],"stroke-width":2.4,"marker-end":mk(c)},null,g)}
+  const lx=s.f===s.to?x1+52:(x1+x2)/2,anchor=s.f===s.to?"start":"middle";const tws=tw(s.l,11.5)+16;
+  E("rect",{x:anchor==="start"?lx-4:lx-tws/2,y:y-26,width:tws,height:20,rx:10,fill:"var(--bg2)",stroke:COL[c],"stroke-width":1.2},null,g);
+  E("text",{x:anchor==="start"?lx+tws/2-4:lx,y:y-12,"text-anchor":"middle","font-size":11.5,"font-weight":700,fill:COL[c]},s.l,g);
+  E("circle",{cx:22,cy:y,r:12,fill:"var(--ink)"},null,g);E("text",{x:22,y:y+4,"text-anchor":"middle","font-size":11,"font-weight":800,fill:"var(--bg)"},String(i+1),g);
+  const dot=E("circle",{r:6,fill:COL[c],cx:x1,cy:y,opacity:0},null,g);g._d=dot;g._x1=x1;g._x2=x2===x1?x1+44:x2;g._y=y;
+  g.addEventListener("click",()=>go(i));return g})})();
+let cur=0,timer=null,raf=0;
+$("#jDots").innerHTML=STEPS.map((_,i)=>`<button class="btn" style="width:36px;padding:8px 0" data-i="${i}">${i+1}</button>`).join("");
+$$("#jDots button").forEach(b=>b.onclick=()=>{stop();go(+b.dataset.i)});
+function go(i){cur=Math.max(0,Math.min(STEPS.length-1,i));const s=STEPS[cur];
+ window.__msgs.forEach((g,j)=>{g.style.opacity=j>cur?.18:(j===cur?1:.55)});
+ const g=window.__msgs[cur];cancelAnimationFrame(raf);const t0=performance.now();
+ const tick=t=>{const k=Math.min(1,(t-t0)/650);g._d.setAttribute("opacity",k<1?1:0);g._d.setAttribute("cx",g._x1+(g._x2-g._x1)*k);if(k<1)raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick);
+ $$("#jDots button").forEach((b,j)=>b.classList.toggle("on",j===cur));$("#jPrev").disabled=cur===0;$("#jNext").disabled=cur===STEPS.length-1;
+ $("#jPanel").className="card panel p-"+s.p;
+ $("#jPanel").innerHTML=`<div class="eyebrow" style="color:var(--pc);margin-bottom:6px">Bước ${cur+1} / ${STEPS.length}</div><h3 style="margin-top:0">${s.t}</h3><p>${s.b}</p><div class="fsee"><b style="font-size:13px">Đường đi trong code</b><br><code style="font-size:12.5px">${s.code}</code></div><span class="chip ptag"><span class="d"></span>Người học: ${P[s.p].name}</span>`}
+function stop(){clearInterval(timer);timer=null;$("#jPlay").textContent="▶ Tự chạy"}
+$("#jPrev").onclick=()=>{stop();go(cur-1)};$("#jNext").onclick=()=>{stop();go(cur+1)};
+$("#jPlay").onclick=()=>{if(timer){stop();return}if(cur>=STEPS.length-1)go(0);$("#jPlay").textContent="⏸ Dừng";timer=setInterval(()=>{if(cur>=STEPS.length-1){stop();return}go(cur+1)},3600)};
+go(0);
+
+/* ============ FEATURES ============ */
+const LY={C:["Client","trung"],M:["Master","kien"],G:["Game Server","toan"],D:["SQLite","kien"],I:["Hạ tầng","kien"],L:["Thư viện","nghia"]};
+const FEATS=[
+ {g:"Tài khoản",n:"Đăng ký tài khoản",o:["kien","trung"],see:"Màn hình Đăng ký: username, mật khẩu, tên hiển thị (không bắt buộc). Thành công thì quay về màn hình đăng nhập.",
+  s:[["C","<code>MenuRegisterScreen</code> lấy dữ liệu, <code>PasswordHasher</code> băm <code>SHA256(mật khẩu + username viết thường)</code>, gửi <code>REGISTER_REQ</code>."],["M","<code>AuthService.Register</code>: username hợp lệ (tối đa 16 ký tự)? chuỗi băm đúng dạng SHA-256 hex? Tên hiển thị để trống thì lấy username, dài quá 32 ký tự thì trả <code>InvalidDisplayName</code>."],["M","<code>BCrypt.HashPassword(chuỗi SHA, 11)</code>."],["D","<code>InsertAccount</code>: <code>INSERT INTO accounts(...)</code>. Trùng tên (kể cả khác hoa thường do <code>COLLATE NOCASE</code>) thì SQLite báo lỗi 19, hàm trả false."],["C","<code>REGISTER_RES {ok, errorCode}</code>; <code>UsernameTaken</code> được dịch thành câu tiếng người bởi <code>MasterErrorText</code>."]],
+  x:["Tài khoản quản trị tạo được từ dòng lệnh: <code>Ironfront.MasterServer --create-account</code>."]},
+ {g:"Tài khoản",n:"Đăng nhập và khoá tài khoản",o:["kien","trung"],see:"Nhập đúng thì vào sảnh. Sai nhiều lần thì được báo chờ bao nhiêu giây, không phải câu chung chung.",
+  s:[["C","Gửi <code>LOGIN_REQ</code> qua TLS."],["M","<code>AuthService.Login</code>: hạn mức theo IP (5 lần sai, 60 lần thử mỗi phút), kiểm định dạng."],["D","<code>FindAccount</code>, <code>BCrypt.Verify</code> (có hash giả khi không có tài khoản)."],["D","Sai: <code>RecordLoginFailure</code>, lần thứ 10 đặt <code>locked_until = now + 15 phút</code>. Đúng: <code>RecordLoginSuccess</code>."],["M","Thứ tự trả lời: cấm trước khoá. Tạo session 24 giờ trong RAM."],["C","<code>LOGIN_RES</code> kèm <code>retryAfterSec</code> khi bị chặn để client nói đúng số giây."]],x:["Chi tiết từng bước ở lưu đồ trong mục 07."]},
+ {g:"Tài khoản",n:"Ghi nhớ đăng nhập",o:["kien","trung"],see:"Tick \"Ghi nhớ\" thì lần sau mở game tự vào sảnh, không hỏi mật khẩu.",
+  s:[["C","<code>LOGIN_REQ {remember: true}</code>."],["M","<code>IssueRememberToken</code> sinh token 43 ký tự."],["D","<code>InsertRememberToken</code> lưu SHA-256 của token, giữ tối đa 8 máy."],["C","Client cất token. Lần sau gửi <code>TOKEN_LOGIN_REQ {token}</code>."],["D","<code>TakeRememberToken</code>: đọc rồi xoá ngay (dùng một lần)."],["M","Còn hạn: tạo session mới, cấp token mới trong <code>LOGIN_RES</code>."]]},
+ {g:"Sảnh",n:"Danh sách phòng và tạo phòng",o:["kien","trung"],see:"Danh sách phòng với bản đồ, số người, số bot, trạng thái. Form tạo phòng chỉ cho chọn số bot trong giới hạn còn lại.",
+  s:[["C","<code>ROOM_LIST_REQ</code>."],["M","Trả <code>ROOM_LIST_RES {rooms[], capacity}</code>. <code>capacity</code> cho biết tối đa bao nhiêu bot cho phòng mới và bản đồ nào còn server rảnh."],["C","<code>ROOM_CREATE_REQ {name, mapId, maxPlayers, botCount, isPrivate, password}</code>."],["M","<code>LobbyService.CreateRoom</code> kiểm ngân sách bot (<code>BotCapacity</code>): tổng 300 đơn vị, mỗi trận tốn 50 trước bot đầu tiên, tức 2 trận 100 bot hoặc 3 trận 50 bot. Không vừa thì lỗi <code>3002</code>."],["C","Người tạo tự vào phòng, nhận <code>ROOM_STATE_PUSH</code>."]]},
+ {g:"Sảnh",n:"Phòng chờ: đổi đội, sẵn sàng, đếm ngược",o:["kien","trung"],see:"Danh sách thành viên hai đội, nút đổi đội, nút Sẵn sàng, đồng hồ đếm ngược khi mọi người đã sẵn sàng.",
+  s:[["C","<code>ROOM_TEAM_REQ</code>, <code>ROOM_READY_REQ {ready}</code>."],["M","<code>SetTeam</code>: master là nơi duy nhất ghi đội, client không tự đoán; trận đã bắt đầu thì từ chối <code>MatchAlreadyStarted</code>."],["M","<code>SetReady</code> rồi <code>Tick</code>: mọi người sẵn sàng và có ít nhất 2 người thì bật đồng hồ 10 giây; ai bỏ sẵn sàng thì tắt."],["M","Hết giờ: <code>Waiting → Starting</code>, cấp game server, phát vé."],["C","Mọi thay đổi đến qua <code>ROOM_STATE_PUSH</code>, client chỉ vẽ lại."]]},
+ {g:"Sảnh",n:"Ghép trận nhanh",o:["kien"],see:"Bấm Ghép trận, chờ vài giây là vào một phòng.",
+  s:[["C","<code>MATCHMAKE_REQ {preferredMapId}</code>."],["M","<code>MatchmakingService.Enqueue</code>; có phòng công khai còn chỗ trên bản đồ đó thì vào luôn (<code>FindJoinableRoom</code>)."],["M","<code>Tick</code> gom hàng chờ: đủ 2 người cùng bản đồ thì tạo phòng (50 bot, hạ xuống nếu ngân sách không đủ). Chờ quá 60 giây thì nhận bản đồ bất kỳ."],["C","<code>MATCHMAKE_RES {roomId, estimatedWaitSec}</code>, hủy bằng <code>MATCHMAKE_CANCEL</code>."]],
+  x:["Lỗi từng gặp: bước \"sau 60 giây nhận bản đồ bất kỳ\" ban đầu đẩy người chờ lâu sang một nhóm riêng, nên họ chỉ ghép được với người cũng chờ lâu. Không lỗi, không log, người chơi chờ mãi. Bị test bắt."]},
+ {g:"Sảnh",n:"Chat sảnh và chat phòng",o:["kien","trung"],see:"Ô chat ở sảnh (mọi người) và trong phòng chờ (chỉ thành viên phòng).",
+  s:[["C","<code>CHAT_SEND {channel, text}</code>; kênh 0 toàn cục, 1 trong phòng."],["M","<code>ChatService</code>: tối đa 200 ký tự (lỗi <code>4000</code>), tối đa 5 tin mỗi 10 giây (lỗi chống spam), kênh lạ <code>4002</code>, chat phòng khi không ở phòng nào <code>4003</code>. Loại ký tự điều khiển."],["M","Phát <code>CHAT_PUSH</code> cho đúng người nhận theo kênh."]],x:["Không lưu lịch sử chat, có chủ ý.","Lỗi từng gặp: Unity gửi kênh 0 cho chat phòng, nên mọi câu trong phòng đi tới cả server. Cách sửa là viết bảng kênh vào đặc tả và dùng chung định nghĩa <code>MspChatChannel</code>."]},
+ {g:"Hạ tầng trận",n:"Game server đăng ký và báo sức khoẻ",o:["kien","toan"],see:"Người chơi không thấy. Đây là lý do master biết server nào còn sống để giao phòng.",
+  s:[["G","Khởi động headless: <code>NetRoleBootstrap</code> khai báo vai trò server, <code>DedicatedServerSceneBootstrap</code> nạp scene bản đồ, <code>MasterLinkBootstrap</code> mở TCP tới master."],["G","<code>GS_REGISTER {serverSecret, publicIp, udpPort, maxPlayers, mapIds}</code>."],["M","<code>GameServerRegistry.TryRegister</code> so secret bằng phép so sánh thời gian không đổi, cấp <code>serverId</code>."],["G","<code>GS_HEARTBEAT {currentPlayers, cpuPercent, avgTickMs}</code> định kỳ."],["M","Server khoẻ khi heartbeat trong 15 giây, CPU dưới 90%, tick dưới 40 ms. Bộ dọn chạy định kỳ thả phòng của server im lặng, báo lỗi <code>3001</code> cho người chơi, đưa phòng về <code>Waiting</code>."]]},
+ {g:"Trong trận",n:"Vào trận qua UDP",o:["toan","nghia"],see:"Màn hình \"Đang kết nối\", rồi vào bản đồ.",
+  s:[["C","<code>MatchTransportHandoff</code> mở UDP, gửi <code>CONNECT_REQUEST {version, joinTicket, clientSalt}</code>, gửi lại mỗi 250 ms tối đa 20 lần."],["G","Chỉ kiểm phiên bản và chỗ trống, không lưu gì. Đáp <code>CONNECT_CHALLENGE {serverSalt}</code>, salt = HMAC(khoá riêng, địa chỉ, cổng, clientSalt, khung 30 giây)."],["C","<code>CONNECT_RESPONSE {clientSalt XOR serverSalt, clientSalt, joinTicket}</code>."],["G","Tính lại salt, xác nhận địa chỉ thật. <code>TicketValidator</code> kiểm HMAC và hạn vé, gắn playerId. Trùng playerId đang chơi thì từ chối mã 6."],["G","<code>CONNECT_ACCEPTED {connectionId, serverTick, mapId, myPlayerId}</code>, rồi gửi trạng thái nền: <code>S_MATCH_STATE</code>, <code>S_SPAWN_ACTOR</code>, <code>S_PLAYER_LIST</code>."],["C","<code>MatchTransportHandoff</code> giữ kết nối qua lần nạp scene, <code>NetClientBootstrap</code> của scene bản đồ nhận lại."]],
+  x:["Mã từ chối: 1 đầy server, 2 sai phiên bản, 3 vé sai hoặc hết hạn, 4 bị cấm, 5 server đang tắt, 6 đã kết nối, 7 đội của bạn đã đầy."]},
+ {g:"Trong trận",n:"Di chuyển",o:["toan","trung","nghia"],see:"Bấm W là đi ngay, không thấy trễ dù ping 100 ms.",
+  s:[["C","<code>MovementSimulation</code> đọc phím, chạy <code>MovementCore</code> ngay trên máy (prediction), lưu input theo tick."],["C","<code>C_INPUT</code> 30 Hz, mỗi gói chứa 3 frame gần nhất."],["G","<code>ServerInputStage</code>: chuẩn hoá vector (đi chéo không nhanh hơn), chạy <code>MovementCore</code>, kẹp quãng đường ở 1,3 lần tốc độ hợp lệ. Mất input thì lặp input cũ tối đa 3 tick (100 ms) rồi dừng."],["G","Snapshot kèm \"tick input cuối đã xử lý\"."],["C","<code>PredictionReconciler</code> so vị trí dự đoán ở tick đó với server, lệch quá ngưỡng thì đặt lại và chạy lại các input sau."]]},
+ {g:"Trong trận",n:"Bắn và trúng đạn",o:["toan","trung"],see:"Bấm chuột là có lửa, tiếng, giật ngay; trúng thì có dấu hitmarker.",
+  s:[["C","Game gốc: <code>Actor.UpdateWeapon → Weapon.Fire → CanFire → Shoot → SpawnProjectile</code>. Trên client đây là hiệu ứng."],["C","Input có nút FIRE; viên trúng mà client thấy gửi bằng <code>C_SHOT_REPORT</code> (tối đa 20 viên một lần bóp cò)."],["G","Kiểm thời gian hồi, đạn, trạng thái trước tiên: bắn nhanh bất thường chỉ tốn vài phép so sánh. Đo thực tế: 100 lệnh bắn trong 1 giây với hồi 0,1 s thì 10 được chấp nhận, 90 bị loại không tốn đạn."],["G","<code>ReportedHitJudge</code>: có lần bóp cò tương ứng trong 8 tick không, tầm bắn, hướng ngắm, thân mục tiêu ở tick người bắn đang vẽ (<code>HitboxHistory</code>), ghế kín, tường chắn."],["G","Server tự trừ máu, gửi <code>S_HIT_CONFIRM</code>, <code>S_WEAPON_FIRE</code> cho người khác nghe tiếng."]],
+  x:["Vì sao không cho client tự quyết: độ toả, độ giật dùng <code>UnityEngine.Random</code> ở nhiều chỗ, và tin client là mở cửa cho hack."]},
+ {g:"Trong trận",n:"Chết và hồi sinh",o:["toan","trung"],see:"Trúng đủ đạn thì ngã ragdoll, hiện màn hình chọn trang bị và điểm hồi sinh.",
+  s:[["G","Máu về 0: <code>ServerActorDamageSink</code>, ghi ai giết ai (<code>DeathAttribution</code>), cộng điểm."],["G","<code>S_DEATH</code> kèm vector lực để client tự làm ragdoll (ragdoll không đồng bộ, tiết kiệm khoảng 1,7 MB/s)."],["C","Hiện killfeed, màn hình trang bị."],["C","<code>C_SPAWN_REQUEST {loadout, spawnPoint}</code>."],["G","<code>ServerRespawnGate</code> kiểm thời gian chờ, điểm hồi sinh hợp lệ, rồi <code>S_SPAWN_ACTOR</code>."]]},
+ {g:"Trong trận",n:"Xe: lên, lái, xuống",o:["toan","trung"],see:"Đứng gần xe bấm phím Dùng để lên, F1 đến F8 đổi ghế.",
+  s:[["C","<code>ClientSeatRequester</code> gửi <code>C_SEAT_REQUEST</code>."],["G","<code>ServerSeatBridge</code> duyệt (ghế trống, đủ gần), trả <code>S_SEAT_CHANGE</code> kể cả khi từ chối."],["C","Khi ngồi lái: <code>C_VEHICLE_INPUT</code> (trục lái, tháp pháo) thay cho input đi bộ."],["G","<code>NetVehicleAuthority</code> mô phỏng xe; <code>S_VEHICLE_SNAPSHOT</code>, <code>S_VEHICLE_SPAWN/DESPAWN</code>. Tối đa 24 xe, id được thu hồi có thời gian cách ly."]]},
+ {g:"Trong trận",n:"Chiếm cờ và thắng trận",o:["toan"],see:"Bảng điểm hai đội, các điểm cờ đổi màu, thông báo thắng thua.",
+  s:[["G","<code>MatchStateMachine</code>: khởi động, chơi, tính điểm, điều kiện thắng, reset."],["G","<code>CapturePointOwnership</code> tính ai đang đứng trên cờ, đổi chủ, gửi <code>S_CAPTURE_POINT</code>."],["G","Thắng khi cách biệt đủ số điểm của luật phòng (mặc định chênh 200 điểm), gửi <code>S_MATCH_STATE</code>."],["G","Sau màn tổng kết, trận reset và chơi hiệp mới với cùng người chơi."]]},
+ {g:"Sau trận",n:"Kết quả, sự nghiệp, thành tựu",o:["kien","toan"],see:"Thông báo \"mở khoá thành tựu\", bảng sự nghiệp cập nhật.",
+  s:[["G","<code>MatchCareerTally</code> đếm số liệu hiệp cho từng người."],["G","<code>GS_MATCH_PROGRESS</code> mỗi 15 giây, <code>GS_MATCH_ENDED</code> cuối hiệp."],["M","<code>HandleMatchEnded</code> kiểm đúng server giữ phòng."],["D","<code>InsertMatchResult</code>, <code>WriteCareer</code> (transaction), <code>InsertAchievement</code> (INSERT OR IGNORE)."],["C","<code>ACHIEVEMENT_UNLOCKED_PUSH</code>."]]},
+ {g:"Sau trận",n:"Bảng xếp hạng và hồ sơ",o:["kien","trung"],see:"Top 100, dòng của chính mình, bấm vào ai đó để so sánh thành tựu.",
+  s:[["C","<code>LEADERBOARD_REQ</code> hoặc <code>PLAYER_PROFILE_REQ {playerId}</code>."],["D","<code>ReadCareerRows</code> đọc chỉ số của mọi người; <code>ReadAchievementIdsByPlayer</code>."],["M","<code>CareerService</code> sắp xếp trong bộ nhớ, cắt top 100, tìm hạng của người hỏi. Thành tựu ẩn hiện dạng khoá (<code>CareerPrivacy</code>)."],["C","<code>LEADERBOARD_RES</code> / <code>PLAYER_PROFILE_RES</code>."]]},
+ {g:"Vận hành",n:"Sao lưu và khôi phục DB",o:["kien"],see:"Người chơi không thấy. Mất máy chủ vẫn còn dữ liệu.",
+  s:[["I","<code>ironfront-backup.timer</code> chạy 6 giờ một lần."],["I","<code>tools/backup.sh</code>: <code>sqlite3 .backup</code>, hoặc <code>Ironfront.MasterServer --backup</code> nếu máy không có sqlite3."],["D","<code>SqliteDatabase.BackupTo</code> dùng backup API trên kết nối đang mở; master không phải dừng."],["I","Kiểm file không rỗng, giữ 7 ngày, tải lên Blob (<code>backup-upload.sh</code>)."],["I","Khôi phục: dừng master, chép bản sao vào thư mục dữ liệu (đúng quyền sở hữu của container), chạy lại, đăng nhập thử bằng tài khoản đã biết."]]},
+ {g:"Vận hành",n:"Triển khai và phát hành",o:["kien","trung"],see:"Người chơi tải zip mới trên trang Releases; chỉ bản mới nhất đăng nhập được.",
+  s:[["I","Đẩy code: <code>ci.yml</code> build, test, chạy các cổng kiểm tra; đỏ thì không merge."],["I","Merge: <code>images.yml</code> build image master, đẩy <code>ghcr.io/...:sha-&lt;sha&gt;</code>, ghi digest. Image game server build thủ công vì runner GitHub không có giấy phép Unity."],["I","Trên máy chủ: ghim digest trong <code>.env</code> (không dùng <code>:latest</code>), chạy <code>deploy.sh up</code> (docker compose)."],["C","Bản cho người chơi (Trung): <code>build-libs.ps1</code> chép DLL vào Plugins, <code>build-player.ps1</code> build Unity, <code>package-release.ps1</code> đóng zip, thử zip từ thư mục riêng, rồi <code>gh release create</code> với 3 zip Windows, macOS, Linux. <code>linux-smoke.yml</code> và <code>macos-smoke.yml</code> chạy thử bản build."]]}
+];
+(function(){let html="",lastG="";FEATS.forEach((f,i)=>{if(f.g!==lastG){html+=`<div class="grp">${f.g}</div>`;lastG=f.g}html+=`<button data-i="${i}"><span class="k">${String(i+1).padStart(2,"0")}</span>${f.n}</button>`});$("#flist").innerHTML=html;
+ $$("#flist button").forEach(b=>b.onclick=()=>showFeat(+b.dataset.i));showFeat(0)})();
+function showFeat(i){const f=FEATS[i];$$("#flist button").forEach(b=>b.classList.toggle("on",+b.dataset.i===i));
+ $("#fdetail").innerHTML=`<div class="row" style="justify-content:space-between"><span class="eyebrow" style="margin:0">${f.g} · tính năng ${i+1}/${FEATS.length}</span><span>${f.o.map(k=>`<span class="chip ptag p-${k}"><span class="d"></span>${P[k].name}</span>`).join("")}</span></div><h3 style="margin:10px 0 6px;font-size:24px">${f.n}</h3><div class="fsee"><b style="font-size:13px">Người chơi thấy gì</b><br>${f.see}</div><ol class="vflow">${f.s.map(s=>`<li class="p-${LY[s[0]][1]}"><span class="ly">${LY[s[0]][0]}</span><span class="wh">${s[1]}</span></li>`).join("")}</ol>${(f.x||[]).map(x=>`<div class="callout" style="margin:10px 0 0">${x}</div>`).join("")}<div class="row" style="justify-content:space-between;margin-top:16px"><button class="btn" ${i?"":"disabled"} id="fPrev">← Tính năng trước</button><button class="btn primary" ${i<FEATS.length-1?"":"disabled"} id="fNext">Tính năng sau →</button></div>`;
+ $("#fPrev").onclick=()=>showFeat(i-1);$("#fNext").onclick=()=>showFeat(i+1)}
+
+/* ============ PERSON PANES ============ */
+const PD={
+nghia:{goal:"Mở đầu buổi bảo vệ: trong 10 phút giải thích được hệ thống có mấy phần, nói chuyện bằng gì, vì sao chọn như vậy. Sau đó đi sâu một tầng: một snapshot được nén từ trạng thái nhân vật thành vài chục byte như thế nào, và vì sao mỗi người chỉ nhận nhân vật ở gần. Phần này ít file nhất (khoảng 15 file chính, đều ngắn, có test đi kèm), nhưng là nền mà ba người kia dựa vào.",
+ pre:["TCP và UDP khác nhau ở đâu (tin cậy, thứ tự, head-of-line blocking)","Byte, bit, little-endian, số có dấu và không dấu (i8, u16, i16, u32)","Hàm băm SHA-256 và HMAC khác nhau thế nào","Phép XOR và dịch bit"],
+ read:[["docs/architecture.md mục 1 đến 4, 7, 9, 10","45 phút"],["plans/00-shared/protocol-spec.md mục 1, 2, 3, 5, 12","60 phút"],["Ironfront.Net.Protocol/ProtocolConstants.cs","20 phút"],["Ironfront.Net.Protocol/Msp/MspFrame.cs","20 phút"],["Ironfront.Net.Protocol/Gsp/GspHeader.cs, ChannelEnvelope.cs","25 phút"],["Ironfront.Net.Protocol/Security/JoinTicket.cs","30 phút"],["Ironfront.Net.Protocol/Quantize.cs, SequenceMath.cs","25 phút"],["Ironfront.Net.Replication/Serialization/BitWriter.cs, BitReader.cs","25 phút"],["Ironfront.Net.Replication/SnapshotBuilder.cs, DeltaEncoder.cs, DeltaDecoder.cs","60 phút"],["Ironfront.Net.Replication/Interest/InterestManager.cs","40 phút"],["docs/report-chapter-state-synchronization.md mục Y.2","40 phút"]],
+ flow:[["Hằng số","ProtocolConstants: mọi con số dùng chung"],["Đóng khung","TCP: u32 + u16 · UDP: header 16 byte"],["Vé vào trận","JoinTicket 64 byte, HMAC-SHA256"],["Ai được nhận","InterestManager, 4 vùng"],["Nén","Quantize: float → số nguyên nhỏ"],["Chỉ gửi phần đổi","DeltaEncoder + mask"]],
+ fns:[["ProtocolConstants.cs","PROTOCOL_ID = 0x4946","Hai byte đầu mỗi gói UDP ('IF'). Sai thì bỏ im lặng: lọc rác và quét cổng"],["ProtocolConstants.cs","PROTOCOL_VERSION = 14","Sai phiên bản bị từ chối (mã 2), nên chỉ bản mới nhất chơi được"],["ProtocolConstants.cs","MTU_SAFE = 1200, GSP_HEADER_SIZE = 16","Gói UDP không quá 1200 byte để lọt mọi router; còn 1184 byte dữ liệu"],["Msp/MspFrame.cs","MspFrameReader.TryReadFrame","Cắt luồng byte TCP thành khung; khung quá 64 KB thì đóng kết nối"],["Enums/GspEnums.cs","enum ChannelId","0 không tin cậy (ping), 1 snapshot có thứ tự, 2 tin cậy có thứ tự (sự kiện, chat), 3 input"],["Security/JoinTicket.cs","Issue / Verify","Ký và kiểm vé; so chữ ký bằng phép so sánh thời gian không đổi"],["SequenceMath.cs","IsNewer(a, b)","So sánh số thứ tự 16 bit có quay vòng; không bao giờ dùng dấu &gt;"],["Quantize.cs","nén số","Vị trí i16 (6,25 cm trên ±2048 m), hướng u16, pitch i8, vận tốc i8, máu u8"],["Replication/Serialization/BitWriter.cs","WriteBits","Ghi theo bit, dùng trong codec thí nghiệm"],["Replication/SnapshotBuilder.cs","Build","Lưu giá trị <b>đã lượng tử hoá</b>, nhờ vậy delta mới so được"],["Replication/DeltaEncoder.cs","Encode","Mỗi actor một mask 8 bit báo trường nào có mặt; so với snapshot client đã ack"],["Replication/Interest/InterestManager.cs","Classify","Gần &lt;60 m 20 Hz · giữa 60–100 m 10 Hz · xa 100–500 m 4 Hz · &gt;500 m ngoài nón 15° không gửi · đồng đội trong 200 m tối thiểu mức giữa"],["Tools.PacketReplay","--analyze","Đọc file .ifpcap, thống kê kích thước và loại gói"]],
+ todo:["Vẽ lại sơ đồ 3 chương trình không nhìn tài liệu","Thuộc bảng TCP và UDP, nói được hậu quả nếu đổi ngược","Giải thích 4 kỹ thuật netcode ở mức khái niệm","Ghi ra 10 hằng số quan trọng trong ProtocolConstants.cs kèm ý nghĩa","Vẽ cấu trúc header GSP 16 byte và JoinTicket 64 byte","Dùng mô phỏng ack bitfield bên dưới, tự giải thích ví dụ 98, 99, 101, 103","Tính tay: toạ độ 123,45 m sau khi nén i16 còn bao nhiêu","Lần theo SnapshotBuilder → DeltaEncoder: nhân vật đứng yên tốn bao nhiêu byte","Giải thích bảng 4 vùng interest và vì sao đồng đội được nâng mức","Đọc bảng kết quả nén Y.2.5, giải thích vì sao bit-packing đo được nhưng không đưa vào bản chạy thật","Chạy dotnet test Ironfront.Net.Protocol.Tests và đọc tên 10 test","Chạy PacketReplay --analyze trên một file .ifpcap","Biết Ironfront.sln, Directory.Build.props, Directory.Packages.props, global.json để làm gì"],
+ qs:[["Vì sao không dùng WebSocket?","Nó chạy trên TCP nên dính head-of-line blocking, thêm handshake HTTP và khung riêng. Nó sinh ra để vượt tường lửa trình duyệt, game desktop không cần."],["Delta so với cái gì? Mất gói thì sao?","So với snapshot client đã xác nhận bằng C_ACK_BASELINE, không phải snapshot liền trước. Mất một gói chỉ mất đúng gói đó; server giữ 32 snapshot mỗi client để làm gốc. Đã thử 20% mất gói qua 1000 tick, trạng thái cuối khớp hoàn toàn."],["Vì sao lưu giá trị đã nén trong WorldSnapshot thay vì float?","Vật lý làm vị trí rung ở chữ số thập phân thứ mười. So float thì nhân vật đứng yên cũng bị coi là \"đã đổi\" mọi tick, delta không tiết kiệm được gì mà code vẫn chạy đúng."],["Interest management tiết kiệm bao nhiêu?","Phụ thuộc kích thước bản đồ: 25,6% trên ô 400 m nhưng 80,9% trên Dustbowl 1700 m. Cả chuỗi kỹ thuật đưa từ 19,86 KB/s xuống 1,50 KB/s mỗi client; bản chạy thật đo 1,67 KB/s."],["Nén vị trí thành i16 có làm bắn trượt không?","Không. Xét trúng chạy ở server bằng vị trí thật. Số đã nén chỉ để client vẽ."],["Game server kiểm vé thế nào mà không hỏi master?","Cả hai giữ chung khoá bí mật. Server tính lại HMAC-SHA256 trên 32 byte đầu, so với 32 byte chữ ký, rồi kiểm hạn."]]},
+kien:{goal:"Trả lời được mọi câu về database (schema, vì sao thiết kế vậy, bảo mật mật khẩu, khoá tài khoản, sao lưu) và kể được một request TCP đi từ socket đến SQL rồi quay lại. Hiểu hạ tầng đủ để giải thích máy chủ được dựng, triển khai, sao lưu thế nào.",
+ pre:["SQL cơ bản: SELECT, JOIN, GROUP BY, INSERT, UPDATE, transaction","Khoá chính, khoá ngoại, index, ràng buộc UNIQUE","async/await trong C#, thread pool","Hash có salt (bcrypt) khác hash thường thế nào","Docker, docker compose, biến môi trường"],
+ read:[["docs/report-chapter-master-server.md (cả chương)","90 phút"],["Ironfront.MasterServer/Program.cs","25 phút"],["Ironfront.MasterServer/Net/TcpListenerHost.cs (đọc phần ghi chú trước)","50 phút"],["Ironfront.MasterServer/Dispatch/MspMessageDispatcher.cs, đọc theo switch","60 phút"],["Ironfront.MasterServer/Auth/AuthService.cs và .Remember.cs","50 phút"],["Ironfront.MasterServer/Data/ cả 3 file","90 phút"],["Ironfront.MasterServer/Lobby/LobbyService.cs, MatchmakingService.cs, ChatService.cs","70 phút"],["Ironfront.MasterServer/GameServers/GameServerRegistry.cs","30 phút"],["Ironfront.MasterServer/Career/CareerService.cs","40 phút"],["docs/operations.md mục 1, 2, 5, 9, 10","50 phút"],["infra/compose/compose.yaml, infra/systemd/, tools/backup.sh","40 phút"],["docs/infrastructure-handover.md, .github/workflows/ci.yml, images.yml","40 phút"]],
+ flow:[["Socket","TcpListenerHost nhận kết nối (thread pool)"],["TLS + PROXY","bóc TLS, đọc IP thật"],["Khung","ClientConnection cắt khung MSP"],["Hàng đợi","_logicQueue, một luồng xử lý"],["Điều phối","Dispatcher.Dispatch theo loại tin"],["Dịch vụ","Auth / Lobby / Career"],["SQL","SqliteDatabase, có tham số"]],
+ fns:[["Program.cs","MainCoreAsync","Nạp .env, dựng config, mở DB, tạo service, chạy host. Thiếu IRONFRONT_SHARED_SECRET thì từ chối chạy"],["Net/TcpListenerHost.cs","accept loop + logic loop","I/O trên thread pool, logic trên 1 luồng; được đánh thức ngay khi có việc thay vì chờ tick 50 ms (p50 từ 50,9 ms giảm hẳn)"],["Net/ClientConnection.cs","vòng nhận","Gom byte vào bộ đệm, cắt khung, đếm giờ im lặng (45 s)"],["Net/ProxyProtocolHeader.cs","đọc PROXY header","Lấy IP thật khi đứng sau proxy, để rate limit đúng người"],["Security/TlsCertificates.cs","nạp PFX","Bọc TCP bằng TLS vì đường này chở mật khẩu"],["Dispatch/MspMessageDispatcher.cs","Dispatch(conn, type, body)","switch hơn 20 loại tin: Login, RoomCreate, Matchmake, GsRegister, GsMatchEnded..."],["Auth/AuthService.cs","Register / Login","bcrypt cost 11, khoá 15 phút sau 10 lần sai, hạn mức theo IP, session 24 giờ trong RAM"],["Auth/AuthService.Remember.cs","IssueRememberToken / LoginWithRememberToken","Token 43 ký tự, 30 ngày, dùng một lần"],["Lobby/LobbyService.cs","CreateRoom, JoinRoom, SetReady, SetTeam, Tick","Vòng đời phòng, đếm ngược 10 s, tối thiểu 2 người"],["Lobby/BotCapacity.cs","MaxBotsForNewRoom","Ngân sách 300 đơn vị, 50 mỗi trận"],["Lobby/MatchmakingService.cs","Enqueue / Tick","Hàng chờ, tối thiểu 2 người, nới bản đồ sau 60 s"],["Lobby/ChatService.cs","Send","200 ký tự, 5 tin mỗi 10 s, kênh 0 hoặc 1"],["GameServers/GameServerRegistry.cs","TryRegister, Heartbeat, Allocate, ReleaseRoomsFromSilentServers","Danh bạ server và tiêu chí khoẻ"],["Career/CareerService.cs","RecordRound, Leaderboard","Gộp chỉ số, xét thành tựu, xếp hạng trong bộ nhớ"],["Data/SqliteDatabase*.cs","toàn bộ SQL","Xem mục 07"],["Net/MetricsEndpoint.cs","cổng 27001","Một tài liệu JSON: online, phòng, server, tài khoản; chỉ mở trong máy"]],
+ todo:["Vẽ lại sơ đồ 8 bảng không nhìn, nói được khoá chính của từng bảng","Trả lời hết thẻ ở mục 08 mà không lật","Lần theo một LOGIN_REQ từ TcpListenerHost đến SqliteDatabase.FindAccount, ghi tên từng hàm","Giải thích mô hình một logic thread, vì sao không cần lock, và nó nghẽn ở đâu (bcrypt)","Đọc HandleMatchEnded và CareerService.RecordRound","Chạy 6 câu SQL luyện tập trên một bản sao DB","Đọc compose.yaml: dịch vụ nào, cổng nào, volume /data để làm gì","Đọc backup.sh và timer: 6 giờ một lần, giữ 7 ngày, vì sao không dùng cp","Biết ci.yml và images.yml làm gì, vì sao triển khai ghim digest chứ không :latest","Chạy pwsh tools/new-env.ps1, chạy master trên máy, tạo tài khoản bằng --create-account","Chạy dotnet test Ironfront.MasterServer.Tests, đọc test sao lưu và khôi phục","Đọc Tools.MspBench: thí nghiệm Nagle và đóng khung TCP","Biết .env, .env.example, .dockerignore, .gitignore chứa gì và vì sao .env không bao giờ vào git hay image"],
+ qs:[["Hai người bấm vào chỗ trống cuối của phòng cùng lúc thì sao?","Không thể xảy ra: cả hai yêu cầu xếp hàng trên một logic thread, người sau thấy phòng đã đầy."],["Một logic thread có phải nút cổ chai không?","Với điều phối thì không: 12.230 thao tác danh sách phòng mỗi giây với 16 client, giữ 1.000 kết nối ở 81 MB. Nghẽn thật ở bcrypt: mỗi lần đăng nhập khoảng 190 ms, 16 người đăng nhập cùng lúc mất 2,6 giây."],["Master chết thì sao?","Người đang trong trận không ảnh hưởng vì vé không cần master. Đăng nhập mới thất bại. Session trong RAM nên mọi người phải đăng nhập lại khi master chạy lại."],["Vì sao lobby không dùng HTTP/REST?","HTTP là hỏi-đáp, không đẩy được. ROOM_STATE_PUSH sẽ thành hỏi liên tục: 16 client hỏi mỗi giây là 16 request vô ích, thay đổi vẫn trễ tới 1 giây."],["Lộ IRONFRONT_SHARED_SECRET thì làm gì?","Sinh khoá mới, đặt cho master và mọi game server, khởi động lại. Vé cũ hết hiệu lực ngay (lỗi từ chối mã 3), người đang chơi không bị ảnh hưởng."],["Phát hiện kết nối chết (rút dây mạng) thế nào?","TCP keepalive của hệ điều hành mặc định 2 giờ, vô dụng. Client gửi HEARTBEAT mỗi 15 s, master cắt sau 45 s im lặng. Dọn dẹp làm idempotent: xoá khỏi bảng trước, chỉ xử lý tiếp nếu xoá thật sự xảy ra."]]},
+trung:{goal:"Kể được một phát súng đi từ chuột trái đến lúc máu giảm trong game gốc, và client chuyển màn hình từ Đăng nhập đến Trong trận ra sao. Hiểu vì sao game gốc chơi một mình chạy được qua mạng mà gần như không phải sửa.",
+ pre:["Unity: GameObject, MonoBehaviour, Awake/Start/Update/FixedUpdate, scene, prefab","Layer, collider, raycast, Rigidbody","Lớp trừu tượng và interface trong C#","Máy trạng thái (state machine)"],
+ read:[["docs/codebase-map.md (cả tài liệu)","60 phút"],["Assembly-CSharp/ActorController.cs (72 dòng, đọc đầu tiên)","20 phút"],["Assembly-CSharp/Actor.cs: Update, UpdateWeapon, Damage, Die","60 phút"],["Assembly-CSharp/Weapon.cs, Projectile.cs, Hitbox.cs, Hurtable.cs","60 phút"],["Assembly-CSharp/ActorManager.cs, GameManager.cs","40 phút"],["Assembly-CSharp/AiActorController.cs (đọc lướt)","30 phút"],["Net/Client/GameFlowState.cs, GameFlowController.cs","40 phút"],["Net/Client/MasterSession.cs, PasswordHasher.cs, MasterErrorText.cs","40 phút"],["Net/Client/MatchTransportHandoff.cs, NetClientBootstrap.cs","40 phút"],["Net/Client/ClientPredictionStage.cs, RemoteActorView.cs, RemoteActorRegistry.cs","50 phút"],["Net/Shared/NetContext.cs, NetRoleBootstrap.cs, IInputSource.cs","30 phút"],["Scripts/NetBindings/ (đọc 4 file bất kỳ)","30 phút"],["Ironfront.MasterClient/MasterClient.cs, IMasterClient.cs","45 phút"],["Ironfront.Net.Configuration/GameClientConfig.cs, EnvRegistry.cs, MapCatalog.cs","35 phút"],["tools/build-libs.ps1, build-player.ps1, package-release.ps1; docs về phát hành","45 phút"]],
+ flow:[["Booting","Splash, nạp cấu hình, khai báo vai trò"],["Login","MasterSession, TCP tới master"],["Lobby → RoomLobby","danh sách phòng, phòng chờ"],["ConnectingGame","MatchTransportHandoff mở UDP"],["InMatch","dự đoán, nội suy, HUD"],["MatchEnd","bảng điểm, quay lại phòng"]],
+ fns:[["Assembly-CSharp/ActorController.cs","30 hàm abstract","Ranh giới giữa \"ai quyết định\" và \"nhân vật làm\". Người chơi, bot, mạng đều là lớp con"],["Assembly-CSharp/Actor.cs","Update → UpdateWeapon, Damage, Die","Một nhân vật: máu, thăng bằng (balance), 5 ô vũ khí, ghế xe, ragdoll"],["Assembly-CSharp/FpsActorController.cs","đọc phím người chơi","37 dòng Input.*: bắn, ngắm, nạp đạn, nghiêng, ngồi, chạy"],["Assembly-CSharp/Weapon.cs","Fire → CanFire → Shoot → SpawnProjectile","Độ toả, giật, đạn, thời gian hồi"],["Assembly-CSharp/Projectile.cs","Travel → Hit","Raycast theo quãng bay; chạm layer hitbox thì gọi ProjectileHit"],["Assembly-CSharp/Hitbox.cs + Hurtable.cs","ProjectileHit → Damage","42 dòng quyết định ai bắn được ai; layer 8 sống, 10 ragdoll, 16 đang ngồi xe"],["Assembly-CSharp/AiActorController.cs","2.227 dòng","Bot: A*, nấp, đi theo tổ. Không có dòng Input nào"],["Assembly-CSharp/ActorManager.cs","StartGame, SpawnWave","Danh bạ nhân vật và vòng hồi sinh"],["Net/Client/GameFlowState.cs","10 trạng thái","Booting, LoginScreen, Authenticating, Lobby, RoomBrowser, JoiningRoom, RoomLobby, ConnectingGame, InMatch, MatchEnd"],["Net/Client/GameFlowController.cs","máy trạng thái","Chuyển màn hình; có test chạy ngoài Unity trong Client.Flow.Tests"],["Net/Client/MasterSession.cs","phiên với master","Giữ kết nối MasterClient, gửi heartbeat, nhận push"],["Net/Client/MatchTransportHandoff.cs","giữ kết nối qua scene","Kết nối UDP mở ở scene Menu được chuyển sang scene bản đồ"],["Net/Client/ClientPredictionStage.cs","dự đoán","Gọi PredictionReconciler (thư viện của Toàn) mỗi frame"],["Net/Client/RemoteActorView.cs","vẽ người khác","Đặt mô hình theo vị trí nội suy, chạy animation, ragdoll cục bộ khi chết"],["Net/Shared/NetContext.cs","IsServer / IsClient","Một codebase hai vai trò; code chỉ dành một bên phải được chặn"],["Net/Shared/NetRoleBootstrap.cs","khai báo vai trò","Đặt vai trò trước khi nạp scene, tránh để Unity tự chọn ngẫu nhiên giữa NetServer và NetClient"],["NetBindings/IronfrontNetBindings.cs","gắn binding","Nối interface ở Net/Shared với component của game gốc"],["Ironfront.MasterClient/MasterClient.cs","client TCP tới master","Gửi LOGIN_REQ, ROOM_*, CHAT_SEND; nhận ROOM_STATE_PUSH, CHAT_PUSH; TLS qua MasterClientTlsOptions"],["Ironfront.Net.Configuration/GameClientConfig.cs","cấu hình client","Địa chỉ master và game server. Giá trị trong Inspector là mặc định, biến môi trường đặt thì đè lên. DefaultMasterPort = 27000 viết đúng một chỗ, vì trước đây chép 5 nơi và lệch thành 27020"],["Ironfront.Net.Configuration/EnvRegistry.cs","danh sách biến","Nguồn duy nhất của mọi biến môi trường; tools/new-env.ps1 sinh .env.example từ đây"],["Ironfront.Net.Configuration/MapCatalog.cs","danh mục bản đồ","Bảng id bản đồ ↔ tên scene ↔ tên hiển thị (TryGetScene, TryGetId); master, client và game server dùng chung một danh sách"],["tools/build-libs.ps1","build DLL","Build các thư viện .NET rồi chép vào Assets/Plugins. Quên chạy thì Unity dùng DLL cũ (CI có cổng kiểm tra độ mới)"],["tools/build-player.ps1 · package-release.ps1","bản phát hành","Build Windows, macOS, Linux vào build/, đóng zip vào artifacts/, rồi gh release create"]],
+ todo:["Lần theo chuỗi bắn 11 bước trong Actor, Weapon, Projectile, Hitbox (sơ đồ bên dưới)","Đọc ActorController.cs trước, rồi giải thích vì sao mạng chỉ cần thêm một lớp con","Biết 5 scene: Splash, Menu, Dustbowl, ForestLake, Island","Vẽ máy trạng thái GameFlowState 10 trạng thái","Đọc MasterSession và MatchTransportHandoff: chỗ client chuyển từ TCP sang UDP","Giải thích vì sao singleton giao diện (IngameUi, Camera.main) là mìn trên server headless","Giải thích NetBindings dùng để làm gì","Mở Unity, chạy scene Menu, đăng nhập server thật, vào một trận","Chạy EditMode test trong Unity Test Runner","Chạy dotnet test Client.Flow.Tests và Client.Input.Tests, hiểu vì sao test .NET đọc được file .cs của Unity","Mở ui-pack/index.html và ironfront-reborn-ui-pack-HUD/index.html, so với menu và HUD thật","Lần theo một LOGIN_REQ từ màn hình đăng nhập qua MasterSession tới MasterClient.cs; ngồi với Kiên xem đầu bên kia","Đọc GameClientConfig và EnvRegistry: client biết địa chỉ master từ đâu","Đọc build-libs, build-player, package-release: từ code đến 3 file zip trên Releases; biết build/ và artifacts/ chứa gì"],
+ qs:[["Vì sao trúng đạn không dự đoán được ở client?","Độ toả, độ giật, animation dùng UnityEngine.Random ở 3 chỗ, cùng đầu vào chưa chắc ra cùng kết quả. Server xét, client chỉ hiện hiệu ứng trước."],["Bot trên server có đọc bàn phím không?","Không. AiActorController không có dòng Input nào; nó dùng cùng giao diện ActorController với người chơi. Đó là lý do cả AI cũ chạy được trên server mà không sửa."],["Ragdoll có đồng bộ không?","Không. Server gửi S_DEATH kèm vector lực, mỗi máy tự làm ragdoll. Đồng bộ ragdoll tốn khoảng 1,7 MB/s."],["Một project Unity vừa là client vừa là server, phân biệt thế nào?","NetRoleBootstrap khai báo vai trò trước khi nạp scene, NetContext.IsServer/IsClient cho code hỏi. Code chỉ dành cho giao diện dùng #if !UNITY_SERVER để bản server gọn."],["Vì sao có thư mục tmp/ và ui-pack/?","tmp/ là script thăm dò Editor dùng một lần, không phải sản phẩm. ui-pack/ là bản mẫu giao diện HTML để tham chiếu khi dựng menu và HUD."],["Sửa code trong Ironfront.Net.Replication mà Unity không thấy thay đổi, vì sao?","Unity không build các thư viện .NET; nó đọc DLL trong Assets/Plugins. Phải chạy tools/build-libs.ps1 để build và chép lại. CI có cổng kiểm tra DLL cũ để bắt đúng lỗi này."],["Bản cũ của game còn chơi được không?","Không. Client gửi PROTOCOL_VERSION; sai phiên bản thì master và game server từ chối. Chỉ bản mới nhất trên Releases được hỗ trợ."]]},
+toan:{goal:"Kể được một gói UDP đi qua những lớp nào, server làm gì trong mỗi tick 33 ms, và vì sao người chơi ping 100 ms vẫn bắn trúng. Hiểu game server trong Unity khởi động, nối master và chạy trận ra sao.",
+ pre:["Socket UDP: gửi, nhận datagram, không kết nối","Số thứ tự, xác nhận (ack), gửi lại","Vòng lặp game, fixed timestep","Vector, raycast, hộp bao (AABB)"],
+ read:[["Ironfront.Net.Transport/README.md, docs/transport-layer-report.md","40 phút"],["protocol-spec.md mục 2.2, 3, 5, 6, 8, 9","50 phút"],["Transport/UdpTransportServer.cs, Connection.cs","60 phút"],["Transport/ReliabilityLayer.cs, ChannelSet.cs","60 phút"],["Transport/HandshakeCookie.cs, RateLimiter.cs, FragmentAssembler.cs","45 phút"],["docs/report-chapter-state-synchronization.md mục Y.3, Y.4, Y.5","50 phút"],["Replication/Client/PredictionReconciler.cs, SnapshotInterpolator.cs","50 phút"],["Replication/Combat/LagCompensator.cs, HitboxHistory.cs, ReportedHitJudge.cs","60 phút"],["Replication/Movement/MovementCore.cs","30 phút"],["Unity: Net/Server/ServerTickLoop.cs, ServerInputStage.cs, ServerSnapshotStage.cs","60 phút"],["Unity: Net/Server/NetServerBootstrap.cs, MasterLinkBootstrap.cs, ServerMasterReporter.cs","40 phút"]],
+ flow:[["Poll()","UdpTransportServer đọc mọi datagram"],["Input stage","InputAuthority kiểm, áp input"],["Mô phỏng","physics + AI + MovementCore"],["Chiến đấu","xét trúng đạn, sát thương"],["Snapshot stage","gọi phần đóng gói, 20 Hz"],["Gửi","ReliabilityLayer + kênh"]],
+ fns:[["Transport/UdpTransportServer.cs","Start / Poll","Một luồng; không có hàm kiểm vé thì từ chối mọi kết nối (fail-closed)"],["Transport/HandshakeCookie.cs","salt từ địa chỉ","Không lưu gì trước khi client chứng minh địa chỉ; gói CONNECT giả chỉ tốn 1 HMAC"],["Transport/ReliabilityLayer.cs","ack + bitfield 32 bit","Mỗi gói mang 33 thông tin ack; gửi lại luôn đóng số thứ tự mới (lỗi X-32 nếu không)"],["Transport/ChannelSet.cs","4 kênh","Kênh nào tin cậy, kênh nào chỉ cần gói mới nhất"],["Transport/FragmentAssembler.cs","ghép mảnh","Tối đa 64 mảnh (~75 KB), quá 2 giây chưa đủ thì bỏ"],["Transport/CongestionControl.cs + RateLimiter.cs","nghẽn + flood","Giảm tốc khi mạng nghẽn, cắt IP gửi quá nhiều"],["Replication/Server/TicketValidator.cs","kiểm vé","HMAC + hạn, gắn connection với playerId"],["Replication/Server/InputAuthority.cs","áp input","Chuẩn hoá vector, kẹp tốc độ 1,3 lần, lặp input cũ tối đa 3 tick"],["Replication/Movement/MovementCore.cs","mô phỏng di chuyển","Chạy giống hệt ở client và server nên dự đoán thường khớp"],["Replication/Client/PredictionReconciler.cs","sửa dự đoán","Lệch quá ngưỡng thì đặt lại và chạy lại các input chưa xác nhận"],["Replication/Client/SnapshotInterpolator.cs","nội suy","Vẽ người khác ở thời điểm (bây giờ − 100 ms)"],["Replication/Combat/HitboxHistory.cs","lịch sử 1 giây","30 tick × 4 hộp mỗi actor, lưu toạ độ thế giới nên tua là đọc, không phải dời vật thể"],["Replication/Combat/LagCompensator.cs","tua thời gian","Dùng RTT do server tự đo; kẹp ở MAX_REWIND_TICKS (400 ms trong ProtocolConstants)"],["Replication/Combat/ReportedHitJudge.cs","xét báo cáo trúng","Tầm, hướng ngắm, thân mục tiêu ở tick người bắn vẽ, ghế kín, tường"],["Replication/Match/MatchStateMachine.cs","vòng đời trận","Khởi động, chơi, tính điểm, thắng, reset"],["Replication/Server/BotLodScheduler.cs","LOD cho bot","Bot ở xa cập nhật thưa hơn để tiết kiệm CPU"],["Unity Net/Server/ServerTickLoop.cs","vòng tick 30 Hz","Bộ tích luỹ theo đồng hồ thật, không theo FixedUpdate; trễ quá 3 tick thì bỏ phần tồn"],["Unity Net/Server/MasterLinkBootstrap.cs","nối master","GS_REGISTER, heartbeat, nhận GS_ROOM_ASSIGNED"],["Ironfront.Net.MasterLink/GameServerMatchReporter.cs","báo kết quả","GS_MATCH_PROGRESS mỗi 15 s (dòng final = người đã rời), GS_MATCH_ENDED cuối hiệp; ServerMasterReporter trong Unity gọi nó"]],
+ todo:["Đọc README của Transport và transport-layer-report","Dùng mô phỏng ack bitfield ở phần của Nghĩa, giải thích vì sao không cần gói ACK riêng","Vẽ 4 bước bắt tay và giải thích vì sao server không lưu gì ở bước 1","Giải thích lỗi X-32: vì sao gói gửi lại phải có số thứ tự mới","Hiểu 4 kênh và vì sao C_INPUT gửi lặp 3 frame","Đọc PredictionReconciler, giải thích lúc nào client bị kéo giật lại","Đọc LagCompensator và HitboxHistory: tua bao xa, vì sao có giới hạn, RTT lấy từ đâu","Đọc ReportedHitJudge: 8 lý do một báo cáo trúng bị bác","Đọc ServerTickLoop.cs theo thứ tự các khâu, xem sơ đồ tick bên dưới","Chạy dotnet test Transport.Tests và Replication.Tests","Đọc Program.cs của Net.LoadHarness: giả lập người chơi để đo game server","Biết TacticsTrainer làm gì và kết quả đi vào đâu","Đọc GameServerMatchReporter và ServerMasterReporter, ngồi với Kiên xem HandleMatchEnded ở đầu bên kia","Ngồi với Nghĩa 20 phút: snapshot từ lúc dựng đến lúc lên dây"],
+ qs:[["Mất 1 snapshot thì sao?","Không gửi lại. Snapshot sau mang trạng thái mới hơn; bộ đệm nội suy 100 ms (2 snapshot) chịu được mất 1 gói liên tiếp."],["Vì sao không cho client tự báo vị trí?","Server không bao giờ nhận vị trí, chỉ nhận input. Chặn dịch chuyển và chạy nhanh từ gốc."],["Người ping 100 ms bắn trúng thế nào?","Client vẽ thế giới lùi rtt/2 + 100 ms. Server dùng RTT tự đo để biết người bắn đang nhìn tick nào, xét trên vị trí thân mục tiêu đã ghi ở tick đó. Có giới hạn tua để kẻ giả ping cao không bắn được vào quá khứ xa."],["Lag compensation có công bằng không?","Nó dời bất công chứ không xoá: người ping cao được phát bắn của mình, người ping thấp đôi khi chết sau khi đã núp. Chọn ưu tiên người ngắm, vì súng ngắm trúng mà không ăn thì người chơi bỏ game."],["Vì sao server tick 30 Hz mà snapshot 20 Hz?","Snapshot là thứ đắt trên đường truyền; 20 Hz cộng nội suy nhìn như 30 Hz với 2/3 chi phí. Mô phỏng giữ 30 Hz vì độ chính xác của dự đoán phụ thuộc vào nó."],["Server bị chậm một tick thì sao?","Không chạy bù vô hạn: chạy bù làm chậm thêm, thành vòng xoáy. Bộ lập lịch bỏ phần tồn quá 3 tick và ghi nhận lại."]]}
+};
+const checks=store.get("if2-checks",{});
+let curTab=store.get("if2-tab","nghia");
+$("#ptabs").innerHTML=ORDER.map(k=>`<button class="p-${k}" data-t="${k}"><i>${P[k].name[0]}</i><span>${P[k].name}<small>${P[k].role}</small></span></button>`).join("");
+$("#panes").innerHTML=ORDER.map(k=>{const d=PD[k];const own=ROOT.filter(r=>r[1]===k);
+ return `<div class="pane p-${k}" id="pane-${k}">
+ <div class="phead"><div><span class="chip ptag wrap"><span class="d"></span>${P[k].role} · ${P[k].w}% khối lượng</span><h3 style="margin:10px 0 6px">Mục tiêu</h3><p>${d.goal}</p></div>
+  <div class="card" style="display:flex;gap:14px;align-items:center"><span class="ringbox" data-r="${k}"></span><div><b>Tiến độ</b><br><small style="color:var(--ink3)">${d.todo.length} việc</small></div></div></div>
+ <div class="grid g2" style="margin-top:6px;align-items:start">
+  <div><h3>Kiến thức nền nên có</h3><ul style="margin:0;padding-left:20px">${d.pre.map(x=>`<li>${x}</li>`).join("")}</ul></div>
+  <div><h3>Thứ tự đọc</h3><ol class="reading">${d.read.map(r=>`<li><span>${esc(r[0])}</span><span class="t">${r[1]}</span></li>`).join("")}</ol></div></div>
+ <h3>Luồng chính</h3><div class="hflow">${d.flow.map((s,i)=>`${i?'<div class="ar">→</div>':""}<div class="st"><b>${s[0]}</b>${s[1]}</div>`).join("")}</div>
+ <div id="extra-${k}"></div>
+ <h3>Hàm nào ở đâu, làm gì</h3><div class="tablewrap"><table><tr><th>File</th><th>Hàm / thành phần</th><th>Xử lý gì</th></tr>${d.fns.map(r=>`<tr><td><code>${esc(r[0])}</code></td><td><b>${r[1]}</b></td><td>${r[2]}</td></tr>`).join("")}</table></div>
+ <h3>Mọi mục ở gốc repo ${P[k].name} phải trả lời được (${own.length})</h3><div class="folders">${own.map(r=>`<code title="${esc(r[3])}">${esc(r[0])}</code>`).join("")}</div>
+ <div class="grid g2" style="margin-top:6px;align-items:start">
+  <div><h3>Danh sách việc</h3><ul class="check">${d.todo.map((t,i)=>{const id=k+"-"+i,on=!!checks[id];return `<li class="${on?"done":""}"><input type="checkbox" id="c-${id}" data-id="${id}" ${on?"checked":""}><label for="c-${id}">${t}</label></li>`}).join("")}</ul></div>
+  <div><h3>Câu hỏi tự kiểm tra</h3>${d.qs.map(q=>`<details class="qa"><summary>${q[0]}</summary><div>${q[1]}</div></details>`).join("")}${k==="kien"?'<p style="margin-top:10px"><a href="#on-tap"><b>→ Thêm 22 thẻ ôn database ở mục 08</b></a></p>':""}</div></div></div>`}).join("");
+function openTab(k){setTimeout(refitPills,0);curTab=k;$$("#ptabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===k));$$(".pane").forEach(p=>p.classList.toggle("on",p.id==="pane-"+k));store.set("if2-tab",k)}
+$$("#ptabs button").forEach(b=>b.onclick=()=>openTab(b.dataset.t));
+document.addEventListener("click",e=>{const a=e.target.closest("[data-goto]");if(a)openTab(a.dataset.goto)});
+function ring(p){const r=34,c=2*Math.PI*r;return `<svg class="ring" viewBox="0 0 84 84"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--soft)" stroke-width="9"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--pc)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c*(1-p)}" transform="rotate(-90 42 42)" style="transition:stroke-dashoffset .6s"/><text x="42" y="47" text-anchor="middle" font-size="16" font-weight="800" fill="var(--ink)">${Math.round(p*100)}%</text></svg>`}
+function refresh(){let tot=0,done=0;$("#teamProgress").innerHTML=ORDER.map(k=>{const n=PD[k].todo.length;let d=0;for(let i=0;i<n;i++)if(checks[k+"-"+i])d++;tot+=n;done+=d;const b=document.querySelector(`[data-r="${k}"]`);if(b)b.innerHTML=ring(d/n);
+  return `<div class="p-${k}" style="margin:12px 0"><div class="row" style="justify-content:space-between;font-size:14px"><b>${P[k].name}</b><span style="color:var(--ink3)">${d}/${n}</span></div><div style="height:10px;border-radius:99px;background:var(--soft);overflow:hidden"><div style="height:100%;width:${d/n*100}%;background:var(--pc);border-radius:99px;transition:width .6s"></div></div></div>`}).join("")+`<p style="font-weight:700;margin-top:12px">Cả nhóm: ${done}/${tot} việc</p>`}
+document.addEventListener("change",e=>{const c=e.target;if(!c.dataset||!c.dataset.id)return;checks[c.dataset.id]=c.checked;c.closest("li").classList.toggle("done",c.checked);store.set("if2-checks",checks);refresh()});
+$("#resetAll").onclick=()=>{if(!confirm("Xoá toàn bộ dấu tick trên máy này?"))return;for(const k in checks)delete checks[k];store.set("if2-checks",checks);$$(".check input").forEach(c=>{c.checked=false;c.closest("li").classList.remove("done")});refresh()};
+
+/* ---- extras: Nghĩa ---- */
+(function(){const el=$("#extra-nghia");
+ const bar=(parts,unit)=>`<div class="byteswrap"><div class="bytes">${parts.map(p=>`<div style="flex:${p[1]};background:${p[2]}">${p[0]}<small>${p[1]} ${unit||"B"}</small></div>`).join("")}</div></div>`;
+ el.innerHTML=`<h3>Giải phẫu gói tin</h3>
+ <div class="card"><h4 style="margin-top:0">Header GSP, có ở mọi datagram UDP (16 byte)</h4>${bar([["protocolId",2,"#7048e8"],["type",1,"#8b6cf0"],["flags",1,"#a48af5"],["sequence",2,"#2563d6"],["ack",2,"#3b78e0"],["ackBitfield",4,"#5590ea"],["connId",2,"#0e8a63"],["payloadLen",2,"#c9741a"]])}
+ <p class="cap">protocolId luôn 0x4946. flags: bit 0 RELIABLE, 1 FRAGMENTED, 2 ORDERED. Sau header là phong bì kênh 3 byte (u8 kênh + u16 số thứ tự trong kênh), rồi tới khung tin nhắn.</p>
+ <h4>JoinTicket (64 byte): 32 byte nội dung + 32 byte chữ ký</h4>${bar([["playerId",4,"#0e8a63"],["serverId",2,"#14a37a"],["roomId",2,"#22b58a"],["expiresAt",8,"#c9741a"],["team",1,"#d98b33"],["displayName",15,"#7048e8"],["HMAC-SHA256",32,"#5b6170"]])}
+ <p class="cap">Chữ ký = HMAC-SHA256(32 byte đầu, IRONFRONT_SHARED_SECRET). Hạn 60 giây. Sửa một bit bất kỳ ở 32 byte đầu là chữ ký sai.</p>
+ <h4>Khung MSP trên TCP</h4>${bar([["length (u32)",4,"#c9741a"],["msgType (u16)",2,"#7048e8"],["body … tối đa 64 KB",14,"#5b6170"]])}
+ <p class="cap">TCP là luồng byte, không có ranh giới tin nhắn: một lần đọc có thể nhận nửa tin, hoặc hai tin rưỡi. Tiền tố độ dài cho bên nhận biết phải chờ thêm bao nhiêu byte. Bốn trường hợp phải xử lý đúng: đủ một khung, thiếu, thừa sang khung sau, và độ dài vô lý (đóng kết nối).</p></div>
+ <h3>Mô phỏng ack bitfield</h3>
+ <div class="card"><p>Bấm vào gói để đổi giữa <b>đã nhận</b> và <b>mất</b>. Bên nhận ghi <code>ack</code> = số lớn nhất đã nhận, và 32 bit cho 32 gói ngay trước đó (bit i ứng với gói ack − 1 − i). Mỗi gói mang 33 thông tin xác nhận, nên ack chỉ mất khi mất liền 33 gói. Vì vậy không cần gói ACK riêng.</p>
+ <div class="pk" id="pkRow"></div><div id="ackOut"></div></div>
+ <h3>Mô phỏng vùng interest</h3>
+ <div class="grid g2" style="align-items:start"><div class="dcard"><svg class="diagram" id="intSvg" viewBox="0 0 440 440" role="img" aria-label="Vùng interest"></svg></div>
+ <div class="card" id="intOut"><p>Bấm vào bất kỳ đâu trong hình để đặt một nhân vật khác. Người xem ở tâm, nhìn lên trên. Bán kính vẽ theo căn bậc hai để vùng gần không bị bé tí.</p><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="intMate"> Nhân vật đó là đồng đội</label><div id="intRes" style="margin-top:12px"></div></div></div>
+ <h3>Từng kỹ thuật nén đóng góp bao nhiêu</h3>
+ <div class="card" id="compChart"></div>`;
+ // ack demo
+ const seqs=[94,95,96,97,98,99,100,101,102,103];const lost=new Set([100,102]);
+ function drawAck(){$("#pkRow").innerHTML=seqs.map(s=>`<button data-s="${s}" class="${lost.has(s)?"lost":""}">#${s}<small>${lost.has(s)?"mất":"đã nhận"}</small></button>`).join("");
+  $$("#pkRow button").forEach(b=>b.onclick=()=>{const s=+b.dataset.s;lost.has(s)?lost.delete(s):lost.add(s);drawAck()});
+  const got=seqs.filter(s=>!lost.has(s));if(!got.length){$("#ackOut").innerHTML="<p>Chưa nhận gói nào: không có gì để xác nhận.</p>";return}
+  const ack=Math.max(...got);let bits=[],val=0;for(let i=0;i<10;i++){const s=ack-1-i;const known=seqs.includes(s);const one=known&&!lost.has(s);bits.push({i,s,one,known});if(one)val|=(1<<i)}
+  $("#ackOut").innerHTML=`<p><b>ack = ${ack}</b> · 10 bit đầu của ackBitfield (bit 0 bên trái):</p><div class="bits">${bits.map(b=>`<span class="${b.known?(b.one?"one":"zero"):""}" title="bit ${b.i} ↔ gói ${b.s}">${b.known?(b.one?1:0):"·"}</span>`).join("")}</div><p class="cap">Giá trị (chỉ tính các gói trong hình): <code>0x${val.toString(16).toUpperCase()}</code> = <code>0b${val.toString(2)}</code>. Bên gửi đọc là biết ngay gói ${seqs.filter(s=>lost.has(s)&&s<ack).join(", ")||"(không có)"} chưa tới và cần gửi lại nếu là gói tin cậy, với số thứ tự mới.</p>`}
+ drawAck();
+ // interest demo
+ const svg=$("#intSvg");const C=220,R=190,rad=d=>R*Math.sqrt(d/500);
+ E("rect",{x:0,y:0,width:440,height:440,fill:"var(--bg3)",rx:12},null,svg);
+ const half=15*Math.PI/180;E("path",{d:`M${C},${C} L${C+300*Math.sin(-half)},${C-300*Math.cos(half)} L${C+300*Math.sin(half)},${C-300*Math.cos(half)} z`,fill:"var(--nghia)",opacity:.1},null,svg);
+ [[500,"var(--toan)",.07,"500 m"],[200,"var(--trung)",0,"200 m"],[100,"var(--kien)",.1,"100 m"],[60,"var(--nghia)",.16,"60 m"]].forEach(z=>{E("circle",{cx:C,cy:C,r:rad(z[0]),fill:z[1],"fill-opacity":z[2],stroke:z[1],"stroke-width":1.6,"stroke-dasharray":z[0]===200?"5 5":null},null,svg);E("text",{x:C+rad(z[0])*.72+4,y:C+rad(z[0])*.72,"font-size":11,"font-weight":700,fill:z[1]},z[3],svg)});
+ E("circle",{cx:C,cy:C,r:7,fill:"var(--ink)"},null,svg);E("text",{x:C,y:C+22,"text-anchor":"middle","font-size":11,fill:"var(--ink2)"},"bạn",svg);E("text",{x:C,y:18,"text-anchor":"middle","font-size":11,fill:"var(--nghia)"},"nón nhìn ±15°",svg);
+ const mark=E("circle",{r:8,fill:"var(--accent)",stroke:"#fff","stroke-width":2,cx:-50,cy:-50},null,svg);
+ let last=null;
+ function classify(px,py){const dx=px-C,dy=py-C,r=Math.hypot(dx,dy),d=500*(r/R)**2;const ang=Math.abs(Math.atan2(dx,-dy))*180/Math.PI;const mate=$("#intMate").checked;
+  let z,hz;if(d<60){z="Gần";hz=20}else if(d<100){z="Giữa";hz=10}else if(d<=500){z="Xa";hz=4}else if(ang<=15){z="Xa (trong nón nhìn)";hz=4}else{z="Không gửi";hz=0}
+  let note="";if(mate&&d<=200&&hz<10){z="Giữa (đồng đội được nâng)";hz=10;note="Đồng đội trong 200 m có mức tối thiểu là Giữa. Đây là mức sàn, không phải mức trần: đồng đội đứng sát vẫn 20 Hz."}
+  $("#intRes").innerHTML=`<div class="fsee"><b style="font-size:22px">${Math.round(d)} m</b> · góc ${Math.round(ang)}°<br>Vùng: <b>${z}</b><br>Tần suất: <b>${hz?hz+" lần/giây":"không gửi"}</b></div>${note?`<p class="cap">${note}</p>`:""}<p class="cap">Nhân vật ra khỏi vùng không bị xoá khỏi máy bạn mà đứng yên ở vị trí cuối cùng, để khỏi nhấp nháy khi qua lại ranh giới.</p>`}
+ svg.addEventListener("click",ev=>{const pt=svg.createSVGPoint();pt.x=ev.clientX;pt.y=ev.clientY;const p=pt.matrixTransform(svg.getScreenCTM().inverse());mark.setAttribute("cx",p.x);mark.setAttribute("cy",p.y);last=[p.x,p.y];classify(p.x,p.y)});
+ $("#intMate").onchange=()=>{if(last)classify(...last)};
+ last=[C+60,C-40];mark.setAttribute("cx",last[0]);mark.setAttribute("cy",last[1]);classify(...last);
+ // compression chart
+ const rows=[["Không nén: snapshot đầy đủ, căn byte, không interest",19.86,"var(--ink3)"],["+ bit-packing",19.04,"var(--nghia)"],["+ delta encoding",9.94,"var(--kien)"],["+ interest management",1.50,"var(--trung)"],["+ cắt vận tốc, độ cao 12 bit, bỏ pitch xa",1.28,"var(--toan)"]];
+ $("#compChart").innerHTML=`<p class="cap" style="margin-top:0">16 người chơi + 32 bot trên Dustbowl, 5 phút, cùng một seed. Đơn vị KB/s mỗi client.</p>`+rows.map(r=>`<div style="display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:10px;align-items:center;margin:9px 0"><div><div style="font-size:13.5px;margin-bottom:3px">${r[0]}</div><div style="height:16px;background:var(--soft);border-radius:6px;overflow:hidden"><div style="height:100%;width:${r[1]/19.86*100}%;background:${r[2]};border-radius:6px"></div></div></div><b style="text-align:right;font-variant-numeric:tabular-nums">${r[1].toFixed(2)}</b></div>`).join("")+`<p class="cap">Bản chạy thật dùng định dạng căn byte đã đóng băng, nên bỏ dòng 2 và dòng 5, đo được 1,67 KB/s, bằng 21% ngân sách 8 KB/s. Dòng 5 bị loại có chủ ý: chỉ lợi 1,2% mà phải đổi định dạng dây và mất độ chính xác (độ cao lượng tử hoá hai lần, sai số 12,5 cm).</p>`;
+})();
+
+/* ---- extras: Kiên ---- */
+(function(){const el=$("#extra-kien");
+ el.innerHTML=`<h3>Bên trong master: ai chạy trên luồng nào</h3><div class="dcard"><svg class="diagram" id="mpSvg" role="img" aria-label="Luồng xử lý master"></svg></div>
+ <p class="cap">Vùng xanh chạy trên thread pool và không bao giờ chạm vào bảng phòng, bảng session. Vùng cam là logic thread duy nhất. Muốn đọc trạng thái từ luồng khác phải đi qua <code>InvokeOnLogicThreadAsync</code>.</p>
+ <h3>Vòng đời phòng (RoomLifecycleState)</h3><div class="dcard"><svg class="diagram" id="roomSvg" role="img" aria-label="Máy trạng thái phòng"></svg></div>
+ <h3>Từ commit đến máy chủ</h3><div class="dcard"><svg class="diagram" id="depSvg" role="img" aria-label="Luồng triển khai"></svg></div>
+ <div class="callout orange"><b>Cổng và biến quan trọng</b><code>27000</code> TCP+TLS cho client và game server · <code>27001</code> số liệu, chỉ mở trong máy · <code>IRONFRONT_SHARED_SECRET</code> ký vé, ít nhất 32 ký tự · <code>IRONFRONT_DB_PATH</code> đường dẫn DB · <code>IRONFRONT_TLS_CERT_PATH</code> và mật khẩu PFX · <code>IRONFRONT_MASTER_IMAGE</code> ghim theo digest.</div>`;
+ // master pipeline
+ let svg=$("#mpSvg");svg.setAttribute("viewBox","0 0 1000 300");let mk=markers(svg);
+ E("rect",{x:10,y:10,width:330,height:280,rx:16,fill:"var(--toan-bg)",opacity:.6},null,svg);E("text",{x:24,y:34,"font-size":12,"font-weight":800,fill:"var(--toan)"},"THREAD POOL (async I/O)",svg);
+ E("rect",{x:360,y:10,width:630,height:280,rx:16,fill:"var(--kien-bg)",opacity:.6},null,svg);E("text",{x:374,y:34,"font-size":12,"font-weight":800,fill:"var(--kien)"},"MỘT LOGIC THREAD",svg);
+ const nb=(x,y,w,t,s,c)=>node(svg,{x,y,w,h:62,c,t,sub:[s],ty:26,fs:14});
+ path(svg,"M180,112 V146","toan",mk);path(svg,"M330,177 H392","toan",mk);path(svg,"M520,177 H560","kien",mk);path(svg,"M700,177 H740","kien",mk);path(svg,"M860,146 V112","kien",mk);path(svg,"M800,208 V232 H180 V208","kien",mk,{dash:true});
+ nb(30,50,300,"AcceptAsync","nhận kết nối, giới hạn 64 kết nối mỗi IP","toan");
+ nb(30,146,300,"ReceiveAsync","đọc byte, TLS, PROXY header","toan");
+ nb(392,146,128,"_logicQueue","hàng đợi","kien");
+ nb(560,146,140,"Cắt khung","MspFrameReader","kien");
+ nb(740,146,240,"Dispatch → service","Auth · Lobby · Career","kien");
+ nb(740,50,240,"SqliteDatabase","một kết nối dùng chung","kien");
+ pill(svg,490,232,"trả lời: SendAsync quay về thread pool","kien",{size:11.5});
+ E("text",{x:374,y:276,"font-size":12,fill:"var(--ink2)"},"Cùng luồng này: quét kết nối im lặng 45 s, đếm ngược phòng, ghép trận, dọn server chết, dọn token hết hạn",svg);
+ // room state machine
+ svg=$("#roomSvg");svg.setAttribute("viewBox","0 0 1000 250");mk=markers(svg);
+ const st=(x,t,s,c)=>node(svg,{x,y:80,w:180,h:70,c,t,sub:[s],ty:30,fs:15});
+ path(svg,"M210,105 H300","kien",mk);path(svg,"M480,105 H570","kien",mk);path(svg,"M750,105 H820","kien",mk);
+ path(svg,"M390,150 V195 H120 V150","kien",mk,{dash:true});path(svg,"M660,150 V215 H100 V150","kien",mk,{dash:true});
+ st(30,"Waiting","đang tụ người","kien");st(300,"Starting","đã chọn server","kien");st(570,"InMatch","đang đánh","kien");st(820,"Ending","kết thúc","kien");
+ pill(svg,255,62,"mọi người Sẵn sàng (≥2) + đếm 10 s","kien",{size:11});pill(svg,525,62,"GS_MATCH_STARTED","kien",{size:11});pill(svg,785,62,"người cuối rời","kien",{size:11});
+ pill(svg,255,195,"có người bỏ Sẵn sàng: tắt đồng hồ","kien",{size:11});pill(svg,420,215,"game server chết: lỗi 3001, về Waiting","kien",{size:11});
+ E("text",{x:500,y:20,"text-anchor":"middle","font-size":12,fill:"var(--ink2)"},"Hết một hiệp KHÔNG đóng phòng: game server chơi tiếp hiệp mới với cùng người. Phòng đóng khi người cuối rời đi.",svg);
+ // deploy
+ svg=$("#depSvg");svg.setAttribute("viewBox","0 0 1000 300");mk=markers(svg);
+ const d=(x,y,w,t,s)=>node(svg,{x,y,w,h:64,c:"infra",t,sub:[s],ty:26,fs:13.5});
+ path(svg,"M170,62 H210","infra",mk);path(svg,"M370,62 H410","infra",mk);path(svg,"M580,62 H620","infra",mk);path(svg,"M790,62 H830","infra",mk);
+ path(svg,"M910,94 V170 H790","infra",mk,{dash:true});path(svg,"M620,202 H580","infra",mk);path(svg,"M410,202 H370","infra",mk);
+ d(10,30,160,"git push","nhánh develop / main");d(210,30,160,"ci.yml","build · test · cổng gác");d(410,30,170,"images.yml","build image master");d(620,30,170,"GHCR","ghcr.io/…:sha-…");d(830,30,160,"Ghim digest",".env trên máy chủ");
+ d(620,170,170,"deploy.sh up","docker compose");d(410,170,170,"Master","AWS EC2");d(210,170,160,"Game server","VM Azure, Docker");
+ E("text",{x:20,y:270,"font-size":12.5,fill:"var(--ink2)"},"Image game server build tay (workflow_dispatch) vì runner GitHub không có giấy phép Unity. Bản zip cho người chơi đi đường riêng, xem phần của Trung.",svg);
+})();
+
+/* ---- extras: Trung ---- */
+(function(){const el=$("#extra-trung");
+ const chain=[["Actor.Update()","Mỗi frame, có vũ khí thì gọi UpdateWeapon"],["Actor.UpdateWeapon()","controller.Fire() đúng, không đang ngã, ghế cho phép bắn"],["Weapon.Fire(dir, useMuzzle)","nhận hướng từ controller"],["Weapon.CanFire()","đã rút súng, không nạp đạn, còn đạn, hết thời gian hồi"],["Weapon.Shoot()","projectilesPerShot lần SpawnProjectile, trừ đạn, ApplyRecoil"],["Weapon.SpawnProjectile()","hướng + Random.insideUnitSphere × spread"],["Projectile.Travel()","raycast theo quãng bay mỗi frame"],["Projectile.Hit()","chạm layer hitbox (8, 10, 16) thì gọi ProjectileHit"],["Hitbox.ProjectileHit()","parent.Damage(sát thương × hệ số vùng)"],["Actor.Damage()","trừ máu và thăng bằng, máu bắn, ngã nếu balance < 0"],["Actor.Die()","rơi súng, ragdoll, ActorManager.SetDead, cộng điểm"]];
+ el.innerHTML=`<h3>Chuỗi một phát súng trong game gốc (11 bước)</h3><div class="card"><ol class="vflow">${chain.map(c=>`<li class="p-trung"><span class="ly mono" style="font-size:11px">${c[0].split("(")[0].split(".")[0]}</span><span class="wh"><code>${c[0]}</code><br><span style="color:var(--ink2)">${c[1]}</span></span></li>`).join("")}</ol>
+ <p class="cap">Trong bản mạng, chuỗi này chạy trên client chỉ để có hiệu ứng; quyết định trúng trượt và trừ máu chạy ở server (phần của Toàn).</p></div>
+ <h3>Máy trạng thái màn hình client</h3><div class="dcard"><svg class="diagram" id="gfSvg" role="img" aria-label="GameFlowState"></svg></div>
+ <h3>Vì sao game gốc chạy được qua mạng mà gần như không sửa</h3><div class="dcard"><svg class="diagram" id="bindSvg" role="img" aria-label="Kiến trúc binding"></svg></div>
+ <div class="callout green"><b>Mìn trên server headless</b>Server không có camera, không có giao diện. Game gốc gọi <code>IngameUi.instance</code>, <code>DecalManager.CreateBloodDrop</code>, <code>Camera.main</code> ở nhiều chỗ. Mười trong mười tám lần chạm singleton của Actor được che may mắn bởi <code>if (!aiControlled)</code> (trên server mọi actor là AI). Năm chỗ còn lại phải chặn có chủ đích; <code>Camera.main</code> trong <code>IsLowQuality()</code> là chỗ không ai đoán trước vì nó chạy mỗi frame cho mọi bot.</div>`;
+ let svg=$("#gfSvg");svg.setAttribute("viewBox","0 0 1000 250");let mk=markers(svg);
+ const S=[["Booting",0],["LoginScreen",1],["Authenticating",2],["Lobby",3],["RoomBrowser",4],["JoiningRoom",5],["RoomLobby",6],["ConnectingGame",7],["InMatch",8],["MatchEnd",9]];
+ S.forEach((s,i)=>{const row=i<5?0:1,col=row?9-i:i;const x=20+col*196,y=row?160:30;if(i<9){}
+  node(svg,{x,y,w:170,h:56,c:"trung",t:s[0],sub:["= "+s[1]],ty:24,fs:13.5})});
+ for(let i=0;i<4;i++)path(svg,`M${190+i*196},58 H${216+i*196}`,"trung",mk);
+ path(svg,"M890,86 V160","trung",mk);for(let i=0;i<4;i++)path(svg,`M${804-i*196},188 H${778-i*196}`,"trung",mk);
+path(svg,"M105,160 V128 H690 V160","trung",mk,{dash:true});pill(svg,400,128,"hết trận: quay về phòng chờ","trung",{size:11});
+ // binding
+ svg=$("#bindSvg");svg.setAttribute("viewBox","0 0 1000 230");mk=markers(svg);
+ path(svg,"M300,110 H360","trung",mk);path(svg,"M640,110 H700","trung",mk);
+ node(svg,{x:20,y:40,w:280,h:140,c:"trung",t:"Game gốc",sub:["Assembly-CSharp","Actor, Weapon, Vehicle…","sửa tối thiểu"],ty:40});
+ node(svg,{x:360,y:40,w:280,h:140,c:"nghia",t:"NetBindings",sub:["bộ chuyển đổi","cài interface của Net/Shared","bằng component game gốc"],ty:40});
+ node(svg,{x:700,y:40,w:280,h:140,c:"toan",t:"Net/Client · Net/Server",sub:["chỉ biết interface","IGameplayWeapon, IInputSource…","test được ngoài Unity"],ty:40});
+ E("text",{x:500,y:215,"text-anchor":"middle","font-size":12.5,fill:"var(--ink2)"},"Code mạng không gọi thẳng Actor; nó gọi interface. NetBindings nối hai bên. Đổi game gốc không làm vỡ code mạng và ngược lại.",svg);
+})();
+
+/* ---- extras: Toàn ---- */
+(function(){const el=$("#extra-toan");
+ el.innerHTML=`<h3>Một giây của game server: 30 tick, 20 snapshot</h3><div class="dcard"><svg class="diagram" id="tickSvg" role="img" aria-label="Vòng tick"></svg></div>
+ <p class="cap">Độ rộng các khâu trong một tick là minh hoạ, không phải số đo. Số đo thật nằm ở docs/report-chapter-state-synchronization.md mục Y.6. 30 tick mà chỉ 20 snapshot nên cứ 3 tick thì 2 tick gửi, 1 tick không.</p>
+ <h3>Bắt tay 4 bước (không cấp tài nguyên cho địa chỉ chưa chứng minh)</h3><div class="dcard"><svg class="diagram" id="hsSvg" role="img" aria-label="Bắt tay UDP"></svg></div>
+ <h3>Lag compensation trên trục thời gian</h3><div class="dcard"><svg class="diagram" id="lcSvg" role="img" aria-label="Lag compensation"></svg></div>`;
+ let svg=$("#tickSvg");svg.setAttribute("viewBox","0 0 1000 220");let mk=markers(svg);
+ const seg=[["Poll",.12,"toan"],["Input",.15,"toan"],["Mô phỏng + AI",.35,"trung"],["Bắn",.12,"kien"],["Snapshot",.26,"nghia"]];
+ for(let t=0;t<3;t++){const x0=30+t*320,w=300;E("text",{x:x0,y:30,"font-size":12.5,"font-weight":700,fill:"var(--ink)"},`Tick ${t+1} · 33,3 ms`,svg);let x=x0;
+  seg.forEach(s=>{const sw=w*s[1];const skip=s[0]==="Snapshot"&&t===2;E("rect",{x,y:44,width:sw-3,height:54,rx:8,fill:skip?"var(--soft)":BG[s[2]],stroke:skip?"var(--line)":COL[s[2]],"stroke-width":1.5,"stroke-dasharray":skip?"4 4":null},null,svg);
+   E("text",{x:x+sw/2,y:76,"text-anchor":"middle","font-size":11,"font-weight":700,fill:skip?"var(--ink3)":COL[s[2]]},skip?"bỏ qua":s[0],svg);x+=sw});
+  if(t<2){path(svg,`M${x0+w*.9},104 V140`,"nghia",mk);pill(svg,x0+w*.9,156,"S_SNAPSHOT","nghia",{size:11})}}
+ E("text",{x:30,y:206,"font-size":12.5,fill:"var(--ink2)"},"Tick chạy theo đồng hồ thật bằng bộ tích luỹ. Chậm quá 3 tick thì bỏ phần tồn thay vì chạy bù, tránh vòng xoáy càng chạy bù càng chậm.",svg);
+ svg=$("#hsSvg");svg.setAttribute("viewBox","0 0 1000 300");mk=markers(svg);
+ const cx=150,sx=850;[[cx,"Client","trung"],[sx,"Game Server","toan"]].forEach(a=>{node(svg,{x:a[0]-90,y:10,w:180,h:40,c:a[2],t:a[1],ty:26,fs:14});E("line",{x1:a[0],y1:52,x2:a[0],y2:292,stroke:"var(--line)","stroke-width":2,"stroke-dasharray":"4 6"},null,svg)});
+ const hs=[["CONNECT_REQUEST {version, joinTicket, clientSalt}","Chỉ kiểm version và chỗ trống. Không lưu gì.",1],["CONNECT_CHALLENGE {serverSalt}","serverSalt = HMAC(khoá riêng, IP, cổng, clientSalt, khung 30 s)",-1],["CONNECT_RESPONSE {clientSalt ⊕ serverSalt, clientSalt, joinTicket}","Tính lại salt: địa chỉ là thật. Giờ mới kiểm HMAC vé.",1],["CONNECT_ACCEPTED {connectionId, serverTick, mapId, myPlayerId}","Gắn playerId ↔ connectionId",-1]];
+ hs.forEach((h,i)=>{const y=86+i*56,from=h[2]>0?cx:sx,to=h[2]>0?sx:cx,c=h[2]>0?"trung":"toan";E("line",{x1:from+(h[2]>0?4:-4),y1:y,x2:to-(h[2]>0?6:-6),y2:y,stroke:COL[c],"stroke-width":2.2,"marker-end":mk(c)},null,svg);
+  E("text",{x:500,y:y-8,"text-anchor":"middle","font-size":12,"font-weight":700,fill:COL[c],class:"mono"},h[0],svg);E("text",{x:500,y:y+17,"text-anchor":"middle","font-size":11.5,fill:"var(--ink2)"},h[1],svg)});
+ svg=$("#lcSvg");svg.setAttribute("viewBox","0 0 1000 220");mk=markers(svg);
+ E("line",{x1:40,y1:110,x2:960,y2:110,stroke:"var(--ink3)","stroke-width":2,"marker-end":mk("ink")},null,svg);E("text",{x:40,y:96,"font-size":12,fill:"var(--ink3)"},"thời gian server →",svg);
+ const T=(x,lab,sub,c)=>{E("line",{x1:x,y1:96,x2:x,y2:124,stroke:COL[c],"stroke-width":3},null,svg);E("text",{x,y:84,"text-anchor":"middle","font-size":12.5,"font-weight":800,fill:COL[c]},lab,svg);E("text",{x,y:144,"text-anchor":"middle","font-size":11.5,fill:"var(--ink2)"},sub,svg)};
+ T(860,"bây giờ","server nhận phát bắn","toan");T(560,"tick người bắn đang vẽ","bây giờ − rtt/2 − 100 ms","kien");T(300,"giới hạn tua","bây giờ − MAX_REWIND","bad");
+ E("rect",{x:300,y:160,width:560,height:22,rx:6,fill:"var(--toan-bg)",stroke:"var(--toan)"},null,svg);E("text",{x:580,y:175,"text-anchor":"middle","font-size":11.5,"font-weight":700,fill:"var(--toan)"},"HitboxHistory giữ 1 giây (30 tick × 4 hộp mỗi actor)",svg);
+ path(svg,"M850,64 C760,30 650,30 570,64","kien",mk);pill(svg,710,36,"tua lại: đọc hộp đã lưu, không dời vật thể","kien",{size:11});
+})();
+refresh();openTab(curTab);
+
+/* ============ DB DIAGRAMS ============ */
+const TB={
+ accounts:{x:330,y:20,cols:[["player_id","PK AUTOINC",1],["username","UNIQUE NOCASE"],["password_hash","TEXT bcrypt"],["display_name","TEXT"],["created_at","INTEGER ms"],["last_login_at","INTEGER NULL"],["failed_logins","INTEGER =0"],["locked_until","INTEGER =0"],["is_banned","INTEGER =0"]],
+  d:`<p>Một dòng cho mỗi tài khoản, bảng trung tâm.</p><ul><li><b>Ghi:</b> <code>InsertAccount</code> (đăng ký), <code>RecordLoginSuccess</code>, <code>RecordLoginFailure</code>, <code>SetBanned</code>.</li><li><b>Đọc:</b> <code>FindAccount</code>, <code>FindAccountById</code>, <code>CountAccounts</code>.</li></ul><p>Thời gian là số mili giây Unix kiểu INTEGER, vì SQLite không có kiểu ngày giờ riêng; so sánh và sắp xếp số thì nhanh, không lệch múi giờ.</p><pre><code>UPDATE accounts SET failed_logins = failed_logins + 1,
+  locked_until = CASE WHEN failed_logins + 1 >= $max
+                 THEN $until ELSE locked_until END
+WHERE player_id = $id</code></pre><p><b>Điểm hay bị hỏi:</b> <code>is_banned</code> có sẵn nhưng chưa có giao diện quản trị nào bật nó; cấm ai thì sửa DB bằng tay (hàm <code>SetBanned</code> chỉ để test gọi được). Index <code>idx_accounts_username</code> trùng chức năng với index ngầm SQLite tự tạo cho UNIQUE.</p>`},
+ remember_tokens:{x:20,y:20,cols:[["token_hash","PK SHA-256",1],["player_id","FK accounts",2],["created_at","INTEGER ms"],["expires_at","INTEGER ms"]],d:`<p>Đăng nhập không cần mật khẩu trên máy đã ghi nhớ.</p><ul><li>Lưu hash chứ không lưu token. Khoá chính chính là hash.</li><li>Tối đa 8 token mỗi tài khoản, hạn 30 ngày.</li><li>Dùng một lần: đọc xong xoá.</li><li>Index <code>idx_remember_player</code> phục vụ câu xoá bớt token cũ theo người.</li></ul>`},
+ match_results:{x:20,y:180,cols:[["id","PK AUTOINC",1],["room_id","INTEGER"],["player_id","FK accounts",2],["kills","INTEGER"],["deaths","INTEGER"],["score","INTEGER"],["ended_at","INTEGER ms"]],d:`<p>Mỗi người, mỗi hiệp kết thúc là một dòng. Sổ cái thô, chỉ thêm không sửa.</p><ul><li><b>Ghi:</b> <code>InsertMatchResult</code> từ <code>HandleMatchEnded</code>.</li><li><b>Đọc:</b> <code>FindMatchResults(roomId)</code>, chủ yếu để test kiểm chứng kết quả có vào DB.</li></ul><p>Index <code>idx_results_player</code> giúp tra lịch sử một người nhanh. <code>room_id</code> không có khoá ngoại vì phòng chỉ sống trong RAM của master.</p>`},
+ career_stats_season1:{x:20,y:410,cols:[["player_id","PK",1],["stat","PK",1],["value","INTEGER"]],arch:true,d:`<p>Bảng lưu trữ, tên sinh động <code>career_stats_season{mùa cũ}</code>, tạo khi bắt đầu mùa mới bên trong transaction của <code>BeginCareerSeason</code>.</p><p>Không có khoá ngoại: chỉ là bản chụp số liệu cũ. Được đọc một lần để dựng <code>career_history</code>.</p>`},
+ career_stats:{x:640,y:20,cols:[["player_id","PK, FK",1],["stat","PK, TEXT",1],["value","INTEGER"]],d:`<p>Chỉ số sự nghiệp mùa hiện tại. Khoá chính ghép <code>(player_id, stat)</code>: mỗi người mỗi chỉ số một dòng.</p><p><b>Lưu theo dòng chứ không theo cột</b> (mô hình key-value). Thêm chỉ số mới chỉ là thêm một giá trị <code>stat</code>, không phải sửa schema trên DB đang chạy. Cái giá: muốn xếp hạng phải gom theo người, master đọc hết rồi sắp xếp trong bộ nhớ, ổn ở quy mô vài trăm tài khoản.</p><ul><li><b>Ghi:</b> <code>WriteCareer</code> trong transaction, <code>SeedStat</code>.</li><li><b>Đọc:</b> <code>ReadCareer</code>, <code>ReadCareerRows</code>.</li></ul>`},
+ career_history:{x:640,y:160,cols:[["player_id","PK, FK",1],["stat","PK, TEXT",1],["value","INTEGER"]],d:`<p>Tổng các mùa đã đóng của từng người. Hồ sơ = mùa hiện tại + lịch sử. Dựng một lần từ bảng lưu trữ, có cờ trong <code>career_meta</code> để không chạy lại.</p>`},
+ achievements:{x:640,y:300,cols:[["player_id","PK, FK",1],["achievement_id","PK, TEXT",1],["unlocked_at","INTEGER ms"]],d:`<p>Thành tựu đã mở. Khoá chính ghép nên mỗi người mỗi thành tựu một lần.</p><pre><code>INSERT OR IGNORE INTO achievements(player_id, achievement_id, unlocked_at)
+VALUES ($id, $achievement, $now)</code></pre><p>Số dòng bị ảnh hưởng 1 là vừa mở khoá, 0 là đã có. Con số này quyết định có đẩy thông báo về client không. Index <code>idx_achievements_id</code> giúp đếm số người có một thành tựu và tìm người đầu tiên đạt (<code>ReadFirstHolders</code>).</p>`},
+ career_meta:{x:640,y:440,cols:[["key","PK TEXT",1],["value","INTEGER"]],d:`<p>Bảng cờ của hệ thống, không thuộc người chơi nào.</p><ul><li><code>season</code>: mùa hiện tại, đang là 2.</li><li>Cờ việc chạy một lần: đã gieo số liệu, đã sửa số sai, đã chép lịch sử mùa.</li></ul><pre><code>INSERT INTO career_meta(key, value) VALUES ('season', $s)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value</code></pre><p>Đây là cú pháp "upsert" của SQLite.</p>`}};
+(function(){const svg=$("#erSvg");const W=270,HH=36,RH=25;svg.setAttribute("viewBox","0 0 930 560");
+ const geo={};Object.entries(TB).forEach(([n,t])=>{geo[n]={x:t.x,y:t.y,w:W,h:HH+t.cols.length*RH+8}});
+ const rowY=(n,i)=>geo[n].y+HH+RH*i+RH/2+4;
+ const A=geo.accounts,ay=rowY("accounts",0);
+ const fk=(d)=>E("path",{d,fill:"none",stroke:"var(--kien)","stroke-width":1.8,opacity:.75},null,svg);
+ // left children → bus x=310
+ ["remember_tokens","match_results"].forEach(n=>{const i=TB[n].cols.findIndex(c=>c[2]===2);const y=rowY(n,i);fk(`M${geo[n].x+W},${y} H310 V${ay} H${A.x}`);E("text",{x:geo[n].x+W+6,y:y-5,"font-size":11,"font-weight":800,fill:"var(--kien)"},"N",svg)});
+ // right children → bus x=620
+ ["career_stats","career_history","achievements"].forEach(n=>{const y=rowY(n,0);fk(`M${geo[n].x},${y} H620 V${ay} H${A.x+W}`);E("text",{x:geo[n].x-14,y:y-5,"font-size":11,"font-weight":800,fill:"var(--kien)"},"N",svg)});
+ E("text",{x:A.x-14,y:ay-5,"font-size":11,"font-weight":800,fill:"var(--kien)"},"1",svg);E("text",{x:A.x+W+5,y:ay-5,"font-size":11,"font-weight":800,fill:"var(--kien)"},"1",svg);
+ Object.entries(TB).forEach(([n,t])=>{const g=E("g",{class:"clickable","data-t":n},null,svg);const G=geo[n];const hc=t.arch?"var(--ink3)":"var(--kien)";
+  E("rect",{class:"nb",x:G.x,y:G.y,width:W,height:G.h,rx:12,fill:"var(--bg2)",stroke:"var(--line)","stroke-width":1.5},null,g);
+  E("path",{d:`M${G.x},${G.y+12} a12,12 0 0 1 12,-12 h${W-24} a12,12 0 0 1 12,12 v${HH-12} h${-W} z`,fill:hc},null,g);
+  E("text",{x:G.x+14,y:G.y+23,"font-size":14,"font-weight":800,fill:"#fff",class:"mono"},n,g);
+  t.cols.forEach((c,i)=>{const y=rowY(n,i)+4;if(i%2)E("rect",{x:G.x+1,y:y-17,width:W-2,height:RH,fill:"var(--bg3)"},null,g);
+   E("text",{x:G.x+14,y,"font-size":12.5,"font-weight":c[2]===1?800:500,fill:c[2]===1?"var(--kien)":"var(--ink)",class:"mono"},(c[2]===1?"◆ ":c[2]===2?"↗ ":"  ")+c[0],g);
+   E("text",{x:G.x+W-12,y,"text-anchor":"end","font-size":11,fill:"var(--ink3)"},c[1],g)});
+  g.addEventListener("click",()=>showTbl(n))});
+ E("text",{x:20,y:548,"font-size":11.5,fill:"var(--ink3)"},"◆ khoá chính   ↗ khoá ngoại tới accounts.player_id",svg)})();
+function showTbl(n){$$("#erSvg .clickable").forEach(g=>g.classList.toggle("sel",g.dataset.t===n));$$("#erSvg .clickable .nb").forEach(r=>{const on=r.parentNode.dataset.t===n;r.setAttribute("stroke",on?"var(--kien)":"var(--line)");r.setAttribute("stroke-width",on?3:1.5)});
+ $("#erPanel").innerHTML=`<span class="chip ptag"><span class="d"></span>bảng</span><h3 class="mono" style="font-size:19px">${n}</h3>${TB[n].d}`}
+showTbl("accounts");
+
+/* auth flowchart */
+(function(){const svg=$("#authSvg");const steps=[
+ ["Hạn mức IP còn không?","5 lần sai + 60 lần thử mỗi phút, đếm trong RAM","RateLimited + số giây"],
+ ["Username, chuỗi băm hợp lệ?","≤16 ký tự · đúng 64 ký tự hex","InvalidUsername / WrongCredentials"],
+ ["FindAccount(username)","SELECT … WHERE username = $username COLLATE NOCASE",null],
+ ["BCrypt.Verify","so với hash thật, hoặc DummyHash khi không có tài khoản",null],
+ ["Mật khẩu đúng?","sai + tài khoản sống, chưa khoá → RecordLoginFailure (10 lần → khoá 15 phút)","WrongCredentials"],
+ ["is_banned = 1?","kiểm cấm TRƯỚC khoá","AccountBanned"],
+ ["locked_until > now?","sai lúc đang khoá không gia hạn khoá","AccountLocked + số giây"],
+ ["RecordLoginSuccess + tạo session","failed_logins = 0, ghi last_login_at, session 24 giờ trong RAM","→ Ok"]];
+ const H=steps.length*74+20;svg.setAttribute("viewBox",`0 0 1000 ${H}`);const mk=markers(svg);
+ steps.forEach((s,i)=>{const y=14+i*74;const ok=i===steps.length-1;const db=i===2||i===4||i===7;
+  if(i<steps.length-1)path(svg,`M330,${y+56} V${y+74}`,"kien",mk);
+  const g=E("g",{},null,svg);E("rect",{x:40,y,width:580,height:56,rx:12,fill:ok?"var(--trung-bg)":"var(--bg2)",stroke:ok?"var(--trung)":"var(--kien)","stroke-width":1.8},null,g);
+  E("circle",{cx:68,cy:y+28,r:14,fill:ok?"var(--trung)":"var(--kien)"},null,g);E("text",{x:68,y:y+33,"text-anchor":"middle","font-size":12,"font-weight":800,fill:"#fff"},String(i+1),g);
+  E("text",{x:94,y:y+24,"font-size":14,"font-weight":800,fill:"var(--ink)"},s[0],g);E("text",{x:94,y:y+44,"font-size":11.5,fill:"var(--ink2)"},s[1],g);
+  if(db){E("text",{x:604,y:y+20,"text-anchor":"end","font-size":10.5,"font-weight":800,fill:"var(--kien)"},"SQLite",g)}
+  if(s[2]&&!ok){path(svg,`M620,${y+28} H690`,"ink",mk,{w:1.6});const w=tw(s[2],12.5)+26;E("rect",{x:694,y:y+12,width:w,height:32,rx:8,fill:"var(--bad-bg)",stroke:"var(--bad)","stroke-width":1.4},null,svg);E("text",{x:694+w/2,y:y+33,"text-anchor":"middle","font-size":12.5,"font-weight":700,fill:"var(--bad)"},s[2],svg)}
+  if(ok){const w=tw("LOGIN_RES ok + token",12.5)+26;path(svg,`M620,${y+28} H690`,"trung",mk,{w:1.6});E("rect",{x:694,y:y+12,width:w,height:32,rx:8,fill:"var(--trung-bg)",stroke:"var(--trung)"},null,svg);E("text",{x:694+w/2,y:y+33,"text-anchor":"middle","font-size":12.5,"font-weight":700,fill:"var(--trung)"},"LOGIN_RES ok + token",svg)}})})();
+
+/* backup diagram */
+(function(){const svg=$("#backupSvg");svg.setAttribute("viewBox","0 0 1000 200");const mk=markers(svg);
+ const b=(x,t,s,c)=>node(svg,{x,y:40,w:170,h:84,c,t,sub:s,ty:28,fs:14});
+ [190,390,590,790].forEach(x=>path(svg,`M${x},82 H${x+20}`,"kien",mk));
+ b(20,"systemd timer",["ironfront-backup.timer","00/6:00"],"infra");b(210,"backup.sh",["sqlite3 .backup","hoặc --backup"],"infra");b(410,"Backup API",["SqliteDatabase.BackupTo","master vẫn chạy"],"kien");b(610,"backups/",["db-<ngày-giờ>.db","giữ 7 ngày"],"kien");b(810,"Azure Blob",["backup-upload.sh","ngoài máy chủ"],"infra");
+ E("text",{x:20,y:160,"font-size":12.5,fill:"var(--ink2)"},"Khôi phục: dừng master → chép bản sao vào thư mục dữ liệu (đúng chủ sở hữu của container) → chạy lại → đăng nhập bằng tài khoản đã biết để kiểm.",svg);
+ E("text",{x:20,y:182,"font-size":12.5,fill:"var(--ink2)"},"Ngoài ra tools/backup-live-stack.ps1 chụp toàn bộ hệ thống đang chạy (DB, cấu hình) về máy làm việc.",svg)})();
+
+/* ============ FLIP CARDS ============ */
+const QA=[
+ ["thiết kế","Vì sao chọn SQLite mà không MySQL hay PostgreSQL?","Chỉ <b>một</b> tiến trình master đọc ghi, vài trăm tài khoản, ghi thưa. SQLite là một file, không phải dựng server DB, sao lưu được khi đang chạy. Giới hạn nói thẳng: không chịu được nhiều luồng ghi đồng thời lớn, không chạy được nhiều master. Ở quy mô này đổi sang Postgres là tối ưu sớm.",0],
+ ["thiết kế","WAL là gì? synchronous = NORMAL nghĩa là gì?","WAL: ghi thay đổi vào file <code>-wal</code> trước, gộp vào file chính sau. Người đọc không bị người ghi chặn. <code>NORMAL</code> trong WAL fsync ít hơn FULL nên nhanh hơn; mất điện có thể mất vài giao dịch cuối nhưng file không hỏng.",0],
+ ["bảo mật","Mật khẩu được lưu thế nào?","Hai lớp. Client gửi <code>SHA256(mật khẩu + username viết thường)</code>, mật khẩu gốc không rời máy. Master băm tiếp bằng <b>bcrypt cost 11</b> có salt, chỉ lưu chuỗi bcrypt. Đường truyền bọc TLS.",0],
+ ["bảo mật","Đã băm SHA-256 ở client rồi, sao còn cần TLS?","Với server, chuỗi SHA <b>chính là</b> mật khẩu: nghe lén được thì phát lại được. Băm phía client chỉ bảo vệ mật khẩu gốc mà người dùng có thể dùng lại ở nơi khác. TLS bảo vệ đường truyền.",1],
+ ["bảo mật","Vì sao vẫn chạy bcrypt khi tài khoản không tồn tại?","Để thời gian trả lời như nhau. Bỏ qua bcrypt thì tên không tồn tại trả lời nhanh hơn rõ rệt, kẻ dò biết tên nào có thật. Code so với <code>DummyHash</code>.",0],
+ ["bảo mật","Chống dò mật khẩu bằng những gì?","(1) Mỗi IP tối đa 5 lần sai và 60 lần thử mỗi phút, đếm trong RAM. (2) 10 lần sai liên tiếp thì khoá 15 phút qua <code>locked_until</code>. (3) bcrypt chậm có chủ ý. Sai lúc đang khoá không gia hạn khoá, để kẻ tấn công không giữ chủ tài khoản bị khoá mãi.",0],
+ ["bảo mật","Hạn mức theo IP đếm lần sai, sao không đếm mọi lần thử?","Cả trường học dùng chung một IP: đếm mọi lần thử thì người thứ sáu đăng nhập đúng cũng bị bắt chờ. Lần đoán là lần sai, nên 5 lần/phút đếm lần sai; còn giới hạn 60 lần thử/phút để chặn việc đăng nhập đúng lặp lại làm CPU chạy bcrypt liên tục.",1],
+ ["bảo mật","Có bị SQL injection không?","Không: mọi giá trị đi qua tham số (<code>$username</code>, <code>AddWithValue</code>), không nối chuỗi. Chỗ duy nhất nội suy chuỗi là tên bảng <code>career_stats_season{old}</code>, và <code>old</code> là số nguyên đọc từ DB, không đến từ người chơi.",0],
+ ["thiết kế","Khoá ngoại có được kiểm tra không?","<b>Không.</b> SQLite mặc định <code>foreign_keys = OFF</code> cho mỗi kết nối và code không bật PRAGMA đó. <code>REFERENCES accounts(player_id)</code> chỉ là tài liệu. Tính đúng đắn dựa vào code: <code>player_id</code> luôn lấy từ session hoặc vé đã ký.",1],
+ ["thiết kế","UNIQUE trên username đã đủ, sao còn idx_accounts_username?","UNIQUE đã tự tạo một index ngầm (<code>sqlite_autoindex_accounts_1</code>) với cùng collation NOCASE, nên index tường minh trùng chức năng, tốn thêm chỗ và thêm việc mỗi lần ghi. Không sai, chỉ thừa.",1],
+ ["thiết kế","Vì sao career_stats lưu mỗi chỉ số một dòng?","Thêm chỉ số mới không cần <code>ALTER TABLE</code> trên DB đang chạy (không có công cụ migration). Cái giá: xếp hạng phải gom theo người, master đọc hết rồi sắp trong bộ nhớ, rẻ ở vài trăm người.",0],
+ ["thiết kế","Session có nằm trong database không?","Không. Session nằm trong <code>Dictionary</code> trong RAM của <code>AuthService</code>, sống 24 giờ, token sinh bằng bộ sinh số ngẫu nhiên an toàn. Master khởi động lại thì mọi người đăng nhập lại, trừ ai có remember token (cái này nằm trong DB).",1],
+ ["bảo mật","Remember token an toàn ở đâu?","DB chỉ giữ SHA-256 của token. Dùng một lần: đọc xong xoá, cấp token mới. Ai trộm token dùng trước thì chủ thật mất đăng nhập tự động, tức là có dấu hiệu. Hạn 30 ngày, tối đa 8 máy, dọn hết hạn mỗi giờ.",0],
+ ["dữ liệu","Đăng ký \"Kien\" khi đã có \"kien\" thì sao?","<code>UNIQUE COLLATE NOCASE</code> coi hai tên là một. INSERT vi phạm ràng buộc, SQLite trả mã lỗi 19 (SQLITE_CONSTRAINT), <code>InsertAccount</code> bắt riêng mã này, trả false, client nhận <code>UsernameTaken</code>.",0],
+ ["dữ liệu","Vì sao thời gian lưu là INTEGER mili giây?","SQLite không có kiểu ngày giờ riêng. Số mili giây Unix so sánh và sắp xếp nhanh, không phụ thuộc múi giờ, khớp với <code>DateTimeOffset.ToUnixTimeMilliseconds()</code> trong code. Đổi ra ngày giờ khi đọc: <code>datetime(x/1000,'unixepoch')</code>.",0],
+ ["dữ liệu","Đổi mùa giải sao cho không mất dữ liệu?","<code>BeginCareerSeason</code> chạy trong <b>một transaction</b>: tạo <code>career_stats_season1</code>, chép chỉ số online sang, xoá khỏi bảng chính, ghi mùa mới vào <code>career_meta</code>. Lỗi giữa chừng thì rollback toàn bộ. Thành tựu giữ nguyên.",0],
+ ["vận hành","Sao lưu thế nào, sao không cp?","Backup API của SQLite (<code>BackupTo</code> hoặc <code>sqlite3 .backup</code>) chạy khi master đang chạy. <code>cp</code> không an toàn vì ở WAL một phần dữ liệu đã commit còn trong file <code>-wal</code>. Timer 6 giờ một lần, giữ 7 ngày, tải lên Blob. Có test khôi phục thật.",0],
+ ["vận hành","Đổi schema (migration) làm sao?","Không có công cụ migration. Bảng mới thêm bằng <code>CREATE TABLE IF NOT EXISTS</code> lúc khởi động. Việc chạy một lần đánh dấu bằng khoá trong <code>career_meta</code>. Đổi kiểu một cột có sẵn thì phải viết tay và chưa từng cần.",1],
+ ["đồng thời","Hai request cùng ghi thì có tranh chấp không?","Trong master thì không: mọi logic chạy trên <b>một</b> logic thread và dùng chung một <code>SqliteConnection</code>, nên SQL chạy tuần tự. Thao tác nhiều câu (ghi sự nghiệp, đổi mùa) bọc transaction để nguyên tử. Sao lưu đọc qua backup API nên không cần dừng ghi.",0],
+ ["luồng","Kết quả trận vào DB qua đường nào?","Game server không chạm DB. Hết hiệp nó gửi <code>GS_MATCH_ENDED</code> qua TCP. Master kiểm đúng server giữ phòng (<code>MayReportRound</code>), rồi mỗi người: <code>InsertMatchResult</code>, <code>CareerService.RecordRound</code> → <code>WriteCareer</code>, <code>InsertAchievement</code>, đẩy thông báo.",0],
+ ["luồng","Cấm một người chơi thế nào?","Hiện chưa có giao diện quản trị: đặt <code>is_banned = 1</code> bằng tay trong DB. Login kiểm cấm trước khoá và chỉ báo \"bị cấm\" khi mật khẩu đúng. Vé đã phát không thu hồi được trước khi hết hạn 60 giây, và người đang trong trận không bị đá ra.",1],
+ ["vận hành","File DB nằm đâu khi chạy thật?","Biến <code>IRONFRONT_DB_PATH</code>. Trong Docker Compose là <code>/data/ironfront.db</code>; <code>/data</code> gắn volume ra máy chủ nên xoá container không mất dữ liệu. Cùng thư mục có <code>durability.csv</code> ghi số liệu định kỳ.",0]];
+const cats=["tất cả","bẫy",...new Set(QA.map(q=>q[0]))];
+$("#qfilter").innerHTML=cats.map((c,i)=>`<button class="btn ${i?"":"on"}" data-c="${c}">${c}</button>`).join("")+`<button class="btn" id="flipAll">Lật tất cả</button>`;
+$("#flips").innerHTML=QA.map((q,i)=>`<div class="flip" data-c="${q[0]}" data-trap="${q[3]}" tabindex="0" role="button" aria-label="Thẻ ${i+1}"><div class="in"><div class="f"><div><div class="qn">CÂU ${i+1} · ${q[0].toUpperCase()}${q[3]?' · <span style="color:var(--bad)">BẪY</span>':""}</div><p>${q[1]}</p></div><small>Bấm hoặc Enter để lật ↻</small></div><div class="b">${q[2]}</div></div></div>`).join("");
+$$(".flip").forEach(f=>{f.addEventListener("click",()=>f.classList.toggle("on"));f.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();f.classList.toggle("on")}})});
+$$("#qfilter [data-c]").forEach(b=>b.onclick=()=>{$$("#qfilter [data-c]").forEach(x=>x.classList.toggle("on",x===b));const c=b.dataset.c;$$(".flip").forEach(f=>f.style.display=(c==="tất cả"||(c==="bẫy"&&f.dataset.trap==="1")||f.dataset.c===c)?"":"none")});
+let flipped=false;$("#flipAll").onclick=()=>{flipped=!flipped;$$(".flip").forEach(f=>f.classList.toggle("on",flipped))};
+})();
+</script>
+</body>
+</html>

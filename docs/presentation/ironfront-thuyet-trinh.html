@@ -1,0 +1,1394 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ironfront Reborn · Thuyết trình</title>
+<meta name="description" content="Bài thuyết trình dạng HTML về kiến trúc mạng, luồng hoạt động, cơ sở dữ liệu và hạ tầng của game nhiều người chơi Ironfront: Reborn.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#07090f; --bg1:#0c0f17; --svgbg:#111522;
+  --panel:rgba(255,255,255,.035); --panel-b:rgba(255,255,255,.09);
+  --ink:#eef1f7; --ink2:#a7afc0; --muted:#6b7385; --line:#2a3040;
+  --violet:#8b7bff; --cyan:#3fd0e8; --lime:#9be15d; --amber:#ffb547; --rose:#ff6f91; --grey:#a7afc0;
+  --violet-s:#242545; --cyan-s:#183342; --lime-s:#27362b; --amber-s:#372f28; --rose-s:#372334; --grey-s:#292e3b;
+  --glow1:rgba(139,123,255,.20); --glow2:rgba(63,208,232,.14);
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg0:#eef0f5; --bg1:#f7f8fb; --svgbg:#ffffff;
+  --panel:rgba(20,30,70,.035); --panel-b:rgba(20,30,70,.11);
+  --ink:#121621; --ink2:#465064; --muted:#8a90a0; --line:#d5d9e3;
+  --violet:#5b4be0; --cyan:#0a8aa3; --lime:#3f7a10; --amber:#a86300; --rose:#cf3460; --grey:#5a6273;
+  --violet-s:#efedfc; --cyan-s:#e6f4f7; --lime-s:#edf3e8; --amber-s:#f8f0e6; --rose-s:#fbebef; --grey-s:#eef0f4;
+  --glow1:rgba(91,75,224,.10); --glow2:rgba(10,138,163,.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);overflow:hidden;
+  font-family:"Be Vietnam Pro","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.mono,code{font-family:"JetBrains Mono",Consolas,monospace}
+code{font-size:.82em;padding:2px 8px;border-radius:7px;background:var(--panel);border:1px solid var(--panel-b)}
+#viewport{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden}
+#deck{width:1600px;height:900px;position:relative;flex:none;transform-origin:center center;border-radius:6px;overflow:hidden;
+  background:radial-gradient(800px 500px at -6% 108%,var(--glow2),transparent 60%),var(--bg1);
+  box-shadow:0 40px 120px -30px rgba(0,0,0,.55)}
+#deck:before{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(var(--panel-b) 1px,transparent 1px),linear-gradient(90deg,var(--panel-b) 1px,transparent 1px);
+  background-size:64px 64px;opacity:.28;mask-image:radial-gradient(1200px 700px at 50% 40%,#000 20%,transparent 80%)}
+#deck:after{content:"";position:absolute;width:900px;height:700px;border-radius:50%;pointer-events:none;top:-260px;left:40%;
+  background:radial-gradient(closest-side,var(--glow1),transparent);animation:orb 26s ease-in-out infinite alternate}
+@keyframes orb{0%{transform:translate(-520px,0)}50%{transform:translate(120px,260px)}100%{transform:translate(420px,-40px)}}
+
+/* slides */
+.slide{position:absolute;inset:0;padding:64px 96px 92px;display:flex;flex-direction:column;z-index:1;
+  opacity:0;visibility:hidden;transform:translateX(48px);transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1),visibility 0s .5s}
+.slide.active{opacity:1;visibility:visible;transform:none;transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1)}
+.slide.past{transform:translateX(-48px)}
+.slide.gone{transition:none;opacity:0;visibility:hidden}
+.slide .notes{display:none}
+.slide.active .rv{animation:rise .75s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--i,0)*80ms + 100ms)}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}}
+.draw{stroke-dasharray:1;stroke-dashoffset:0}
+.slide.active .draw{animation:draw 1.1s cubic-bezier(.4,0,.2,1) .35s backwards}
+@keyframes draw{from{stroke-dashoffset:1}}
+.pop{transform-box:fill-box;transform-origin:center}
+.slide.active .pop{animation:pop .6s cubic-bezier(.2,.9,.3,1.25) backwards;animation-delay:var(--d,0ms)}
+@keyframes pop{from{opacity:0;transform:scale(.82)}}
+@media (prefers-reduced-motion:reduce){.slide,[data-step]{transition:none!important}.slide.active .rv,.slide.active .draw,.slide.active .pop{animation:none}#deck:after{animation:none}.flow-dot{display:none}}
+.kicker{display:flex;align-items:center;gap:14px;font:600 17px/1 "JetBrains Mono",monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);margin-bottom:20px}
+.kicker:before{content:"";width:34px;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--violet),var(--cyan))}
+h1,h2,h3{margin:0;letter-spacing:-.025em;line-height:1.08}
+h2{font-size:50px;font-weight:800;max-width:1380px}
+h2 .hl,.cover h1 span{background:linear-gradient(90deg,var(--violet),var(--cyan),var(--lime),var(--violet));background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 9s linear infinite}
+@keyframes shine{to{background-position:300% 0}}
+h3{font-size:28px;font-weight:700;margin-bottom:10px}
+.body{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;margin-top:24px}
+p{margin:0}
+.muted{color:var(--muted)}.ink2{color:var(--ink2)}
+.cap{font-size:19px;line-height:1.5;color:var(--ink2)}
+.grid{display:grid;gap:20px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.split{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:32px;align-items:center;min-height:0;flex:1}
+.split.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.card{background:var(--panel);border:1px solid var(--panel-b);border-radius:22px;padding:24px 26px;backdrop-filter:blur(6px)}
+.card h3{font-size:24px}
+.card p,.card li{font-size:19px;line-height:1.5;color:var(--ink2)}
+.card .tag,.tag{display:inline-block;font:700 13px/1 "JetBrains Mono",monospace;letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px;color:var(--c,var(--cyan))}
+.accent{border-top:3px solid var(--c,var(--cyan))}
+.c-v{--c:var(--violet)}.c-c{--c:var(--cyan)}.c-l{--c:var(--lime)}.c-a{--c:var(--amber)}.c-r{--c:var(--rose)}.c-g{--c:var(--grey)}
+.stat b{display:block;font-size:62px;font-weight:800;letter-spacing:-.04em;line-height:1;color:var(--c,var(--ink));font-variant-numeric:tabular-nums}
+.stat>span{display:block;margin-top:12px;font-size:18px;line-height:1.4;color:var(--ink2)}
+.tile b{display:block;font-size:54px;font-weight:800;letter-spacing:-.04em;line-height:1;color:var(--c);font-variant-numeric:tabular-nums;margin-bottom:12px}
+.tile h3{font-size:24px;margin-bottom:4px}
+.fit{width:100%;height:auto;max-height:100%;display:block}
+.dwrap{min-height:0;display:flex;align-items:center;justify-content:center;height:100%}
+svg text{font-family:"Be Vietnam Pro","Segoe UI",system-ui,sans-serif}
+svg .mono{font-family:"JetBrains Mono",Consolas,monospace}
+.click{cursor:pointer}
+.click:hover .nb{filter:brightness(1.15)}
+.sel .nb{stroke-width:4.5}
+.dash{stroke-dasharray:8 7;animation:dm 1.4s linear infinite}
+@keyframes dm{to{stroke-dashoffset:-30}}
+[data-step]{opacity:0;transform:translateY(16px);transition:opacity .45s ease,transform .45s ease}
+[data-step].on{opacity:1;transform:none}
+.panel{min-height:400px}
+.panel h3{font-size:30px}
+.panel p{font-size:20px;line-height:1.55;color:var(--ink2);margin-top:12px}
+.panel code{font-size:16px}
+.chipset{display:flex;flex-wrap:wrap;gap:10px}
+.chip{display:inline-flex;align-items:center;gap:9px;padding:9px 16px;border-radius:99px;background:var(--panel);border:1px solid var(--panel-b);font-size:18px;color:var(--ink2)}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--c,var(--cyan));flex:none}
+.chip b{color:var(--ink)}
+.fact{display:flex;gap:16px;align-items:center;padding:14px 20px;border-radius:16px;background:var(--panel);border:1px solid var(--panel-b);font-size:19px;line-height:1.4;color:var(--ink2)}
+.fact>b{color:var(--c,var(--cyan));font-size:24px;font-weight:800;white-space:nowrap}
+.flowrow{display:flex;align-items:stretch}
+.flowrow .st{flex:1;min-width:0;background:var(--panel);border:1px solid var(--panel-b);border-radius:18px;padding:16px 18px;border-top:3px solid var(--c,var(--cyan));transition:transform .35s,box-shadow .35s}
+.flowrow .st.lit{transform:translateY(-6px);box-shadow:0 0 0 2px var(--c),0 18px 40px -16px var(--c)}
+.flowrow .st b{display:block;font:700 13px/1.2 "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--c,var(--cyan));margin-bottom:8px}
+.flowrow .st span{font-size:18px;line-height:1.4;color:var(--ink2);overflow-wrap:anywhere}
+.flowrow .st .val{display:block;margin-top:8px;font:600 16px/1.35 "JetBrains Mono",monospace;color:var(--ink);overflow-wrap:anywhere}
+.flowrow .ar{display:flex;align-items:center;padding:0 8px;color:var(--muted);font-size:24px}
+.bytes{display:flex;border-radius:14px;overflow:hidden;border:1px solid var(--panel-b)}
+.bytes div{padding:14px 6px;text-align:center;color:#fff;font:700 15px/1.3 "JetBrains Mono",monospace;border-right:1px solid rgba(255,255,255,.3);min-width:0;overflow:hidden;white-space:nowrap;transition:filter .25s,transform .25s}
+.bytes div small{display:block;font-weight:400;opacity:.85;font-size:12.5px}
+.bytes div:last-child{border-right:0}
+.bytes.pick div{cursor:pointer}
+.bytes div.hot{filter:brightness(1.3);box-shadow:inset 0 -5px 0 #fff}
+.b-v{background:#6c5ce7}.b-v2{background:#8676ef}.b-v3{background:#9d90f3}.b-c{background:#1593ad}.b-c2{background:#1aa6c2}.b-c3{background:#2bb9d4}.b-l{background:#4f8f1f}.b-a{background:#c27a10}.b-a2{background:#d48e26}.b-g{background:#5a6273}
+.pk{display:flex;gap:10px;flex-wrap:wrap}
+.pk button{all:unset;cursor:pointer;width:96px;padding:14px 0;text-align:center;border-radius:14px;border:2px solid var(--cyan);font:700 20px/1.2 "JetBrains Mono",monospace;background:var(--cyan-s);color:var(--cyan);transition:transform .2s}
+.pk button:hover{transform:translateY(-3px)}
+.pk button small{display:block;font-size:13px;font-weight:500;margin-top:4px}
+.pk button.lost{border-style:dashed;border-color:var(--rose);background:var(--rose-s);color:var(--rose)}
+.bits{display:flex;gap:6px;flex-wrap:wrap}
+.bits span{width:44px;height:52px;border-radius:10px;display:grid;place-items:center;font:700 22px/1 "JetBrains Mono",monospace;background:var(--panel);color:var(--muted);border:1px solid var(--panel-b);animation:pop .4s backwards}
+.bits span.one{background:var(--cyan);color:#06121a;border-color:transparent}
+.bits span.zero{background:var(--rose-s);color:var(--rose);border-color:var(--rose)}
+.range{display:flex;align-items:center;gap:18px;font-size:20px;color:var(--ink2)}
+.range input{width:420px;accent-color:var(--cyan)}
+.range b{font:700 22px/1 "JetBrains Mono",monospace;color:var(--ink);min-width:110px}
+.toggle{display:inline-flex;align-items:center;gap:10px;font-size:18px;color:var(--ink2);cursor:pointer}
+.toggle input{width:22px;height:22px;accent-color:var(--cyan)}
+.btn{all:unset;cursor:pointer;padding:10px 18px;border-radius:12px;border:1px solid var(--panel-b);background:var(--panel);font-size:17px;font-weight:600;color:var(--ink);transition:border-color .2s,transform .2s}
+.btn:hover{border-color:var(--cyan);transform:translateY(-2px)}
+.btn.on{background:var(--cyan);color:#06121a;border-color:var(--cyan)}
+.btn.warn{border-color:var(--rose);color:var(--rose)}
+.btn[disabled]{opacity:.35;pointer-events:none}
+.btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.bar-row{display:grid;grid-template-columns:400px minmax(0,1fr) 110px;gap:20px;align-items:center;margin:12px 0}
+.bar-row .lb{font-size:20px;color:var(--ink2);line-height:1.3}
+.bar-row .tr{height:34px;border-radius:10px;background:var(--panel);border:1px solid var(--panel-b);overflow:hidden}
+.bar-row .fl{height:100%;width:0;border-radius:9px;transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
+.bar-row .v{font:700 26px/1 "JetBrains Mono",monospace;text-align:right}
+input.tx{all:unset;font:600 18px/1 "JetBrains Mono",monospace;color:var(--ink);background:var(--svgbg);border:1px solid var(--panel-b);border-radius:10px;padding:10px 14px;width:200px}
+input.tx:focus{border-color:var(--cyan)}
+.dots{display:flex;gap:9px;margin:14px 0}
+.dots i{width:30px;height:30px;border-radius:9px;background:var(--panel);border:1px solid var(--panel-b);transition:.3s}
+.dots i.f{background:var(--rose);border-color:var(--rose);transform:scale(1.1)}
+.shake{animation:shk .5s}
+@keyframes shk{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.mt{width:100%;border-collapse:collapse;font:500 15px/1.35 "JetBrains Mono",monospace;color:var(--ink2)}
+.mt th{text-align:left;color:var(--muted);font-weight:600;font-size:12.5px;padding:4px 6px;border-bottom:1px solid var(--panel-b)}
+.mt td{padding:5px 6px;border-bottom:1px solid var(--panel-b)}
+.mt tr.new td{animation:flash 1.4s ease}
+.mt tr.bad td{background:var(--rose-s);color:var(--rose)}
+@keyframes flash{0%{background:var(--lime-s);color:var(--lime)}100%{background:transparent}}
+.status{font:700 15px/1.3 "JetBrains Mono",monospace;margin-top:12px;min-height:20px}
+.flip{perspective:1400px;cursor:pointer;height:196px}
+.flip .in{position:relative;width:100%;height:100%;transition:transform .8s cubic-bezier(.2,.7,.2,1);transform-style:preserve-3d}
+.flip.turn .in{transform:rotateY(180deg)}
+.flip .fa,.flip .fb{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:22px;padding:22px 26px;display:flex;flex-direction:column;justify-content:center}
+.flip .fa{background:var(--rose-s);border:1px solid var(--rose)}
+.flip .fa .tag{color:var(--rose)}
+.flip .fa h3{font-size:27px}
+.flip .fa small{font-size:15px;color:var(--muted);margin-top:6px}
+.flip .fb{background:var(--cyan-s);border:1px solid var(--cyan);transform:rotateY(180deg)}
+.flip .fb h3{font-size:25px;color:var(--cyan);margin-bottom:6px}
+.flip .fb p{font-size:17.5px;line-height:1.45;color:var(--ink2)}
+.term{background:#0a0d14;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px 24px;font:500 16.5px/1.75 "JetBrains Mono",monospace;color:#c9d1e0;min-height:560px}
+.term div{white-space:pre}
+.term .pr{color:#8b7bff}.term .ok{color:#9be15d}.term .dim{color:#6b7385}
+.term .cur{display:inline-block;width:10px;height:19px;background:#3fd0e8;vertical-align:-3px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.lim{display:grid;grid-template-columns:minmax(0,1fr) 70px minmax(0,1fr);align-items:center;margin:10px 0}
+.lim .a,.lim .b{padding:16px 20px;border-radius:16px;font-size:19px;line-height:1.4}
+.lim .a{background:var(--rose-s);border:1px solid var(--rose);color:var(--ink)}
+.lim .b{background:var(--lime-s);border:1px solid var(--lime);color:var(--ink)}
+.lim .arr{height:3px;margin:0 10px;background:linear-gradient(90deg,var(--rose),var(--lime));position:relative;transform-origin:left;transform:scaleX(0);transition:transform .6s .2s}
+.lim .arr:after{content:"";position:absolute;right:0;top:-6px;border-left:12px solid var(--lime);border-top:7px solid transparent;border-bottom:7px solid transparent}
+.lim.on .arr{transform:scaleX(1)}
+.flist{display:flex;flex-direction:column;gap:3px;overflow:auto;height:100%;min-height:0;padding-right:6px}
+.flist .grp{font:700 12.5px/1 "JetBrains Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}
+.flist button{all:unset;cursor:pointer;padding:7px 12px;border-radius:10px;font-size:16px;color:var(--ink2);border:1px solid transparent}
+.flist button:hover{border-color:var(--panel-b)}
+.flist button.on{background:var(--cyan-s);color:var(--ink);border-color:var(--cyan)}
+.flist button span{font:700 12px/1 "JetBrains Mono",monospace;color:var(--muted);margin-right:8px}
+.vflow{list-style:none;margin:14px 0 0;padding:0;position:relative}
+.vflow:before{content:"";position:absolute;left:62px;top:8px;bottom:8px;width:2px;background:var(--panel-b)}
+.vflow li{display:grid;grid-template-columns:126px minmax(0,1fr);gap:14px;align-items:start;padding:6px 0;font-size:16.5px;line-height:1.45;color:var(--ink2);animation:rise .5s backwards}
+.vflow li .ly{justify-self:center;position:relative;z-index:1;font:700 12px/1 "JetBrains Mono",monospace;letter-spacing:.06em;text-transform:uppercase;padding:7px 10px;border-radius:99px;background:var(--svgbg);border:1.5px solid var(--c);color:var(--c);white-space:nowrap}
+.vflow code{font-size:14px;padding:1px 6px}
+.fsee{margin-top:10px;padding:10px 16px;border-radius:12px;background:var(--panel);border-left:3px solid var(--cyan);font-size:17px;color:var(--ink2)}
+.fx{margin-top:10px;font-size:15.5px;color:var(--muted);line-height:1.45}
+
+/* cover */
+.cover{justify-content:center}
+.cover h1{font-size:118px;font-weight:800;letter-spacing:-.045em;line-height:.98}
+.cover .sub{font-size:30px;line-height:1.45;color:var(--ink2);max-width:820px;margin-top:30px}
+.cover .meta{display:flex;gap:56px;margin-top:56px}
+.cover .meta div small{display:block;font:600 14px/1 "JetBrains Mono",monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.cover .meta div b{font-size:24px;font-weight:600}
+#coverArt,#endArt{position:absolute;right:30px;top:170px;width:560px;height:560px}
+
+/* chrome */
+.foot{position:absolute;left:96px;right:96px;bottom:34px;display:flex;align-items:center;gap:20px;font:500 15px/1 "JetBrains Mono",monospace;color:var(--muted);letter-spacing:.06em;z-index:5;pointer-events:none}
+.foot .sp{flex:1;height:1px;background:var(--panel-b)}
+#prog{position:absolute;left:0;bottom:0;height:4px;width:0;background:linear-gradient(90deg,var(--violet),var(--cyan));transition:width .5s ease;z-index:6}
+#hud{position:fixed;right:18px;bottom:18px;display:flex;gap:8px;z-index:20;transition:opacity .4s}
+#hud.hide{opacity:0;pointer-events:none}
+#hud button{all:unset;cursor:pointer;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(20,24,36,.78);color:#e8ebf2;border:1px solid rgba(255,255,255,.14);font-size:17px;backdrop-filter:blur(8px)}
+#hud button:hover{border-color:#3fd0e8}
+#notes{position:fixed;left:50%;bottom:76px;transform:translate(-50%,20px);width:min(980px,92vw);max-height:38vh;overflow:auto;background:rgba(12,15,24,.94);color:#e8ebf2;border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:20px 26px;font-size:18px;line-height:1.6;opacity:0;pointer-events:none;transition:.3s;z-index:19}
+#notes.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#notes b{display:block;font:600 13px/1 "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:#3fd0e8;margin-bottom:10px}
+#overview{position:fixed;inset:0;z-index:30;background:rgba(5,7,12,.92);backdrop-filter:blur(10px);display:none;overflow:auto;padding:48px}
+#overview.show{display:block}
+#overview h4{color:#e8ebf2;font-size:22px;margin:0 0 22px;font-weight:700}
+#ovGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+#ovGrid button{all:unset;cursor:pointer;border-radius:16px;padding:18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#e8ebf2;min-height:96px}
+#ovGrid button:hover,#ovGrid button.cur{border-color:#3fd0e8;background:rgba(63,208,232,.1)}
+#ovGrid small{display:block;font:600 13px/1 "JetBrains Mono",monospace;color:#8b7bff;letter-spacing:.12em;margin-bottom:10px}
+#ovGrid span{font-size:17px;line-height:1.35;font-weight:600}
+#help{position:fixed;left:18px;bottom:18px;z-index:20;font:500 13px/1.6 "JetBrains Mono",monospace;color:#8a90a0;background:rgba(12,15,24,.8);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 14px;transition:opacity .4s}
+#help.hide{opacity:0}
+#help kbd{color:#e8ebf2;font-family:inherit}
+</style>
+</head>
+<body>
+<div id="viewport"><div id="deck">
+
+<!-- 1 COVER -->
+<section class="slide cover" data-title="Ironfront: Reborn" data-sec="Mở đầu">
+  <div class="kicker">Báo cáo đồ án · 11/2026</div>
+  <h1><span>Ironfront:</span><br>Reborn</h1>
+  <p class="sub">Một game bắn súng chơi đơn, đưa lên nhiều người chơi thời gian thực bằng tầng mạng tự viết trên TCP và UDP.</p>
+  <div class="meta">
+    <div><small>Nhóm thực hiện</small><b>Nghĩa · Kiên · Trung · Toàn</b></div>
+    <div><small>Công nghệ</small><b>Unity 6 · .NET 10 · SQLite · Docker</b></div>
+  </div>
+  <svg id="coverArt" viewBox="0 0 640 640" aria-hidden="true"></svg>
+  <aside class="notes">Chào thầy cô và các bạn. Nhóm trình bày Ironfront: Reborn. Điểm chính: toàn bộ phần mạng do nhóm tự viết, không dùng thư viện netcode có sẵn. Thứ tự: bài toán, kiến trúc, các luồng hoạt động của trò chơi, master và cơ sở dữ liệu, giao thức, đồng bộ trạng thái, chiến đấu, vận hành.</aside>
+</section>
+
+<!-- 2 PROBLEM -->
+<section class="slide" data-title="Bài toán" data-sec="Bài toán">
+  <div class="kicker">01 · Bài toán</div>
+  <h2>Từ chơi một mình đến <span class="hl">chơi cùng nhau qua Internet</span></h2>
+  <div class="body" style="margin-top:10px">
+    <svg class="fit rv" id="probSvg" viewBox="0 0 1400 330" role="img" aria-label="Từ một máy lên nhiều người chơi"></svg>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card tile c-a" data-step="1"><b><span data-count="150">150</span> ms</b><h3>Độ trễ</h3><p>Gói tin đi mất 50 đến 150 ms, nhưng bấm phím phải thấy nhân vật đi ngay.</p></div>
+      <div class="card tile c-l" data-step="2"><b><span data-count="20">20</span> lần/giây</b><h3>Băng thông</h3><p>Thế giới gửi tới từng người, 16 người chơi cùng hàng chục bot.</p></div>
+      <div class="card tile c-r" data-step="3"><b><span data-count="100">100</span>%</b><h3>Gian lận</h3><p>dữ liệu client gửi lên đều sửa được, vì client chạy trên máy người chơi.</p></div>
+    </div>
+    <div class="chipset rv" style="margin-top:16px"><span class="chip c-v"><i></i>Tự viết trên socket TCP và UDP</span><span class="chip c-r"><i></i>Không Mirror, Photon, Netcode for GameObjects, KCP</span><span class="chip c-c"><i></i>Có tài khoản, phòng chờ, ghép trận, thành tích</span></div>
+  </div>
+  <aside class="notes">Bên trái là game gốc: một máy, bot AI tìm đường bằng A*. Bên phải là thứ phải làm ra: nhiều người, một server, gói tin chạy hai chiều. Ba thách thức xuyên suốt cả bài: độ trễ, băng thông, gian lận. Mỗi phần sau chỉ ra kỹ thuật xử lý từng cái.</aside>
+</section>
+
+<!-- 3 RESULTS -->
+<section class="slide" data-title="Kết quả tổng quan" data-sec="Bài toán">
+  <div class="kicker">02 · Kết quả</div>
+  <h2>Một hệ thống chạy thật, <span class="hl">đo được bằng số</span></h2>
+  <div class="body">
+    <div class="grid g4" style="row-gap:24px">
+      <div class="card stat c-v rv"><b data-count="3">3</b><span>chương trình: client, master, game server</span></div>
+      <div class="card stat c-c rv"><b data-count="2">2</b><span>giao thức tự thiết kế: MSP trên TCP, GSP trên UDP</span></div>
+      <div class="card stat c-l rv"><b><span data-count="30">30</span> / <span data-count="20">20</span></b><span>Hz: tần số mô phỏng và tần số gửi trạng thái</span></div>
+      <div class="card stat c-a rv"><b data-count="1.67" data-dec="2">1,67</b><span>KB/s xuống mỗi người chơi, đo trên bản chạy thật</span></div>
+      <div class="card stat c-r rv"><b data-count="100">100</b><span>bot AI trên một game server, đo bằng bài thử tải</span></div>
+      <div class="card stat c-v rv"><b data-count="8">8</b><span>project test .NET, thêm test EditMode trong Unity</span></div>
+      <div class="card stat c-c rv"><b data-count="3">3</b><span>nền tảng phát hành: Windows, macOS, Linux</span></div>
+      <div class="card stat c-l rv"><b data-count="2">2</b><span>đám mây: master trên AWS EC2, game server trên Azure</span></div>
+    </div>
+  </div>
+  <aside class="notes">Tóm tắt trước khi vào chi tiết. Con số đáng nhớ nhất là 1,67 KB/s: băng thông xuống của mỗi người chơi trên bản chạy thật. Hệ thống đang chạy trên AWS và Azure, có bản phát hành cho ba hệ điều hành.</aside>
+</section>
+
+<!-- 4 ARCHITECTURE -->
+<section class="slide" id="s-arch" data-title="Kiến trúc tổng thể" data-sec="Kiến trúc">
+  <div class="kicker">03 · Kiến trúc</div>
+  <h2>Ba chương trình, <span class="hl">hai đường truyền</span></h2>
+  <div class="split" style="margin-top:16px;grid-template-columns:minmax(0,2fr) minmax(0,1fr)">
+    <div class="dwrap"><svg class="fit" id="archSvg" viewBox="0 0 1000 540" role="img" aria-label="Sơ đồ kiến trúc"></svg></div>
+    <div class="card panel rv" id="archPanel"></div>
+  </div>
+  <aside class="notes">Bấm vào từng khối. Client nói chuyện với master qua TCP để đăng nhập và vào phòng. Khi trận bắt đầu, client chuyển sang UDP, nói thẳng với game server. Game server báo kết quả về master, master ghi vào SQLite. Thư viện Protocol là luật chung của cả ba.</aside>
+</section>
+
+<!-- 5 LAYERS -->
+<section class="slide" id="s-layer" data-title="Lớp phụ thuộc" data-sec="Kiến trúc">
+  <div class="kicker">04 · Lớp phụ thuộc</div>
+  <h2>Ai được dùng ai: <span class="hl">mũi tên chỉ đi một chiều</span></h2>
+  <div class="split" style="margin-top:16px;grid-template-columns:minmax(0,2.1fr) minmax(0,1fr)">
+    <div class="dwrap"><svg class="fit" id="layerSvg" viewBox="0 0 1000 370" role="img" aria-label="Sơ đồ phụ thuộc giữa các project"></svg></div>
+    <div class="card panel rv" id="layerPanel"></div>
+  </div>
+  <aside class="notes">Rê chuột hoặc bấm vào một khối để thấy nó dùng ai và ai dùng nó. Protocol ở đáy, không phụ thuộc ai. Unity nạp sáu DLL đã build sẵn. Master là chương trình .NET độc lập, không dính gì tới Unity. Một cổng trong CI làm hỏng build nếu thư viện thuần tham chiếu Unity.</aside>
+</section>
+
+<!-- 6 TCP vs UDP -->
+<section class="slide" id="s-hol" data-title="Vì sao cần cả TCP và UDP" data-sec="Kiến trúc">
+  <div class="kicker">05 · Chọn giao thức</div>
+  <h2>TCP khi <span class="hl">không được mất</span>, UDP khi <span class="hl">không được chờ</span></h2>
+  <div class="body" style="margin-top:14px">
+    <svg class="fit rv" id="holSvg" viewBox="0 0 1400 300" role="img" aria-label="Mô phỏng head-of-line blocking"></svg>
+    <div class="grid g2" style="margin-top:12px">
+      <div class="fact c-v rv"><b>TCP</b><span>Đăng nhập, phòng, ghép trận, kết quả trận. Vài gói mỗi phút, mất một gói là sai nghiệp vụ.</span></div>
+      <div class="fact c-c rv"><b>UDP</b><span>Phím bấm và trạng thái thế giới, 20 đến 60 gói mỗi giây. Trạng thái cũ 200 ms đã vô dụng.</span></div>
+    </div>
+    <div class="btns rv" style="margin-top:14px"><button class="btn" id="holReplay">↻ Phát lại</button><span class="cap">Gói số 4 bị mất trên cả hai đường.</span></div>
+  </div>
+  <aside class="notes">Gói số 4 bị mất. Với TCP, gói 5 đến 8 đã tới nhưng phải đứng chờ gói 4 được gửi lại: head-of-line blocking, trong game là đứng hình rồi giật. Với UDP, gói 5 đến 8 dùng ngay, gói 4 bỏ qua vì gói sau đã mang trạng thái mới hơn. WebSocket cũng chạy trên TCP nên gặp đúng vấn đề này.</aside>
+</section>
+
+<!-- 7 AUTHORITY -->
+<section class="slide" id="s-auth" data-title="Server quyết định" data-sec="Kiến trúc">
+  <div class="kicker">06 · Mô hình tin cậy</div>
+  <h2>Client gửi <span class="hl">ý định</span>, server quyết định <span class="hl">kết quả</span></h2>
+  <div class="body">
+    <svg class="fit rv" id="authSvg2" viewBox="0 0 1400 240" role="img" aria-label="Client gửi input, server gửi trạng thái"></svg>
+    <div class="btns rv" style="margin-top:16px"><button class="btn" id="authKey">Gửi phím bấm</button><button class="btn warn" id="authFake">Thử gửi vị trí giả</button><span class="cap" id="authRes" style="margin-left:10px;font-size:21px"></span></div>
+    <div class="grid g2" style="margin-top:22px">
+      <div class="card c-c accent rv"><span class="tag">Server chốt</span><div class="chipset"><span class="chip">vị trí</span><span class="chip">trúng đạn</span><span class="chip">máu, chết</span><span class="chip">đạn còn lại</span><span class="chip">bot AI</span><span class="chip">cờ, điểm</span></div></div>
+      <div class="card c-v accent rv"><span class="tag">Client tự lo</span><div class="chipset"><span class="chip">dự đoán bước đi của mình</span><span class="chip">hiệu ứng, âm thanh</span><span class="chip">camera, giao diện</span><span class="chip">ragdoll</span><span class="chip">nội suy người khác</span></div></div>
+    </div>
+  </div>
+  <aside class="notes">Bấm thử hai nút. Phím bấm được nhận, server tự tính vị trí rồi trả về trạng thái đã chốt. Gói "vị trí giả" bị bỏ, vì gói input không có trường vị trí nào. Hack tốc độ hay dịch chuyển bị chặn ngay từ thiết kế. Cái giá là độ trễ, và phần đồng bộ trạng thái trình bày cách che nó.</aside>
+</section>
+
+<!-- 8 JOURNEY -->
+<section class="slide" id="s-journey" data-steps="10" data-title="Một trận đấu từ đầu đến cuối" data-sec="Luồng hoạt động">
+  <div class="kicker">07 · Luồng hoạt động</div>
+  <h2>Một trận đấu, <span class="hl">từ đăng nhập đến ghi điểm</span></h2>
+  <div class="split" style="margin-top:18px">
+    <div class="dwrap"><svg class="fit" id="seqSvg" role="img" aria-label="Sơ đồ tuần tự"></svg></div>
+    <div class="card panel rv" id="seqPanel"></div>
+  </div>
+  <aside class="notes">Khi chưa bấm, sơ đồ tự chạy qua các bước. Nhấn → để đi từng bước. TCP cho phần trước và sau trận, UDP cho phần trong trận. Bước 6 và 7 là chỗ chuyển giao: master phát vé có chữ ký, game server tự kiểm vé, không hỏi lại master.</aside>
+</section>
+
+<!-- 9 GAMEFLOW -->
+<section class="slide" id="s-gf" data-title="Các màn hình của client" data-sec="Luồng hoạt động">
+  <div class="kicker">08 · Máy trạng thái của client</div>
+  <h2>Mười màn hình, <span class="hl">một đường đi</span></h2>
+  <div class="body">
+    <svg class="fit rv" id="gfSvg" viewBox="0 0 1400 300" role="img" aria-label="GameFlowState"></svg>
+    <div class="card rv" style="margin-top:20px;display:flex;gap:26px;align-items:center">
+      <div class="mono" id="gfNow" style="font-size:30px;font-weight:700;color:var(--cyan);min-width:330px"></div>
+      <p id="gfDesc" style="font-size:21px;color:var(--ink2)"></p>
+    </div>
+  </div>
+  <aside class="notes">Client là một máy trạng thái tên GameFlowState với mười trạng thái. Chấm tròn chạy theo đúng thứ tự người chơi đi qua. Hết trận không quay về màn hình đăng nhập mà về phòng chờ, nên chơi tiếp không phải làm lại từ đầu.</aside>
+</section>
+
+<!-- 10 ROOM LIFECYCLE -->
+<section class="slide" id="s-room" data-title="Vòng đời một phòng" data-sec="Luồng hoạt động">
+  <div class="kicker">09 · Vòng đời phòng</div>
+  <h2>Một phòng đi qua <span class="hl">bốn trạng thái</span> trên master</h2>
+  <div class="body">
+    <svg class="fit rv" id="roomSvg" viewBox="0 0 1400 330" role="img" aria-label="RoomLifecycleState"></svg>
+    <div class="card rv" style="margin-top:16px">
+      <div class="btns" id="roomBtns"></div>
+      <p class="cap" id="roomLog" style="margin-top:12px;font-size:20px"></p>
+    </div>
+  </div>
+  <aside class="notes">Đây là máy trạng thái thật của master, RoomLifecycleState. Khi mở slide, nó tự chạy một vòng; bấm nút để tự thử. Hai điều hay bị hỏi: hết một hiệp không đóng phòng, game server chơi tiếp hiệp mới với cùng người. Game server chết giữa chừng thì phòng quay về Waiting và người chơi nhận lỗi 3001.</aside>
+</section>
+
+<!-- 11 PLAYER LIFE -->
+<section class="slide" id="s-life" data-steps="5" data-title="Vòng đời người chơi trong trận" data-sec="Luồng hoạt động">
+  <div class="kicker">10 · Trong trận</div>
+  <h2>Chọn trang bị, chiến đấu, <span class="hl">bị hạ, và lại từ đầu</span></h2>
+  <div class="split" style="margin-top:14px">
+    <div class="dwrap"><svg class="fit" id="lifeSvg" viewBox="0 0 900 520" role="img" aria-label="Vòng đời người chơi"></svg></div>
+    <div class="card panel rv" id="lifePanel"></div>
+  </div>
+  <aside class="notes">Chấm tròn chạy vòng khi chưa bấm. Nhấn → để dừng ở từng trạng thái và xem gói tin nào đi qua mạng. Ragdoll không đồng bộ: server chỉ gửi vector lực, mỗi client tự cho xác ngã. Bỏ đồng bộ ragdoll tiết kiệm khoảng 1,7 MB/s.</aside>
+</section>
+
+<!-- 12 SHOT FLOW -->
+<section class="slide" id="s-shot" data-steps="7" data-title="Đường đi của một phát bắn" data-sec="Luồng hoạt động">
+  <div class="kicker">11 · Một phát bắn</div>
+  <h2>Từ cú bấm chuột <span class="hl">đến dòng hạ gục</span></h2>
+  <div class="split" style="margin-top:18px">
+    <div class="dwrap"><svg class="fit" id="shotSvg" data-w="860" role="img" aria-label="Luồng một phát bắn"></svg></div>
+    <div class="card panel rv" id="shotPanel"></div>
+  </div>
+  <aside class="notes">Một phát bắn đi qua bảy bước. Người bắn thấy lửa và nghe tiếng ngay, không chờ ai. Nhưng quyết định trúng hay không, trừ bao nhiêu máu, thuộc về server. Kiểm tra rẻ chạy trước, kiểm tra đắt chạy sau, nên kẻ bắn nhanh bất thường chỉ tốn server vài phép so sánh.</aside>
+</section>
+
+<!-- 13 FEATURES -->
+<section class="slide" id="s-feat" data-title="18 tính năng, từng lớp một" data-sec="Luồng hoạt động">
+  <div class="kicker">12 · Tính năng từ đầu đến cuối</div>
+  <h2>Mỗi tính năng đi qua <span class="hl">những lớp nào</span></h2>
+  <div style="display:grid;grid-template-columns:330px minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:26px;margin-top:20px;flex:1;min-height:0">
+    <div class="card rv" style="padding:14px 12px;min-height:0;overflow:hidden"><div class="flist" id="flist"></div></div>
+    <div class="card rv" id="fdetail" style="overflow:auto;min-height:0"></div>
+  </div>
+  <aside class="notes">Chọn một tính năng bên trái. Bên phải là chuỗi lớp nó đi qua, theo đúng thứ tự trong code: Client, Master, Game server, SQLite, Hạ tầng. Mỗi dòng nêu lớp, hàm và gói tin thật. Gợi ý demo: Đăng nhập, Ghép trận nhanh, Bắn và trúng đạn.</aside>
+</section>
+
+<!-- 14 MASTER -->
+<section class="slide" id="s-master" data-title="Master server" data-sec="Master server">
+  <div class="kicker">13 · Master server</div>
+  <h2>Nhiều kết nối, <span class="hl">một luồng xử lý</span></h2>
+  <div class="body">
+    <svg class="fit rv" id="mpSvg" viewBox="0 0 1400 300" role="img" aria-label="Luồng xử lý của master"></svg>
+    <div class="grid g3" style="margin-top:20px">
+      <div class="card stat c-c rv"><b data-count="12230">12.230</b><span>thao tác danh sách phòng mỗi giây, 16 client</span></div>
+      <div class="card stat c-l rv"><b data-count="1000">1.000</b><span>kết nối đồng thời trong 81 MB bộ nhớ</span></div>
+      <div class="card stat c-a rv"><b>~<span data-count="190">190</span> ms</b><span>mỗi lần bcrypt: chậm có chủ ý để chống dò mật khẩu</span></div>
+    </div>
+  </div>
+  <aside class="notes">Byte được nhận và gửi bất đồng bộ trên thread pool, nhưng mọi việc đi qua một hàng đợi và chạy trên một luồng. Hai người tranh chỗ cuối của một phòng được xử lý lần lượt, nên không cần lock. Một luồng có chậm không? Với điều phối thì không; nút thắt thật là bcrypt, và chậm là có chủ ý.</aside>
+</section>
+
+<!-- 15 LOGIN -->
+<section class="slide" id="s-login" data-title="Mật khẩu đi đâu" data-sec="Master server">
+  <div class="kicker">14 · Bảo mật tài khoản</div>
+  <h2>Mật khẩu gốc <span class="hl">không bao giờ rời máy</span></h2>
+  <div class="body">
+    <div class="btns rv"><span class="cap">Tên</span><input class="tx" id="lgU" value="kien" maxlength="16"><span class="cap" style="margin-left:14px">Mật khẩu</span><input class="tx" id="lgP" value="matkhau123" maxlength="24"><span class="cap muted" style="margin-left:8px">gõ thử, giá trị bên dưới tính thật</span></div>
+    <div class="flowrow rv" style="margin-top:20px">
+      <div class="st c-v" id="lg1"><b>Máy người chơi</b><span>mật khẩu gốc</span><span class="val" id="lgV1"></span></div><div class="ar">→</div>
+      <div class="st c-v" id="lg2"><b>Client băm</b><span>SHA-256(mật khẩu + tên)</span><span class="val" id="lgV2"></span></div><div class="ar">→</div>
+      <div class="st c-c" id="lg3"><b>Đường truyền</b><span>TCP bọc TLS</span><span class="val">không đọc được</span></div><div class="ar">→</div>
+      <div class="st c-a" id="lg4"><b>Master</b><span>bcrypt cost 11, salt riêng</span><span class="val" id="lgV4"></span></div><div class="ar">→</div>
+      <div class="st c-a" id="lg5"><b>SQLite</b><span>chỉ lưu chuỗi bcrypt</span><span class="val">accounts.password_hash</span></div>
+    </div>
+    <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);margin-top:22px">
+      <div class="card c-r accent rv" id="lockCard"><span class="tag">Thử dò mật khẩu</span><div class="dots" id="lockDots"></div><p id="lockMsg" style="min-height:58px"></p><div class="btns" style="margin-top:12px"><button class="btn warn" id="lockTry">Đăng nhập sai</button><button class="btn" id="lockReset">Làm lại</button></div></div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="fact c-r rv"><b>5 / 60</b><span>lần sai và lần thử mỗi phút cho một IP. Cả lớp chung một IP vẫn đăng nhập được.</span></div>
+        <div class="fact c-a rv"><b>hash giả</b><span>Tên không tồn tại vẫn chạy bcrypt, để không đoán được tên nào có thật.</span></div>
+        <div class="fact c-v rv"><b>30 ngày</b><span>Token ghi nhớ: chỉ lưu SHA-256 của nó, dùng một lần rồi đổi token mới.</span></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">Gõ thử vào ô mật khẩu: chuỗi SHA-256 được tính thật trong trình duyệt. Chuỗi bcrypt là minh hoạ vì salt đổi mỗi lần. Băm ở client bảo vệ mật khẩu gốc người dùng có thể dùng lại ở nơi khác; nhưng với server, chuỗi SHA chính là mật khẩu, nên vẫn cần TLS. Bấm "Đăng nhập sai" mười lần để thấy khoá 15 phút.</aside>
+</section>
+
+<!-- 16 LOGIN FLOWCHART -->
+<section class="slide" id="s-authflow" data-title="Lưu đồ đăng nhập" data-sec="Master server">
+  <div class="kicker">15 · Lưu đồ đăng nhập</div>
+  <h2>Tám bước kiểm, <span class="hl">thứ tự là có chủ ý</span></h2>
+  <div class="split" style="margin-top:14px;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)">
+    <div class="dwrap"><svg class="fit" id="authSvg" viewBox="0 0 1000 548" role="img" aria-label="Lưu đồ đăng nhập"></svg></div>
+    <div class="card panel rv" style="min-height:0">
+      <span class="tag">Chọn một tình huống</span>
+      <div class="btns" id="afBtns" style="margin-top:4px"></div>
+      <div id="afOut" style="margin-top:18px"></div>
+    </div>
+  </div>
+  <aside class="notes">Đây là AuthService.Login. Chọn một tình huống, lưu đồ chạy từ trên xuống đến chỗ dừng. Hai chi tiết đáng nói: kiểm cấm trước kiểm khoá; và thông báo "bị khoá" hay "bị cấm" chỉ hiện khi mật khẩu đã đúng, kẻ dò chỉ nhận được "sai thông tin".</aside>
+</section>
+
+<!-- 17 DATABASE ER -->
+<section class="slide" id="s-er" data-title="Cơ sở dữ liệu" data-sec="Cơ sở dữ liệu">
+  <div class="kicker">16 · Cơ sở dữ liệu</div>
+  <h2>SQLite: 8 bảng quanh <span class="hl">accounts</span></h2>
+  <div class="split" style="margin-top:18px">
+    <div class="dwrap"><svg class="fit" id="erSvg" viewBox="0 0 930 560" role="img" aria-label="Sơ đồ quan hệ"></svg></div>
+    <div class="card panel rv" id="erPanel"></div>
+  </div>
+  <aside class="notes">Bấm vào từng bảng. Chỉ master đọc ghi cơ sở dữ liệu; game server muốn ghi kết quả phải gửi qua master. Mọi câu SQL viết tay và dùng tham số, không ghép chuỗi. Bảng xám là bảng lưu trữ mùa giải cũ.</aside>
+</section>
+
+<!-- 18 DB DEMOS -->
+<section class="slide" id="s-dbd" data-title="Quyết định thiết kế dữ liệu" data-sec="Cơ sở dữ liệu">
+  <div class="kicker">17 · Thiết kế dữ liệu</div>
+  <h2>Ba quyết định, <span class="hl">bấm để thấy</span></h2>
+  <div class="body">
+    <div class="grid g3" style="align-items:stretch">
+      <div class="card c-v accent rv"><span class="tag">Chỉ số theo dòng</span><h3>Thêm chỉ số, không ALTER</h3><table class="mt" id="eavT"></table><div class="btns" style="margin-top:14px"><button class="btn" id="eavAdd">+ Thêm chỉ số</button></div><p class="status" id="eavS" style="color:var(--violet)"></p></div>
+      <div class="card c-l accent rv"><span class="tag">Transaction</span><h3>Đổi mùa giải nguyên tử</h3><div class="grid g2" style="gap:12px"><div><p class="mono" style="font-size:12.5px;color:var(--muted)">career_stats</p><table class="mt" id="ssA"></table></div><div><p class="mono" style="font-size:12.5px;color:var(--muted)">…_season1</p><table class="mt" id="ssB"></table></div></div><div class="btns" style="margin-top:14px"><button class="btn" id="ssRun">Đổi mùa</button><label class="toggle" style="font-size:16px"><input type="checkbox" id="ssFail">lỗi giữa chừng</label></div><p class="status" id="ssS"></p></div>
+      <div class="card c-c accent rv"><span class="tag">WAL + một kết nối</span><h3>Đọc không chờ ghi</h3><svg class="fit" id="walSvg" viewBox="0 0 420 210" role="img" aria-label="Chế độ WAL"></svg><p style="font-size:16.5px;margin-top:8px">Ghi nối vào file <code>-wal</code>, gộp về sau. Master một luồng nên một kết nối là đủ.</p></div>
+    </div>
+    <div class="fact c-a rv" style="margin-top:20px"><b>Vì sao SQLite</b><span>Một tiến trình đọc ghi, vài trăm tài khoản, ghi thưa. Một file, không cần dựng server cơ sở dữ liệu, sao lưu được khi đang chạy.</span></div>
+  </div>
+  <aside class="notes">Bấm "Thêm chỉ số": chỉ thêm một dòng, schema không đổi. Cái giá là xếp hạng phải gom trong bộ nhớ, ổn ở quy mô vài trăm tài khoản. Bấm "Đổi mùa" có và không có lỗi giữa chừng: lỗi thì rollback, không còn gì dở dang. Mùa giải 2 ra đời vì số liệu mùa 1 bị cộng trùng.</aside>
+</section>
+
+<!-- 19 BACKUP -->
+<section class="slide" id="s-backup" data-title="Sao lưu và khôi phục" data-sec="Cơ sở dữ liệu">
+  <div class="kicker">18 · Sao lưu</div>
+  <h2>Mất máy chủ <span class="hl">vẫn còn dữ liệu</span></h2>
+  <div class="body">
+    <svg class="fit rv" id="backupSvg" viewBox="0 0 1400 200" role="img" aria-label="Luồng sao lưu"></svg>
+    <div class="fact c-r rv" style="margin-top:18px"><b>Không dùng cp</b><span>Ở chế độ WAL một phần dữ liệu còn nằm trong file <code>-wal</code>. Backup API chép đúng trạng thái nhất quán trên kết nối đang mở.</span></div>
+    <p class="tag rv" style="margin-top:26px;color:var(--lime)">Khôi phục, đã chạy thử thật</p>
+    <div class="flowrow" data-step="1">
+      <div class="st c-l"><b>1</b><span>Dừng master</span></div><div class="ar">→</div>
+      <div class="st c-l"><b>2</b><span>Chép bản sao vào thư mục dữ liệu, đúng chủ sở hữu của container</span></div><div class="ar">→</div>
+      <div class="st c-l"><b>3</b><span>Chạy lại master</span></div><div class="ar">→</div>
+      <div class="st c-l"><b>4</b><span>Đăng nhập bằng tài khoản đã biết để kiểm</span></div>
+    </div>
+  </div>
+  <aside class="notes">Timer systemd chạy 6 giờ một lần, gọi Backup API của SQLite trong khi master vẫn chạy. Bản sao giữ 7 ngày trên máy và được đẩy lên Azure Blob. Có test khôi phục trên cơ sở dữ liệu thật, không chỉ test sao lưu.</aside>
+</section>
+
+<!-- 20 GSP -->
+<section class="slide" id="s-gsp" data-title="Giao thức UDP tự thiết kế" data-sec="Giao thức">
+  <div class="kicker">19 · Giao thức GSP</div>
+  <h2>Mỗi gói: <span class="hl">16 byte header</span>, tối đa 1.200 byte</h2>
+  <div class="body" style="margin-top:16px">
+    <div class="rv">
+      <div class="bytes pick" id="gspBytes" style="height:78px">
+        <div class="b-v" style="flex:2" data-f="0">protocolId<small>2 B</small></div><div class="b-v2" style="flex:1" data-f="1">type<small>1 B</small></div><div class="b-v3" style="flex:1" data-f="2">flags<small>1 B</small></div>
+        <div class="b-c" style="flex:2" data-f="3">sequence<small>2 B</small></div><div class="b-c2" style="flex:2" data-f="4">ack<small>2 B</small></div><div class="b-c3" style="flex:4" data-f="5">ackBitfield<small>4 B</small></div>
+        <div class="b-l" style="flex:2" data-f="6">connId<small>2 B</small></div><div class="b-a" style="flex:2" data-f="7">payloadLen<small>2 B</small></div>
+      </div>
+      <p id="gspInfo" style="font-size:20px;margin-top:12px;min-height:30px;color:var(--ink2)"></p>
+    </div>
+    <p class="tag rv" style="margin-top:14px">Bốn kênh, bốn luật giao nhận</p>
+    <svg class="fit rv" id="chSvg" viewBox="0 0 1400 290" role="img" aria-label="Bốn kênh"></svg>
+  </div>
+  <aside class="notes">Bấm vào từng trường của header. 1.200 byte để lọt qua mọi router mà không bị phân mảnh IP. Bên dưới: cùng một sự cố mất gói, bốn kênh xử lý bốn cách. Ping mất thì thôi. Snapshot đến muộn thì bỏ. Sự kiện tin cậy thì gửi lại. Input lặp 3 frame gần nhất nên gói sau bù cho gói mất.</aside>
+</section>
+
+<!-- 21 HANDSHAKE -->
+<section class="slide" id="s-hs" data-title="Bắt tay và vé vào trận" data-sec="Giao thức">
+  <div class="kicker">20 · Vào trận an toàn</div>
+  <h2>Chứng minh địa chỉ <span class="hl">trước khi cấp tài nguyên</span></h2>
+  <div class="body" style="margin-top:12px">
+    <svg class="fit rv" id="hsSvg" viewBox="0 0 1400 330" role="img" aria-label="Bắt tay 4 bước"></svg>
+    <div class="btns rv" style="margin-top:6px"><label class="toggle"><input type="checkbox" id="hsAtk"> Kẻ tấn công giả địa chỉ IP</label></div>
+    <div data-step="1" style="margin-top:16px">
+      <p class="ink2" style="font-size:19px;margin-bottom:10px"><b style="color:var(--ink)">JoinTicket 64 byte</b>: master ký, game server tự kiểm bằng khoá chung, hạn 60 giây</p>
+      <div class="bytes" style="height:62px">
+        <div class="b-l" style="flex:4">playerId<small>4</small></div><div class="b-l" style="flex:2;filter:brightness(1.12)">serverId<small>2</small></div><div class="b-l" style="flex:2;filter:brightness(1.24)">roomId<small>2</small></div>
+        <div class="b-a" style="flex:8">expiresAt<small>8</small></div><div class="b-a2" style="flex:1.6">team<small>1</small></div><div class="b-v" style="flex:14.4">displayName<small>15</small></div>
+      </div>
+      <div class="bytes" style="height:46px;margin-top:6px"><div class="b-g" style="flex:1">HMAC-SHA256 trên 32 byte phía trên · 32 byte</div></div>
+    </div>
+  </div>
+  <aside class="notes">Bật ô "kẻ tấn công": serverSalt được gửi về địa chỉ thật, kẻ giả không nhận được, nên không đi tiếp được bước 3. Mỗi gói giả chỉ tốn server một phép HMAC. Vé tự chứng minh, nên game server không cần hỏi lại master và trận đang chạy không phụ thuộc master.</aside>
+</section>
+
+<!-- 22 ACK -->
+<section class="slide" id="s-ack" data-title="Độ tin cậy trên UDP" data-sec="Giao thức">
+  <div class="kicker">21 · Xác nhận gói tin</div>
+  <h2>Mỗi gói mang <span class="hl">33 xác nhận</span>, không cần gói ACK</h2>
+  <div class="split even" style="margin-top:24px;align-items:start">
+    <div class="card rv">
+      <span class="tag">Bấm vào gói để đánh dấu mất</span>
+      <div class="pk" id="pkRow" style="margin-top:6px"></div>
+      <div id="ackOut" style="margin-top:22px"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="fact c-c rv"><b>ack</b><span>số thứ tự lớn nhất đã nhận</span></div>
+      <div class="fact c-c rv"><b>bit i</b><span>ứng với gói <code>ack − 1 − i</code>, 1 là đã nhận</span></div>
+      <div class="fact c-a rv"><b>33</b><span>gói mất liền nhau thì mới mất xác nhận</span></div>
+      <div class="fact c-r rv"><b>số mới</b><span>gói tin cậy gửi lại mang số thứ tự mới, nếu không bên nhận coi là gói trùng</span></div>
+    </div>
+  </div>
+  <aside class="notes">Mặc định gói 100 và 102 bị mất. Bên nhận ghi ack bằng 103 và một dãy bit cho 32 gói trước. Bên gửi đọc là biết gói nào chưa tới. Xác nhận đi kèm mọi gói đang gửi, nên không tốn băng thông cho gói ACK riêng.</aside>
+</section>
+
+<!-- 23 TICK -->
+<section class="slide" id="s-tick" data-title="Vòng lặp của game server" data-sec="Đồng bộ trạng thái">
+  <div class="kicker">22 · Game server</div>
+  <h2>Một giây trên server: <span class="hl">30 tick, 20 snapshot</span></h2>
+  <div class="body">
+    <svg class="fit rv" id="tickSvg" viewBox="0 0 1400 250" role="img" aria-label="Vòng tick"></svg>
+    <div class="grid g3" style="margin-top:22px">
+      <div class="fact c-c rv"><b>đồng hồ thật</b><span>Tick chạy theo bộ tích luỹ, không theo FixedUpdate của Unity.</span></div>
+      <div class="fact c-a rv"><b>tối đa 3</b><span>tick chạy bù. Chậm hơn thì bỏ phần tồn, tránh vòng xoáy.</span></div>
+      <div class="fact c-v rv"><b>2 / 3</b><span>chi phí của 30 Hz: 20 Hz cộng nội suy nhìn mượt như nhau.</span></div>
+    </div>
+  </div>
+  <aside class="notes">Đầu chỉ chạy qua từng khâu, chậm lại 30 lần cho dễ nhìn. Mỗi tick khoảng 33 ms: đọc gói UDP, áp phím bấm, chạy vật lý và bot AI, xét bắn, đóng gói snapshot. Độ rộng các khâu là minh hoạ, không phải số đo. Cứ 3 tick thì 2 tick gửi snapshot.</aside>
+</section>
+
+<!-- 24 PREDICTION -->
+<section class="slide" id="s-pred" data-title="Che độ trễ bằng dự đoán" data-sec="Đồng bộ trạng thái">
+  <div class="kicker">23 · Che độ trễ</div>
+  <h2>Dự đoán ở client, <span class="hl">sửa lại</span> khi server trả lời</h2>
+  <div class="body" style="margin-top:14px">
+    <svg class="fit rv" id="predSvg" viewBox="0 0 1400 380" role="img" aria-label="Mô phỏng dự đoán"></svg>
+    <div class="btns rv" style="margin-top:12px;gap:40px">
+      <label class="range">Ping <input type="range" id="pingIn" min="0" max="300" step="10" value="120"><b id="pingOut">120 ms</b></label>
+      <span class="cap">Kéo lên 300 ms để thấy khác biệt.</span>
+    </div>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="fact c-c rv"><b>Prediction</b><span>chạy cùng mã di chuyển với server, áp phím ngay</span></div>
+      <div class="fact c-a rv"><b>Reconcile</b><span>lệch quá ngưỡng thì đặt lại, chạy lại các input sau</span></div>
+      <div class="fact c-v rv"><b>Interpolate</b><span>vẽ người khác lùi 100 ms, giữa hai snapshot</span></div>
+    </div>
+  </div>
+  <aside class="notes">Hai làn chạy cùng một chuỗi phím bấm. Làn trên không dự đoán: nhân vật chỉ nhúc nhích sau một vòng đi về, như điều khiển qua sợi dây chun. Làn dưới có dự đoán: đi ngay, vòng nét đứt là vị trí server đã xác nhận, đuổi theo sau.</aside>
+</section>
+
+<!-- 25 INTEREST -->
+<section class="slide" id="s-int" data-title="Ai được nhận gì" data-sec="Đồng bộ trạng thái">
+  <div class="kicker">24 · Interest management</div>
+  <h2>Mỗi người chỉ nhận <span class="hl">những gì ở gần</span></h2>
+  <div class="split even" style="margin-top:18px">
+    <div class="dwrap"><svg class="fit rv" id="intSvg" viewBox="0 0 440 440" style="max-height:600px" role="img" aria-label="Vùng interest"></svg></div>
+    <div class="card panel rv">
+      <span class="tag">Bấm vào hình để đặt một nhân vật</span>
+      <div id="intRes" style="margin-top:8px"></div>
+      <label class="toggle" style="margin-top:16px"><input type="checkbox" id="intMate"> Nhân vật đó là đồng đội</label>
+      <table style="width:100%;margin-top:20px;border-collapse:collapse;font-size:18px;color:var(--ink2)">
+        <tr><td style="padding:6px 0"><b style="color:var(--violet)">Gần</b> dưới 60 m</td><td style="text-align:right">20 lần/giây</td></tr>
+        <tr><td style="padding:6px 0"><b style="color:var(--amber)">Giữa</b> 60 đến 100 m</td><td style="text-align:right">10 lần/giây</td></tr>
+        <tr><td style="padding:6px 0"><b style="color:var(--cyan)">Xa</b> 100 đến 500 m</td><td style="text-align:right">4 lần/giây</td></tr>
+        <tr><td style="padding:6px 0"><b>Ngoài 500 m</b>, ngoài nón ngắm 15°</td><td style="text-align:right">không gửi</td></tr>
+      </table>
+      <p class="muted" style="font-size:15px;margin-top:12px">Chấm nhấp nháy mỗi lần được gửi, chậm lại 4 lần cho dễ nhìn.</p>
+    </div>
+  </div>
+  <aside class="notes">Các chấm là nhân vật đang di chuyển; chấm càng gần càng nhấp nháy dày, vì được gửi thường hơn. Đồng đội trong 200 m luôn ít nhất ở mức Giữa. Người bắn tỉa ngắm xa vẫn thấy mục tiêu trong nón ngắm. Trên bản đồ Dustbowl rộng 1,7 km, riêng bước này giảm 80,9% dữ liệu.</aside>
+</section>
+
+<!-- 26 COMPRESSION -->
+<section class="slide" id="s-comp" data-title="Băng thông" data-sec="Đồng bộ trạng thái">
+  <div class="kicker">25 · Băng thông</div>
+  <h2>Từ 19,86 xuống <span class="hl">1,28 KB/s</span> mỗi người chơi</h2>
+  <div class="body">
+    <p class="cap rv" style="margin-bottom:8px">16 người chơi, 32 bot, Dustbowl, 5 phút, cùng seed. Mỗi dòng cộng thêm một kỹ thuật.</p>
+    <div id="compBars" class="rv"></div>
+    <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,2fr);margin-top:18px">
+      <div class="card stat c-a rv"><b><span data-count="1.67" data-dec="2">1,67</span> KB/s</b><span>bản chạy thật, bằng 21% ngân sách 8 KB/s</span></div>
+      <div class="card rv"><p style="font-size:19px">Bản chạy thật giữ định dạng căn byte đã đóng băng, nên bỏ bit-packing và bước cuối: bước cuối chỉ lợi 1,2% mà làm sai số độ cao lên 12,5 cm.</p></div>
+    </div>
+  </div>
+  <aside class="notes">Delta so với snapshot client đã xác nhận, không phải snapshot liền trước, nên mất một gói không làm hỏng các gói sau. Server giữ 32 snapshot gần nhất cho mỗi client. Thử mất 20% gói trong 1.000 tick, trạng thái cuối vẫn khớp. Vị trí nén về số nguyên 16 bit, bước 6,25 cm.</aside>
+</section>
+
+<!-- 27 LAG COMP -->
+<section class="slide" id="s-lc" data-title="Bắn trúng công bằng" data-sec="Chiến đấu">
+  <div class="kicker">26 · Lag compensation</div>
+  <h2>Server <span class="hl">tua lại thời gian</span> để xét phát bắn</h2>
+  <div class="body" style="margin-top:12px">
+    <svg class="fit rv" id="lcSvg" viewBox="0 0 1400 300" role="img" aria-label="Mô phỏng lag compensation"></svg>
+    <div class="btns rv" style="margin-top:10px"><button class="btn" id="lcFire">Bắn khi tâm nằm trên mục tiêu</button><label class="toggle"><input type="checkbox" id="lcOn" checked> Bật lag compensation</label><span class="cap" id="lcRes" style="margin-left:10px;font-size:20px"></span></div>
+    <p class="tag" data-step="1" style="margin-top:20px;color:var(--rose)">Báo cáo trúng bị bác nếu</p>
+    <div class="chipset" data-step="1">
+      <span class="chip c-r"><i></i>không có lần bóp cò trong 8 tick</span><span class="chip c-r"><i></i>ngoài tầm súng</span><span class="chip c-r"><i></i>lệch hướng ngắm</span><span class="chip c-r"><i></i>thân mục tiêu không ở đó tại tick ấy</span><span class="chip c-r"><i></i>mục tiêu ngồi ghế kín của xe</span><span class="chip c-r"><i></i>có tường chắn</span><span class="chip c-r"><i></i>quá 20 viên một lần bóp cò</span>
+    </div>
+  </div>
+  <aside class="notes">Người bắn thấy thế giới lùi khoảng rtt/2 cộng 100 ms. Bấm Bắn: tâm nằm đúng trên mục tiêu ở màn hình người bắn. Bật lag compensation, server tua về tick đó và tính trúng. Tắt đi, server xét vị trí hiện tại và báo trượt dù người bắn ngắm đúng. Lag comp dời bất công sang người ping thấp: đôi khi chết sau khi đã núp. Nhóm chọn ưu tiên người ngắm.</aside>
+</section>
+
+<!-- 28 ANTI-CHEAT -->
+<section class="slide" id="s-ac" data-steps="2" data-title="Chống gian lận theo thiết kế" data-sec="Chiến đấu">
+  <div class="kicker">27 · Chống gian lận</div>
+  <h2>Thử hack, <span class="hl">thiết kế đã chặn sẵn</span></h2>
+  <div class="body">
+    <div class="grid g3" id="acGrid" style="row-gap:20px"></div>
+    <p class="cap rv" style="margin-top:20px">Bấm vào thẻ để lật. Không có phần mềm chống gian lận riêng: các lớp phòng thủ nằm sẵn trong thiết kế.</p>
+  </div>
+  <aside class="notes">Nhấn → để lật lần lượt, hoặc bấm từng thẻ. Mặt đỏ là cách hack, mặt xanh là thứ chặn nó. Số 10 trên 100 là đo thật trong test.</aside>
+</section>
+
+<!-- 29 UNITY -->
+<section class="slide" id="s-unity" data-title="Tích hợp vào Unity" data-sec="Vận hành">
+  <div class="kicker">28 · Tích hợp Unity</div>
+  <h2>Gắn mạng vào game gốc <span class="hl">mà gần như không sửa nó</span></h2>
+  <div class="body">
+    <div class="btns rv"><button class="btn on" id="roleC">Build client</button><button class="btn" id="roleS">Build game server</button><span class="cap" id="roleNote" style="margin-left:12px"></span></div>
+    <svg class="fit rv" id="bindSvg" viewBox="0 0 1400 300" role="img" aria-label="Kiến trúc binding" style="margin-top:14px"></svg>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="fact c-l rv"><b>1 project</b><span>build ra client và game server headless</span></div>
+      <div class="fact c-a rv"><b>bot AI</b><span>dùng cùng giao diện điều khiển với người, nên chạy được trên server</span></div>
+      <div class="fact c-v rv"><b>.NET thuần</b><span>logic mạng test bằng xUnit, build thành DLL cho Unity</span></div>
+    </div>
+  </div>
+  <aside class="notes">Bấm "Build game server": camera, giao diện, âm thanh tắt, vì server không có màn hình. Những lời gọi đó phải được chặn, có chỗ chạy mỗi frame cho mọi bot. Code mạng chỉ biết interface; NetBindings nối interface với component của game gốc, nên đổi một bên không làm vỡ bên kia.</aside>
+</section>
+
+<!-- 30 DEPLOY -->
+<section class="slide" id="s-dep" data-title="Hạ tầng và triển khai" data-sec="Vận hành">
+  <div class="kicker">29 · Hạ tầng</div>
+  <h2>Từ một commit đến <span class="hl">máy chủ đang chạy</span></h2>
+  <div class="body">
+    <svg class="fit rv" id="depSvg" viewBox="0 0 1400 330" role="img" aria-label="Luồng triển khai"></svg>
+    <div class="grid g4" style="margin-top:18px">
+      <div class="fact c-c rv"><b>Terraform</b><span>dựng EC2 và VM Azure</span></div>
+      <div class="fact c-v rv"><b>digest</b><span>không dùng <code>:latest</code></span></div>
+      <div class="fact c-a rv"><b>.env</b><span>bí mật chỉ trên máy chủ</span></div>
+      <div class="fact c-l rv"><b>3 zip</b><span>Windows, macOS, Linux</span></div>
+    </div>
+  </div>
+  <aside class="notes">CI chặn merge khi build hoặc test đỏ. Image master build tự động, đẩy lên GitHub Container Registry. Image game server build tay vì runner GitHub không có giấy phép Unity. Bản cho người chơi là ba file zip trên trang Releases, và chỉ bản mới nhất kết nối được.</aside>
+</section>
+
+<!-- 31 TESTING -->
+<section class="slide" id="s-test" data-title="Kiểm thử và đo đạc" data-sec="Vận hành">
+  <div class="kicker">30 · Chất lượng</div>
+  <h2>Mỗi tầng đều có <span class="hl">cách tự chứng minh</span></h2>
+  <div class="split" style="margin-top:20px;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);align-items:stretch">
+    <div class="term rv" id="term"></div>
+    <div style="display:flex;flex-direction:column;gap:16px;justify-content:center">
+      <div class="card stat c-c rv"><b data-count="8">8</b><span>project test .NET</span></div>
+      <div class="card stat c-l rv"><b data-count="100">100</b><span>bot mỗi game server, từ bài thử tải</span></div>
+      <div class="card stat c-a rv"><b data-count="20">20</b><span>% gói mất trong 1.000 tick, trạng thái cuối vẫn khớp</span></div>
+    </div>
+  </div>
+  <aside class="notes">Mọi con số trong bài đến từ các công cụ này, không phải ước lượng. Ba cổng trong CI chặn những lỗi không thấy được bằng mắt: đặc tả lệch hằng số, thư viện thuần tham chiếu Unity, DLL trong Unity cũ hơn mã nguồn.</aside>
+</section>
+
+<!-- 32 LIMITS -->
+<section class="slide" data-title="Hạn chế và hướng phát triển" data-sec="Kết luận">
+  <div class="kicker">31 · Nhìn thẳng</div>
+  <h2>Hạn chế đã biết, <span class="hl">và cách gỡ từng cái</span></h2>
+  <div class="body">
+    <div class="lim" style="margin-bottom:4px"><span class="tag rv" style="color:var(--rose)">Hạn chế</span><span></span><span class="tag rv" style="color:var(--lime)">Hướng đi tiếp</span></div>
+    <div class="lim" data-step="1"><div class="a">Một master duy nhất: phiên đăng nhập nằm trong RAM</div><div class="arr"></div><div class="b">Đưa phiên ra kho dùng chung để chạy nhiều master</div></div>
+    <div class="lim" data-step="2"><div class="a">SQLite một file, một tiến trình ghi</div><div class="arr"></div><div class="b">Chuyển sang PostgreSQL khi nhiều master cùng ghi</div></div>
+    <div class="lim" data-step="3"><div class="a">Khoá ngoại chưa bật, chưa có giao diện quản trị</div><div class="arr"></div><div class="b">Trang quản trị: cấm, mở khoá, xem số liệu</div></div>
+    <div class="lim" data-step="4"><div class="a">Image game server build tay vì CI không có giấy phép Unity</div><div class="arr"></div><div class="b">Runner tự quản có giấy phép, build tự động</div></div>
+    <div class="lim" data-step="5"><div class="a">Lag compensation dời bất công sang người ping thấp</div><div class="arr"></div><div class="b">Giới hạn tua chặt hơn theo ping đo được</div></div>
+  </div>
+  <aside class="notes">Phần lớn giới hạn đến từ một quyết định có ý thức: tối ưu cho quy mô hiện tại thay vì tối ưu sớm. Mỗi giới hạn có hướng gỡ cụ thể khi quy mô tăng.</aside>
+</section>
+
+<!-- 33 THANKS -->
+<section class="slide cover" data-title="Cảm ơn" data-sec="Kết luận">
+  <div class="kicker">Hỏi đáp</div>
+  <h1 style="font-size:92px"><span>Cảm ơn</span><br>thầy cô<br>và các bạn</h1>
+  <p class="sub">Nhóm sẵn sàng demo trực tiếp và trả lời câu hỏi.</p>
+  <div class="meta">
+    <div><small>Tải game</small><b>Trang Releases của repo</b></div>
+    <div><small>Mã nguồn</small><b>Client · Master · Game server · Hạ tầng</b></div>
+  </div>
+  <svg id="endArt" viewBox="0 0 640 640" aria-hidden="true"></svg>
+  <aside class="notes">Cảm ơn thầy cô và các bạn. Nếu còn thời gian, nhóm mở game, đăng nhập, vào phòng và chơi một trận để thấy toàn bộ luồng vừa trình bày.</aside>
+</section>
+
+<div class="foot"><span>IRONFRONT: REBORN</span><span class="sp"></span><span id="fSec"></span><span id="fNum"></span></div>
+<div id="prog"></div>
+</div></div>
+
+<div id="hud">
+  <button id="bPrev" title="Trước (←)" aria-label="Slide trước">‹</button>
+  <button id="bNext" title="Sau (→)" aria-label="Slide sau">›</button>
+  <button id="bOv" title="Tổng quan (O)" aria-label="Tổng quan">▦</button>
+  <button id="bNotes" title="Ghi chú người nói (N)" aria-label="Ghi chú">✎</button>
+  <button id="bTheme" title="Sáng / tối (T)" aria-label="Đổi giao diện">◐</button>
+  <button id="bFull" title="Toàn màn hình (F)" aria-label="Toàn màn hình">⛶</button>
+</div>
+<div id="help"><kbd>← →</kbd> chuyển · <kbd>O</kbd> tổng quan · <kbd>N</kbd> ghi chú · <kbd>F</kbd> toàn màn hình · <kbd>T</kbd> sáng/tối</div>
+<div id="notes"><b>Ghi chú người nói</b><div id="notesText"></div></div>
+<div id="overview"><h4>Tất cả slide</h4><div id="ovGrid"></div></div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
+const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const NS="http://www.w3.org/2000/svg";
+function E(tag,a,text,parent){const e=document.createElementNS(NS,tag);for(const k in a)if(a[k]!=null)e.setAttribute(k,a[k]);if(text!=null)e.textContent=text;if(parent)parent.appendChild(e);return e}
+let MEAS=null;function textW(t,size,weight,cls){if(!MEAS){MEAS=E("svg",{width:0,height:0,style:"position:absolute;left:-9999px;top:0"},null,document.body)}const e=E("text",{"font-size":size,"font-weight":weight||700,class:cls||null},t,MEAS);const w=e.getComputedTextLength();e.remove();return w}
+const C={v:"var(--violet)",c:"var(--cyan)",l:"var(--lime)",a:"var(--amber)",r:"var(--rose)",g:"var(--grey)"};
+const S={v:"var(--violet-s)",c:"var(--cyan-s)",l:"var(--lime-s)",a:"var(--amber-s)",r:"var(--rose-s)",g:"var(--grey-s)"};
+let TM=[];const later=(f,ms)=>{TM.push(setTimeout(f,ms))};const clearLater=()=>{TM.forEach(clearTimeout);TM=[]};
+const ease=p=>1-Math.pow(1-p,3);
+function tween(ms,fn,done){const t0=performance.now();let id=0,dead=false;const f=n=>{if(dead)return;const p=Math.min(1,Math.max(0,(n-t0)/ms));fn(p);if(p<1)id=requestAnimationFrame(f);else if(done)done()};id=requestAnimationFrame(f);return()=>{dead=true;cancelAnimationFrame(id)}}
+function ticker(fn){let id=0,t0=0,on=false;const f=n=>{if(!on)return;fn((n-t0)/1000);id=requestAnimationFrame(f)};return{start(){on=true;cancelAnimationFrame(id);t0=performance.now();id=requestAnimationFrame(f)},stop(){on=false;cancelAnimationFrame(id)}}}
+const fmt=(v,d)=>v.toLocaleString("vi-VN",{minimumFractionDigits:d,maximumFractionDigits:d});
+function countIn(root,skip){root.querySelectorAll("[data-count]").forEach(el=>{if(skip&&el.closest("[data-step]"))return;const to=+el.dataset.count,d=+(el.dataset.dec||0);tween(1300,p=>{el.textContent=fmt(to*ease(p),d)})})}
+function polyAt(pts,p){let L=0;const seg=[];for(let i=1;i<pts.length;i++){const l=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);seg.push(l);L+=l}let d=p*L;for(let i=0;i<seg.length;i++){if(d<=seg[i]||i===seg.length-1){const k=seg[i]?Math.min(1,d/seg[i]):1;return[pts[i][0]+(pts[i+1][0]-pts[i][0])*k,pts[i][1]+(pts[i+1][1]-pts[i][1])*k]}d-=seg[i]}return pts[pts.length-1]}
+function markers(svg){const d=E("defs",{},null,svg);Object.keys(C).forEach(k=>{const m=E("marker",{id:svg.id+"-m"+k,viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"11",markerHeight:"11",markerUnits:"userSpaceOnUse",orient:"auto-start-reverse"},null,d);E("path",{d:"M0,0 L10,5 L0,10 z",fill:C[k]},null,m)});return k=>"url(#"+svg.id+"-m"+k+")"}
+function popIn(svg,g){svg.__n=(svg.__n||0)+1;g.classList.add("pop");g.style.setProperty("--d",(150+svg.__n*55)+"ms")}
+function box(svg,o){const g=E("g",{class:o.click?"click":null},null,svg);popIn(svg,g);
+  if(o.cyl){E("path",{class:"nb",d:`M${o.x},${o.y+14} a${o.w/2},14 0 0 1 ${o.w},0 v${o.h-28} a${o.w/2},14 0 0 1 ${-o.w},0 z`,fill:S[o.c],stroke:C[o.c],"stroke-width":2.2},null,g);E("path",{d:`M${o.x},${o.y+14} a${o.w/2},14 0 0 0 ${o.w},0`,fill:"none",stroke:C[o.c],"stroke-width":2.2},null,g)}
+  else E("rect",{class:"nb",x:o.x,y:o.y,width:o.w,height:o.h,rx:o.rx||18,fill:S[o.c],stroke:C[o.c],"stroke-width":2.2,"stroke-dasharray":o.dashed?"8 6":null},null,g);
+  const cx=o.x+o.w/2,ty=o.y+(o.ty||36);
+  E("text",{x:cx,y:ty,"text-anchor":"middle","font-size":o.fs||19,"font-weight":800,fill:C[o.c],class:o.mono?"mono":null},o.t,g);
+  (o.sub||[]).forEach((s,i)=>E("text",{x:cx,y:ty+(o.gap||25)+i*(o.lh||21),"text-anchor":"middle","font-size":o.ss||14.5,fill:"var(--ink2)"},s,g));
+  return g}
+function pill(svg,x,y,t,c,size){const s=size||14,w=textW(t,s,700)+26,h=s+14,g=E("g",{},null,svg);E("rect",{class:"nb",x:x-w/2,y:y-h/2,width:w,height:h,rx:h/2,fill:"var(--svgbg)",stroke:C[c],"stroke-width":1.6},null,g);E("text",{x,y:y+s*.36,"text-anchor":"middle","font-size":s,"font-weight":700,fill:C[c]},t,g);return g}
+function line(svg,d,c,mk,o){o=o||{};const plain=!o.dash&&!o.anim&&!o.nodraw;return E("path",{d,fill:"none",stroke:C[c],"stroke-width":o.w||2.6,"stroke-dasharray":o.dash?"8 7":null,class:o.anim?"dash":(plain?"draw":null),pathLength:plain?1:null,"marker-end":mk?mk(c):null,id:o.id||null,opacity:o.op||null},null,svg)}
+function dot(svg,id,c,dur,begin,r){const ci=E("circle",{r:r||6,fill:C[c],class:"flow-dot"},null,svg);const am=E("animateMotion",{dur:dur+"s",begin:(begin||0)+"s",repeatCount:"indefinite"},null,ci);E("mpath",{href:"#"+id},null,am);return ci}
+
+/* ================= deck engine ================= */
+const deck=$("#deck"),slides=$$(".slide"),HOOK={};
+let cur=0,step=0,booted=false;
+slides.forEach(s=>{let n=0;s.querySelectorAll(".kicker,h1,h2,.sub,.meta,.rv").forEach(e=>{e.classList.add("rv");e.style.setProperty("--i",n++)})});
+function maxStep(i){const s=slides[i];if(s.dataset.steps)return +s.dataset.steps;let m=0;s.querySelectorAll("[data-step]").forEach(e=>m=Math.max(m,+e.dataset.step));return m}
+function applySteps(){const s=slides[cur];s.querySelectorAll("[data-step]").forEach(e=>{const on=+e.dataset.step<=step;if(on&&!e.classList.contains("on"))countIn(e,false);e.classList.toggle("on",on)});const h=HOOK[s.id];if(h&&h.step)h.step(step)}
+function go(i,st){i=Math.max(0,Math.min(slides.length-1,i));const prev=cur,chg=i!==prev||!booted;
+  if(i!==prev){clearLater();const h=HOOK[slides[prev].id];if(h&&h.leave)h.leave()}
+  cur=i;step=st==null?0:Math.max(0,Math.min(maxStep(i),st));
+  slides.forEach((s,k)=>{s.classList.toggle("active",k===i);s.classList.toggle("past",k<i);s.classList.toggle("gone",k!==i&&k!==prev)});
+  if(i!==prev)later(()=>slides[prev].classList.add("gone"),650);
+  const h=HOOK[slides[i].id];
+  if(chg){countIn(slides[i],true);if(h&&h.enter)h.enter()}
+  applySteps();booted=true;
+  $("#fNum").textContent=String(i+1).padStart(2,"0")+" / "+slides.length;$("#fSec").textContent=slides[i].dataset.sec||"";
+  $("#prog").style.width=((i+1)/slides.length*100)+"%";
+  const n=slides[i].querySelector(".notes");$("#notesText").textContent=n?n.textContent.trim():"";
+  try{history.replaceState(null,"","#"+(i+1))}catch(e){}
+  $$("#ovGrid button").forEach((b,k)=>b.classList.toggle("cur",k===i))}
+function next(){if(step<maxStep(cur)){step++;applySteps()}else if(cur<slides.length-1)go(cur+1,0)}
+function prev(){if(step>0){step--;applySteps()}else if(cur>0)go(cur-1,maxStep(cur-1))}
+function fit(){const s=Math.min(innerWidth/1600,innerHeight/900);deck.style.transform=`scale(${s})`}
+addEventListener("resize",fit);fit();
+document.addEventListener("keydown",e=>{const t=e.target,k=e.key;
+  if(t&&t.tagName==="INPUT"&&t.type==="text"&&k!=="Escape")return;
+  if(t&&t.tagName==="INPUT"&&t.type==="range"&&k.startsWith("Arrow"))return;
+  if(["ArrowRight","PageDown"," ","Enter"].includes(k)){e.preventDefault();if($("#overview").classList.contains("show"))return;next()}
+  else if(["ArrowLeft","PageUp","Backspace"].includes(k)){e.preventDefault();prev()}
+  else if(k==="Home")go(0);else if(k==="End")go(slides.length-1,maxStep(slides.length-1));
+  else if(k==="o"||k==="O")toggleOv();else if(k==="Escape"){$("#overview").classList.remove("show");if(t&&t.blur)t.blur()}
+  else if(k==="n"||k==="N")$("#notes").classList.toggle("show");
+  else if(k==="f"||k==="F")toggleFull();else if(k==="t"||k==="T")toggleTheme()});
+let tx=null;deck.addEventListener("touchstart",e=>{tx=e.touches[0].clientX},{passive:true});deck.addEventListener("touchend",e=>{if(tx==null)return;const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50)(dx<0?next:prev)();tx=null});
+function toggleOv(){$("#overview").classList.toggle("show")}
+function toggleFull(){try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}catch(e){}}
+function toggleTheme(){const r=document.documentElement;r.dataset.theme=r.dataset.theme==="light"?"dark":"light";store.set("ifp-theme",r.dataset.theme)}
+document.documentElement.dataset.theme=store.get("ifp-theme","dark");
+$("#bPrev").onclick=prev;$("#bNext").onclick=next;$("#bOv").onclick=toggleOv;$("#bNotes").onclick=()=>$("#notes").classList.toggle("show");$("#bTheme").onclick=toggleTheme;$("#bFull").onclick=toggleFull;
+$("#ovGrid").innerHTML=slides.map((s,i)=>`<button data-i="${i}"><small>${String(i+1).padStart(2,"0")} · ${s.dataset.sec||""}</small><span>${s.dataset.title}</span></button>`).join("");
+$$("#ovGrid button").forEach(b=>b.onclick=()=>{go(+b.dataset.i);$("#overview").classList.remove("show")});
+$("#overview").addEventListener("click",e=>{if(e.target.id==="overview")e.currentTarget.classList.remove("show")});
+let idle;function wake(){$("#hud").classList.remove("hide");$("#help").classList.remove("hide");clearTimeout(idle);idle=setTimeout(()=>{$("#hud").classList.add("hide");$("#help").classList.add("hide")},2800)}
+addEventListener("mousemove",wake);wake();
+
+/* generic: sequence diagram with step-through and auto preview */
+function seqDiagram(svgSel,lanes,steps,panelSel,intro,hookId){const svg=$(svgSel),W=+(svg.dataset.w||780),H=82+steps.length*56;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const mk=markers(svg),LX={};
+ lanes.forEach(([k,t,c,x])=>{LX[k]=x;const w=textW(t,15,800)+34;E("line",{x1:x,y1:54,x2:x,y2:H-6,stroke:"var(--line)","stroke-width":2,"stroke-dasharray":"4 7"},null,svg);const g=E("g",{},null,svg);popIn(svg,g);E("rect",{x:x-w/2,y:8,width:w,height:40,rx:12,fill:S[c],stroke:C[c],"stroke-width":2},null,g);E("text",{x,y:34,"text-anchor":"middle","font-size":15,"font-weight":800,fill:C[c]},t,g)});
+ const rows=steps.map((s,i)=>{const y=96+i*56,c=s[3],g=E("g",{style:"transition:opacity .35s"},null,svg),x1=LX[s[0]],x2=LX[s[1]];let pk=null;const w=textW(s[2],13,700)+24;let rx;
+  if(s[0]===s[1]){const L=x1>W*.6;line(g,L?`M${x1-4},${y-8} h-52 v20 h46`:`M${x1+4},${y-8} h52 v20 h-46`,c,mk,{nodraw:true});rx=L?x1-64-w:x1+64}
+  else{const d=x2>x1?1:-1;E("line",{x1:x1+d*5,y1:y,x2:x2-d*7,y2:y,stroke:C[c],"stroke-width":2.6,"marker-end":mk(c)},null,g);rx=(x1+x2)/2-w/2;
+   pk=E("circle",{cy:y,r:7,fill:C[c],opacity:0},null,g);E("animate",{attributeName:"cx",from:x1,to:x2,dur:"1.1s",repeatCount:"indefinite"},null,pk)}
+  const lg=E("g",{},null,g);E("rect",{class:"nb",x:rx,y:y-31,width:w,height:24,rx:12,fill:"var(--svgbg)",stroke:C[c],"stroke-width":1.4},null,lg);E("text",{x:rx+w/2,y:y-14,"text-anchor":"middle","font-size":13,"font-weight":700,fill:C[c]},s[2],lg);
+  E("circle",{cx:24,cy:y-10,r:14,fill:C[c]},null,g);E("text",{x:24,y:y-5,"text-anchor":"middle","font-size":13,"font-weight":800,fill:"var(--svgbg)"},String(i+1),g);return{g,pk}});
+ function show(n,auto){rows.forEach((r,j)=>{r.g.style.opacity=n===0?.22:(j<n-1?.42:j===n-1?1:.12);if(r.pk)r.pk.setAttribute("opacity",j===n-1?1:0)});
+  if(auto)return;const s=steps[n-1];$(panelSel).innerHTML=n===0?intro:`<span class="tag" style="color:${C[s[3]]}">Bước ${n} / ${steps.length} · ${s[2]}</span><h3>${s[4]}</h3><p>${s[5]}</p>`}
+ const tk=ticker(t=>show(1+Math.floor(t/1.4)%steps.length,true));
+ HOOK[hookId]={enter(){},leave(){tk.stop()},step(n){show(n);if(n===0)tk.start();else tk.stop()}}}
+
+/* generic: cycle (state) diagram */
+function cycleDiagram(svgSel,nodes,edges,panelSel,intro,o,hookId){const svg=$(svgSel),mk=markers(svg),n=nodes.length,bw=o.bw||220,bh=o.bh||76;
+ const P=nodes.map((nd,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return[o.cx+o.rx*Math.cos(a),o.cy+o.ry*Math.sin(a)]});
+ const clip=(a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1];const t=Math.min((bw/2+8)/Math.abs(dx||1e-9),(bh/2+8)/Math.abs(dy||1e-9));return[a[0]+dx*t,a[1]+dy*t]};
+ const ED=edges.map(([a,b,dash])=>{const p=clip(P[a],P[b]),q=clip(P[b],P[a]);line(svg,`M${p[0]},${p[1]} L${q[0]},${q[1]}`,dash?"g":"c",mk,{dash});return{a,b,p,q}});
+ const G=nodes.map((nd,i)=>{const g=box(svg,{x:P[i][0]-bw/2,y:P[i][1]-bh/2,w:bw,h:bh,c:nd[1],t:nd[0],sub:[nd[2]],ty:32,fs:19,gap:24,ss:14.5});g.style.transition="opacity .35s";return g});
+ const tok=E("circle",{r:10,fill:C.c,opacity:0,stroke:"var(--svgbg)","stroke-width":3},null,svg);let stopT=null;
+ function move(k){const e=ED.find(e=>e.b===k&&!edges[ED.indexOf(e)][2]);if(!e)return;if(stopT)stopT();tok.setAttribute("opacity",1);stopT=tween(700,p=>{const z=ease(p);tok.setAttribute("cx",e.p[0]+(e.q[0]-e.p[0])*z);tok.setAttribute("cy",e.p[1]+(e.q[1]-e.p[1])*z)})}
+ function show(k,auto){G.forEach((g,i)=>{g.style.opacity=k<0?1:(i===k?1:.4);g.classList.toggle("sel",i===k)});if(auto)return;$(panelSel).innerHTML=k<0?intro:`<span class="tag" style="color:${C[nodes[k][1]]}">${k+1} / ${n}</span><h3>${nodes[k][0]}</h3><p>${nodes[k][3]}</p>`}
+ let last=-1;const tk=ticker(t=>{const k=Math.floor(t/1.5)%n;if(k!==last){last=k;show(k,true);move(k)}});
+ HOOK[hookId]={enter(){last=-1},leave(){tk.stop()},step(s){if(s===0){show(-1);last=-1;tk.start()}else{tk.stop();show(s-1);move(s-1)}}}}
+
+function build(){
+/* ================= cover art ================= */
+function netArt(svg,seed){const P=[[320,120,"v"],[150,330,"c"],[490,330,"l"],[320,520,"a"],[320,330,"v"]];
+  [[0,4],[1,4],[2,4],[3,4],[0,1],[0,2],[1,3],[2,3]].forEach(([a,b],i)=>{const id=svg.id+"e"+i;E("path",{id,d:`M${P[a][0]},${P[a][1]} L${P[b][0]},${P[b][1]}`,stroke:"var(--panel-b)","stroke-width":2,fill:"none"},null,svg);dot(svg,id,P[a][2],2.2+i*.37,i*.3)});
+  P.forEach((p,i)=>{const R=i===4?58:38;const g=E("g",{},null,svg);popIn(svg,g);E("circle",{cx:p[0],cy:p[1],r:R,fill:S[p[2]],stroke:C[p[2]],"stroke-width":2.5},null,g);E("circle",{cx:p[0],cy:p[1],r:R,fill:"none",stroke:C[p[2]],"stroke-width":2,opacity:.5},null,svg).innerHTML=`<animate attributeName="r" values="${R};${R+38}" dur="3s" begin="${i*.6}s" repeatCount="indefinite"/><animate attributeName="opacity" values=".5;0" dur="3s" begin="${i*.6}s" repeatCount="indefinite"/>`});
+  E("text",{x:320,y:338,"text-anchor":"middle","font-size":20,"font-weight":800,fill:C.v},seed,svg)}
+netArt($("#coverArt"),"SERVER");netArt($("#endArt"),"Q & A");
+
+/* ================= problem ================= */
+(function(){const svg=$("#probSvg"),mk=markers(svg);
+ box(svg,{x:30,y:40,w:380,h:250,c:"g",t:"Game gốc",sub:["một người, một máy","bot AI tìm đường bằng A*"],ty:70});
+ [[110,0,"c"],[190,.8,"r"],[270,1.6,"r"],[340,2.4,"r"]].forEach(([x,b,c])=>{const ci=E("circle",{cx:x,cy:228,r:11,fill:C[c]},null,svg);E("animate",{attributeName:"cx",values:`${x};${x+34};${x-30};${x}`,dur:"4s",begin:b+"s",repeatCount:"indefinite"},null,ci)});
+ line(svg,"M432,165 H585","v",mk);pill(svg,508,130,"lên mạng","v",15);
+ const cx=1010,cy=165;
+ for(let i=0;i<6;i++){const a=-Math.PI/2+i*Math.PI/3,x=cx+275*Math.cos(a),y=cy+122*Math.sin(a),dx=cx-x,dy=cy-y,L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L;
+  const p=[x+ux*34,y+uy*34],q=[cx-ux*68,cy-uy*68];
+  E("path",{id:"pr"+i,d:`M${p[0]},${p[1]} L${q[0]},${q[1]}`,stroke:"var(--line)","stroke-width":2,fill:"none"},null,svg);E("path",{id:"pq"+i,d:`M${q[0]},${q[1]} L${p[0]},${p[1]}`,stroke:"none",fill:"none"},null,svg);
+  dot(svg,"pr"+i,"c",1.6,i*.27,5);dot(svg,"pq"+i,"v",1.6,i*.27+.8,5);
+  const g=E("g",{},null,svg);popIn(svg,g);E("circle",{cx:x,cy:y,r:30,fill:S.c,stroke:C.c,"stroke-width":2.2},null,g);E("text",{x,y:y+6,"text-anchor":"middle","font-size":16,"font-weight":800,fill:C.c},"P"+(i+1),g)}
+ const rg=E("circle",{cx,cy,r:62,fill:"none",stroke:C.v,"stroke-width":2,opacity:.5},null,svg);rg.innerHTML=`<animate attributeName="r" values="62;110" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".5;0" dur="2.4s" repeatCount="indefinite"/>`;
+ const g=E("g",{},null,svg);popIn(svg,g);E("circle",{cx,cy,r:62,fill:S.v,stroke:C.v,"stroke-width":2.6},null,g);E("text",{x:cx,y:cy+7,"text-anchor":"middle","font-size":19,"font-weight":800,fill:C.v},"Server",g)})();
+
+/* ================= architecture ================= */
+const ARCH={
+ client:["c","Client","Unity 6",`<p>Game người chơi tải về, chạy trên Windows, macOS, Linux.</p><p>Client <b>dự đoán</b> bước đi của chính mình và chỉ gửi phím bấm, không gửi vị trí.</p>`],
+ master:["v","Master Server",".NET 10 · TCP + TLS",`<p>Đăng nhập, phòng, ghép trận, chat, thành tích. Không cần Unity.</p><p>Mọi logic chạy trên <b>một luồng</b>. Phòng đủ người thì chọn game server khoẻ và phát vé có chữ ký.</p>`],
+ db:["a","SQLite","một file · WAL",`<p>8 bảng: tài khoản, kết quả trận, token, chỉ số, thành tựu, mùa giải.</p><p>Chỉ master đọc ghi. Sao lưu 6 giờ một lần khi master vẫn chạy.</p>`],
+ gs:["l","Game Server","Unity headless · UDP",`<p>Cùng project Unity, build không hình, không tiếng, chạy trong Docker. Mỗi tiến trình một trận.</p><p>30 tick, 20 snapshot mỗi giây. Kiểm vé bằng khoá chung, <b>không hỏi lại master</b>.</p>`],
+ infra:["g","Hạ tầng","AWS · Azure · Docker",`<p>Master trên AWS EC2, game server trên VM Azure, đều chạy Docker Compose, dựng bằng Terraform.</p><p>Image ghim theo digest.</p>`],
+ proto:["v","Ironfront.Net.Protocol","thư viện dùng chung",`<p>Định dạng từng gói tin, mã lỗi, hằng số như 30 Hz, 1.200 byte, 16 người chơi.</p><p>CI làm hỏng build nếu đặc tả lệch với code.</p>`]};
+(function(){const svg=$("#archSvg"),mk=markers(svg);
+ line(svg,"M265,250 H330 V185 H400","v",mk,{id:"aT"});line(svg,"M265,300 H330 V445 H400","l",mk,{id:"aU"});
+ line(svg,"M525,380 V252","v",mk,{id:"aG",dash:true});line(svg,"M650,185 H786","a",mk,{id:"aD"});
+ line(svg,"M790,445 H654","g",mk,{dash:true,anim:true});
+ dot(svg,"aT","v",2.4);[0,.3,.6].forEach(b=>dot(svg,"aU","l",.9,b));dot(svg,"aG","v",3);dot(svg,"aD","a",1.8);
+ const N=[["proto",{x:330,y:8,w:340,h:66,c:"v",t:"Ironfront.Net.Protocol",sub:["luật chung của mọi gói tin"],ty:30,fs:18,gap:22}],
+  ["client",{x:20,y:200,w:245,h:150,c:"c",t:"Client",sub:["Unity 6","Windows · macOS · Linux"],ty:56}],
+  ["master",{x:400,y:118,w:250,h:134,c:"v",t:"Master Server",sub:[".NET 10 · một luồng logic","tài khoản · phòng · ghép trận"],ty:46}],
+  ["db",{x:790,y:122,w:190,h:126,c:"a",t:"SQLite",sub:["ironfront.db · WAL"],cyl:true,ty:72}],
+  ["gs",{x:400,y:380,w:250,h:134,c:"l",t:"Game Server",sub:["Unity headless · UDP","30 tick mỗi giây"],ty:46}],
+  ["infra",{x:790,y:380,w:190,h:134,c:"g",t:"Hạ tầng",sub:["AWS EC2 · Azure VM","Docker · GHCR"],ty:46,dashed:true}]];
+ N.forEach(([k,o])=>{o.click=true;const g=box(svg,o);g.dataset.k=k;g.addEventListener("click",()=>showArch(k))});
+ pill(svg,330,218,"TCP + TLS","v");pill(svg,330,372,"UDP","l");pill(svg,525,316,"đăng ký · heartbeat · kết quả","v",13);pill(svg,718,185,"SQL","a");pill(svg,722,445,"triển khai","g",13);
+ E("text",{x:525,y:100,"text-anchor":"middle","font-size":14,fill:"var(--muted)"},"cả ba chương trình dùng chung thư viện này",svg)})();
+function showArch(k){const a=ARCH[k];$$("#archSvg .click").forEach(g=>g.classList.toggle("sel",g.dataset.k===k));
+ $("#archPanel").innerHTML=`<span class="tag" style="color:${C[a[0]]}">${a[2]}</span><h3>${a[1]}</h3>${a[3]}<p class="muted" style="font-size:16px;margin-top:22px">Bấm vào khối khác để xem tiếp.</p>`}
+showArch("master");
+
+/* ================= layers ================= */
+(function(){const svg=$("#layerSvg"),mk=markers(svg);
+ const NODES={unity:[20,20,680,"Ironfront_Reborn (Unity 6)","c","nạp 6 DLL trong Assets/Plugins, build bằng tools/build-libs.ps1"],master:[760,20,200,"MasterServer","v",".NET 10 · không qua Unity"],
+  transport:[20,150,150,"Net.Transport","l","UDP tự viết"],repl:[190,150,150,"Net.Replication","l","đồng bộ, chiến đấu"],link:[360,150,150,"Net.MasterLink","l","GS báo kết quả"],
+  mclient:[530,150,150,"MasterClient","c","TCP tới master"],config:[760,150,200,"Net.Configuration","c",".env · bản đồ · độc lập"],proto:[250,290,400,"Ironfront.Net.Protocol","a","netstandard2.1 · gói tin, hằng số, mã lỗi · không phụ thuộc ai"]};
+ const DESC={unity:"Project Unity của client và game server. Nạp sáu DLL đã build sẵn, không biên dịch mã mạng trong Editor.",master:"Chương trình .NET độc lập. Chỉ dùng Configuration và Protocol, không dính gì tới Unity.",transport:"Lớp UDP tự viết: số thứ tự, xác nhận, gửi lại, cắt ghép mảnh, kiểm soát nghẽn.",repl:"Đồng bộ trạng thái và chiến đấu: snapshot, delta, interest, lag compensation.",link:"Đường TCP từ game server về master: đăng ký, heartbeat, kết quả trận.",mclient:"Thư viện TCP mà client dùng để nói chuyện với master.",config:"Đọc cấu hình .env và danh sách bản đồ. Không phụ thuộc thư viện mạng nào.",proto:"Đáy của mọi thứ: định dạng gói tin, hằng số, mã lỗi. Không phụ thuộc ai, nên ai cũng dùng được."};
+ const ED=[{d:"M360,78 V108 M95,108 H800",f:"unity",t:"*",c:"c"},...[["transport",95],["repl",265],["link",435],["mclient",605],["config",800]].map(([t,x])=>({d:`M${x},108 V150`,f:"unity",t,c:"c",m:1})),
+  {d:"M900,78 V150",f:"master",t:"config",c:"v",m:1},{d:"M960,49 H986 V320 H652",f:"master",t:"proto",c:"v",m:1},
+  {d:"M360,179 H342",f:"link",t:"repl",c:"l",m:1},{d:"M510,179 H528",f:"link",t:"mclient",c:"l",m:1},
+  {d:"M95,208 V240 H330 V290",f:"transport",t:"proto",c:"g",m:1},{d:"M265,208 V228 H400 V290",f:"repl",t:"proto",c:"g",m:1},{d:"M605,208 V240 H470 V290",f:"mclient",t:"proto",c:"g",m:1}];
+ ED.forEach(e=>{e.el=E("path",{d:e.d,fill:"none",stroke:C[e.c],"stroke-width":2,class:"draw",pathLength:1,"marker-end":e.m?mk(e.c):null,style:"transition:opacity .25s"},null,svg)});
+ const G={};Object.entries(NODES).forEach(([k,n])=>{const g=box(svg,{x:n[0],y:n[1],w:n[2],h:58,c:n[4],t:n[3],sub:[n[5]],ty:25,fs:14,gap:20,ss:12,click:true});g.style.transition="opacity .25s";G[k]=g;
+  const on=()=>show(k);g.addEventListener("mouseenter",on);g.addEventListener("click",on)});
+ svg.addEventListener("mouseleave",()=>show(null));
+ function show(k){Object.entries(G).forEach(([n,g])=>{const rel=!k||n===k||ED.some(e=>(e.f===k&&(e.t===n||e.t==="*"))||(e.t===k&&e.f===n));g.style.opacity=rel?1:.25;g.classList.toggle("sel",n===k)});
+  ED.forEach(e=>e.el.style.opacity=!k||e.f===k||e.t===k||(e.t==="*"&&k==="unity")?1:.1);
+  const uses=k?ED.filter(e=>e.f===k&&e.t!=="*").map(e=>NODES[e.t][3]):[],by=k?ED.filter(e=>e.t===k).map(e=>NODES[e.f][3]):[];
+  $("#layerPanel").innerHTML=!k?`<span class="tag">Rê chuột lên một khối</span><h3>Phụ thuộc theo ProjectReference</h3><p>Mũi tên đi từ project dùng sang project được dùng. Không có vòng, và không thư viện thuần nào được trỏ ngược lên Unity.</p>`:`<span class="tag" style="color:${C[NODES[k][4]]}">${NODES[k][3]}</span><h3 style="font-size:24px">${DESC[k]}</h3><p><b style="color:var(--ink)">Dùng:</b> ${uses.length?uses.join(", "):"không ai"}</p><p><b style="color:var(--ink)">Được dùng bởi:</b> ${by.length?by.join(", "):"không ai"}</p>`}
+ show(null)})();
+
+/* ================= head-of-line blocking ================= */
+(function(){const svg=$("#holSvg");const L=[{y:95,n:"TCP",c:"v"},{y:230,n:"UDP",c:"c"}];const X0=200,X1=1110,T=1.4,N=8,gap=.34,LOST=4,RTX=1.9,PER=7.4;
+ L.forEach(l=>{E("text",{x:20,y:l.y+7,"font-size":24,"font-weight":800,fill:C[l.c]},l.n,svg);E("line",{x1:X0-40,y1:l.y,x2:X1+10,y2:l.y,stroke:"var(--line)","stroke-width":2,"stroke-dasharray":"3 7"},null,svg);
+  E("rect",{x:X0-80,y:l.y-26,width:52,height:52,rx:12,fill:S[l.c],stroke:C[l.c],"stroke-width":2},null,svg);E("text",{x:X0-54,y:l.y+5,"text-anchor":"middle","font-size":13,"font-weight":700,fill:C[l.c]},"gửi",svg);
+  E("rect",{x:X1+20,y:l.y-40,width:250,height:80,rx:14,fill:S[l.c],stroke:C[l.c],"stroke-width":2},null,svg);E("text",{x:X1+32,y:l.y-48,"font-size":14,fill:"var(--ink2)"},"game nhận được",svg)});
+ const mk=(l,i)=>{const g=E("g",{},null,svg);E("circle",{r:17,fill:C[l.c]},null,g);E("text",{y:6,"text-anchor":"middle","font-size":16,"font-weight":800,fill:"var(--svgbg)"},String(i),g);return g};
+ const pk=L.map(l=>Array.from({length:N},(_,k)=>mk(l,k+1)));
+ const rt=mk(L[0],LOST);rt.querySelector("circle").setAttribute("fill",C.a);
+ const slot=(li,i)=>[X1+44+((i-1)%4)*58,L[li].y-14+Math.floor((i-1)/4)*30];
+ const got=L.map((l,li)=>Array.from({length:N},(_,k)=>{const [x,y]=slot(li,k+1);const g=E("g",{opacity:.18},null,svg);E("rect",{x:x-20,y:y-11,width:40,height:24,rx:7,fill:C[l.c]},null,g);E("text",{x,y:y+6,"text-anchor":"middle","font-size":14,"font-weight":800,fill:"var(--svgbg)"},String(k+1),g);return g}));
+ const xMark=E("text",{x:(X0+X1)/2,y:L[0].y-30,"text-anchor":"middle","font-size":15,"font-weight":800,fill:C.r},"✕ gói 4 mất",svg);const xMark2=E("text",{x:(X0+X1)/2,y:L[1].y-30,"text-anchor":"middle","font-size":15,"font-weight":800,fill:C.r},"✕ gói 4 mất",svg);
+ const waitT=E("text",{x:X1-10,y:L[0].y+50,"text-anchor":"end","font-size":16,"font-weight":700,fill:C.a},"gói 5 đến 8 đã tới nhưng phải chờ gói 4",svg);
+ const skipT=E("text",{x:X1-10,y:L[1].y+50,"text-anchor":"end","font-size":16,"font-weight":700,fill:C.c},"dùng ngay gói 5 đến 8, bỏ qua gói 4",svg);
+ function frame(t){t=t%PER;const sp=i=>.3+gap*(i-1),arr=i=>sp(i)+T;const rtS=sp(LOST)+RTX,rtA=rtS+T;
+  [0,1].forEach(li=>{for(let i=1;i<=N;i++){const g=pk[li][i-1],s=sp(i),dt=t-s;let vis=dt>=0&&dt<=T,x=X0+(X1-X0)*Math.min(1,Math.max(0,dt/T)),op=1;
+    if(i===LOST){if(dt>T*.5){vis=dt<T*.5+.35;op=1-(dt-T*.5)/.35;x=X0+(X1-X0)*.5}}
+    let delivered=false,waiting=false;if(i!==LOST){if(li===1)delivered=t>=arr(i);else{if(i<LOST)delivered=t>=arr(i);else{delivered=t>=Math.max(arr(i),rtA);waiting=t>=arr(i)&&!delivered}}}else if(li===0)delivered=t>=rtA;
+    if(waiting){vis=true;x=X1-20-(i-LOST-1)*40;op=.55}
+    g.setAttribute("opacity",vis?op:0);g.setAttribute("transform",`translate(${x},${L[li].y})`);got[li][i-1].setAttribute("opacity",delivered?1:.15)}});
+  const dr=t-rtS;rt.setAttribute("opacity",dr>=0&&dr<=T?1:0);rt.setAttribute("transform",`translate(${X0+(X1-X0)*Math.min(1,Math.max(0,dr/T))},${L[0].y})`);
+  const lostOn=t>sp(LOST)+T*.5&&t<sp(LOST)+T*.5+1.6;xMark.setAttribute("opacity",lostOn?1:0);xMark2.setAttribute("opacity",lostOn?1:0);
+  waitT.setAttribute("opacity",t>arr(LOST+1)&&t<rtA?1:0);skipT.setAttribute("opacity",t>arr(LOST+1)&&t<PER-.6?1:0)}
+ const tk=ticker(frame);frame(0);
+ $("#holReplay").onclick=()=>tk.start();
+ HOOK["s-hol"]={enter(){tk.start()},leave(){tk.stop()}}})();
+
+/* ================= authority demo ================= */
+(function(){const svg=$("#authSvg2");
+ E("line",{x1:340,y1:120,x2:1060,y2:120,stroke:"var(--line)","stroke-width":2,"stroke-dasharray":"4 8"},null,svg);
+ box(svg,{x:20,y:30,w:310,h:180,c:"c",t:"Client",sub:["máy người chơi","không được tin"],ty:86});
+ const sv=box(svg,{x:1070,y:30,w:310,h:180,c:"v",t:"Server",sub:["nguồn sự thật","mô phỏng 30 lần/giây"],ty:86}),svR=sv.querySelector(".nb");
+ const pk=E("g",{opacity:0},null,svg),pr=E("rect",{height:42,y:-21,rx:21,"stroke-width":2},null,pk),pt=E("text",{y:6,"text-anchor":"middle","font-size":16,"font-weight":800},"",pk);
+ let stop=null,run=0;const res=$("#authRes");
+ function setPk(t,c){const w=textW(t,16,800)+36;pr.setAttribute("x",-w/2);pr.setAttribute("width",w);pr.setAttribute("fill",S[c]);pr.setAttribute("stroke",C[c]);pt.setAttribute("fill",C[c]);pt.textContent=t}
+ function fly(x0,x1,ms,done){if(stop)stop();pk.setAttribute("opacity",1);stop=tween(ms,p=>pk.setAttribute("transform",`translate(${x0+(x1-x0)*ease(p)},120)`),done)}
+ function flash(c){svR.setAttribute("stroke",C[c]);svR.setAttribute("stroke-width",5);later(()=>{svR.setAttribute("stroke",C.v);svR.setAttribute("stroke-width",2.2)},1000)}
+ function send(kind){const r=++run;res.innerHTML="";
+  if(kind==="key"){setPk("phím W · ngắm 37°","c");fly(470,930,1000,()=>{if(r!==run)return;flash("l");res.innerHTML=`<b style="color:var(--lime)">Nhận.</b> Server tự mô phỏng và tính ra vị trí mới.`;
+    later(()=>{if(r!==run)return;setPk("vị trí đã chốt: (412, 87)","v");fly(930,470,1000,()=>{if(r!==run)return;res.innerHTML=`<b style="color:var(--violet)">Client vẽ theo</b> trạng thái server đã chốt.`;later(()=>{if(r===run)pk.setAttribute("opacity",0)},900)})},800)})}
+  else{setPk("tôi đang ở (9999, 9999)","r");fly(470,930,1000,()=>{if(r!==run)return;flash("r");if(stop)stop();stop=tween(600,p=>pk.setAttribute("transform",`translate(${930+Math.sin(p*Math.PI*6)*14*(1-p)},120)`),()=>{pk.setAttribute("opacity",.3)});
+    res.innerHTML=`<b style="color:var(--rose)">Bỏ.</b> Gói input không có trường vị trí, không có chỗ để nhận con số này.`})}}
+ $("#authKey").onclick=()=>send("key");$("#authFake").onclick=()=>send("fake");
+ HOOK["s-auth"]={enter(){run++;pk.setAttribute("opacity",0);res.innerHTML="";later(()=>send("key"),700);later(()=>send("fake"),5200)},leave(){run++;if(stop)stop()}}})();
+
+/* ================= journey ================= */
+seqDiagram("#seqSvg",[["C","Client","c",90],["M","Master","v",300],["G","Game Server","l",510],["D","SQLite","a",690]],[
+ ["C","M","LOGIN_REQ","v","Đăng nhập qua TCP + TLS","Client gửi tên và chuỗi SHA-256 của mật khẩu. Luồng logic của master gọi dịch vụ xác thực."],
+ ["M","D","SELECT accounts","a","Tra tài khoản","bcrypt so mật khẩu. Đúng thì ghi giờ đăng nhập; sai thì tăng bộ đếm, 10 lần thì khoá 15 phút."],
+ ["M","C","LOGIN_RES","v","Nhận phiên làm việc","Phiên sống 24 giờ trong bộ nhớ master. Client gửi heartbeat 15 giây một lần; im lặng 45 giây là bị cắt."],
+ ["C","M","ROOM / MATCHMAKE","v","Vào phòng","Tạo phòng, vào phòng, hoặc ghép trận nhanh. Mọi thay đổi trong phòng được master đẩy về cho cả phòng."],
+ ["M","M","đếm ngược 10 s","v","Đếm ngược, chọn server","Đủ 2 người và mọi người sẵn sàng thì đếm 10 giây, chọn game server có heartbeat trong 15 giây, CPU dưới 90%, tick dưới 40 ms."],
+ ["M","G","GS_ROOM_ASSIGNED","v","Phát vé vào trận","Game server được giao phòng. Mỗi người nhận địa chỉ server và một vé 64 byte có chữ ký, hạn 60 giây."],
+ ["C","G","CONNECT + vé · UDP","l","Chuyển sang UDP","Bắt tay 4 bước có cookie. Địa chỉ được chứng minh rồi mới kiểm chữ ký vé."],
+ ["G","C","snapshot ⇄ input","l","Trong trận","Client gửi phím bấm 30 lần mỗi giây; server gửi snapshot 20 lần mỗi giây, đã nén và lọc theo khoảng cách."],
+ ["C","G","SHOT_REPORT","l","Một phát súng","Client hiện hiệu ứng ngay, báo viên trúng nó thấy. Server tua thời gian, kiểm 7 điều kiện, tự trừ máu."],
+ ["G","M","GS_MATCH_ENDED","v","Ghi kết quả","Hết hiệp, game server gửi kết quả qua TCP. Master ghi kết quả và chỉ số trong một transaction, mở thành tựu."]],
+ "#seqPanel",`<span class="tag">10 bước · đang tự chạy</span><h3>TCP trước và sau trận, UDP trong trận</h3><p>Nhấn → để đi qua từng bước. Mỗi bước là một tin nhắn thật trong giao thức.</p>`,"s-journey");
+
+/* ================= game flow states ================= */
+(function(){const svg=$("#gfSvg"),mk=markers(svg);
+ const ST=[["Booting","khởi động, đọc cấu hình","Đọc cấu hình, nạp tài nguyên, kiểm token ghi nhớ nếu có."],["LoginScreen","đăng nhập, đăng ký","Màn hình đăng nhập và đăng ký."],["Authenticating","chờ LOGIN_RES","Đã gửi LOGIN_REQ qua TLS, chờ master trả lời."],["Lobby","sảnh","Sảnh: bảng xếp hạng, hồ sơ, chat sảnh, nút ghép trận."],["RoomBrowser","danh sách phòng","Danh sách phòng với bản đồ, số người, số bot. Tạo hoặc chọn phòng."],
+  ["JoiningRoom","chờ vào phòng","Đã gửi yêu cầu vào phòng, chờ ROOM_STATE_PUSH đầu tiên."],["RoomLobby","phòng chờ","Đổi đội, sẵn sàng, đếm ngược. Mọi thay đổi do master đẩy về."],["ConnectingGame","bắt tay UDP","Nhận vé, bắt tay UDP với game server, nạp scene bản đồ."],["InMatch","đang chơi","Gửi input 30 lần mỗi giây, nhận snapshot 20 lần mỗi giây."],["MatchEnd","tổng kết","Bảng tổng kết hiệp, thành tựu vừa mở. Sau đó quay về phòng chờ."]];
+ const pos=i=>{const row=i<5?0:1,col=row?9-i:i;return[30+col*272,row?200:30]},ctr=i=>{const[x,y]=pos(i);return[x+120,y+35]};
+ for(let i=0;i<4;i++){line(svg,`M${30+i*272+244},65 H${30+(i+1)*272-6}`,"c",mk);line(svg,`M${30+(4-i)*272-4+0},235 H${30+(3-i)*272+246}`,"c",mk)}
+ line(svg,`M${30+4*272+120},104 V194`,"c",mk);
+ line(svg,"M150,200 V162 H846 V194","g",mk,{dash:true});pill(svg,498,162,"hết trận: quay về phòng chờ","g",13);
+ const G=ST.map((s,i)=>{const[x,y]=pos(i);const g=box(svg,{x,y,w:240,h:70,c:i>=7?"l":i>=3?"v":"c",t:s[0],sub:[s[1]],ty:30,fs:17,gap:23,ss:14,mono:true});g.style.transition="opacity .3s";return g});
+ const tok=E("circle",{r:11,fill:C.a,stroke:"var(--svgbg)","stroke-width":3,opacity:0},null,svg);
+ const SEQ=[0,1,2,3,4,5,6,7,8,9,6,7,8,9];let last=-1,stopT=null;
+ function route(a,b){if(a===9&&b===6)return[[150,235],[150,162],[846,162],[846,235]];return[ctr(a),ctr(b)]}
+ function show(k,from){G.forEach((g,i)=>{g.style.opacity=i===k?1:.45;g.classList.toggle("sel",i===k)});$("#gfNow").textContent=ST[k][0];$("#gfDesc").textContent=ST[k][2];
+  if(from==null){tok.setAttribute("cx",ctr(k)[0]);tok.setAttribute("cy",ctr(k)[1]);return}const pts=route(from,k);if(stopT)stopT();stopT=tween(650,p=>{const q=polyAt(pts,ease(p));tok.setAttribute("cx",q[0]);tok.setAttribute("cy",q[1])})}
+ const tk=ticker(t=>{const j=Math.floor(t/1.3)%SEQ.length;if(j!==last){const from=last<0?null:SEQ[last];last=j;tok.setAttribute("opacity",1);show(SEQ[j],j===0?null:from)}});
+ show(0);HOOK["s-gf"]={enter(){last=-1;tk.start()},leave(){tk.stop()}}})();
+
+/* ================= room lifecycle ================= */
+(function(){const svg=$("#roomSvg"),mk=markers(svg);
+ const X={W:40,S:400,I:760,E:1120},NAME={W:"Waiting",S:"Starting",I:"InMatch",E:"Ending"},SUB={W:"đang tụ người",S:"đã chọn server",I:"đang đánh",E:"phòng đóng"};
+ line(svg,"M282,150 H396","v",mk);line(svg,"M642,150 H756","v",mk);line(svg,"M1002,150 H1116","v",mk);
+ line(svg,"M520,190 V250 H170 V194","r",mk,{dash:true});line(svg,"M880,190 V300 H120 V194","r",mk,{dash:true});line(svg,"M840,110 V40 H930 V106","l",mk,{dash:true});
+ pill(svg,339,82,"mọi người sẵn sàng (≥2) + 10 s","v",13);pill(svg,680,82,"GS_MATCH_STARTED","v",13);pill(svg,1060,82,"người cuối rời","v",13);
+ pill(svg,345,250,"có người bỏ sẵn sàng: tắt đồng hồ","r",13);pill(svg,500,300,"game server chết: lỗi 3001","r",13);pill(svg,1010,40,"hết hiệp: chơi hiệp mới","l",13);
+ const G={};Object.keys(X).forEach(k=>{G[k]=box(svg,{x:X[k],y:110,w:240,h:80,c:k==="E"?"g":"v",t:NAME[k],sub:[SUB[k]],ty:34,fs:20,gap:24,ss:15,mono:true});G[k].style.transition="opacity .3s"});
+ const tok=E("circle",{r:11,fill:C.a,stroke:"var(--svgbg)","stroke-width":3,cx:160,cy:150},null,svg);
+ const PATH={WS:[[282,150],[400,150]],SI:[[642,150],[760,150]],IE:[[1002,150],[1120,150]],SW:[[520,190],[520,250],[170,250],[170,190]],IW:[[880,190],[880,300],[120,300],[120,190]],II:[[840,110],[840,40],[930,40],[930,110]]};
+ const EV={W:[["Mọi người sẵn sàng","S","WS","Đủ ít nhất 2 người và mọi người sẵn sàng: đếm 10 giây, master chọn game server và phát vé."]],
+  S:[["GS_MATCH_STARTED","I","SI","Game server báo trận đã bắt đầu. Từ đây master đứng ngoài, trận chạy giữa client và game server."],["Có người bỏ sẵn sàng","W","SW","Một người bỏ sẵn sàng: tắt đồng hồ, phòng quay về Waiting."]],
+  I:[["Hết hiệp","I","II","Hết hiệp không đóng phòng. Game server chơi tiếp hiệp mới với cùng người, kết quả đã gửi về master."],["Game server chết","W","IW","Bộ dọn thấy server im lặng: thả phòng, báo lỗi 3001 cho người chơi, đưa phòng về Waiting."],["Người cuối rời","E","IE","Người cuối cùng rời phòng: phòng chuyển sang Ending và bị xoá khỏi bộ nhớ master."]],
+  E:[["Tạo phòng mới","W",null,"Một phòng mới bắt đầu ở Waiting."]]};
+ let st="W",busy=false,manual=false,stopT=null;
+ function render(){Object.keys(G).forEach(k=>{G[k].style.opacity=k===st?1:.42;G[k].classList.toggle("sel",k===st)});
+  $("#roomBtns").innerHTML=`<span class="tag" style="margin:0 8px 0 0">Đang ở ${NAME[st]}</span>`+EV[st].map((e,i)=>`<button class="btn${e[1]==="W"&&st!=="E"?" warn":""}" data-i="${i}">${e[0]}</button>`).join("");
+  $$("#roomBtns button").forEach(b=>b.onclick=()=>{manual=true;fire(+b.dataset.i)})}
+ function fire(i){if(busy)return;const e=EV[st][i];busy=true;$("#roomLog").textContent=e[3];
+  const done=()=>{st=e[1];busy=false;render()};
+  if(!e[2]){tok.setAttribute("cx",160);tok.setAttribute("cy",150);done();return}
+  const pts=PATH[e[2]];if(stopT)stopT();stopT=tween(e[2]==="II"?1200:900,p=>{const q=polyAt(pts,ease(p));tok.setAttribute("cx",q[0]);tok.setAttribute("cy",q[1])},()=>{const c=pts[pts.length-1];const k=e[1];tok.setAttribute("cx",X[k]+120);tok.setAttribute("cy",150);done()})}
+ function auto(){const plan=[[0],[0],[0],[2]];let k=0;const nxt=()=>{if(manual||k>=plan.length)return;fire(plan[k++][0]);later(nxt,2600)};later(nxt,900)}
+ HOOK["s-room"]={enter(){if(stopT)stopT();st="W";busy=false;manual=false;tok.setAttribute("cx",160);tok.setAttribute("cy",150);$("#roomLog").textContent="Phòng vừa được tạo: Waiting.";render();auto()},leave(){manual=true}};
+ render()})();
+
+/* ================= player lifecycle ================= */
+cycleDiagram("#lifeSvg",[
+ ["Chọn trang bị","a","5 ô vũ khí, điểm hồi sinh","Màn hình trang bị của game gốc. Client gửi <code>C_SPAWN_REQUEST {loadout, spawnPoint}</code>."],
+ ["Hồi sinh","l","ServerRespawnGate","Server kiểm thời gian chờ và điểm hồi sinh hợp lệ, rồi gửi <code>S_SPAWN_ACTOR</code> cho mọi người."],
+ ["Chiến đấu","c","input 30 lần mỗi giây","Client dự đoán bước đi, gửi <code>C_INPUT</code> kèm 3 frame gần nhất. Server kẹp quãng đường ở 1,3 lần tốc độ hợp lệ."],
+ ["Lên xe","v","F1 đến F8 đổi ghế","<code>C_SEAT_REQUEST</code>, server duyệt rồi trả <code>S_SEAT_CHANGE</code>. Ngồi lái thì gửi <code>C_VEHICLE_INPUT</code> thay cho input đi bộ."],
+ ["Bị hạ","r","máu về 0 trên server","Server ghi ai giết ai, gửi <code>S_DEATH</code> kèm vector lực. Ragdoll chạy ở client, không đồng bộ, tiết kiệm khoảng 1,7 MB/s."]],
+ [[0,1],[1,2],[2,3],[3,4],[4,0],[2,4,true]],"#lifePanel",`<span class="tag">5 trạng thái · đang tự chạy</span><h3>Một vòng đời trong trận</h3><p>Nhấn → để dừng ở từng trạng thái. Đường nét đứt: bị hạ khi đang đi bộ, không cần lên xe.</p>`,{cx:450,cy:265,rx:320,ry:190},"s-life");
+
+/* ================= shot flow ================= */
+seqDiagram("#shotSvg",[["S","Người bắn","c",130],["G","Game server","l",450],["O","Mọi client","v",740]],[
+ ["S","S","Weapon.Fire","c","Hiệu ứng ngay trên máy","Lửa, tiếng súng, độ giật hiện ngay, không chờ server. Trên client đây chỉ là hiệu ứng."],
+ ["S","G","C_SHOT_REPORT","c","Báo viên trúng","Client gửi những viên nó thấy trúng, tối đa 20 viên cho một lần bóp cò."],
+ ["G","G","hồi súng · đạn","l","Kiểm rẻ chạy trước","Hồi súng, đạn, trạng thái được kiểm đầu tiên. 100 lệnh bắn trong 1 giây với hồi 0,1 s: 10 được nhận, 90 bị loại."],
+ ["G","G","ReportedHitJudge","l","Tua thời gian, xét trúng","Có bóp cò trong 8 tick không, tầm bắn, hướng ngắm, thân mục tiêu ở tick người bắn thấy, ghế kín, tường chắn."],
+ ["G","S","S_HIT_CONFIRM","l","Xác nhận trúng","Server tự trừ máu rồi báo người bắn để hiện dấu hitmarker."],
+ ["G","O","S_WEAPON_FIRE","l","Người khác nghe tiếng","Mọi client gần đó phát tiếng và hiệu ứng của phát bắn."],
+ ["G","O","S_DEATH","r","Nếu máu về 0","Sự kiện chết kèm vector lực đi kênh tin cậy. Mỗi client tự cho xác ngã và hiện dòng hạ gục."]],
+ "#shotPanel",`<span class="tag">7 bước · đang tự chạy</span><h3>Thấy ngay, quyết định sau</h3><p>Người bắn thấy hiệu ứng tức thì. Trúng hay trượt, mất bao nhiêu máu là việc của server. Nhấn → để đi từng bước.</p>`,"s-shot");
+
+/* ================= features explorer ================= */
+const LYD={C:["Client","c"],M:["Master","v"],G:["Game server","l"],D:["SQLite","a"],I:["Hạ tầng","g"],L:["Thư viện","v"]};
+const FEATS=[
+ {g:"Tài khoản",n:"Đăng ký tài khoản",o:["kien","trung"],see:"Màn hình Đăng ký: username, mật khẩu, tên hiển thị (không bắt buộc). Thành công thì quay về màn hình đăng nhập.",
+  s:[["C","<code>MenuRegisterScreen</code> lấy dữ liệu, <code>PasswordHasher</code> băm <code>SHA256(mật khẩu + username viết thường)</code>, gửi <code>REGISTER_REQ</code>."],["M","<code>AuthService.Register</code>: username hợp lệ (tối đa 16 ký tự)? chuỗi băm đúng dạng SHA-256 hex? Tên hiển thị để trống thì lấy username, dài quá 32 ký tự thì trả <code>InvalidDisplayName</code>."],["M","<code>BCrypt.HashPassword(chuỗi SHA, 11)</code>."],["D","<code>InsertAccount</code>: <code>INSERT INTO accounts(...)</code>. Trùng tên (kể cả khác hoa thường do <code>COLLATE NOCASE</code>) thì SQLite báo lỗi 19, hàm trả false."],["C","<code>REGISTER_RES {ok, errorCode}</code>; <code>UsernameTaken</code> được dịch thành câu tiếng người bởi <code>MasterErrorText</code>."]],
+  x:["Tài khoản quản trị tạo được từ dòng lệnh: <code>Ironfront.MasterServer --create-account</code>."]},
+ {g:"Tài khoản",n:"Đăng nhập và khoá tài khoản",o:["kien","trung"],see:"Nhập đúng thì vào sảnh. Sai nhiều lần thì được báo chờ bao nhiêu giây, không phải câu chung chung.",
+  s:[["C","Gửi <code>LOGIN_REQ</code> qua TLS."],["M","<code>AuthService.Login</code>: hạn mức theo IP (5 lần sai, 60 lần thử mỗi phút), kiểm định dạng."],["D","<code>FindAccount</code>, <code>BCrypt.Verify</code> (có hash giả khi không có tài khoản)."],["D","Sai: <code>RecordLoginFailure</code>, lần thứ 10 đặt <code>locked_until = now + 15 phút</code>. Đúng: <code>RecordLoginSuccess</code>."],["M","Thứ tự trả lời: cấm trước khoá. Tạo session 24 giờ trong RAM."],["C","<code>LOGIN_RES</code> kèm <code>retryAfterSec</code> khi bị chặn để client nói đúng số giây."]],x:["Chi tiết từng bước ở lưu đồ trong mục 07."]},
+ {g:"Tài khoản",n:"Ghi nhớ đăng nhập",o:["kien","trung"],see:"Tick \"Ghi nhớ\" thì lần sau mở game tự vào sảnh, không hỏi mật khẩu.",
+  s:[["C","<code>LOGIN_REQ {remember: true}</code>."],["M","<code>IssueRememberToken</code> sinh token 43 ký tự."],["D","<code>InsertRememberToken</code> lưu SHA-256 của token, giữ tối đa 8 máy."],["C","Client cất token. Lần sau gửi <code>TOKEN_LOGIN_REQ {token}</code>."],["D","<code>TakeRememberToken</code>: đọc rồi xoá ngay (dùng một lần)."],["M","Còn hạn: tạo session mới, cấp token mới trong <code>LOGIN_RES</code>."]]},
+ {g:"Sảnh",n:"Danh sách phòng và tạo phòng",o:["kien","trung"],see:"Danh sách phòng với bản đồ, số người, số bot, trạng thái. Form tạo phòng chỉ cho chọn số bot trong giới hạn còn lại.",
+  s:[["C","<code>ROOM_LIST_REQ</code>."],["M","Trả <code>ROOM_LIST_RES {rooms[], capacity}</code>. <code>capacity</code> cho biết tối đa bao nhiêu bot cho phòng mới và bản đồ nào còn server rảnh."],["C","<code>ROOM_CREATE_REQ {name, mapId, maxPlayers, botCount, isPrivate, password}</code>."],["M","<code>LobbyService.CreateRoom</code> kiểm ngân sách bot (<code>BotCapacity</code>): tổng 300 đơn vị, mỗi trận tốn 50 trước bot đầu tiên, tức 2 trận 100 bot hoặc 3 trận 50 bot. Không vừa thì lỗi <code>3002</code>."],["C","Người tạo tự vào phòng, nhận <code>ROOM_STATE_PUSH</code>."]]},
+ {g:"Sảnh",n:"Phòng chờ: đổi đội, sẵn sàng, đếm ngược",o:["kien","trung"],see:"Danh sách thành viên hai đội, nút đổi đội, nút Sẵn sàng, đồng hồ đếm ngược khi mọi người đã sẵn sàng.",
+  s:[["C","<code>ROOM_TEAM_REQ</code>, <code>ROOM_READY_REQ {ready}</code>."],["M","<code>SetTeam</code>: master là nơi duy nhất ghi đội, client không tự đoán; trận đã bắt đầu thì từ chối <code>MatchAlreadyStarted</code>."],["M","<code>SetReady</code> rồi <code>Tick</code>: mọi người sẵn sàng và có ít nhất 2 người thì bật đồng hồ 10 giây; ai bỏ sẵn sàng thì tắt."],["M","Hết giờ: <code>Waiting → Starting</code>, cấp game server, phát vé."],["C","Mọi thay đổi đến qua <code>ROOM_STATE_PUSH</code>, client chỉ vẽ lại."]]},
+ {g:"Sảnh",n:"Ghép trận nhanh",o:["kien"],see:"Bấm Ghép trận, chờ vài giây là vào một phòng.",
+  s:[["C","<code>MATCHMAKE_REQ {preferredMapId}</code>."],["M","<code>MatchmakingService.Enqueue</code>; có phòng công khai còn chỗ trên bản đồ đó thì vào luôn (<code>FindJoinableRoom</code>)."],["M","<code>Tick</code> gom hàng chờ: đủ 2 người cùng bản đồ thì tạo phòng (50 bot, hạ xuống nếu ngân sách không đủ). Chờ quá 60 giây thì nhận bản đồ bất kỳ."],["C","<code>MATCHMAKE_RES {roomId, estimatedWaitSec}</code>, hủy bằng <code>MATCHMAKE_CANCEL</code>."]],
+  x:["Lỗi từng gặp: bước \"sau 60 giây nhận bản đồ bất kỳ\" ban đầu đẩy người chờ lâu sang một nhóm riêng, nên họ chỉ ghép được với người cũng chờ lâu. Không lỗi, không log, người chơi chờ mãi. Bị test bắt."]},
+ {g:"Sảnh",n:"Chat sảnh và chat phòng",o:["kien","trung"],see:"Ô chat ở sảnh (mọi người) và trong phòng chờ (chỉ thành viên phòng).",
+  s:[["C","<code>CHAT_SEND {channel, text}</code>; kênh 0 toàn cục, 1 trong phòng."],["M","<code>ChatService</code>: tối đa 200 ký tự (lỗi <code>4000</code>), tối đa 5 tin mỗi 10 giây (lỗi chống spam), kênh lạ <code>4002</code>, chat phòng khi không ở phòng nào <code>4003</code>. Loại ký tự điều khiển."],["M","Phát <code>CHAT_PUSH</code> cho đúng người nhận theo kênh."]],x:["Không lưu lịch sử chat, có chủ ý.","Lỗi từng gặp: Unity gửi kênh 0 cho chat phòng, nên mọi câu trong phòng đi tới cả server. Cách sửa là viết bảng kênh vào đặc tả và dùng chung định nghĩa <code>MspChatChannel</code>."]},
+ {g:"Hạ tầng trận",n:"Game server đăng ký và báo sức khoẻ",o:["kien","toan"],see:"Người chơi không thấy. Đây là lý do master biết server nào còn sống để giao phòng.",
+  s:[["G","Khởi động headless: <code>NetRoleBootstrap</code> khai báo vai trò server, <code>DedicatedServerSceneBootstrap</code> nạp scene bản đồ, <code>MasterLinkBootstrap</code> mở TCP tới master."],["G","<code>GS_REGISTER {serverSecret, publicIp, udpPort, maxPlayers, mapIds}</code>."],["M","<code>GameServerRegistry.TryRegister</code> so secret bằng phép so sánh thời gian không đổi, cấp <code>serverId</code>."],["G","<code>GS_HEARTBEAT {currentPlayers, cpuPercent, avgTickMs}</code> định kỳ."],["M","Server khoẻ khi heartbeat trong 15 giây, CPU dưới 90%, tick dưới 40 ms. Bộ dọn chạy định kỳ thả phòng của server im lặng, báo lỗi <code>3001</code> cho người chơi, đưa phòng về <code>Waiting</code>."]]},
+ {g:"Trong trận",n:"Vào trận qua UDP",o:["toan","nghia"],see:"Màn hình \"Đang kết nối\", rồi vào bản đồ.",
+  s:[["C","<code>MatchTransportHandoff</code> mở UDP, gửi <code>CONNECT_REQUEST {version, joinTicket, clientSalt}</code>, gửi lại mỗi 250 ms tối đa 20 lần."],["G","Chỉ kiểm phiên bản và chỗ trống, không lưu gì. Đáp <code>CONNECT_CHALLENGE {serverSalt}</code>, salt = HMAC(khoá riêng, địa chỉ, cổng, clientSalt, khung 30 giây)."],["C","<code>CONNECT_RESPONSE {clientSalt XOR serverSalt, clientSalt, joinTicket}</code>."],["G","Tính lại salt, xác nhận địa chỉ thật. <code>TicketValidator</code> kiểm HMAC và hạn vé, gắn playerId. Trùng playerId đang chơi thì từ chối mã 6."],["G","<code>CONNECT_ACCEPTED {connectionId, serverTick, mapId, myPlayerId}</code>, rồi gửi trạng thái nền: <code>S_MATCH_STATE</code>, <code>S_SPAWN_ACTOR</code>, <code>S_PLAYER_LIST</code>."],["C","<code>MatchTransportHandoff</code> giữ kết nối qua lần nạp scene, <code>NetClientBootstrap</code> của scene bản đồ nhận lại."]],
+  x:["Mã từ chối: 1 đầy server, 2 sai phiên bản, 3 vé sai hoặc hết hạn, 4 bị cấm, 5 server đang tắt, 6 đã kết nối, 7 đội của bạn đã đầy."]},
+ {g:"Trong trận",n:"Di chuyển",o:["toan","trung","nghia"],see:"Bấm W là đi ngay, không thấy trễ dù ping 100 ms.",
+  s:[["C","<code>MovementSimulation</code> đọc phím, chạy <code>MovementCore</code> ngay trên máy (prediction), lưu input theo tick."],["C","<code>C_INPUT</code> 30 Hz, mỗi gói chứa 3 frame gần nhất."],["G","<code>ServerInputStage</code>: chuẩn hoá vector (đi chéo không nhanh hơn), chạy <code>MovementCore</code>, kẹp quãng đường ở 1,3 lần tốc độ hợp lệ. Mất input thì lặp input cũ tối đa 3 tick (100 ms) rồi dừng."],["G","Snapshot kèm \"tick input cuối đã xử lý\"."],["C","<code>PredictionReconciler</code> so vị trí dự đoán ở tick đó với server, lệch quá ngưỡng thì đặt lại và chạy lại các input sau."]]},
+ {g:"Trong trận",n:"Bắn và trúng đạn",o:["toan","trung"],see:"Bấm chuột là có lửa, tiếng, giật ngay; trúng thì có dấu hitmarker.",
+  s:[["C","Game gốc: <code>Actor.UpdateWeapon → Weapon.Fire → CanFire → Shoot → SpawnProjectile</code>. Trên client đây là hiệu ứng."],["C","Input có nút FIRE; viên trúng mà client thấy gửi bằng <code>C_SHOT_REPORT</code> (tối đa 20 viên một lần bóp cò)."],["G","Kiểm thời gian hồi, đạn, trạng thái trước tiên: bắn nhanh bất thường chỉ tốn vài phép so sánh. Đo thực tế: 100 lệnh bắn trong 1 giây với hồi 0,1 s thì 10 được chấp nhận, 90 bị loại không tốn đạn."],["G","<code>ReportedHitJudge</code>: có lần bóp cò tương ứng trong 8 tick không, tầm bắn, hướng ngắm, thân mục tiêu ở tick người bắn đang vẽ (<code>HitboxHistory</code>), ghế kín, tường chắn."],["G","Server tự trừ máu, gửi <code>S_HIT_CONFIRM</code>, <code>S_WEAPON_FIRE</code> cho người khác nghe tiếng."]],
+  x:["Vì sao không cho client tự quyết: độ toả, độ giật dùng <code>UnityEngine.Random</code> ở nhiều chỗ, và tin client là mở cửa cho hack."]},
+ {g:"Trong trận",n:"Chết và hồi sinh",o:["toan","trung"],see:"Trúng đủ đạn thì ngã ragdoll, hiện màn hình chọn trang bị và điểm hồi sinh.",
+  s:[["G","Máu về 0: <code>ServerActorDamageSink</code>, ghi ai giết ai (<code>DeathAttribution</code>), cộng điểm."],["G","<code>S_DEATH</code> kèm vector lực để client tự làm ragdoll (ragdoll không đồng bộ, tiết kiệm khoảng 1,7 MB/s)."],["C","Hiện killfeed, màn hình trang bị."],["C","<code>C_SPAWN_REQUEST {loadout, spawnPoint}</code>."],["G","<code>ServerRespawnGate</code> kiểm thời gian chờ, điểm hồi sinh hợp lệ, rồi <code>S_SPAWN_ACTOR</code>."]]},
+ {g:"Trong trận",n:"Xe: lên, lái, xuống",o:["toan","trung"],see:"Đứng gần xe bấm phím Dùng để lên, F1 đến F8 đổi ghế.",
+  s:[["C","<code>ClientSeatRequester</code> gửi <code>C_SEAT_REQUEST</code>."],["G","<code>ServerSeatBridge</code> duyệt (ghế trống, đủ gần), trả <code>S_SEAT_CHANGE</code> kể cả khi từ chối."],["C","Khi ngồi lái: <code>C_VEHICLE_INPUT</code> (trục lái, tháp pháo) thay cho input đi bộ."],["G","<code>NetVehicleAuthority</code> mô phỏng xe; <code>S_VEHICLE_SNAPSHOT</code>, <code>S_VEHICLE_SPAWN/DESPAWN</code>. Tối đa 24 xe, id được thu hồi có thời gian cách ly."]]},
+ {g:"Trong trận",n:"Chiếm cờ và thắng trận",o:["toan"],see:"Bảng điểm hai đội, các điểm cờ đổi màu, thông báo thắng thua.",
+  s:[["G","<code>MatchStateMachine</code>: khởi động, chơi, tính điểm, điều kiện thắng, reset."],["G","<code>CapturePointOwnership</code> tính ai đang đứng trên cờ, đổi chủ, gửi <code>S_CAPTURE_POINT</code>."],["G","Thắng khi cách biệt đủ số điểm của luật phòng (mặc định chênh 200 điểm), gửi <code>S_MATCH_STATE</code>."],["G","Sau màn tổng kết, trận reset và chơi hiệp mới với cùng người chơi."]]},
+ {g:"Sau trận",n:"Kết quả, sự nghiệp, thành tựu",o:["kien","toan"],see:"Thông báo \"mở khoá thành tựu\", bảng sự nghiệp cập nhật.",
+  s:[["G","<code>MatchCareerTally</code> đếm số liệu hiệp cho từng người."],["G","<code>GS_MATCH_PROGRESS</code> mỗi 15 giây, <code>GS_MATCH_ENDED</code> cuối hiệp."],["M","<code>HandleMatchEnded</code> kiểm đúng server giữ phòng."],["D","<code>InsertMatchResult</code>, <code>WriteCareer</code> (transaction), <code>InsertAchievement</code> (INSERT OR IGNORE)."],["C","<code>ACHIEVEMENT_UNLOCKED_PUSH</code>."]]},
+ {g:"Sau trận",n:"Bảng xếp hạng và hồ sơ",o:["kien","trung"],see:"Top 100, dòng của chính mình, bấm vào ai đó để so sánh thành tựu.",
+  s:[["C","<code>LEADERBOARD_REQ</code> hoặc <code>PLAYER_PROFILE_REQ {playerId}</code>."],["D","<code>ReadCareerRows</code> đọc chỉ số của mọi người; <code>ReadAchievementIdsByPlayer</code>."],["M","<code>CareerService</code> sắp xếp trong bộ nhớ, cắt top 100, tìm hạng của người hỏi. Thành tựu ẩn hiện dạng khoá (<code>CareerPrivacy</code>)."],["C","<code>LEADERBOARD_RES</code> / <code>PLAYER_PROFILE_RES</code>."]]},
+ {g:"Vận hành",n:"Sao lưu và khôi phục DB",o:["kien"],see:"Người chơi không thấy. Mất máy chủ vẫn còn dữ liệu.",
+  s:[["I","<code>ironfront-backup.timer</code> chạy 6 giờ một lần."],["I","<code>tools/backup.sh</code>: <code>sqlite3 .backup</code>, hoặc <code>Ironfront.MasterServer --backup</code> nếu máy không có sqlite3."],["D","<code>SqliteDatabase.BackupTo</code> dùng backup API trên kết nối đang mở; master không phải dừng."],["I","Kiểm file không rỗng, giữ 7 ngày, tải lên Blob (<code>backup-upload.sh</code>)."],["I","Khôi phục: dừng master, chép bản sao vào thư mục dữ liệu (đúng quyền sở hữu của container), chạy lại, đăng nhập thử bằng tài khoản đã biết."]]},
+ {g:"Vận hành",n:"Triển khai và phát hành",o:["kien","trung"],see:"Người chơi tải zip mới trên trang Releases; chỉ bản mới nhất đăng nhập được.",
+  s:[["I","Đẩy code: <code>ci.yml</code> build, test, chạy các cổng kiểm tra; đỏ thì không merge."],["I","Merge: <code>images.yml</code> build image master, đẩy <code>ghcr.io/...:sha-&lt;sha&gt;</code>, ghi digest. Image game server build thủ công vì runner GitHub không có giấy phép Unity."],["I","Trên máy chủ: ghim digest trong <code>.env</code> (không dùng <code>:latest</code>), chạy <code>deploy.sh up</code> (docker compose)."],["C","Bản cho người chơi: <code>build-libs.ps1</code> chép DLL vào Plugins, <code>build-player.ps1</code> build Unity, <code>package-release.ps1</code> đóng zip, thử zip từ thư mục riêng, rồi <code>gh release create</code> với 3 zip Windows, macOS, Linux. <code>linux-smoke.yml</code> và <code>macos-smoke.yml</code> chạy thử bản build."]]}
+];
+(function(){let html="",lastG="";FEATS.forEach((f,i)=>{if(f.g!==lastG){html+=`<div class="grp">${f.g}</div>`;lastG=f.g}html+=`<button data-i="${i}"><span>${String(i+1).padStart(2,"0")}</span>${f.n}</button>`});$("#flist").innerHTML=html;
+ $$("#flist button").forEach(b=>b.onclick=()=>showFeat(+b.dataset.i))})();
+function showFeat(i){const f=FEATS[i];$$("#flist button").forEach(b=>b.classList.toggle("on",+b.dataset.i===i));
+ $("#fdetail").innerHTML=`<span class="tag">${f.g} · ${i+1} / ${FEATS.length}</span><h3 style="font-size:28px;margin-bottom:4px">${f.n}</h3><div class="fsee"><b style="color:var(--ink)">Người chơi thấy:</b> ${f.see}</div><ol class="vflow">${f.s.map((s,k)=>`<li style="--c:${C[LYD[s[0]][1]]};animation-delay:${k*110}ms"><span class="ly">${LYD[s[0]][0]}</span><span>${s[1]}</span></li>`).join("")}</ol>${(f.x||[]).slice(0,1).map(x=>`<p class="fx">${x}</p>`).join("")}`}
+showFeat(0);HOOK["s-feat"]={enter(){const b=$("#flist button.on");showFeat(b?+b.dataset.i:0)}};
+
+/* ================= master simulation ================= */
+(function(){const svg=$("#mpSvg"),mk=markers(svg);const LY=[46,114,182,250];
+ LY.forEach((y,i)=>E("path",{d:`M232,${y} C400,${y} 420,150 556,150`,fill:"none",stroke:"var(--panel-b)","stroke-width":2},null,svg));
+ LY.forEach((y,i)=>box(svg,{x:20,y:y-26,w:210,h:52,c:"c",t:`Kết nối ${i+1}`,ty:33,fs:16}));
+ E("text",{x:740,y:106,"text-anchor":"middle","font-size":14,"font-weight":800,fill:C.v,class:"mono"},"HÀNG ĐỢI · _logicQueue",svg);
+ const q=E("g",{},null,svg);popIn(svg,q);E("rect",{x:560,y:120,width:360,height:60,rx:14,fill:S.v,stroke:C.v,"stroke-width":2},null,q);
+ const SL=Array.from({length:6},(_,k)=>E("rect",{x:572+k*58,y:132,width:46,height:36,rx:8,fill:"var(--panel)",stroke:"var(--panel-b)"},null,q));
+ line(svg,"M922,150 H976","v",mk);
+ const th=box(svg,{x:980,y:95,w:250,h:110,c:"v",t:"Luồng logic",sub:["xử lý lần lượt từng việc"],ty:44,fs:20}),thR=th.querySelector(".nb");
+ const cnt=E("text",{x:1105,y:240,"text-anchor":"middle","font-size":15,"font-weight":700,fill:"var(--ink2)"},"đã xử lý 0",svg);
+ line(svg,"M1232,150 H1266","l",mk);box(svg,{x:1270,y:115,w:115,h:70,c:"l",t:"Trả lời",ty:42,fs:16});
+ const COL=["c","l","a","r"];const P=Array.from({length:10},()=>E("circle",{r:9,opacity:0},null,svg));
+ let fl=[],queue=[],done=0,lastSpawn=0,lastProc=0,busyT=-1;
+ function f(t){if(t-lastSpawn>.42){lastSpawn=t;const lane=Math.floor(Math.random()*4);const el=P.find(p=>!fl.some(x=>x.el===p));if(el)fl.push({el,lane,t0:t})}
+  fl=fl.filter(p=>{const k=Math.min(1,(t-p.t0)/.8),y0=LY[p.lane];const u=ease(k);const x=232+(556-232)*u,y=y0+(150-y0)*Math.pow(u,1.6);p.el.setAttribute("cx",x);p.el.setAttribute("cy",y);p.el.setAttribute("fill",C[COL[p.lane]]);p.el.setAttribute("opacity",1);
+   if(k>=1){if(queue.length<6){queue.push(p.lane);p.el.setAttribute("opacity",0);return false}}return true});
+  if(t-lastProc>.5&&queue.length){lastProc=t;queue.shift();done++;cnt.textContent="đã xử lý "+done;busyT=t}
+  SL.forEach((s,k)=>{const l=queue[k];s.setAttribute("fill",l==null?"var(--panel)":C[COL[l]]);s.setAttribute("stroke",l==null?"var(--panel-b)":"none")});
+  const on=t-busyT<.3;thR.setAttribute("stroke-width",on?5:2.2);thR.setAttribute("fill",on?C.v:S.v);th.querySelectorAll("text").forEach((x,i)=>x.setAttribute("fill",on?"var(--svgbg)":i?"var(--ink2)":C.v))}
+ const tk=ticker(f);HOOK["s-master"]={enter(){fl=[];queue=[];done=0;lastSpawn=lastProc=0;P.forEach(p=>p.setAttribute("opacity",0));tk.start()},leave(){tk.stop()}}})();
+
+/* ================= login: hash pipeline + lockout ================= */
+(function(){const short=h=>h.slice(0,14)+"…"+h.slice(-6);
+ async function sha(s){try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return new Uint8Array(b)}catch(e){return null}}
+ const hex=b=>[...b].map(x=>x.toString(16).padStart(2,"0")).join("");
+ async function upd(pulse){const u=$("#lgU").value.trim().toLowerCase(),p=$("#lgP").value;$("#lgV1").textContent=p||"(trống)";
+  const b=await sha(p+u);$("#lgV2").textContent=b?short(hex(b)):"trình duyệt chặn crypto";
+  const b2=b?await sha(hex(b)):null;$("#lgV4").textContent=b2?"$2a$11$"+btoa(String.fromCharCode(...b2.slice(0,15))).replace(/[+/=]/g,"x").slice(0,14)+"… (minh hoạ)":"";
+  if(pulse){["#lg1","#lg2","#lg3","#lg4","#lg5"].forEach((s,i)=>{$(s).classList.remove("lit");later(()=>{$$(".flowrow .st.lit").forEach(x=>x.classList.remove("lit"));$(s).classList.add("lit")},150+i*380)});later(()=>$$(".flowrow .st.lit").forEach(x=>x.classList.remove("lit")),150+5*380+500)}}
+ $("#lgU").oninput=()=>upd(false);$("#lgP").oninput=()=>upd(false);$("#lgP").onchange=()=>upd(true);
+ let n=0;const dots=$("#lockDots");dots.innerHTML="<i></i>".repeat(10);
+ function draw(){$$("#lockDots i").forEach((d,i)=>d.classList.toggle("f",i<n));const m=$("#lockMsg");
+  m.innerHTML=n===0?"Chưa có lần sai nào.":n<10?`Sai <b style="color:var(--rose)">${n} / 10</b>. Kẻ dò chỉ nhận được "sai thông tin", không biết tài khoản có thật hay không.`:`<b style="color:var(--rose)">Khoá 15 phút.</b> Sai tiếp trong lúc khoá không gia hạn thêm.`;$("#lockTry").disabled=n>=10}
+ $("#lockTry").onclick=()=>{if(n<10){n++;draw();if(n===10){const c=$("#lockCard");c.classList.remove("shake");void c.offsetWidth;c.classList.add("shake")}}};$("#lockReset").onclick=()=>{n=0;draw()};
+ draw();upd(false);HOOK["s-login"]={enter(){upd(true)}}})();
+
+/* ================= login flowchart ================= */
+(function(){const svg=$("#authSvg"),mk=markers(svg);const steps=[
+ ["Hạn mức IP còn không?","5 lần sai và 60 lần thử mỗi phút, đếm trong RAM","RateLimited + số giây"],
+ ["Username, chuỗi băm hợp lệ?","tối đa 16 ký tự · đúng 64 ký tự hex","InvalidUsername"],
+ ["FindAccount(username)","SELECT … WHERE username = $username COLLATE NOCASE",null],
+ ["BCrypt.Verify","so với hash thật, hoặc hash giả khi không có tài khoản",null],
+ ["Mật khẩu đúng?","sai: RecordLoginFailure, lần thứ 10 khoá 15 phút","WrongCredentials"],
+ ["is_banned = 1?","kiểm cấm TRƯỚC kiểm khoá","AccountBanned"],
+ ["locked_until > now?","sai lúc đang khoá không gia hạn khoá","AccountLocked + số giây"],
+ ["RecordLoginSuccess, tạo session","failed_logins = 0, session 24 giờ trong RAM","LOGIN_RES ok + token"]];
+ const R=steps.map((s,i)=>{const y=14+i*66,ok=i===steps.length-1,c=ok?"l":"v",db=i===2||i===4||i===7;
+  if(i<steps.length-1)E("path",{d:`M320,${y+52} V${y+64}`,stroke:C.v,"stroke-width":2,fill:"none","marker-end":mk("v")},null,svg);
+  const g=E("g",{style:"transition:opacity .25s"},null,svg);popIn(svg,g);const r=E("rect",{class:"nb",x:40,y,width:560,height:52,rx:12,fill:S[c],stroke:C[c],"stroke-width":1.8},null,g);
+  E("circle",{cx:68,cy:y+26,r:14,fill:C[c]},null,g);E("text",{x:68,y:y+31,"text-anchor":"middle","font-size":12,"font-weight":800,fill:"var(--svgbg)"},String(i+1),g);
+  E("text",{x:94,y:y+22,"font-size":15,"font-weight":800,fill:"var(--ink)"},s[0],g);E("text",{x:94,y:y+42,"font-size":12.5,fill:"var(--ink2)"},s[1],g);
+  if(db)E("text",{x:586,y:y+20,"text-anchor":"end","font-size":11,"font-weight":800,fill:C.a},"SQLite",g);
+  let ex=null;if(s[2]){ex=E("g",{style:"transition:opacity .25s"},null,svg);const ec=ok?"l":"r";E("path",{d:`M600,${y+26} H668`,stroke:C[ec],"stroke-width":1.8,fill:"none","marker-end":mk(ec)},null,ex);const w=textW(s[2],13,700)+26;E("rect",{class:"nb",x:672,y:y+10,width:w,height:32,rx:9,fill:S[ec],stroke:C[ec],"stroke-width":1.5},null,ex);E("text",{x:672+w/2,y:y+31,"text-anchor":"middle","font-size":13,"font-weight":700,fill:C[ec]},s[2],ex)}
+  return{g,r,ex}});
+ const SC=[["Mật khẩu đúng",7,"l","Đi hết tám bước. Bộ đếm sai về 0, master tạo phiên 24 giờ và trả token nếu người chơi chọn ghi nhớ."],
+  ["Sai mật khẩu",4,"r","Dừng ở bước 5. Bộ đếm sai của tài khoản tăng thêm 1. Người dùng chỉ thấy \"sai thông tin\"."],
+  ["Sai lần thứ 10",4,"r","Vẫn dừng ở bước 5, nhưng lần này ghi <code>locked_until = now + 15 phút</code>. Lần sau đúng mật khẩu cũng bị chặn ở bước 7."],
+  ["Tài khoản bị cấm",5,"r","Mật khẩu đúng nhưng <code>is_banned = 1</code>. Cấm được kiểm trước khoá, nên tài khoản vừa bị cấm vừa bị khoá nhận thông báo cấm."],
+  ["Đang bị khoá",6,"r","Mật khẩu đúng nhưng còn trong 15 phút khoá. Master trả số giây còn lại để client nói đúng phải chờ bao lâu."],
+  ["Quá hạn mức IP",0,"r","Chặn ngay bước 1, chưa chạm cơ sở dữ liệu và chưa chạy bcrypt. Bảo vệ CPU của master trước kẻ dò hàng loạt."]];
+ $("#afBtns").innerHTML=SC.map((s,i)=>`<button class="btn" data-i="${i}">${s[0]}</button>`).join("");
+ let run=0;function play(i){const r=++run,s=SC[i];$$("#afBtns button").forEach(b=>b.classList.toggle("on",+b.dataset.i===i));
+  R.forEach(x=>{x.g.style.opacity=.25;if(x.ex)x.ex.style.opacity=.15;x.r.setAttribute("stroke-width",1.8)});$("#afOut").innerHTML="";
+  for(let k=0;k<=s[1];k++)later(()=>{if(r!==run)return;R[k].g.style.opacity=1;R[k].r.setAttribute("stroke-width",k===s[1]?4:1.8);
+   if(k===s[1]){if(R[k].ex)R[k].ex.style.opacity=1;$("#afOut").innerHTML=`<h3 style="color:${C[s[2]]}">${s[0]}</h3><p>${s[3]}</p>`}},k*330)}
+ $$("#afBtns button").forEach(b=>b.onclick=()=>play(+b.dataset.i));
+ HOOK["s-authflow"]={enter(){play(0)},leave(){run++}}})();
+
+/* ================= ER ================= */
+const TB={
+ accounts:{x:330,y:20,cols:[["player_id","PK AUTOINC",1],["username","UNIQUE NOCASE"],["password_hash","bcrypt"],["display_name","TEXT"],["created_at","INTEGER ms"],["last_login_at","INTEGER"],["failed_logins","INTEGER"],["locked_until","INTEGER ms"],["is_banned","INTEGER"]],d:"Bảng trung tâm, một dòng mỗi tài khoản. Tên đăng nhập UNIQUE không phân biệt hoa thường, nên đăng ký trùng bị SQLite chặn ngay. Bộ đếm sai và thời điểm mở khoá nằm ngay trong bảng."},
+ remember_tokens:{x:20,y:20,cols:[["token_hash","PK SHA-256",1],["player_id","FK",2],["created_at","INTEGER ms"],["expires_at","INTEGER ms"]],d:"Ghi nhớ đăng nhập. Chỉ lưu SHA-256 của token: lộ file cơ sở dữ liệu cũng không đăng nhập được. Tối đa 8 máy mỗi tài khoản, dùng một lần."},
+ match_results:{x:20,y:180,cols:[["id","PK AUTOINC",1],["room_id","INTEGER"],["player_id","FK",2],["kills","INTEGER"],["deaths","INTEGER"],["score","INTEGER"],["ended_at","INTEGER ms"]],d:"Sổ cái thô: mỗi người, mỗi hiệp một dòng, chỉ thêm không sửa. room_id không có khoá ngoại vì phòng chỉ sống trong bộ nhớ master."},
+ career_stats_season1:{x:20,y:410,arch:true,cols:[["player_id","PK",1],["stat","PK",1],["value","INTEGER"]],d:"Bảng lưu trữ mùa 1, tạo trong transaction đổi mùa. Không có khoá ngoại vì chỉ là bản chụp số liệu cũ."},
+ career_stats:{x:640,y:20,cols:[["player_id","PK, FK",1],["stat","PK, TEXT",1],["value","INTEGER"]],d:"Chỉ số mùa hiện tại, khoá chính ghép (player_id, stat). Lưu theo dòng nên thêm chỉ số mới không cần sửa schema."},
+ career_history:{x:640,y:160,cols:[["player_id","PK, FK",1],["stat","PK, TEXT",1],["value","INTEGER"]],d:"Tổng các mùa đã đóng. Hồ sơ người chơi bằng mùa hiện tại cộng lịch sử."},
+ achievements:{x:640,y:300,cols:[["player_id","PK, FK",1],["achievement_id","PK, TEXT",1],["unlocked_at","INTEGER ms"]],d:"Thành tựu đã mở. INSERT OR IGNORE trả về 1 dòng là vừa mở khoá, 0 là đã có; con số này quyết định có báo cho người chơi hay không."},
+ career_meta:{x:640,y:440,cols:[["key","PK TEXT",1],["value","INTEGER"]],d:"Bảng cờ hệ thống: mùa hiện tại và các việc chỉ chạy một lần. Thay cho công cụ migration."}};
+(function(){const svg=$("#erSvg"),W=270,HH=38,RH=26;const geo={};Object.entries(TB).forEach(([n,t])=>geo[n]={x:t.x,y:t.y,h:HH+t.cols.length*RH+8});
+ const rowY=(n,i)=>geo[n].y+HH+RH*i+RH/2+4,A=geo.accounts,ay=rowY("accounts",0);
+ const fk=d=>E("path",{d,fill:"none",stroke:C.a,"stroke-width":2,opacity:.8,class:"draw",pathLength:1},null,svg);
+ ["remember_tokens","match_results"].forEach(n=>{const i=TB[n].cols.findIndex(c=>c[2]===2),y=rowY(n,i);fk(`M${geo[n].x+W},${y} H310 V${ay} H${A.x}`)});
+ ["career_stats","career_history","achievements"].forEach(n=>{const y=rowY(n,0);fk(`M${geo[n].x},${y} H620 V${ay} H${A.x+W}`)});
+ Object.entries(TB).forEach(([n,t])=>{const g=E("g",{class:"click"},null,svg);popIn(svg,g);g.dataset.t=n;const G=geo[n],hc=t.arch?"var(--grey)":C.a;
+  E("rect",{class:"nb",x:G.x,y:G.y,width:W,height:G.h,rx:12,fill:"var(--svgbg)",stroke:"var(--line)","stroke-width":1.6},null,g);
+  E("path",{d:`M${G.x},${G.y+12} a12,12 0 0 1 12,-12 h${W-24} a12,12 0 0 1 12,12 v${HH-12} h${-W} z`,fill:hc},null,g);
+  E("text",{x:G.x+14,y:G.y+25,"font-size":14.5,"font-weight":800,fill:"var(--svgbg)",class:"mono"},n,g);
+  t.cols.forEach((c,i)=>{const y=rowY(n,i)+5;E("text",{x:G.x+14,y,"font-size":13,"font-weight":c[2]===1?800:500,fill:c[2]===1?C.a:"var(--ink)",class:"mono"},(c[2]===1?"◆ ":c[2]===2?"↗ ":"  ")+c[0],g);E("text",{x:G.x+W-12,y,"text-anchor":"end","font-size":11.5,fill:"var(--muted)"},c[1],g)});
+  g.addEventListener("click",()=>showTbl(n))});
+ E("text",{x:20,y:552,"font-size":12.5,fill:"var(--muted)"},"◆ khoá chính   ↗ khoá ngoại tới accounts.player_id",svg)})();
+function showTbl(n){$$("#erSvg .click").forEach(g=>{const on=g.dataset.t===n,r=g.querySelector(".nb");r.setAttribute("stroke",on?C.a:"var(--line)");r.setAttribute("stroke-width",on?3.2:1.6)});
+ $("#erPanel").innerHTML=`<span class="tag" style="color:var(--amber)">bảng · ${TB[n].cols.length} cột</span><h3 class="mono" style="font-size:25px">${n}</h3><p>${TB[n].d}</p><p class="muted" style="font-size:16px;margin-top:22px">Bấm vào bảng khác để xem tiếp.</p>`}
+showTbl("accounts");
+
+/* ================= DB demos ================= */
+(function(){const tbl=(sel,head,rows,cls)=>{$(sel).innerHTML=`<tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr>`+rows.map((r,i)=>`<tr class="${(cls&&cls(i))||""}">${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")};
+ const BASE=[[7,"kills",42],[7,"deaths",17],[7,"wins",5]],EXTRA=[[7,"headshots",9],[7,"revives",3]];let eav=[];
+ function eavDraw(nw){tbl("#eavT",["player_id","stat","value"],eav,i=>i===nw?"new":"");$("#eavAdd").disabled=eav.length>=5}
+ $("#eavAdd").onclick=()=>{const r=EXTRA[eav.length-3];if(!r)return;eav.push(r);eavDraw(eav.length-1);$("#eavS").textContent=`INSERT 1 dòng "${r[1]}". Schema không đổi.`};
+ let A=[],B=[],busy=false;
+ function ssDraw(nwB,bad){tbl("#ssA",["stat","value"],A.map(r=>[r[1],r[2]]));tbl("#ssB",["stat","value"],B.map(r=>[r[1],r[2]]),i=>bad?"bad":i===nwB?"new":"")}
+ function st(t,c){$("#ssS").innerHTML=`<span style="color:${C[c]}">${t}</span>`}
+ $("#ssRun").onclick=()=>{if(busy)return;if(!A.length){A=BASE.slice();B=[];ssDraw();st("","g");return}busy=true;const fail=$("#ssFail").checked;st("BEGIN TRANSACTION","a");
+  A.forEach((r,k)=>later(()=>{B.push(r);ssDraw(B.length-1)},400+k*450));
+  if(fail){later(()=>{ssDraw(-1,true);st("Lỗi giữa chừng → ROLLBACK","r")},400+1*450+500);later(()=>{B=[];ssDraw();st("Không có gì thay đổi. Mùa 1 vẫn nguyên.","r");busy=false},400+1*450+1500);return}
+  later(()=>{A=[];ssDraw();st("COMMIT · mùa 2 bắt đầu với bảng trống","l");$("#ssRun").textContent="Làm lại";busy=false},400+3*450+400)};
+ const svg=$("#walSvg");E("text",{x:20,y:30,"font-size":14,"font-weight":800,fill:C.c,class:"mono"},"ironfront.db",svg);const dbR=E("rect",{x:20,y:40,width:380,height:40,rx:10,fill:S.c,stroke:C.c,"stroke-width":2},null,svg);
+ E("text",{x:20,y:132,"font-size":14,"font-weight":800,fill:C.v,class:"mono"},"ironfront.db-wal",svg);E("rect",{x:20,y:142,width:380,height:40,rx:10,fill:"var(--panel)",stroke:C.v,"stroke-width":2},null,svg);
+ const segs=Array.from({length:6},(_,k)=>E("rect",{x:26+k*62,y:148,width:56,height:28,rx:6,fill:C.v,opacity:0},null,svg));
+ const rd=E("circle",{cy:60,r:8,fill:C.c},null,svg);const rdT=E("text",{y:100,"text-anchor":"middle","font-size":12.5,"font-weight":700,fill:C.c},"đọc",svg);const ck=E("text",{x:210,y:117,"text-anchor":"middle","font-size":13,"font-weight":800,fill:C.v,opacity:0},"checkpoint: gộp về file chính",svg);
+ const tk=ticker(t=>{const ph=t%4.6,n=Math.min(6,Math.floor(ph/.6)+1);const x=40+((t*120)%340);rd.setAttribute("cx",x);rdT.setAttribute("x",x);
+  const cp=ph>3.6?(ph-3.6):0;segs.forEach((s,k)=>{s.setAttribute("opacity",k<n?(cp?1-cp:1):0);s.setAttribute("y",148-cp*100)});ck.setAttribute("opacity",cp?1:0);dbR.setAttribute("stroke-width",cp?4:2)});
+ HOOK["s-dbd"]={enter(){eav=BASE.slice();eavDraw(-1);$("#eavS").textContent="";A=BASE.slice();B=[];busy=false;ssDraw();st("","g");$("#ssRun").textContent="Đổi mùa";tk.start()},leave(){tk.stop()}};
+ eav=BASE.slice();eavDraw(-1);A=BASE.slice();ssDraw()})();
+
+/* ================= backup ================= */
+(function(){const svg=$("#backupSvg"),mk=markers(svg);const B=[["systemd timer","ironfront-backup.timer","6 giờ một lần","g"],["backup.sh","sqlite3 .backup","hoặc --backup","g"],["Backup API","SqliteDatabase.BackupTo","master vẫn chạy","a"],["backups/","db-<ngày-giờ>.db","giữ 7 ngày","a"],["Azure Blob","backup-upload.sh","ngoài máy chủ","c"]];
+ for(let i=0;i<4;i++)line(svg,`M${20+i*276+246},90 H${20+(i+1)*276-4}`,"g",mk);
+ const G=B.map((b,i)=>box(svg,{x:20+i*276,y:30,w:246,h:120,c:b[3],t:b[0],sub:[b[1],b[2]],ty:46,fs:19,gap:28,ss:14}));
+ const tok=E("circle",{r:10,cy:90,fill:C.a,stroke:"var(--svgbg)","stroke-width":3,opacity:0},null,svg);
+ const tk=ticker(t=>{const ph=(t%6.5)/6.5*5;const k=Math.min(4,Math.floor(ph));G.forEach((g,i)=>g.classList.toggle("sel",i===k));const f=ph-k;tok.setAttribute("opacity",f>.6&&k<4?1:0);tok.setAttribute("cx",20+k*276+246+(30*(f-.6)/.4))});
+ HOOK["s-backup"]={enter(){tk.start()},leave(){tk.stop()}}})();
+
+/* ================= GSP header + channels ================= */
+(function(){const F=[["protocolId","2 byte, giá trị 0x4946. Sai giá trị hoặc sai phiên bản thì gói bị bỏ ngay."],["type","1 byte cho biết đây là loại gói gì."],["flags","1 byte cờ bổ sung cho gói."],["sequence","Số thứ tự của gói, tăng dần, quay vòng sau 65.535."],["ack","Số thứ tự lớn nhất đã nhận từ phía bên kia."],["ackBitfield","32 bit cho 32 gói trước ack: 1 là đã nhận. Xem slide xác nhận gói tin."],["connId","Mã kết nối server cấp sau khi bắt tay xong."],["payloadLen","Độ dài phần dữ liệu phía sau, tối đa 1.184 byte."]];
+ const cells=$$("#gspBytes div");let manual=false;
+ function pick(i){cells.forEach((c,k)=>c.classList.toggle("hot",k===i));$("#gspInfo").innerHTML=`<b class="mono" style="color:var(--ink)">${F[i][0]}</b> · ${F[i][1]}`}
+ cells.forEach((c,i)=>c.onclick=()=>{manual=true;pick(i)});
+ const svg=$("#chSvg");const LN=[["0 · Không tin cậy","ping","v"],["1 · Snapshot","trạng thái thế giới","c"],["2 · Tin cậy","chết, hồi sinh, lên xe, chat","l"],["3 · Input","phím bấm, 30 gói/giây","a"]];
+ const X0=360,X1=1100,T=1.5,PER=6.4,sp=i=>.2+i*.62;
+ const lanes=LN.map((l,li)=>{const y=40+li*70;E("text",{x:20,y:y-4,"font-size":17,"font-weight":800,fill:C[l[2]]},l[0],svg);E("text",{x:20,y:y+18,"font-size":13.5,fill:"var(--ink2)"},l[1],svg);
+  E("line",{x1:X0,y1:y,x2:X1,y2:y,stroke:"var(--line)","stroke-width":2,"stroke-dasharray":"3 7"},null,svg);
+  const pk=Array.from({length:5},(_,k)=>{const g=E("g",{opacity:0},null,svg);E("circle",{r:15,fill:C[l[2]]},null,g);E("text",{y:5,"text-anchor":"middle","font-size":13,"font-weight":800,fill:"var(--svgbg)"},String(k+1),g);return g});
+  const extra=E("g",{opacity:0},null,svg);E("circle",{r:15,fill:C.a,stroke:"var(--svgbg)","stroke-width":2},null,extra);E("text",{y:5,"text-anchor":"middle","font-size":13,"font-weight":800,fill:"var(--svgbg)"},"3",extra);
+  const x=E("text",{x:(X0+X1)/2,y:y-20,"text-anchor":"middle","font-size":14,"font-weight":800,fill:C.r,opacity:0},"✕ gói 3 mất",svg);
+  const out=E("text",{x:X1+22,y:y+6,"font-size":15,"font-weight":700,fill:C[l[2]],opacity:0},"",svg);return{y,pk,extra,x,out}});
+ const OUT=["mất thì thôi","gói 3 tới sau gói 4: bỏ","gửi lại gói 3, tới nơi","gói 4 mang lại frame của gói 3"];
+ function frame(t){t=t%PER;lanes.forEach((L,li)=>{L.pk.forEach((g,k)=>{const i=k+1;let dt=t-sp(k),x,vis,op=1,dur=T;
+   if(li===1&&i===3)dur=T*1.9;x=X0+(X1-X0)*Math.min(1,Math.max(0,dt/dur));vis=dt>=0&&dt<=dur+.9;
+   if(i===3&&li!==1&&dt>T*.5){x=X0+(X1-X0)*.5;op=Math.max(0,1-(dt-T*.5)/.4)}
+   if(li===1&&i===3&&dt>dur)op=.3;
+   g.setAttribute("opacity",vis?op:0);g.setAttribute("transform",`translate(${x},${L.y})`);
+   if(li===3&&i===4){const c=g.querySelector("circle");c.setAttribute("stroke",dt>0?C.l:"none");c.setAttribute("stroke-width",4)}});
+  const lostAt=sp(2)+T*.5;L.x.setAttribute("opacity",li!==1&&t>lostAt&&t<lostAt+1.4?1:0);
+  if(li===2){const d=t-(sp(2)+T*1.3);L.extra.setAttribute("opacity",d>=0&&d<=T+.6?1:0);L.extra.setAttribute("transform",`translate(${X0+(X1-X0)*Math.min(1,Math.max(0,d/T))},${L.y})`)}
+  const showAt=[lostAt+.3,sp(2)+T*1.9,sp(2)+T*2.3,sp(3)+T][li];L.out.textContent=OUT[li];L.out.setAttribute("opacity",t>showAt?1:0)})}
+ const tk=ticker(t=>{frame(t);if(!manual)pick(Math.floor(t/1.8)%F.length)});frame(0);pick(0);
+ HOOK["s-gsp"]={enter(){manual=false;tk.start()},leave(){tk.stop()}}})();
+
+/* ================= handshake ================= */
+(function(){const svg=$("#hsSvg"),mk=markers(svg);const cx=150,sx=1250;
+ const who=[];[[cx,"Client","c"],[sx,"Game Server","l"]].forEach(([x,t,c])=>{E("line",{x1:x,y1:58,x2:x,y2:322,stroke:"var(--line)","stroke-width":2,"stroke-dasharray":"4 7"},null,svg);who.push(box(svg,{x:x-110,y:8,w:220,h:46,c,t,ty:30,fs:17}))});
+ const HS=[["CONNECT_REQUEST { version, vé, clientSalt }","server chỉ kiểm phiên bản và chỗ trống, chưa lưu gì",1,"c"],["CONNECT_CHALLENGE { serverSalt }","serverSalt = HMAC(khoá riêng, IP, cổng, clientSalt, khung 30 giây)",-1,"l"],["CONNECT_RESPONSE { clientSalt ⊕ serverSalt, vé }","tính lại salt: địa chỉ là thật. Giờ mới kiểm chữ ký vé",1,"c"],["CONNECT_ACCEPTED { connectionId, tick, bản đồ }","gắn người chơi với kết nối, bắt đầu gửi trạng thái",-1,"l"]];
+ const ATK=[null,"gửi về IP thật: kẻ giả không bao giờ nhận được","không gửi được: thiếu serverSalt","server chưa cấp gì cho địa chỉ này"];
+ const rows=HS.map((h,i)=>{const y=100+i*62,f=h[2]>0?cx:sx,t=h[2]>0?sx:cx,g=E("g",{opacity:.15,style:"transition:opacity .3s"},null,svg);
+  const ln=E("line",{x1:f+(h[2]>0?5:-5),y1:y,x2:t-(h[2]>0?7:-7),y2:y,stroke:C[h[3]],"stroke-width":2.6,"marker-end":mk(h[3])},null,g);
+  E("text",{x:700,y:y-10,"text-anchor":"middle","font-size":16,"font-weight":700,fill:C[h[3]],class:"mono"},h[0],g);const d=E("text",{x:700,y:y+22,"text-anchor":"middle","font-size":15,fill:"var(--ink2)"},h[1],g);
+  const pk=E("circle",{r:9,cy:y,fill:C[h[3]],opacity:0},null,svg);return{g,ln,d,pk,f,t,y}});
+ let run=0;function play(){const r=++run,atk=$("#hsAtk").checked;who[0].querySelector("text").textContent=atk?"Kẻ giả IP":"Client";
+  rows.forEach((R,i)=>{R.g.setAttribute("opacity",.15);R.d.textContent=atk&&ATK[i]?ATK[i]:HS[i][1];R.d.setAttribute("fill",atk&&ATK[i]?C.r:"var(--ink2)");R.ln.setAttribute("stroke-dasharray",atk&&i>0?"8 7":"none");R.pk.setAttribute("opacity",0)});
+  rows.forEach((R,i)=>later(()=>{if(r!==run)return;R.g.setAttribute("opacity",atk&&i>1?.45:1);if(atk&&i>1)return;R.pk.setAttribute("opacity",1);
+    tween(800,p=>{const k=atk&&i===1?p*.5:p;R.pk.setAttribute("cx",R.f+(R.t-R.f)*ease(k))},()=>R.pk.setAttribute("opacity",atk&&i===1?0:0))},300+i*1100));
+  later(()=>{if(r===run)play()},300+4*1100+2600)}
+ $("#hsAtk").onchange=()=>{clearLater();play()};
+ HOOK["s-hs"]={enter(){play()},leave(){run++}}})();
+
+/* ================= ack demo ================= */
+(function(){const seqs=[96,97,98,99,100,101,102,103];const lost=new Set([100,102]);
+ function draw(){$("#pkRow").innerHTML=seqs.map(s=>`<button data-s="${s}" class="${lost.has(s)?"lost":""}">#${s}<small>${lost.has(s)?"mất":"đã nhận"}</small></button>`).join("");
+  $$("#pkRow button").forEach(b=>b.onclick=()=>{const s=+b.dataset.s;lost.has(s)?lost.delete(s):lost.add(s);draw()});
+  const got=seqs.filter(s=>!lost.has(s));if(!got.length){$("#ackOut").innerHTML=`<p class="ink2" style="font-size:20px">Chưa nhận gói nào nên chưa có gì để xác nhận.</p>`;return}
+  const ack=Math.max(...got);let v=0;const bits=[];for(let i=0;i<8;i++){const s=ack-1-i,known=seqs.includes(s),one=known&&!lost.has(s);bits.push([known,one,s]);if(one)v|=1<<i}
+  const miss=seqs.filter(s=>lost.has(s)&&s<ack);
+  $("#ackOut").innerHTML=`<p style="font-size:26px;font-weight:700">ack = <span class="mono" style="color:var(--cyan)">${ack}</span></p><p class="ink2" style="font-size:17px;margin:12px 0 8px">8 bit đầu của ackBitfield, bit 0 bên trái</p><div class="bits">${bits.map((b,i)=>`<span style="animation-delay:${i*60}ms" class="${b[0]?(b[1]?"one":"zero"):""}" title="gói ${b[2]}">${b[0]?(b[1]?1:0):"·"}</span>`).join("")}</div><p class="ink2" style="font-size:19px;margin-top:14px">Giá trị <code>0x${v.toString(16).toUpperCase()}</code>. Bên gửi biết ngay ${miss.length?`gói <b style="color:var(--rose)">${miss.join(", ")}</b> chưa tới`:"không có gói nào bị mất"}.</p>`}
+ draw();HOOK["s-ack"]={enter(){draw()}}})();
+
+/* ================= tick ================= */
+(function(){const svg=$("#tickSvg"),mk=markers(svg);const seg=[["Đọc gói",.13,"c"],["Input",.14,"c"],["Mô phỏng + AI",.35,"l"],["Xét bắn",.14,"r"],["Snapshot",.24,"v"]];const R=[],PL=[];
+ for(let t=0;t<3;t++){const x0=20+t*460,w=430;E("text",{x:x0,y:22,"font-size":16,"font-weight":700,fill:"var(--ink)"},`Tick ${t+1} · 33,3 ms`,svg);let x=x0;
+  seg.forEach(s=>{const sw=w*s[1],skip=s[0]==="Snapshot"&&t===2;const r=E("rect",{x,y:46,width:sw-4,height:64,rx:10,fill:skip?"var(--panel)":S[s[2]],stroke:skip?"var(--line)":C[s[2]],"stroke-width":1.8,"stroke-dasharray":skip?"5 5":null,style:"transition:fill .15s"},null,svg);R.push({r,x0:x,x1:x+sw,c:s[2],skip,snap:s[0]==="Snapshot",t});
+   E("text",{x:x+sw/2-2,y:84,"text-anchor":"middle","font-size":13.5,"font-weight":700,fill:skip?"var(--muted)":C[s[2]]},skip?"bỏ qua":s[0],svg);x+=sw});
+  if(t<2){line(svg,`M${x0+w*.88},114 V156`,"v",mk);const p=pill(svg,x0+w*.88,176,"gửi snapshot","v",13.5);p.style.transition="opacity .2s";PL.push(p)}}
+ E("text",{x:20,y:236,"font-size":15,fill:"var(--ink2)"},"Độ rộng từng khâu là minh hoạ, chậm 30 lần. Cứ 3 tick thì 2 tick gửi snapshot.",svg);
+ const head=E("polygon",{points:"-9,0 9,0 0,12",fill:"var(--ink)"},null,svg);
+ const tk=ticker(t=>{const u=(t%3)/3,x=20+u*1380;head.setAttribute("transform",`translate(${Math.min(1370,x)},30)`);
+  R.forEach(s=>{const on=x>=s.x0&&x<s.x1;s.r.setAttribute("stroke-width",on?4.5:1.8);s.r.setAttribute("fill-opacity",on?.55:1)});
+  PL.forEach((p,i)=>{const s=R.find(r=>r.snap&&r.t===i);p.style.opacity=x>=s.x0&&x<s.x1+120?1:.3})});
+ HOOK["s-tick"]={enter(){tk.start()},leave(){tk.stop()}}})();
+
+/* ================= prediction sim ================= */
+(function(){const svg=$("#predSvg");const X0=160,X1=1240,lanes=[{y:120,t:"Không dự đoán",s:"nhân vật chờ server trả lời",c:"r"},{y:280,t:"Có dự đoán",s:"đi ngay, server xác nhận sau",c:"c"}];
+ lanes.forEach(l=>{E("text",{x:20,y:l.y-48,"font-size":20,"font-weight":800,fill:C[l.c]},l.t,svg);E("text",{x:20,y:l.y-24,"font-size":14,fill:"var(--ink2)"},l.s,svg);E("line",{x1:X0,y1:l.y+30,x2:X1,y2:l.y+30,stroke:"var(--line)","stroke-width":3,"stroke-linecap":"round"},null,svg)});
+ const key=E("g",{},null,svg);E("rect",{x:1140,y:6,width:240,height:46,rx:12,fill:"var(--svgbg)",stroke:"var(--line)","stroke-width":1.6},null,key);const keyT=E("text",{x:1260,y:36,"text-anchor":"middle","font-size":17,"font-weight":800,fill:"var(--ink)"},"",key);
+ const me=lanes.map(l=>{const g=E("g",{},null,svg);E("circle",{r:22,fill:C[l.c]},null,g);E("circle",{r:8,fill:"var(--svgbg)"},null,g);return g});
+ const ghost=E("circle",{r:22,fill:"none",stroke:C.a,"stroke-width":3,"stroke-dasharray":"6 5"},null,svg);
+ const lag=E("text",{x:X1+20,y:lanes[0].y+8,"font-size":17,"font-weight":800,fill:C.r},"",svg);E("text",{x:X1+20,y:lanes[1].y+8,"font-size":17,"font-weight":800,fill:C.c},"trễ 0 ms",svg);
+ E("text",{x:X0,y:lanes[1].y+70,"font-size":14,fill:C.a},"vòng nét đứt: vị trí server đã xác nhận",svg);
+ const P=3.6,V=300,B=450;
+ function input(t){const p=((t%P)+P)%P;return p<1.2?1:p<1.8?0:p<3?-1:0}
+ function pos(t){const p=((t%P)+P)%P;if(p<1.2)return B+V*p;if(p<1.8)return B+V*1.2;if(p<3)return B+V*1.2-V*(p-1.8);return B}
+ const pin=$("#pingIn");
+ function f(t){const rtt=+pin.value/1000;const k=input(t);keyT.textContent=k>0?"Phím: giữ →":k<0?"Phím: giữ ←":"Phím: thả";
+  me[0].setAttribute("transform",`translate(${pos(t-rtt)},${lanes[0].y})`);me[1].setAttribute("transform",`translate(${pos(t)},${lanes[1].y})`);
+  ghost.setAttribute("cx",pos(t-rtt));ghost.setAttribute("cy",lanes[1].y);lag.textContent="trễ "+Math.round(rtt*1000)+" ms"}
+ pin.oninput=()=>{$("#pingOut").textContent=pin.value+" ms"};f(.4);
+ const tk=ticker(f);HOOK["s-pred"]={enter(){tk.start()},leave(){tk.stop()}}})();
+
+/* ================= interest ================= */
+(function(){const svg=$("#intSvg"),Cx=220,R=190,rad=d=>R*Math.sqrt(d/500);
+ E("rect",{x:0,y:0,width:440,height:440,fill:"var(--svgbg)",rx:16,stroke:"var(--line)"},null,svg);
+ const h=15*Math.PI/180;E("path",{d:`M${Cx},${Cx} L${Cx-210*Math.tan(h)},10 L${Cx+210*Math.tan(h)},10 z`,fill:C.v,opacity:.12},null,svg);
+ [[500,"c",.07],[200,"l",0],[100,"a",.1],[60,"v",.18]].forEach(z=>{E("circle",{cx:Cx,cy:Cx,r:rad(z[0]),fill:C[z[1]],"fill-opacity":z[2],stroke:C[z[1]],"stroke-width":1.8,"stroke-dasharray":z[0]===200?"5 5":null},null,svg)});
+ [[500,"c","500 m"],[200,"l","200 m"],[100,"a","100 m"],[60,"v","60 m"]].forEach(z=>E("text",{x:Cx+rad(z[0])*.71+4,y:Cx+rad(z[0])*.71+4,"font-size":12,"font-weight":700,fill:C[z[1]]},z[2],svg));
+ const zone=(px,py)=>{const dx=px-Cx,dy=py-Cx,d=500*(Math.hypot(dx,dy)/R)**2,ang=Math.abs(Math.atan2(dx,-dy))*180/Math.PI;return d<60?["v",5]:d<100?["a",2.5]:d<=500?["c",1]:ang<=15?["c",1]:["g",0]};
+ const bots=Array.from({length:14},(_,i)=>{const g=E("g",{},null,svg);const ring=E("circle",{r:6,fill:"none","stroke-width":2,opacity:0},null,g);const c=E("circle",{r:5.5},null,g);return{g,ring,c,a:i*2.3,rr:.15+.85*((i*37)%14)/14,sp:.12+((i*13)%7)/40,acc:Math.random(),flash:9}});
+ E("circle",{cx:Cx,cy:Cx,r:7,fill:"var(--ink)"},null,svg);E("text",{x:Cx,y:Cx+24,"text-anchor":"middle","font-size":12,fill:"var(--ink2)"},"bạn",svg);
+ const m=E("circle",{r:9,fill:C.r,stroke:"var(--svgbg)","stroke-width":2.5},null,svg);let last=[Cx+70,Cx-50],prevT=0;
+ const tk=ticker(t=>{const dt=Math.min(.1,t-prevT);prevT=t;bots.forEach((b,i)=>{const a=b.a+t*b.sp*(i%2?1:-1),r=R*1.08*b.rr*(.85+.15*Math.sin(t*.7+i));const x=Cx+r*Math.cos(a),y=Cx+r*Math.sin(a);
+   const[z,hz]=zone(x,y);b.acc+=hz*dt;if(b.acc>=1){b.acc-=1;b.flash=0}b.flash+=dt;
+   b.g.setAttribute("transform",`translate(${x},${y})`);b.c.setAttribute("fill",C[z]);b.c.setAttribute("opacity",hz?1:.35);b.ring.setAttribute("stroke",C[z]);
+   const k=Math.min(1,b.flash/.35);b.ring.setAttribute("r",6+k*10);b.ring.setAttribute("opacity",hz?1-k:0)})});
+ function cls(px,py){const dx=px-Cx,dy=py-Cx,d=500*(Math.hypot(dx,dy)/R)**2,ang=Math.abs(Math.atan2(dx,-dy))*180/Math.PI,mate=$("#intMate").checked;
+  let z,hz,c;if(d<60){z="Gần";hz=20;c="v"}else if(d<100){z="Giữa";hz=10;c="a"}else if(d<=500){z="Xa";hz=4;c="c"}else if(ang<=15){z="Xa, trong nón ngắm";hz=4;c="c"}else{z="Không gửi";hz=0;c="g"}
+  let note="";if(mate&&d<=200&&hz<10){z="Giữa (đồng đội)";hz=10;c="l";note="Đồng đội trong 200 m có mức sàn là Giữa."}
+  $("#intRes").innerHTML=`<p style="font-size:44px;font-weight:800;letter-spacing:-.03em;color:var(--ink)">${Math.round(d)} m <span style="font-size:20px;color:var(--muted);font-weight:500">· góc ${Math.round(ang)}°</span></p><p style="font-size:24px;margin-top:6px;color:${C[c]};font-weight:700">${z} · ${hz?hz+" lần/giây":"không gửi"}</p>${note?`<p class="ink2" style="font-size:17px;margin-top:6px">${note}</p>`:""}`}
+ function place(x,y){last=[x,y];m.setAttribute("cx",x);m.setAttribute("cy",y);cls(x,y)}
+ svg.addEventListener("click",e=>{const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const q=p.matrixTransform(svg.getScreenCTM().inverse());place(q.x,q.y)});
+ $("#intMate").onchange=()=>cls(...last);place(...last);
+ HOOK["s-int"]={enter(){prevT=0;tk.start()},leave(){tk.stop()}}})();
+
+/* ================= compression ================= */
+(function(){const rows=[["Snapshot đầy đủ, căn byte",19.86,"g"],["+ bit-packing",19.04,"v"],["+ delta so với bản đã xác nhận",9.94,"a"],["+ interest management",1.50,"l"],["+ cắt vận tốc, độ cao 12 bit",1.28,"c"]];
+ $("#compBars").innerHTML=rows.map(r=>`<div class="bar-row"><div class="lb">${r[0]}</div><div class="tr"><div class="fl" data-w="${r[1]/19.86*100}" style="background:${C[r[2]]}"></div></div><div class="v" style="color:${C[r[2]]}">${r[1].toFixed(2).replace(".",",")}</div></div>`).join("");
+ HOOK["s-comp"]={enter(){const f=$$("#compBars .fl");f.forEach(x=>x.style.width="0");requestAnimationFrame(()=>requestAnimationFrame(()=>f.forEach((x,i)=>later(()=>x.style.width=x.dataset.w+"%",300+i*260))))}}})();
+
+/* ================= lag compensation sim ================= */
+(function(){const svg=$("#lcSvg");const LT=95,LB=230,AIM=820,D=.35,SPD=260,X0=300,X1=1300;
+ E("text",{x:20,y:LT-6,"font-size":19,"font-weight":800,fill:C.c},"Màn hình người bắn",svg);E("text",{x:20,y:LT+18,"font-size":14,fill:"var(--ink2)"},"thấy quá khứ, lùi 350 ms",svg);
+ E("text",{x:20,y:LB-6,"font-size":19,"font-weight":800,fill:C.v},"Server, cùng lúc",svg);E("text",{x:20,y:LB+18,"font-size":14,fill:"var(--ink2)"},"vị trí hiện tại",svg);
+ [LT,LB].forEach(y=>E("line",{x1:X0-20,y1:y+34,x2:X1+20,y2:y+34,stroke:"var(--line)","stroke-width":2},null,svg));
+ const man=(c)=>{const g=E("g",{},null,svg);E("rect",{x:-13,y:-30,width:26,height:56,rx:9,fill:S[c],stroke:C[c],"stroke-width":2.4},null,g);E("circle",{cy:-40,r:10,fill:S[c],stroke:C[c],"stroke-width":2.4},null,g);return g};
+ const tT=man("c"),tB=man("v"),gh=E("g",{opacity:0},null,svg);E("rect",{x:-13,y:-30,width:26,height:56,rx:9,fill:"none",stroke:C.a,"stroke-width":2.4,"stroke-dasharray":"5 4"},null,gh);E("circle",{cy:-40,r:10,fill:"none",stroke:C.a,"stroke-width":2.4,"stroke-dasharray":"5 4"},null,gh);
+ const ch=E("g",{},null,svg);E("circle",{cx:AIM,cy:LT-8,r:24,fill:"none",stroke:C.r,"stroke-width":2.4},null,ch);E("line",{x1:AIM,y1:LT-40,x2:AIM,y2:LT+24,stroke:C.r,"stroke-width":2},null,ch);E("line",{x1:AIM-34,y1:LT-8,x2:AIM+34,y2:LT-8,stroke:C.r,"stroke-width":2},null,ch);
+ const flash=E("circle",{cx:AIM,cy:LT-8,r:30,fill:C.a,opacity:0},null,svg);
+ const arc=E("path",{fill:"none",stroke:C.a,"stroke-width":2.6,"stroke-dasharray":"7 6",opacity:0},null,svg);const arcT=E("text",{"text-anchor":"middle","font-size":14,"font-weight":800,fill:C.a,opacity:0},"tua lại 350 ms",svg);
+ const X=t=>X0+((t*SPD)%(X1-X0));let frozen=-1,res=$("#lcRes"),wantFire=false,clock=0;
+ const tk=ticker(t=>{if(frozen>=0){if(t-frozen>2.8){frozen=-1;gh.setAttribute("opacity",0);arc.setAttribute("opacity",0);arcT.setAttribute("opacity",0);flash.setAttribute("opacity",0)}else{flash.setAttribute("opacity",Math.max(0,.6-(t-frozen)*2));return}}
+  clock=t;const xt=X(t-D),xb=X(t);tT.setAttribute("transform",`translate(${xt},${LT})`);tB.setAttribute("transform",`translate(${xb},${LB})`);
+  if(wantFire&&Math.abs(xt-AIM)<6&&xb>xt){wantFire=false;fire(t,xt,xb)}});
+ function fire(t,xt,xb){frozen=t;const on=$("#lcOn").checked;flash.setAttribute("opacity",.6);
+  if(on){gh.setAttribute("opacity",1);gh.setAttribute("transform",`translate(${xt},${LB})`);arc.setAttribute("d",`M${xb},${LB-56} C${xb-20},${LB-100} ${xt+20},${LB-100} ${xt},${LB-56}`);arc.setAttribute("opacity",1);arcT.setAttribute("x",(xt+xb)/2);arcT.setAttribute("y",LB-98);arcT.setAttribute("opacity",1);
+   res.innerHTML=`<b style="color:var(--lime)">Trúng.</b> Server xét trên vị trí đã ghi ở tick người bắn thấy.`}
+  else res.innerHTML=`<b style="color:var(--rose)">Trượt.</b> Server xét vị trí hiện tại, mục tiêu đã đi xa ${Math.round(xb-xt)} px.`}
+ $("#lcFire").onclick=()=>{wantFire=true;res.textContent="Chờ tâm nằm trên mục tiêu…"};
+ HOOK["s-lc"]={enter(){frozen=-1;res.textContent="";tk.start();later(()=>{wantFire=true},900)},leave(){tk.stop();wantFire=false}}})();
+
+/* ================= anti-cheat flips ================= */
+(function(){const A=[["Dịch chuyển tức thời","Không nhận vị trí","Client chỉ gửi phím bấm. Gói tin không có trường vị trí để sửa."],["Chạy nhanh gấp đôi","Kẹp ở 1,3 lần","Quãng đường mỗi tick bị kẹp, vector đi chéo được chuẩn hoá."],["Bắn 100 phát mỗi giây","10 nhận, 90 loại","Kiểm hồi súng trước khi tính. Lệnh bị loại không tốn đạn."],["Làm vé vào trận giả","HMAC-SHA256","Chữ ký bằng khoá chỉ master và game server biết, hạn 60 giây."],["Giả địa chỉ IP","Cookie bắt tay","Chưa chứng minh được địa chỉ thì server không cấp gì."],["Làm ngập gói UDP","Giới hạn tốc độ","Cắt địa chỉ gửi quá nhiều gói. Master giới hạn đăng nhập theo IP."]];
+ $("#acGrid").innerHTML=A.map((a,i)=>`<div class="flip rv" data-i="${i}"><div class="in"><div class="fa"><span class="tag">Thử hack</span><h3>${a[0]}</h3><small>bấm để xem cách chặn</small></div><div class="fb"><h3>${a[1]}</h3><p>${a[2]}</p></div></div></div>`).join("");
+ const F=$$("#acGrid .flip");let n=0;F.forEach(f=>{f.classList.add("rv");f.style.setProperty("--i",3+(+f.dataset.i));f.onclick=()=>f.classList.toggle("turn")});
+ HOOK["s-ac"]={step(s){F.forEach((f,i)=>f.classList.toggle("turn",i<s*3))}}})();
+
+/* ================= unity binding ================= */
+(function(){const svg=$("#bindSvg"),mk=markers(svg);
+ line(svg,"M420,85 H496","l",mk,{id:"bd1"});line(svg,"M900,85 H976","l",mk,{id:"bd2"});dot(svg,"bd1","l",1.3);dot(svg,"bd2","l",1.3,.6);
+ box(svg,{x:20,y:20,w:400,h:130,c:"l",t:"Game gốc",sub:["Actor · Weapon · Vehicle · AI","sửa ở mức tối thiểu"],ty:52});
+ box(svg,{x:500,y:20,w:400,h:130,c:"a",t:"NetBindings",sub:["cài các interface","bằng component của game gốc"],ty:52});
+ box(svg,{x:980,y:20,w:400,h:130,c:"v",t:"Net/Client · Net/Server",sub:["chỉ biết interface","IGameplayWeapon, IInputSource…"],ty:52});
+ const MI=[["Camera",20],["Giao diện",160],["Âm thanh",300]].map(([t,x])=>{line(svg,`M${x+60},150 V196`,"g",null,{nodraw:true});const g=box(svg,{x,y:200,w:120,h:56,c:"c",t,ty:34,fs:16});g.style.transition="opacity .3s";return{g,t}});
+ const bot=box(svg,{x:500,y:200,w:400,h:56,c:"a",t:"Bot AI: cùng giao diện điều khiển với người",ty:34,fs:15});
+ function role(s){$("#roleC").classList.toggle("on",!s);$("#roleS").classList.toggle("on",s);
+  MI.forEach(m=>{m.g.style.opacity=s?.25:1;m.g.querySelector("text").textContent=s?m.t+": tắt":m.t});
+  $("#roleNote").textContent=s?"Không màn hình, không tiếng. Chạy trên Linux trong Docker.":"Bản người chơi tải về: đủ hình, tiếng, giao diện."}
+ $("#roleC").onclick=()=>role(false);$("#roleS").onclick=()=>role(true);role(false);
+ HOOK["s-unity"]={enter(){role(false);later(()=>role(true),2600)}}})();
+
+/* ================= deploy ================= */
+(function(){const svg=$("#depSvg"),mk=markers(svg);const d=(x,y,w,t,s,c)=>{const g=box(svg,{x,y,w,h:80,c,t,sub:[s],ty:33,fs:17,gap:24,ss:14});return g};
+ [[230,270],[510,550],[790,830],[1070,1110]].forEach(([a,b],i)=>line(svg,`M${a},60 H${b}`,"c",mk,{id:"dp"+i}));
+ line(svg,"M1250,100 V220 H1074","v",mk,{id:"dp4"});line(svg,"M830,220 H794","v",mk,{id:"dp5"});
+ const G=[d(10,20,220,"git push","nhánh develop / main","c"),d(270,20,240,"ci.yml","build · test · cổng gác","c"),d(550,20,240,"images.yml","build image master","c"),d(830,20,240,"GHCR","image theo sha","c"),d(1110,20,280,"Ghim digest",".env trên máy chủ","v"),d(830,180,240,"deploy.sh up","docker compose","v"),d(550,180,240,"Master","AWS EC2","v")];
+ d(270,180,240,"Game server","VM Azure","l");line(svg,"M230,220 H266","l",mk,{dash:true});E("text",{x:10,y:230,"font-size":15,"font-weight":700,fill:C.l},"build tay",svg);
+ E("text",{x:10,y:310,"font-size":15,fill:"var(--ink2)"},"Bản cho người chơi đi đường riêng: build Unity cho 3 nền tảng, đóng zip, thử zip từ thư mục riêng, phát hành trên Releases.",svg);
+ const tok=E("circle",{r:10,fill:C.a,stroke:"var(--svgbg)","stroke-width":3,opacity:0},null,svg);const PTS=[[120,60],[390,60],[670,60],[950,60],[1250,60],[1250,220],[950,220],[670,220]];
+ const tk=ticker(t=>{const u=(t%9)/9*(PTS.length-1),k=Math.floor(u),f=u-k;G.forEach((g,i)=>g.classList.toggle("sel",i===k));
+  const a=PTS[k],b=PTS[Math.min(PTS.length-1,k+1)];const m=f<.5?0:(f-.5)*2;tok.setAttribute("opacity",f>.5?1:0);
+  const q=k===4?polyAt([[1250,100],[1250,180]],m):[a[0]+(b[0]-a[0])*m,(k<4?60:220)];tok.setAttribute("cx",k===4?q[0]:a[0]+(b[0]-a[0])*m);tok.setAttribute("cy",k===4?q[1]:(k<4?60:220))});
+ HOOK["s-dep"]={enter(){tk.start()},leave(){tk.stop()}}})();
+
+/* ================= testing terminal ================= */
+(function(){const L=[["pr","$ dotnet test Ironfront.sln"],["","  Ironfront.Net.Protocol.Tests       từng byte khớp đặc tả"],["","  Ironfront.Net.Transport.Tests      mạng giả lập: mất gói, đảo thứ tự"],["","  Ironfront.Net.Replication.Tests    delta: mất 20% gói, cuối cùng vẫn khớp"],["","  Ironfront.MasterServer.Tests       sao lưu rồi khôi phục trên DB thật"],["","  Ironfront.Net.Configuration.Tests  đọc .env, danh sách bản đồ"],["","  Ironfront.Net.LoadHarness.Tests    công cụ thử tải nhiều client"],["","  Ironfront.Client.Flow.Tests        luồng màn hình client"],["","  Ironfront.Client.Input.Tests       phím bấm thành input"],["pr","$ cổng trong CI"],["ok","  ✓ đặc tả và hằng số khớp nhau"],["ok","  ✓ thư viện thuần không tham chiếu Unity"],["ok","  ✓ DLL trong Unity không cũ hơn mã nguồn"]];
+ const term=$("#term");let run=0;
+ function play(){const r=++run;term.innerHTML="";let at=200;L.forEach(([c,t])=>{const div=document.createElement("div");div.className=c;term.appendChild(div);const chars=[...t];
+   chars.forEach((ch,k)=>later(()=>{if(r!==run)return;div.textContent+=ch},at+k*9));at+=chars.length*9+(c==="pr"?380:120)});
+  later(()=>{if(r!==run)return;const s=document.createElement("span");s.className="cur";term.appendChild(s)},at)}
+ HOOK["s-test"]={enter(){play()},leave(){run++}}})();
+
+}
+/* ================= start ================= */
+const ready=document.fonts&&document.fonts.ready?Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,3000))]):Promise.resolve();
+ready.then(()=>{build();const h=parseInt((location.hash||"").slice(1),10);go(isNaN(h)?0:h-1,0);window.deckGo=go;document.body.dataset.ready="1"});
+})();
+</script>
+</body>
+</html>
