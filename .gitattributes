@@ -9,6 +9,9 @@
 *.unity   merge=unityyamlmerge eol=lf
 *.prefab  merge=unityyamlmerge eol=lf
 *.asset   merge=unityyamlmerge eol=lf
+# The Editor re-saves the mixer (PreallocateGUIDs) with LF on close; without eol=lf an autocrlf
+# checkout shows that byte-identical round trip as a modification.
+*.mixer   merge=unityyamlmerge eol=lf
 
 # TerrainData is a native binary asset despite its .asset suffix. Treating it as YAML makes
 # Git's line-ending filter report a byte-identical Editor round trip as a binary modification.
