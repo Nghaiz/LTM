@@ -1,8 +1,0 @@
----
-# Deploy Master Server only
-- name: Deploy Master Server
-  hosts: master
-  become: true
-  roles:
-    - role: common
-    - role: master

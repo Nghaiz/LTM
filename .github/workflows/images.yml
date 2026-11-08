@@ -24,7 +24,7 @@ name: images
 
 on:
   push:
-    branches: [main, develop, release, 'release/**']
+    branches: [main, develop]
     tags: ['v*']
   pull_request:
     branches: [main, develop]

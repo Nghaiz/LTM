@@ -1,214 +1,161 @@
 name: CD
 
-# Continuous Deployment pipeline for Ironfront.
+# Manual deploys of an image that ALREADY EXISTS. Never triggered by a push, a tag or a release.
 #
-# Production Safety Policy:
-#   Deployment to the server is 100% MANUAL (workflow_dispatch).
-#   Pushing branches, creating tags, or publishing releases will NOT auto-deploy.
-#   An operator must explicitly trigger the run via the "Run workflow" button,
-#   selecting the desired target, environment, and branch/tag.
+#   target=gameservers  image=ironfront-game-server:<rev>                       (Azure VM, over SSH)
+#   target=master       image=ghcr.io/nghaiz/ironfront-master@sha256:<digest>   (EC2, over SSM)
+#
+# Both paths reuse what the operator runs by hand, so CD and a manual deploy cannot drift:
+#   - gameservers: infra/ansible/playbooks/deploy-gameservers.yml, the same steps as
+#     tools/deploy-gameservers-azure.ps1 plus a live-room check and an automatic rollback;
+#   - master: infra/terraform/aws/master/deploy.sh, whose on-box half refuses while a room is open.
+#
+# Each path stays INERT until its credentials exist, and fails before touching a server if they
+# do not:
+#   - gameservers: secret GAMESERVER_SSH_KEY (irondev's private key). The host and its host key are
+#     pinned in infra/ansible/, not taken from secrets, so a secret cannot redirect a deploy.
+#   - master: variables AWS_DEPLOY_ROLE_ARN + MASTER_INSTANCE_ID (an IAM role trusted for
+#     repo:Nghaiz/LTM:environment:production through GitHub OIDC). The EC2 master has no SSH.
+#
+# Runs only from main: the playbook, compose file and deploy.sh it executes come from the ref,
+# so a branch could otherwise deploy unreviewed code. Give the "production" environment required
+# reviewers (Settings -> Environments) so every run waits for an approval.
 
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Deployment target'
+        description: 'What to deploy'
         required: true
-        default: 'all'
         type: choice
         options:
-          - all
-          - master
           - gameservers
-          - standalone
-      environment:
-        description: 'Target environment'
+          - master
+      image:
+        description: 'gameservers: ironfront-game-server:<rev> (already on the VM). master: ghcr.io/nghaiz/ironfront-master@sha256:<digest>'
         required: true
-        default: 'production'
-        type: choice
-        options:
-          - production
-          - staging
-      image_tag:
-        description: 'Specific image digest or tag (leave empty for auto build)'
-        required: false
-        default: ''
         type: string
       force:
-        description: 'Force deploy even if active rooms/matches exist'
+        description: 'Deploy even while a room is live (its players are dropped)'
         required: false
         default: false
         type: boolean
 
 permissions:
   contents: read
-  packages: write
-  deployments: write
 
 concurrency:
-  group: cd-${{ github.ref }}
+  group: cd-production
   cancel-in-progress: false
 
 jobs:
-  build-master:
-    name: Build Master Image
-    if: inputs.target != 'gameservers' && inputs.image_tag == ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    outputs:
-      image_digest: ${{ steps.build.outputs.digest && format('ghcr.io/{0}/ironfront-master@{1}', github.repository_owner, steps.build.outputs.digest) || '' }}
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Generate timestamp
-        id: timestamp
-        run: echo "ts=$(TZ='Asia/Ho_Chi_Minh' date +'%Y-%m-%dT%H-%M-%SVN')" >> "$GITHUB_OUTPUT"
-
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/ironfront-master
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
-            type=raw,value=${{ steps.timestamp.outputs.ts }}
-
-      - uses: docker/setup-buildx-action@v4
-
-      - uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push master image
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: infra/docker/master.Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Report built master image
-        run: |
-          {
-            echo "### Master Image Published";
-            echo "- **Digest**: \`ghcr.io/${{ github.repository_owner }}/ironfront-master@${{ steps.build.outputs.digest }}\`";
-            echo "- **Tags**: \`${{ steps.meta.outputs.tags }}\`";
-          } >> "$GITHUB_STEP_SUMMARY"
-
   deploy:
-    name: Deploy via Ansible
-    needs: [build-master]
-    if: always() && !cancelled() && !contains(needs.*.result, 'failure')
-    runs-on: ubuntu-latest
+    name: deploy ${{ inputs.target }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
-    environment:
-      name: ${{ inputs.environment || 'production' }}
-      url: https://52-62-179-111.sslip.io
-
+    environment: production
+    permissions:
+      contents: read
+      id-token: write   # GitHub OIDC -> the AWS role; used by target=master only
+    env:
+      TARGET: ${{ inputs.target }}
+      IMAGE: ${{ inputs.image }}
+      FORCE: ${{ inputs.force }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Validate the inputs
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::CD runs only from main, not $GITHUB_REF"; exit 1; }
+          case "$TARGET" in
+            gameservers) re='^ironfront-game-server:[0-9a-f]{7,40}$' ;;
+            master)      re='^ghcr\.io/nghaiz/ironfront-master@sha256:[0-9a-f]{64}$' ;;
+            *) echo "::error::unknown target '$TARGET'"; exit 1 ;;
+          esac
+          [[ "$IMAGE" =~ $re ]] || { echo "::error::image for $TARGET must match $re"; exit 1; }
+          [[ "$FORCE" == true || "$FORCE" == false ]] || { echo "::error::force must be true or false"; exit 1; }
+          echo "deploying $IMAGE to $TARGET (force=$FORCE)"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
         with:
-          python-version: '3.12'
+          persist-credentials: false
+
+      # ---- gameservers -----------------------------------------------------------------------
+      - name: Check the game-server credentials exist
+        if: inputs.target == 'gameservers'
+        env:
+          KEY_SET: ${{ secrets.GAMESERVER_SSH_KEY != '' }}
+        run: |
+          [ "$KEY_SET" = true ] || { echo "::error::secret GAMESERVER_SSH_KEY is not set; nothing was deployed"; exit 1; }
 
       - name: Install Ansible
+        if: inputs.target == 'gameservers'
         run: |
-          python -m pip install --upgrade pip
-          pip install ansible
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/ansible"
+          "$RUNNER_TEMP/ansible/bin/pip" install --quiet 'ansible-core==2.17.7'
+          echo "$RUNNER_TEMP/ansible/bin" >> "$GITHUB_PATH"
 
-      - name: Configure SSH Private Key
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          echo "${{ secrets.MASTER_SERVER_KEY || secrets.SSH_PRIVATE_KEY || secrets.ANSIBLE_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-
-      - name: Determine Target Playbook and Inventory
-        id: plan
-        run: |
-          TARGET="${{ inputs.target || 'all' }}"
-          ENV_NAME="${{ inputs.environment || 'production' }}"
-          case "$TARGET" in
-            master) PLAYBOOK="infra/ansible/playbooks/deploy-master.yml" ;;
-            gameservers) PLAYBOOK="infra/ansible/playbooks/deploy-gameservers.yml" ;;
-            standalone) PLAYBOOK="infra/ansible/playbooks/deploy-standalone.yml" ;;
-            *) PLAYBOOK="infra/ansible/playbooks/site.yml" ;;
-          esac
-          INVENTORY="infra/ansible/inventory/${ENV_NAME}.ini"
-
-          # Resolve master image digest
-          CUSTOM_IMAGE="${{ inputs.image_tag }}"
-          BUILT_IMAGE="${{ needs.build-master.outputs.image_digest }}"
-          CHOSEN_IMAGE="${CUSTOM_IMAGE:-$BUILT_IMAGE}"
-
-          echo "playbook=$PLAYBOOK" >> "$GITHUB_OUTPUT"
-          echo "inventory=$INVENTORY" >> "$GITHUB_OUTPUT"
-          echo "master_image=$CHOSEN_IMAGE" >> "$GITHUB_OUTPUT"
-
-      - name: Run Ansible Playbook
+      - name: Install the SSH key and the pinned host key
+        if: inputs.target == 'gameservers'
         env:
-          ANSIBLE_CONFIG: infra/ansible/ansible.cfg
-          GHCR_USER: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IRONFRONT_SHARED_SECRET: ${{ secrets.IRONFRONT_SHARED_SECRET }}
-          MASTER_SERVER_HOST: ${{ secrets.MASTER_SERVER_HOST || vars.MASTER_SERVER_HOST || '' }}
-          MASTER_SERVER_USER: ${{ secrets.MASTER_SERVER_USER || vars.MASTER_SERVER_USER || '' }}
-          GAMESERVER_HOST: ${{ secrets.GAMESERVER_HOST || vars.GAMESERVER_HOST || '' }}
-          GAMESERVER_USER: ${{ secrets.GAMESERVER_USER || vars.GAMESERVER_USER || '' }}
+          SSH_KEY: ${{ secrets.GAMESERVER_SSH_KEY }}
         run: |
-          EXTRA_VARS="force_deploy=${{ inputs.force || false }}"
-          if [ -n "${{ steps.plan.outputs.master_image }}" ]; then
-            EXTRA_VARS="$EXTRA_VARS master_image=${{ steps.plan.outputs.master_image }}"
-          fi
-          if [ -n "$MASTER_SERVER_HOST" ]; then
-            EXTRA_VARS="$EXTRA_VARS master_server_host=$MASTER_SERVER_HOST"
-          fi
-          if [ -n "$MASTER_SERVER_USER" ]; then
-            EXTRA_VARS="$EXTRA_VARS master_server_user=$MASTER_SERVER_USER"
-          fi
-          if [ -n "$GAMESERVER_HOST" ]; then
-            EXTRA_VARS="$EXTRA_VARS gameserver_host=$GAMESERVER_HOST"
-          fi
-          if [ -n "$GAMESERVER_USER" ]; then
-            EXTRA_VARS="$EXTRA_VARS gameserver_user=$GAMESERVER_USER"
-          fi
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          (umask 077; printf '%s\n' "$SSH_KEY" > ~/.ssh/id_gameserver)
+          install -m 644 infra/ansible/pinned-hostkeys.txt ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/id_gameserver >/dev/null || { echo "::error::GAMESERVER_SSH_KEY is not a valid private key"; exit 1; }
 
-          echo "Executing Ansible: ansible-playbook -i ${{ steps.plan.outputs.inventory }} ${{ steps.plan.outputs.playbook }} -e \"$EXTRA_VARS\""
-          ansible-playbook -i "${{ steps.plan.outputs.inventory }}" "${{ steps.plan.outputs.playbook }}" -e "$EXTRA_VARS"
-
-      - name: Record LIVE_MASTER_IMAGE in repository variables
-        if: steps.plan.outputs.master_image != ''
+      - name: Deploy the game servers
+        if: inputs.target == 'gameservers'
+        working-directory: infra/ansible
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANSIBLE_CONFIG: ansible.cfg
         run: |
-          IMAGE="${{ steps.plan.outputs.master_image }}"
-          echo "Updating LIVE_MASTER_IMAGE to $IMAGE"
-          gh variable set LIVE_MASTER_IMAGE --repo "${{ github.repository }}" --body "$IMAGE" || {
-            echo "::warning::Could not automatically update LIVE_MASTER_IMAGE repository variable. Check permissions."
-          }
+          set -euo pipefail
+          export ANSIBLE_PRIVATE_KEY_FILE="$HOME/.ssh/id_gameserver"
+          jq -n --arg image "$IMAGE" --argjson force "$FORCE" \
+            '{gameserver_image: $image, gameserver_force: $force}' > "$RUNNER_TEMP/vars.json"
+          ansible-playbook playbooks/deploy-gameservers.yml -e "@$RUNNER_TEMP/vars.json"
 
-      - name: Deployment Summary
+      - name: Remove the SSH key
+        if: always() && inputs.target == 'gameservers'
+        run: rm -f ~/.ssh/id_gameserver
+
+      # ---- master ------------------------------------------------------------------------------
+      - name: Check the master credentials exist
+        if: inputs.target == 'master'
+        env:
+          ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          INSTANCE: ${{ vars.MASTER_INSTANCE_ID }}
+          TOKEN_SET: ${{ secrets.LIVE_MASTER_IMAGE_TOKEN != '' }}
         run: |
-          {
-            echo "### Deployment Complete 🚀";
-            echo "- **Environment**: \`${{ inputs.environment || 'production' }}\`";
-            echo "- **Target**: \`${{ inputs.target || 'all' }}\`";
-            echo "- **Playbook**: \`${{ steps.plan.outputs.playbook }}\`";
-            if [ -n "${{ steps.plan.outputs.master_image }}" ]; then
-              echo "- **Master Image**: \`${{ steps.plan.outputs.master_image }}\`";
-            fi
-            echo "- **Status**: Success";
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$ROLE" ] || [ -z "$INSTANCE" ]; then
+            echo "::error::variables AWS_DEPLOY_ROLE_ARN and MASTER_INSTANCE_ID are not both set; nothing was deployed"; exit 1
+          fi
+          # GITHUB_TOKEN cannot write repository variables. Without this token the new digest would
+          # not reach LIVE_MASTER_IMAGE, and ghcr-retention.yml could prune the image the master runs.
+          [ "$TOKEN_SET" = true ] || {
+            echo "::error::secret LIVE_MASTER_IMAGE_TOKEN (fine-grained, Variables: write on this repo) is not set; nothing was deployed"; exit 1; }
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: inputs.target == 'master'
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-2
+
+      - name: Deploy the master
+        if: inputs.target == 'master'
+        env:
+          IRONFRONT_MASTER_IMAGE: ${{ inputs.image }}
+          INSTANCE_ID: ${{ vars.MASTER_INSTANCE_ID }}
+          REGION: ap-southeast-2
+          BUCKET: unused-by-deploy
+          GH_TOKEN: ${{ secrets.LIVE_MASTER_IMAGE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "$FORCE" = true ]; then export FORCE=1; else export FORCE=0; fi
+          infra/terraform/aws/master/deploy.sh
+          live=$(gh variable get LIVE_MASTER_IMAGE --repo "$GITHUB_REPOSITORY")
+          [ "$live" = "$IRONFRONT_MASTER_IMAGE" ] || {
+            echo "::error::the master runs $IRONFRONT_MASTER_IMAGE but LIVE_MASTER_IMAGE is '$live'; set it by hand before ghcr-retention runs"; exit 1; }

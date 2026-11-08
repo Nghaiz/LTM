@@ -1,98 +1,58 @@
-# Ironfront Ansible Deployment Automation
+# Ansible: game-server deploys
 
-Automated CD (Continuous Deployment) configuration for Ironfront multiplayer infrastructure using Ansible.
+One playbook, `playbooks/deploy-gameservers.yml`: it switches the three game servers on the Azure
+VM (`irondev@20.205.152.66`, Dustbowl/Island/Forest Lake on UDP 27015-27017) to an image that is
+already on the VM. It is the update half of `tools/deploy-gameservers-azure.ps1`, which still does
+the first-time setup and ships images (CI cannot build the Unity server).
 
-## Architecture & Inventory
+The EC2 master is not deployed from here: it has no SSH. `infra/terraform/aws/master/deploy.sh`
+deploys it over SSM, by hand or from the CD workflow.
 
-- **Master Server** (`[master]`): AWS EC2 (`m7i-flex.large`, Sydney) running `ironfront-master` (ASP.NET / MSP + TLS).
-- **Game Servers** (`[gameservers]`): Azure VM (`Standard_B2as_v2`, Singapore) running 3 game server containers (Dustbowl, Island, Forest Lake) on UDP 27015-27017.
-- **Standalone** (`[standalone]`): Single-VM stack (`infra/compose/compose.yaml`) for local/self-hosted full deployments.
+## What a run does
 
-```
-infra/ansible/
-├── ansible.cfg                # Default Ansible config (SSH, roles_path, inventory)
-├── inventory/
-│   ├── production.ini         # Production hosts (EC2 Master + Azure Game Servers)
-│   ├── staging.ini            # Staging hosts template
-│   └── group_vars/
-│       ├── all.yml            # Common paths and secrets
-│       ├── master.yml         # Master ports, options, image repo, dynamic host overrides
-│       ├── gameservers.yml    # Map catalog, ports, master host, dynamic host overrides
-│       └── standalone.yml     # Single-VM compose settings
-├── playbooks/
-│   ├── site.yml               # Deploys both Master and Game Servers
-│   ├── deploy-master.yml      # Deploys Master Server only
-│   ├── deploy-gameservers.yml # Deploys Game Servers only
-│   └── deploy-standalone.yml  # Deploys Single-VM Compose stack
-└── roles/
-    ├── common/                # Verifies Docker & Compose, directory permissions, GHCR login
-    ├── master/                # Durability check, compose deploy, service restart, healthcheck
-    ├── gameserver/            # Compose deploy, registration verification with master
-    └── standalone/            # Single-VM full stack deployment
-```
+1. **Preflight, read-only.** Refuses when:
+   - the image is not `ironfront-game-server:<rev>`, or the VM does not hold it;
+   - `~/ironfront/.env` or `gameservers.compose.yml` is missing, `.env` has no shared secret, or its
+     current image is unknown (there would be nothing to roll back to);
+   - a container's latest room event is `master assigned room` (a live room) and `force` is off;
+   - the current servers are not running the `.env` image and registered (`force` skips this).
+2. **Backup** to `~/ironfront/backups/<UTC time>/`: `.env`, the compose file and every
+   container's `docker logs -t` (the only record of a match). The five newest backups are kept.
+3. **Change**: installs `infra/docker/gameservers.compose.yml`, rewrites only the
+   `IRONFRONT_GAMESERVER_IMAGE=` line of `.env` (the shared secret is never read out or rewritten),
+   then `docker compose up -d` in `~/ironfront`. The directory is the compose project name
+   (`ironfront`); never run it from anywhere else.
+4. **Verify**: every container runs the new image and has logged
+   `master link: registered as server` since its current start, within 180 s.
+5. **Rollback** if 3 or 4 fails: restores the backup, brings the previous image up, verifies it the
+   same way, and fails the run naming both images.
 
-## Prerequisites
+Nothing changes when the image and compose file are already in place; the run only verifies.
 
-- Ansible 2.15+ (with `pipelining = True` and python3 on targets).
-- SSH access to target machines:
-  - AWS EC2: user `ubuntu` with authorized SSH key (`MASTER_SERVER_KEY`).
-  - Azure VM: user `irondev` with authorized SSH key.
+## From GitHub Actions
 
-## Production Safety Policy & GitHub Actions CD
+Actions -> **CD** -> Run workflow, from `main` only: target `gameservers`, image
+`ironfront-game-server:<rev>`, `force` off unless a live room may be dropped.
 
-All deployments to the production server are **100% MANUAL** via GitHub Actions:
-- Pushing to any branch (`main`, `release`), pushing a git tag (`v*.*.*`), or publishing a GitHub Release will **NEVER** automatically deploy to the server.
-- To deploy, navigate to **GitHub Actions → CD → Click "Run workflow"**:
-  1. **Use workflow from**: Choose the branch or tag to deploy (`main`, `release`, `v4.6.5`, etc.).
-  2. **Deployment target**: `master`, `gameservers`, `all`, or `standalone`.
-  3. **Target environment**: `production` or `staging`.
-  4. **image_tag**: Optional specific image digest or release tag (leave blank to build selected ref).
-  5. **force**: Set true to deploy even if active rooms are in progress.
-- If configured with GitHub Environment Protection Rules ("Required reviewers"), deployment will pause and require an explicit "Approve and deploy" before Ansible starts.
+Needs the secret `GAMESERVER_SSH_KEY` (irondev's private key); without it the run stops before
+connecting. The host and its host key are pinned in `inventory/production.ini` and `pinned-hostkeys.txt`, so a
+changed host key stops the run. Give the `production` environment required reviewers so every run
+waits for approval.
 
-## Manual CLI Usage
+Target `master` runs `deploy.sh` and needs the variables `AWS_DEPLOY_ROLE_ARN` (an IAM role trusted
+through GitHub OIDC for `repo:Nghaiz/LTM:environment:production`, allowed `ssm:SendCommand` on the
+instance) and `MASTER_INSTANCE_ID`, plus the secret `LIVE_MASTER_IMAGE_TOKEN` (fine-grained,
+Variables: write) so the new digest reaches `LIVE_MASTER_IMAGE` and `ghcr-retention.yml` keeps it.
 
-### 1. Deploy Master Server only
-
-Deploy the newest build of master:
-```bash
-ansible-playbook -i inventory/production.ini playbooks/deploy-master.yml \
-  -e "master_image=ghcr.io/nghaiz/ironfront-master@sha256:<digest>"
-```
-
-Deploy even if rooms/matches are open (`force_deploy`):
-```bash
-ansible-playbook -i inventory/production.ini playbooks/deploy-master.yml \
-  -e "master_image=ghcr.io/nghaiz/ironfront-master@sha256:<digest>" \
-  -e "force_deploy=true"
-```
-
-### 2. Deploy Game Servers only
+## By hand
 
 ```bash
-ansible-playbook -i inventory/production.ini playbooks/deploy-gameservers.yml \
-  -e "gameserver_image=ghcr.io/nghaiz/ironfront-gameserver:v4.6.5"
+cd infra/ansible
+ssh-keygen -F 20.205.152.66 || cat pinned-hostkeys.txt >> ~/.ssh/known_hosts   # the pinned host key
+ansible-playbook playbooks/deploy-gameservers.yml \
+  --private-key ~/.ssh/nghaiz_ed25519_ctf \
+  -e gameserver_image=ironfront-game-server:<rev>
 ```
 
-### 3. Full Deployment (Master + Game Servers)
-
-```bash
-ansible-playbook -i inventory/production.ini playbooks/site.yml \
-  -e "master_image=ghcr.io/nghaiz/ironfront-master@sha256:<digest>" \
-  -e "gameserver_image=ghcr.io/nghaiz/ironfront-gameserver:v4.6.5"
-```
-
-### 4. Single-VM Standalone Stack
-
-```bash
-ansible-playbook -i inventory/production.ini playbooks/deploy-standalone.yml \
-  -e "standalone_master_image=ghcr.io/nghaiz/ironfront-master@sha256:<digest>" \
-  -e "standalone_gameserver_image=ironfront-game-server:v4.6.5"
-```
-
-## Safety Mechanisms & Healthchecks
-
-1. **Active Match Protection**: `roles/master` inspects `/opt/ironfront/data/durability.csv`. If `roomsActive > 0`, the deployment halts immediately to avoid disconnecting active players (unless `-e force_deploy=true` is passed).
-2. **Digest Enforcement**: Refuses `:latest` images. Every deployment requires an immutable digest or version tag.
-3. **Master Healthcheck**: Waits for `docker inspect` to report `healthy` before finishing.
-4. **Game Server Registration Check**: Verifies that every deployed container reports `master link: registered as server` in its logs within 180s.
+Add `-e gameserver_force=true` to deploy over a live room. Ansible needs a Linux or macOS control
+machine (WSL on Windows); `ansible-core` 2.17 is what CI pins.
