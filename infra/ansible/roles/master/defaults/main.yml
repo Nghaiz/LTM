@@ -1,0 +1,5 @@
+---
+# Defaults for master role
+force_deploy: false
+master_health_retries: 30
+master_health_delay: 3

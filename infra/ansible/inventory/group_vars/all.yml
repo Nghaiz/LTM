@@ -1,0 +1,18 @@
+---
+# Global configuration across all Ironfront servers
+ironfront_root_dir: /opt/ironfront
+ironfront_data_dir: /opt/ironfront/data
+ironfront_tls_dir: /opt/ironfront/tls
+ironfront_bin_dir: /opt/ironfront/bin
+
+# User/Group ownership for data directory (master container runs with non-root uid 1654)
+ironfront_uid: 1654
+ironfront_gid: 1654
+
+# Registry authentication (GHCR)
+ghcr_registry: ghcr.io
+ghcr_user: "{{ lookup('env', 'GHCR_USER') | default(lookup('env', 'GITHUB_ACTOR') | default('', true), true) }}"
+ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') | default(lookup('env', 'GITHUB_TOKEN') | default('', true), true) }}"
+
+# Shared secret for signing/verifying join tickets (leave empty to retain host's existing .env)
+ironfront_shared_secret: "{{ lookup('env', 'IRONFRONT_SHARED_SECRET') | default('', true) }}"

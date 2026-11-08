@@ -1,0 +1,8 @@
+---
+# Deploy Standalone Single-VM Stack
+- name: Deploy Standalone Single-VM Stack
+  hosts: standalone
+  become: true
+  roles:
+    - role: common
+    - role: standalone

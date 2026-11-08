@@ -1,0 +1,92 @@
+# Standalone Ironfront stack managed by Ansible
+name: ironfront
+
+x-gameserver-base: &gameserver-base
+  image: ${IRONFRONT_GAMESERVER_IMAGE:?set IRONFRONT_GAMESERVER_IMAGE to a pinned ghcr.io digest/tag}
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  depends_on:
+    master:
+      condition: service_started
+  networks:
+    - ironfront
+  deploy:
+    resources:
+      limits:
+        memory: 1536M
+
+x-gameserver-env: &gameserver-env
+  IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET (>=32 chars) in .env}
+  IRONFRONT_MASTER_HOST: master
+  IRONFRONT_MASTER_PORT: "27000"
+  IRONFRONT_GAMESERVER_MASTER_TLS: "1"
+  IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST: ${IRONFRONT_DOMAIN:?set IRONFRONT_DOMAIN to the master certificate hostname}
+  IRONFRONT_GAMESERVER_PUBLIC_IP: ${IRONFRONT_PUBLIC_IP:?set IRONFRONT_PUBLIC_IP to the VM public IPv4}
+  IRONFRONT_GAMESERVER_TRANSPORT: udp
+  IRONFRONT_GAMESERVER_SCENE: ${IRONFRONT_GAMESERVER_SCENE:-Dustbowl}
+  IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "0"
+  IRONFRONT_GAMESERVER_MAX_PLAYERS: ${IRONFRONT_GAMESERVER_MAX_PLAYERS:-16}
+  IRONFRONT_GAMESERVER_MAX_CONNECTIONS: ${IRONFRONT_GAMESERVER_MAX_CONNECTIONS:-16}
+
+services:
+  master:
+    image: ${IRONFRONT_MASTER_IMAGE:?set IRONFRONT_MASTER_IMAGE to a pinned ghcr.io digest/tag}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 25s
+    networks:
+      - ironfront
+    ports:
+      - "27000:27000"
+      - "127.0.0.1:27001:27001"
+    volumes:
+      - ${IRONFRONT_DATA_DIR:-./data}:/data
+      - ${IRONFRONT_TLS_DIR:-./tls}:/tls:ro
+    environment:
+      IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET (>=32 chars) in .env}
+      IRONFRONT_MASTER_PORT: "27000"
+      IRONFRONT_TLS_CERT_PATH: /tls/master.pfx
+      IRONFRONT_TLS_CERT_PASSWORD: ${IRONFRONT_TLS_CERT_PASSWORD:?set IRONFRONT_TLS_CERT_PASSWORD in .env}
+      IRONFRONT_METRICS_PORT: "27001"
+      IRONFRONT_METRICS_BIND: "0.0.0.0"
+      IRONFRONT_DB_PATH: /data/ironfront.db
+      IRONFRONT_METRICS_CSV: /data/durability.csv
+      IRONFRONT_METRICS_CSV_INTERVAL_SEC: ${IRONFRONT_METRICS_CSV_INTERVAL_SEC:-60}
+      IRONFRONT_LOG_LEVEL: ${IRONFRONT_LOG_LEVEL:-Warn}
+      IRONFRONT_STRUCTURED_LOG: "1"
+      IRONFRONT_MAX_CONNECTIONS_PER_IP: ${IRONFRONT_MAX_CONNECTIONS_PER_IP:-64}
+      IRONFRONT_MAX_TOTAL_CONNECTIONS: ${IRONFRONT_MAX_TOTAL_CONNECTIONS:-256}
+      IRONFRONT_LOGIN_RATE_PER_MINUTE: ${IRONFRONT_LOGIN_RATE_PER_MINUTE:-5}
+      IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE: ${IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE:-60}
+    deploy:
+      resources:
+        limits:
+          memory: {{ standalone_master_memory }}
+
+  game-server-1:
+    <<: *gameserver-base
+    ports:
+      - "27015:27015/udp"
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_UDP_PORT: "27015"
+      IRONFRONT_GAMESERVER_MAP_IDS: "1"
+
+  game-server-2:
+    <<: *gameserver-base
+    ports:
+      - "27016:27016/udp"
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_UDP_PORT: "27016"
+      IRONFRONT_GAMESERVER_MAP_IDS: "2"
+
+networks:
+  ironfront:
+    driver: bridge

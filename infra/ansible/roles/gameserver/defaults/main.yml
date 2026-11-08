@@ -1,0 +1,3 @@
+---
+# Defaults for gameserver role
+gameserver_register_timeout: 180

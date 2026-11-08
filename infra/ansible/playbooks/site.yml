@@ -1,0 +1,15 @@
+---
+# Complete Ironfront deployment: Master Server followed by Game Servers
+- name: Deploy Master Server
+  hosts: master
+  become: true
+  roles:
+    - role: common
+    - role: master
+
+- name: Deploy Game Servers
+  hosts: gameservers
+  become: true
+  roles:
+    - role: common
+    - role: gameserver

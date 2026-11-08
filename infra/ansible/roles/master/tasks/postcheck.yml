@@ -1,0 +1,35 @@
+---
+# Post-deployment health checks for Master Server
+
+- name: Wait for master container to report healthy
+  ansible.builtin.command: >
+    docker inspect --format '{% raw %}{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}{% endraw %}'
+    {{ master_container_name }}
+  register: container_health_check
+  until: container_health_check.stdout == 'healthy'
+  retries: "{{ master_health_retries }}"
+  delay: "{{ master_health_delay }}"
+  changed_when: false
+
+- name: Query deployed image revision label
+  ansible.builtin.command: >
+    docker inspect --format '{% raw %}{{index .Config.Labels "org.opencontainers.image.revision"}}{% endraw %}'
+    {{ master_container_name }}
+  register: revision_check
+  changed_when: false
+  failed_when: false
+
+- name: Query master protocol version from container logs
+  ansible.builtin.shell: >
+    docker logs {{ master_container_name }} 2>&1 | grep -m1 -i "protocol v" || echo "unknown protocol"
+  register: protocol_check
+  changed_when: false
+  failed_when: false
+
+- name: Display master deployment summary
+  ansible.builtin.debug:
+    msg:
+      - "Master health: {{ container_health_check.stdout }}"
+      - "Master image: {{ master_image }}"
+      - "Git revision: {{ revision_check.stdout | default('N/A') }}"
+      - "Protocol: {{ protocol_check.stdout | trim }}"

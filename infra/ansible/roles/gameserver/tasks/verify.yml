@@ -1,0 +1,17 @@
+---
+# Verification tasks ensuring game servers successfully register with Master Server
+
+- name: Verify game servers register with master
+  ansible.builtin.shell: >
+    docker logs {{ item.container_name }} 2>&1 | grep -i "master link: registered as server"
+  loop: "{{ gameserver_instances }}"
+  register: gs_registration_check
+  until: gs_registration_check.rc == 0
+  retries: "{{ (gameserver_register_timeout | int / 3) | int }}"
+  delay: 3
+  changed_when: false
+
+- name: Display game server registration status
+  ansible.builtin.debug:
+    msg: "{{ item.item.container_name }} successfully registered with master (output: {{ item.stdout | trim }})"
+  loop: "{{ gs_registration_check.results }}"

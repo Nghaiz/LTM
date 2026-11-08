@@ -1,0 +1,36 @@
+---
+# Game server deployment tasks
+- name: Ensure gameserver directory exists
+  ansible.builtin.file:
+    path: "{{ gameserver_root_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Render gameservers compose file
+  ansible.builtin.template:
+    src: gameservers.compose.yml.j2
+    dest: "{{ gameserver_root_dir }}/gameservers.compose.yml"
+    mode: "0644"
+
+- name: Render gameservers .env file
+  ansible.builtin.template:
+    src: gameservers.env.j2
+    dest: "{{ gameserver_root_dir }}/.env"
+    mode: "0600"
+  when: ironfront_shared_secret | length > 0
+  no_log: true
+
+- name: Pull gameserver image if repository prefix is present
+  ansible.builtin.command: "docker pull {{ gameserver_image }}"
+  when: "'/' in gameserver_image"
+  register: gs_pull_result
+  changed_when: "'Downloaded' in gs_pull_result.stdout or 'Pull complete' in gs_pull_result.stdout"
+
+- name: Start or update game servers using docker compose
+  ansible.builtin.command: >
+    docker compose --env-file .env -f gameservers.compose.yml up -d --remove-orphans
+  args:
+    chdir: "{{ gameserver_root_dir }}"
+
+- name: Verify game server registration with master
+  ansible.builtin.include_tasks: verify.yml

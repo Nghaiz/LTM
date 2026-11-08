@@ -1,0 +1,204 @@
+name: CD
+
+# Continuous Deployment pipeline for Ironfront.
+#
+# Triggers:
+#   - Push to main, release, release/** branches
+#   - Git tags matching v*.*.* (semantic version releases)
+#   - Manual trigger (workflow_dispatch) with options for target, environment, force, and custom image.
+
+on:
+  push:
+    branches:
+      - main
+      - release
+      - 'release/**'
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deployment target'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - master
+          - gameservers
+          - standalone
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      image_tag:
+        description: 'Specific image digest or tag (leave empty for auto build)'
+        required: false
+        default: ''
+        type: string
+      force:
+        description: 'Force deploy even if active rooms/matches exist'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+  variables: write
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-master:
+    name: Build Master Image
+    # Skip building master only if manually deploying gameservers only or if specific digest already provided
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      (inputs.target != 'gameservers' && inputs.image_tag == '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image_digest: ${{ steps.build.outputs.digest && format('ghcr.io/{0}/ironfront-master@{1}', github.repository_owner, steps.build.outputs.digest) || '' }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "ts=$(TZ='Asia/Ho_Chi_Minh' date +'%Y-%m-%dT%H-%M-%SVN')" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ironfront-master
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=${{ steps.timestamp.outputs.ts }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push master image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: infra/docker/master.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Report built master image
+        run: |
+          {
+            echo "### Master Image Published";
+            echo "- **Digest**: \`ghcr.io/${{ github.repository_owner }}/ironfront-master@${{ steps.build.outputs.digest }}\`";
+            echo "- **Tags**: \`${{ steps.meta.outputs.tags }}\`";
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy via Ansible
+    needs: [build-master]
+    if: always() && !cancelled() && !contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible
+
+      - name: Configure SSH Private Key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY || secrets.ANSIBLE_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Determine Target Playbook and Inventory
+        id: plan
+        run: |
+          TARGET="${{ inputs.target || 'all' }}"
+          ENV_NAME="${{ inputs.environment || 'production' }}"
+          case "$TARGET" in
+            master) PLAYBOOK="infra/ansible/playbooks/deploy-master.yml" ;;
+            gameservers) PLAYBOOK="infra/ansible/playbooks/deploy-gameservers.yml" ;;
+            standalone) PLAYBOOK="infra/ansible/playbooks/deploy-standalone.yml" ;;
+            *) PLAYBOOK="infra/ansible/playbooks/site.yml" ;;
+          esac
+          INVENTORY="infra/ansible/inventory/${ENV_NAME}.ini"
+
+          # Resolve master image digest
+          CUSTOM_IMAGE="${{ inputs.image_tag }}"
+          BUILT_IMAGE="${{ needs.build-master.outputs.image_digest }}"
+          CHOSEN_IMAGE="${CUSTOM_IMAGE:-$BUILT_IMAGE}"
+
+          echo "playbook=$PLAYBOOK" >> "$GITHUB_OUTPUT"
+          echo "inventory=$INVENTORY" >> "$GITHUB_OUTPUT"
+          echo "master_image=$CHOSEN_IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Run Ansible Playbook
+        env:
+          ANSIBLE_CONFIG: infra/ansible/ansible.cfg
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IRONFRONT_SHARED_SECRET: ${{ secrets.IRONFRONT_SHARED_SECRET }}
+        run: |
+          EXTRA_VARS="force_deploy=${{ inputs.force || false }}"
+          if [ -n "${{ steps.plan.outputs.master_image }}" ]; then
+            EXTRA_VARS="$EXTRA_VARS master_image=${{ steps.plan.outputs.master_image }}"
+          fi
+
+          echo "Executing Ansible: ansible-playbook -i ${{ steps.plan.outputs.inventory }} ${{ steps.plan.outputs.playbook }} -e \"$EXTRA_VARS\""
+          ansible-playbook -i "${{ steps.plan.outputs.inventory }}" "${{ steps.plan.outputs.playbook }}" -e "$EXTRA_VARS"
+
+      - name: Record LIVE_MASTER_IMAGE in repository variables
+        if: steps.plan.outputs.master_image != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IMAGE="${{ steps.plan.outputs.master_image }}"
+          echo "Updating LIVE_MASTER_IMAGE to $IMAGE"
+          gh variable set LIVE_MASTER_IMAGE --repo "${{ github.repository }}" --body "$IMAGE" || {
+            echo "::warning::Could not automatically update LIVE_MASTER_IMAGE repository variable. Check permissions."
+          }
+
+      - name: Deployment Summary
+        run: |
+          {
+            echo "### Deployment Complete 🚀";
+            echo "- **Environment**: \`${{ inputs.environment || 'production' }}\`";
+            echo "- **Target**: \`${{ inputs.target || 'all' }}\`";
+            echo "- **Playbook**: \`${{ steps.plan.outputs.playbook }}\`";
+            if [ -n "${{ steps.plan.outputs.master_image }}" ]; then
+              echo "- **Master Image**: \`${{ steps.plan.outputs.master_image }}\`";
+            fi
+            echo "- **Status**: Success";
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,5 @@
+---
+# Defaults for standalone role
+standalone_master_memory: 768M
+standalone_health_retries: 30
+standalone_health_delay: 3

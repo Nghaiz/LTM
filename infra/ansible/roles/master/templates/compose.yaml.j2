@@ -1,0 +1,111 @@
+# Ironfront master stack managed by Ansible
+name: ironfront
+
+services:
+  master:
+    image: ${IRONFRONT_MASTER_IMAGE:?set IRONFRONT_MASTER_IMAGE in /opt/ironfront/master.env}
+    container_name: {{ master_container_name }}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 25s
+    ports:
+      - "{{ master_port }}:{{ master_port }}"
+      - "{{ master_https_port }}:{{ master_port }}"
+      - "127.0.0.1:{{ master_metrics_port }}:{{ master_metrics_port }}"
+    volumes:
+      - {{ ironfront_data_dir }}:/data
+      - {{ ironfront_tls_dir }}:/tls:ro
+    env_file:
+      - {{ ironfront_root_dir }}/.env
+    environment:
+      IRONFRONT_MASTER_PORT: "{{ master_port }}"
+      IRONFRONT_DB_PATH: "{{ master_db_path }}"
+      IRONFRONT_METRICS_CSV: "{{ master_metrics_csv }}"
+      IRONFRONT_METRICS_PORT: "{{ master_metrics_port }}"
+      IRONFRONT_METRICS_BIND: "{{ master_metrics_bind }}"
+      IRONFRONT_STRUCTURED_LOG: "1"
+      IRONFRONT_LOG_FILE: /data/master.log
+      IRONFRONT_LOG_LEVEL: "{{ master_log_level }}"
+      IRONFRONT_MAX_CONNECTIONS_PER_IP: "{{ master_max_connections_per_ip }}"
+      IRONFRONT_MAX_TOTAL_CONNECTIONS: "{{ master_max_total_connections }}"
+      IRONFRONT_LOGIN_RATE_PER_MINUTE: "{{ master_login_rate_per_minute }}"
+      IRONFRONT_LOGIN_ATTEMPTS_PER_MINUTE: "{{ master_login_attempts_per_minute }}"
+      IRONFRONT_TLS_CERT_PATH: "{{ master_tls_cert_path }}"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  db-viewer:
+    image: coleifer/sqlite-web@sha256:1e5b86237968ed747554f951c6df2fc2fe4bf4ef070b8ca23d553d7f6c6426f7
+    container_name: ironfront-db-viewer
+    restart: unless-stopped
+    user: "{{ ironfront_uid }}:{{ ironfront_gid }}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    entrypoint: ["sqlite_web"]
+    command: ["--host", "0.0.0.0", "--port", "8080", "--no-browser", "/data/ironfront.db"]
+    volumes:
+      - {{ ironfront_data_dir }}:/data
+    depends_on:
+      - master
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  db-tunnel:
+    image: cloudflare/cloudflared@sha256:faa8e0a1475f137c910be6025f43c8e4092fdd35461b31e19fd1390657a1ff39
+    container_name: ironfront-db-tunnel
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command: ["tunnel", "--metrics", "127.0.0.1:20241", "run", "--token-file", "/etc/cloudflared/token"]
+    volumes:
+      - {{ ironfront_root_dir }}/cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - db-gate
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  db-gate:
+    image: caddy@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17
+    container_name: ironfront-db-gate
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - {{ ironfront_root_dir }}/db-viewer:/etc/caddy:ro
+    depends_on:
+      - db-viewer
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }

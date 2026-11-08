@@ -1,0 +1,23 @@
+---
+# Configuration for Ironfront Master Server host(s)
+master_service_name: ironfront-master
+master_container_name: ironfront-master
+master_port: 27000
+master_https_port: 443
+master_metrics_port: 27001
+master_db_path: /data/ironfront.db
+master_metrics_csv: /data/durability.csv
+master_metrics_bind: "0.0.0.0"
+master_log_level: Warn
+master_max_connections_per_ip: "64"
+master_max_total_connections: "256"
+master_login_rate_per_minute: "5"
+master_login_attempts_per_minute: "60"
+master_tls_cert_path: /tls/master.pfx
+
+# Image repository & default image tag
+master_image_repo: "ghcr.io/nghaiz/ironfront-master"
+master_image: "{{ lookup('env', 'IRONFRONT_MASTER_IMAGE') | default(master_image_repo ~ ':main', true) }}"
+
+# Force deploy even if active rooms exist (overridden by -e force_deploy=true)
+force_deploy: false

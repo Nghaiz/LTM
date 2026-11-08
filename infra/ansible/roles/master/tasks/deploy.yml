@@ -1,0 +1,52 @@
+---
+# Deployment tasks for Master Server
+
+- name: Render master docker compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ ironfront_root_dir }}/compose.yaml"
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Update master.env with desired image
+  ansible.builtin.template:
+    src: master.env.j2
+    dest: "{{ ironfront_root_dir }}/master.env"
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Update shared secret in .env if provided
+  ansible.builtin.lineinfile:
+    path: "{{ ironfront_root_dir }}/.env"
+    regexp: '^IRONFRONT_SHARED_SECRET='
+    line: "IRONFRONT_SHARED_SECRET={{ ironfront_shared_secret }}"
+    mode: "0600"
+    create: true
+  when: ironfront_shared_secret | length > 0
+  no_log: true
+
+- name: Pull the master image
+  ansible.builtin.command: "docker pull -q {{ master_image }}"
+  register: docker_pull_result
+  changed_when: "'Downloaded' in docker_pull_result.stdout or 'Pull complete' in docker_pull_result.stdout"
+
+- name: Check if ironfront-master.service systemd unit exists
+  ansible.builtin.stat:
+    path: /etc/systemd/system/ironfront-master.service
+  register: systemd_unit_stat
+
+- name: Restart master service via systemd if installed
+  ansible.builtin.systemd:
+    name: ironfront-master
+    state: restarted
+    daemon_reload: true
+  when: systemd_unit_stat.stat.exists
+
+- name: Recreate master container via docker compose if systemd unit not used
+  ansible.builtin.command: >
+    docker compose --project-directory {{ ironfront_root_dir }}
+    --env-file {{ ironfront_root_dir }}/master.env
+    up -d --remove-orphans
+  when: not systemd_unit_stat.stat.exists
