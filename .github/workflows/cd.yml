@@ -121,6 +121,9 @@ jobs:
     if: always() && !cancelled() && !contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment || 'production' }}
+      url: https://52-62-179-111.sslip.io
 
     steps:
       - uses: actions/checkout@v7
