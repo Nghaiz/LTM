@@ -15,11 +15,13 @@ name: CD
 #   - gameservers: secret GAMESERVER_SSH_KEY (irondev's private key). The host and its host key are
 #     pinned in infra/ansible/, not taken from secrets, so a secret cannot redirect a deploy.
 #   - master: variables AWS_DEPLOY_ROLE_ARN + MASTER_INSTANCE_ID (an IAM role trusted for
-#     repo:Nghaiz/LTM:environment:production through GitHub OIDC). The EC2 master has no SSH.
+#     repo:Nghaiz/LTM:environment:production through GitHub OIDC, created by
+#     infra/terraform/aws/master/github-deploy-role.sh). The EC2 master has no SSH.
 #
 # Runs only from main: the playbook, compose file and deploy.sh it executes come from the ref,
-# so a branch could otherwise deploy unreviewed code. Give the "production" environment required
-# reviewers (Settings -> Environments) so every run waits for an approval.
+# so a branch could otherwise deploy unreviewed code. The "production" environment (created
+# 2026-11-09) allows only main and requires the owner's approval for every run; its secret and
+# variables live there, not at repository level.
 
 on:
   workflow_dispatch:
@@ -57,6 +59,7 @@ jobs:
     permissions:
       contents: read
       id-token: write   # GitHub OIDC -> the AWS role; used by target=master only
+      packages: write   # the "live" tag on the deployed master image; target=master only
     env:
       TARGET: ${{ inputs.target }}
       IMAGE: ${{ inputs.image }}
@@ -128,15 +131,10 @@ jobs:
         env:
           ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           INSTANCE: ${{ vars.MASTER_INSTANCE_ID }}
-          TOKEN_SET: ${{ secrets.LIVE_MASTER_IMAGE_TOKEN != '' }}
         run: |
           if [ -z "$ROLE" ] || [ -z "$INSTANCE" ]; then
             echo "::error::variables AWS_DEPLOY_ROLE_ARN and MASTER_INSTANCE_ID are not both set; nothing was deployed"; exit 1
           fi
-          # GITHUB_TOKEN cannot write repository variables. Without this token the new digest would
-          # not reach LIVE_MASTER_IMAGE, and ghcr-retention.yml could prune the image the master runs.
-          [ "$TOKEN_SET" = true ] || {
-            echo "::error::secret LIVE_MASTER_IMAGE_TOKEN (fine-grained, Variables: write on this repo) is not set; nothing was deployed"; exit 1; }
 
       - uses: aws-actions/configure-aws-credentials@v4
         if: inputs.target == 'master'
@@ -151,11 +149,30 @@ jobs:
           INSTANCE_ID: ${{ vars.MASTER_INSTANCE_ID }}
           REGION: ap-southeast-2
           BUCKET: unused-by-deploy
-          GH_TOKEN: ${{ secrets.LIVE_MASTER_IMAGE_TOKEN }}
         run: |
           set -euo pipefail
           if [ "$FORCE" = true ]; then export FORCE=1; else export FORCE=0; fi
-          infra/terraform/aws/master/deploy.sh
-          live=$(gh variable get LIVE_MASTER_IMAGE --repo "$GITHUB_REPOSITORY")
-          [ "$live" = "$IRONFRONT_MASTER_IMAGE" ] || {
-            echo "::error::the master runs $IRONFRONT_MASTER_IMAGE but LIVE_MASTER_IMAGE is '$live'; set it by hand before ghcr-retention runs"; exit 1; }
+          # deploy.sh then tries `gh variable set LIVE_MASTER_IMAGE`; GITHUB_TOKEN cannot write
+          # repository variables, so that only warns. The next step protects the image instead.
+          GH_TOKEN='' infra/terraform/aws/master/deploy.sh
+
+      - uses: docker/login-action@v4
+        if: inputs.target == 'master'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # tools/prune_ghcr.py keeps every image that carries a name tag, so tagging the deployed digest
+      # "live" keeps ghcr-retention.yml from ever pruning the image the master runs. Only after a
+      # successful deploy: a failed deploy leaves "live" on the image still running.
+      - name: Tag the deployed image "live" on GHCR
+        if: inputs.target == 'master'
+        run: |
+          set -euo pipefail
+          live="${IMAGE%@*}:live"
+          docker buildx imagetools create --tag "$live" "$IMAGE"
+          got=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$live")
+          [ "$got" = "${IMAGE#*@}" ] || {
+            echo "::error::$live points at $got, not ${IMAGE#*@}. The master runs $IMAGE; retag it: docker buildx imagetools create --tag $live $IMAGE"; exit 1; }
+          echo "$live -> $got"

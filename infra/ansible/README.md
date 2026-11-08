@@ -34,15 +34,16 @@ Nothing changes when the image and compose file are already in place; the run on
 Actions -> **CD** -> Run workflow, from `main` only: target `gameservers`, image
 `ironfront-game-server:<rev>`, `force` off unless a live room may be dropped.
 
-Needs the secret `GAMESERVER_SSH_KEY` (irondev's private key); without it the run stops before
-connecting. The host and its host key are pinned in `inventory/production.ini` and `pinned-hostkeys.txt`, so a
-changed host key stops the run. Give the `production` environment required reviewers so every run
-waits for approval.
+Needs the `production` environment's secret `GAMESERVER_SSH_KEY` (the CD deploy key, authorized
+for irondev on the VM); without it the run stops before connecting. The host and its host key are
+pinned in `inventory/production.ini` and `pinned-hostkeys.txt`, so a changed host key stops the run.
+The environment admits only `main` and waits for the owner's approval on every run.
 
-Target `master` runs `deploy.sh` and needs the variables `AWS_DEPLOY_ROLE_ARN` (an IAM role trusted
-through GitHub OIDC for `repo:Nghaiz/LTM:environment:production`, allowed `ssm:SendCommand` on the
-instance) and `MASTER_INSTANCE_ID`, plus the secret `LIVE_MASTER_IMAGE_TOKEN` (fine-grained,
-Variables: write) so the new digest reaches `LIVE_MASTER_IMAGE` and `ghcr-retention.yml` keeps it.
+Target `master` runs `deploy.sh` over SSM with the environment variables `AWS_DEPLOY_ROLE_ARN` and
+`MASTER_INSTANCE_ID`, both written by `infra/terraform/aws/master/github-deploy-role.sh --apply`
+(an IAM role trusted through GitHub OIDC for `repo:Nghaiz/LTM:environment:production`, allowed
+`ssm:SendCommand` on that one instance). After a successful deploy it tags the digest `live` on
+GHCR, which `tools/prune_ghcr.py` never prunes (it keeps every name-tagged image).
 
 ## By hand
 
