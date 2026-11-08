@@ -38,7 +38,8 @@ deploy() {
     fi
     [ "${#password}" -ge 8 ] || die "use at least 8 characters"
 
-    hash=$(docker run --rm "$CADDY_IMAGE" caddy hash-password --plaintext "$password")
+    # Through stdin, not --plaintext: an argument is visible to every local user in the process list.
+    hash=$(printf '%s\n' "$password" | docker run --rm -i "$CADDY_IMAGE" caddy hash-password)
     unset password confirm
     [[ "$hash" =~ ^\$2[aby]\$ ]] || die "caddy hash-password returned no bcrypt hash"
 

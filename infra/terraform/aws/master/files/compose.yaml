@@ -60,7 +60,7 @@ services:
       options: { max-size: "20m", max-file: "5" }
 
   # ---- database viewer: db-gate (login) -> db-viewer (sqlite-web) ---------------------------
-  # Browse and edit the live SQLite database in a browser. Two layers keep it private, because the
+  # Browse the live SQLite database in a browser, read-only. Two layers keep it private, because the
   # database holds password hashes and session tokens:
   #   - host loopback only: the security group opens nothing for it, so you reach it through an
   #     SSM port forward, which needs AWS credentials (../db-viewer.sh tunnel);
@@ -69,9 +69,12 @@ services:
   #     db-gate fails to start and the viewer cannot be reached (fail closed); the master is
   #     unaffected either way.
   #
-  # The volume is mounted read-write and runs as the master's uid (1654, master.Dockerfile) so
-  # SQLite WAL mode can map the -shm file and edits can be made. It publishes no port: only
-  # db-gate reaches it.
+  # sqlite-web runs with --read-only: the master is the only writer, and a second writer on the
+  # live file could take the write lock out from under it. Any INSERT/UPDATE/DELETE typed into the
+  # query page fails with "attempt to write a readonly database". The volume itself stays
+  # read-write and the container runs as the master's uid (1654, master.Dockerfile) only because a
+  # read-only connection to a WAL database still has to map the -shm file. It publishes no port:
+  # only db-gate reaches it.
   db-viewer:
     image: coleifer/sqlite-web@sha256:1e5b86237968ed747554f951c6df2fc2fe4bf4ef070b8ca23d553d7f6c6426f7
     container_name: ironfront-db-viewer
@@ -82,7 +85,7 @@ services:
     cap_drop:
       - ALL
     entrypoint: ["sqlite_web"]
-    command: ["--host", "0.0.0.0", "--port", "8080", "--no-browser", "/data/ironfront.db"]
+    command: ["--host", "0.0.0.0", "--port", "8080", "--no-browser", "--read-only", "/data/ironfront.db"]
     volumes:
       - /opt/ironfront/data:/data
     depends_on:
