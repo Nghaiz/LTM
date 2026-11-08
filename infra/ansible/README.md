@@ -16,8 +16,8 @@ infra/ansible/
 │   ├── staging.ini            # Staging hosts template
 │   └── group_vars/
 │       ├── all.yml            # Common paths and secrets
-│       ├── master.yml         # Master ports, options, image repo
-│       ├── gameservers.yml    # Map catalog, ports, master host
+│       ├── master.yml         # Master ports, options, image repo, dynamic host overrides
+│       ├── gameservers.yml    # Map catalog, ports, master host, dynamic host overrides
 │       └── standalone.yml     # Single-VM compose settings
 ├── playbooks/
 │   ├── site.yml               # Deploys both Master and Game Servers
@@ -35,10 +35,22 @@ infra/ansible/
 
 - Ansible 2.15+ (with `pipelining = True` and python3 on targets).
 - SSH access to target machines:
-  - AWS EC2: user `ubuntu` with authorized SSH key.
+  - AWS EC2: user `ubuntu` with authorized SSH key (`MASTER_SERVER_KEY`).
   - Azure VM: user `irondev` with authorized SSH key.
 
-## Usage
+## Production Safety Policy & GitHub Actions CD
+
+All deployments to the production server are **100% MANUAL** via GitHub Actions:
+- Pushing to any branch (`main`, `release`), pushing a git tag (`v*.*.*`), or publishing a GitHub Release will **NEVER** automatically deploy to the server.
+- To deploy, navigate to **GitHub Actions → CD → Click "Run workflow"**:
+  1. **Use workflow from**: Choose the branch or tag to deploy (`main`, `release`, `v4.6.5`, etc.).
+  2. **Deployment target**: `master`, `gameservers`, `all`, or `standalone`.
+  3. **Target environment**: `production` or `staging`.
+  4. **image_tag**: Optional specific image digest or release tag (leave blank to build selected ref).
+  5. **force**: Set true to deploy even if active rooms are in progress.
+- If configured with GitHub Environment Protection Rules ("Required reviewers"), deployment will pause and require an explicit "Approve and deploy" before Ansible starts.
+
+## Manual CLI Usage
 
 ### 1. Deploy Master Server only
 

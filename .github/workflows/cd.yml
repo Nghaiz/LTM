@@ -2,19 +2,13 @@ name: CD
 
 # Continuous Deployment pipeline for Ironfront.
 #
-# Triggers:
-#   - Push to main, release, release/** branches
-#   - Git tags matching v*.*.* (semantic version releases)
-#   - Manual trigger (workflow_dispatch) with options for target, environment, force, and custom image.
+# Production Safety Policy:
+#   Deployment to the server is 100% MANUAL (workflow_dispatch).
+#   Pushing branches, creating tags, or publishing releases will NOT auto-deploy.
+#   An operator must explicitly trigger the run via the "Run workflow" button,
+#   selecting the desired target, environment, and branch/tag.
 
 on:
-  push:
-    branches:
-      - main
-      - release
-      - 'release/**'
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       target:
@@ -58,10 +52,7 @@ concurrency:
 jobs:
   build-master:
     name: Build Master Image
-    # Skip building master only if manually deploying gameservers only or if specific digest already provided
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      (inputs.target != 'gameservers' && inputs.image_tag == '')
+    if: inputs.target != 'gameservers' && inputs.image_tag == ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
