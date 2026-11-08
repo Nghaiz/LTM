@@ -1,4 +1,9 @@
 ---
+# Connection settings: can be overridden via extra-vars (master_server_host, master_server_user)
+# or env vars/secrets (MASTER_SERVER_HOST, MASTER_SERVER_USER). Defaults to production EC2 instance.
+ansible_host: "{{ master_server_host | default(lookup('env', 'MASTER_SERVER_HOST') | default('52.62.179.111', true), true) }}"
+ansible_user: "{{ master_server_user | default(lookup('env', 'MASTER_SERVER_USER') | default('ubuntu', true), true) }}"
+
 # Configuration for Ironfront Master Server host(s)
 master_service_name: ironfront-master
 master_container_name: ironfront-master

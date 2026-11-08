@@ -1,4 +1,9 @@
 ---
+# Connection settings: can be overridden via extra-vars (gameserver_host, gameserver_user)
+# or env vars/secrets (GAMESERVER_HOST, GAMESERVER_USER). Defaults to Azure VM.
+ansible_host: "{{ gameserver_host | default(lookup('env', 'GAMESERVER_HOST') | default('20.205.152.66', true), true) }}"
+ansible_user: "{{ gameserver_user | default(lookup('env', 'GAMESERVER_USER') | default('irondev', true), true) }}"
+
 # Configuration for Ironfront Game Server host(s)
 gameserver_root_dir: "/home/{{ ansible_user }}/ironfront"
 gameserver_image_repo: "ironfront-game-server"

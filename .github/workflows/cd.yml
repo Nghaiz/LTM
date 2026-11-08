@@ -139,7 +139,7 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY || secrets.ANSIBLE_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.MASTER_SERVER_KEY || secrets.SSH_PRIVATE_KEY || secrets.ANSIBLE_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
       - name: Determine Target Playbook and Inventory
@@ -170,10 +170,26 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IRONFRONT_SHARED_SECRET: ${{ secrets.IRONFRONT_SHARED_SECRET }}
+          MASTER_SERVER_HOST: ${{ secrets.MASTER_SERVER_HOST || vars.MASTER_SERVER_HOST || '' }}
+          MASTER_SERVER_USER: ${{ secrets.MASTER_SERVER_USER || vars.MASTER_SERVER_USER || '' }}
+          GAMESERVER_HOST: ${{ secrets.GAMESERVER_HOST || vars.GAMESERVER_HOST || '' }}
+          GAMESERVER_USER: ${{ secrets.GAMESERVER_USER || vars.GAMESERVER_USER || '' }}
         run: |
           EXTRA_VARS="force_deploy=${{ inputs.force || false }}"
           if [ -n "${{ steps.plan.outputs.master_image }}" ]; then
             EXTRA_VARS="$EXTRA_VARS master_image=${{ steps.plan.outputs.master_image }}"
+          fi
+          if [ -n "$MASTER_SERVER_HOST" ]; then
+            EXTRA_VARS="$EXTRA_VARS master_server_host=$MASTER_SERVER_HOST"
+          fi
+          if [ -n "$MASTER_SERVER_USER" ]; then
+            EXTRA_VARS="$EXTRA_VARS master_server_user=$MASTER_SERVER_USER"
+          fi
+          if [ -n "$GAMESERVER_HOST" ]; then
+            EXTRA_VARS="$EXTRA_VARS gameserver_host=$GAMESERVER_HOST"
+          fi
+          if [ -n "$GAMESERVER_USER" ]; then
+            EXTRA_VARS="$EXTRA_VARS gameserver_user=$GAMESERVER_USER"
           fi
 
           echo "Executing Ansible: ansible-playbook -i ${{ steps.plan.outputs.inventory }} ${{ steps.plan.outputs.playbook }} -e \"$EXTRA_VARS\""

@@ -1,4 +1,8 @@
 ---
+# Connection settings
+ansible_host: "{{ standalone_host | default(lookup('env', 'STANDALONE_HOST') | default('20.205.152.66', true), true) }}"
+ansible_user: "{{ standalone_user | default(lookup('env', 'STANDALONE_USER') | default('irondev', true), true) }}"
+
 # Configuration for Single-VM Standalone host (infra/compose/compose.yaml)
 standalone_root_dir: /opt/ironfront
 standalone_domain: "52-62-179-111.sslip.io"
