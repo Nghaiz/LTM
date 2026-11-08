@@ -39,11 +39,13 @@ for irondev on the VM); without it the run stops before connecting. The host and
 pinned in `inventory/production.ini` and `pinned-hostkeys.txt`, so a changed host key stops the run.
 The environment admits only `main` and waits for the owner's approval on every run.
 
-Target `master` runs `deploy.sh` over SSM with the environment variables `AWS_DEPLOY_ROLE_ARN` and
-`MASTER_INSTANCE_ID`, both written by `infra/terraform/aws/master/github-deploy-role.sh --apply`
-(an IAM role trusted through GitHub OIDC for `repo:Nghaiz/LTM:environment:production`, allowed
-`ssm:SendCommand` on that one instance). After a successful deploy it tags the digest `live` on
-GHCR, which `tools/prune_ghcr.py` never prunes (it keeps every name-tagged image).
+Target `master` runs `deploy.sh` over SSM. Its AWS identity and `MASTER_INSTANCE_ID` are written
+into the environment by `infra/terraform/aws/master/github-deploy-role.sh`: an OIDC role
+(`--oidc`, no stored key) where the account allows it, otherwise an IAM user's access key
+(`--user`; account 648879824333's organization SCP denies the OIDC provider, so this is what runs
+now). Either identity may only send `AWS-RunShellScript` to that one instance (probed: the master
+answers, another instance and S3 are denied), and the run refuses any other identity. After a
+successful deploy it tags the digest `live` on GHCR, which `tools/prune_ghcr.py` never prunes.
 
 ## By hand
 
