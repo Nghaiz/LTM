@@ -58,3 +58,93 @@ services:
     logging:
       driver: json-file
       options: { max-size: "20m", max-file: "5" }
+
+  # ---- database viewer: db-gate (login) -> db-viewer (sqlite-web) ---------------------------
+  # Browse the live SQLite database in a browser, read-only. Two layers keep it private, because the
+  # database holds password hashes and session tokens:
+  #   - host loopback only: the security group opens nothing for it, so you reach it through an
+  #     SSM port forward, which needs AWS credentials (../db-viewer.sh tunnel);
+  #   - HTTP basic auth in db-gate, from /opt/ironfront/db-viewer/Caddyfile. That file holds a
+  #     bcrypt hash, is written by ../db-viewer.sh deploy, and is NOT in git. Until it exists
+  #     db-gate fails to start and the viewer cannot be reached (fail closed); the master is
+  #     unaffected either way.
+  #
+  # sqlite-web runs with --read-only: the master is the only writer, and a second writer on the
+  # live file could take the write lock out from under it. Any INSERT/UPDATE/DELETE typed into the
+  # query page fails with "attempt to write a readonly database". The volume itself stays
+  # read-write and the container runs as the master's uid (1654, master.Dockerfile) only because a
+  # read-only connection to a WAL database still has to map the -shm file. It publishes no port:
+  # only db-gate reaches it.
+  db-viewer:
+    image: coleifer/sqlite-web@sha256:1e5b86237968ed747554f951c6df2fc2fe4bf4ef070b8ca23d553d7f6c6426f7
+    container_name: ironfront-db-viewer
+    restart: unless-stopped
+    user: "1654:1654"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    entrypoint: ["sqlite_web"]
+    command: ["--host", "0.0.0.0", "--port", "8080", "--no-browser", "--read-only", "/data/ironfront.db"]
+    volumes:
+      - /opt/ironfront/data:/data
+    depends_on:
+      - master
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # Cloudflare Tunnel to db-gate, for browsing without the AWS CLI. cloudflared dials OUT to
+  # Cloudflare, so the security group still opens nothing. Its public hostname (-> http://db-gate:8080)
+  # and the Cloudflare Access policy in front of it are set in the Cloudflare dashboard, not here.
+  # The token is /opt/ironfront/cloudflared/token, fetched from SSM by ../db-viewer.sh deploy; until
+  # it exists this container exits and restarts, and nothing is exposed.
+  db-tunnel:
+    image: cloudflare/cloudflared@sha256:faa8e0a1475f137c910be6025f43c8e4092fdd35461b31e19fd1390657a1ff39  # 2026.10.3
+    container_name: ironfront-db-tunnel
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command: ["tunnel", "--metrics", "127.0.0.1:20241", "run", "--token-file", "/etc/cloudflared/token"]
+    volumes:
+      - /opt/ironfront/cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - db-gate
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  db-gate:
+    image: caddy@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17  # 2.8.4-alpine
+    container_name: ironfront-db-gate
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The caddy binary carries a file capability; without this the exec itself is refused.
+    cap_add:
+      - NET_BIND_SERVICE
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /opt/ironfront/db-viewer:/etc/caddy:ro
+    depends_on:
+      - db-viewer
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }

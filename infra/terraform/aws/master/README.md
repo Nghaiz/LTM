@@ -24,6 +24,7 @@ runs the master in Docker and **starts it on its own**: no SSH and no manual ste
 | `files/` | Written onto the instance by cloud-init: `compose.yaml`, the systemd units, `/opt/ironfront/bin/*.sh` |
 | `deploy.sh` | Deploys a new master image over SSM and records it in the `LIVE_MASTER_IMAGE` repository variable, so `ghcr-retention.yml` never prunes it |
 | `lib.sh` | Shared helpers: `terraform output` plus SSM Run Command |
+| `db-viewer.sh` | Read-only browser for the SQLite database (sqlite-web behind Caddy basic auth, loopback only). `deploy` sets the login and starts it, `tunnel` forwards it to `http://127.0.0.1:8080` over SSM |
 
 ## How the instance boots
 
@@ -78,6 +79,18 @@ nc 127.0.0.1 27001                              # metrics (raw TCP JSON, not HTT
 sudo /opt/ironfront/bin/ironfront-backup.sh manual
 sudo /opt/ironfront/bin/ironfront-restore.sh backups/<file>.db.gz
 ```
+
+### Browsing the database
+
+```bash
+./infra/terraform/aws/master/db-viewer.sh deploy   # once, and again to change the password (asks for it)
+./infra/terraform/aws/master/db-viewer.sh tunnel   # then open http://127.0.0.1:8080 and sign in
+```
+
+It is reachable through the SSM tunnel (or Cloudflare Tunnel). The login is a
+bcrypt hash in `/opt/ironfront/db-viewer/Caddyfile` on the instance, never in git or SSM history;
+without that file the viewer refuses to start. `deploy` also pushes `files/compose.yaml`, since
+`terraform apply` does not update a running instance's cloud-init files.
 
 To rotate the secret: `aws ssm put-parameter --overwrite ...`, then
 `sudo systemctl restart ironfront-master`, then redeploy the game servers with the same value.

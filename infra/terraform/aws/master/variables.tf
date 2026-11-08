@@ -73,6 +73,16 @@ variable "shared_secret_parameter" {
   default     = "/ironfront/shared-secret"
 }
 
+variable "cloudflared_token_parameter" {
+  description = <<-EOT
+    SSM Parameter Store name (SecureString) holding the Cloudflare Tunnel token for the database
+    viewer (db-tunnel in files/compose.yaml). Optional: Terraform does NOT create it, and without
+    it the viewer is reachable only through the SSM port forward. See db-viewer.sh.
+  EOT
+  type        = string
+  default     = "/ironfront/cloudflared-token"
+}
+
 variable "ssh_public_key" {
   description = "Optional OpenSSH public key. Empty = no key pair and no port 22; use SSM Session Manager."
   type        = string

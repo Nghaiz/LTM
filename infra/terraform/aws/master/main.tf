@@ -233,6 +233,13 @@ data "aws_iam_policy_document" "master" {
     resources = ["arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter${var.shared_secret_parameter}"]
   }
 
+  # The database viewer's Cloudflare Tunnel token, read by db-viewer.sh deploy on the instance.
+  statement {
+    sid       = "ReadCloudflaredToken"
+    actions   = ["ssm:GetParameter"]
+    resources = ["arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter${var.cloudflared_token_parameter}"]
+  }
+
   statement {
     sid       = "ListBackups"
     actions   = ["s3:ListBucket"]
