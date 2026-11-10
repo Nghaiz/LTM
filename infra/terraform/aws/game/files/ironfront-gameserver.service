@@ -1,0 +1,26 @@
+# /etc/systemd/system/ironfront-gameserver.service — the game servers containers, started at boot.
+#
+# ExecStartPre executes ironfront-gameserver-bootstrap.sh to read the shared secret from SSM,
+# wait for Elastic IP, and prepare /opt/ironfront/.env before launching docker compose.
+
+[Unit]
+Description=Ironfront game servers (docker compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/ironfront
+ExecStartPre=/opt/ironfront/bin/ironfront-gameserver-bootstrap.sh
+ExecStart=/usr/bin/docker compose --project-directory /opt/ironfront --env-file /opt/ironfront/.env -f /opt/ironfront/gameservers.compose.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose --project-directory /opt/ironfront --env-file /opt/ironfront/.env -f /opt/ironfront/gameservers.compose.yml down
+TimeoutStartSec=15min
+TimeoutStopSec=60
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -400,7 +400,7 @@ jobs:
       # module per platform/role under infra/terraform/ (azure, aws/master).
       - name: Terraform validate
         run: |
-          for dir in infra/terraform/azure infra/terraform/aws/master; do
+          for dir in infra/terraform/azure infra/terraform/aws/master infra/terraform/aws/game; do
             echo "::group::$dir"
             terraform -chdir="$dir" init -backend=false -input=false
             terraform -chdir="$dir" validate
