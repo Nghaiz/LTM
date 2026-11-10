@@ -60,11 +60,18 @@ if [ -s "$ROOT/gameserver.env" ]; then
     # shellcheck disable=SC1091
     . "$ROOT/gameserver.env"
 fi
-image="${IRONFRONT_GAMESERVER_IMAGE:-ghcr.io/nghaiz/ironfront-game-server:latest}"
+image="${IRONFRONT_GAMESERVER_IMAGE:-}"
+[ -n "$image" ] || die "IRONFRONT_GAMESERVER_IMAGE is not set in $ROOT/gameserver.env"
 
 if [[ "$image" == *"/"* ]]; then
     log "pulling game server image $image"
-    docker pull "$image" || log "warning: failed to pull image $image (might need docker login or local build)"
+    # A failed pull is fatal unless the image is already here: compose would only fail later
+    # with a vaguer error, and the unit's Restart= would loop on it every 30 s.
+    if ! docker pull --quiet "$image"; then
+        docker image inspect "$image" >/dev/null 2>&1 \
+            || die "cannot pull $image and it is not on this host; set a pinned tag that exists in GHCR"
+        log "pull failed; using the copy of $image already on this host"
+    fi
 fi
 
 # ---- 4. write .env -------------------------------------------------------------------------

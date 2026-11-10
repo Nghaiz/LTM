@@ -7,7 +7,7 @@
 name: ironfront-gameservers
 
 x-gameserver: &gameserver
-  image: ${IRONFRONT_GAMESERVER_IMAGE:-ghcr.io/nghaiz/ironfront-game-server:latest}
+  image: ${IRONFRONT_GAMESERVER_IMAGE:?set IRONFRONT_GAMESERVER_IMAGE in /opt/ironfront/.env}
   restart: unless-stopped
   environment: &gameserver-env
     IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET in /opt/ironfront/.env}

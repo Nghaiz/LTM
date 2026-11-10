@@ -33,9 +33,16 @@ variable "root_volume_gb" {
 }
 
 variable "gameserver_image" {
-  description = "The game server Docker image."
+  description = <<-EOT
+    The game server image, pinned to a rev tag: ghcr.io/nghaiz/ironfront-game-server:<7-40 hex>.
+    No default and no :latest: GHCR has no such tag, and a moving tag cannot be rolled back to.
+  EOT
   type        = string
-  default     = "ghcr.io/nghaiz/ironfront-game-server:latest"
+
+  validation {
+    condition     = can(regex("^ghcr\\.io/nghaiz/ironfront-game-server:[0-9a-f]{7,40}$", var.gameserver_image))
+    error_message = "gameserver_image must be ghcr.io/nghaiz/ironfront-game-server:<rev> (7-40 hex)."
+  }
 }
 
 variable "master_host" {

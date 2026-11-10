@@ -407,6 +407,11 @@ jobs:
             echo "::endgroup::"
           done
 
+      # The on-box game-server deploy (aws/game) refuses a live room, proves registration and rolls
+      # back; this pins those behaviours with fake docker/systemctl, so it needs no AWS.
+      - name: Game-server deploy contract (aws/game)
+        run: bash infra/terraform/aws/game/tests/deploy-test.sh
+
   # Unity compilation needs a licensed Editor on the runner, which the free tier does not
   # provide. The client track runs `pwsh tools/ci.ps1` locally with UNITY_PATH set instead. Enable
   # this job once a self-hosted runner with Unity 6000.3.21f1 exists.

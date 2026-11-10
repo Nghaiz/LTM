@@ -1,0 +1,14 @@
+---
+# Switch the game servers on the Azure VM to another image, the same way
+# tools/deploy-gameservers-azure.ps1 does, with a pre-deploy room check and an automatic rollback.
+#
+#   ansible-playbook playbooks/deploy-gameservers.yml -e gameserver_image=ironfront-game-server:<rev>
+#
+# The image must already be on the VM (the PowerShell tool ships it; CI cannot build the Unity server).
+- name: Deploy game servers
+  hosts: gameservers
+  gather_facts: false
+  become: false
+  serial: 1
+  roles:
+    - role: gameserver
