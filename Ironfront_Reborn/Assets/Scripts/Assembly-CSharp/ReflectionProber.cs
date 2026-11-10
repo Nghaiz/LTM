@@ -15,14 +15,8 @@ public class ReflectionProber : MonoBehaviour
 	private Vector3 disabledBounds = new Vector3(0f, 0f, 0f);
 
 	/// <summary>
-	/// The longest one probe render is waited for before the setup carries on regardless.
+	/// The longest the day probe's render is waited for before the setup carries on without it.
 	/// </summary>
-	/// <remarks>
-	/// The night vision atmosphere is applied between the two renders and only reset after the
-	/// second. A probe that never reports finished -- disabled, or asked to render outside
-	/// realtime mode -- would otherwise leave that atmosphere on for the rest of the match, a
-	/// worse outcome than the green reflections the wait exists to prevent.
-	/// </remarks>
 	private const float MaxProbeWaitSeconds = 5f;
 
 	// The two renders, once made, as the scene's default reflection. See AdoptAsDefaultReflection.
@@ -76,10 +70,19 @@ public class ReflectionProber : MonoBehaviour
 	}
 
 	/// <summary>
-	/// Renders each probe under its own atmosphere: the day's for the normal probe, the green
-	/// night vision tint for the other.
+	/// Renders the day probe, and the night vision reflection under the green night vision
+	/// atmosphere, without that atmosphere ever reaching the screen.
 	/// </summary>
 	/// <remarks>
+	/// <para>
+	/// <b>The night vision render is made in one call, inside one frame</b>
+	/// (<see cref="RenderNightVisionReflection"/>). It used to be the second probe, rendered the way the
+	/// first is -- scheduled, then waited for over frames -- with the night vision atmosphere on the
+	/// whole scene for the wait, so every frame drawn meanwhile was green. On the Low preset realtime
+	/// probes are off and the wait never ended early: every map load and room switch showed five
+	/// seconds of green screen (a Linux player's report and log, 2026-11-10; reproduced in the Editor,
+	/// 285 green frames over 5.0 s on Low, two on Ultra). Every platform had it.
+	/// </para>
 	/// <para>
 	/// <b>Waits for each render to finish, not for the end of a frame.</b> RenderProbe only
 	/// schedules the render, and the probe is drawn during a later frame. Waiting one frame was
@@ -97,20 +100,21 @@ public class ReflectionProber : MonoBehaviour
 		{
 			yield break;
 		}
+		// The Low preset switches realtime probes off: nothing would render, and the wait below would
+		// only spend five seconds learning that.
+		if (!QualitySettings.realtimeReflectionProbes)
+		{
+			yield break;
+		}
 		int normal = normalProbe.RenderProbe();
 		yield return StartCoroutine(WaitForProbe(normalProbe, normal, "day"));
-		// Each render is copied as soon as it is finished and a frame has passed, BEFORE the next
-		// probe renders. Copied at the end, after both, the day copy came out holding the night
-		// vision render (read back in the Editor, 2026-10-02: the day copy's sky 0.26/1.94/0.41,
-		// exactly the night vision probe's, against 0.41/0.54/0.65 for the day probe itself).
+		// Copied once finished and a frame has passed. Copied later, after another render, the day
+		// copy came out holding that render (read back in the Editor, 2026-10-02: the day copy's sky
+		// 0.26/1.94/0.41, exactly the night vision probe's, against 0.41/0.54/0.65 for the day
+		// probe itself).
 		yield return null;
 		RenderTexture day = normalProbe.IsFinishedRendering(normal) ? CopyOf(normalProbe) : null;
-		TimeOfDay.instance.ApplyNightvision();
-		int nightVision = nightVisionProbe.RenderProbe();
-		yield return StartCoroutine(WaitForProbe(nightVisionProbe, nightVision, "night vision"));
-		yield return null;
-		RenderTexture night = nightVisionProbe.IsFinishedRendering(nightVision) ? CopyOf(nightVisionProbe) : null;
-		TimeOfDay.instance.ResetAtmosphere();
+		RenderTexture night = day != null ? RenderNightVisionReflection(day) : null;
 		AdoptAsDefaultReflection(day, night);
 	}
 
@@ -168,6 +172,73 @@ public class ReflectionProber : MonoBehaviour
 			old.Release();
 			Object.Destroy(old);
 		}
+	}
+
+	/// <summary>
+	/// The night vision reflection: the scene seen from <see cref="nightVisionProbe"/> under the night
+	/// vision atmosphere, rendered into a cubemap shaped like <paramref name="day"/> in one call, the
+	/// atmosphere put back before this returns. Null when the device cannot render it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// A camera's <c>RenderToCubemap</c> is synchronous, so the green atmosphere exists only inside
+	/// this method, which runs in a coroutine step, before the frame is drawn: no camera that shows the
+	/// player anything renders while it is on.
+	/// </para>
+	/// <para>
+	/// Its mips are filtered by <c>GenerateMips</c> rather than convolved as a probe's are, so a rough
+	/// surface under night vision reflects a slightly sharper blur than by day. Night vision paints the
+	/// whole scene green; that difference is not one anybody can see in it.
+	/// </para>
+	/// </remarks>
+	private RenderTexture RenderNightVisionReflection(RenderTexture day)
+	{
+		if (nightVisionProbe == null || TimeOfDay.instance == null)
+		{
+			return null;
+		}
+		RenderTextureDescriptor shape = day.descriptor;
+		shape.useMipMap = true;
+		shape.autoGenerateMips = false;
+		var night = new RenderTexture(shape)
+		{
+			name = nightVisionProbe.name + " (default reflection)",
+		};
+		night.Create();
+		var host = new GameObject("Night Vision Reflection Camera")
+		{
+			hideFlags = HideFlags.HideAndDontSave,
+		};
+		host.transform.SetPositionAndRotation(nightVisionProbe.transform.position, Quaternion.identity);
+		Camera camera = host.AddComponent<Camera>();
+		camera.enabled = false;
+		camera.cullingMask = nightVisionProbe.cullingMask;
+		camera.nearClipPlane = nightVisionProbe.nearClipPlane;
+		camera.farClipPlane = nightVisionProbe.farClipPlane;
+		camera.clearFlags = nightVisionProbe.clearFlags == ReflectionProbeClearFlags.Skybox ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
+		camera.backgroundColor = nightVisionProbe.backgroundColor;
+		camera.allowHDR = nightVisionProbe.hdr;
+		camera.allowMSAA = false;
+		bool rendered = false;
+		TimeOfDay.instance.ApplyNightvision();
+		try
+		{
+			rendered = camera.RenderToCubemap(night);
+		}
+		finally
+		{
+			TimeOfDay.instance.ResetAtmosphere();
+			Object.Destroy(host);
+		}
+		if (!rendered)
+		{
+			Debug.LogWarning("[render] the night vision reflection could not be rendered on this device; night vision keeps the day's.");
+			night.Release();
+			Object.Destroy(night);
+			return null;
+		}
+		night.GenerateMips();
+		return night;
 	}
 
 	private static RenderTexture CopyOf(ReflectionProbe probe)
