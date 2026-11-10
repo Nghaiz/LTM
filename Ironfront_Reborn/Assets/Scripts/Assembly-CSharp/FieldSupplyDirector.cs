@@ -511,18 +511,24 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		return false;
 	}
 
-	/// <summary>A place on water deep enough for a boat within reach of <paramref name="point"/>.</summary>
+	/// <summary>
+	/// A place at the water's edge within reach of <paramref name="point"/> for a boat, moored the way
+	/// a shore boat is (<see cref="FieldParking.TryMoorAshore"/>): out in the lake it is a swim from the
+	/// flag it was put there for.
+	/// </summary>
 	private bool TryMoorNearFlag(SpawnPoint point, GameObject prefab, out Vector3 at, out Quaternion facing)
 	{
 		Bounds footprint = VehicleSpawner.FootprintOf(prefab);
+		Vector3[] seats = SeatsOf(prefab);
 		Vector3 centre = point.transform.position;
-		for (int attempt = 0; attempt < ParkingAttempts; attempt++)
+		for (int attempt = 0; attempt < ParkingAttempts * 4; attempt++)
 		{
 			float angle = (float)(random.NextDouble() * Math.PI * 2.0);
 			float radius = Mathf.Lerp(config.flagRingInner * 0.6f, config.flagRingOuter + 20f, (float)random.NextDouble());
 			var outward = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
-			float yaw = Mathf.Atan2(outward.x, outward.z) * Mathf.Rad2Deg;
-			if (!parking.CanMoor(centre + outward * radius, yaw, footprint, out Vector3 surface)
+			Vector3 probe = centre + outward * radius;
+			if (!FieldParking.NearShore(probe, config.shoreReach, out float yaw)
+				|| !parking.TryMoorAshore(probe, yaw, footprint, seats, config.shoreReach, out Vector3 surface)
 				|| !FieldSupplyLayout.FarFromAll(ToVec(surface), padPositions.ToArray(), PadSeparation * PadSeparation))
 			{
 				continue;
@@ -574,9 +580,10 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 	}
 
 	/// <summary>
-	/// A place along a shore -- water at least <see cref="FieldParking.MinMooringDepth"/> deep with dry
-	/// land within <see cref="FieldSupplyConfig.shoreReach"/> -- for a boat, nosed out onto the water,
-	/// as far from the other finds as a field vehicle keeps.
+	/// A place along a shore for a boat: found from water at least <see cref="FieldParking.MinMooringDepth"/>
+	/// deep with dry land within <see cref="FieldSupplyConfig.shoreReach"/>, then brought in to the
+	/// water's edge (<see cref="FieldParking.TryMoorAshore"/>), nosed out onto the water, as far from the
+	/// other finds as a field vehicle keeps.
 	/// </summary>
 	/// <remarks>
 	/// Points are drawn over the map's lakes and rivers alone (<see cref="WaterLevel.TryGetBoundedArea"/>),
@@ -586,6 +593,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 	private bool TryMoorAtShore(GameObject prefab, VehicleSpawner moving, out Vector3 at, out Quaternion facing)
 	{
 		Bounds footprint = VehicleSpawner.FootprintOf(prefab);
+		Vector3[] seats = SeatsOf(prefab);
 		Bounds play = FieldParking.PlayArea();
 		Rect area = Rect.MinMaxRect(play.min.x, play.min.z, play.max.x, play.max.z);
 		if (WaterLevel.TryGetBoundedArea(out Rect water))
@@ -608,7 +616,7 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 					continue;
 				}
 				nearShore++;
-				if (!parking.CanMoor(probe, yaw, footprint, out Vector3 surface))
+				if (!parking.TryMoorAshore(probe, yaw, footprint, seats, config.shoreReach, out Vector3 surface))
 				{
 					continue;
 				}
@@ -628,11 +636,30 @@ public sealed class FieldSupplyDirector : MonoBehaviour
 		// Said, not swallowed: v4.5.0's server moored no boat on any match and printed only "none".
 		Debug.LogWarning("[supply] no shore mooring for a " + prefab.name + ": " + ShoreAttempts + " points over "
 			+ (area.width > 0f && area.height > 0f ? "x " + area.xMin.ToString("F0") + "-" + area.xMax.ToString("F0") + ", z " + area.yMin.ToString("F0") + "-" + area.yMax.ToString("F0") : "no area")
-			+ ", " + nearShore + " deep water by a shore, " + moorable + " fit the hull, the rest too close to another find; ground from the "
+			+ ", " + nearShore + " deep water by a shore, " + moorable + " fit the hull at a shore a player can board it from, the rest too close to another find; ground from the "
 			+ FieldParking.ShoreGroundSource() + ".");
 		at = default;
 		facing = default;
 		return false;
+	}
+
+	/// <summary>Where <paramref name="prefab"/>'s seats are, in its own space; none for a prefab without any.</summary>
+	private static Vector3[] SeatsOf(GameObject prefab)
+	{
+		Vehicle vehicle = prefab.GetComponent<Vehicle>();
+		if (vehicle == null || vehicle.seats == null)
+		{
+			return new Vector3[0];
+		}
+		var seats = new List<Vector3>(vehicle.seats.Length);
+		foreach (Seat seat in vehicle.seats)
+		{
+			if (seat != null)
+			{
+				seats.Add(prefab.transform.InverseTransformPoint(seat.transform.position));
+			}
+		}
+		return seats.ToArray();
 	}
 
 	private Vec3[] OtherFieldPositions(VehicleSpawner moving)

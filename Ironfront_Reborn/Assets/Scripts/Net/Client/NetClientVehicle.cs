@@ -65,6 +65,7 @@ namespace Ironfront.Net.Unity.Client
             SeatCount = seatCount;
             _vehicle  = vehicle;
             _rigidbody = vehicle != null ? vehicle.Rigidbody : null;
+            SeatPositions = vehicle != null ? vehicle.GetSeatPosition : (System.Func<int, Vector3>)null;
 
             SetMode(VehicleClientMode.Remote);
         }
@@ -109,6 +110,13 @@ namespace Ironfront.Net.Unity.Client
         /// Diagnostics is reading from.
         /// </remarks>
         internal IGameplayVehicleBody Body => _vehicle;
+
+        /// <summary>
+        /// <see cref="IGameplayVehicleBody.GetSeatPosition"/> as a delegate, made once: the seat
+        /// prompt asks <see cref="SeatReach.NearestSquared"/> about every vehicle every frame, and a
+        /// method group converted there would allocate each time. Null with no body.
+        /// </summary>
+        internal System.Func<int, Vector3> SeatPositions { get; }
 
         /// <summary>False once the underlying vehicle has been destroyed.</summary>
         internal bool Exists => _vehicle != null && _vehicle.Exists;

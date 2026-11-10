@@ -19,8 +19,30 @@ public sealed class FieldParking
 	/// <summary>Size of a tree-lookup cell, in metres.</summary>
 	private const float TreeCell = 16f;
 
-	/// <summary>Metres of water a boat is moored over, everywhere under its hull.</summary>
+	/// <summary>
+	/// Metres of water under a mooring's centre for it to count as deep water by a shore
+	/// (<see cref="NearShore"/>): where the search for a mooring starts, not where the boat ends up.
+	/// </summary>
 	public const float MinMooringDepth = 1.5f;
+
+	/// <summary>
+	/// Metres of water a moored hull keeps under the centre and every corner of its footprint.
+	/// </summary>
+	/// <remarks>
+	/// The RHIB's lowest collider is 0.40 m under its origin and its mesh 0.56 m, and its four float
+	/// samplers (0.48 m down, <c>floatDepth</c> 0.4, <c>floatAcceleration</c> 20) hold the origin about
+	/// 0.28 m over the surface, so it draws 0.1 to 0.3 m. Twice the deeper figure, on the footprint's
+	/// corners, which stand 0.5 m clear of the hull. This was <see cref="MinMooringDepth"/> until
+	/// 2026-11-10, which kept every boat out in the lake.
+	/// </remarks>
+	public const float MooredHullClearance = 0.6f;
+
+	/// <summary>
+	/// Most metres, across the ground, from one of a moored boat's seats to the nearest place a player
+	/// can stand: inside the server's seat reach with room to spare, so the boat is boarded from the
+	/// shore rather than swum to.
+	/// </summary>
+	public const float BoardingReachMetres = 3f;
 
 	/// <summary>Everything a parked vehicle could land on or in: not hitboxes, ragdolls, seats or actors.</summary>
 	private static readonly int ParkingMask = ~((1 << 1) | (1 << 2) | (1 << 5) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 13) | (1 << 14) | (1 << 16) | (1 << 17));
@@ -43,7 +65,10 @@ public sealed class FieldParking
 		IndexTrees();
 	}
 
-	/// <summary>Water deep enough under every corner of the hull, and nothing solid where it floats.</summary>
+	/// <summary>
+	/// <see cref="MooredHullClearance"/> of water under every corner of the hull, and nothing solid
+	/// where it floats.
+	/// </summary>
 	public bool CanMoor(Vector3 probe, float yaw, Bounds footprint, out Vector3 surface)
 	{
 		surface = default;
@@ -59,7 +84,7 @@ public sealed class FieldParking
 			float water = Mathf.Max(WaterLevel.height, WaterLevel.BoundedSurfaceAt(at.x, at.z));
 			if (float.IsNegativeInfinity(water)
 				|| !Physics.Raycast(new Vector3(at.x, 2000f, at.z), Vector3.down, out RaycastHit hit, 4000f, GroundOnlyMask, QueryTriggerInteraction.Ignore)
-				|| !(hit.collider is TerrainCollider) || water - hit.point.y < MinMooringDepth)
+				|| !(hit.collider is TerrainCollider) || water - hit.point.y < MooredHullClearance)
 			{
 				return false;
 			}
@@ -79,6 +104,55 @@ public sealed class FieldParking
 			}
 		}
 		return true;
+	}
+
+	/// <summary>
+	/// A mooring by the shore near <paramref name="probe"/>: the hull slid stern first toward the land
+	/// (against <paramref name="awayYaw"/>, the heading <see cref="NearShore"/> answered) for up to
+	/// <paramref name="reach"/> metres while it still floats (<see cref="CanMoor"/>), and kept only when
+	/// a player can stand within <see cref="BoardingReachMetres"/> of one of its seats.
+	/// </summary>
+	/// <param name="seats">The seats' positions in the vehicle's own space; none tests from its origin.</param>
+	/// <param name="surface">The water's surface over the mooring's centre.</param>
+	/// <remarks>
+	/// Stern first because the boat is nosed out onto the water and the RHIB's driver sits aft, so the
+	/// seat the player wants is the one that ends up nearest the land.
+	/// </remarks>
+	public bool TryMoorAshore(Vector3 probe, float awayYaw, Bounds footprint, Vector3[] seats, float reach, out Vector3 surface)
+	{
+		surface = default;
+		Quaternion turn = Quaternion.Euler(0f, awayYaw, 0f);
+		Vector3 shoreward = turn * Vector3.back;
+		if (!Ironfront.Net.Unity.ShoreMooring.TrySlide(probe.x, probe.z, shoreward.x, shoreward.z, reach,
+				(x, z) => CanMoor(new Vector3(x, 0f, z), awayYaw, footprint, out _), out float atX, out float atZ)
+			|| !CanMoor(new Vector3(atX, 0f, atZ), awayYaw, footprint, out surface))
+		{
+			return false;
+		}
+		return BoardableFromShore(surface, turn, seats);
+	}
+
+	/// <summary>Whether a player can stand within <see cref="BoardingReachMetres"/> of a seat of a hull moored at <paramref name="surface"/>.</summary>
+	/// <remarks>
+	/// "Stand" as a swimmer's way out is judged (<see cref="Ironfront.Net.Unity.ShoreFinder"/>): ground no
+	/// deeper than <see cref="Actor.SwimEndDepth"/> under the surface, reached without climbing a bank
+	/// higher than <see cref="Actor.SwimClimbLip"/>. A boat under a cliff is not boarded from its top.
+	/// </remarks>
+	private static bool BoardableFromShore(Vector3 surface, Quaternion turn, Vector3[] seats)
+	{
+		Terrain terrain = FindTerrain();
+		System.Func<float, float, float> groundAt = (x, z) => GroundAt(terrain, x, z);
+		int count = seats != null && seats.Length > 0 ? seats.Length : 1;
+		for (int i = 0; i < count; i++)
+		{
+			Vector3 seat = surface + turn * (seats != null && seats.Length > 0 ? seats[i] : Vector3.zero);
+			if (Ironfront.Net.Unity.ShoreFinder.TryFind(seat.x, seat.z, surface.y, Actor.SwimEndDepth, Actor.SwimClimbLip, groundAt, out float x, out float z)
+				&& (x - seat.x) * (x - seat.x) + (z - seat.z) * (z - seat.z) <= BoardingReachMetres * BoardingReachMetres)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/// <summary>Bearings round a mooring tested for dry land, on each of <see cref="ShoreRings"/> rings.</summary>

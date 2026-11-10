@@ -345,6 +345,14 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         /// <remarks>
         /// <para>
+        /// <b>Reach is to the nearest seat, the request is still for the driver's</b>
+        /// (<see cref="SeatReach"/>, 2026-11-10). Measured to the driver's seat alone, a swimmer off
+        /// the RHIB's bow had nothing in reach: the driver sits aft, more than 6 m away, while the bow
+        /// gun was beside him.
+        /// </para>
+        /// </remarks>
+        /// <remarks>
+        /// <para>
         /// <b>Measured against the same constant the server enforces</b>
         /// (<see cref="SeatArbiter.MaxSeatReachMetres"/>). A client using a more generous number
         /// spends a round trip to be told <c>RejectedTooFar</c>; one using a stricter number
@@ -396,7 +404,9 @@ namespace Ironfront.Net.Unity.Client
                 if (float.IsInfinity(seat.x) || float.IsInfinity(seat.y) || float.IsInfinity(seat.z))
                     continue;
 
-                float squared = (seat - from).sqrMagnitude;
+                // To the NEAREST seat, as ServerSeatBridge measures it: the server grants the
+                // driver's seat to a body within reach of any seat of the vehicle.
+                float squared = SeatReach.NearestSquared(from, vehicle.SeatCount, vehicle.SeatPositions);
                 if (squared > bestSquared) continue;
 
                 bestSquared = squared;
