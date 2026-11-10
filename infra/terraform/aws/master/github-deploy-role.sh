@@ -48,15 +48,22 @@ aws ec2 describe-instances --region "$REGION" --instance-ids "$INSTANCE_ID" \
     --query 'Reservations[0].Instances[0].InstanceId' --output text >/dev/null 2>&1 \
     || die "instance $INSTANCE_ID not found in account $account, region $REGION"
 
-permissions=$(jq -n --arg r "$REGION" --arg a "$account" --arg i "$INSTANCE_ID" '{
+GAME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../game" && pwd)"
+GAMESERVER_INSTANCE_ID="${GAMESERVER_INSTANCE_ID:-$(command -v terraform >/dev/null 2>&1 && terraform -chdir="$GAME_DIR" output -raw instance_id 2>/dev/null || echo "")}"
+
+resources_json=$(jq -nc --arg r "$REGION" --arg a "$account" --arg m "$INSTANCE_ID" --arg g "$GAMESERVER_INSTANCE_ID" '
+  ["arn:aws:ec2:\($r):\($a):instance/\($m)", "arn:aws:ssm:\($r)::document/AWS-RunShellScript"] +
+  (if $g != "" then ["arn:aws:ec2:\($r):\($a):instance/\($g)"] else [] end)
+')
+
+permissions=$(jq -n --argjson res "$resources_json" '{
   Version: "2012-10-17",
   Statement: [
-    {Sid: "RunOnTheMasterOnly", Effect: "Allow", Action: "ssm:SendCommand",
-     Resource: ["arn:aws:ec2:\($r):\($a):instance/\($i)", "arn:aws:ssm:\($r)::document/AWS-RunShellScript"]},
+    {Sid: "RunOnEC2InstancesOnly", Effect: "Allow", Action: "ssm:SendCommand", Resource: $res},
     {Sid: "ReadCommandResults", Effect: "Allow", Action: "ssm:GetCommandInvocation", Resource: "*"}
   ]}')
 
-log "account $account, region $REGION, instance $INSTANCE_ID, mode $mode, name $NAME"
+log "account $account, region $REGION, master $INSTANCE_ID, gameserver ${GAMESERVER_INSTANCE_ID:-none}, mode $mode, name $NAME"
 echo "$permissions" | jq -c .
 
 gh_env() { gh "$@" --repo "$GITHUB_REPO" --env "$GITHUB_ENVIRONMENT"; }
@@ -128,3 +135,9 @@ fi
 
 gh_env variable set MASTER_INSTANCE_ID --body "$INSTANCE_ID"
 log "recorded MASTER_INSTANCE_ID=$INSTANCE_ID in the $GITHUB_ENVIRONMENT environment"
+
+if [ -n "$GAMESERVER_INSTANCE_ID" ]; then
+    gh_env variable set GAMESERVER_INSTANCE_ID --body "$GAMESERVER_INSTANCE_ID"
+    log "recorded GAMESERVER_INSTANCE_ID=$GAMESERVER_INSTANCE_ID in the $GITHUB_ENVIRONMENT environment"
+fi
+

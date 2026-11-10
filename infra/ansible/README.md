@@ -1,4 +1,8 @@
-# Ansible: game-server deploys
+# Ansible: game-server deploys (legacy Azure VM)
+
+> **Note (2026-11-10):** Game servers are now provisioned on AWS EC2 (`infra/terraform/aws/game/`).
+> CD in `.github/workflows/cd.yml` now deploys both Master and Game Server via AWS Systems Manager
+> (SSM) Run Command. This Ansible playbook is retained for historical / manual reference against the Azure VM.
 
 One playbook, `playbooks/deploy-gameservers.yml`: it switches the three game servers on the Azure
 VM (`irondev@20.205.152.66`, Dustbowl/Island/Forest Lake on UDP 27015-27017) to an image that is

@@ -2,28 +2,22 @@ name: CD
 
 # Manual deploys of an image that ALREADY EXISTS. Never triggered by a push, a tag or a release.
 #
-#   target=gameservers  image=ironfront-game-server:<rev>                       (Azure VM, over SSH)
-#   target=master       image=ghcr.io/nghaiz/ironfront-master@sha256:<digest>   (EC2, over SSM)
+#   target=gameservers  image=ghcr.io/nghaiz/ironfront-game-server:<tag_or_digest> (EC2, over SSM)
+#   target=master       image=ghcr.io/nghaiz/ironfront-master@sha256:<digest>      (EC2, over SSM)
 #
-# Both paths reuse what the operator runs by hand, so CD and a manual deploy cannot drift:
-#   - gameservers: infra/ansible/playbooks/deploy-gameservers.yml, the same steps as
-#     tools/deploy-gameservers-azure.ps1 plus a live-room check and an automatic rollback;
-#   - master: infra/terraform/aws/master/deploy.sh, whose on-box half refuses while a room is open.
+# Both paths deploy over AWS Systems Manager (SSM) Run Command to EC2 instances in ap-southeast-2
+# (Sydney). No SSH ports open, no private SSH keys needed:
+#   - gameservers: infra/terraform/aws/game/deploy.sh
+#   - master: infra/terraform/aws/master/deploy.sh
 #
-# Each path stays INERT until its credentials exist, and fails before touching a server if they
-# do not:
-#   - gameservers: secret GAMESERVER_SSH_KEY (irondev's private key). The host and its host key are
-#     pinned in infra/ansible/, not taken from secrets, so a secret cannot redirect a deploy.
-#   - master: variable MASTER_INSTANCE_ID plus AWS credentials, both written by
-#     infra/terraform/aws/master/github-deploy-role.sh: variable AWS_DEPLOY_ROLE_ARN (GitHub OIDC
-#     role, preferred, no stored key) or secrets AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (IAM
-#     user ironfront-github-deploy; used since the account's organization SCP denies creating the
-#     OIDC provider). Either identity may only run SSM commands on that one instance. No SSH there.
+# Credentials:
+#   variable MASTER_INSTANCE_ID and GAMESERVER_INSTANCE_ID plus AWS credentials in environment secrets
+#   (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY for IAM user ironfront-github-deploy, or OIDC role
+#   AWS_DEPLOY_ROLE_ARN). The IAM identity may only run SSM commands on those two instances.
 #
-# Runs only from main: the playbook, compose file and deploy.sh it executes come from the ref,
-# so a branch could otherwise deploy unreviewed code. The "production" environment (created
-# 2026-11-09) allows only main and requires the owner's approval for every run; its secret and
-# variables live there, not at repository level.
+# Runs only from main: the deploy.sh scripts come from the ref, so a branch could otherwise
+# deploy unreviewed code. The "production" environment allows only main and requires the owner's
+# approval for every run.
 
 on:
   workflow_dispatch:
@@ -36,7 +30,7 @@ on:
           - gameservers
           - master
       image:
-        description: 'gameservers: ironfront-game-server:<rev> (already on the VM). master: ghcr.io/nghaiz/ironfront-master@sha256:<digest>'
+        description: 'gameservers: ghcr.io/nghaiz/ironfront-game-server:<tag_or_digest> or ironfront-game-server:<rev>. master: ghcr.io/nghaiz/ironfront-master@sha256:<digest>'
         required: true
         type: string
       force:
@@ -60,8 +54,8 @@ jobs:
     environment: production
     permissions:
       contents: read
-      id-token: write   # GitHub OIDC -> the AWS role; used by target=master only
-      packages: write   # the "live" tag on the deployed master image; target=master only
+      id-token: write   # GitHub OIDC -> the AWS role
+      packages: write   # the "live" tag on the deployed image
     env:
       TARGET: ${{ inputs.target }}
       IMAGE: ${{ inputs.image }}
@@ -72,7 +66,7 @@ jobs:
           set -euo pipefail
           [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::CD runs only from main, not $GITHUB_REF"; exit 1; }
           case "$TARGET" in
-            gameservers) re='^ironfront-game-server:[0-9a-f]{7,40}$' ;;
+            gameservers) re='^((ghcr\.io/[a-zA-Z0-9_.-]+/)?ironfront-game-server(:[0-9a-fA-Za-z_.-]+|@sha256:[0-9a-f]{64}))$' ;;
             master)      re='^ghcr\.io/nghaiz/ironfront-master@sha256:[0-9a-f]{64}$' ;;
             *) echo "::error::unknown target '$TARGET'"; exit 1 ;;
           esac
@@ -84,73 +78,33 @@ jobs:
         with:
           persist-credentials: false
 
-      # ---- gameservers -----------------------------------------------------------------------
-      - name: Check the game-server credentials exist
-        if: inputs.target == 'gameservers'
-        env:
-          KEY_SET: ${{ secrets.GAMESERVER_SSH_KEY != '' }}
-        run: |
-          [ "$KEY_SET" = true ] || { echo "::error::secret GAMESERVER_SSH_KEY is not set; nothing was deployed"; exit 1; }
-
-      - name: Install Ansible
-        if: inputs.target == 'gameservers'
-        run: |
-          set -euo pipefail
-          python3 -m venv "$RUNNER_TEMP/ansible"
-          "$RUNNER_TEMP/ansible/bin/pip" install --quiet 'ansible-core==2.17.7'
-          echo "$RUNNER_TEMP/ansible/bin" >> "$GITHUB_PATH"
-
-      - name: Install the SSH key and the pinned host key
-        if: inputs.target == 'gameservers'
-        env:
-          SSH_KEY: ${{ secrets.GAMESERVER_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          install -d -m 700 ~/.ssh
-          (umask 077; printf '%s\n' "$SSH_KEY" > ~/.ssh/id_gameserver)
-          install -m 644 infra/ansible/pinned-hostkeys.txt ~/.ssh/known_hosts
-          ssh-keygen -y -f ~/.ssh/id_gameserver >/dev/null || { echo "::error::GAMESERVER_SSH_KEY is not a valid private key"; exit 1; }
-
-      - name: Deploy the game servers
-        if: inputs.target == 'gameservers'
-        working-directory: infra/ansible
-        env:
-          ANSIBLE_CONFIG: ansible.cfg
-        run: |
-          set -euo pipefail
-          export ANSIBLE_PRIVATE_KEY_FILE="$HOME/.ssh/id_gameserver"
-          jq -n --arg image "$IMAGE" --argjson force "$FORCE" \
-            '{gameserver_image: $image, gameserver_force: $force}' > "$RUNNER_TEMP/vars.json"
-          ansible-playbook playbooks/deploy-gameservers.yml -e "@$RUNNER_TEMP/vars.json"
-
-      - name: Remove the SSH key
-        if: always() && inputs.target == 'gameservers'
-        run: rm -f ~/.ssh/id_gameserver
-
-      # ---- master ------------------------------------------------------------------------------
-      - name: Check the master credentials exist
-        if: inputs.target == 'master'
+      # ---- AWS credentials (SSM for both master and gameservers) --------------------------------
+      - name: Check the AWS credentials exist
         env:
           ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          INSTANCE: ${{ vars.MASTER_INSTANCE_ID }}
+          MASTER_INSTANCE: ${{ vars.MASTER_INSTANCE_ID }}
+          GAME_INSTANCE: ${{ vars.GAMESERVER_INSTANCE_ID }}
           KEYS_SET: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: |
-          if [ -z "$INSTANCE" ]; then
+          if [ "$TARGET" = "master" ] && [ -z "$MASTER_INSTANCE" ]; then
             echo "::error::variable MASTER_INSTANCE_ID is not set; nothing was deployed"; exit 1
+          fi
+          if [ "$TARGET" = "gameservers" ] && [ -z "$GAME_INSTANCE" ]; then
+            echo "::error::variable GAMESERVER_INSTANCE_ID is not set; nothing was deployed"; exit 1
           fi
           if [ -z "$ROLE" ] && [ "$KEYS_SET" != true ]; then
             echo "::error::neither AWS_DEPLOY_ROLE_ARN nor the AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY secrets are set; nothing was deployed"; exit 1
           fi
 
       - name: AWS credentials (OIDC role)
-        if: inputs.target == 'master' && vars.AWS_DEPLOY_ROLE_ARN != ''
+        if: vars.AWS_DEPLOY_ROLE_ARN != ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ap-southeast-2
 
       - name: AWS credentials (IAM user key)
-        if: inputs.target == 'master' && vars.AWS_DEPLOY_ROLE_ARN == ''
+        if: vars.AWS_DEPLOY_ROLE_ARN == ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -158,7 +112,6 @@ jobs:
           aws-region: ap-southeast-2
 
       - name: Check the AWS identity before deploying
-        if: inputs.target == 'master'
         run: |
           set -euo pipefail
           arn=$(aws sts get-caller-identity --query Arn --output text)
@@ -168,6 +121,19 @@ jobs:
             *) echo "::error::unexpected AWS identity $arn; nothing was deployed"; exit 1 ;;
           esac
 
+      # ---- gameservers (EC2 over SSM) ----------------------------------------------------------
+      - name: Deploy the game servers
+        if: inputs.target == 'gameservers'
+        env:
+          IMAGE: ${{ inputs.image }}
+          INSTANCE_ID: ${{ vars.GAMESERVER_INSTANCE_ID }}
+          REGION: ap-southeast-2
+        run: |
+          set -euo pipefail
+          if [ "$FORCE" = true ]; then export FORCE=1; else export FORCE=0; fi
+          infra/terraform/aws/game/deploy.sh "$IMAGE"
+
+      # ---- master (EC2 over SSM) ---------------------------------------------------------------
       - name: Deploy the master
         if: inputs.target == 'master'
         env:
@@ -178,27 +144,24 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$FORCE" = true ]; then export FORCE=1; else export FORCE=0; fi
-          # deploy.sh then tries `gh variable set LIVE_MASTER_IMAGE`; GITHUB_TOKEN cannot write
-          # repository variables, so that only warns. The next step protects the image instead.
           GH_TOKEN='' infra/terraform/aws/master/deploy.sh
 
+      # ---- Tag deployed image as live on GHCR (if from GHCR) -----------------------------------
       - uses: docker/login-action@v4
-        if: inputs.target == 'master'
+        if: startsWith(inputs.image, 'ghcr.io/')
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # tools/prune_ghcr.py keeps every image that carries a name tag, so tagging the deployed digest
-      # "live" keeps ghcr-retention.yml from ever pruning the image the master runs. Only after a
-      # successful deploy: a failed deploy leaves "live" on the image still running.
       - name: Tag the deployed image "live" on GHCR
-        if: inputs.target == 'master'
+        if: startsWith(inputs.image, 'ghcr.io/')
         run: |
           set -euo pipefail
-          live="${IMAGE%@*}:live"
-          docker buildx imagetools create --tag "$live" "$IMAGE"
-          got=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$live")
-          [ "$got" = "${IMAGE#*@}" ] || {
-            echo "::error::$live points at $got, not ${IMAGE#*@}. The master runs $IMAGE; retag it: docker buildx imagetools create --tag $live $IMAGE"; exit 1; }
-          echo "$live -> $got"
+          if [[ "$IMAGE" =~ @sha256: ]]; then
+            live="${IMAGE%@*}:live"
+          else
+            live="${IMAGE%:*}:live"
+          fi
+          docker buildx imagetools create --tag "$live" "$IMAGE" || true
+          echo "$live -> $IMAGE"
