@@ -256,7 +256,11 @@ namespace Ironfront.Net.Unity.Server
                 || Quantize.PositionSaturates(actorAt.z))
                 return SeatChangeResult.RejectedActorUnplaced;
 
-            distanceSquared = (seat - actorAt).sqrMagnitude;
+            // To the vehicle's NEAREST seat, not the one asked for (SeatReach, 2026-11-10): the
+            // client asks for the driver's seat first, and a swimmer at a boat's bow is out of
+            // reach of a driver who sits aft while touching the hull. The seat asked for must
+            // still exist -- checked above -- so an index off the end is refused as itself.
+            distanceSquared = SeatReach.NearestSquared(actorAt, vehicle.SeatCount, vehicle.GetSeatPosition);
             return null;
         }
     }
