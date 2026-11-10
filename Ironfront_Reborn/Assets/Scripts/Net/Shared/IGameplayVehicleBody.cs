@@ -51,8 +51,8 @@ namespace Ironfront.Net.Unity
         /// <remarks>
         /// <para>
         /// <b>On the shared seam, and on this one, because the reach check has two readers.</b>
-        /// The server judges a seat request against <c>GetSeatPosition(seatIndex)</c>; the client
-        /// decides which seat to OFFER. X-67 is those two measuring different things -- the
+        /// The server judges a seat request against these positions (the nearest of them,
+        /// <see cref="SeatReach"/>); the client decides which seat to OFFER. X-67 is those two measuring different things -- the
         /// client used <see cref="Transform"/>'s position, the hull origin, against the same 6 m
         /// constant the server applied to the seat. A client standing beside a tank could be
         /// shown a prompt the server then refused.
