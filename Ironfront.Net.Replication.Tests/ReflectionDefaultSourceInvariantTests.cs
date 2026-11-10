@@ -27,22 +27,32 @@ namespace Ironfront.Net.Replication.Tests
     public sealed class ReflectionDefaultSourceInvariantTests
     {
         [Fact]
-        public void EachRenderIsCopiedBeforeTheNextOneAndAdoptedOnceTheAtmosphereIsBack()
+        public void TheDayRenderIsCopiedThenTheNightRenderedInOneCallThenBothAdopted()
         {
             string setup = Normalized(Method("SetupProbesCoroutine").Body!);
 
+            int lowSkip = setup.IndexOf("if(!QualitySettings.realtimeReflectionProbes){yieldbreak;}", StringComparison.Ordinal);
+            int dayRender = setup.IndexOf("intnormal=normalProbe.RenderProbe();", StringComparison.Ordinal);
             int dayCopy = setup.IndexOf("RenderTextureday=normalProbe.IsFinishedRendering(normal)?CopyOf(normalProbe):null;", StringComparison.Ordinal);
-            int nightVision = setup.IndexOf("TimeOfDay.instance.ApplyNightvision();", StringComparison.Ordinal);
-            int nightCopy = setup.IndexOf("RenderTexturenight=nightVisionProbe.IsFinishedRendering(nightVision)?CopyOf(nightVisionProbe):null;", StringComparison.Ordinal);
-            int reset = setup.IndexOf("TimeOfDay.instance.ResetAtmosphere();", StringComparison.Ordinal);
+            int night = setup.IndexOf("RenderTexturenight=day!=null?RenderNightVisionReflection(day):null;", StringComparison.Ordinal);
             int adopt = setup.IndexOf("AdoptAsDefaultReflection(day,night);", StringComparison.Ordinal);
 
-            // Copied after both renders, the day copy held the night vision render (2026-10-02).
-            Assert.True(dayCopy >= 0 && nightVision > dayCopy,
-                "the day render must be copied before night vision is applied and the second probe renders.");
-            Assert.True(nightCopy > nightVision && reset > nightCopy && adopt > reset,
-                "the night vision render is copied, the atmosphere put back, and only then both are adopted.");
-            Assert.Equal(2, setup.Split("yieldreturnnull;").Length - 1);
+            // The Low preset has no realtime probes: waiting for one cost five seconds for nothing.
+            Assert.True(lowSkip >= 0 && dayRender > lowSkip,
+                "the setup must give up on presets without realtime probes before it schedules a render.");
+            // Copied after another render, the day copy held that render (2026-10-02).
+            Assert.True(dayCopy > dayRender && night > dayCopy && adopt > night,
+                "the day render is copied, then the night vision one rendered, and only then both are adopted.");
+            // Night vision applied in the coroutine stayed on across every frame of the probe wait:
+            // five seconds of green on Low, a flash on higher presets, on every OS (2026-11-10).
+            Assert.DoesNotContain("ApplyNightvision", setup, StringComparison.Ordinal);
+            Assert.Equal(1, setup.Split("yieldreturnnull;").Length - 1);
+
+            string render = Normalized(Method("RenderNightVisionReflection").Body!);
+            Assert.DoesNotContain("yield", render, StringComparison.Ordinal);
+            Assert.Contains(
+                "TimeOfDay.instance.ApplyNightvision();try{rendered=camera.RenderToCubemap(night);}finally{TimeOfDay.instance.ResetAtmosphere();",
+                render, StringComparison.Ordinal);
         }
 
         [Fact]
