@@ -21,6 +21,13 @@ using UnityEngine.UI;
 /// screen is all it costs. The moment the loadout closes or the camera changes (a deploy switches
 /// to first person) the camera gets its mask back.
 /// </para>
+/// <para>
+/// <b>Creating this canvas re-sorts every overlay canvas that ties on sorting order.</b> The
+/// first freeze of a life in a scene creates it, and in v4.6.5 that put the HUD (then order 0,
+/// like the loadout) over the death screen, where its full-screen damage vignette swallowed every
+/// DEPLOY click (playtest 2026-11-09). The HUD now sorts strictly below the loadout
+/// (<c>HudBelowLoadoutTests</c>); keep any canvas this adds off the menus' orders.
+/// </para>
 /// </remarks>
 public sealed class FrozenDeathView
 {
