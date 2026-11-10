@@ -4,7 +4,7 @@ The live stack is two hosts, and only a few things on them are not in git:
 
 | Host | What runs | State git cannot give back |
 |---|---|---|
-| AWS EC2 `i-0d82a32b23a370c59` (`ap-southeast-2`, m7i-flex.large, Elastic IP `52.62.179.111`, [`infra/terraform/aws/master`](../infra/terraform/aws/master/README.md)) | the master in Docker, TLS (Let's Encrypt) on `52-62-179-111.sslip.io:443` and `:27000` | the SQLite database (`/opt/ironfront/data/ironfront.db`: accounts, careers, achievements, match history; copied daily to S3), `master.log`, `durability.csv` beside it, and `IRONFRONT_SHARED_SECRET` in SSM Parameter Store `/ironfront/shared-secret` |
+| AWS EC2 tagged `Name=ironfront-master` (`i-036da5468755952ef` since 2026-11-10, a new id on every rebuild; `ap-southeast-2`, m7i-flex.large, Elastic IP `52.62.179.111`, [`infra/terraform/aws/master`](../infra/terraform/aws/master/README.md)) | the master in Docker, TLS (Let's Encrypt) on `52-62-179-111.sslip.io:443` and `:27000` | the SQLite database (`/opt/ironfront/data/ironfront.db`: accounts, careers, achievements, match history; copied daily to S3), `master.log`, `durability.csv` beside it, and `IRONFRONT_SHARED_SECRET` in SSM Parameter Store `/ironfront/shared-secret` |
 | Azure VM `ironfront-game` (resource group `ironfront-gameservers`, Southeast Asia, Standard_B2as_v2, Ubuntu 24.04, `20.205.152.66`) | three game servers in Docker, one per map, UDP 27015-27017, from `~/ironfront/gameservers.compose.yml` | the game-server image (side-loaded from this PC, in no registry), `~/ironfront/.env`, and each container's `docker logs` |
 
 The game servers keep nothing between matches: careers and achievements are written to the master.
@@ -105,7 +105,7 @@ Only when `/opt/ironfront/data/ironfront.db` is lost or damaged. Two sources:
 
 - **The daily S3 copies** in `s3://ironfront-master-backups-b647cb91eaa1e49f82570f2dfe/backups/`
   (19:30 UTC, kept 30 days, versioned). From a shell on the instance
-  (`aws ssm start-session --region ap-southeast-2 --target i-0d82a32b23a370c59`):
+  (`aws ssm start-session --region ap-southeast-2 --target <instance id>`; look it up by tag as in infra/terraform/aws/master/README.md):
   ```sh
   aws s3 ls s3://ironfront-master-backups-b647cb91eaa1e49f82570f2dfe/backups/
   sudo /opt/ironfront/bin/ironfront-restore.sh backups/<file>.db.gz

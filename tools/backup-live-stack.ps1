@@ -42,8 +42,10 @@
 param(
     [string] $OutDir = '',
     [string] $EnvFile = '',
-    # The EC2 master (infra/terraform/aws/master: `terraform output`).
-    [string] $InstanceId = 'i-0d82a32b23a370c59',
+    # The EC2 master. Empty (default) finds the one running instance tagged Name=ironfront-master:
+    # the id changes on every rebuild (i-0d82a32b... until 2026-11-08, i-032f9c76... until 2026-11-09,
+    # i-036da546... since 2026-11-10), and a hardcoded one silently pointed this at a dead instance.
+    [string] $InstanceId = '',
     [string] $Region = 'ap-southeast-2',
     [string] $Bucket = 'ironfront-master-backups-b647cb91eaa1e49f82570f2dfe',
     [string] $SecretParameter = '/ironfront/shared-secret',
@@ -176,7 +178,13 @@ $secretsDir = Join-Path $work 'secrets'
 if ($LASTEXITCODE -ne 0) { throw "icacls could not restrict $secretsDir ($LASTEXITCODE)." }
 
 # ---- the master (AWS EC2) ----
-$instance = (Invoke-Aws @('ec2', 'describe-instances', '--instance-ids', $InstanceId)).Reservations[0].Instances[0]
+if (-not $InstanceId) {
+    $found = @((Invoke-Aws @('ec2', 'describe-instances', '--filters', 'Name=tag:Name,Values=ironfront-master',
+        'Name=instance-state-name,Values=pending,running,stopping,stopped')).Reservations | ForEach-Object { $_.Instances } | ForEach-Object { $_.InstanceId })
+    if ($found.Count -ne 1) { throw "expected one instance tagged Name=ironfront-master, found $($found.Count) ($($found -join ', ')); pass -InstanceId." }
+    $InstanceId = $found[0]
+}
+$instance =(Invoke-Aws @('ec2', 'describe-instances', '--instance-ids', $InstanceId)).Reservations[0].Instances[0]
 if ($instance.State.Name -ne 'running') { throw "instance $InstanceId is $($instance.State.Name): start it first." }
 ConvertTo-Json -InputObject $instance -Depth 20 | Set-Content -Encoding utf8 (Join-Path $work 'master/instance.json')
 $facts['master instance'] = "$InstanceId $($instance.State.Name) in $($instance.Placement.AvailabilityZone), $($instance.InstanceType), address $($instance.PublicIpAddress)"

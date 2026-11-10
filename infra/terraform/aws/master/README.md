@@ -62,7 +62,7 @@ aws ssm start-session --region ap-southeast-2 --target "$(terraform output -raw 
 IRONFRONT_MASTER_IMAGE=ghcr.io/nghaiz/ironfront-master@sha256:... ./infra/terraform/aws/master/deploy.sh
 FORCE=1 ./infra/terraform/aws/master/deploy.sh            # even with rooms open
 # From a machine without the Terraform state (the IDs come from `terraform output`):
-INSTANCE_ID=i-0d82a32b23a370c59 REGION=ap-southeast-2 BUCKET=ironfront-master-backups-b647cb91eaa1e49f82570f2dfe \
+INSTANCE_ID=<id, see "Things to know"> REGION=ap-southeast-2 BUCKET=ironfront-master-backups-b647cb91eaa1e49f82570f2dfe \
   ./infra/terraform/aws/master/deploy.sh
 ```
 
@@ -101,6 +101,19 @@ To rotate the secret: `aws ssm put-parameter --overwrite ...`, then
   `ignore_changes`. After you edit `files/`, either copy the change onto the box or rebuild it
   with `terraform apply -replace=aws_instance.master`. A rebuilt box restores the newest S3
   backup, so run `ironfront-backup.sh` first.
+- **Terminating the instance deletes the database with it** (the root volume is the only disk and
+  `delete_on_termination` is on). Everything written since the last daily backup (19:30 UTC) is
+  gone unless `sudo /opt/ironfront/bin/ironfront-backup.sh <label>` ran first. On 2026-11-09 01:06 UTC
+  the master was terminated without one and rebuilt on 2026-11-10 as `i-036da5468755952ef`, which
+  restored the 2026-11-08 19:34 UTC backup (its newest login was 17:30, so nothing later was
+  provably lost, but nothing could prove it either). Players had no master for about 28 hours.
+- **The instance id changes on every rebuild.** Never hardcode it: look it up by tag (below), and
+  after a rebuild re-run `github-deploy-role.sh` so the CD variable `MASTER_INSTANCE_ID` and the
+  deploy user's policy name the new id.
+  ```bash
+  aws ec2 describe-instances --region ap-southeast-2 --query 'Reservations[].Instances[].InstanceId' \
+    --filters Name=tag:Name,Values=ironfront-master Name=instance-state-name,Values=running --output text
+  ```
 - **Renewing the certificate restarts the master at 20:00 UTC (03:00 +07), not immediately.**
   The old certificate is still valid for about 30 days when certbot renews, so waiting is safe.
 - **`/opt/ironfront/data/from-fly/` is the rest of the fly volume**: its logs, `durability.csv` and
