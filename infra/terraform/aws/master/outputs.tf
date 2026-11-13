@@ -31,3 +31,14 @@ output "session_command" {
   description = "Shell on the instance without SSH (needs the Session Manager plugin)."
   value       = "aws ssm start-session --region ${var.region} --target ${aws_instance.master.id}"
 }
+
+output "vpc_id" {
+  description = "VPC ID where master runs."
+  value       = aws_vpc.main.id
+}
+
+output "subnet_id" {
+  description = "Public subnet ID where master runs."
+  value       = aws_subnet.public.id
+}
+

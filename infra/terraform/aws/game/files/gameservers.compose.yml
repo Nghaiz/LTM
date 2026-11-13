@@ -1,0 +1,65 @@
+# Ironfront game servers on AWS EC2 — written to /opt/ironfront/gameservers.compose.yml by cloud-init.
+#
+# Three game server containers (Dustbowl, Island, Forest Lake) registered with the master server.
+# Run by ironfront-gameserver.service:
+#   docker compose --project-directory /opt/ironfront --env-file /opt/ironfront/.env -f /opt/ironfront/gameservers.compose.yml up -d
+
+name: ironfront-gameservers
+
+x-gameserver: &gameserver
+  image: ${IRONFRONT_GAMESERVER_IMAGE:?set IRONFRONT_GAMESERVER_IMAGE in /opt/ironfront/.env}
+  restart: unless-stopped
+  environment: &gameserver-env
+    IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET in /opt/ironfront/.env}
+    IRONFRONT_MASTER_HOST: ${IRONFRONT_MASTER_HOST:?set IRONFRONT_MASTER_HOST in /opt/ironfront/.env}
+    IRONFRONT_MASTER_PORT: "${IRONFRONT_MASTER_PORT:-443}"
+    IRONFRONT_GAMESERVER_MASTER_TLS: "1"
+    IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST: ${IRONFRONT_MASTER_HOST}
+    IRONFRONT_GAMESERVER_PUBLIC_IP: ${IRONFRONT_GAMESERVER_PUBLIC_IP_ADVERTISED:?set IRONFRONT_GAMESERVER_PUBLIC_IP_ADVERTISED in /opt/ironfront/.env}
+    IRONFRONT_GAMESERVER_TRANSPORT: udp
+    IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "0"
+    IRONFRONT_GAMESERVER_MAX_PLAYERS: "16"
+    IRONFRONT_GAMESERVER_MAX_CONNECTIONS: "16"
+    IRONFRONT_LOG_LEVEL: Info
+    IRONFRONT_STRUCTURED_LOG: "1"
+    IRONFRONT_LOG_FRAMES: "1"
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "3" }
+
+services:
+  game-server-dustbowl:
+    <<: *gameserver
+    container_name: ironfront-gs-dustbowl
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_SCENE: Dustbowl
+      IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_DUSTBOWL_PORT:-27015}"
+      # MapCatalog: Dustbowl = 1
+      IRONFRONT_GAMESERVER_MAP_IDS: "1"
+    ports:
+      - "${IRONFRONT_GS_DUSTBOWL_PORT:-27015}:${IRONFRONT_GS_DUSTBOWL_PORT:-27015}/udp"
+
+  game-server-island:
+    <<: *gameserver
+    container_name: ironfront-gs-island
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_SCENE: Island
+      IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_ISLAND_PORT:-27016}"
+      # MapCatalog: Island = 2
+      IRONFRONT_GAMESERVER_MAP_IDS: "2"
+    ports:
+      - "${IRONFRONT_GS_ISLAND_PORT:-27016}:${IRONFRONT_GS_ISLAND_PORT:-27016}/udp"
+
+  game-server-forestlake:
+    <<: *gameserver
+    container_name: ironfront-gs-forestlake
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_SCENE: ForestLake
+      IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_FORESTLAKE_PORT:-27017}"
+      # MapCatalog: Forest Lake = 3
+      IRONFRONT_GAMESERVER_MAP_IDS: "3"
+    ports:
+      - "${IRONFRONT_GS_FORESTLAKE_PORT:-27017}:${IRONFRONT_GS_FORESTLAKE_PORT:-27017}/udp"

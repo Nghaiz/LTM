@@ -1,0 +1,8 @@
+# Example terraform.tfvars for aws/game
+
+# Game server image: a GHCR rev tag, required (no default, no :latest). 19044c0 is v4.6.5.
+gameserver_image = "ghcr.io/nghaiz/ironfront-game-server:19044c0"
+
+# Optional OpenSSH public key for direct SSH access
+# ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."
+# ssh_cidrs      = ["198.51.100.42/32"]
